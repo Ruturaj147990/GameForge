@@ -16,9 +16,34 @@ def test_validate_all_existing_specs():
     assert len(result.errors) == 0
     # Provenance warnings should be present
     assert len(result.warnings) >= 6
-    # T3-016 pilot discrepancy should be detected
+    # Inherited T3-016 discrepancy has been resolved via D-006
+    assert len(result.discrepancies) == 0
+
+
+def test_discrepancy_detection_when_mismatched(tmp_path):
+    inv_file = tmp_path / "TASK_INVENTORY.csv"
+    inv_file.write_text(
+        "id,tier,title,category,engine_pairing,primary_grading,pilot,notes\n"
+        "T2-001,T2,Third-person movement and camera,gameplay,paired,probes,no,notes\n",
+        encoding="utf-8",
+    )
+    pilot_dir = tmp_path / "pilot_tasks"
+    pilot_dir.mkdir()
+    pilot_yaml = pilot_dir / "t2-001-third-person-controller.yaml"
+    pilot_yaml.write_text(
+        "id: t2-001-third-person-controller\n"
+        "logical_task_id: T2-001\n"
+        "tier: T2\n"
+        "title: Third-person movement\n"
+        "prompt: Test prompt\n"
+        "limits: {wall_clock_seconds: 1800, max_tool_calls: 100}\n"
+        "allowed_edit_paths: [Source]\n"
+        "forbidden_edits: [tests]\n",
+        encoding="utf-8",
+    )
+    result = validate_all_specs(tmp_path)
     discrepancy_fields = [d.field_name for d in result.discrepancies]
-    assert "T3-016.pilot" in discrepancy_fields
+    assert "T2-001.pilot" in discrepancy_fields
 
 
 def test_detect_duplicate_inventory_ids(tmp_path):

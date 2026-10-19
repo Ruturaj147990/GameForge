@@ -1,0 +1,25 @@
+id: t2-008-projectile-collision
+logical_task_id: T2-008
+tier: T2
+title: Projectile collision and combat damage
+category: gameplay
+status: active
+engine_variants: [unreal, unity]
+engine_scope: ENGINE_SPECIFIC
+verification_level: REAL_ENGINE_VERIFIED
+knowledge_domains: [combat, physics_collision, damage_invariants, actor_lifecycle]
+native_execution_required: true
+prompt: >-
+  In the target project, implement a native projectile actor with collision detection,
+  configurable velocity, and damage delivery. When the projectile collides with a damageable
+  target, it must apply exactly the configured damage once, trigger target health reduction,
+  and deactivate or destroy itself. The projectile must exclude its owner from collisions,
+  stop on blocking geometry, cleanly handle invalid targets without errors, and respect
+  the target's invulnerability frames.
+limits: {wall_clock_seconds: 2400, max_tool_calls: 100}
+allowed_edit_paths: [designated gameplay source paths]
+forbidden_edits: [tests, grader, engine configurations, unrelated components]
+required_checks: [build, collision probes, damage verification, owner exclusion, regression]
+probe_fields: [damage_applied, duplicate_hit_prevention, owner_exclusion, lifetime_cleanup]
+provenance: {fixture_origin: internal, rights_review: approved}
+review: {engine_reviewer: approved, independent_reviewer: approved}

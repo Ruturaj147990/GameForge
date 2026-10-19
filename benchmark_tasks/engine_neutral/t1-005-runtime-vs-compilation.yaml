@@ -1,0 +1,24 @@
+id: t1-005-runtime-vs-compilation
+logical_task_id: T1-005
+tier: T1
+title: Runtime behavior vs compilation verification principles
+category: debug_performance
+status: active
+engine_variants: [agnostic]
+engine_scope: ENGINE_AGNOSTIC
+verification_level: STATIC_INSPECTION
+knowledge_domains: [software_testing, runtime_verification, compilation_vs_runtime, engine_traps]
+native_execution_required: false
+prompt: >-
+  Explain in detail why successful C++ or C# compilation fails to guarantee correct gameplay
+  runtime behavior. Give concrete examples from game development including: (1) uninitialized
+  or default UPROPERTY/SerializeField values, (2) collision channel filtering mismatches,
+  (3) frame-rate-dependent physics logic lacking delta-time scaling, (4) lifecycle execution
+  order discrepancies (e.g., Awake vs Start in Unity, PostInitializeComponents vs BeginPlay in Unreal),
+  and (5) delegate registration race conditions.
+limits: {wall_clock_seconds: 1200, max_tool_calls: 30}
+allowed_edit_paths: [designated analysis paths]
+forbidden_edits: [tests, grader]
+required_checks: [schema_validation, rubric_matching]
+provenance: {fixture_origin: internal, rights_review: approved}
+review: {engine_reviewer: approved, independent_reviewer: approved}

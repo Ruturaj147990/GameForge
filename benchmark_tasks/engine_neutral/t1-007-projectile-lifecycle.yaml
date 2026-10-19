@@ -1,0 +1,24 @@
+id: t1-007-projectile-lifecycle
+logical_task_id: T1-007
+tier: T1
+title: Projectile collision, ownership, and lifecycle invariants
+category: gameplay
+status: active
+engine_variants: [agnostic]
+engine_scope: CROSS_ENGINE
+verification_level: STATIC_INSPECTION
+knowledge_domains: [combat_mechanics, collision_filtering, actor_lifecycle, cross_engine]
+native_execution_required: false
+prompt: >-
+  Identify the critical requirements for a reusable gameplay projectile. Detail:
+  (1) Owner exclusion mechanisms preventing muzzle self-collision, (2) Exactly-once impact
+  and damage application semantics, (3) World geometry impact resolution vs damageable actor
+  impact resolution, (4) Lifespan timer management preventing orphaned actors in the world,
+  and (5) Architectural implementation differences between Unreal Engine (UProjectileMovementComponent,
+  AActor::SetOwner, IgnoreActorWhenMoving) and Unity (Rigidbody.linearVelocity, Physics.IgnoreCollision).
+limits: {wall_clock_seconds: 1200, max_tool_calls: 30}
+allowed_edit_paths: [designated analysis paths]
+forbidden_edits: [tests, grader]
+required_checks: [schema_validation, rubric_matching]
+provenance: {fixture_origin: internal, rights_review: approved}
+review: {engine_reviewer: approved, independent_reviewer: approved}

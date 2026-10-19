@@ -51,9 +51,40 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["unity", "unreal"]
+        "enum": ["unity", "unreal", "godot", "custom", "agnostic"]
       },
       "minItems": 1
+    },
+    "engine_scope": {
+      "type": "string",
+      "enum": ["ENGINE_AGNOSTIC", "ENGINE_SPECIFIC", "CROSS_ENGINE"]
+    },
+    "engines_supported": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "engine_versions": {
+      "type": "object"
+    },
+    "verification_level": {
+      "type": "string"
+    },
+    "knowledge_domains": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "parity_group": {
+      "type": ["string", "null"]
+    },
+    "native_execution_required": {
+      "type": "boolean"
+    },
+    "source_references": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "data_provenance_status": {
+      "type": "string"
     },
     "engine": {
       "type": "object",

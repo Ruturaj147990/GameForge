@@ -100,7 +100,9 @@ class UnrealEngineAdapter(EngineAdapter):
         source_dir = project_path / "Source"
         if source_dir.is_dir() and any(source_dir.glob("**/*.cpp")):
             # Build using RunUAT or Build.bat if available
-            build_bat = Path(self._discovery.executable_path).parents[3] / "Build" / "BatchFiles" / "Build.bat"
+            build_bat = Path(self._discovery.executable_path).parents[2] / "Build" / "BatchFiles" / "Build.bat"
+            if not build_bat.is_file():
+                build_bat = Path(self._discovery.executable_path).parents[3] / "Build" / "BatchFiles" / "Build.bat"
             if build_bat.is_file():
                 target_name = uproject.stem + "Editor"
                 cmd = [
@@ -564,6 +566,27 @@ print("BEHAVIOR_PROBES_COMPLETE")
             measurements.append(
                 ProbeMeasurement("camera_geometry_intersection", allow_intersect, m, None, passed, "bool", "Must not clip world geometry")
             )
+        # Generic / health-damage / hidden probe measurements
+        for k, v in measured_data.items():
+            if k.startswith("probe_") and isinstance(v, dict):
+                p_id = k
+                p_pass = bool(v.get("passed", False))
+                p_meas = v.get("measured_value")
+                p_target = v.get("target_value")
+                p_tol = v.get("tolerance")
+                p_unit = v.get("unit", "")
+                p_details = v.get("details", "")
+                measurements.append(
+                    ProbeMeasurement(
+                        probe_id=p_id,
+                        target_value=p_target,
+                        measured_value=p_meas,
+                        tolerance=p_tol,
+                        passed=p_pass,
+                        unit=p_unit,
+                        details=p_details,
+                    )
+                )
 
         return measurements
 
@@ -600,10 +623,9 @@ print("BEHAVIOR_PROBES_COMPLETE")
 
         # Check required components declared in acceptance config
         req_components = acceptance_config.get("required_components", [])
+        req_classes = acceptance_config.get("required_classes", [])
         
         # Check candidate character definition files
-        # Can be in Source/ or Content/ or designated config
-        character_config = project_path / "Config" / "DefaultGame.ini"
         source_dir = project_path / "Source"
         has_character_code = False
         if source_dir.is_dir():
@@ -611,8 +633,23 @@ print("BEHAVIOR_PROBES_COMPLETE")
                 has_character_code = True
                 content = cpp_file.read_text(encoding="utf-8", errors="replace")
                 for comp in req_components:
-                    if comp not in content:
+                    instantiated = (
+                        f"CreateDefaultSubobject<U{comp}>" in content or
+                        f"CreateDefaultSubobject<{comp}>" in content or
+                        f"Get{comp}()" in content or
+                        f"Get{comp.replace('Component', '')}()" in content
+                    )
+                    if not instantiated:
                         missing_components.append(f"{cpp_file.name}:{comp}")
+
+            for req_cls in req_classes:
+                found_cls = False
+                for h_file in source_dir.glob("**/*.h"):
+                    if req_cls in h_file.stem:
+                        found_cls = True
+                        break
+                if not found_cls:
+                    missing_components.append(f"MissingClass:{req_cls}")
 
         # Check blueprints or fixture assets
         content_dir = project_path / "Content"

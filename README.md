@@ -59,6 +59,15 @@ python -m gameforge_bench.cli run --task-id t2-001-third-person-controller --eng
 
 # Run controlled fault candidate (demonstrates partial build / defect detection):
 python -m gameforge_bench.cli run --task-id t2-001-third-person-controller --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_001_failing_speed --candidate-id defective_speed_candidate
+
+# Run reference solution for health/damage system (Pilot 2) on Unreal Engine 5:
+python -m gameforge_bench.cli run --task-id t2-004-health-damage --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_004_health
+
+# Run reference solution for pickup collection system (Step 3 Task 1):
+python -m gameforge_bench.cli run --task-id t2-005-pickup-collection --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_005_pickup
+
+# Run reference solution for player character composition (Step 3 Task 2):
+python -m gameforge_bench.cli run --task-id t3-016-player-composition --engine unreal --candidate-dir graders/reference_solutions/unreal/t3_016_composition
 ```
 
 ### Summarize Benchmark Runs (`summarize`)
@@ -70,11 +79,27 @@ python -m gameforge_bench.cli summarize --report-dir reports
 ## 3. Running Automated Tests
 
 ```powershell
-# Unit tests (harness, policy, discovery, adapters, reporting)
+# Unit tests (harness, policy, discovery, adapters, reporting, isolation provider)
 pytest tests/unit -v
 
-# Real-engine integration tests (executes pilot in headless Unreal Engine 5.7)
+# Hidden grader oracles (isolated tests for temporal and event contracts)
+pytest graders/protected -v
+
+# Real-engine integration tests:
+# Pilot 1: Third-person movement & camera
 pytest tests/integration/test_pipeline_execution.py -v
+
+# Pilot 2: Health and damage, invulnerability window, and exactly-once death
+pytest tests/integration/test_health_damage_pipeline.py -v
+
+# Step 3 Task 1: Pickup collection, health/stamina effects, exactly-once events
+pytest tests/integration/test_pickup_pipeline.py -v
+
+# Step 3 Task 2: Player composition, scene integration, kinematics and health parity
+pytest tests/integration/test_composition_pipeline.py -v
+
+# Run entire test suite
+pytest -v
 ```
 
 ## 4. Discovered Environment Status
@@ -83,4 +108,5 @@ pytest tests/integration/test_pipeline_execution.py -v
 - **Unreal Engine:** 5.7.4 installed at `E:\UE\UE_5.7` (verified runnable with `UnrealEditor-Cmd.exe` and `PythonScriptPlugin`)
 - **Unity Engine:** Not installed locally in standard locations (adapter implemented and unit-tested; real-engine execution marked UNVERIFIED).
 - **GitHub Remote:** `https://github.com/Ruturaj147990/GameForge.git`
+
 

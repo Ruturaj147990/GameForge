@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -41,11 +42,45 @@ def snapshot_directory_hashes(directory: Path) -> Dict[str, str]:
             full = r_path / f
             # Skip transient build/cache artifacts
             rel = full.relative_to(directory).as_posix()
-            if any(part in rel for part in ("Intermediate", "Saved", "DerivedDataCache", "Library", "Temp", ".git")):
+            if any(part in rel for part in ("Binaries", "Intermediate", "Saved", "DerivedDataCache", "Library", "Temp", ".git")):
                 continue
             hashes[rel] = compute_file_hash(full)
 
     return hashes
+
+
+def compute_snapshot_hash(hashes_or_dir: Dict[str, str] | Path) -> str:
+    """Computes a deterministic SHA-256 hash across sorted (rel_path, file_hash) pairs."""
+    if isinstance(hashes_or_dir, Path):
+        hashes = snapshot_directory_hashes(hashes_or_dir)
+    else:
+        hashes = hashes_or_dir
+
+    h = hashlib.sha256()
+    for rel_path in sorted(hashes.keys()):
+        file_hash = hashes[rel_path]
+        h.update(f"{rel_path}:{file_hash}\n".encode("utf-8"))
+    return f"sha256:{h.hexdigest()}"
+
+
+def freeze_candidate_snapshot(candidate_dir: Path, frozen_dir: Path) -> Tuple[str, Dict[str, str]]:
+    """Creates a frozen, isolated read-only copy of the candidate directory and records its snapshot hash."""
+    if frozen_dir.exists():
+        shutil.rmtree(frozen_dir, ignore_errors=True)
+    frozen_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    # Copy tree preserving files
+    shutil.copytree(candidate_dir, frozen_dir, dirs_exist_ok=True)
+
+    inventory = snapshot_directory_hashes(frozen_dir)
+    snapshot_id = compute_snapshot_hash(inventory)
+    return snapshot_id, inventory
+
+
+def verify_snapshot_integrity(frozen_dir: Path, expected_snapshot_hash: str) -> bool:
+    """Verifies that a frozen snapshot has not been altered."""
+    actual_hash = compute_snapshot_hash(frozen_dir)
+    return actual_hash == expected_snapshot_hash
 
 
 def is_path_safe_relative(base_dir: Path, target_path_str: str) -> Tuple[bool, Optional[Path]]:
@@ -93,9 +128,22 @@ def check_candidate_policy(
     else:
         modified_files = list(current_hashes.keys())
 
-    # 3. Check forbidden paths and tampering
+    # 3. Check symlinks for path traversal / escape attempts
+    for root, dirs, files in os.walk(candidate_dir):
+        for entry in dirs + files:
+            entry_path = Path(root) / entry
+            if entry_path.is_symlink():
+                try:
+                    resolved_target = entry_path.resolve()
+                    if not resolved_target.is_relative_to(candidate_dir.resolve()):
+                        violations.append(
+                            f"Symlink traversal attack detected: '{entry_path.relative_to(candidate_dir)}' points outside candidate workspace ({resolved_target})"
+                        )
+                except Exception as exc:
+                    violations.append(f"Invalid symlink detected: {exc}")
+
+    # 4. Check forbidden paths and tampering
     normalized_forbidden = [p.lower().replace("\\", "/") for p in forbidden_paths]
-    # Standard mandatory protected directories
     mandatory_protected = [
         "graders",
         "configs/acceptance_criteria",
@@ -117,16 +165,23 @@ def check_candidate_policy(
             if m_pat in m_lower:
                 violations.append(f"Protected security violation: candidate cannot edit '{m_file}'")
 
-    # 4. Check allowed edit paths (allowlist enforcement)
-    # If allowed_edit_paths contains specific designations, ensure changes fall within them
+        # Anti-tampering: Candidate must never contain fake reports
+        if any(tok in m_lower for tok in ("benchmark_report", "run_report", "test_report")) and m_lower.endswith(".json"):
+            violations.append(f"Tampering detected: fake report generation attempt in '{m_file}'")
+
+        # Anti-tampering: Hidden test / grader leak check
+        if "hidden" in m_lower or "test_health_damage_hidden" in m_lower:
+            violations.append(f"Tampering detected: hidden test file in candidate directory '{m_file}'")
+
+    # 5. Check allowed edit paths (allowlist enforcement)
     if allowed_edit_paths and modified_files:
         for m_file in modified_files:
             m_lower = m_file.lower().replace("\\", "/")
-            # Handle generic keywords like 'project gameplay source paths', 'designated content/assets paths'
+            if any(part in m_lower for part in ("binaries/", "intermediate/", "saved/", ".target")):
+                continue
             is_allowed = False
             for allowed in allowed_edit_paths:
                 a_lower = allowed.lower().replace("\\", "/")
-                # Check for direct path match or semantic game paths (Source/, Content/, Assets/, Config/)
                 if a_lower in m_lower:
                     is_allowed = True
                     break

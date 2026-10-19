@@ -22,6 +22,12 @@
     "timestamp": { "type": "string" },
     "logical_task_id": { "type": "string" },
     "task_id": { "type": "string" },
+    "engine_scope": { "type": "string" },
+    "verification_level": { "type": "string" },
+    "knowledge_domains": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "engine": {
       "type": "object",
       "required": ["name", "version", "executable_path"],
@@ -112,6 +118,23 @@
         "stdout_log": { "type": "string" },
         "stderr_log": { "type": "string" },
         "engine_log": { "type": "string" }
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string" },
+        "classification": { "type": "string" },
+        "runtime_version": { "type": "string" },
+        "network_restricted": { "type": "boolean" },
+        "host_fs_restricted": { "type": "boolean" },
+        "timeout_policy_seconds": { "type": "number" },
+        "cleanup_status": { "type": "string" },
+        "workspace_identity": { "type": "string" },
+        "residual_risks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "duration_seconds": { "type": "number" },

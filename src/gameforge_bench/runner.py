@@ -14,7 +14,13 @@ from .engines.discovery import discover_environment, discover_unity_engine, disc
 from .engines.unity import UnityEngineAdapter
 from .engines.unreal import UnrealEngineAdapter
 from .grading import evaluate_grading_pipeline
-from .policy import check_candidate_policy, snapshot_directory_hashes
+from .policy import (
+    check_candidate_policy,
+    compute_snapshot_hash,
+    freeze_candidate_snapshot,
+    snapshot_directory_hashes,
+    verify_snapshot_integrity,
+)
 from .reporting import assemble_benchmark_report, format_report_summary, save_report
 from .task_loader import TaskSpec, load_task
 
@@ -57,8 +63,10 @@ class BenchmarkRunner:
         # Step 1: Validate the task specification
         task_yaml = self.workspace_root / "pilot_tasks" / f"{task_id}.yaml"
         if not task_yaml.is_file():
-            # Try searching in pilot_tasks
+            # Try searching in pilot_tasks and benchmark_tasks
             candidates = list((self.workspace_root / "pilot_tasks").glob(f"*{task_id}*.yaml"))
+            if not candidates:
+                candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{task_id}*.yaml"))
             if candidates:
                 task_yaml = candidates[0]
             else:
@@ -79,34 +87,53 @@ class BenchmarkRunner:
         # Resolve fixture directory
         fixture_dir = self.workspace_root / "fixtures" / adapter.engine_name / task_spec.id.replace("-", "_")
         if not fixture_dir.is_dir():
+            parts = task_spec.id.split("-")
+            if len(parts) >= 3:
+                cand_fixture = self.workspace_root / "fixtures" / adapter.engine_name / f"{parts[0]}_{parts[1]}_{parts[2]}"
+                if cand_fixture.is_dir():
+                    fixture_dir = cand_fixture
+        if not fixture_dir.is_dir():
             # Fallback to general pilot fixture
             fixture_dir = self.workspace_root / "fixtures" / adapter.engine_name / "t2_001_controller"
 
         # Resolve candidate directory
         if not candidate_dir:
-            # Use reference solution by default
-            candidate_dir = self.workspace_root / "graders" / "reference_solutions" / adapter.engine_name / "t2_001_controller"
-            if not Path(candidate_dir).is_dir():
+            # Check task-specific reference solution first
+            task_dir_name = task_spec.id.replace("-", "_")
+            cand_candidate = self.workspace_root / "graders" / "reference_solutions" / adapter.engine_name / task_dir_name
+            if not cand_candidate.is_dir():
+                parts = task_spec.id.split("-")
+                if len(parts) >= 3:
+                    alt_cand = self.workspace_root / "graders" / "reference_solutions" / adapter.engine_name / f"{parts[0]}_{parts[1]}_{parts[2]}"
+                    if alt_cand.is_dir():
+                        cand_candidate = alt_cand
+            if cand_candidate.is_dir():
+                candidate_dir = cand_candidate
+            else:
                 candidate_dir = fixture_dir
         candidate_path = Path(candidate_dir)
 
-        # Step 3: Prepare an isolated clean evaluation workspace
+        # Step 3: Freeze candidate snapshot in isolated storage
+        frozen_candidate_dir = self.workspace_root / "scratch" / "eval_runs" / run_id / "frozen_candidate"
         eval_workspace = self.workspace_root / "scratch" / "eval_runs" / run_id / "project"
         log_dir = self.workspace_root / "scratch" / "eval_runs" / run_id / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
 
         clean_start_ok = True
         try:
-            adapter.prepare_clean_workspace(candidate_path, eval_workspace)
+            snapshot_hash, candidate_hashes = freeze_candidate_snapshot(candidate_path, frozen_candidate_dir)
+            adapter.prepare_clean_workspace(frozen_candidate_dir, eval_workspace)
         except Exception:
             clean_start_ok = False
+            snapshot_hash = "unknown"
+            candidate_hashes = {}
 
         # Step 4: Record baseline directory hashes
         baseline_hashes = snapshot_directory_hashes(fixture_dir) if fixture_dir.is_dir() else {}
 
-        # Step 5 & 6: Freeze candidate snapshot hash
-        candidate_hashes = snapshot_directory_hashes(eval_workspace) if eval_workspace.is_dir() else {}
-        snapshot_hash = hex(hash(frozenset(candidate_hashes.items())))
+        # Step 5 & 6: Verify frozen candidate integrity
+        if not verify_snapshot_integrity(frozen_candidate_dir, snapshot_hash):
+            clean_start_ok = False
 
         # Step 7: Enforce static policy checks
         policy_result = check_candidate_policy(
@@ -116,6 +143,21 @@ class BenchmarkRunner:
             forbidden_paths=task_spec.forbidden_edits,
             baseline_hashes=baseline_hashes,
         )
+
+        # Step 7.5: Hidden Grader Isolation
+        # Inject protected test oracles ONLY into the isolated grading workspace (eval_workspace)
+        task_protected_dir = self.workspace_root / "graders" / "protected" / task_spec.id.replace("-", "_")
+        if not task_protected_dir.is_dir():
+            parts = task_spec.id.split("-")
+            if len(parts) >= 2:
+                short_id = f"{parts[0]}_{parts[1]}"
+                task_protected_dir = self.workspace_root / "graders" / "protected" / short_id
+
+        if task_protected_dir.is_dir():
+            dest_protected = eval_workspace / "Probes" / "ProtectedGrader"
+            dest_protected.mkdir(parents=True, exist_ok=True)
+            for f in task_protected_dir.glob("*.py"):
+                shutil.copyfile(f, dest_protected / f.name)
 
         # Load frozen acceptance criteria
         if not acceptance_config_path:

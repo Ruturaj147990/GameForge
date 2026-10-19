@@ -1,0 +1,23 @@
+id: t1-003-event-diagnostics
+logical_task_id: T1-003
+tier: T1
+title: Event subscription lifecycle and duplicate notification diagnostics
+category: debug_performance
+status: active
+engine_variants: [agnostic]
+engine_scope: ENGINE_AGNOSTIC
+verification_level: STATIC_INSPECTION
+knowledge_domains: [debugging, event_semantics, ui_architecture, memory_lifecycle]
+native_execution_required: false
+prompt: >-
+  Analyze a diagnostic case study where repeated player respawn or widget reconstruction
+  causes exponential UI event updates and memory retention. Explain: (1) root causes in
+  multicast delegate/event systems, (2) proper unsubscription lifecycles in Unreal Engine
+  (NativeDestruct, RemoveDynamic) and Unity (OnDisable, OnDestroy), and (3) defensive idempotent
+  binding patterns that prevent duplicate listener registration.
+limits: {wall_clock_seconds: 1200, max_tool_calls: 30}
+allowed_edit_paths: [designated analysis paths]
+forbidden_edits: [tests, grader]
+required_checks: [schema_validation, rubric_matching]
+provenance: {fixture_origin: internal, rights_review: approved}
+review: {engine_reviewer: approved, independent_reviewer: approved}

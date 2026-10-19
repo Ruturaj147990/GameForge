@@ -1,0 +1,46 @@
+{
+  "task_id": "t2-004-health-damage",
+  "logical_task_id": "T2-004",
+  "version": "1.0.0",
+  "status": "frozen",
+  "review_status": "approved_baseline",
+  "description": "Frozen acceptance targets and temporal tolerances for Health and Damage System pilot",
+  "initial_state": {
+    "max_health": 100.0,
+    "initial_health": 100.0,
+    "is_alive": true,
+    "invulnerability_duration_seconds": 0.75
+  },
+  "damage_rules": {
+    "min_health_floor": 0.0,
+    "reject_negative_damage": true,
+    "reject_zero_damage": true,
+    "reject_non_finite_damage": true
+  },
+  "healing_rules": {
+    "max_health_ceiling": 100.0,
+    "reject_negative_healing": true,
+    "reject_zero_healing": true,
+    "reject_non_finite_healing": true,
+    "allow_revival_via_healing": false
+  },
+  "temporal_invulnerability": {
+    "duration_seconds": 0.75,
+    "timer_extension_on_blocked_hit": false,
+    "pre_expiry_test_offset_seconds": 0.70,
+    "post_expiry_test_offset_seconds": 0.80
+  },
+  "events": {
+    "health_changed_on_mutation_only": true,
+    "damage_accepted_on_effective_hit_only": true,
+    "death_emitted_exactly_once": true,
+    "lethal_hit_event_order": [
+      "OnHealthChanged",
+      "OnDamageAccepted",
+      "OnDeath"
+    ]
+  },
+  "required_components": [
+    "HealthComponent"
+  ]
+}

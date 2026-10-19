@@ -14,7 +14,7 @@ T2-012,T2,Death and respawn state reset,gameplay,paired where feasible,hidden te
 T2-013,T2,Stamina drain and regeneration,gameplay,paired where feasible,behavior probes + runtime tests,no,Movement constraints and timing
 T2-014,T2,Moving platform rider transport,gameplay,paired where feasible,behavior probes + runtime tests,no,No unintended sliding or detachment
 T2-015,T2,Damage/death events update UI cleanly,gameplay,paired where feasible,hidden tests + regression,no,No duplicate subscriptions or stale values
-T3-016,T3,Player prefab/actor composition,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Required components and references resolve
+T3-016,T3,Player prefab/actor composition,editor_authoring,paired where feasible,saved-asset checks + runtime tests,yes,Required components and references resolve
 T3-017,T3,Health and stamina HUD bindings,editor_authoring,paired where feasible,saved-asset checks + runtime tests,yes,HUD updates from underlying values
 T3-018,T3,Pickup object and configured instances,editor_authoring,paired where feasible,saved-asset checks,no,Multiple instances preserve configuration
 T3-019,T3,Door trigger and interaction target,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,References and interaction wiring

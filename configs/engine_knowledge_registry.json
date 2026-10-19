@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "registry_version": "1.0.0",
+  "description": "GameForge Version-Aware Engine Knowledge Registry for multi-engine API retrieval and evaluation",
+  "last_updated": "2026-10-19",
+  "engines": {
+    "unreal_engine": {
+      "versions": ["5.5", "5.6", "5.7"],
+      "primary_version": "5.7.4",
+      "official_docs": "https://dev.epicgames.com/documentation/en-us/unreal-engine",
+      "verification_status": "REAL_ENGINE_VERIFIED",
+      "api_families": {
+        "gameplay_framework": {
+          "status": "VERIFIED",
+          "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-framework-in-unreal-engine",
+          "components": ["AActor", "UActorComponent", "ACharacter", "APawn", "APlayerController"],
+          "notes": "Tick lifecycle, Subobject creation via CreateDefaultSubobject in constructor"
+        },
+        "enhanced_input": {
+          "status": "VERIFIED",
+          "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine",
+          "components": ["UEnhancedInputComponent", "UInputMappingContext", "UInputAction"],
+          "notes": "Replaces legacy input action bindings starting in UE 5.1"
+        },
+        "umg_ui": {
+          "status": "VERIFIED",
+          "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/umg-ui-designer-for-unreal-engine",
+          "components": ["UUserWidget", "UProgressBar", "UTextBlock"],
+          "notes": "Requires UMG, Slate, SlateCore module dependencies in Build.cs"
+        },
+        "collision_and_physics": {
+          "status": "VERIFIED",
+          "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/collision-in-unreal-engine",
+          "components": ["UPrimitiveComponent", "USphereComponent", "FHitResult"],
+          "notes": "Delegate OnComponentHit and OnComponentBeginOverlap require exact signature matches"
+        }
+      }
+    },
+    "unity": {
+      "versions": ["2022.3 LTS", "6.0 LTS"],
+      "primary_version": "2022.3 LTS",
+      "official_docs": "https://docs.unity3d.com/Manual/index.html",
+      "verification_status": "AUTHORED",
+      "api_families": {
+        "gameplay_core": {
+          "status": "AUTHORED",
+          "doc_url": "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html",
+          "components": ["MonoBehaviour", "GameObject", "Transform", "Component"],
+          "notes": "Awake -> OnEnable -> Start lifecycle execution order"
+        },
+        "physics": {
+          "status": "AUTHORED",
+          "doc_url": "https://docs.unity3d.com/ScriptReference/Rigidbody.html",
+          "components": ["Rigidbody", "Collider", "Collision", "RaycastHit"],
+          "notes": "Unity units in meters (1 unit = 100 cm). Y-axis is up."
+        },
+        "ui_toolkit_ugui": {
+          "status": "AUTHORED",
+          "doc_url": "https://docs.unity3d.com/Packages/com.unity.ugui@latest",
+          "components": ["UnityEngine.UI.Image", "UnityEngine.UI.Text", "Canvas"],
+          "notes": "Event-driven updates preferred over polling in Update()"
+        }
+      }
+    },
+    "godot": {
+      "versions": ["4.2", "4.3"],
+      "primary_version": "4.3",
+      "official_docs": "https://docs.godotengine.org/en/stable/",
+      "verification_status": "SPECIFIED",
+      "api_families": {
+        "node_tree": {
+          "status": "SPECIFIED",
+          "doc_url": "https://docs.godotengine.org/en/stable/classes/class_node.html",
+          "components": ["Node", "Node3D", "CharacterBody3D", "Area3D"],
+          "notes": "_ready -> _process -> _physics_process lifecycle"
+        },
+        "signals": {
+          "status": "SPECIFIED",
+          "doc_url": "https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html",
+          "components": ["Signal", "Callable"],
+          "notes": "Decoupled observer pattern native to engine"
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from .engines.base import EngineDiscoveryResult
 from .grading import GradingPipelineResult, RunStatus
+from .isolation import audit_os_isolation_capabilities
 from .provenance import capture_environment
 from .task_loader import TaskSpec
 
@@ -28,6 +29,7 @@ def assemble_benchmark_report(
 ) -> Dict[str, Any]:
     """Assembles a full machine-readable evaluation report conforming to report_schema.json."""
     env_rec = capture_environment(workspace_root)
+    isolation_audit = audit_os_isolation_capabilities()
 
     report = {
         "report_schema_version": "0.1.0",
@@ -36,6 +38,9 @@ def assemble_benchmark_report(
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "logical_task_id": task_spec.logical_task_id,
         "task_id": task_spec.id,
+        "engine_scope": getattr(task_spec, "engine_scope", "ENGINE_SPECIFIC"),
+        "verification_level": getattr(task_spec, "verification_level", "REAL_ENGINE_VERIFIED"),
+        "knowledge_domains": getattr(task_spec, "knowledge_domains", ["gameplay"]),
         "engine": {
             "name": engine_discovery.engine_name,
             "version": engine_discovery.version or "unverified",
@@ -78,6 +83,20 @@ def assemble_benchmark_report(
         },
         "probes": grading_result.probes,
         "diff_summary": diff_summary,
+        "isolation": {
+            "provider": "RestrictedProcessIsolationProvider",
+            "classification": isolation_audit.default_classification,
+            "runtime_version": isolation_audit.host_build,
+            "network_restricted": False,
+            "host_fs_restricted": False,
+            "timeout_policy_seconds": 180.0,
+            "cleanup_status": "DISPOSABLE_WORKSPACE_PER_RUN",
+            "workspace_identity": "scratch/eval_runs",
+            "residual_risks": [
+                "Host user permissions retained by native C++ process",
+                "OS-level sandbox (Hyper-V / Windows Sandbox) not active",
+            ],
+        },
         "logs": log_files or {},
         "duration_seconds": round(grading_result.duration_seconds, 3),
         "warnings": grading_result.warnings,
@@ -106,6 +125,9 @@ def format_report_summary(report: Dict[str, Any]) -> str:
     lines.append(f"Engine:          {report['engine']['name']} (v{report['engine']['version']})")
     lines.append(f"Candidate:       {report['candidate']['candidate_id']} ({report['candidate']['candidate_type']})")
     lines.append(f"Status:          {report['status']}")
+    if "isolation" in report:
+        iso = report["isolation"]
+        lines.append(f"Isolation:       {iso.get('classification', 'UNVERIFIED')} ({iso.get('provider', 'none')})")
     if report.get("first_mandatory_failure_layer"):
         lines.append(f"First Failure:   {report['first_mandatory_failure_layer']}")
     lines.append(f"Total Duration:  {report['duration_seconds']}s")

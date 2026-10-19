@@ -1,0 +1,38 @@
+{
+  "task_id": "t3-016-player-composition",
+  "logical_task_id": "T3-016",
+  "version": "1.0.0",
+  "status": "frozen",
+  "review_status": "approved_baseline",
+  "description": "Frozen acceptance targets for Native Player Character Composition and Scene Integration",
+  "required_components": [
+    "CapsuleComponent",
+    "CharacterMovementComponent",
+    "SpringArmComponent",
+    "CameraComponent",
+    "HealthComponent",
+    "StaminaComponent"
+  ],
+  "composition_rules": {
+    "unique_component_instances": true,
+    "valid_component_references": true,
+    "receiver_interface_implemented": true
+  },
+  "initial_scenario_state": {
+    "initial_health": 50.0,
+    "initial_stamina": 40.0
+  },
+  "expected_final_state": {
+    "health_after_pickup": 75.0,
+    "stamina_after_pickup": 60.0
+  },
+  "movement_parity": {
+    "max_speed_mps": 6.0,
+    "jump_apex_height_meters": 1.2,
+    "orbit_arm_length_meters": 4.0
+  },
+  "health_parity": {
+    "max_health": 100.0,
+    "invulnerability_duration_seconds": 0.75
+  }
+}

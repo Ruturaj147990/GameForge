@@ -1,0 +1,36 @@
+{
+  "task_id": "t2-005-pickup-collection",
+  "logical_task_id": "T2-005",
+  "version": "1.0.0",
+  "status": "frozen",
+  "review_status": "approved_baseline",
+  "description": "Frozen acceptance targets and lifecycle rules for Pickup Collection system pilot",
+  "health_pickup": {
+    "max_health": 100.0,
+    "initial_health_during_test": 50.0,
+    "pickup_amount": 25.0,
+    "expected_health_after_collection": 75.0,
+    "full_health_rejection": true,
+    "dead_player_rejection": true
+  },
+  "stamina_pickup": {
+    "max_stamina": 100.0,
+    "initial_stamina_during_test": 40.0,
+    "pickup_amount": 20.0,
+    "expected_stamina_after_collection": 60.0,
+    "full_stamina_rejection": true
+  },
+  "collection_rules": {
+    "exactly_once_event": true,
+    "repeated_overlap_idempotent": true,
+    "reentry_after_consumed_disabled": true,
+    "rejection_on_invalid_target": true,
+    "rejection_on_non_positive_amount": true,
+    "reentrancy_guard_required": true,
+    "race_condition_single_winner": true
+  },
+  "required_classes": [
+    "PickupComponent",
+    "PickupActor"
+  ]
+}

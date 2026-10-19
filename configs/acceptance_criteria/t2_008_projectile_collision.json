@@ -1,0 +1,25 @@
+{
+  "task_id": "t2-008-projectile-collision",
+  "logical_task_id": "T2-008",
+  "version": "1.0.0",
+  "status": "frozen",
+  "review_status": "approved_baseline",
+  "description": "Frozen acceptance targets for Projectile Collision and Combat Damage pilot",
+  "projectile_config": {
+    "speed_cmps": 2000.0,
+    "damage_amount": 20.0,
+    "lifespan_seconds": 5.0
+  },
+  "combat_rules": {
+    "target_initial_health": 100.0,
+    "expected_health_after_single_hit": 80.0,
+    "owner_damage_exclusion": true,
+    "invalid_target_rejection": true,
+    "invulnerability_window_respected": true,
+    "exactly_once_damage_per_projectile": true,
+    "collision_disabled_on_impact": true
+  },
+  "required_classes": [
+    "ProjectileActor"
+  ]
+}

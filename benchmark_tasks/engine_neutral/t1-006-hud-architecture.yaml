@@ -1,0 +1,25 @@
+id: t1-006-hud-architecture
+logical_task_id: T1-006
+tier: T1
+title: Decoupled resource HUD architecture across engines
+category: gameplay
+status: active
+engine_variants: [agnostic]
+engine_scope: CROSS_ENGINE
+verification_level: STATIC_INSPECTION
+knowledge_domains: [ui_architecture, decoupled_presentation, observer_pattern, cross_engine]
+native_execution_required: false
+prompt: >-
+  Identify the general design principles and engine-specific implementation steps required to
+  build a decoupled player resource HUD (health and stamina bars). Outline: (1) why polling
+  in Tick/Update violates clean architecture, (2) the observer pattern with broadcast delegates,
+  (3) engine-specific implementation in Unreal Engine (UMG UUserWidget C++ base, binding to
+  UActorComponent delegates in NativeConstruct, unbinding in NativeDestruct), (4) engine-specific
+  implementation in Unity (UGUI/UI Toolkit, event listening on OnEnable/OnDisable), and
+  (5) defensive handling of player possession changes.
+limits: {wall_clock_seconds: 1200, max_tool_calls: 30}
+allowed_edit_paths: [designated analysis paths]
+forbidden_edits: [tests, grader]
+required_checks: [schema_validation, rubric_matching]
+provenance: {fixture_origin: internal, rights_review: approved}
+review: {engine_reviewer: approved, independent_reviewer: approved}

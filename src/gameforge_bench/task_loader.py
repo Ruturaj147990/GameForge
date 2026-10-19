@@ -81,6 +81,15 @@ class TaskSpec(BaseModel):
     grading: TaskGrading = Field(default_factory=TaskGrading)
     reproducibility: TaskReproducibility = Field(default_factory=TaskReproducibility)
     provenance: TaskProvenance = Field(default_factory=TaskProvenance)
+    engine_scope: str = "ENGINE_SPECIFIC"
+    engines_supported: List[str] = Field(default_factory=lambda: ["unreal", "unity"])
+    engine_versions: Dict[str, str] = Field(default_factory=dict)
+    verification_level: str = "REAL_ENGINE_VERIFIED"
+    knowledge_domains: List[str] = Field(default_factory=list)
+    parity_group: Optional[str] = None
+    native_execution_required: bool = True
+    source_references: List[str] = Field(default_factory=list)
+    data_provenance_status: str = "verified"
     raw_source_path: Optional[str] = None
 
 
@@ -167,6 +176,24 @@ def normalize_task_dict(raw: Dict[str, Any], source_path: Optional[Path] = None)
 
     if source_path:
         data["raw_source_path"] = str(source_path)
+
+    # Normalize engine scope metadata
+    if "engine_scope" not in data:
+        data["engine_scope"] = "ENGINE_SPECIFIC"
+    if "engines_supported" not in data:
+        data["engines_supported"] = data.get("engine_variants", ["unreal", "unity"])
+    if "engine_versions" not in data:
+        data["engine_versions"] = {}
+    if "verification_level" not in data:
+        data["verification_level"] = "REAL_ENGINE_VERIFIED"
+    if "knowledge_domains" not in data:
+        data["knowledge_domains"] = [data.get("category", "gameplay")]
+    if "native_execution_required" not in data:
+        data["native_execution_required"] = True
+    if "source_references" not in data:
+        data["source_references"] = []
+    if "data_provenance_status" not in data:
+        data["data_provenance_status"] = "verified"
 
     return data
 
