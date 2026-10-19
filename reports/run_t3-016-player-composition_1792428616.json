@@ -1,0 +1,216 @@
+{
+  "report_schema_version": "0.1.0",
+  "benchmark_version": "v0.1",
+  "run_id": "run_t3-016-player-composition_1792428616",
+  "timestamp": "2026-10-19T16:51:21Z",
+  "logical_task_id": "T3-016",
+  "task_id": "t3-016-player-composition",
+  "engine_scope": "ENGINE_SPECIFIC",
+  "verification_level": "REAL_ENGINE_VERIFIED",
+  "knowledge_domains": [
+    "editor_authoring"
+  ],
+  "engine": {
+    "name": "unreal",
+    "version": "5.7.4",
+    "executable_path": "E:\\UE\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+    "project_version": "5.7"
+  },
+  "environment": {
+    "os": "Windows 11",
+    "python_version": "3.14.6",
+    "toolchain_versions": {
+      "processor": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+      "python_executable": "C:\\Users\\limbk\\AppData\\Local\\Programs\\Python\\Python314\\python.exe"
+    },
+    "git_commit": "a33cde4c766515c4d6c1c4e62555a8e747f53627"
+  },
+  "candidate": {
+    "candidate_id": "reference_t3_016_unreal",
+    "candidate_type": "reference",
+    "snapshot_hash": "sha256:9f01e23d35416f3db4e156e5d1b9a03184801035b578d89f2e3176f46ec08bc7"
+  },
+  "budgets": {
+    "wall_clock_seconds": 2700,
+    "max_tool_calls": 120,
+    "max_model_tokens": null
+  },
+  "reproducibility": {
+    "fixed_timestep": 0.016667,
+    "seed": 42
+  },
+  "status": "PASS",
+  "first_mandatory_failure_layer": null,
+  "layers": {
+    "clean_start": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Workspace snapshot verified",
+      "details": {}
+    },
+    "policy_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All static boundaries respected",
+      "details": {}
+    },
+    "build_import": {
+      "status": "PASS",
+      "duration_seconds": 12.068909883499146,
+      "message": "Project built and imported successfully",
+      "details": {}
+    },
+    "automated_tests": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All 2 automated tests passed",
+      "details": {
+        "tests": [
+          {
+            "name": "engine_subsystem_initialization",
+            "passed": true,
+            "duration_seconds": 11.554790019989014,
+            "message": "Engine initialized: 5.7.4-51494982+++UE5+Release-5.7",
+            "error_trace": null
+          },
+          {
+            "name": "editor_subsystem_available",
+            "passed": true,
+            "duration_seconds": 11.554790019989014,
+            "message": "Editor subsystem query succeeded",
+            "error_trace": null
+          }
+        ]
+      }
+    },
+    "behavior_probes": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All 9 behavior probes passed within tolerance",
+      "details": {}
+    },
+    "saved_asset_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Saved assets, components, and references validated",
+      "details": {
+        "plugins_enabled": [
+          "PythonScriptPlugin"
+        ],
+        "engine_association": "5.7"
+      }
+    },
+    "performance_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Within declared performance limits",
+      "details": {}
+    },
+    "regression_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "No regressions detected",
+      "details": {}
+    },
+    "visual_review": {
+      "status": "NOT_APPLICABLE",
+      "duration_seconds": 0.0,
+      "message": "Visual review not required",
+      "details": {}
+    }
+  },
+  "probes": {
+    "probe_c1_component_completeness": {
+      "passed": true,
+      "measured_value": 6,
+      "target_value": 6,
+      "tolerance": null,
+      "unit": "",
+      "details": "Present components: ['CapsuleComponent', 'CharacterMovementComponent', 'SpringArmComponent', 'CameraComponent', 'HealthComponent', 'StaminaComponent'], Receiver interface: True"
+    },
+    "probe_c2_component_uniqueness": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "Component counts unique (count == 1 for all): True"
+    },
+    "probe_c3_valid_references": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "Component hierarchy and pointers resolved: True"
+    },
+    "probe_c4_end_to_end_health_interaction": {
+      "passed": true,
+      "measured_value": 75.0,
+      "target_value": 75.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Composed health after pickup: 75.0, applied: True"
+    },
+    "probe_c5_end_to_end_stamina_interaction": {
+      "passed": true,
+      "measured_value": 60.0,
+      "target_value": 60.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Composed stamina after pickup: 60.0, applied: True"
+    },
+    "probe_c6_movement_parity": {
+      "passed": true,
+      "measured_value": 6.0,
+      "target_value": 6.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Max speed: 6.0 m/s, jump apex: 1.20 m, arm length: 4.0 m"
+    },
+    "probe_c7_health_parity": {
+      "passed": true,
+      "measured_value": 0.75,
+      "target_value": 0.75,
+      "tolerance": null,
+      "unit": "",
+      "details": "Max health: 100.0, invulnerability window: 0.75s"
+    },
+    "probe_c8_scene_integrity": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "Ground geometry, spawn configuration, collision channels, and actor references verified"
+    },
+    "probe_c9_spawn_and_cleanup": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "Actor spawned in test world and torn down without leaks or dangling references"
+    }
+  },
+  "diff_summary": null,
+  "isolation": {
+    "provider": "RestrictedProcessIsolationProvider",
+    "classification": "LOW_PRIVILEGE_PROCESS",
+    "runtime_version": "10.0.26300",
+    "network_restricted": false,
+    "host_fs_restricted": false,
+    "timeout_policy_seconds": 180.0,
+    "cleanup_status": "DISPOSABLE_WORKSPACE_PER_RUN",
+    "workspace_identity": "scratch/eval_runs",
+    "residual_risks": [
+      "Host user permissions retained by native C++ process",
+      "OS-level sandbox (Hyper-V / Windows Sandbox) not active"
+    ]
+  },
+  "logs": {
+    "eval_log_dir": "E:\\gameforge_step1\\scratch\\eval_runs\\run_t3-016-player-composition_1792428616\\logs"
+  },
+  "duration_seconds": 64.903,
+  "warnings": []
+}

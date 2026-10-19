@@ -1,0 +1,142 @@
+# src/gameplay/components/HealthComponent.h
+--- a/src/gameplay/components/HealthComponent.h
++++ b/src/gameplay/components/HealthComponent.h
+@@ -0,0 +1,28 @@
++#ifndef HEALTH_COMPONENT_H
++#define HEALTH_COMPONENT_H
++
++#include "EntityComponent.h"
++#include "Time.h"
++
++class HealthComponent : public EntityComponent {
++public:
++    static constexpr float kInvulnerabilityWindowDuration = 1.0f; // seconds
++    static constexpr float kMaxHealth = 100.0f;
++    static constexpr float kMinHealth = 0.0f;
++
++    HealthComponent(Entity* entity);
++    ~HealthComponent() override;
++
++    void TakeDamage(float damage) override;
++    void Update(Time::Delta delta) override;
++
++    float GetHealth() const { return m_health; }
++    bool IsInvulnerable() const { return m_invulnerabilityWindowActive; }
++
++private:
++    float m_health;
++    Time m_invulnerabilityWindowStart;
++    bool m_invulnerabilityWindowActive;
++};
++
++#endif // HEALTH_COMPONENT_H
+
+
+# src/gameplay/components/HealthComponent.cpp
+--- a/src/gameplay/components/HealthComponent.cpp
++++ b/src/gameplay/components/HealthComponent.cpp
+@@ -0,0 +1,25 @@
++#include "HealthComponent.h"
++
++HealthComponent::HealthComponent(Entity* entity)
++    : EntityComponent(entity), m_health(kMaxHealth) {}
++
++HealthComponent::~HealthComponent() {}
++
++void HealthComponent::TakeDamage(float damage) {
++    if (m_invulnerabilityWindowActive) return;
++
++    float newHealth = std::max(m_minHealth, m_health - damage);
++    m_health = newHealth;
++    if (newHealth <= 0.0f) {
++        // Death event
++        EmitEvent("Death");
++        m_invulnerabilityWindowStart = Time::GetTime() + kInvulnerabilityWindowDuration;
++        m_invulnerabilityWindowActive = true;
++    }
++}
++
++void HealthComponent::Update(Time::Delta delta) {
++    if (m_invulnerabilityWindowActive && Time::GetTime() >= m_invulnerabilityWindowStart) {
++        m_invulnerabilityWindowActive = false;
++    }
++}
+
+
+# src/gameplay/systems/HealthSystem.h
+--- a/src/gameplay/systems/HealthSystem.h
++++ b/src/gameplay/systems/HealthSystem.h
+@@ -0,0 +1,17 @@
++#ifndef HEALTH_SYSTEM_H
++#define HEALTH_SYSTEM_H
++
++#include "EntitySystem.h"
++#include "HealthComponent.h"
++
++class HealthSystem : public EntitySystem {
++public:
++    static constexpr float kUpdateInterval = 1.0f / 60.0f; // seconds
++
++    HealthSystem();
++    ~HealthSystem() override;
++
++    void Update(Time::Delta delta) override;
++};
++
++#endif // HEALTH_SYSTEM_H
+
+
+# src/gameplay/systems/HealthSystem.cpp
+--- a/src/gameplay/systems/HealthSystem.cpp
++++ b/src/gameplay/systems/HealthSystem.cpp
+@@ -0,0 +1,12 @@
++#include "HealthSystem.h"
++
++HealthSystem::HealthSystem()
++    : EntitySystem("HealthSystem") {}
++
++HealthSystem::~HealthSystem() {}
++
++void HealthSystem::Update(Time::Delta delta) {
++    for (Entity* entity : GetEntities<HealthComponent>()) {
++        entity->GetComponent<HealthComponent>()->Update(delta);
++    }
++}
+
+
+# src/gameplay/entities/Entity.h
+--- a/src/gameplay/entities/Entity.h
++++ b/src/gameplay/entities/Entity.h
+@@ -0,0 +1,18 @@
++#ifndef ENTITY_H
++#define ENTITY_H
++
++#include "ComponentManager.h"
++
++class Entity {
++public:
++    Entity();
++    ~Entity();
++
++    template <typename T>
++    T* GetComponent() { return m_componentManager->GetComponent<T>(); }
++
++private:
++    ComponentManager* m_componentManager;
++};
++
++#endif // ENTITY_H
+
+
+# src/gameplay/entities/Entity.cpp
+--- a/src/gameplay/entities/Entity.cpp
++++ b/src/gameplay/entities/Entity.cpp
+@@ -0,0 +1,8 @@
++#include "Entity.h"
++
++Entity::Entity()
++    : m_componentManager(new ComponentManager()) {}
++
++Entity::~Entity() {
++    delete m_componentManager;
++}

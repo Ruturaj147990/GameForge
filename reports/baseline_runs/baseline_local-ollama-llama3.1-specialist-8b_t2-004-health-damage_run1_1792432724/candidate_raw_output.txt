@@ -1,0 +1,137 @@
+Here is a possible solution for the task:
+
+### File: src/gameplay/components/HealthComponent.h
+```cpp
+#ifndef HEALTH_COMPONENT_H
+#define HEALTH_COMPONENT_H
+
+#include "EntityComponent.h"
+#include "Time.h"
+
+class HealthComponent : public EntityComponent {
+public:
+    static constexpr float kInvulnerabilityWindowDuration = 1.0f; // seconds
+    static constexpr float kMaxHealth = 100.0f;
+    static constexpr float kMinHealth = 0.0f;
+
+    HealthComponent(Entity* entity);
+    ~HealthComponent() override;
+
+    void TakeDamage(float damage) override;
+    void Update(Time::Delta delta) override;
+
+    float GetHealth() const { return m_health; }
+    bool IsInvulnerable() const { return m_invulnerabilityWindowActive; }
+
+private:
+    float m_health;
+    Time m_invulnerabilityWindowStart;
+    bool m_invulnerabilityWindowActive;
+};
+
+#endif // HEALTH_COMPONENT_H
+```
+
+### File: src/gameplay/components/HealthComponent.cpp
+```cpp
+#include "HealthComponent.h"
+
+HealthComponent::HealthComponent(Entity* entity)
+    : EntityComponent(entity), m_health(kMaxHealth) {}
+
+HealthComponent::~HealthComponent() {}
+
+void HealthComponent::TakeDamage(float damage) {
+    if (m_invulnerabilityWindowActive) return;
+
+    float newHealth = std::max(m_minHealth, m_health - damage);
+    m_health = newHealth;
+    if (newHealth <= 0.0f) {
+        // Death event
+        EmitEvent("Death");
+        m_invulnerabilityWindowStart = Time::GetTime() + kInvulnerabilityWindowDuration;
+        m_invulnerabilityWindowActive = true;
+    }
+}
+
+void HealthComponent::Update(Time::Delta delta) {
+    if (m_invulnerabilityWindowActive && Time::GetTime() >= m_invulnerabilityWindowStart) {
+        m_invulnerabilityWindowActive = false;
+    }
+}
+```
+
+### File: src/gameplay/systems/HealthSystem.h
+```cpp
+#ifndef HEALTH_SYSTEM_H
+#define HEALTH_SYSTEM_H
+
+#include "EntitySystem.h"
+#include "HealthComponent.h"
+
+class HealthSystem : public EntitySystem {
+public:
+    static constexpr float kUpdateInterval = 1.0f / 60.0f; // seconds
+
+    HealthSystem();
+    ~HealthSystem() override;
+
+    void Update(Time::Delta delta) override;
+};
+
+#endif // HEALTH_SYSTEM_H
+```
+
+### File: src/gameplay/systems/HealthSystem.cpp
+```cpp
+#include "HealthSystem.h"
+
+HealthSystem::HealthSystem()
+    : EntitySystem("HealthSystem") {}
+
+HealthSystem::~HealthSystem() {}
+
+void HealthSystem::Update(Time::Delta delta) {
+    for (Entity* entity : GetEntities<HealthComponent>()) {
+        entity->GetComponent<HealthComponent>()->Update(delta);
+    }
+}
+```
+
+### File: src/gameplay/entities/Entity.h
+```cpp
+#ifndef ENTITY_H
+#define ENTITY_H
+
+#include "ComponentManager.h"
+
+class Entity {
+public:
+    Entity();
+    ~Entity();
+
+    template <typename T>
+    T* GetComponent() { return m_componentManager->GetComponent<T>(); }
+
+private:
+    ComponentManager* m_componentManager;
+};
+
+#endif // ENTITY_H
+```
+
+### File: src/gameplay/entities/Entity.cpp
+```cpp
+#include "Entity.h"
+
+Entity::Entity()
+    : m_componentManager(new ComponentManager()) {}
+
+Entity::~Entity() {
+    delete m_componentManager;
+}
+```
+
+This solution implements a `HealthComponent` that tracks the entity's health and damage, as well as an invulnerability window. The `HealthSystem` updates the health of all entities with the `HealthComponent`. The existing interfaces are preserved.
+
+Note: This is just one possible implementation, and you may need to adjust it based on your specific project requirements.

@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GameForge Game IR v0.1 Specification",
+  "description": "Typed, deterministic intermediate representation for gameplay semantics, executable contracts, and native escape hatches under GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 6 and Section 28.6.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "ir_version",
+    "module_name",
+    "target_engines",
+    "entities",
+    "contracts"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "ir_version": {
+      "type": "string",
+      "enum": ["0.1.0"]
+    },
+    "module_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_engines": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["unreal", "unity", "neutral"] },
+      "minItems": 1
+    },
+    "coordinate_system": {
+      "type": "object",
+      "properties": {
+        "handedness": { "type": "string", "enum": ["left", "right"] },
+        "up_axis": { "type": "string", "enum": ["Y", "Z"] },
+        "unit": { "type": "string", "enum": ["meter", "centimeter"] }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entity_id", "components"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "base_class": { "type": "string" },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["component_id", "type", "properties"],
+              "properties": {
+                "component_id": { "type": "string" },
+                "type": { "type": "string" },
+                "properties": { "type": "object" },
+                "state_machines": { "type": "array" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["contract_id", "target_component", "invariants"],
+        "properties": {
+          "contract_id": { "type": "string" },
+          "target_component": { "type": "string" },
+          "invariants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["rule", "expression"],
+              "properties": {
+                "rule": { "type": "string" },
+                "expression": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "native_escape_hatches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["hatch_id", "target_engine", "code_block"],
+        "properties": {
+          "hatch_id": { "type": "string" },
+          "target_engine": { "type": "string", "enum": ["unreal", "unity"] },
+          "file_target": { "type": "string" },
+          "code_block": { "type": "string" }
+        }
+      }
+    }
+  }
+}

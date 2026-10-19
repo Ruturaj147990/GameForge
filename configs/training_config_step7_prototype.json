@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "experiment_id": "exp-step7-lora-llama3.1-8b-prototype",
+  "created_at": "2026-10-19T21:00:00Z",
+  "author": "Antigravity Engineering / Step 7 Specialist SFT",
+  "governing_policy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0 Section 5.1-5.6, 28.4, 30.1.3",
+  "base_model": {
+    "candidate_id": "local-ollama-llama3.1-8b-instruct",
+    "provider": "ollama",
+    "model_name": "llama3.1:8b",
+    "immutable_revision": "46e0c10c039e",
+    "license": "Meta Llama 3.1 Community License",
+    "context_window": 4096,
+    "input_modalities": ["text"],
+    "output_modalities": ["text", "code"]
+  },
+  "training_method": "lora",
+  "adapter_config": {
+    "r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj"],
+    "bias": "none"
+  },
+  "dataset": {
+    "manifest_path": "scratch/step7_training_manifest.json",
+    "manifest_digest": "",
+    "split_policy_version": "v1.1.0",
+    "source_register_path": "configs/dataset_source_register.json",
+    "admitted_sample_types": ["process_trajectory", "code_sample"]
+  },
+  "hyperparameters": {
+    "learning_rate": 0.0002,
+    "batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "epochs": 3,
+    "seed": 42,
+    "optimizer": "adamw_torch",
+    "lr_scheduler": "cosine",
+    "max_seq_length": 2048
+  },
+  "resource_budget": {
+    "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+    "precision": "bfloat16",
+    "max_vram_gb": 10.5,
+    "max_disk_gb": 5.0,
+    "checkpoint_cadence_steps": 50,
+    "output_dir": "artifacts/training_checkpoints/exp_step7_prototype"
+  },
+  "evaluation_manifest": {
+    "frozen_manifest_id": "gameforge-bench-v0.2.0-baseline",
+    "held_out_tasks": [
+      "t2-008-projectile-collision",
+      "t3-016-player-composition",
+      "t3-017-health-hud"
+    ],
+    "general_reasoning_tasks": [
+      "general-coding-python-algorithms",
+      "general-math-geometry",
+      "general-logic-puzzles"
+    ]
+  },
+  "stopping_criteria": {
+    "min_game_gain_threshold": 0.15,
+    "max_general_regression_threshold": 0.03,
+    "early_stopping_patience": 2
+  }
+}

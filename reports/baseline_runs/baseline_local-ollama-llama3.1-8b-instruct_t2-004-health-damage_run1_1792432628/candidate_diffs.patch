@@ -1,0 +1,123 @@
+# src/gameplay/components/HealthComponent.h
+--- a/src/gameplay/components/HealthComponent.h
++++ b/src/gameplay/components/HealthComponent.h
+@@ -0,0 +1,45 @@
++#ifndef HEALTH_COMPONENT_H
++#define HEALTH_COMPONENT_H
++
++#include "entt.hpp"
++#include "components/Component.h"
++
++namespace game {
++
++struct Health {
++    float maxHealth = 100.0f;
++    float currentHealth = 100.0f;
++    float invulnerabilityWindowDuration = 2.0f; // seconds
++    float invulnerabilityWindowTimer = 0.0f;
++
++    void onDamage(float damage) {
++        if (invulnerabilityWindowTimer > 0.0f) {
++            return;
++        }
++
++        currentHealth -= damage;
++        invulnerabilityWindowTimer = invulnerabilityWindowDuration;
++
++        // Clamp health to max allowed range
++        currentHealth = std::max(0.0f, std::min(currentHealth, maxHealth));
++    }
++
++    void update(float deltaTime) {
++        if (invulnerabilityWindowTimer > 0.0f) {
++            invulnerabilityWindowTimer -= deltaTime;
++        }
++    }
++
++    bool isDead() const {
++        return currentHealth <= 0.0f;
++    }
++};
++
++class HealthComponent : public Component<Health> {
++public:
++    static constexpr auto tag = "health";
++};
++
++} // namespace game
++
++#endif // HEALTH_COMPONENT_H
+
+
+# src/gameplay/systems/HealthSystem.h
+--- a/src/gameplay/systems/HealthSystem.h
++++ b/src/gameplay/systems/HealthSystem.h
+@@ -0,0 +1,16 @@
++#ifndef HEALTH_SYSTEM_H
++#define HEALTH_SYSTEM_H
++
++#include "entt.hpp"
++#include "systems/System.h"
++
++namespace game {
++
++class HealthSystem : public System<HealthComponent> {
++public:
++    void update(float deltaTime) override;
++};
++
++} // namespace game
++
++#endif // HEALTH_SYSTEM_H
+
+
+# src/gameplay/systems/HealthSystem.cpp
+--- a/src/gameplay/systems/HealthSystem.cpp
++++ b/src/gameplay/systems/HealthSystem.cpp
+@@ -0,0 +1,18 @@
++#include "HealthSystem.h"
++#include "HealthComponent.h"
++
++namespace game {
++
++void HealthSystem::update(float deltaTime) {
++    for (auto entity : getEntities()) {
++        auto& health = getComponent<Health>(entity);
++        health.update(deltaTime);
++
++        if (health.isDead()) {
++            // Emit death event
++            emitEvent(entity, "death");
++        }
++    }
++}
++
++} // namespace game
+
+
+# src/gameplay/entities/Entity.h
+--- a/src/gameplay/entities/Entity.h
++++ b/src/gameplay/entities/Entity.h
+@@ -0,0 +1,22 @@
++#ifndef ENTITY_H
++#define ENTITY_H
++
++#include "entt.hpp"
++
++namespace game {
++
++class Entity : public entt::entity {
++public:
++    template <typename T>
++    T& getComponent() {
++        return entt::get<T>(this);
++    }
++
++    void emitEvent(entt::id_type entity, const std::string& event) {
++        // Emit event to listeners
++    }
++};
++
++} // namespace game
++
++#endif // ENTITY_H

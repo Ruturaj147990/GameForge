@@ -1,0 +1,126 @@
+Here is a possible solution for the task:
+
+### File: src/gameplay/components/HealthComponent.h
+```cpp
+#ifndef HEALTH_COMPONENT_H
+#define HEALTH_COMPONENT_H
+
+#include "entt.hpp"
+#include "components/Component.h"
+
+namespace game {
+
+struct Health {
+    float maxHealth = 100.0f;
+    float currentHealth = 100.0f;
+    float invulnerabilityWindowDuration = 2.0f; // seconds
+    float invulnerabilityWindowTimer = 0.0f;
+
+    void onDamage(float damage) {
+        if (invulnerabilityWindowTimer > 0.0f) {
+            return;
+        }
+
+        currentHealth -= damage;
+        invulnerabilityWindowTimer = invulnerabilityWindowDuration;
+
+        // Clamp health to max allowed range
+        currentHealth = std::max(0.0f, std::min(currentHealth, maxHealth));
+    }
+
+    void update(float deltaTime) {
+        if (invulnerabilityWindowTimer > 0.0f) {
+            invulnerabilityWindowTimer -= deltaTime;
+        }
+    }
+
+    bool isDead() const {
+        return currentHealth <= 0.0f;
+    }
+};
+
+class HealthComponent : public Component<Health> {
+public:
+    static constexpr auto tag = "health";
+};
+
+} // namespace game
+
+#endif // HEALTH_COMPONENT_H
+```
+
+### File: src/gameplay/systems/HealthSystem.h
+```cpp
+#ifndef HEALTH_SYSTEM_H
+#define HEALTH_SYSTEM_H
+
+#include "entt.hpp"
+#include "systems/System.h"
+
+namespace game {
+
+class HealthSystem : public System<HealthComponent> {
+public:
+    void update(float deltaTime) override;
+};
+
+} // namespace game
+
+#endif // HEALTH_SYSTEM_H
+```
+
+### File: src/gameplay/systems/HealthSystem.cpp
+```cpp
+#include "HealthSystem.h"
+#include "HealthComponent.h"
+
+namespace game {
+
+void HealthSystem::update(float deltaTime) {
+    for (auto entity : getEntities()) {
+        auto& health = getComponent<Health>(entity);
+        health.update(deltaTime);
+
+        if (health.isDead()) {
+            // Emit death event
+            emitEvent(entity, "death");
+        }
+    }
+}
+
+} // namespace game
+```
+
+### File: src/gameplay/entities/Entity.h
+```cpp
+#ifndef ENTITY_H
+#define ENTITY_H
+
+#include "entt.hpp"
+
+namespace game {
+
+class Entity : public entt::entity {
+public:
+    template <typename T>
+    T& getComponent() {
+        return entt::get<T>(this);
+    }
+
+    void emitEvent(entt::id_type entity, const std::string& event) {
+        // Emit event to listeners
+    }
+};
+
+} // namespace game
+
+#endif // ENTITY_H
+```
+
+This solution defines a `Health` struct that represents the health state of an entity. The `onDamage` function reduces the current health by the specified damage amount and sets the invulnerability window timer. The `update` function updates the invulnerability window timer.
+
+The `HealthComponent` class is a wrapper around the `Health` struct, providing a convenient interface for accessing its members.
+
+The `HealthSystem` class is responsible for updating the health state of entities and emitting death events when an entity's health reaches zero. It uses the `getEntities` function to retrieve all entities with the `health` tag and updates their health state accordingly.
+
+Note that this solution assumes the existence of a `entt::entity` class, which represents an entity in the game world. The `emitEvent` function is also assumed to be implemented elsewhere in the codebase.

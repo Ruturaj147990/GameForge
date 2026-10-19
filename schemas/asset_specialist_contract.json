@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0.0",
+  "contract_name": "GameForge Asset Specialist Interface",
+  "governing_policy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 5.4, 28.4, 28.8",
+  "description": "Standardized schema for external asset specialists (3D mesh, texture, rigging, animation, audio) invoked by the Core GameForge LLM.",
+  "type": "object",
+  "required": [
+    "task_id",
+    "modality",
+    "provider",
+    "request",
+    "status"
+  ],
+  "properties": {
+    "task_id": { "type": "string" },
+    "modality": {
+      "type": "string",
+      "enum": ["mesh_3d", "texture", "rigging", "animation", "audio", "vision_qa"]
+    },
+    "provider": {
+      "type": "object",
+      "required": ["provider_id", "model_name", "revision"],
+      "properties": {
+        "provider_id": { "type": "string" },
+        "model_name": { "type": "string" },
+        "revision": { "type": "string" },
+        "is_available": { "type": "boolean" },
+        "is_test_double": { "type": "boolean" },
+        "notes": { "type": ["string", "null"] }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["prompt", "target_format", "constraints", "provenance"],
+      "properties": {
+        "prompt": { "type": "string" },
+        "target_format": { "type": "string" },
+        "destination_path": { "type": "string" },
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "max_triangles": { "type": "integer" },
+            "max_texture_dimension": { "type": "integer" },
+            "target_engine": { "type": "string" },
+            "skeleton_preset": { "type": "string" },
+            "animation_framerate": { "type": "number" }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "required": ["license_id", "rights_holder", "rights_cleared", "evidence_reference"],
+          "properties": {
+            "license_id": { "type": "string" },
+            "rights_holder": { "type": "string" },
+            "rights_cleared": { "type": "boolean" },
+            "evidence_reference": { "type": "string" }
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUBMITTED", "IN_PROGRESS", "GENERATED", "VALIDATED", "FAILED", "REJECTED"]
+    },
+    "engine_integration_status": {
+      "type": "string",
+      "enum": ["UNPROCESSED", "IMPORTED", "RIGGED", "RUNTIME_TESTED", "ACCEPTED", "REJECTED"],
+      "default": "UNPROCESSED"
+    },
+    "result": {
+      "type": "object",
+      "properties": {
+        "artifact_path": { "type": "string" },
+        "artifact_sha256": { "type": "string" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "triangle_count": { "type": "integer" },
+            "max_dimension": { "type": "integer" },
+            "bone_count": { "type": "integer" },
+            "resolution": { "type": "string" }
+          }
+        },
+        "error_message": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

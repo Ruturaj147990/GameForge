@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GameForge Step 5 Acceptance Record",
+  "description": "Formal schema for Step 5 baseline acceptance records under GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0 Section 28.2.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "acceptance_status",
+    "accepted_model_id",
+    "immutable_revision",
+    "frozen_benchmark_manifest_id",
+    "benchmark_version",
+    "benchmark_manifest_digest",
+    "reconciliation_audit_file",
+    "referenced_baseline_run_ids",
+    "evidence_files",
+    "formal_decision_provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "acceptance_status": {
+      "type": "string",
+      "enum": ["ACCEPTED", "REJECTED", "PENDING_REVIEW", "INVALIDATED"]
+    },
+    "accepted_model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "immutable_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frozen_benchmark_manifest_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "benchmark_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "benchmark_manifest_digest": {
+      "type": "string",
+      "minLength": 64
+    },
+    "reconciliation_audit_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "referenced_baseline_run_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "evidence_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "evidence_type", "expected_digest_sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "evidence_type": { "type": "string", "minLength": 1 },
+          "expected_digest_sha256": { "type": "string", "minLength": 64 },
+          "model_id": { "type": "string" },
+          "run_id": { "type": "string" }
+        }
+      },
+      "minItems": 1
+    },
+    "formal_decision_provenance": {
+      "type": "object",
+      "required": ["decision_id", "decision_date", "approver", "basis"],
+      "properties": {
+        "decision_id": { "type": "string", "minLength": 1 },
+        "decision_date": { "type": "string", "minLength": 1 },
+        "approver": { "type": "string", "minLength": 1 },
+        "basis": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

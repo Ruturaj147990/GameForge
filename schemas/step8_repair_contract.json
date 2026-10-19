@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GameForge Step 8 Agentic Tool & Repair Trajectory Contract",
+  "description": "Formal schema for Step 8 tool-use execution, compiler diagnostics, and targeted self-repair loop under GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 28.5.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "session_id",
+    "task_id",
+    "engine",
+    "clean_snapshot_hash",
+    "initial_status",
+    "repair_iterations",
+    "final_status",
+    "tool_calls_trace",
+    "outcome_verification"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engine": {
+      "type": "string",
+      "enum": ["unreal", "unity", "neutral"]
+    },
+    "clean_snapshot_hash": {
+      "type": "string",
+      "minLength": 64
+    },
+    "initial_status": {
+      "type": "string"
+    },
+    "repair_iterations": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_allowed_repair_iterations": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "final_status": {
+      "type": "string"
+    },
+    "tool_calls_trace": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step_index", "tool_name", "action_payload", "observation_result", "diagnostics"],
+        "properties": {
+          "step_index": { "type": "integer", "minimum": 0 },
+          "tool_name": {
+            "type": "string",
+            "enum": ["read_file", "write_file", "list_dir", "compile_project", "run_probes", "rollback_snapshot"]
+          },
+          "action_payload": { "type": "object" },
+          "observation_result": { "type": "object" },
+          "diagnostics": {
+            "type": "object",
+            "properties": {
+              "failure_class": {
+                "type": "string",
+                "enum": [
+                  "NONE",
+                  "COMPILER_SYNTAX_ERROR",
+                  "REFLECTION_MACRO_MISSING",
+                  "DELEGATE_SIGNATURE_MISMATCH",
+                  "RUNTIME_PROBE_FAILED",
+                  "POLICY_ALLOWLIST_VIOLATION",
+                  "TIMEOUT_EXCEEDED"
+                ]
+              },
+              "targeted_file": { "type": "string" },
+              "line_number": { "type": ["integer", "null"] },
+              "recommended_fix": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "outcome_verification": {
+      "type": "object",
+      "required": ["verified_by_engine", "non_zero_patches_verified", "regression_tests_passed", "hidden_grader_untampered"],
+      "properties": {
+        "verified_by_engine": { "type": "boolean" },
+        "non_zero_patches_verified": { "type": "boolean" },
+        "regression_tests_passed": { "type": "boolean" },
+        "hidden_grader_untampered": { "type": "boolean" }
+      }
+    }
+  }
+}

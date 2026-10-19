@@ -1,0 +1,121 @@
+**Temporal Invariants of an Authoritative Health and Damage Subsystem**
+
+### Introduction
+
+The health and damage system is a critical component of any game engine, responsible for tracking the state of entities within the game world. This document outlines the core temporal invariants of such a subsystem, ensuring that it behaves correctly under various scenarios.
+
+### Notation
+
+* `H`: The current health value of an entity.
+* `M`: The maximum health value of an entity (i.e., `MaxHealth`).
+* `D`: The amount of damage applied to an entity.
+* `I`: The invulnerability window duration.
+* `T`: The current time.
+
+### Temporal Invariants
+
+#### 1. Damage Acceptance within and outside Invulnerability Windows
+
+**Invariant:** If the entity is not invulnerable (`H > 0`), then any damage applied (`D`) will reduce its health (`H = H - D`). Otherwise, if the entity is invulnerable (`H <= 0`), no damage will be accepted (`H = H`).
+
+**Mathematical Postcondition:**
+
+∀t ∈ T, ∀d ∈ D:
+if `H(t) > 0` then `H(t + Δt) = max(0, H(t) - d)`
+else `H(t + Δt) = H(t)`
+
+where `Δt` is the time step between two consecutive updates.
+
+#### 2. Resource Clamping between 0 and MaxHealth
+
+**Invariant:** The health value of an entity will always be clamped between 0 and its maximum health (`0 ≤ H ≤ M`).
+
+**Mathematical Postcondition:**
+
+∀t ∈ T, ∀h ∈ H:
+if `H(t) < 0` then `H(t + Δt) = 0`
+else if `H(t) > M` then `H(t + Δt) = M`
+
+#### 3. Exactly-Once Death State Transition
+
+**Invariant:** An entity will only transition from alive to dead once, and vice versa.
+
+**Mathematical Postcondition:**
+
+∀t ∈ T:
+if `H(t) > 0` then `isDead(t) = false`
+else if `H(t) <= 0` then `isDead(t + Δt) = true`
+
+where `isDead(t)` denotes the death state of an entity at time `t`.
+
+#### 4. Event Dispatch Sequencing
+
+**Invariant:** Events related to health and damage (e.g., damage applied, health updated) will be dispatched in a consistent order.
+
+**Mathematical Postcondition:**
+
+∀t ∈ T:
+if `damageApplied(t)` then `healthUpdated(t + Δt)`
+else if `healthUpdated(t)` then `damageApplied(t + Δt)`
+
+where `damageApplied(t)` and `healthUpdated(t)` denote the events of damage applied and health updated at time `t`, respectively.
+
+### Unreal Engine (C++) vs. Unity (C#)
+
+While both game engines provide a way to implement these invariants, the approach differs due to their respective programming paradigms:
+
+* **Unreal Engine (C++):** Delegates are used to handle events and ensure correct sequencing. For example:
+```cpp
+// Damage applied delegate
+void AMyActor::DamageApplied(float DamageAmount)
+{
+    // Update health value
+    Health -= DamageAmount;
+    
+    // Dispatch health updated event
+    OnHealthUpdated.Broadcast(Health);
+}
+
+// Health updated delegate
+void AMyActor::OnHealthUpdated(float NewHealth)
+{
+    // Clamp health value between 0 and MaxHealth
+    Health = FMath::Clamp(NewHealth, 0.0f, MaxHealth);
+    
+    // Dispatch death event if necessary
+    if (NewHealth <= 0.0f)
+    {
+        OnDeath.Broadcast();
+    }
+}
+```
+* **Unity (C#):** Actions and events are used to handle health and damage-related events. For example:
+```csharp
+// Damage applied action
+public void ApplyDamage(float damageAmount)
+{
+    // Update health value
+    Health -= damageAmount;
+    
+    // Dispatch health updated event
+    OnHealthUpdated?.Invoke(Health);
+}
+
+// Health updated event handler
+private void OnHealthUpdated(float newHealth)
+{
+    // Clamp health value between 0 and MaxHealth
+    Health = Mathf.Clamp(newHealth, 0.0f, MaxHealth);
+    
+    // Dispatch death event if necessary
+    if (newHealth <= 0.0f)
+    {
+        OnDeath?.Invoke();
+    }
+}
+```
+In both cases, the invariants are ensured through careful sequencing of events and updates to the health value.
+
+### Conclusion
+
+The temporal invariants outlined above provide a rigorous foundation for implementing an authoritative health and damage subsystem. By ensuring that these invariants hold true under various scenarios, game developers can create more robust and predictable gameplay experiences. The differences between Unreal Engine (C++) and Unity (C#) highlight the importance of considering the programming paradigm when implementing these invariants.
