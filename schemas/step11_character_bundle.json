@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GameForge Step 11 Integrated Character Bundle Contract",
+  "description": "Formal schema for connected character bundle pipeline under GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 7 and Section 28.8.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "character_name",
+    "provenance",
+    "mesh",
+    "skeleton_and_rig",
+    "animation_set",
+    "animation_blueprint",
+    "gameplay_controller",
+    "qa_verification"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "bundle_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_engine": {
+      "type": "string",
+      "enum": ["unreal", "unity"]
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source_license", "rights_cleared", "evidence_reference"],
+      "properties": {
+        "source_license": { "type": "string" },
+        "rights_cleared": { "type": "boolean" },
+        "evidence_reference": { "type": "string" }
+      }
+    },
+    "mesh": {
+      "type": "object",
+      "required": ["mesh_path", "triangle_count", "lod_levels", "uv_layers_count"],
+      "properties": {
+        "mesh_path": { "type": "string" },
+        "triangle_count": { "type": "integer", "maximum": 50000 },
+        "lod_levels": { "type": "integer", "minimum": 1 },
+        "uv_layers_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "skeleton_and_rig": {
+      "type": "object",
+      "required": ["bone_count", "root_bone_name", "has_skin_weights", "bone_names"],
+      "properties": {
+        "bone_count": { "type": "integer", "minimum": 10 },
+        "root_bone_name": { "type": "string" },
+        "has_skin_weights": { "type": "boolean" },
+        "bone_names": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "animation_set": {
+      "type": "object",
+      "required": ["clips"],
+      "properties": {
+        "clips": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["clip_name", "duration_seconds", "is_looping"],
+            "properties": {
+              "clip_name": { "type": "string" },
+              "duration_seconds": { "type": "number", "minimum": 0.1 },
+              "is_looping": { "type": "boolean" }
+            }
+          },
+          "minItems": 3
+        }
+      }
+    },
+    "animation_blueprint": {
+      "type": "object",
+      "required": ["state_machine_name", "states", "transitions"],
+      "properties": {
+        "state_machine_name": { "type": "string" },
+        "states": { "type": "array", "items": { "type": "string" } },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from_state", "to_state", "condition"],
+            "properties": {
+              "from_state": { "type": "string" },
+              "to_state": { "type": "string" },
+              "condition": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "gameplay_controller": {
+      "type": "object",
+      "required": ["controller_class", "movement_component", "capsule_half_height", "capsule_radius"],
+      "properties": {
+        "controller_class": { "type": "string" },
+        "movement_component": { "type": "string" },
+        "capsule_half_height": { "type": "number", "minimum": 10.0 },
+        "capsule_radius": { "type": "number", "minimum": 5.0 }
+      }
+    },
+    "qa_verification": {
+      "type": "object",
+      "required": [
+        "mesh_import_passed",
+        "rig_resolved",
+        "animation_retarget_passed",
+        "motion_controller_synced",
+        "controlled_broken_asset_rejected"
+      ],
+      "properties": {
+        "mesh_import_passed": { "type": "boolean" },
+        "rig_resolved": { "type": "boolean" },
+        "animation_retarget_passed": { "type": "boolean" },
+        "motion_controller_synced": { "type": "boolean" },
+        "controlled_broken_asset_rejected": { "type": "boolean" }
+      }
+    }
+  }
+}

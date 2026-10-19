@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GameForge Step 10 Multimodal & Spatial Evaluation Contract",
+  "description": "Formal schema for multimodal gameplay inspection, visual rubric calibration, and temporal video alignment under GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 21 and Section 28.7.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "task_id",
+    "visual_rubrics",
+    "temporal_frames",
+    "calibration_metrics",
+    "deterministic_separation"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "evaluation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "visual_rubrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rubric_id", "dimension", "criteria", "confidence_threshold"],
+        "properties": {
+          "rubric_id": { "type": "string" },
+          "dimension": {
+            "type": "string",
+            "enum": ["UI_LAYOUT", "TEXTURE_MATERIAL_INTEGRITY", "CAMERA_OCCLUSION", "SCENE_COMPOSITION", "ANIMATION_MOTION"]
+          },
+          "criteria": { "type": "string" },
+          "confidence_threshold": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "human_calibrated": { "type": "boolean" }
+        }
+      }
+    },
+    "temporal_frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp_seconds", "frame_index", "observed_state", "visual_verdict"],
+        "properties": {
+          "timestamp_seconds": { "type": "number", "minimum": 0.0 },
+          "frame_index": { "type": "integer", "minimum": 0 },
+          "observed_state": {
+            "type": "object",
+            "required": ["player_position", "velocity", "event_emitted"],
+            "properties": {
+              "player_position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "velocity": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+              "event_emitted": { "type": "string" }
+            }
+          },
+          "visual_verdict": {
+            "type": "string",
+            "enum": ["PASS", "ARTIFACT_DETECTED", "CLIPPING_DETECTED", "MISSING_TEXTURE", "OCCLUSION_FAIL"]
+          }
+        }
+      }
+    },
+    "calibration_metrics": {
+      "type": "object",
+      "required": ["inter_rater_agreement", "sample_size", "false_positive_rate", "false_negative_rate"],
+      "properties": {
+        "inter_rater_agreement": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "sample_size": { "type": "integer", "minimum": 1 },
+        "false_positive_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "false_negative_rate": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    },
+    "deterministic_separation": {
+      "type": "object",
+      "required": ["telemetry_source_independent_from_vision", "exact_numeric_values_grounded_in_engine"],
+      "properties": {
+        "telemetry_source_independent_from_vision": { "type": "boolean" },
+        "exact_numeric_values_grounded_in_engine": { "type": "boolean" }
+      }
+    }
+  }
+}
