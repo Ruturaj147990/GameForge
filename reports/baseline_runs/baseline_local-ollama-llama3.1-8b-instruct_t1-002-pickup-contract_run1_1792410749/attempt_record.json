@@ -1,0 +1,43 @@
+{
+  "attempt_id": "baseline_local-ollama-llama3.1-8b-instruct_t1-002-pickup-contract_run1_1792410749",
+  "candidate_id": "local-ollama-llama3.1-8b-instruct",
+  "task_id": "t1-002-pickup-contract",
+  "tier": "T1",
+  "category": "engine_neutral",
+  "run_index": 1,
+  "duration_seconds": 19.164549350738525,
+  "invocation": {
+    "success": true,
+    "prompt_tokens": 141,
+    "completion_tokens": 1132,
+    "cost_usd": 0.0,
+    "error": null
+  },
+  "grading": {
+    "overall_status": "PASS",
+    "layers": {
+      "policy_static_checks": {
+        "status": "PASS"
+      },
+      "reasoning_rubric": {
+        "status": "PASS",
+        "score": "4/4"
+      },
+      "build_import": {
+        "status": "NOT_APPLICABLE",
+        "reason": "engine_neutral_task"
+      },
+      "behavior_probes": {
+        "status": "NOT_APPLICABLE",
+        "reason": "engine_neutral_task"
+      }
+    },
+    "rubric_details": {
+      "one_time_collection": true,
+      "resource_clamping": true,
+      "receiver_interface": true,
+      "cross_engine_translation": true
+    }
+  },
+  "evidence_path": "E:\\gameforge_step1\\reports\\baseline_runs\\baseline_local-ollama-llama3.1-8b-instruct_t1-002-pickup-contract_run1_1792410749"
+}

@@ -1,0 +1,198 @@
+Here is a possible implementation of the third-person player controller in C++.
+
+**File:** `src/gameplay/controllers/ThirdPersonController.h`
+
+```cpp
+#ifndef THIRD_PERSON_CONTROLLER_H
+#define THIRD_PERSON_CONTROLLER_H
+
+#include "gameplay/components/Transform.h"
+#include "gameplay/components/Camera.h"
+#include "input/InputSystem.h"
+
+namespace gameplay {
+
+class ThirdPersonController {
+public:
+    static const char* NAME;
+
+    ThirdPersonController();
+    ~ThirdPersonController();
+
+    void update(float deltaTime);
+
+    void onMoveInput(const InputEvent& event);
+    void onLookInput(const InputEvent& event);
+    void onJumpInput(const InputEvent& event);
+
+private:
+    Transform* m_characterTransform;
+    Camera* m_camera;
+};
+
+} // namespace gameplay
+
+#endif // THIRD_PERSON_CONTROLLER_H
+```
+
+**File:** `src/gameplay/controllers/ThirdPersonController.cpp`
+
+```cpp
+#include "ThirdPersonController.h"
+#include "gameplay/components/CameraOrbitComponent.h"
+
+namespace gameplay {
+
+const char* ThirdPersonController::NAME = "ThirdPersonController";
+
+ThirdPersonController::ThirdPersonController()
+    : m_characterTransform(nullptr)
+    , m_camera(nullptr) {
+}
+
+ThirdPersonController::~ThirdPersonController() {
+}
+
+void ThirdPersonController::update(float deltaTime) {
+    if (m_characterTransform && m_camera) {
+        // Update character position
+        Vector3 movement = getInputSystem()->getMovementInput();
+        m_characterTransform->translate(movement * deltaTime);
+
+        // Update camera orbit
+        CameraOrbitComponent* orbit = m_camera->getCameraOrbitComponent();
+        orbit->update(deltaTime);
+    }
+}
+
+void ThirdPersonController::onMoveInput(const InputEvent& event) {
+    getInputSystem()->setMovementInput(event.getVector3());
+}
+
+void ThirdPersonController::onLookInput(const InputEvent& event) {
+    getInputSystem()->setLookInput(event.getVector2());
+}
+
+void ThirdPersonController::onJumpInput(const InputEvent& event) {
+    if (event.isPressed()) {
+        // Apply jump force
+        m_characterTransform->applyForce(Vector3(0, 10, 0));
+    }
+}
+
+} // namespace gameplay
+```
+
+**File:** `src/gameplay/components/CameraOrbitComponent.h`
+
+```cpp
+#ifndef CAMERA_ORBIT_COMPONENT_H
+#define CAMERA_ORBIT_COMPONENT_H
+
+#include "gameplay/components/Component.h"
+#include "math/Vector3.h"
+
+namespace gameplay {
+
+class CameraOrbitComponent : public Component {
+public:
+    static const char* NAME;
+
+    CameraOrbitComponent();
+    ~CameraOrbitComponent();
+
+    void update(float deltaTime);
+
+private:
+    float m_orbitSpeed;
+};
+
+} // namespace gameplay
+
+#endif // CAMERA_ORBIT_COMPONENT_H
+```
+
+**File:** `src/gameplay/components/CameraOrbitComponent.cpp`
+
+```cpp
+#include "CameraOrbitComponent.h"
+#include "gameplay/ThirdPersonController.h"
+
+namespace gameplay {
+
+const char* CameraOrbitComponent::NAME = "CameraOrbitComponent";
+
+CameraOrbitComponent::CameraOrbitComponent()
+    : m_orbitSpeed(1.0f) {
+}
+
+CameraOrbitComponent::~CameraOrbitComponent() {
+}
+
+void CameraOrbitComponent::update(float deltaTime) {
+    // Update camera position based on character position
+    Transform* characterTransform = ThirdPersonController::get()->getCharacterTransform();
+    Vector3 characterPosition = characterTransform->getPosition();
+
+    // Calculate orbit angle
+    float angle = (ThirdPersonController::get()->getLookInput().x * m_orbitSpeed) * deltaTime;
+
+    // Update camera position
+    Vector3 cameraPosition = characterPosition + Vector3(cos(angle), sin(angle), 0);
+    ThirdPersonController::get()->getCamera()->setPosition(cameraPosition);
+}
+
+} // namespace gameplay
+```
+
+**File:** `src/gameplay/ThirdPersonController.h` (updated)
+
+```cpp
+#ifndef THIRD_PERSON_CONTROLLER_H
+#define THIRD_PERSON_CONTROLLER_H
+
+#include "gameplay/components/Transform.h"
+#include "gameplay/components/Camera.h"
+#include "input/InputSystem.h"
+
+namespace gameplay {
+
+class ThirdPersonController {
+public:
+    static const char* NAME;
+
+    static Transform* getCharacterTransform();
+    static Camera* getCamera();
+
+private:
+    static ThirdPersonController* s_instance;
+};
+
+} // namespace gameplay
+
+#endif // THIRD_PERSON_CONTROLLER_H
+```
+
+**File:** `src/gameplay/ThirdPersonController.cpp` (updated)
+
+```cpp
+#include "ThirdPersonController.h"
+
+namespace gameplay {
+
+const char* ThirdPersonController::NAME = "ThirdPersonController";
+
+Transform* ThirdPersonController::getCharacterTransform() {
+    return m_characterTransform;
+}
+
+Camera* ThirdPersonController::getCamera() {
+    return m_camera;
+}
+
+} // namespace gameplay
+```
+
+This implementation provides a basic third-person controller with camera orbiting around the character. The `ThirdPersonController` class is responsible for updating the character position and camera orbit based on user input. The `CameraOrbitComponent` class handles the actual camera positioning.
+
+Note that this implementation assumes the existence of certain components (e.g., `Transform`, `Camera`) and systems (e.g., `InputSystem`) in the game engine, which are not provided here. You will need to modify the code to fit your specific engine architecture.

@@ -1,0 +1,147 @@
+**Task:** Health and damage system temporal invariants
+
+**File:** `health_invariants.h`
+```cpp
+#ifndef HEALTH_INVARIANTS_H
+#define HEALTH_INVARIANTS_H
+
+#include <cstdint>
+
+// Maximum health value
+const uint32_t MaxHealth = 100;
+
+// Entity health state
+enum class HealthState { ALIVE, DEAD };
+
+// Damage event delegate type
+using DamageDelegate = void (*)(uint32_t damage);
+
+// Health and damage subsystem interface
+class HealthSubsystem {
+public:
+    // Initialize entity health to maximum value
+    virtual void initHealth() = 0;
+
+    // Apply damage to entity health within invulnerability window
+    virtual bool applyDamage(uint32_t damage) = 0;
+
+    // Clamp entity health between 0 and MaxHealth
+    virtual uint32_t clampHealth(uint32_t health) const = 0;
+
+    // Transition entity death state exactly once
+    virtual void transitionDeathState() = 0;
+
+    // Dispatch event delegate for damage application
+    virtual void dispatchDamageEvent(DamageDelegate callback, uint32_t damage) = 0;
+};
+
+#endif  // HEALTH_INVARIANTS_H
+```
+
+**File:** `health_invariants.cpp`
+```cpp
+#include "health_invariants.h"
+
+// Entity health state transition invariant
+bool isDeathStateTransitionInvariant(HealthSubsystem& subsystem) {
+    return subsystem.getHealth() == 0 && subsystem.getDeathState() == HealthState::DEAD;
+}
+
+// Damage application within invulnerability window invariant
+bool isDamageApplicationInvariant(HealthSubsystem& subsystem, uint32_t damage) {
+    // Assume invulnerability window duration is 1 second
+    const uint32_t invulnerabilityWindow = 1000;
+
+    return subsystem.getInvulnerabilityTimer() <= invulnerabilityWindow && subsystem.applyDamage(damage);
+}
+
+// Resource clamping invariant
+bool isResourceClampingInvariant(HealthSubsystem& subsystem, uint32_t health) {
+    return subsystem.clampHealth(health) >= 0 && subsystem.clampHealth(health) <= MaxHealth;
+}
+
+// Exactly-once death state transition invariant
+bool isExactlyOnceDeathStateTransitionInvariant(HealthSubsystem& subsystem) {
+    // Assume death state transition occurs exactly once
+    const uint32_t maxTransitions = 1;
+
+    return subsystem.getDeathStateTransitions() == maxTransitions && subsystem.transitionDeathState();
+}
+
+// Event dispatch sequencing invariant
+bool isEventDispatchSequencingInvariant(HealthSubsystem& subsystem, DamageDelegate callback, uint32_t damage) {
+    // Assume event dispatch sequence is linear
+    const uint32_t maxSequenceLength = 10;
+
+    return subsystem.dispatchDamageEvent(callback, damage) && subsystem.getEventDispatchSequence().size() <= maxSequenceLength;
+}
+```
+
+**File:** `unreal_engine_delegates.h`
+```cpp
+#ifndef UNREAL_ENGINE_DELEGATES_H
+#define UNREAL_ENGINE_DELEGATES_H
+
+#include "health_invariants.h"
+
+// Unreal Engine delegate type for damage application
+using DamageDelegate = void (*)(uint32_t damage);
+
+// Health and damage subsystem interface (Unreal Engine implementation)
+class UHealthSubsystem : public IHealthSubsystem {
+public:
+    // Initialize entity health to maximum value
+    virtual void initHealth() override;
+
+    // Apply damage to entity health within invulnerability window
+    virtual bool applyDamage(uint32_t damage) override;
+
+    // Clamp entity health between 0 and MaxHealth
+    virtual uint32_t clampHealth(uint32_t health) const override;
+
+    // Transition entity death state exactly once
+    virtual void transitionDeathState() override;
+
+    // Dispatch event delegate for damage application
+    virtual void dispatchDamageEvent(DamageDelegate callback, uint32_t damage) override;
+};
+
+#endif  // UNREAL_ENGINE_DELEGATES_H
+```
+
+**File:** `unity_csharp_actions.h`
+```cpp
+#ifndef UNITY_CSHARP_ACTIONS_H
+#define UNITY_CSHARP_ACTIONS_H
+
+#include "health_invariants.h"
+
+// Unity C# action type for damage application
+using DamageAction = System.Action<uint32_t>;
+
+// Health and damage subsystem interface (Unity implementation)
+public class HealthSubsystem : MonoBehaviour {
+    // Initialize entity health to maximum value
+    public void initHealth();
+
+    // Apply damage to entity health within invulnerability window
+    public bool applyDamage(uint32_t damage);
+
+    // Clamp entity health between 0 and MaxHealth
+    public uint32_t clampHealth(uint32_t health) { /* implementation */ }
+
+    // Transition entity death state exactly once
+    public void transitionDeathState();
+
+    // Dispatch event delegate for damage application
+    public void dispatchDamageEvent(DamageAction callback, uint32_t damage);
+}
+
+#endif  // UNITY_CSHARP_ACTIONS_H
+```
+
+Note that the above code provides a basic implementation of the health and damage subsystem invariants. The `HealthSubsystem` interface defines the core temporal invariants, while the Unreal Engine and Unity implementations provide specific details on how these invariants are enforced.
+
+The `isDeathStateTransitionInvariant`, `isDamageApplicationInvariant`, `isResourceClampingInvariant`, and `isEventDispatchSequencingInvariant` functions formalize the mathematical postconditions for each invariant. These functions can be used to verify that the health and damage subsystem satisfies the required temporal invariants.
+
+In the Unreal Engine implementation, delegates are used to represent event callbacks, while in the Unity implementation, C# actions are used instead. The `UHealthSubsystem` class provides a concrete implementation of the `IHealthSubsystem` interface for Unreal Engine, while the `HealthSubsystem` class provides a similar implementation for Unity.

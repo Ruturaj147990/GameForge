@@ -6,7 +6,7 @@
   "logical_task_id": "T2-005",
   "task_id": "t2-005-pickup-collection",
   "engine_scope": "ENGINE_SPECIFIC",
-  "verification_level": "REAL_ENGINE_VERIFIED",
+  "verification_level": "UNVERIFIED",
   "knowledge_domains": [
     "gameplay"
   ],

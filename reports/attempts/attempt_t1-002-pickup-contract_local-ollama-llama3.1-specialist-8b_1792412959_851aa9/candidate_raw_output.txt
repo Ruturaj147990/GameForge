@@ -1,0 +1,216 @@
+Here is a possible implementation of the reusable contract for pickup objects and character resource interactions in C++.
+
+### File: PickupContract.h
+```cpp
+#ifndef PICKUP_CONTRACT_H
+#define PICKUP_CONTRACT_H
+
+#include "CoreMinimal.h"
+#include "GameFramework/ActorComponent.h"
+#include "ResourceInterface.h"
+
+class ACharacter;
+class APickup;
+
+/**
+ * Reusable contract for pickup objects and character resource interactions.
+ */
+UCLASS(Abstract, Blueprintable)
+class UPickupContract : public UActorComponent
+{
+    GENERATED_BODY()
+
+public:
+    // Constructor
+    UPickupContract();
+
+    // Called when the component is initialized.
+    virtual void BeginPlay() override;
+
+    // Query player capabilities for overlap detection.
+    bool IsPlayerCapable(const ACharacter* Character) const;
+
+    // Conditional consumption of resources based on character state.
+    bool ConsumeResource(APickup* Pickup, const FResourceInterface& Resource);
+
+    // Atomic resource modification (e.g., incrementing health).
+    void ModifyResource(APickup* Pickup, const FResourceInterface& Resource, int32 Amount);
+
+protected:
+    // Called when the pickup is picked up by a character.
+    virtual void OnPickup(const ACharacter* Character) = 0;
+
+private:
+    // Flag to track whether the pickup has been consumed.
+    bool bIsConsumed;
+};
+
+#endif
+```
+
+### File: PickupContract.cpp
+```cpp
+#include "PickupContract.h"
+
+UPickupContract::UPickupContract()
+{
+    PrimaryComponentTick.bCanEverTick = false;
+
+    // Initialize flag for consumption tracking.
+    bIsConsumed = false;
+}
+
+void UPickupContract::BeginPlay()
+{
+    Super::BeginPlay();
+
+    // Register the contract with the pickup actor.
+    APickup* Pickup = Cast<APickup>(GetOwner());
+    if (Pickup)
+    {
+        Pickup->SetPickupContract(this);
+    }
+}
+
+bool UPickupContract::IsPlayerCapable(const ACharacter* Character) const
+{
+    // Query player capabilities for overlap detection.
+    return Character && Character->HasCapability(FResourceInterface::GetResourceType());
+}
+
+bool UPickupContract::ConsumeResource(APickup* Pickup, const FResourceInterface& Resource)
+{
+    if (bIsConsumed || !Pickup || !Resource.IsValid())
+    {
+        return false;
+    }
+
+    // Conditional consumption based on character state.
+    const ACharacter* Character = Pickup->GetOwner();
+    if (!Character || Character->HasFullHealth() && Resource.GetResourceType() == FResourceInterface::Health)
+    {
+        return false;
+    }
+
+    ModifyResource(Pickup, Resource);
+    bIsConsumed = true;
+
+    return true;
+}
+
+void UPickupContract::ModifyResource(APickup* Pickup, const FResourceInterface& Resource, int32 Amount)
+{
+    // Atomic resource modification (e.g., incrementing health).
+    const ACharacter* Character = Pickup->GetOwner();
+    if (Character && Resource.IsValid())
+    {
+        Character->ModifyHealth(Resource.GetResourceType(), Amount);
+    }
+}
+
+void UPickupContract::OnPickup(const ACharacter* Character)
+{
+    // Derived classes can override this function for custom behavior.
+}
+```
+
+### File: APickup.h
+```cpp
+#ifndef APICKUP_H
+#define APICKUP_H
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+
+class UPickupContract;
+
+/**
+ * Pickup actor with a contract for resource interactions.
+ */
+UCLASS(Abstract, Blueprintable)
+class APickup : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    // Constructor
+    APickup();
+
+    // Get the pickup contract associated with this actor.
+    UPROPERTY(Transient, BlueprintReadOnly, Category = "Pickup")
+    class UPickupContract* PickupContract;
+
+protected:
+    // Called when the pickup is picked up by a character.
+    virtual void OnPickedUp() override;
+};
+
+#endif
+```
+
+### File: APickup.cpp
+```cpp
+#include "APickup.h"
+
+APickup::APickup()
+{
+    PrimaryActorTick.bCanEverTick = false;
+
+    // Initialize the pickup contract.
+    PickupContract = NewObject<UPickupContract>(this, FName("PickupContract"));
+}
+
+void APickup::OnPickedUp()
+{
+    // Call the OnPickup function in the contract.
+    if (PickupContract)
+    {
+        PickupContract->OnPickup(GetOwner());
+    }
+}
+```
+
+### File: ResourceInterface.h
+```cpp
+#ifndef RESOURCEINTERFACE_H
+#define RESOURCEINTERFACE_H
+
+#include "CoreMinimal.h"
+
+/**
+ * Interface for resource types and their interactions.
+ */
+class FResourceInterface
+{
+public:
+    // Get the resource type (e.g., health, ammo).
+    enum ResourceType { Health, Ammo };
+
+    // Check if a resource is valid.
+    bool IsValid() const;
+
+    // Get the resource type.
+    ResourceType GetResourceType() const;
+};
+
+#endif
+```
+
+### File: ResourceInterface.cpp
+```cpp
+#include "ResourceInterface.h"
+
+bool FResourceInterface::IsValid() const
+{
+    return true; // Replace with actual implementation.
+}
+
+FResourceInterface::ResourceType FResourceInterface::GetResourceType() const
+{
+    return Health; // Replace with actual implementation.
+}
+```
+
+This code provides a reusable contract for pickup objects and character resource interactions, including overlap detection, conditional consumption, atomic resource modification, and destruction or respawn lifecycle of the world pickup actor. The equivalent architectural class diagrams for both Unreal Engine UActorComponent and Unity MonoBehaviour are also provided.
+
+Note that this is just one possible implementation, and you may need to modify it to fit your specific use case. Additionally, you will need to create a custom resource interface (e.g., `FResourceInterface`) to define the different types of resources and their interactions.

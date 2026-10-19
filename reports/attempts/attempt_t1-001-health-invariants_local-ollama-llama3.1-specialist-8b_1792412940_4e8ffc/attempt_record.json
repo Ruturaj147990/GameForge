@@ -1,0 +1,90 @@
+{
+  "attempt_id": "attempt_t1-001-health-invariants_local-ollama-llama3.1-specialist-8b_1792412940_4e8ffc",
+  "task_id": "t1-001-health-invariants",
+  "candidate_id": "local-ollama-llama3.1-specialist-8b",
+  "benchmark_release_id": "gameforge-bench-v0.2.0-baseline",
+  "timestamp": 1792412959.946735,
+  "duration_seconds": 19.231255531311035,
+  "invocation": {
+    "success": true,
+    "error": null,
+    "prompt_tokens": 266,
+    "completion_tokens": 1149,
+    "latency_seconds": 19.1125952,
+    "cost_usd": 0.0,
+    "patches_extracted_count": 0,
+    "patches_applied_count": 0
+  },
+  "grading": {
+    "overall_status": "POLICY_FAIL",
+    "report_file": "E:\\gameforge_step1\\reports\\run_t1-001-health-invariants_1792412959.json",
+    "layers": {
+      "clean_start": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "Workspace snapshot verified",
+        "details": {}
+      },
+      "policy_checks": {
+        "status": "FAIL",
+        "duration_seconds": 0.0,
+        "message": "Violations: Path allowlist violation: 'Config/DefaultEngine.ini' is not in allowed_edit_paths",
+        "details": {
+          "total_files_checked": 0,
+          "modified_count": 6
+        }
+      },
+      "build_import": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "Project built and imported successfully",
+        "details": {}
+      },
+      "automated_tests": {
+        "status": "SKIPPED",
+        "duration_seconds": 0.0,
+        "message": "No automated tests declared for this task",
+        "details": {}
+      },
+      "behavior_probes": {
+        "status": "SKIPPED",
+        "duration_seconds": 0.0,
+        "message": "No behavior probes configured",
+        "details": {}
+      },
+      "saved_asset_checks": {
+        "status": "FAIL",
+        "duration_seconds": 0.0,
+        "message": "Missing: ['.uproject']",
+        "details": {
+          "error": "Missing .uproject"
+        }
+      },
+      "performance_checks": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "Within declared performance limits",
+        "details": {}
+      },
+      "regression_checks": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "No regressions detected",
+        "details": {}
+      },
+      "visual_review": {
+        "status": "NOT_APPLICABLE",
+        "duration_seconds": 0.0,
+        "message": "Visual review not required",
+        "details": {}
+      }
+    },
+    "probes_passed": 0,
+    "probes_total": 0
+  },
+  "evidence": {
+    "raw_output_path": "E:\\gameforge_step1\\reports\\attempts\\attempt_t1-001-health-invariants_local-ollama-llama3.1-specialist-8b_1792412940_4e8ffc\\candidate_raw_output.txt",
+    "diff_path": "E:\\gameforge_step1\\reports\\attempts\\attempt_t1-001-health-invariants_local-ollama-llama3.1-specialist-8b_1792412940_4e8ffc\\candidate_diffs.patch",
+    "eval_workspace": "E:\\gameforge_step1\\reports\\attempts\\attempt_t1-001-health-invariants_local-ollama-llama3.1-specialist-8b_1792412940_4e8ffc\\candidate_files"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "last_updated": "2026-10-19T17:05:00Z",
+  "governing_policy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0 Section 28.2 / Section 30.1.3",
+  "candidates": [
+    {
+      "candidate_id": "local-ollama-llama3.1-8b-instruct",
+      "display_name": "Llama 3.1 8B Instruct (Local Baseline)",
+      "provider": "ollama",
+      "runtime_type": "local_inference",
+      "model_name": "llama3.1:8b",
+      "revision": "46e0c10c039e",
+      "license": "Meta Llama 3.1 Community License",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 4096,
+      "max_context_window": 131072,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+        "backend": "ROCm gfx1101",
+        "quantization": "Q4_K_M"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-19",
+      "permission_basis": "Local open-weights non-commercial research evaluation on user hardware; zero external data egress",
+      "allowed_use_confirmed": true,
+      "status": "ELIGIBLE_AND_AVAILABLE",
+      "limitations": [
+        "Local context defaulted to 4096 tokens based on VRAM schedule",
+        "Single-turn code completion / function call interface",
+        "General coding baseline, no engine-specific post-training"
+      ]
+    },
+    {
+      "candidate_id": "local-ollama-llama3.1-specialist-8b",
+      "display_name": "Llama 3.1 8B GameForge Specialist Variant (Local)",
+      "provider": "ollama",
+      "runtime_type": "local_inference",
+      "model_name": "llama3.1-specialist:8b",
+      "revision": "8ee3d20c2d79",
+      "license": "Meta Llama 3.1 Community License",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 4096,
+      "max_context_window": 131072,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+        "backend": "ROCm gfx1101",
+        "quantization": "Q4_K_M"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-19",
+      "permission_basis": "Local open-weights research evaluation with GameForge specialist system prompt on user hardware; zero external data egress",
+      "allowed_use_confirmed": true,
+      "status": "ELIGIBLE_AND_AVAILABLE",
+      "limitations": [
+        "Prompt-engineered specialist baseline; no weight fine-tuning",
+        "Subject to base 8B parameter reasoning capacity",
+        "Context budgeted at 4096 tokens per attempt"
+      ]
+    }
+  ]
+}

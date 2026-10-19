@@ -1,0 +1,165 @@
+**Temporal Invariants of an Authoritative Health and Damage Subsystem**
+
+### Introduction
+
+The health and damage system is a critical component of any game engine, responsible for tracking the state of entities within the game world. This document outlines the core temporal invariants of such a subsystem, ensuring that it behaves correctly under various scenarios.
+
+### Notation
+
+* `H`: The current health value of an entity.
+* `M`: The maximum health value of an entity (i.e., `MaxHealth`).
+* `D`: The amount of damage applied to an entity.
+* `I`: The invulnerability window duration.
+* `T`: The current time.
+
+### Temporal Invariants
+
+#### 1. Damage Acceptance within and outside Invulnerability Windows
+
+**Invariant:** If the entity is not invulnerable, then any non-zero damage applied during the invulnerability window will be accepted at the end of the window.
+
+**Mathematical Postcondition:**
+
+∀t ∈ [T - I, T]: if H > 0 ∧ D ≠ 0, then H = H + D
+
+#### 2. Resource Clamping between 0 and MaxHealth
+
+**Invariant:** The health value will always be clamped between 0 and `MaxHealth`.
+
+**Mathematical Postcondition:**
+
+∀t ∈ [T - I, T]: 0 ≤ H ≤ M ∧ (H < 0 ∨ H > M) ⇒ H = max(0, min(M, H))
+
+#### 3. Exactly-Once Death State Transition
+
+**Invariant:** An entity will transition to the dead state exactly once.
+
+**Mathematical Postcondition:**
+
+∀t ∈ [T - I, T]: if H ≤ 0 ∧ (H < 0 ∨ H > M), then H = 0 ∧ "dead" event dispatched
+
+#### 4. Event Dispatch Sequencing
+
+**Invariant:** Events will be dispatched in the correct order.
+
+**Mathematical Postcondition:**
+
+∀t ∈ [T - I, T]: if H ≤ 0, then "damage applied" event dispatched before "dead" event dispatched
+
+### Unreal Engine (C++) Implementation
+
+In Unreal Engine, we can implement these invariants using delegates and a state machine. The `HealthComponent` class will manage the health value and dispatch events accordingly.
+
+```cpp
+// HealthComponent.h
+class UHealthComponent : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    // Delegate for damage applied event
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void OnDamageApplied(float Damage);
+
+    // Delegate for dead event
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void OnDead();
+
+private:
+    float Health;
+    bool bIsInvulnerable;
+
+    // State machine to manage health state transitions
+    enum class EHealthState { Alive, Invulnerable, Dead };
+    EHealthState CurrentState;
+
+    // Update health value and dispatch events as necessary
+    void UpdateHealth(float DeltaTime);
+};
+
+// HealthComponent.cpp
+void UHealthComponent::UpdateHealth(float DeltaTime)
+{
+    if (bIsInvulnerable && Damage > 0) {
+        // Accept damage at the end of invulnerability window
+        Health += Damage;
+    } else {
+        // Clamp health value between 0 and MaxHealth
+        Health = FMath::Clamp(Health + Damage, 0.0f, MaxHealth);
+
+        if (Health <= 0) {
+            // Transition to dead state exactly once
+            CurrentState = EHealthState::Dead;
+            OnDead();
+        }
+    }
+
+    // Dispatch events in the correct order
+    if (CurrentState == EHealthState::Dead) {
+        OnDamageApplied(Damage);
+        OnDead();
+    } else {
+        OnDamageApplied(Damage);
+    }
+}
+```
+
+### Unity (C#) Implementation
+
+In Unity, we can implement these invariants using C# actions and events.
+
+```csharp
+// HealthManager.cs
+using UnityEngine;
+
+public class HealthManager : MonoBehaviour
+{
+    // Action for damage applied event
+    public delegate void DamageApplied(float damage);
+
+    // Event for dead event
+    public event DamageApplied OnDead;
+
+    private float health;
+    private bool isInvulnerable;
+
+    // State machine to manage health state transitions
+    enum HealthState { Alive, Invulnerable, Dead };
+    HealthState currentState;
+
+    // Update health value and dispatch events as necessary
+    void UpdateHealth(float deltaTime)
+    {
+        if (isInvulnerable && damage > 0) {
+            // Accept damage at the end of invulnerability window
+            health += damage;
+        } else {
+            // Clamp health value between 0 and MaxHealth
+            health = Mathf.Clamp(health + damage, 0.0f, MaxHealth);
+
+            if (health <= 0) {
+                // Transition to dead state exactly once
+                currentState = HealthState.Dead;
+                OnDead?.Invoke(damage);
+            }
+        }
+
+        // Dispatch events in the correct order
+        if (currentState == HealthState.Dead) {
+            OnDamageApplied(damage);
+            OnDead?.Invoke(damage);
+        } else {
+            OnDamageApplied(damage);
+        }
+    }
+}
+```
+
+### Contrast between Unreal Engine and Unity Implementations
+
+While both implementations achieve the same invariants, there are some differences in approach:
+
+*   In Unreal Engine, we use delegates to define events, whereas in Unity, we use C# actions.
+*   The state machine is implemented using an enum in both cases, but the logic for transitioning between states differs slightly due to language-specific features.
+
+In summary, this document outlines the core temporal invariants of an authoritative health and damage subsystem. We have provided a rigorous, formal engineering specification addressing all requirements and contrasted how this invariant contract translates between Unreal Engine (delegates) and Unity (C# actions/events).

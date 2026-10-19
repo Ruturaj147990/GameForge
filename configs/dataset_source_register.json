@@ -1,0 +1,98 @@
+{
+  "register_version": "v1.1.0",
+  "policy_status": "AUDITED_RIGHTS_ENFORCEMENT",
+  "governing_document": "GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 5.5, 28.3, 32.8",
+  "split_definitions": {
+    "train": "Curated, rights-cleared trajectories and code examples permitted for model training.",
+    "dev": "Open validation split used for prompt engineering and iterative evaluation during development.",
+    "eval_private": "Held-out private benchmark tasks strictly isolated from training corpora and candidate access.",
+    "eval_public": "Public benchmark tasks used for external reproducibility and community evaluation."
+  },
+  "provenance_rules": [
+    "Every source must specify source identity, revision, rights holder, exact license, intended uses, and evidence reference.",
+    "Public availability or open repository hosting does not imply training clearance; license must explicitly permit commercial model training.",
+    "Internal authorship claims without independent copyright assignment or legal clearance must default to REVIEW_REQUIRED.",
+    "Unreal Engine proprietary source code, starter content, and Epic marketplace assets are strictly PROHIBITED from training corpora.",
+    "Unity engine source and Asset Store assets are strictly PROHIBITED from training corpora.",
+    "Private evaluation benchmark tasks, hidden grader oracles, and reference solutions are strictly RESTRICTED_EVAL_ONLY and prohibited from training.",
+    "All secrets, API tokens, passwords, and PII must be scrubbed before ingestion."
+  ],
+  "registered_sources": [
+    {
+      "source_id": "gameforge-cleanroom-unreal-pilots",
+      "name": "GameForge Clean-Room Native Unreal Pilots",
+      "provenance": "Internal clean-room implementation of T2/T3 gameplay tasks in Unreal Engine",
+      "revision": "git-head-audited-20261019",
+      "rights_holder": "GameForge Authors / Pending Legal Review",
+      "exact_license": "MIT (Asserted, rights unreviewed for training use)",
+      "intended_uses": ["EVALUATION", "BENCHMARK_FIXTURE"],
+      "permitted_uses": {
+        "training": false,
+        "evaluation": true,
+        "redistribution": false
+      },
+      "evidence_reference": "doc://licensing/internal_cleanroom_review_pending",
+      "review_status": "REVIEW_REQUIRED",
+      "split_restrictions": ["dev", "eval_public"],
+      "removal_obligations": "Must be removed immediately upon copyright notice or licensing determination.",
+      "notes": "Audited in Step 6: Internal authorship claims require copyright assignment and legal clearance before entering training splits."
+    },
+    {
+      "source_id": "gameforge-engine-neutral-specs",
+      "name": "GameForge Engine-Neutral Semantic Specifications",
+      "provenance": "Mathematical invariants, event timing rules, and formal behavioral contracts",
+      "revision": "v1.0.0-frozen",
+      "rights_holder": "GameForge Authors / Pending Legal Review",
+      "exact_license": "Apache-2.0 (Asserted, rights unreviewed for training use)",
+      "intended_uses": ["EVALUATION", "SPECIFICATION"],
+      "permitted_uses": {
+        "training": false,
+        "evaluation": true,
+        "redistribution": true
+      },
+      "evidence_reference": "doc://licensing/specs_terms_review_pending",
+      "review_status": "REVIEW_REQUIRED",
+      "split_restrictions": ["dev", "eval_public"],
+      "removal_obligations": "Tombstone and invalidate downstream derived specs upon notice.",
+      "notes": "Audited in Step 6: Engine-neutral contracts require formal IP review before model training ingestion."
+    },
+    {
+      "source_id": "gameforge-synthetic-test-corpus",
+      "name": "GameForge Synthetic Test Corpus (Test Fixture Only)",
+      "provenance": "Generated purely in-memory/in-test for automated pipeline validation",
+      "revision": "synthetic-v1",
+      "rights_holder": "GameForge Test Suite",
+      "exact_license": "CC0-1.0",
+      "intended_uses": ["TRAINING_TEST", "EVALUATION_TEST"],
+      "permitted_uses": {
+        "training": true,
+        "evaluation": true,
+        "redistribution": true
+      },
+      "evidence_reference": "tests/unit/test_data_factory.py",
+      "review_status": "CONFIRMED_FOR_TRAINING",
+      "split_restrictions": ["train", "dev"],
+      "removal_obligations": "None (pure synthetic test data)",
+      "notes": "Approved solely for unit testing and CI test validation of the data factory pipeline."
+    },
+    {
+      "source_id": "gameforge-private-heldout-eval",
+      "name": "GameForge Private Held-Out Benchmark Split",
+      "provenance": "Held-out acceptance tasks and hidden test oracles",
+      "revision": "private-oracle-v1",
+      "rights_holder": "GameForge Governance",
+      "exact_license": "PROPRIETARY_HELD_OUT",
+      "intended_uses": ["PRIVATE_EVALUATION"],
+      "permitted_uses": {
+        "training": false,
+        "evaluation": true,
+        "redistribution": false
+      },
+      "evidence_reference": "graders/protected/",
+      "review_status": "RESTRICTED_EVAL_ONLY",
+      "split_restrictions": ["eval_private"],
+      "removal_obligations": "Quarantined indefinitely. Must never be ingested into any training manifest.",
+      "notes": "Strictly quarantined from any training corpus. Contamination checks enforce isolation."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "attempt_id": "baseline_local-ollama-llama3.1-specialist-8b_t1-003-event-diagnostics_run1_1792411515",
+  "candidate_id": "local-ollama-llama3.1-specialist-8b",
+  "task_id": "t1-003-event-diagnostics",
+  "tier": "T1",
+  "category": "engine_neutral",
+  "run_index": 1,
+  "duration_seconds": 12.926877975463867,
+  "invocation": {
+    "success": true,
+    "prompt_tokens": 138,
+    "completion_tokens": 774,
+    "cost_usd": 0.0,
+    "error": null
+  },
+  "grading": {
+    "overall_status": "PASS",
+    "layers": {
+      "policy_static_checks": {
+        "status": "PASS"
+      },
+      "reasoning_rubric": {
+        "status": "PASS",
+        "score": "4/4"
+      },
+      "build_import": {
+        "status": "NOT_APPLICABLE",
+        "reason": "engine_neutral_task"
+      },
+      "behavior_probes": {
+        "status": "NOT_APPLICABLE",
+        "reason": "engine_neutral_task"
+      }
+    },
+    "rubric_details": {
+      "duplicate_subscription_identification": true,
+      "idempotent_registration": true,
+      "lifecycle_cleanup": true,
+      "cross_engine_translation": true
+    }
+  },
+  "evidence_path": "E:\\gameforge_step1\\reports\\baseline_runs\\baseline_local-ollama-llama3.1-specialist-8b_t1-003-event-diagnostics_run1_1792411515"
+}

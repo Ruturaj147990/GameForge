@@ -1,0 +1,89 @@
+{
+  "report_schema_version": "0.1.0",
+  "benchmark_version": "v0.1",
+  "run_id": "run_t2-005-pickup-collection_1792414507",
+  "timestamp": "2026-10-19T12:55:07Z",
+  "logical_task_id": "T2-005",
+  "task_id": "t2-005-pickup-collection",
+  "engine_scope": "ENGINE_SPECIFIC",
+  "verification_level": "UNVERIFIED",
+  "knowledge_domains": [
+    "gameplay"
+  ],
+  "engine": {
+    "name": "unity",
+    "version": "unverified",
+    "executable_path": "none",
+    "project_version": "2022.3"
+  },
+  "environment": {
+    "os": "Windows 11",
+    "python_version": "3.14.6",
+    "toolchain_versions": {
+      "processor": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+      "python_executable": "C:\\Users\\limbk\\AppData\\Local\\Programs\\Python\\Python314\\python.exe"
+    },
+    "git_commit": "197c889dd4b2b28213f9dd79dc6c845f5332621b"
+  },
+  "candidate": {
+    "candidate_id": "reference_solution",
+    "candidate_type": "reference",
+    "snapshot_hash": "sha256:42abe70705203198f32419bdcb894694dd824dc2184a02b6a9dbd64bff292766"
+  },
+  "budgets": {
+    "wall_clock_seconds": 1800,
+    "max_tool_calls": 100,
+    "max_model_tokens": null
+  },
+  "reproducibility": {
+    "fixed_timestep": 0.016667,
+    "seed": 42
+  },
+  "status": "HARNESS_INVALID",
+  "first_mandatory_failure_layer": "build_import",
+  "layers": {
+    "clean_start": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Workspace snapshot verified",
+      "details": {}
+    },
+    "policy_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All static boundaries respected",
+      "details": {}
+    },
+    "build_import": {
+      "status": "ERROR",
+      "duration_seconds": 0.0,
+      "message": "Engine not installed in environment",
+      "details": {
+        "is_infrastructure_failure": true
+      }
+    }
+  },
+  "probes": {},
+  "diff_summary": null,
+  "isolation": {
+    "provider": "RestrictedProcessIsolationProvider",
+    "classification": "LOW_PRIVILEGE_PROCESS",
+    "runtime_version": "10.0.26300",
+    "network_restricted": false,
+    "host_fs_restricted": false,
+    "timeout_policy_seconds": 180.0,
+    "cleanup_status": "DISPOSABLE_WORKSPACE_PER_RUN",
+    "workspace_identity": "scratch/eval_runs",
+    "residual_risks": [
+      "Host user permissions retained by native C++ process",
+      "OS-level sandbox (Hyper-V / Windows Sandbox) not active"
+    ]
+  },
+  "logs": {
+    "eval_log_dir": "E:\\gameforge_step1\\scratch\\eval_runs\\run_t2-005-pickup-collection_1792414507\\logs"
+  },
+  "duration_seconds": 0.011,
+  "warnings": [
+    "Engine not installed; real-engine execution blocked"
+  ]
+}

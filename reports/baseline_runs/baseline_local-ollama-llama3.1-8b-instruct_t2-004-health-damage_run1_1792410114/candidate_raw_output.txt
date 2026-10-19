@@ -1,0 +1,86 @@
+Here is a possible solution for the task:
+
+### File: src/gameplay/components/HealthComponent.h
+```cpp
+#ifndef HEALTH_COMPONENT_H
+#define HEALTH_COMPONENT_H
+
+#include "entt.hpp"
+#include "component_interface.h"
+
+namespace game {
+
+struct Health {
+    float max_health = 100.0f;
+    float current_health = 100.0f;
+    float invulnerability_window_duration = 2.0f; // seconds
+    float invulnerability_window_start_time = 0.0f;
+
+    bool is_invulnerable() const { return invulnerability_window_start_time > 0.0f && entt::time() - invulnerability_window_start_time < invulnerability_window_duration; }
+};
+
+class HealthComponent : public ComponentInterface<Health> {
+public:
+    void on_update(entt::registry& registry, float delta) override;
+    void take_damage(float amount);
+};
+
+} // namespace game
+
+#endif // HEALTH_COMPONENT_H
+```
+
+### File: src/gameplay/components/HealthComponent.cpp
+```cpp
+#include "HealthComponent.h"
+
+namespace game {
+
+void HealthComponent::on_update(entt::registry& registry, float delta) {
+    auto health = registry.get<Health>(entt::get_current_entity());
+    if (health->is_invulnerable()) {
+        // do nothing
+    } else {
+        // clamp current health to max health
+        health->current_health = std::max(0.0f, std::min(health->max_health, health->current_health - delta * 10.0f)); // assume damage rate of 10 per second
+
+        if (health->current_health <= 0.0f) {
+            // emit death event
+            registry.emit_event<DeathEvent>(entt::get_current_entity());
+        }
+    }
+}
+
+void HealthComponent::take_damage(float amount) {
+    auto health = get<Health>(entt::get_current_entity());
+    if (!health->is_invulnerable()) {
+        health->current_health -= amount;
+        // set invulnerability window start time
+        health->invulnerability_window_start_time = entt::time();
+    }
+}
+
+} // namespace game
+```
+
+### File: src/gameplay/events/DeathEvent.h
+```cpp
+#ifndef DEATH_EVENT_H
+#define DEATH_EVENT_H
+
+#include "entt.hpp"
+
+namespace game {
+
+struct DeathEvent {
+    entt::entity entity;
+};
+
+} // namespace game
+
+#endif // DEATH_EVENT_H
+```
+
+This solution defines a `HealthComponent` that manages the health of an entity. The component has methods for updating the health based on time and taking damage, which also sets an invulnerability window to prevent repeated damage during its defined duration. When the health reaches zero, it emits a `DeathEvent`. The existing interfaces are preserved.
+
+Note: This solution assumes that the `entt` library is used for entity-component-system (ECS) management, and that the `ComponentInterface` class provides basic functionality for components. Also, this implementation uses safe math clamping to prevent health from exceeding its allowed range.

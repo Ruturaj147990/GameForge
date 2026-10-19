@@ -1,0 +1,163 @@
+**File:** `pickup_collection.h`
+```cpp
+#ifndef PICKUP_COLLECTION_H
+#define PICKUP_COLLECTION_H
+
+#include "component_interface.h"
+#include "inventory_component.h"
+
+class PickupCollectionComponent : public ComponentInterface {
+public:
+    PickupCollectionComponent(Entity* entity);
+    ~PickupCollectionComponent();
+
+    void CollectItem(Item* item) const;
+    bool IsCollected() const;
+
+private:
+    Entity* m_entity;
+    InventoryComponent* m_inventory;
+    Item* m_collectedItem;
+};
+
+#endif  // PICKUP_COLLECTION_H
+```
+
+**File:** `pickup_collection.cpp`
+```cpp
+#include "pickup_collection.h"
+#include "entity.h"
+#include "item.h"
+
+PickupCollectionComponent::PickupCollectionComponent(Entity* entity)
+    : ComponentInterface(entity), m_entity(entity) {
+    m_inventory = entity->GetComponent<InventoryComponent>();
+}
+
+PickupCollectionComponent::~PickupCollectionComponent() {}
+
+void PickupCollectionComponent::CollectItem(Item* item) const {
+    if (m_collectedItem == nullptr && !IsCollected()) {
+        m_collectedItem = item;
+        m_inventory->IncrementItemCount(item);
+        // Update UI or other interfaces as needed
+    }
+}
+
+bool PickupCollectionComponent::IsCollected() const {
+    return m_collectedItem != nullptr;
+}
+```
+
+**File:** `entity.h`
+```cpp
+#ifndef ENTITY_H
+#define ENTITY_H
+
+#include "component_interface.h"
+
+class Entity : public ComponentInterface {
+public:
+    Entity();
+    ~Entity();
+
+    void AddComponent(ComponentInterface* component);
+    ComponentInterface* GetComponent(const std::type_index& type);
+
+private:
+    std::vector<ComponentInterface*> m_components;
+};
+
+#endif  // ENTITY_H
+```
+
+**File:** `entity.cpp`
+```cpp
+#include "entity.h"
+#include "pickup_collection_component.h"
+
+Entity::Entity() {}
+Entity::~Entity() {}
+
+void Entity::AddComponent(ComponentInterface* component) {
+    m_components.push_back(component);
+}
+
+ComponentInterface* Entity::GetComponent(const std::type_index& type) {
+    for (auto& component : m_components) {
+        if (component->GetTypeId() == type) {
+            return dynamic_cast<ComponentInterface*>(component);
+        }
+    }
+    return nullptr;
+}
+```
+
+**File:** `item.h`
+```cpp
+#ifndef ITEM_H
+#define ITEM_H
+
+class Item {
+public:
+    virtual ~Item() {}
+};
+
+#endif  // ITEM_H
+```
+
+**File:** `inventory_component.h`
+```cpp
+#ifndef INVENTORY_COMPONENT_H
+#define INVENTORY_COMPONENT_H
+
+#include "component_interface.h"
+
+class InventoryComponent : public ComponentInterface {
+public:
+    InventoryComponent(Entity* entity);
+    ~InventoryComponent();
+
+    void IncrementItemCount(Item* item);
+
+private:
+    Entity* m_entity;
+};
+
+#endif  // INVENTORY_COMPONENT_H
+```
+
+**File:** `inventory_component.cpp`
+```cpp
+#include "inventory_component.h"
+#include "entity.h"
+
+InventoryComponent::InventoryComponent(Entity* entity)
+    : ComponentInterface(entity), m_entity(entity) {}
+
+InventoryComponent::~InventoryComponent() {}
+
+void InventoryComponent::IncrementItemCount(Item* item) {
+    // Update inventory logic as needed
+}
+```
+
+**File:** `component_interface.h`
+```cpp
+#ifndef COMPONENT_INTERFACE_H
+#define COMPONENT_INTERFACE_H
+
+#include "entity.h"
+
+class ComponentInterface {
+public:
+    virtual ~ComponentInterface() {}
+    virtual std::type_index GetTypeId() const = 0;
+};
+
+#endif  // COMPONENT_INTERFACE_H
+```
+
+This implementation provides a PickupCollectionComponent that can be attached to an entity. When the player overlaps with an item, the CollectItem function is called, which checks if the item has already been collected and updates the inventory accordingly.
+
+Note: This code assumes that the `Entity` class has a method to add components and retrieve them by type index. The `InventoryComponent` class is responsible for updating the inventory logic. The `Item` class is a base class for items in the game, and its implementation is not provided here.

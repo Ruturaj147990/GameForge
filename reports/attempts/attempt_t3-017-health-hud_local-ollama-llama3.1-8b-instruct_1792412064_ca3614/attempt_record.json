@@ -1,0 +1,107 @@
+{
+  "attempt_id": "attempt_t3-017-health-hud_local-ollama-llama3.1-8b-instruct_1792412064_ca3614",
+  "task_id": "t3-017-health-hud",
+  "candidate_id": "local-ollama-llama3.1-8b-instruct",
+  "benchmark_release_id": "gameforge-bench-v0.2.0-baseline",
+  "timestamp": 1792412181.3814883,
+  "duration_seconds": 116.95396661758423,
+  "invocation": {
+    "success": true,
+    "error": null,
+    "prompt_tokens": 249,
+    "completion_tokens": 1022,
+    "latency_seconds": 17.0372725,
+    "cost_usd": 0.0,
+    "patches_extracted_count": 6,
+    "patches_applied_count": 0
+  },
+  "grading": {
+    "overall_status": "PASS",
+    "report_file": "E:\\gameforge_step1\\reports\\run_t3-017-health-hud_1792412081.json",
+    "layers": {
+      "clean_start": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "Workspace snapshot verified",
+        "details": {}
+      },
+      "policy_checks": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "All static boundaries respected",
+        "details": {}
+      },
+      "build_import": {
+        "status": "PASS",
+        "duration_seconds": 13.567734241485596,
+        "message": "Project built and imported successfully",
+        "details": {}
+      },
+      "automated_tests": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "All 2 automated tests passed",
+        "details": {
+          "tests": [
+            {
+              "name": "engine_subsystem_initialization",
+              "passed": true,
+              "duration_seconds": 11.066798210144043,
+              "message": "Engine initialized: 5.7.4-51494982+++UE5+Release-5.7",
+              "error_trace": null
+            },
+            {
+              "name": "editor_subsystem_available",
+              "passed": true,
+              "duration_seconds": 11.066798210144043,
+              "message": "Editor subsystem query succeeded",
+              "error_trace": null
+            }
+          ]
+        }
+      },
+      "behavior_probes": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "All 13 behavior probes passed within tolerance",
+        "details": {}
+      },
+      "saved_asset_checks": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "Saved assets, components, and references validated",
+        "details": {
+          "plugins_enabled": [
+            "PythonScriptPlugin"
+          ],
+          "engine_association": "5.7"
+        }
+      },
+      "performance_checks": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "Within declared performance limits",
+        "details": {}
+      },
+      "regression_checks": {
+        "status": "PASS",
+        "duration_seconds": 0.0,
+        "message": "No regressions detected",
+        "details": {}
+      },
+      "visual_review": {
+        "status": "NOT_APPLICABLE",
+        "duration_seconds": 0.0,
+        "message": "Visual review not required",
+        "details": {}
+      }
+    },
+    "probes_passed": 13,
+    "probes_total": 13
+  },
+  "evidence": {
+    "raw_output_path": "E:\\gameforge_step1\\reports\\attempts\\attempt_t3-017-health-hud_local-ollama-llama3.1-8b-instruct_1792412064_ca3614\\candidate_raw_output.txt",
+    "diff_path": "E:\\gameforge_step1\\reports\\attempts\\attempt_t3-017-health-hud_local-ollama-llama3.1-8b-instruct_1792412064_ca3614\\candidate_diffs.patch",
+    "eval_workspace": "E:\\gameforge_step1\\reports\\attempts\\attempt_t3-017-health-hud_local-ollama-llama3.1-8b-instruct_1792412064_ca3614\\candidate_files"
+  }
+}

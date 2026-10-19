@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .engines.base import EngineAdapter
+from .engines.base import BuildResult, EngineAdapter
 from .engines.discovery import discover_environment, discover_unity_engine, discover_unreal_engine
 from .engines.unity import UnityEngineAdapter
 from .engines.unreal import UnrealEngineAdapter
@@ -173,16 +173,26 @@ class BenchmarkRunner:
                 pass
 
         # Step 8: Build / Import the candidate
-        build_result = adapter.build_project(eval_workspace, log_dir)
+        if getattr(task_spec, "native_execution_required", True):
+            build_result = adapter.build_project(eval_workspace, log_dir)
+        else:
+            build_result = BuildResult(
+                success=True,
+                duration_seconds=0.0,
+                return_code=0,
+                log_output="Static/conceptual task: native engine compilation not required.",
+                error_summary=None,
+                is_infrastructure_failure=False,
+            )
 
         # Step 9: Execute automated tests (if build succeeded and engine available)
         tests = []
-        if build_result.success and engine_discovery.is_installed:
+        if getattr(task_spec, "native_execution_required", True) and build_result.success and engine_discovery.is_installed:
             tests = adapter.execute_automated_tests(eval_workspace, log_dir)
 
         # Step 10: Execute gameplay behavior probes
         probes = []
-        if build_result.success and engine_discovery.is_installed:
+        if getattr(task_spec, "native_execution_required", True) and build_result.success and engine_discovery.is_installed:
             probes = adapter.execute_behavior_probes(eval_workspace, log_dir, acceptance_config)
 
         # Step 11: Inspect native saved assets

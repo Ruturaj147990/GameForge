@@ -1,0 +1,91 @@
+**Temporal Invariants of an Authoritative Health and Damage Subsystem**
+
+### Introduction
+
+The health and damage system is a critical component of any game engine, responsible for tracking the state of entities within the game world. This document outlines the core temporal invariants of such a subsystem, ensuring that it behaves correctly under various scenarios.
+
+### Notation
+
+* `H`: The current health value of an entity.
+* `M`: The maximum health value of an entity (i.e., `MaxHealth`).
+* `D`: The amount of damage applied to an entity.
+* `I`: The invulnerability window duration.
+* `T`: The time at which the invulnerability window starts or ends.
+
+### Temporal Invariants
+
+#### 1. Damage Acceptance within and outside Invulnerability Windows (t1-001-damage-invariant)
+
+When damage is applied to an entity, the following conditions must hold:
+
+* If the entity is not invulnerable (`T < I`), then `H = H - D`.
+* If the entity is invulnerable (`T ≥ I`) and the damage is within the invulnerability window (`T ≤ T + I`), then `H = H`.
+
+Formalized in temporal logic:
+
+```math
+∀t, d : (¬invuln(t) ∧ h(t) = h(t - 1) - d)
+∨ (∃i : invuln(t) ∧ t ≤ t + i ∧ h(t) = h(t - 1))
+```
+
+#### 2. Resource Clamping between 0 and MaxHealth (t1-002-clamp-invariant)
+
+The health value of an entity must always be clamped within the range [0, `M`]:
+
+* If `H < 0`, then `H = 0`.
+* If `H > M`, then `H = M`.
+
+Formalized in temporal logic:
+
+```math
+∀t : (h(t) < 0 → h(t) = 0)
+∧ (∃m : h(t) > m → h(t) = m)
+```
+
+#### 3. Exactly-Once Death State Transition (t1-003-death-invariant)
+
+An entity can only die once:
+
+* If `H ≤ 0`, then the death state is set to true.
+* Once the death state is set, it cannot be reset.
+
+Formalized in temporal logic:
+
+```math
+∀t : (∃h : h(t) ≤ 0 → dead(t))
+∧ ∀t, t' : (dead(t) ∧ t < t' → ¬dead(t'))
+```
+
+#### 4. Event Dispatch Sequencing (t1-004-event-invariant)
+
+Events related to health and damage must be dispatched in a specific order:
+
+* When an entity takes damage, the `OnDamage` event is dispatched before the `OnHealthUpdate` event.
+* When an entity dies, the `OnDeath` event is dispatched after the `OnHealthUpdate` event.
+
+Formalized in temporal logic (assuming events are represented as functions):
+
+```math
+∀t : (∃d : on_damage(t) → on_health_update(t))
+∧ ∀t : (∃h : on_death(t) → on_health_update(t))
+```
+
+### Translation to Unreal Engine and Unity
+
+In Unreal Engine, the above invariants can be implemented using delegates:
+
+* `OnDamage` delegate: triggered when an entity takes damage
+* `OnHealthUpdate` delegate: triggered when an entity's health changes
+* `OnDeath` delegate: triggered when an entity dies
+
+In Unity, the same invariants can be implemented using C# actions and events:
+
+* `OnDamage` action: triggered when an entity takes damage
+* `OnHealthUpdate` event: triggered when an entity's health changes
+* `OnDeath` event: triggered when an entity dies
+
+Note that while the implementation details differ between Unreal Engine and Unity, the underlying invariants remain the same.
+
+### Conclusion
+
+The above temporal invariants ensure that the health and damage system behaves correctly under various scenarios. By formalizing these invariants, we can guarantee that our game engine's health and damage subsystem meets its functional requirements.

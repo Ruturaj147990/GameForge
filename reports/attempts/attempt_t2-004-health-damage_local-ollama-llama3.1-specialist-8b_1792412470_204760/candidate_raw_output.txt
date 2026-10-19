@@ -1,0 +1,113 @@
+Here is a possible solution for the task:
+
+### File: src/gameplay/components/HealthComponent.h
+```cpp
+#ifndef HEALTH_COMPONENT_H
+#define HEALTH_COMPONENT_H
+
+#include "entt.hpp"
+#include "component_interface.h"
+
+namespace game {
+
+struct Health {
+    float max_health = 100.0f;
+    float current_health = 100.0f;
+    float invulnerability_window_duration = 2.0f; // seconds
+    float invulnerability_window_start_time = 0.0f;
+
+    bool is_invulnerable() const { return invulnerability_window_start_time > 0.0f && entt::time() - invulnerability_window_start_time < invulnerability_window_duration; }
+};
+
+class HealthComponent : public ComponentInterface<Health> {
+public:
+    void on_update(entt::registry& registry, float delta) override;
+    void take_damage(float amount);
+};
+
+} // namespace game
+
+#endif // HEALTH_COMPONENT_H
+```
+
+### File: src/gameplay/components/HealthComponent.cpp
+```cpp
+#include "HealthComponent.h"
+
+namespace game {
+
+void HealthComponent::on_update(entt::registry& registry, float delta) {
+    auto health = registry.get<Health>(entt::null);
+    if (health && !health->is_invulnerable()) {
+        // Clamp current health to max health range
+        health->current_health = std::max(0.0f, std::min(health->max_health, health->current_health));
+    }
+}
+
+void HealthComponent::take_damage(float amount) {
+    auto health = get<Health>();
+    if (health && !health->is_invulnerable()) {
+        // Apply damage to current health
+        health->current_health -= amount;
+        // Set invulnerability window start time
+        health->invulnerability_window_start_time = entt::time();
+        // Emit death event when health reaches zero
+        if (health->current_health <= 0.0f) {
+            emit_event("death");
+        }
+    }
+}
+
+} // namespace game
+```
+
+### File: src/gameplay/systems/DamageSystem.h
+```cpp
+#ifndef DAMAGE_SYSTEM_H
+#define DAMAGE_SYSTEM_H
+
+#include "entt.hpp"
+#include "system_interface.h"
+
+namespace game {
+
+class DamageSystem : public SystemInterface {
+public:
+    void on_update(entt::registry& registry, float delta) override;
+};
+
+} // namespace game
+
+#endif // DAMAGE_SYSTEM_H
+```
+
+### File: src/gameplay/systems/DamageSystem.cpp
+```cpp
+#include "DamageSystem.h"
+#include "HealthComponent.h"
+
+namespace game {
+
+void DamageSystem::on_update(entt::registry& registry, float delta) {
+    auto entities = registry.view<Health>();
+    for (auto entity : entities) {
+        auto health = registry.get<Health>(entity);
+        if (health && !health->is_invulnerable()) {
+            // Apply damage to current health
+            health->current_health -= 10.0f; // example damage amount
+            // Set invulnerability window start time
+            health->invulnerability_window_start_time = entt::time();
+            // Emit death event when health reaches zero
+            if (health->current_health <= 0.0f) {
+                emit_event("death");
+            }
+        }
+    }
+}
+
+} // namespace game
+```
+
+This solution implements a `HealthComponent` that tracks the entity's current and maximum health, as well as an invulnerability window duration. The `DamageSystem` applies damage to entities with a non-zero health value and sets their invulnerability window start time. When an entity's health reaches zero, it emits a "death" event.
+
+Note: This solution assumes that the `entt::registry` is properly set up and configured in your game engine. Additionally, this implementation uses example values for damage amount and invulnerability window duration; you should adjust these to fit your specific game requirements.

@@ -1,0 +1,136 @@
+Here is a possible implementation of the third-person player controller in C++.
+
+**File:** `src/gameplay/controllers/ThirdPersonController.h`
+
+```cpp
+#ifndef THIRD_PERSON_CONTROLLER_H
+#define THIRD_PERSON_CONTROLLER_H
+
+#include "gameplay/components/Transform.h"
+#include "gameplay/components/Camera.h"
+#include "input/InputSystem.h"
+
+namespace gameplay {
+
+class ThirdPersonController {
+public:
+    static const float MAX_SPEED = 5.0f;
+    static const float JUMP_HEIGHT = 10.0f;
+
+    ThirdPersonController();
+    ~ThirdPersonController();
+
+    void update(float deltaTime);
+
+private:
+    Transform* m_characterTransform;
+    Camera* m_camera;
+    InputSystem* m_inputSystem;
+
+    Vector3 m_moveDirection;
+    bool m_isJumping;
+};
+
+} // namespace gameplay
+
+#endif // THIRD_PERSON_CONTROLLER_H
+```
+
+**File:** `src/gameplay/controllers/ThirdPersonController.cpp`
+
+```cpp
+#include "ThirdPersonController.h"
+
+namespace gameplay {
+
+ThirdPersonController::ThirdPersonController()
+    : m_characterTransform(nullptr)
+    , m_camera(nullptr)
+    , m_inputSystem(nullptr)
+    , m_moveDirection(0, 0, 0)
+    , m_isJumping(false) {}
+
+ThirdPersonController::~ThirdPersonController() {}
+
+void ThirdPersonController::update(float deltaTime) {
+    // Get the character's transform and camera
+    m_characterTransform = Transform::getEntity()->getComponent<Transform>();
+    m_camera = Camera::getEntity()->getComponent<Camera>();
+
+    // Handle movement input
+    if (m_inputSystem->isKeyDown(InputKey::FORWARD)) {
+        m_moveDirection += Vector3(0, 0, -1);
+    }
+    if (m_inputSystem->isKeyDown(InputKey::BACKWARD)) {
+        m_moveDirection += Vector3(0, 0, 1);
+    }
+    if (m_inputSystem->isKeyDown(InputKey::LEFT)) {
+        m_moveDirection += Vector3(-1, 0, 0);
+    }
+    if (m_inputSystem->isKeyDown(InputKey::RIGHT)) {
+        m_moveDirection += Vector3(1, 0, 0);
+    }
+
+    // Clamp movement speed
+    m_moveDirection = Vector3::clampLength(m_moveDirection, MAX_SPEED);
+
+    // Update character position
+    m_characterTransform->setPosition(m_characterTransform->getPosition() + m_moveDirection * deltaTime);
+
+    // Handle camera rotation
+    if (m_inputSystem->isKeyDown(InputKey::MOUSE_LEFT)) {
+        float rotationSpeed = 100.0f;
+        Vector2 mouseDelta = m_inputSystem->getMouseDelta();
+        m_camera->rotate(Vector3(0, 1, 0), -mouseDelta.x * rotationSpeed);
+        m_camera->rotate(Vector3(1, 0, 0), -mouseDelta.y * rotationSpeed);
+    }
+
+    // Handle jump input
+    if (m_inputSystem->isKeyDown(InputKey::JUMP) && !m_isJumping) {
+        m_characterTransform->applyForce(Vector3(0, JUMP_HEIGHT, 0));
+        m_isJumping = true;
+    }
+}
+
+} // namespace gameplay
+```
+
+**File:** `src/gameplay/components/ThirdPersonCamera.h` (assuming a camera component is already implemented)
+
+```cpp
+#ifndef THIRD_PERSON_CAMERA_H
+#define THIRD_PERSON_CAMERA_H
+
+#include "gameplay/components/Camera.h"
+
+namespace gameplay {
+
+class ThirdPersonCamera : public Camera {
+public:
+    static const float ORBIT_SPEED = 100.0f;
+
+    void rotate(const Vector3& axis, float angle);
+};
+
+} // namespace gameplay
+
+#endif // THIRD_PERSON_CAMERA_H
+```
+
+**File:** `src/gameplay/components/ThirdPersonCamera.cpp` (assuming a camera component is already implemented)
+
+```cpp
+#include "ThirdPersonCamera.h"
+
+namespace gameplay {
+
+void ThirdPersonCamera::rotate(const Vector3& axis, float angle) {
+    m_rotation += axis * angle;
+}
+
+} // namespace gameplay
+```
+
+This implementation assumes that the `Transform`, `Camera`, and `InputSystem` classes are already implemented in the project. The `ThirdPersonController` class handles movement, camera rotation, and jump input based on user input. The camera is set to orbit around the character using a simple rotation formula.
+
+Note: This code snippet does not include any error handling or edge cases that may be required for a production-ready implementation. It's meant to serve as a starting point for further development and refinement.

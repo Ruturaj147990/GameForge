@@ -1,0 +1,177 @@
+Here is a possible implementation of the third-person player controller in C++.
+
+**File:** `src/gameplay/controllers/ThirdPersonController.h`
+
+```cpp
+#ifndef THIRD_PERSON_CONTROLLER_H
+#define THIRD_PERSON_CONTROLLER_H
+
+#include "gameplay/components/Transform.h"
+#include "gameplay/components/Camera.h"
+#include "input/InputSystem.h"
+
+namespace gameplay {
+
+class ThirdPersonController {
+public:
+    static const float MAX_SPEED = 5.0f;
+    static const float JUMP_HEIGHT = 10.0f;
+
+    ThirdPersonController();
+    ~ThirdPersonController();
+
+    void update(float deltaTime);
+
+private:
+    Transform* m_characterTransform;
+    Camera* m_camera;
+    InputSystem* m_inputSystem;
+
+    Vector3 m_moveDirection;
+    bool m_isJumping;
+};
+
+} // namespace gameplay
+
+#endif // THIRD_PERSON_CONTROLLER_H
+```
+
+**File:** `src/gameplay/controllers/ThirdPersonController.cpp`
+
+```cpp
+#include "ThirdPersonController.h"
+
+namespace gameplay {
+
+ThirdPersonController::ThirdPersonController()
+    : m_characterTransform(nullptr)
+    , m_camera(nullptr)
+    , m_inputSystem(nullptr)
+    , m_moveDirection(0.0f, 0.0f, 0.0f)
+    , m_isJumping(false) {
+}
+
+ThirdPersonController::~ThirdPersonController() {
+}
+
+void ThirdPersonController::update(float deltaTime) {
+    // Get the character's transform and camera
+    m_characterTransform = Transform::getEntity()->getComponent<Transform>();
+    m_camera = Camera::getEntity()->getComponent<Camera>();
+
+    // Handle movement input
+    if (m_inputSystem->isKeyDown(InputKey::FORWARD)) {
+        m_moveDirection += Vector3(0.0f, 0.0f, -1.0f);
+    }
+    if (m_inputSystem->isKeyDown(InputKey::BACKWARD)) {
+        m_moveDirection += Vector3(0.0f, 0.0f, 1.0f);
+    }
+    if (m_inputSystem->isKeyDown(InputKey::LEFT)) {
+        m_moveDirection += Vector3(-1.0f, 0.0f, 0.0f);
+    }
+    if (m_inputSystem->isKeyDown(InputKey::RIGHT)) {
+        m_moveDirection += Vector3(1.0f, 0.0f, 0.0f);
+    }
+
+    // Clamp movement speed
+    float speed = Math::clamp(m_moveDirection.length(), 0.0f, MAX_SPEED);
+
+    // Update character position
+    m_characterTransform->setPosition(
+        m_characterTransform->getPosition() + (m_moveDirection * speed * deltaTime));
+
+    // Handle jump input
+    if (m_inputSystem->isKeyDown(InputKey::JUMP) && !m_isJumping) {
+        m_isJumping = true;
+        m_characterTransform->setVelocity(Vector3(0.0f, JUMP_HEIGHT, 0.0f));
+    }
+
+    // Update camera position
+    Vector3 characterPosition = m_characterTransform->getPosition();
+    Vector3 cameraPosition = characterPosition + (m_camera->getForward() * 5.0f);
+    m_camera->setPosition(cameraPosition);
+
+    // Reset movement direction
+    m_moveDirection = Vector3(0.0f, 0.0f, 0.0f);
+}
+
+} // namespace gameplay
+```
+
+**File:** `src/gameplay/components/Transform.h` (assuming this file already exists)
+
+```cpp
+#ifndef TRANSFORM_H
+#define TRANSFORM_H
+
+#include "core/math/Vector3.h"
+
+namespace gameplay {
+
+class Transform {
+public:
+    static Transform* getEntity();
+
+    void setPosition(const Vector3& position);
+    const Vector3& getPosition() const;
+
+private:
+    Vector3 m_position;
+};
+
+} // namespace gameplay
+
+#endif // TRANSFORM_H
+```
+
+**File:** `src/gameplay/components/Camera.h` (assuming this file already exists)
+
+```cpp
+#ifndef CAMERA_H
+#define CAMERA_H
+
+#include "core/math/Vector3.h"
+
+namespace gameplay {
+
+class Camera {
+public:
+    static Camera* getEntity();
+
+    void setPosition(const Vector3& position);
+    const Vector3& getPosition() const;
+    const Vector3& getForward() const;
+
+private:
+    Vector3 m_position;
+};
+
+} // namespace gameplay
+
+#endif // CAMERA_H
+```
+
+**File:** `src/input/InputSystem.h` (assuming this file already exists)
+
+```cpp
+#ifndef INPUT_SYSTEM_H
+#define INPUT_SYSTEM_H
+
+namespace gameplay {
+
+class InputSystem {
+public:
+    bool isKeyDown(InputKey key);
+
+private:
+    // ...
+};
+
+} // namespace gameplay
+
+#endif // INPUT_SYSTEM_H
+```
+
+This implementation assumes that the `Transform`, `Camera`, and `InputSystem` classes are already defined elsewhere in the project. The `ThirdPersonController` class handles movement, jump input, and camera positioning based on the provided input system.
+
+Note: This is a basic implementation to get you started. You may need to modify it to fit your specific requirements and engine constraints.

@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gameforge.ai/schemas/trajectory_schema.v1.0.json",
+  "title": "GameForgeTrajectorySchema",
+  "description": "Validation schema for GameForge rights-aware training, process trajectories, and evaluation examples (v1.0)",
+  "type": "object",
+  "required": [
+    "sample_id",
+    "schema_version",
+    "sample_type",
+    "source_id",
+    "provenance",
+    "rights",
+    "content_digest",
+    "task_info",
+    "split_info",
+    "quality",
+    "security_and_privacy"
+  ],
+  "properties": {
+    "sample_id": {
+      "type": "string",
+      "pattern": "^(samp|traj|spec|neg)-[a-z0-9-]+$"
+    },
+    "schema_version": {
+      "type": "string",
+      "enum": ["v1.0.0"]
+    },
+    "sample_type": {
+      "type": "string",
+      "enum": ["process_trajectory", "code_sample", "specification", "negative_example"]
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Identifier linking to configs/dataset_source_register.json"
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["origin_uri", "commit_or_hash", "collected_at", "producing_tool"],
+      "properties": {
+        "origin_uri": { "type": "string" },
+        "commit_or_hash": { "type": "string" },
+        "source_version": { "type": "string" },
+        "collected_at": { "type": "string" },
+        "producing_tool": { "type": "string" },
+        "parent_sample_id": { "type": ["string", "null"] },
+        "lineage_notes": { "type": "string" }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "required": ["rights_holder", "license_id", "evidence_reference", "rights_review_state", "permitted_uses"],
+      "properties": {
+        "rights_holder": { "type": "string" },
+        "license_id": { "type": "string" },
+        "evidence_reference": { "type": "string" },
+        "rights_review_state": {
+          "type": "string",
+          "enum": ["CONFIRMED_FOR_TRAINING", "REVIEW_REQUIRED", "RESTRICTED_EVAL_ONLY", "PROHIBITED", "UNKNOWN"]
+        },
+        "permitted_uses": {
+          "type": "object",
+          "required": ["training", "evaluation", "redistribution"],
+          "properties": {
+            "training": { "type": "boolean" },
+            "evaluation": { "type": "boolean" },
+            "redistribution": { "type": "boolean" }
+          }
+        },
+        "removal_obligations": { "type": "string" }
+      }
+    },
+    "content_digest": {
+      "type": "object",
+      "required": ["original_sha256", "canonical_fingerprint"],
+      "properties": {
+        "original_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "canonical_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "normalization_version": { "type": "string" }
+      }
+    },
+    "task_info": {
+      "type": "object",
+      "required": ["task_id", "benchmark_version"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "logical_task_id": { "type": "string" },
+        "benchmark_tier": {
+          "type": "string",
+          "enum": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
+        },
+        "benchmark_version": { "type": "string" },
+        "engine": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "enum": ["unreal", "unity", "godot", "engine_neutral"] },
+            "version": { "type": "string" }
+          }
+        }
+      }
+    },
+    "split_info": {
+      "type": "object",
+      "required": ["assigned_split", "group_id", "contamination_status"],
+      "properties": {
+        "assigned_split": {
+          "type": "string",
+          "enum": ["train", "dev", "eval_public", "eval_private"]
+        },
+        "group_id": { "type": "string" },
+        "contamination_status": {
+          "type": "string",
+          "enum": ["CLEAN", "SUSPECTED", "CONTAMINATED", "EXEMPT_EVAL_PRIVATE"]
+        },
+        "split_manifest_version": { "type": "string" }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": ["schema_valid", "provenance_complete", "rights_eligible", "review_status"],
+      "properties": {
+        "schema_valid": { "type": "boolean" },
+        "provenance_complete": { "type": "boolean" },
+        "rights_eligible": { "type": "boolean" },
+        "task_clarity": { "type": "string", "enum": ["CLEAR", "AMBIGUOUS", "UNKNOWN"] },
+        "implementation_validity": { "type": "string", "enum": ["VERIFIED", "PARTIAL", "DEFECTIVE", "UNKNOWN"] },
+        "runtime_tested": { "type": "boolean" },
+        "review_status": {
+          "type": "string",
+          "enum": ["UNREVIEWED", "AUTOMATED_PASSED", "HUMAN_VERIFIED", "REJECTED"]
+        },
+        "reviewer_id": { "type": ["string", "null"] },
+        "review_date": { "type": ["string", "null"] }
+      }
+    },
+    "security_and_privacy": {
+      "type": "object",
+      "required": ["secret_scan_passed", "pii_scan_passed", "scan_timestamp"],
+      "properties": {
+        "secret_scan_passed": { "type": "boolean" },
+        "pii_scan_passed": { "type": "boolean" },
+        "scan_timestamp": { "type": "string" }
+      }
+    },
+    "tombstone": {
+      "type": "object",
+      "required": ["is_tombstoned"],
+      "properties": {
+        "is_tombstoned": { "type": "boolean" },
+        "tombstone_reason": { "type": ["string", "null"] },
+        "tombstone_timestamp": { "type": ["string", "null"] },
+        "removal_ticket": { "type": ["string", "null"] },
+        "derived_artifacts": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "process_details": {
+      "type": "object",
+      "description": "Required when sample_type is process_trajectory",
+      "properties": {
+        "interpreted_requirements": { "type": "string" },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "plan": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "actions_trace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step_index", "action_type"],
+            "properties": {
+              "step_index": { "type": "integer", "minimum": 0 },
+              "action_type": { "type": "string" },
+              "tool_call": { "type": "object" },
+              "proposed_changes": { "type": "string" },
+              "applied_patch": { "type": "string" },
+              "observation": { "type": "string" },
+              "error_message": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "applied_patch": { "type": "string" },
+        "check_results": { "type": "object" },
+        "repair_iterations": { "type": "integer", "minimum": 0 },
+        "final_outcome": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "REPAIRED", "BLOCKED"]
+        },
+        "evidence_references": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "sample_type": { "const": "process_trajectory" } }
+      },
+      "then": {
+        "required": ["process_details"]
+      }
+    }
+  ]
+}

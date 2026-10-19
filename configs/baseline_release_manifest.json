@@ -1,0 +1,158 @@
+{
+  "benchmark_release_id": "gameforge-bench-v0.2.0-baseline",
+  "version": "0.2.0",
+  "created_at": "2026-10-19T17:00:00Z",
+  "status": "FROZEN",
+  "governing_strategy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0",
+  "engine_pins": {
+    "unreal": {
+      "version": "5.7.4",
+      "build_id": "5.7.4-51494982+++UE5+Release-5.7",
+      "executable": "E:\\UE\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+      "status": "REAL_ENGINE_VERIFIED"
+    },
+    "unity": {
+      "version": "2022.3 LTS / 6.0 LTS",
+      "executable": null,
+      "status": "HARNESS_INVALID_UNINSTALLED"
+    },
+    "godot": {
+      "version": "4.2 / 4.3",
+      "executable": null,
+      "status": "SPECIFIED_UNINSTALLED"
+    }
+  },
+  "host_toolchain": {
+    "os": "Windows 11 Enterprise (AMD64)",
+    "python": "3.14.6",
+    "dotnet_sdk": "9.0.315",
+    "msvc": "14.44.35207",
+    "gpu": "AMD Radeon RX 7700 XT 12GB (ROCm gfx1101)"
+  },
+  "task_subsets": {
+    "initial_baseline_tasks": [
+      {
+        "task_id": "t2-001-third-person-controller",
+        "category": "gameplay",
+        "tier": "T2",
+        "split": "public_dev",
+        "engine": "unreal",
+        "fixture_dir": "fixtures/unreal/t2_001_controller",
+        "acceptance_config": "configs/acceptance_criteria/t2_001_controller.json"
+      },
+      {
+        "task_id": "t2-004-health-damage",
+        "category": "gameplay",
+        "tier": "T2",
+        "split": "public_test",
+        "engine": "unreal",
+        "fixture_dir": "fixtures/unreal/t2_004_health",
+        "acceptance_config": "configs/acceptance_criteria/t2_004_health.json"
+      },
+      {
+        "task_id": "t2-005-pickup-collection",
+        "category": "gameplay",
+        "tier": "T2",
+        "split": "public_test",
+        "engine": "unreal",
+        "fixture_dir": "fixtures/unreal/t2_005_pickup",
+        "acceptance_config": "configs/acceptance_criteria/t2_005_pickup.json"
+      },
+      {
+        "task_id": "t3-016-player-composition",
+        "category": "editor_authoring",
+        "tier": "T3",
+        "split": "private_held_out",
+        "engine": "unreal",
+        "fixture_dir": "fixtures/unreal/t3_016_composition",
+        "acceptance_config": "configs/acceptance_criteria/t3_016_composition.json"
+      },
+      {
+        "task_id": "t3-017-health-hud",
+        "category": "editor_authoring",
+        "tier": "T3",
+        "split": "private_held_out",
+        "engine": "unreal",
+        "fixture_dir": "fixtures/unreal/t3_017_hud",
+        "acceptance_config": "configs/acceptance_criteria/t3_017_health_stamina_hud.json"
+      },
+      {
+        "task_id": "t2-008-projectile-collision",
+        "category": "gameplay",
+        "tier": "T2",
+        "split": "private_held_out",
+        "engine": "unreal",
+        "fixture_dir": "fixtures/unreal/t2_008_projectile",
+        "acceptance_config": "configs/acceptance_criteria/t2_008_projectile_collision.json"
+      },
+      {
+        "task_id": "t1-001-health-invariants",
+        "category": "engine_neutral",
+        "tier": "T1",
+        "split": "public_dev",
+        "engine": "neutral",
+        "fixture_dir": null,
+        "spec_path": "benchmark_tasks/engine_neutral/t1-001-health-invariants.yaml"
+      },
+      {
+        "task_id": "t1-002-pickup-contract",
+        "category": "engine_neutral",
+        "tier": "T1",
+        "split": "public_test",
+        "engine": "neutral",
+        "fixture_dir": null,
+        "spec_path": "benchmark_tasks/engine_neutral/t1-002-pickup-contract.yaml"
+      },
+      {
+        "task_id": "t1-003-event-diagnostics",
+        "category": "engine_neutral",
+        "tier": "T1",
+        "split": "public_test",
+        "engine": "neutral",
+        "fixture_dir": null,
+        "spec_path": "benchmark_tasks/engine_neutral/t1-003-event-diagnostics.yaml"
+      }
+    ],
+    "repeated_variance_subset": [
+      "t2-004-health-damage",
+      "t1-001-health-invariants"
+    ]
+  },
+  "candidate_protocol": {
+    "visible_context": [
+      "task_specification_prompt",
+      "public_contracts_and_headers",
+      "starter_source_files",
+      "allowed_edit_paths"
+    ],
+    "protected_context_excluded_from_candidate": [
+      "graders/protected/*",
+      "acceptance_criteria/*.json",
+      "reference_solutions/*",
+      "hidden_tests/*"
+    ],
+    "permitted_tools": [
+      "read_file",
+      "write_file",
+      "list_dir"
+    ],
+    "budgets": {
+      "timeout_seconds": 300,
+      "max_retries": 1,
+      "max_tokens_per_request": 8192,
+      "max_tool_calls_per_attempt": 10,
+      "cost_limit_usd": 0.00
+    },
+    "isolation_policy": "LOW_PRIVILEGE_PROCESS"
+  },
+  "grading_layers": [
+    "policy_static_checks",
+    "build_import",
+    "unit_integration_tests",
+    "behavior_probes",
+    "saved_asset_checks",
+    "performance_checks",
+    "regression_checks"
+  ],
+  "result_schema": "schemas/report_schema.json"
+}

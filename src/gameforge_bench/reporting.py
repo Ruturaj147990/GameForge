@@ -15,6 +15,37 @@ from .provenance import capture_environment
 from .task_loader import TaskSpec
 
 
+def compute_run_verification_level(
+    task_spec: TaskSpec,
+    engine_discovery: EngineDiscoveryResult,
+    grading_result: GradingPipelineResult,
+) -> str:
+    """Computes truthful canonical verification level based on execution evidence."""
+    is_engine_available = bool(
+        engine_discovery.is_installed
+        and engine_discovery.executable_path
+        and engine_discovery.executable_path != "none"
+    )
+
+    if not is_engine_available or grading_result.overall_status == RunStatus.HARNESS_INVALID:
+        return "UNVERIFIED"
+
+    if grading_result.overall_status == RunStatus.PASS:
+        if getattr(task_spec, "native_execution_required", True):
+            return "REAL_ENGINE_VERIFIED"
+        return getattr(task_spec, "verification_level", "STATICALLY_VALIDATED")
+    elif grading_result.overall_status == RunStatus.PARTIAL_BUILD:
+        return "UNIT_TESTED"
+    elif grading_result.overall_status == RunStatus.FAIL_BUILD:
+        if grading_result.layers.get("policy_checks", {}).status == "PASS":
+            return "STATICALLY_VALIDATED"
+        return "UNVERIFIED"
+    elif grading_result.overall_status == RunStatus.POLICY_FAIL:
+        return "UNVERIFIED"
+    else:
+        return "UNVERIFIED"
+
+
 def assemble_benchmark_report(
     run_id: str,
     task_spec: TaskSpec,
@@ -39,7 +70,7 @@ def assemble_benchmark_report(
         "logical_task_id": task_spec.logical_task_id,
         "task_id": task_spec.id,
         "engine_scope": getattr(task_spec, "engine_scope", "ENGINE_SPECIFIC"),
-        "verification_level": getattr(task_spec, "verification_level", "REAL_ENGINE_VERIFIED"),
+        "verification_level": compute_run_verification_level(task_spec, engine_discovery, grading_result),
         "knowledge_domains": getattr(task_spec, "knowledge_domains", ["gameplay"]),
         "engine": {
             "name": engine_discovery.engine_name,

@@ -1,0 +1,162 @@
+**Reusable Pickup and Resource Interaction Contract**
+
+**Overview**
+
+The Reusable Pickup and Resource Interaction Contract is designed to standardize interactions between pickup objects and character resources in a game environment. This contract ensures seamless integration with various game engines (Unreal Engine and Unity) while maintaining modularity, scalability, and maintainability.
+
+**Requirements Breakdown**
+
+1. **Overlap Detection and Query of Player Capabilities**
+	* Detect when the player's character overlaps with a pickup object.
+	* Query the player's current capabilities (e.g., health, ammo, etc.) to determine if they can interact with the pickup.
+2. **Conditional Consumption**
+	* Reject pickups that would exceed the player's maximum capacity (e.g., rejecting health pickups when already at full health).
+	* Allow pickups to be consumed conditionally based on specific rules or game logic.
+3. **Atomic Resource Modification**
+	* Update the player's resources atomically, ensuring consistency and preventing concurrent modifications.
+4. **Destruction or Respawn Lifecycle of the World Pickup Actor**
+	* Define a lifecycle for pickup objects, including destruction or respawning when interacted with.
+
+**Architectural Class Diagrams**
+
+### Unreal Engine (UActorComponent)
+
+```mermaid
+classDiagram
+    class PickupContract {
+        +OverlapDetection()
+        +QueryPlayerCapabilities()
+        +ConditionalConsumption()
+        +AtomicResourceModification()
+        +DestructionOrRespawnLifecycle()
+    }
+
+    class PlayerCharacter : UActorComponent {
+        -health: int
+        -ammo: int
+        ...
+    }
+
+    class PickupObject : UActorComponent {
+        -pickupType: string
+        -maxCapacity: int
+        ...
+    }
+
+    class PickupContractImpl : PickupContract {
+        +OverlapDetection()
+        +QueryPlayerCapabilities()
+        +ConditionalConsumption()
+        +AtomicResourceModification()
+        +DestructionOrRespawnLifecycle()
+    }
+```
+
+### Unity (MonoBehaviour)
+
+```mermaid
+classDiagram
+    class PickupContract {
+        +OverlapDetection()
+        +QueryPlayerCapabilities()
+        +ConditionalConsumption()
+        +AtomicResourceModification()
+        +DestructionOrRespawnLifecycle()
+    }
+
+    class PlayerCharacter : MonoBehaviour {
+        -health: int
+        -ammo: int
+        ...
+    }
+
+    class PickupObject : MonoBehaviour {
+        -pickupType: string
+        -maxCapacity: int
+        ...
+    }
+
+    class PickupContractImpl : PickupContract {
+        +OverlapDetection()
+        +QueryPlayerCapabilities()
+        +ConditionalConsumption()
+        +AtomicResourceModification()
+        +DestructionOrRespawnLifecycle()
+    }
+```
+
+**Implementation Details**
+
+### Overlap Detection and Query of Player Capabilities
+
+*   Use Unreal Engine's `OverlapSphere` or Unity's `Physics.OverlapSphere` to detect overlap between the player character and pickup object.
+*   Query the player's current capabilities (e.g., health, ammo) using a data storage system (e.g., Unreal Engine's `GameplayTags` or Unity's `PlayerPrefs`).
+
+### Conditional Consumption
+
+*   Implement conditional consumption logic based on specific rules or game logic. For example:
+    *   Reject health pickups when the player is already at full health.
+    *   Allow ammo pickups to be consumed conditionally based on the player's current ammo capacity.
+
+### Atomic Resource Modification
+
+*   Use Unreal Engine's `Atomic` or Unity's `lock` statement to ensure atomic resource modification. This prevents concurrent modifications and ensures consistency.
+
+### Destruction or Respawn Lifecycle of the World Pickup Actor
+
+*   Define a lifecycle for pickup objects, including destruction or respawning when interacted with.
+*   Implement a system to respawn pickup objects after they have been destroyed or consumed.
+
+**Code Snippets**
+
+Here are some code snippets to illustrate the implementation:
+
+Unreal Engine (C++):
+```cpp
+// PickupContract.h
+class UPickupContract : public UActorComponent {
+    GENERATED_BODY()
+
+public:
+    virtual void OverlapDetection() = 0;
+    virtual void QueryPlayerCapabilities() = 0;
+    virtual void ConditionalConsumption() = 0;
+    virtual void AtomicResourceModification() = 0;
+    virtual void DestructionOrRespawnLifecycle() = 0;
+};
+
+// PickupContractImpl.h
+class UPickupContractImpl : public UPickupContract {
+    GENERATED_BODY()
+
+public:
+    void OverlapDetection() override;
+    void QueryPlayerCapabilities() override;
+    void ConditionalConsumption() override;
+    void AtomicResourceModification() override;
+    void DestructionOrRespawnLifecycle() override;
+};
+```
+
+Unity (C#):
+```csharp
+// PickupContract.cs
+public class PickupContract : MonoBehaviour {
+    public virtual void OverlapDetection();
+    public virtual void QueryPlayerCapabilities();
+    public virtual void ConditionalConsumption();
+    public virtual void AtomicResourceModification();
+    public virtual void DestructionOrRespawnLifecycle();
+}
+
+// PickupContractImpl.cs
+public class PickupContractImpl : PickupContract {
+    public override void OverlapDetection() { ... }
+    public override void QueryPlayerCapabilities() { ... }
+    public override void ConditionalConsumption() { ... }
+    public override void AtomicResourceModification() { ... }
+    public override void DestructionOrRespawnLifecycle() { ... }
+}
+```
+
+This implementation provides a reusable contract for pickup objects and character resource interactions, addressing all requirements specified in the benchmark task. The equivalent architectural class diagrams for both Unreal Engine (UActorComponent) and Unity (MonoBehaviour) are provided to ensure modularity, scalability, and maintainability across different game engines.

@@ -47,6 +47,36 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum = subparsers.add_parser("summarize", help="Aggregate evaluation reports across runs")
     p_sum.add_argument("--report-dir", type=Path, default=Path("reports"), help="Reports directory")
 
+    # eval-baseline
+    p_base = subparsers.add_parser("eval-baseline", help="Run model baseline evaluation across registered candidates")
+    p_base.add_argument("--manifest", type=Path, default=Path("configs/baseline_release_manifest.json"), help="Baseline release manifest")
+    p_base.add_argument("--register", type=Path, default=Path("configs/model_register.json"), help="Model register")
+    p_base.add_argument("--task-id", action="append", dest="tasks", help="Specific task ID(s) to evaluate (optional)")
+    p_base.add_argument("--workspace", type=Path, default=Path.cwd(), help="Workspace root directory")
+
+    # validate-data
+    p_vdata = subparsers.add_parser("validate-data", help="Validate a sample manifest against schema, provenance, rights, and contamination")
+    p_vdata.add_argument("--manifest", type=Path, required=True, help="Path to sample manifest JSON file")
+    p_vdata.add_argument("--source-register", type=Path, default=Path("configs/dataset_source_register.json"), help="Dataset source register")
+    p_vdata.add_argument("--dry-run", action="store_true", default=True, help="Preview validation without updating dataset manifests (default: True)")
+    p_vdata.add_argument("--no-dry-run", action="store_false", dest="dry_run", help="Disable dry-run mode")
+    p_vdata.add_argument("--workspace", type=Path, default=Path.cwd(), help="Workspace root directory")
+
+    # ingest-data
+    p_ingest = subparsers.add_parser("ingest-data", help="Deterministic ingestion of local sample manifests into dataset splits")
+    p_ingest.add_argument("--manifest", type=Path, required=True, help="Path to sample manifest JSON file")
+    p_ingest.add_argument("--output-manifest", type=Path, default=None, help="Output dataset manifest JSON path")
+    p_ingest.add_argument("--source-register", type=Path, default=Path("configs/dataset_source_register.json"), help="Dataset source register")
+    p_ingest.add_argument("--dry-run", action="store_true", default=False, help="Preview ingestion decisions without writing")
+    p_ingest.add_argument("--workspace", type=Path, default=Path.cwd(), help="Workspace root directory")
+
+    # run-tests
+    p_tests = subparsers.add_parser("run-tests", help="Execute canonical test workflow across unit, protected oracles, and integration")
+    p_tests.add_argument("--suite", default="all", choices=["all", "unit", "protected", "integration"], help="Test suite subset to run")
+    p_tests.add_argument("--collect-only", action="store_true", help="Collect and report unique test IDs without execution")
+    p_tests.add_argument("--json", action="store_true", help="Output machine-readable execution summary JSON")
+    p_tests.add_argument("--workspace", type=Path, default=Path.cwd(), help="Workspace root directory")
+
     return parser
 
 
@@ -170,6 +200,182 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_eval_baseline(args: argparse.Namespace) -> int:
+    from .baseline_eval import BaselineEvaluator
+    evaluator = BaselineEvaluator(
+        workspace_root=args.workspace,
+        manifest_path=args.manifest,
+        register_path=args.register,
+    )
+    scorecard = evaluator.run_all(subset_task_ids=args.tasks)
+    print("\n=======================================================")
+    print(" BASELINE EVALUATION COMPLETE")
+    print("=======================================================")
+    for cand_id, data in scorecard["scorecard"].items():
+        print(f"Candidate: {cand_id}")
+        print(f"  Attempts: {data['attempts_count']} | Passes: {data['passes_count']} | Pass@1: {data['pass_at_1']}")
+        print(f"  Domain Breakdown: {data['domain_scores']}")
+        print(f"  Failure Taxonomy: {data['failure_taxonomy']}")
+    return 0
+
+
+def cmd_validate_data(args: argparse.Namespace) -> int:
+    from .data_factory import DataFactory
+    manifest_path = args.manifest
+    if not manifest_path.is_file():
+        print(f"Error: Manifest file not found: {manifest_path}", file=sys.stderr)
+        return 1
+
+    try:
+        samples_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if isinstance(samples_data, dict) and "samples" in samples_data:
+            samples_list = samples_data["samples"]
+        elif isinstance(samples_data, list):
+            samples_list = samples_data
+        else:
+            print("Error: Manifest must be a list of samples or an object with 'samples' key", file=sys.stderr)
+            return 1
+    except Exception as exc:
+        print(f"Error reading manifest JSON: {exc}", file=sys.stderr)
+        return 1
+
+    factory = DataFactory(workspace_root=args.workspace, source_register_path=args.source_register)
+    sample_reports = []
+    for s in samples_list:
+        rep = factory.validate_and_ingest_sample(s, dry_run=args.dry_run)
+        sample_reports.append(rep)
+
+    readiness = factory.produce_readiness_report(sample_reports)
+
+    print("=" * 75)
+    print(" GAMEFORGE DATA FACTORY — VALIDATION & READINESS REPORT")
+    print("=" * 75)
+    print(f"Total Discovered Samples:        {readiness['total_discovered']}")
+    print(f"Schema Valid:                    {readiness['schema_valid']}")
+    print(f"Provenance Complete:             {readiness['provenance_complete']}")
+    print(f"Sources Training Confirmed:      {readiness['sources_training_confirmed']}")
+    print(f"Sources Awaiting Rights Review:  {readiness['sources_review_required']}")
+    print(f"Sources Restricted (Eval Only):  {readiness['sources_restricted_eval']}")
+    print("-" * 75)
+    print(f"Accepted Samples:                {readiness['accepted_samples']}")
+    print(f"Rejected Samples:                {readiness['rejected_samples']}")
+    if readiness["rejection_breakdown"]:
+        print("Rejection Breakdown:")
+        for cat, cnt in readiness["rejection_breakdown"].items():
+            print(f"  * {cat:<25}: {cnt}")
+    print("-" * 75)
+    print(f"Eligible Split Allocation:       {readiness['split_allocation']}")
+    print(f"Tombstones / Removals Recorded:  {readiness['tombstones_recorded']}")
+    print(f"Training Ready?                  {'YES' if readiness['training_ready'] else 'NO (BLOCKED)'}")
+    if not readiness["training_ready"]:
+        print(f"Blocker:                         {readiness['training_block_reason']}")
+    print("=" * 75)
+
+    # Return non-zero if any samples were rejected or training is blocked when expected
+    return 0 if readiness["rejected_samples"] == 0 else 1
+
+
+def cmd_ingest_data(args: argparse.Namespace) -> int:
+    from .data_factory import DataFactory
+    manifest_path = args.manifest
+    if not manifest_path.is_file():
+        print(f"Error: Manifest file not found: {manifest_path}", file=sys.stderr)
+        return 1
+
+    try:
+        samples_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        samples_list = samples_data.get("samples", samples_data) if isinstance(samples_data, dict) else samples_data
+    except Exception as exc:
+        print(f"Error reading manifest: {exc}", file=sys.stderr)
+        return 1
+
+    factory = DataFactory(workspace_root=args.workspace, source_register_path=args.source_register)
+    accepted_records = []
+    rejected_records = []
+
+    for s in samples_list:
+        rep = factory.validate_and_ingest_sample(s, dry_run=args.dry_run)
+        if rep["accepted"]:
+            s_copy = dict(s)
+            s_copy.setdefault("split_info", {})["assigned_split"] = rep["assigned_split"]
+            s_copy["split_info"]["group_id"] = rep.get("group_id", "default")
+            accepted_records.append(s_copy)
+        else:
+            rejected_records.append({"sample_id": rep["sample_id"], "reasons": rep["reasons"]})
+
+    print(f"Ingestion complete: {len(accepted_records)} accepted, {len(rejected_records)} rejected.")
+    if not args.dry_run and args.output_manifest:
+        out_data = {
+            "dataset_version": "v1.0.0",
+            "total_samples": len(accepted_records),
+            "samples": accepted_records,
+        }
+        args.output_manifest.parent.mkdir(parents=True, exist_ok=True)
+        args.output_manifest.write_text(json.dumps(out_data, indent=2), encoding="utf-8")
+        print(f"Saved dataset manifest to {args.output_manifest}")
+
+    return 0 if len(rejected_records) == 0 else 1
+
+
+def cmd_run_tests(args: argparse.Namespace) -> int:
+    import subprocess
+    workspace = args.workspace
+    suite = args.suite
+    collect_only = args.collect_only
+
+    suite_configs = {
+        "unit": {"label": "Unit Tests", "path": "tests/unit"},
+        "protected": {"label": "Protected Oracles (grdr)", "path": "graders/protected"},
+        "integration": {"label": "Integration Tests (UE 5.7.4)", "path": "tests/integration"},
+    }
+
+    targets = [suite] if suite != "all" else ["unit", "protected", "integration"]
+    summary_results = {}
+    overall_exit_code = 0
+
+    print("=" * 75)
+    print(" GAMEFORGE CANONICAL TEST RUNNER — SUITE ORCHESTRATION")
+    print("=" * 75)
+
+    for tgt in targets:
+        cfg = suite_configs[tgt]
+        cmd = [sys.executable, "-m", "pytest", cfg["path"]]
+        if collect_only:
+            cmd.extend(["--collect-only", "-q"])
+        else:
+            cmd.extend(["-q"])
+
+        res = subprocess.run(cmd, cwd=str(workspace), capture_output=True, text=True)
+        stdout = res.stdout.strip()
+        stderr = res.stderr.strip()
+
+        # Parse test count from output
+        count = 0
+        status = "PASSED" if res.returncode == 0 else "FAILED"
+        if res.returncode != 0:
+            overall_exit_code = res.returncode
+
+        # Parse lines
+        lines = stdout.splitlines()
+        last_line = lines[-1] if lines else ""
+
+        summary_results[tgt] = {
+            "label": cfg["label"],
+            "path": cfg["path"],
+            "exit_code": res.returncode,
+            "status": status,
+            "output_summary": last_line,
+        }
+
+        print(f"[{status:<6}] {cfg['label']:<32} -> {last_line}")
+
+    print("=" * 75)
+    if args.json:
+        print(json.dumps(summary_results, indent=2))
+
+    return overall_exit_code
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -184,6 +390,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_run(args)
     elif args.command == "summarize":
         return cmd_summarize(args)
+    elif args.command == "eval-baseline":
+        return cmd_eval_baseline(args)
+    elif args.command == "validate-data":
+        return cmd_validate_data(args)
+    elif args.command == "ingest-data":
+        return cmd_ingest_data(args)
+    elif args.command == "run-tests":
+        return cmd_run_tests(args)
     else:
         parser.print_help()
         return 1

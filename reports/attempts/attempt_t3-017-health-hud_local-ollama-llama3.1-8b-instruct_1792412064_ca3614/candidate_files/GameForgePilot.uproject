@@ -1,0 +1,19 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.7",
+  "Category": "Benchmark",
+  "Description": "GameForge T2-004 Health and Damage System Benchmark Fixture",
+  "Modules": [
+    {
+      "Name": "GameForgePilot",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "PythonScriptPlugin",
+      "Enabled": true
+    }
+  ]
+}

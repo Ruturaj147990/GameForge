@@ -1,0 +1,243 @@
+{
+  "report_schema_version": "0.1.0",
+  "benchmark_version": "v0.1",
+  "run_id": "run_t2-008-projectile-collision_1792411350",
+  "timestamp": "2026-10-19T12:04:23Z",
+  "logical_task_id": "T2-008",
+  "task_id": "t2-008-projectile-collision",
+  "engine_scope": "ENGINE_SPECIFIC",
+  "verification_level": "REAL_ENGINE_VERIFIED",
+  "knowledge_domains": [
+    "combat",
+    "physics_collision",
+    "damage_invariants",
+    "actor_lifecycle"
+  ],
+  "engine": {
+    "name": "unreal",
+    "version": "5.7.4",
+    "executable_path": "E:\\UE\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+    "project_version": "5.7"
+  },
+  "environment": {
+    "os": "Windows 11",
+    "python_version": "3.14.6",
+    "toolchain_versions": {
+      "processor": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+      "python_executable": "C:\\Users\\limbk\\AppData\\Local\\Programs\\Python\\Python314\\python.exe"
+    },
+    "git_commit": "197c889dd4b2b28213f9dd79dc6c845f5332621b"
+  },
+  "candidate": {
+    "candidate_id": "reference_t2_008_unreal",
+    "candidate_type": "reference",
+    "snapshot_hash": "sha256:fe29473b6cb9327be0148457c70f4707e4327d974b7560e7f22d011e39fe28c0"
+  },
+  "budgets": {
+    "wall_clock_seconds": 2400,
+    "max_tool_calls": 100,
+    "max_model_tokens": null
+  },
+  "reproducibility": {
+    "fixed_timestep": 0.016667,
+    "seed": 42
+  },
+  "status": "PASS",
+  "first_mandatory_failure_layer": null,
+  "layers": {
+    "clean_start": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Workspace snapshot verified",
+      "details": {}
+    },
+    "policy_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All static boundaries respected",
+      "details": {}
+    },
+    "build_import": {
+      "status": "PASS",
+      "duration_seconds": 41.69431495666504,
+      "message": "Project built and imported successfully",
+      "details": {}
+    },
+    "automated_tests": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All 2 automated tests passed",
+      "details": {
+        "tests": [
+          {
+            "name": "engine_subsystem_initialization",
+            "passed": true,
+            "duration_seconds": 12.629483222961426,
+            "message": "Engine initialized: 5.7.4-51494982+++UE5+Release-5.7",
+            "error_trace": null
+          },
+          {
+            "name": "editor_subsystem_available",
+            "passed": true,
+            "duration_seconds": 12.629483222961426,
+            "message": "Editor subsystem query succeeded",
+            "error_trace": null
+          }
+        ]
+      }
+    },
+    "behavior_probes": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "All 12 behavior probes passed within tolerance",
+      "details": {}
+    },
+    "saved_asset_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Saved assets, components, and references validated",
+      "details": {
+        "plugins_enabled": [
+          "PythonScriptPlugin"
+        ],
+        "engine_association": "5.7"
+      }
+    },
+    "performance_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "Within declared performance limits",
+      "details": {}
+    },
+    "regression_checks": {
+      "status": "PASS",
+      "duration_seconds": 0.0,
+      "message": "No regressions detected",
+      "details": {}
+    },
+    "visual_review": {
+      "status": "NOT_APPLICABLE",
+      "duration_seconds": 0.0,
+      "message": "Visual review not required",
+      "details": {}
+    }
+  },
+  "probes": {
+    "probe_proj1_valid_hit_damage": {
+      "passed": true,
+      "measured_value": 80.0,
+      "target_value": 80.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Target health after hit: 80.0, applied count: 1"
+    },
+    "probe_proj2_duplicate_hit_prevention": {
+      "passed": true,
+      "measured_value": 1,
+      "target_value": 1,
+      "tolerance": null,
+      "unit": "",
+      "details": "Repeated hit notification rejected: True, health: 80.0"
+    },
+    "probe_proj3_owner_exclusion": {
+      "passed": true,
+      "measured_value": 100.0,
+      "target_value": 100.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Owner hit safely rejected: True, owner health: 100.0"
+    },
+    "probe_proj4_invalid_target_safety": {
+      "passed": true,
+      "measured_value": 0,
+      "target_value": 0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Non-damageable actor produced 0 damage: True"
+    },
+    "probe_proj5_blocking_geometry_resolution": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "World hit resolved: impacted=True, collision_disabled=True"
+    },
+    "probe_proj6_post_impact_cleanup": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "Collision disabled: True, Hidden: True"
+    },
+    "probe_proj7_lifetime_cleanup": {
+      "passed": true,
+      "measured_value": 5.0,
+      "target_value": 5.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Lifespan configured to 5.0s with clean timer destruction"
+    },
+    "probe_proj8_invulnerability_respected": {
+      "passed": true,
+      "measured_value": 80.0,
+      "target_value": 80.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Hit during invulnerability rejected: True, health: 80.0"
+    },
+    "probe_proj9_post_expiry_hit": {
+      "passed": true,
+      "measured_value": 60.0,
+      "target_value": 60.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Hit after invulnerability window applied: health=60.0"
+    },
+    "probe_proj10_invalid_config_safety": {
+      "passed": true,
+      "measured_value": 60.0,
+      "target_value": 60.0,
+      "tolerance": null,
+      "unit": "",
+      "details": "Negative damage rejected: True, health remains 60.0"
+    },
+    "probe_proj11_death_and_zero_clamp": {
+      "passed": true,
+      "measured_value": 1,
+      "target_value": 1,
+      "tolerance": null,
+      "unit": "",
+      "details": "Health clamped to 0.0, death events: 1"
+    },
+    "probe_proj12_cross_system_parity": {
+      "passed": true,
+      "measured_value": true,
+      "target_value": true,
+      "tolerance": null,
+      "unit": "",
+      "details": "Projectile combat integrates with HealthComponent without regressing existing rules"
+    }
+  },
+  "diff_summary": null,
+  "isolation": {
+    "provider": "RestrictedProcessIsolationProvider",
+    "classification": "LOW_PRIVILEGE_PROCESS",
+    "runtime_version": "10.0.26300",
+    "network_restricted": false,
+    "host_fs_restricted": false,
+    "timeout_policy_seconds": 180.0,
+    "cleanup_status": "DISPOSABLE_WORKSPACE_PER_RUN",
+    "workspace_identity": "scratch/eval_runs",
+    "residual_risks": [
+      "Host user permissions retained by native C++ process",
+      "OS-level sandbox (Hyper-V / Windows Sandbox) not active"
+    ]
+  },
+  "logs": {
+    "eval_log_dir": "E:\\gameforge_step1\\scratch\\eval_runs\\run_t2-008-projectile-collision_1792411350\\logs"
+  },
+  "duration_seconds": 112.877,
+  "warnings": []
+}

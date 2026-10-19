@@ -1,0 +1,44 @@
+{
+  "attempt_id": "baseline_local-ollama-llama3.1-8b-instruct_t1-001-health-invariants_run2_1792410729",
+  "candidate_id": "local-ollama-llama3.1-8b-instruct",
+  "task_id": "t1-001-health-invariants",
+  "tier": "T1",
+  "category": "engine_neutral",
+  "run_index": 2,
+  "duration_seconds": 20.323203086853027,
+  "invocation": {
+    "success": true,
+    "prompt_tokens": 149,
+    "completion_tokens": 1212,
+    "cost_usd": 0.0,
+    "error": null
+  },
+  "grading": {
+    "overall_status": "PASS",
+    "layers": {
+      "policy_static_checks": {
+        "status": "PASS"
+      },
+      "reasoning_rubric": {
+        "status": "PASS",
+        "score": "5/5"
+      },
+      "build_import": {
+        "status": "NOT_APPLICABLE",
+        "reason": "engine_neutral_task"
+      },
+      "behavior_probes": {
+        "status": "NOT_APPLICABLE",
+        "reason": "engine_neutral_task"
+      }
+    },
+    "rubric_details": {
+      "invulnerability_window": true,
+      "clamping": true,
+      "exactly_once_death": true,
+      "event_sequencing": true,
+      "cross_engine_translation": true
+    }
+  },
+  "evidence_path": "E:\\gameforge_step1\\reports\\baseline_runs\\baseline_local-ollama-llama3.1-8b-instruct_t1-001-health-invariants_run2_1792410729"
+}
