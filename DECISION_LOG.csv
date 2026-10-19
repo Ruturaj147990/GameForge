@@ -1,0 +1,6 @@
+id,date,decision_or_question,default_position,evidence_needed,status,owner,notes
+D-001,2026-10-19,Which Unity and Unreal versions are used for pilot?,Choose versions only after checking actual installed builds and CI/licensing viability,Successful clean runner and legal/CI check,OPEN,Project owner,Do not infer version availability from draft notes
+D-002,2026-10-19,Is Game IR mandatory?,No; compare direct native generation vs IR+contracts vs IR+native escape hatches,Controlled held-out comparison,OPEN,ML + engine leads,Contracts can remain useful even if IR is rejected
+D-003,2026-10-19,Single model vs modular experts?,Start simple and benchmark alternatives,Pass rate cost latency and reliability,OPEN,ML lead,Do not choose by architecture novelty
+D-004,2026-10-19,Train from scratch or specialize a base?,Specialize a capable base first,Demonstrated capability ceiling and cost-benefit evidence,OPEN,ML lead,No frontier-scale-from-scratch commitment in Step 1
+D-005,2026-10-19,Which data sources are approved?,Only reviewed rights-cleared data,Provenance and legal/use review for each source family,OPEN,Data owner,Unknown rights means excluded pending review

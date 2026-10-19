@@ -1,0 +1,18 @@
+id: t2-004-health-damage
+logical_task_id: T2-004
+tier: T2
+title: Health and damage with invulnerability window
+status: specification-draft
+engine_variants: [unity, unreal]
+prompt: >-
+  Implement a health/damage component or system in the supplied project. Damage must
+  reduce health according to the spec, an invulnerability window must prevent repeated
+  damage during its defined duration, health must not exceed its allowed range, and
+  death must be emitted exactly once when health reaches zero. Preserve existing interfaces.
+limits: {wall_clock_seconds: 1800, max_tool_calls: 100}
+allowed_edit_paths: [project gameplay source paths, designated content/assets paths]
+forbidden_edits: [tests, grader, unrelated project settings]
+required_checks: [build, unit tests, hidden runtime tests, event-count tests, regression]
+probe_fields: [health_value_after_trace, invulnerability_duration, death_event_count]
+provenance: {fixture_origin: pending, rights_review: pending}
+review: {engine_reviewer: pending, independent_reviewer: pending}

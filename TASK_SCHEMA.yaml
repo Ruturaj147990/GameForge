@@ -1,0 +1,65 @@
+# GameForge task schema v0.1 — illustrative schema, not yet machine-validated.
+# Each logical task may have one or more engine-specific variants.
+task:
+  id: string                 # e.g. t2-0001-third-person-controller
+  title: string
+  tier: T1|T2|T3|T4|T5|T6|T7|T8
+  category: gameplay|editor_authoring|animation|asset_pipeline|project_feature|end_to_end|debug_performance
+  logical_task_id: string    # shared ID for paired Unity/Unreal variants
+  engine:
+    name: unity|unreal
+    version: string          # pinned only after current installation/CI/licensing check
+    project_template_id: string
+  prompt: string
+  context:
+    included_paths: [string]
+    excluded_paths: [string]
+    project_constraints: [string]
+    assumptions: [string]
+  limits:
+    wall_clock_seconds: integer
+    max_tool_calls: integer
+    max_model_tokens: integer
+    network_access: disabled|allowlisted
+  permissions:
+    allowed_edit_paths: [string]
+    forbidden_paths: [string]
+    can_modify_tests: false
+    can_modify_grader: false
+    can_install_dependencies: false
+  acceptance:
+    required_behavior: [string]
+    required_assets: [string]
+    invariants: [string]
+    performance_budgets: [string]
+  grading:
+    build_required: boolean
+    static_policy_checks: [string]
+    visible_tests: [string]
+    hidden_tests_ref: string  # grader-only; never mounted in agent workspace
+    probes_ref: string        # grader-only
+    saved_asset_checks: [string]
+    performance_checks: [string]
+    visual_review: none|calibrated_vlm_plus_human
+    regression_suite_ref: string
+  reproducibility:
+    fixed_timestep_seconds: number|null
+    random_seed: integer|null
+    tolerance_policy: string
+    clean_snapshot_required: true
+  provenance:
+    project_fixture_origin: string
+    code_asset_license_or_permission: string
+    allowed_use_review_status: pending|approved|rejected
+    reviewer: string|null
+    notes: string
+  reference_solution:
+    grader_only_ref: string
+    reviewer_status: pending|reviewed|approved
+  reporting:
+    report_schema_version: string
+    record_build_logs: true
+    record_test_logs: true
+    record_diff: true
+    record_tool_trace: true
+    record_time_and_cost: true

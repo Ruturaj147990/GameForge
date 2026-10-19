@@ -1,0 +1,18 @@
+id: t3-017-health-hud
+logical_task_id: T3-017
+tier: T3
+title: Health HUD binding
+status: specification-draft
+engine_variants: [unity, unreal]
+prompt: >-
+  In the supplied project, create or wire a health HUD using the project's existing UI
+  conventions. The HUD must display the authoritative health value, update after damage
+  and healing, clamp or format values as required by the spec, and avoid stale or duplicate
+  event subscriptions. Required UI asset/component references must persist after reopening.
+limits: {wall_clock_seconds: 2700, max_tool_calls: 120}
+allowed_edit_paths: [designated gameplay source paths, designated UI/content asset paths]
+forbidden_edits: [tests, grader, unrelated project settings]
+required_checks: [build, saved-asset checks, runtime HUD updates, repeated open/close test, regression]
+probe_fields: [displayed_health_after_damage, displayed_health_after_heal, subscription_duplication]
+provenance: {fixture_origin: pending, rights_review: pending}
+review: {engine_reviewer: pending, independent_reviewer: pending}

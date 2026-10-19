@@ -1,0 +1,17 @@
+id: t3-023-input-mappings
+logical_task_id: T3-023
+tier: T3
+title: Input action and mapping setup
+status: specification-draft
+engine_variants: [unity, unreal]
+prompt: >-
+  Create and wire input actions/mappings for move, look, jump, and interact according to
+  the project's chosen engine input system. Connect them to the specified player controller,
+  verify required action/assets exist and references resolve, and avoid breaking existing bindings.
+limits: {wall_clock_seconds: 2700, max_tool_calls: 120}
+allowed_edit_paths: [designated gameplay source paths, designated input/content asset paths]
+forbidden_edits: [tests, grader, unrelated project settings]
+required_checks: [build, saved-asset checks, input trace runtime tests, regression]
+probe_fields: [move_response, look_response, jump_trigger_count, interact_trigger_count]
+provenance: {fixture_origin: pending, rights_review: pending}
+review: {engine_reviewer: pending, independent_reviewer: pending}

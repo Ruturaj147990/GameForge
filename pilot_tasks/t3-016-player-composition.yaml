@@ -1,0 +1,18 @@
+id: t3-016-player-composition
+logical_task_id: T3-016
+tier: T3
+title: Player prefab/actor composition
+status: specification-draft
+engine_variants: [unity, unreal]
+prompt: >-
+  Create or repair the designated player prefab/actor composition so all required gameplay,
+  collision, input, camera, and UI references listed in the variant acceptance file are present
+  and valid. Do not invent dependencies or hand-edit opaque serialized assets where supported
+  editor APIs should be used. Reopening the project must preserve the composition.
+limits: {wall_clock_seconds: 2700, max_tool_calls: 120}
+allowed_edit_paths: [designated gameplay source paths, designated scene/prefab/content paths]
+forbidden_edits: [tests, grader, unrelated project settings]
+required_checks: [build, saved-asset checks, reference-resolution checks, minimal runtime smoke test, regression]
+probe_fields: [required_component_presence, missing_reference_count, reopen_persistence]
+provenance: {fixture_origin: pending, rights_review: pending}
+review: {engine_reviewer: pending, independent_reviewer: pending}

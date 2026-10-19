@@ -1,0 +1,18 @@
+id: t2-001-third-person-controller
+logical_task_id: T2-001
+tier: T2
+title: Third-person movement and camera
+status: specification-draft
+engine_variants: [unity, unreal]
+prompt: >-
+  Implement a third-person player controller in the supplied project. Support move,
+  look, and jump using the project's intended input system. The camera must orbit
+  the character and must not intersect blocking world geometry in the provided test setup.
+  Follow numerical targets and engine constraints in the task variant's acceptance file.
+limits: {wall_clock_seconds: 2700, max_tool_calls: 120}
+allowed_edit_paths: [project gameplay source paths, designated content/assets paths]
+forbidden_edits: [tests, grader, project license/configuration outside task scope]
+required_checks: [build, hidden runtime tests, movement probes, camera collision probe, regression]
+probe_fields: [max_speed, acceleration_response, input_latency_frames, camera_geometry_intersection]
+provenance: {fixture_origin: pending, rights_review: pending}
+review: {engine_reviewer: pending, independent_reviewer: pending}

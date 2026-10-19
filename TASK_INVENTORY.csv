@@ -1,0 +1,31 @@
+id,tier,title,category,engine_pairing,primary_grading,pilot,notes
+T2-001,T2,Third-person movement and camera,gameplay,paired where feasible,behavior probes + runtime tests,yes,Measure movement response and camera collision
+T2-002,T2,Platformer jump with variable jump height,gameplay,paired where feasible,behavior probes + runtime tests,no,Release timing changes jump height
+T2-003,T2,Coyote time and jump buffering,gameplay,paired where feasible,behavior probes + runtime tests,no,Probe exact input timing with tolerance
+T2-004,T2,Health and damage with invulnerability window,gameplay,paired where feasible,hidden tests + runtime tests,yes,Repeated hits during window must obey spec
+T2-005,T2,Pickup collection with one-time activation,gameplay,paired where feasible,hidden tests + runtime tests,yes,No duplicate collection event
+T2-006,T2,Inventory with stack limits,gameplay,paired where feasible,unit + runtime tests,no,Add/remove and overflow rules
+T2-007,T2,Enemy finite-state machine,gameplay,paired where feasible,behavior probes + runtime tests,no,Idle/chase/attack/recover transitions
+T2-008,T2,Projectile collision damage and cleanup,gameplay,paired where feasible,hidden tests + runtime tests,no,Check collision and lifetime cleanup
+T2-009,T2,Interactable door,gameplay,paired where feasible,hidden tests + runtime tests,no,Range and activation conditions
+T2-010,T2,Cooldown ability with resource cost,gameplay,paired where feasible,unit + runtime tests,no,No use during cooldown or without resource
+T2-011,T2,Checkpoint activation and respawn,gameplay,paired where feasible,hidden tests + runtime tests,no,Respawn to latest valid checkpoint
+T2-012,T2,Death and respawn state reset,gameplay,paired where feasible,hidden tests + regression,no,Reset only state named in spec
+T2-013,T2,Stamina drain and regeneration,gameplay,paired where feasible,behavior probes + runtime tests,no,Movement constraints and timing
+T2-014,T2,Moving platform rider transport,gameplay,paired where feasible,behavior probes + runtime tests,no,No unintended sliding or detachment
+T2-015,T2,Damage/death events update UI cleanly,gameplay,paired where feasible,hidden tests + regression,no,No duplicate subscriptions or stale values
+T3-016,T3,Player prefab/actor composition,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Required components and references resolve
+T3-017,T3,Health and stamina HUD bindings,editor_authoring,paired where feasible,saved-asset checks + runtime tests,yes,HUD updates from underlying values
+T3-018,T3,Pickup object and configured instances,editor_authoring,paired where feasible,saved-asset checks,no,Multiple instances preserve configuration
+T3-019,T3,Door trigger and interaction target,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,References and interaction wiring
+T3-020,T3,Enemy encounter with spawn points,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Spawn bounds and references
+T3-021,T3,Small platformer test level,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Start/goal/obstacles match specification
+T3-022,T3,Checkpoint and respawn locations,editor_authoring,paired where feasible,saved-asset checks,no,References exist and are valid
+T3-023,T3,Input actions and mappings,editor_authoring,paired where feasible,saved-asset checks + runtime tests,yes,Move/look/jump/interact bindings
+T3-024,T3,Projectile asset with collision and visual reference,editor_authoring,paired where feasible,saved-asset checks,no,Collision setup and required references
+T3-025,T3,Damageable target with health and feedback hooks,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Component wiring and event hooks
+T3-026,T3,Collision layers/channels configuration,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Player/enemy/projectile/world interaction matrix
+T3-027,T3,Moving platform path/waypoints,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Path and configuration persistence
+T3-028,T3,Pause/settings UI wiring,editor_authoring,paired where feasible,saved-asset checks + runtime tests,no,Resume/restart actions work
+T3-029,T3,Camera rig setup,editor_authoring,paired where feasible,saved-asset checks + behavior probes,no,Wall-collision configuration
+T3-030,T3,Animation-ready character setup,editor_authoring,paired where feasible,saved-asset checks,no,Supplied rig/clips; full behavior deferred to T4

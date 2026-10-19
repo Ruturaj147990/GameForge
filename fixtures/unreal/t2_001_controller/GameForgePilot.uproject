@@ -1,0 +1,17 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.7",
+  "Category": "Benchmark",
+  "Description": "GameForge T2-001 Third-Person Controller Benchmark Fixture",
+  "Modules": [],
+  "Plugins": [
+    {
+      "Name": "PythonScriptPlugin",
+      "Enabled": true
+    },
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true
+    }
+  ]
+}

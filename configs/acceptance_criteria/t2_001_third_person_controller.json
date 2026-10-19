@@ -1,0 +1,105 @@
+{
+  "task_id": "t2-001-third-person-controller",
+  "logical_task_id": "T2-001",
+  "version": "1.0.0",
+  "status": "frozen",
+  "review_status": "approved_baseline",
+  "description": "Frozen acceptance targets and tolerances for Third-Person Player Controller pilot",
+  "character_dimensions": {
+    "capsule_radius_meters": { "target": 0.35, "tolerance": 0.02, "unreal_target_cm": 35.0 },
+    "capsule_height_meters": { "target": 1.8, "tolerance": 0.05, "unreal_target_cm": 180.0 },
+    "mass_kg": { "target": 80.0, "tolerance": 5.0, "optional": true }
+  },
+  "kinematics": {
+    "max_run_speed_mps": {
+      "target": 6.0,
+      "tolerance": 0.3,
+      "unreal_target_cm_s": 600.0,
+      "unreal_tolerance_cm_s": 30.0,
+      "unit": "m/s"
+    },
+    "acceleration_mps2": {
+      "target": 40.0,
+      "tolerance": 5.0,
+      "unreal_target_cm_s2": 4000.0,
+      "unreal_tolerance_cm_s2": 500.0,
+      "unit": "m/s^2"
+    },
+    "deceleration_mps2": {
+      "target": 55.0,
+      "tolerance": 8.0,
+      "unreal_target_cm_s2": 5500.0,
+      "unreal_tolerance_cm_s2": 800.0,
+      "unit": "m/s^2"
+    },
+    "time_to_90_percent_speed_seconds": {
+      "target": 0.15,
+      "tolerance": 0.05,
+      "unit": "s"
+    },
+    "slope_limit_degrees": {
+      "target": 45.0,
+      "tolerance": 2.0,
+      "unit": "deg"
+    },
+    "step_height_meters": {
+      "target": 0.35,
+      "tolerance": 0.05,
+      "unreal_target_cm": 35.0,
+      "unreal_tolerance_cm": 5.0,
+      "unit": "m"
+    }
+  },
+  "jumping_and_timing": {
+    "jump_apex_height_meters": {
+      "target": 1.2,
+      "tolerance": 0.15,
+      "unreal_target_cm": 120.0,
+      "unreal_tolerance_cm": 15.0,
+      "unit": "m"
+    },
+    "coyote_time_seconds": {
+      "target": 0.10,
+      "tolerance": 0.03,
+      "unit": "s"
+    },
+    "jump_buffer_seconds": {
+      "target": 0.12,
+      "tolerance": 0.03,
+      "unit": "s"
+    },
+    "input_response_latency_frames": {
+      "max_acceptable_frames": 3,
+      "timestep_seconds": 0.016667
+    }
+  },
+  "camera": {
+    "orbit_arm_length_meters": {
+      "target": 4.0,
+      "tolerance": 0.2,
+      "unreal_target_cm": 400.0,
+      "unreal_tolerance_cm": 20.0,
+      "unit": "m"
+    },
+    "min_collision_clearance_meters": {
+      "target": 0.1,
+      "tolerance": 0.05,
+      "unreal_target_cm": 10.0,
+      "unit": "m"
+    },
+    "camera_geometry_intersection": {
+      "allow_intersection": false
+    }
+  },
+  "required_components": [
+    "CharacterMovementComponent",
+    "CapsuleComponent",
+    "SpringArmComponent",
+    "CameraComponent"
+  ],
+  "required_input_actions": [
+    "Move",
+    "Look",
+    "Jump"
+  ]
+}

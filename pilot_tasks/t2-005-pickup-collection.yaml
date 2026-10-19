@@ -1,0 +1,18 @@
+id: t2-005-pickup-collection
+logical_task_id: T2-005
+tier: T2
+title: Pickup collection with one-time activation
+status: specification-draft
+engine_variants: [unity, unreal]
+prompt: >-
+  Implement pickup collection in the supplied project. A valid player interaction/overlap
+  collects the item once, updates the designated inventory or counter interface, and
+  prevents additional collection events from duplicate overlap callbacks or repeated input.
+  Follow existing project conventions and preserve unrelated behavior.
+limits: {wall_clock_seconds: 1800, max_tool_calls: 100}
+allowed_edit_paths: [project gameplay source paths, designated content/assets paths]
+forbidden_edits: [tests, grader, unrelated project settings]
+required_checks: [build, hidden runtime tests, collection-count test, asset/reference checks, regression]
+probe_fields: [collect_count, inventory_delta, pickup_active_after_collection]
+provenance: {fixture_origin: pending, rights_review: pending}
+review: {engine_reviewer: pending, independent_reviewer: pending}

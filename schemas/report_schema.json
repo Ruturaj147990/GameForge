@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gameforge.ai/schemas/report_schema.v0.1.json",
+  "title": "GameForgeReportSchema",
+  "description": "Validation schema for GameForge benchmark run evaluation reports (v0.1)",
+  "type": "object",
+  "required": [
+    "report_schema_version",
+    "benchmark_version",
+    "run_id",
+    "timestamp",
+    "logical_task_id",
+    "task_id",
+    "engine",
+    "status",
+    "layers"
+  ],
+  "properties": {
+    "report_schema_version": { "type": "string" },
+    "benchmark_version": { "type": "string" },
+    "run_id": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "logical_task_id": { "type": "string" },
+    "task_id": { "type": "string" },
+    "engine": {
+      "type": "object",
+      "required": ["name", "version", "executable_path"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "executable_path": { "type": "string" },
+        "project_version": { "type": "string" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "os": { "type": "string" },
+        "python_version": { "type": "string" },
+        "toolchain_versions": { "type": "object" },
+        "git_commit": { "type": ["string", "null"] }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "properties": {
+        "candidate_id": { "type": "string" },
+        "candidate_type": { "type": "string" },
+        "snapshot_hash": { "type": "string" }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "wall_clock_seconds": { "type": ["integer", "null"] },
+        "max_tool_calls": { "type": ["integer", "null"] },
+        "max_model_tokens": { "type": ["integer", "null"] }
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "properties": {
+        "fixed_timestep": { "type": ["number", "null"] },
+        "seed": { "type": ["integer", "null"] }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "PARTIAL_BUILD",
+        "FAIL_BUILD",
+        "POLICY_FAIL",
+        "HARNESS_INVALID",
+        "FLAKY_QUARANTINED"
+      ]
+    },
+    "first_mandatory_failure_layer": { "type": ["string", "null"] },
+    "layers": {
+      "type": "object",
+      "properties": {
+        "clean_start": { "$ref": "#/$defs/layer_result" },
+        "policy_checks": { "$ref": "#/$defs/layer_result" },
+        "build_import": { "$ref": "#/$defs/layer_result" },
+        "automated_tests": { "$ref": "#/$defs/layer_result" },
+        "behavior_probes": { "$ref": "#/$defs/layer_result" },
+        "saved_asset_checks": { "$ref": "#/$defs/layer_result" },
+        "performance_checks": { "$ref": "#/$defs/layer_result" },
+        "regression_checks": { "$ref": "#/$defs/layer_result" },
+        "visual_review": { "$ref": "#/$defs/layer_result" }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["passed", "measured_value", "target_value"],
+        "properties": {
+          "passed": { "type": "boolean" },
+          "measured_value": {},
+          "target_value": {},
+          "tolerance": {},
+          "unit": { "type": "string" },
+          "details": { "type": "string" }
+        }
+      }
+    },
+    "diff_summary": { "type": ["string", "null"] },
+    "logs": {
+      "type": "object",
+      "properties": {
+        "stdout_log": { "type": "string" },
+        "stderr_log": { "type": "string" },
+        "engine_log": { "type": "string" }
+      }
+    },
+    "duration_seconds": { "type": "number" },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "layer_result": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["PASS", "FAIL", "SKIPPED", "NOT_APPLICABLE", "ERROR"] },
+        "duration_seconds": { "type": "number" },
+        "message": { "type": "string" },
+        "details": {}
+      }
+    }
+  }
+}

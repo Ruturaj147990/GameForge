@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gameforge.ai/schemas/task_schema.v0.1.json",
+  "title": "GameForgeTaskSchema",
+  "description": "Validation schema for GameForge benchmark task specifications (v0.1)",
+  "type": "object",
+  "required": [
+    "id",
+    "logical_task_id",
+    "tier",
+    "title",
+    "prompt",
+    "limits",
+    "allowed_edit_paths",
+    "forbidden_edits"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+-[0-9]+-[a-z0-9-]+$"
+    },
+    "logical_task_id": {
+      "type": "string",
+      "pattern": "^T[1-8]-[0-9]{3}$"
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "gameplay",
+        "editor_authoring",
+        "animation",
+        "asset_pipeline",
+        "project_feature",
+        "end_to_end",
+        "debug_performance"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["specification-draft", "active", "quarantined", "deprecated"]
+    },
+    "engine_variants": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["unity", "unreal"]
+      },
+      "minItems": 1
+    },
+    "engine": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "enum": ["unity", "unreal"] },
+        "version": { "type": "string" },
+        "project_template_id": { "type": "string" }
+      }
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 10
+    },
+    "limits": {
+      "type": "object",
+      "required": ["wall_clock_seconds", "max_tool_calls"],
+      "properties": {
+        "wall_clock_seconds": { "type": "integer", "minimum": 10 },
+        "max_tool_calls": { "type": "integer", "minimum": 1 },
+        "max_model_tokens": { "type": "integer", "minimum": 1 },
+        "network_access": { "type": "string", "enum": ["disabled", "allowlisted"] }
+      }
+    },
+    "allowed_edit_paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "forbidden_edits": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "required_checks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "probe_fields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "allowed_edit_paths": { "type": "array", "items": { "type": "string" } },
+        "forbidden_paths": { "type": "array", "items": { "type": "string" } },
+        "can_modify_tests": { "type": "boolean" },
+        "can_modify_grader": { "type": "boolean" },
+        "can_install_dependencies": { "type": "boolean" }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "properties": {
+        "required_behavior": { "type": "array", "items": { "type": "string" } },
+        "required_assets": { "type": "array", "items": { "type": "string" } },
+        "invariants": { "type": "array", "items": { "type": "string" } },
+        "performance_budgets": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "grading": {
+      "type": "object",
+      "properties": {
+        "build_required": { "type": "boolean" },
+        "static_policy_checks": { "type": "array", "items": { "type": "string" } },
+        "visible_tests": { "type": "array", "items": { "type": "string" } },
+        "hidden_tests_ref": { "type": ["string", "null"] },
+        "probes_ref": { "type": ["string", "null"] },
+        "saved_asset_checks": { "type": "array", "items": { "type": "string" } },
+        "performance_checks": { "type": "array", "items": { "type": "string" } },
+        "visual_review": { "type": "string" },
+        "regression_suite_ref": { "type": ["string", "null"] }
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "properties": {
+        "fixed_timestep_seconds": { "type": ["number", "null"] },
+        "random_seed": { "type": ["integer", "null"] },
+        "tolerance_policy": { "type": "string" },
+        "clean_snapshot_required": { "type": "boolean" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "fixture_origin": { "type": "string" },
+        "rights_review": { "type": "string" },
+        "project_fixture_origin": { "type": "string" },
+        "code_asset_license_or_permission": { "type": "string" },
+        "allowed_use_review_status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "reviewer": { "type": ["string", "null"] },
+        "notes": { "type": "string" }
+      }
+    },
+    "reference_solution": {
+      "type": "object",
+      "properties": {
+        "grader_only_ref": { "type": "string" },
+        "reviewer_status": { "type": "string" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "engine_reviewer": { "type": "string" },
+        "independent_reviewer": { "type": "string" }
+      }
+    },
+    "reporting": {
+      "type": "object",
+      "properties": {
+        "report_schema_version": { "type": "string" },
+        "record_build_logs": { "type": "boolean" },
+        "record_test_logs": { "type": "boolean" },
+        "record_diff": { "type": "boolean" },
+        "record_tool_trace": { "type": "boolean" },
+        "record_time_and_cost": { "type": "boolean" }
+      }
+    }
+  }
+}
