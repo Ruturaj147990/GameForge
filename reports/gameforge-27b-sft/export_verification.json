@@ -1,0 +1,11 @@
+{
+  "artifact_path": "E:\\GameForge\\artifacts\\gameforge-27b-sft\\gameforge-27b-sft-q4_k_m.gguf",
+  "file_size_bytes": 16810714464,
+  "file_size_gb": 15.6562,
+  "sha256": "d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b",
+  "format": "GGUF Q4_K_M",
+  "architecture": "qwen35",
+  "total_tensors": 866,
+  "ollama_tag": "gameforge-27b-sft:latest",
+  "is_standalone": true
+}

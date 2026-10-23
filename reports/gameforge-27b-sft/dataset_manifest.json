@@ -1,0 +1,26 @@
+{
+  "dataset_name": "GameForge-27B-SFT-Dataset",
+  "version": "1.0.0",
+  "license": "Custom Clean-Room Synthetic / Commercial Permissive",
+  "total_samples": 518,
+  "train_samples_count": 470,
+  "val_samples_count": 48,
+  "train_file": "E:\\GameForge\\datasets\\gameforge-27b-sft\\gameforge_27b_sft_train.jsonl",
+  "train_file_sha256": "df5ccc71c00e2a81cede58bfd62dfa8670e84fc41069bd442895f00d2c64d545",
+  "val_file": "E:\\GameForge\\datasets\\gameforge-27b-sft\\gameforge_27b_sft_val.jsonl",
+  "val_file_sha256": "a8ec5be009ca412eb975e9d2903b8ab6a42e45adc881f7bde5c6b8dde616da5b",
+  "domain_distribution": {
+    "Unity DOTS": 80,
+    "Godot 4": 70,
+    "UEFN Verse": 40,
+    "Unreal Engine 5.7": 198,
+    "Bevy Rust": 40,
+    "Roblox Luau": 50,
+    "Game Mathematics": 40
+  },
+  "leakage_audit": {
+    "quarantined_pilot_trajectories_included": false,
+    "baseline_benchmark_leakage": "0.0%",
+    "held_out_regression_leakage": "0.0%"
+  }
+}

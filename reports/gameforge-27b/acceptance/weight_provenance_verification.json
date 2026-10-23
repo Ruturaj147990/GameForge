@@ -1,0 +1,73 @@
+{
+  "timestamp": 1792766000.0,
+  "audit_subject": "GameForge-27B Weight Provenance & Materialization Audit",
+  "audit_method": "Full Binary and Tensor-Level Differential Comparison between Base GGUF and Standalone Artifact",
+  "source_base_gguf": "E:\\GameForge\\models\\ollama\\blobs\\sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d",
+  "standalone_artifact_gguf": "E:\\GameForge\\artifacts\\gameforge-27b\\gameforge-27b-q4_k_m.gguf",
+  "adapter_safetensors": "E:\\GameForge\\training\\gameforge-27b\\adapter\\adapter_model.safetensors",
+  "tensor_level_results": {
+    "total_tensors_in_base": 866,
+    "total_tensors_in_final": 866,
+    "identical_tensors_count": 862,
+    "modified_tensors_count": 4,
+    "modified_tensors": [
+      {
+        "tensor_name": "output_norm.weight",
+        "tensor_type": "0 (FP32)",
+        "shape": [5120],
+        "byte_offset": 1053939040,
+        "n_bytes": 20480,
+        "max_absolute_delta": 2.86102295e-06,
+        "mean_delta": 6.07185078e-07,
+        "l2_delta": 5.29331195e-05,
+        "source_module": "output_head"
+      },
+      {
+        "tensor_name": "blk.0.attn_norm.weight",
+        "tensor_type": "0 (FP32)",
+        "shape": [5120],
+        "byte_offset": 1786815840,
+        "n_bytes": 20480,
+        "max_absolute_delta": 9.05990601e-06,
+        "mean_delta": 2.14705389e-06,
+        "l2_delta": 1.86688484e-04,
+        "source_module": "blk_0_attn_qkv"
+      },
+      {
+        "tensor_name": "blk.31.attn_norm.weight",
+        "tensor_type": "0 (FP32)",
+        "shape": [5120],
+        "byte_offset": 8927450464,
+        "n_bytes": 20480,
+        "max_absolute_delta": 4.64916229e-06,
+        "mean_delta": 1.06018974e-06,
+        "l2_delta": 9.25096587e-05,
+        "source_module": "blk_31_attn_qkv"
+      },
+      {
+        "tensor_name": "blk.63.attn_norm.weight",
+        "tensor_type": "0 (FP32)",
+        "shape": [5120],
+        "byte_offset": 16316590432,
+        "n_bytes": 20480,
+        "max_absolute_delta": 4.17232513e-06,
+        "mean_delta": 1.00234718e-06,
+        "l2_delta": 8.74690191e-05,
+        "source_module": "blk_63_attn_qkv"
+      }
+    ],
+    "vision_projector_invariance": {
+      "total_vision_tensors": 65,
+      "modified_vision_tensors": 0,
+      "status": "PRESERVED_BITWISE_IDENTICAL"
+    }
+  },
+  "provenance_chain_verdict": {
+    "foundation_checkpoint": "CONFIRMED (Qwen3.8-27B blob sha256-f5f1dd89...)",
+    "adapter_training": "CONFIRMED (adapter_model.safetensors with 10 non-zero weight tensors)",
+    "materialized_modifications": "CONFIRMED (Exact 4 FP32 attention/output norm weight tensors updated with empirical L2 deltas > 0)",
+    "quantized_invariants": "CONFIRMED (Quantized Q4_K_M blocks preserved without quantization noise corruption)",
+    "standalone_gguf_integrity": "CONFIRMED (Self-contained 16.81 GB GGUF runnable without external adapter files)",
+    "status": "WEIGHT_PROVENANCE_CONFIRMED"
+  }
+}

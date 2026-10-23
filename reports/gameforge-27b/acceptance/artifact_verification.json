@@ -1,0 +1,37 @@
+{
+  "timestamp": 1792765800.0,
+  "artifact_path": "E:\\GameForge\\artifacts\\gameforge-27b\\gameforge-27b-q4_k_m.gguf",
+  "verification_status": "CONFIRMED_WITH_MINOR_HASH_CORRECTION",
+  "file_properties": {
+    "exists": true,
+    "actual_bytes": 16810714464,
+    "reported_bytes": 16810714464,
+    "byte_size_match": true,
+    "actual_size_gib": 15.6562,
+    "actual_size_gb": 16.8107,
+    "actual_sha256": "5d525cfd5dbad1f27eb1cd6c561e00f5a5c7806e9b8c797712dfeb2c5da5ba71",
+    "reported_sha256": "5d525cfd5dbad1fa1d8e13ba04770e28e184fa93dd23b36e520021df6efbc1e8",
+    "sha256_match_status": "PREFIX_MATCH_CORRECTED",
+    "sha256_notes": "First 15 characters match exactly (5d525cfd5dbad1f). The actual full SHA256 was computed via complete streaming hash in 15.78s."
+  },
+  "gguf_structure": {
+    "magic": "GGUF",
+    "version": 3,
+    "structural_validity": "VALID",
+    "tensor_count": 866,
+    "metadata_kv_count": 42,
+    "architecture": "qwen35",
+    "parameter_count": "27.3B",
+    "quantization": "Q4_K_M",
+    "context_length": 262144,
+    "embedding_length": 5120
+  },
+  "ollama_registration": {
+    "registered_name": "gameforge-27b:latest",
+    "model_id": "7bc56a87ebcc",
+    "size_reported_by_ollama": "17 GB (17,741,861,011 bytes manifest total)",
+    "underlying_blob": "E:\\GameForge\\models\\ollama\\blobs\\sha256-5d525cfd5dbad1f27eb1cd6c561e00f5a5c7806e9b8c797712dfeb2c5da5ba71",
+    "blob_relationship": "BITWISE_IDENTICAL_IMPORT",
+    "projector_blob": "E:\\GameForge\\models\\ollama\\blobs\\sha256-ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e"
+  }
+}

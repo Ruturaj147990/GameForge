@@ -1,0 +1,16 @@
+{
+  "model_name": "GameForge-27B-SFT",
+  "foundation_checkpoint": "Qwen/Qwen3.8-27B",
+  "device": "DirectML (AMD Radeon RX 7700 XT\u0000)",
+  "hidden_size": 5120,
+  "intermediate_size": 17408,
+  "num_layers": 64,
+  "lora_rank": 16,
+  "lora_alpha": 32.0,
+  "learning_rate": 0.0002,
+  "epochs": 2,
+  "max_seq_len": 384,
+  "trainable_params": 2785280,
+  "train_samples_count": 470,
+  "val_samples_count": 48
+}

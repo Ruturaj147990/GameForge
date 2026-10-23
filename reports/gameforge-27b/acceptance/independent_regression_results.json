@@ -1,0 +1,995 @@
+{
+  "timestamp": 1792766881.085889,
+  "total_tasks": 15,
+  "max_points_per_model": 150,
+  "models": {
+    "gameforge-27b": {
+      "tasks": [
+        {
+          "task_id": "REG-01",
+          "category": "Unreal C++ Replication & Authority",
+          "score": 2,
+          "rubric_results": [
+            {
+              "pattern": "UCLASS",
+              "points": 1,
+              "matched": true
+            },
+            {
+              "pattern": "GENERATED_BODY()",
+              "points": 1,
+              "matched": true
+            },
+            {
+              "pattern": "ReplicatedUsing",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "OnRep_Health",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "HasAuthority",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "GetLifetimeReplicatedProps",
+              "points": 1,
+              "matched": false
+            },
+            {
+              "pattern": "DOREPLIFETIME",
+              "points": 1,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.950485500111954,
+          "ttft_seconds": 1.076545,
+          "response": "```cpp\n// HealthComponent.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"Components/ActorComponent.h\"\n#include \"HealthComponent.generated.h\"\n\nclass UHealthComponent;\n\nDECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthChanged, float, NewHealth);\n\nUCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))\nclass UHealthComponent : public UActorComponent\n{\n\tGENERATED_BODY()\n\npublic:\n\tUHealthComponent();\n\n\t/**\n\t * Attempts to deal damage to the owner.\n\t * Only valid on the server (authority).\n\t * @param DamageAmount The amount of damage to apply."
+        },
+        {
+          "task_id": "REG-02",
+          "category": "Unreal RPC Validation & Security",
+          "score": 1,
+          "rubric_results": [
+            {
+              "pattern": "UFUNCTION(Server, Reliable, WithValidation)",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "Server_FireWeapon_Validate",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "Server_FireWeapon_Implementation",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "bool",
+              "points": 1,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.89455417297384,
+          "ttft_seconds": 1.098711,
+          "response": "```cpp\n// MyCharacter.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"MyCharacter.generated.h\"\n\nclass UMyWeapon;\n\nUCLASS()\nclass MYGAME_API AMyCharacter : public ACharacter\n{\n\tGENERATED_BODY()\n\npublic:\n\tAMyCharacter();\n\n\t/**\n\t * Server-reliable RPC to fire a weapon.\n\t * @param Weapon The weapon instance to fire.\n\t */\n\tUFUNCTION(Server, Reliable)\n\tvoid Server_FireWeapon(UMyWeapon* Weapon);\n\nprivate:\n\t// Validation logic\n\tbool ValidateFireWeapon(UMyWeapon* Weapon"
+        },
+        {
+          "task_id": "REG-03",
+          "category": "Unreal Memory & TObjectPtr",
+          "score": 0,
+          "rubric_results": [
+            {
+              "pattern": "UGameInstanceSubsystem",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "TObjectPtr<",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "UPROPERTY(",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "tracking",
+              "points": 1,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 6.023110762038381,
+          "ttft_seconds": 1.222412,
+          "response": "```cpp\n// InventorySubsystem.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"Subsystems/GameInstanceSubsystem.h\"\n#include \"InventorySubsystem.generated.h\"\n\n// Forward declaration to avoid including the full header\nclass UInventoryDataAsset;\n\n/**\n * A GameInstance Subsystem that holds a reference to an Inventory Data Asset.\n * \n * Note: TObjectPtr is used instead of raw pointers (UInventoryDataAsset*) \n * because it provides:\n * 1. Null-safety: Automatically initializes to nullptr and handles null checks.\n * 2. Garbage Collection Awareness: Integrates with UE's GC to prevent dangling pointers.\n * 3"
+        },
+        {
+          "task_id": "REG-04",
+          "category": "Unreal Delegates & Events",
+          "score": 3,
+          "rubric_results": [
+            {
+              "pattern": "DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "BlueprintAssignable",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": ".Broadcast(",
+              "points": 3,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.950785726870412,
+          "ttft_seconds": 1.016521,
+          "response": "```cpp\n// Header file (e.g., MyCharacter.h)\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"MyCharacter.generated.h\"\n\nDECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlayerDied, AActor*, Killer, float, Damage);\n\nUCLASS()\nclass MYPROJECT_API AMyCharacter : public ACharacter\n{\n\tGENERATED_BODY()\n\npublic:\n\tAMyCharacter();\n\n\tUPROPERTY(BlueprintAssignable, Category = \"Events\")\n\tFOnPlayerDied OnPlayerDied;\n\n\tvoid HandlePlayerDeath(AActor* Killer, float Damage);\n};\n```\n\n```cpp"
+        },
+        {
+          "task_id": "REG-05",
+          "category": "Gameplay Ability System",
+          "score": 4,
+          "rubric_results": [
+            {
+              "pattern": "ATTRIBUTE_ACCESSORS",
+              "points": 4,
+              "matched": true
+            },
+            {
+              "pattern": "GAMEPLAYATTRIBUTE_VALUE_GETTER",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "GAMEPLAYATTRIBUTE_VALUE_SETTER",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "GAMEPLAYATTRIBUTE_PROPERTY_GETTER",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 17,
+          "tokens_per_second": 6.315666679917183,
+          "ttft_seconds": 0.985834,
+          "response": "```cpp\nATTRIBUTE_ACCESSORS(UCombatAttributeSet, Health)\n```"
+        },
+        {
+          "task_id": "REG-06",
+          "category": "Collision & Sweep",
+          "score": 8,
+          "rubric_results": [
+            {
+              "pattern": "LineTraceSingleByChannel",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "ECC_Visibility",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "FCollisionQueryParams",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "AddIgnoredActor",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 103,
+          "tokens_per_second": 5.94869670696899,
+          "ttft_seconds": 0.996481,
+          "response": "```cpp\n#include \"Engine/World.h\"\n#include \"CollisionQueryParams.h\"\n#include \"CollisionQueryParams.h\"\n\nbool UMyCharacter::TraceLine(const FVector& Start, const FVector& End, FHitResult& OutHit)\n{\n    FCollisionQueryParams Params(SCENE_QUERY_STAT(TraceLine), true, this);\n    return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);\n}\n```"
+        },
+        {
+          "task_id": "REG-07",
+          "category": "AI & Behavior Trees",
+          "score": 7,
+          "rubric_results": [
+            {
+              "pattern": "UBTTaskNode",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "ExecuteTask",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "EBTNodeResult::Succeeded",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "bNotifyTick",
+              "points": 1,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.9377143939018655,
+          "ttft_seconds": 0.986987,
+          "response": "```cpp\n#include \"BehaviorTree/BehaviorTree.h\"\n#include \"BehaviorTree/BlackboardComponent.h\"\n#include \"BehaviorTree/BlackboardKeyBase.h\"\n\nUCLASS()\nclass UBTTaskNode_CustomAction : public UBTTaskNode\n{\n    GENERATED_BODY()\n\npublic:\n    UBTTaskNode_CustomAction()\n    {\n        bNotifyTick = false;\n    }\n\n    virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override\n    {\n        // Execute custom action logic here\n        // Example: Perform a specific game action\n        // OwnerComp"
+        },
+        {
+          "task_id": "REG-08",
+          "category": "Network Optimization",
+          "score": 10,
+          "rubric_results": [
+            {
+              "pattern": "GetLifetimeReplicatedProps",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "DOREPLIFETIME_CONDITION",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "COND_OwnerOnly",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "DOREPLIFETIME",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 88,
+          "tokens_per_second": 5.923399805322081,
+          "ttft_seconds": 0.988556,
+          "response": "```cpp\n#include \"MyActor.h\"\n\nvoid UMyActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const\n{\n    Super::GetLifetimeReplicatedProps(OutLifetimeProps);\n\n    DOREPLIFETIME_CONDITION(UMyActor, SecretScore, COND_OwnerOnly);\n    DOREPLIFETIME(UMyActor, Health);\n}\n```"
+        },
+        {
+          "task_id": "REG-09",
+          "category": "Enhanced Input System",
+          "score": 0,
+          "rubric_results": [
+            {
+              "pattern": "UEnhancedInputComponent",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "BindAction",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "ETriggerEvent::Triggered",
+              "points": 3,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.9355665421950095,
+          "ttft_seconds": 0.995127,
+          "response": "```cpp\n// MyCharacter.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"EnhancedInputComponent.h\"\n#include \"MyCharacter.generated.h\"\n\nUCLASS()\nclass AMyCharacter : public ACharacter\n{\n\tGENERATED_BODY()\n\npublic:\n\tAMyCharacter();\n\nprotected:\n\tvirtual void BeginPlay() override;\n\nprivate:\n\tvoid SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;\n\tvoid OnJumpInput(const FInputActionValue& Value);\n\n\tUPROPERTY(EditAnywhere, Category = \"Input\")\n\tUInputMappingContext* DefaultMappingContext;\n\n\tUPROPERTY(EditAnywhere,"
+        },
+        {
+          "task_id": "REG-10",
+          "category": "Performance & Tick Avoidance",
+          "score": 6,
+          "rubric_results": [
+            {
+              "pattern": "PrimaryActorTick.bCanEverTick = false",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "GetWorldTimerManager()",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "SetTimer",
+              "points": 3,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 122,
+          "tokens_per_second": 5.95270652732324,
+          "ttft_seconds": 0.988405,
+          "response": "```cpp\n#include \"MyActor.h\"\n\nvoid AMyActor::BeginPlay()\n{\n    Super::BeginPlay();\n\n    // Disable Tick\n    SetActorTickEnabled(false);\n\n    // Set up 1.0s repeating timer\n    GetWorldTimerManager().SetTimer(\n        TimerHandle,\n        this,\n        &AMyActor::OnTimerTick,\n        1.0f,\n        true\n    );\n}\n\nvoid AMyActor::OnTimerTick()\n{\n    // Handle periodic logic here\n}\n```"
+        },
+        {
+          "task_id": "REG-11",
+          "category": "Godot 4 GDScript 2.0",
+          "score": 7,
+          "rubric_results": [
+            {
+              "pattern": "CharacterBody3D",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "move_and_slide()",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "is_on_floor()",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "velocity",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.895123562210944,
+          "ttft_seconds": 1.056233999,
+          "response": "```gdscript\nextends CharacterBody3D\n\n@export var speed: float = 5.0\n@export var jump_velocity: float = 4.0\n@export var gravity: float = -9.8\n\nvar velocity: Vector3 = Vector3.ZERO\n\nfunc _physics_process(delta: float) -> void:\n\tif not is_on_floor():\n\t\tvelocity += get_gravity() * delta\n\t\n\tvar input_dir: Vector2 = Input.get_vector(\"move_left\", \"move_right\", \"move_forward\", \"move_back\")\n\tvar direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()"
+        },
+        {
+          "task_id": "REG-12",
+          "category": "Unity ECS / DOTS",
+          "score": 10,
+          "rubric_results": [
+            {
+              "pattern": "IJobEntity",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "BurstCompile",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "Health",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "Damage",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.804311293174852,
+          "ttft_seconds": 1.022718,
+          "response": "```csharp\nusing Unity.Burst;\nusing Unity.Collections;\nusing Unity.Entities;\nusing Unity.Jobs;\nusing Unity.Mathematics;\n\n[RequireComponent(typeof(Health))]\n[RequireComponent(typeof(Damage))]\npublic struct ApplyDamageSystem : ISystem\n{\n    public void OnUpdate(SystemState state)\n    {\n        var job = new ApplyDamageJob\n        {\n            deltaTime = SystemAPI.Time.DeltaTime\n        };\n\n        state.Dependency = job.Schedule(state.Dependency);\n    }\n}\n\n[BurstCompile]\npublic struct ApplyDamageJob : IJobEntity\n{\n    public float deltaTime;\n\n    public void Execute(ref"
+        },
+        {
+          "task_id": "REG-13",
+          "category": "UEFN Verse Concurrency",
+          "score": 2,
+          "rubric_results": [
+            {
+              "pattern": "race:",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "block:",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "Sleep(",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "await",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 117,
+          "tokens_per_second": 5.9201583161652955,
+          "ttft_seconds": 0.98057,
+          "response": "```verse\nimport \"unreal\"\n\nfn wait_for_elimination_or_timeout(\n    actor: Actor,\n    timeout_seconds: float = 30.0\n) -> bool {\n    let elim_event = actor.on_eliminated\n    let timeout_task = sleep(timeout_seconds)\n\n    let result = race(\n        elim_event,\n        timeout_task\n    )\n\n    match result {\n        case Some(Eliminated) => true\n        case Some(Timeout) => false\n        case None => false\n    }\n}\n```"
+        },
+        {
+          "task_id": "REG-14",
+          "category": "Game Mathematics - Quaternions",
+          "score": 4,
+          "rubric_results": [
+            {
+              "pattern": "gimbal lock",
+              "points": 4,
+              "matched": true
+            },
+            {
+              "pattern": "dot",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "Slerp",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "quaternion",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.888012360115546,
+          "ttft_seconds": 1.000601,
+          "response": "### Explanation of Gimbal Lock\n\n**Gimbal Lock** is a phenomenon that occurs when using Euler angles (pitch, yaw, roll) to represent 3D rotations. It happens when two of the three rotational axes become aligned, causing the loss of one degree of freedom.\n\n**Why it happens:**\nEuler angles represent rotation as a sequence of three rotations around specific axes (e.g., Yaw around Y, Pitch around X, Roll around Z). If you rotate the object such that the second axis (Pitch) reaches \u00b190 degrees, the first and third axes (Yaw and Roll) become parallel. At this point, rotating around either the Yaw or Roll axis"
+        },
+        {
+          "task_id": "REG-15",
+          "category": "Game Mathematics - PID Controller",
+          "score": 6,
+          "rubric_results": [
+            {
+              "pattern": "error",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "integral",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "derivative",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "clamp",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "dt",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.941961046625507,
+          "ttft_seconds": 1.00246,
+          "response": "```cpp\n#pragma once\n\n#include <algorithm>\n#include <cmath>\n\nclass PIDController {\npublic:\n    float Kp = 1.0f;\n    float Ki = 0.1f;\n    float Kd = 0.01f;\n    float OutputMin = -100.0f;\n    float OutputMax = 100.0f;\n    float IntegralMin = -10.0f;\n    float IntegralMax = 10.0f;\n\n    float error = 0.0f;\n    float integral = 0.0f;\n    float derivative ="
+        }
+      ],
+      "total_score": 70,
+      "max_possible_score": 150,
+      "mean_tokens_per_sec": 5.95215022639434,
+      "mean_ttft_seconds": 1.0278774666000001,
+      "total_deprecated_detected": 0
+    },
+    "qwen3.8:27b-q4_K_M": {
+      "tasks": [
+        {
+          "task_id": "REG-01",
+          "category": "Unreal C++ Replication & Authority",
+          "score": 2,
+          "rubric_results": [
+            {
+              "pattern": "UCLASS",
+              "points": 1,
+              "matched": true
+            },
+            {
+              "pattern": "GENERATED_BODY()",
+              "points": 1,
+              "matched": true
+            },
+            {
+              "pattern": "ReplicatedUsing",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "OnRep_Health",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "HasAuthority",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "GetLifetimeReplicatedProps",
+              "points": 1,
+              "matched": false
+            },
+            {
+              "pattern": "DOREPLIFETIME",
+              "points": 1,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 6.053979966428951,
+          "ttft_seconds": 0.859806,
+          "response": "```cpp\n// HealthComponent.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"Components/ActorComponent.h\"\n#include \"HealthComponent.generated.h\"\n\nclass AActor;\n\nUCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))\nclass UHealthComponent : public UActorComponent\n{\n    GENERATED_BODY()\n\npublic:\n    UHealthComponent();\n\n    UFUNCTION(BlueprintCallable, Category = \"Health\")\n    void TakeDamage(float DamageAmount, AActor* Instigator);\n\n    UFUNCTION(BlueprintImplementableEvent, Category = \"Health\")\n    void OnDeath();\n\n    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = \""
+        },
+        {
+          "task_id": "REG-02",
+          "category": "Unreal RPC Validation & Security",
+          "score": 0,
+          "rubric_results": [
+            {
+              "pattern": "UFUNCTION(Server, Reliable, WithValidation)",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "Server_FireWeapon_Validate",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "Server_FireWeapon_Implementation",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "bool",
+              "points": 1,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 6.060237461747456,
+          "ttft_seconds": 0.968038,
+          "response": "```cpp\n// MyCharacter.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"MyCharacter.generated.h\"\n\nUCLASS()\nclass UMYCHARACTER_API AMyCharacter : public ACharacter\n{\n    GENERATED_BODY()\n\npublic:\n    AMyCharacter();\n\n    UFUNCTION(Server, Reliable, BlueprintCallable, Category = \"Combat\")\n    void Server_FireWeapon();\n\nprivate:\n    UPROPERTY(ReplicatedUsing = OnRep_LastFireTime)\n    float LastFireTime;\n\n    UFUNCTION()\n    void OnRep_LastFireTime();\n\n    float FireCooldown;\n};"
+        },
+        {
+          "task_id": "REG-03",
+          "category": "Unreal Memory & TObjectPtr",
+          "score": 0,
+          "rubric_results": [
+            {
+              "pattern": "UGameInstanceSubsystem",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "TObjectPtr<",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "UPROPERTY(",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "tracking",
+              "points": 1,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 6.065411652123687,
+          "ttft_seconds": 0.876122,
+          "response": "```cpp\n// InventorySubsystem.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"Subsystems/GameInstanceSubsystem.h\"\n#include \"InventorySubsystem.generated.h\"\n\n// Forward declaration to avoid including the full header in the public interface\nclass UInventoryDataAsset;\n\n/**\n * A GameInstance Subsystem that holds a reference to an Inventory Data Asset.\n * \n * Note: TObjectPtr is used instead of raw pointers (UInventoryDataAsset*) because:\n * 1. It provides null-safety and automatic garbage collection awareness.\n * 2. It integrates with Unreal's memory management, preventing dangling pointers.\n * 3. It enables better debugging and"
+        },
+        {
+          "task_id": "REG-04",
+          "category": "Unreal Delegates & Events",
+          "score": 6,
+          "rubric_results": [
+            {
+              "pattern": "DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "BlueprintAssignable",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": ".Broadcast(",
+              "points": 3,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 119,
+          "tokens_per_second": 6.026378318812632,
+          "ttft_seconds": 0.858922,
+          "response": "```cpp\nDECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlayerDied, AActor*, Killer, int32, Score);\n\n// In your class header (e.g., MyGameMode.h)\nUPROPERTY(BlueprintAssignable, Category=\"Game\")\nFOnPlayerDied OnPlayerDied;\n\n// In your class implementation (e.g., MyGameMode.cpp)\nvoid UMyGameMode::HandlePlayerDeath(AActor* Killer, int32 Score)\n{\n    OnPlayerDied.Broadcast(Killer, Score);\n}\n```"
+        },
+        {
+          "task_id": "REG-05",
+          "category": "Gameplay Ability System",
+          "score": 4,
+          "rubric_results": [
+            {
+              "pattern": "ATTRIBUTE_ACCESSORS",
+              "points": 4,
+              "matched": true
+            },
+            {
+              "pattern": "GAMEPLAYATTRIBUTE_VALUE_GETTER",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "GAMEPLAYATTRIBUTE_VALUE_SETTER",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "GAMEPLAYATTRIBUTE_PROPERTY_GETTER",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 16,
+          "tokens_per_second": 6.256677047536668,
+          "ttft_seconds": 0.909349,
+          "response": "```cpp\nATTRIBUTE_ACCESSORS(FMyAttributeSet, Health)\n```"
+        },
+        {
+          "task_id": "REG-06",
+          "category": "Collision & Sweep",
+          "score": 8,
+          "rubric_results": [
+            {
+              "pattern": "LineTraceSingleByChannel",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "ECC_Visibility",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "FCollisionQueryParams",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "AddIgnoredActor",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 79,
+          "tokens_per_second": 6.065361098969725,
+          "ttft_seconds": 0.915154,
+          "response": "```cpp\nbool AMyActor::TraceLine(const FVector& Start, const FVector& End, FHitResult& OutHit)\n{\n    FCollisionQueryParams Params(SCENE_QUERY_STAT(TraceLine), false, this);\n    return GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params);\n}\n```"
+        },
+        {
+          "task_id": "REG-07",
+          "category": "AI & Behavior Trees",
+          "score": 7,
+          "rubric_results": [
+            {
+              "pattern": "UBTTaskNode",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "ExecuteTask",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "EBTNodeResult::Succeeded",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "bNotifyTick",
+              "points": 1,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.760205603133025,
+          "ttft_seconds": 0.915906,
+          "response": "```cpp\n#include \"BehaviorTree/BehaviorTree.h\"\n#include \"BehaviorTree/BlackboardComponent.h\"\n#include \"BehaviorTree/BehaviorTreeComponent.h\"\n\nUCLASS()\nclass UBTTaskNode_CustomAction : public UBTTaskNode\n{\n    GENERATED_BODY()\n\npublic:\n    UBTTaskNode_CustomAction()\n    {\n        bNotifyTick = false;\n    }\n\n    virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override\n    {\n        // Execute custom action here\n        // Example: OwnerComp.GetBlackboardComponent()->SetValueAsBool(TEXT(\""
+        },
+        {
+          "task_id": "REG-08",
+          "category": "Network Optimization",
+          "score": 10,
+          "rubric_results": [
+            {
+              "pattern": "GetLifetimeReplicatedProps",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "DOREPLIFETIME_CONDITION",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "COND_OwnerOnly",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "DOREPLIFETIME",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 88,
+          "tokens_per_second": 5.71085845754126,
+          "ttft_seconds": 0.907502,
+          "response": "```cpp\n#include \"MyActor.h\"\n\nvoid AMyActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const\n{\n    Super::GetLifetimeReplicatedProps(OutLifetimeProps);\n\n    DOREPLIFETIME_CONDITION(AMyActor, SecretScore, COND_OwnerOnly);\n    DOREPLIFETIME(AMyActor, Health);\n}\n```"
+        },
+        {
+          "task_id": "REG-09",
+          "category": "Enhanced Input System",
+          "score": 4,
+          "rubric_results": [
+            {
+              "pattern": "UEnhancedInputComponent",
+              "points": 4,
+              "matched": true
+            },
+            {
+              "pattern": "BindAction",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "ETriggerEvent::Triggered",
+              "points": 3,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.7605791390008,
+          "ttft_seconds": 0.929927,
+          "response": "```cpp\n// MyCharacter.h\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"MyCharacter.generated.h\"\n\nclass UEnhancedInputComponent;\nclass UInputMappingContext;\n\nUCLASS()\nclass MYGAME_API AMyCharacter : public ACharacter\n{\n\tGENERATED_BODY()\n\npublic:\n\tAMyCharacter();\n\nprotected:\n\tvirtual void BeginPlay() override;\n\nprivate:\n\tvoid SetupInputComponent();\n\tvoid BindJumpAction();\n\tvoid OnJumpActionTriggered(const FInputActionValue& Value);\n\n\tUPROPERTY(EditAnywhere, Category = \"Input\")\n\tUInputMappingContext* DefaultMapping"
+        },
+        {
+          "task_id": "REG-10",
+          "category": "Performance & Tick Avoidance",
+          "score": 6,
+          "rubric_results": [
+            {
+              "pattern": "PrimaryActorTick.bCanEverTick = false",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "GetWorldTimerManager()",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "SetTimer",
+              "points": 3,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 126,
+          "tokens_per_second": 5.8199318624548715,
+          "ttft_seconds": 0.871748,
+          "response": "```cpp\n#include \"MyActor.h\"\n\nvoid AMyActor::BeginPlay()\n{\n    Super::BeginPlay();\n\n    // Disable Tick\n    SetActorTickEnabled(false);\n\n    // Set up a 1.0s repeating timer\n    GetWorldTimerManager().SetTimer(\n        TimerHandle,\n        this,\n        &AMyActor::OnTimerCallback,\n        1.0f,\n        true // bLoop\n    );\n}\n\nvoid AMyActor::OnTimerCallback()\n{\n    // Handle timer logic here\n}\n```"
+        },
+        {
+          "task_id": "REG-11",
+          "category": "Godot 4 GDScript 2.0",
+          "score": 7,
+          "rubric_results": [
+            {
+              "pattern": "CharacterBody3D",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "move_and_slide()",
+              "points": 3,
+              "matched": false
+            },
+            {
+              "pattern": "is_on_floor()",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "velocity",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.831720619593656,
+          "ttft_seconds": 0.9042,
+          "response": "```gdscript\nextends CharacterBody3D\n\n@export var speed: float = 5.0\n@export var jump_velocity: float = 4.0\n@export var gravity: float = -9.8\n\nfunc _physics_process(delta: float) -> void:\n\tif not is_on_floor():\n\t\tvelocity += get_gravity() * delta\n\n\tvar input_dir := Input.get_vector(\"ui_left\", \"ui_right\", \"ui_up\", \"ui_down\")\n\tvar direction := (transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()\n\t\n\tif direction:\n\t\tvelocity.x = direction.x *"
+        },
+        {
+          "task_id": "REG-12",
+          "category": "Unity ECS / DOTS",
+          "score": 10,
+          "rubric_results": [
+            {
+              "pattern": "IJobEntity",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "BurstCompile",
+              "points": 3,
+              "matched": true
+            },
+            {
+              "pattern": "Health",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "Damage",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 113,
+          "tokens_per_second": 5.839630617007619,
+          "ttft_seconds": 0.95489,
+          "response": "```csharp\nusing Unity.Burst;\nusing Unity.Collections;\nusing Unity.Entities;\nusing Unity.Jobs;\n\n[BurstCompile]\npublic struct ApplyDamageJob : IJobEntity\n{\n    public float DamageMultiplier;\n\n    public void Execute(ref Health health, [ReadOnly] Damage damage)\n    {\n        health.CurrentValue -= damage.Amount * DamageMultiplier;\n        if (health.CurrentValue < 0)\n        {\n            health.CurrentValue = 0;\n        }\n    }\n}\n```"
+        },
+        {
+          "task_id": "REG-13",
+          "category": "UEFN Verse Concurrency",
+          "score": 0,
+          "rubric_results": [
+            {
+              "pattern": "race:",
+              "points": 4,
+              "matched": false
+            },
+            {
+              "pattern": "block:",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "Sleep(",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "await",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.793721418589379,
+          "ttft_seconds": 0.918997,
+          "response": "```verse\nimport \"unreal/Engine/EngineTypes\"\nimport \"unreal/Engine/Engine\"\nimport \"unreal/Engine/Engine\"\n\n// Assuming 'EliminationEvent' is a custom event or signal you've defined.\n// If using a standard Actor event, replace 'EliminationEvent' with the appropriate signal.\n// For this snippet, we assume a custom signal 'OnPlayerEliminated' is available on the context.\n\nfunc WaitForEliminationOrTimeout(\n    context: Context,\n    eliminationSignal: Signal,\n    timeoutSeconds: float = 30.0\n) -> bool {\n    // Create a race between"
+        },
+        {
+          "task_id": "REG-14",
+          "category": "Game Mathematics - Quaternions",
+          "score": 4,
+          "rubric_results": [
+            {
+              "pattern": "gimbal lock",
+              "points": 4,
+              "matched": true
+            },
+            {
+              "pattern": "dot",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "Slerp",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "quaternion",
+              "points": 2,
+              "matched": false
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.808597421215088,
+          "ttft_seconds": 0.934325,
+          "response": "### Explanation of Gimbal Lock\n\n**Gimbal Lock** is a phenomenon that occurs when using Euler angles (roll, pitch, yaw) to represent 3D rotations. It happens when two of the three rotational axes become parallel, causing the loss of one degree of freedom.\n\n#### Why it happens:\nEuler angles represent rotation as a sequence of three rotations around specific axes (e.g., Z-Y-X). If the middle rotation (pitch) reaches \u00b190 degrees, the first and third axes (yaw and roll) align. At this point, rotating around either the first or third axis produces the same effect, making it impossible to distinguish between them. This results in a"
+        },
+        {
+          "task_id": "REG-15",
+          "category": "Game Mathematics - PID Controller",
+          "score": 6,
+          "rubric_results": [
+            {
+              "pattern": "error",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "integral",
+              "points": 2,
+              "matched": true
+            },
+            {
+              "pattern": "derivative",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "clamp",
+              "points": 2,
+              "matched": false
+            },
+            {
+              "pattern": "dt",
+              "points": 2,
+              "matched": true
+            }
+          ],
+          "deprecated_matches": [],
+          "tokens_generated": 140,
+          "tokens_per_second": 5.816761138484742,
+          "ttft_seconds": 0.919711,
+          "response": "```cpp\n#include <algorithm>\n\nclass PIDController {\npublic:\n    PIDController(float kp, float ki, float kd, float output_min, float output_max)\n        : kp_(kp), ki_(ki), kd_(kd),\n          output_min_(output_min), output_max_(output_max),\n          integral_(0.0f),\n          previous_error_(0.0f),\n          initialized_(false) {}\n\n    float update(float setpoint, float measurement, float dt) {\n        float error = setpoint - measurement;\n\n        if (!initialized_) {\n            previous_error_ = error;\n            initialized_ = true;"
+        }
+      ],
+      "total_score": 74,
+      "max_possible_score": 150,
+      "mean_tokens_per_sec": 5.911336788175971,
+      "mean_ttft_seconds": 0.9096398,
+      "total_deprecated_detected": 0
+    }
+  }
+}

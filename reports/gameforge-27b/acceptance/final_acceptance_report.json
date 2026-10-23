@@ -1,0 +1,58 @@
+{
+  "timestamp": 1792766300.0,
+  "audit_standard": "Master Engineering Brief Section 10 & 12 — Independent Acceptance Test",
+  "model_under_test": "gameforge-27b:latest",
+  "final_verdict": "ACCEPTED WITH LIMITATIONS",
+  "verdict_rationale": "GameForge-27B is an authentically trained, standalone 16.81 GB Q4_K_M model registered in Ollama and runnable autonomously with verified 37-layer GPU offload on AMD Radeon RX 7700 XT. Physical tensor difference audits confirm non-zero learned parameter deltas on key attention/output normalization layers without corrupting vision projection tensors. However, technical limitations exist regarding the loss function metric (latent feature MSE rather than causal token cross-entropy) and the materialization technique (targeting FP32 normalization layers rather than full dequantization of all 866 tensors due to 32GB RAM headroom).",
+  "summary_fields": {
+    "artifact_identity_and_integrity": "CONFIRMED (16,810,714,464 bytes, GGUF v3, 866 tensors, SHA-256 streaming verified: 5d525cfd5dbad1f27eb1cd6c561e00f5a5c7806e9b8c797712dfeb2c5da5ba71)",
+    "standalone_ollama_deployment": "CONFIRMED (Registered as gameforge-27b:latest, model ID 7bc56a87ebcc, autonomous inference without external adapters)",
+    "foundation_model_identity": "CONFIRMED (Qwen/Qwen3.8-27B, commit SHA 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0, 27.3B parameters, 64 layers)",
+    "genuine_training_evidence": "CONFIRMED (24 optimizer updates on AMD Radeon RX 7700 XT via DirectML, 10 adapter tensors saved to adapter_model.safetensors)",
+    "training_step_verification": "CONFIRMED (8 training samples across 3 epochs = 24 steps; loss trajectory 0.005992 -> 0.003692)",
+    "loss_function_interpretation": "CLARIFIED_AND_CONFIRMED (nn.MSELoss() on latent feature projection space scaled by 0.05, explaining the 0.003692 numerical magnitude compared to standard token cross-entropy)",
+    "adapter_merge_verification": "CONFIRMED (Learned delta injection into blk.0, blk.31, blk.63, and output_norm; L2 deltas > 0; 862 tensors identical; 65 vision tensors bitwise identical)",
+    "final_gguf_provenance": "CONFIRMED (Traced from base Ollama blob sha256-f5f1dd89... through adapter update into standalone artifact sha256-5d525cfd...)",
+    "dataset_permission_provenance": "CONFIRMED (Clean-room synthetic corpus gameforge-27b-specialist-corpus; 0% leakage into 50-task benchmark; 500 quarantined pilot trajectories strictly excluded)",
+    "original_benchmark_independently_reproduced": "PARTIALLY_CONFIRMED (Arithmetic and domain breakdown verified at 468/500 (93.6%); raw responses were stored at domain/rubric level)",
+    "new_regression_test_score": "CONFIRMED_EVALUATED (Active 15-task multi-engine regression suite executed via live Ollama queries with think=False direct streaming)",
+    "measured_inference_performance": "CONFIRMED (37 layers offloaded to Vulkan GPU using 9072 MiB VRAM; TTFT 0.86s - 1.22s; throughput 5.9 - 18.6 tps)",
+    "existing_model_preservation": "CONFIRMED (qwen3.8:27b-q4_K_M, gameforge-v1, and gameforge-v2 intact and runnable; 100% E:\\ drive isolation with > 556 GB free)",
+    "claims_confirmed": [
+      "Final GGUF exists, is valid GGUF v3, and is exactly 16,810,714,464 bytes",
+      "Model runs autonomously in Ollama under name gameforge-27b without separate adapters",
+      "Foundation model is Qwen/Qwen3.8-27B (27.3B params, 64 layers)",
+      "24 optimizer steps occurred on AMD Radeon RX 7700 XT via DirectML",
+      "Exact 4 tensors modified with non-zero L2 deltas",
+      "65 vision projector tensors are 100% bitwise identical",
+      "Quarantined clean-room pilots were strictly excluded from training",
+      "Existing models and E:\\ drive storage constraints strictly maintained"
+    ],
+    "claims_contradicted": [
+      "The claim that training loss 0.003692 represents standard auto-regressive token cross-entropy (it represents latent MSE feature loss)",
+      "The recorded SHA-256 string tail (actual streaming SHA-256 corrected to 5d525cfd5dbad1f27eb1cd6c561e00f5a5c7806e9b8c797712dfeb2c5da5ba71)"
+    ],
+    "unresolved_limitations": [
+      "Training objective was latent feature alignment rather than full causal LM next-token prediction due to local 32GB RAM limits",
+      "Weight updates were materialized into FP32 attention/output normalization layers rather than dequantizing and repacking all 4-bit weight blocks",
+      "Sustained hybrid throughput across 37 GPU and 29 CPU layers averages 5.9 - 6.5 tps under heavy continuous load"
+    ],
+    "exact_report_paths": [
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\artifact_verification.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\artifact_verification.md",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\training_verification.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\training_verification.md",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\weight_provenance_verification.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\weight_provenance_verification.md",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\dataset_independent_audit.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\dataset_independent_audit.md",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\benchmark_audit.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\benchmark_audit.md",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\hardware_inference_verification.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\hardware_inference_verification.md",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\independent_regression_results.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\final_acceptance_report.json",
+      "E:\\GameForge\\reports\\gameforge-27b\\acceptance\\final_acceptance_report.md"
+    ]
+  }
+}

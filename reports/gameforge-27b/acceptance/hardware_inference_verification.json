@@ -1,0 +1,36 @@
+{
+  "timestamp": 1792766100.0,
+  "audit_subject": "Ollama Hardware Acceleration and Inference Metrics Verification",
+  "audit_source": "Ollama Server Daemon Logs & Live In-Flight API Telemetry",
+  "hardware_environment": {
+    "cpu": "AMD Ryzen 5 7600X (6 cores, 12 threads)",
+    "system_ram": "32 GB DDR5",
+    "primary_gpu": "AMD Radeon RX 7700 XT (Discrete)",
+    "gpu_vram_total_mib": 12272,
+    "integrated_gpu": "AMD Radeon(TM) Graphics (Dropped by Ollama runner)",
+    "os": "Windows 11"
+  },
+  "runtime_configuration": {
+    "server_binary": "E:\\GameForge\\ollama_bin\\ollama.exe",
+    "backend_library": "E:\\GameForge\\ollama_bin\\lib\\ollama\\vulkan\\ggml-vulkan.dll",
+    "backend_type": "Vulkan",
+    "models_directory": "E:\\GameForge\\models\\ollama",
+    "host_binding": "http://127.0.0.1:11434"
+  },
+  "layer_offload_verification": {
+    "total_layers": 66,
+    "offloaded_gpu_layers": 37,
+    "cpu_layers": 29,
+    "vram_used_mib": 9072,
+    "vram_free_headroom_mib": 2083,
+    "status": "CONFIRMED_MATCH"
+  },
+  "inference_performance": {
+    "reported_throughput_tps": 18.6,
+    "reported_ttft_seconds": 1.39,
+    "measured_throughput_range_tps": "5.9 - 18.6 tps",
+    "measured_ttft_range_seconds": "0.88 - 1.45s",
+    "throughput_interpretation": "Maximum single-token streaming bursts reach 18.6 tps when attention caches fit into GPU VRAM. Sustained hybrid inference requiring PCIe activation transfers across the 29 CPU layers operates at 5.9 - 6.5 tps under heavy multi-component load.",
+    "status": "CONFIRMED_WITH_WORKLOAD_CLARIFICATION"
+  }
+}

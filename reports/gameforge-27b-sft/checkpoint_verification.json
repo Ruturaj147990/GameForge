@@ -1,0 +1,105 @@
+{
+  "adapter_path": "E:\\GameForge\\training\\gameforge-27b-sft\\adapter\\adapter_model.safetensors",
+  "adapter_size_bytes": 11143696,
+  "modules": {
+    "blk_0_attn_qkv": {
+      "shape": [
+        5120,
+        5120
+      ],
+      "max_abs_delta": 0.00925802,
+      "l2_norm": 5.052138,
+      "is_active": true
+    },
+    "blk_0_ffn_up": {
+      "shape": [
+        17408,
+        5120
+      ],
+      "max_abs_delta": 0.0,
+      "l2_norm": 0.0,
+      "is_active": false
+    },
+    "blk_16_attn_qkv": {
+      "shape": [
+        5120,
+        5120
+      ],
+      "max_abs_delta": 0.01615437,
+      "l2_norm": 6.820183,
+      "is_active": true
+    },
+    "blk_16_ffn_up": {
+      "shape": [
+        17408,
+        5120
+      ],
+      "max_abs_delta": 0.0,
+      "l2_norm": 0.0,
+      "is_active": false
+    },
+    "blk_31_attn_qkv": {
+      "shape": [
+        5120,
+        5120
+      ],
+      "max_abs_delta": 0.01933906,
+      "l2_norm": 7.134028,
+      "is_active": true
+    },
+    "blk_31_ffn_up": {
+      "shape": [
+        17408,
+        5120
+      ],
+      "max_abs_delta": 0.0,
+      "l2_norm": 0.0,
+      "is_active": false
+    },
+    "blk_48_attn_qkv": {
+      "shape": [
+        5120,
+        5120
+      ],
+      "max_abs_delta": 0.02003331,
+      "l2_norm": 6.437256,
+      "is_active": true
+    },
+    "blk_48_ffn_up": {
+      "shape": [
+        17408,
+        5120
+      ],
+      "max_abs_delta": 0.0,
+      "l2_norm": 0.0,
+      "is_active": false
+    },
+    "blk_63_attn_qkv": {
+      "shape": [
+        5120,
+        5120
+      ],
+      "max_abs_delta": 0.01330243,
+      "l2_norm": 5.645928,
+      "is_active": true
+    },
+    "blk_63_ffn_up": {
+      "shape": [
+        17408,
+        5120
+      ],
+      "max_abs_delta": 0.0,
+      "l2_norm": 0.0,
+      "is_active": false
+    },
+    "output_head": {
+      "shape": [
+        5120,
+        5120
+      ],
+      "max_abs_delta": 0.01330105,
+      "l2_norm": 5.81625,
+      "is_active": true
+    }
+  }
+}
