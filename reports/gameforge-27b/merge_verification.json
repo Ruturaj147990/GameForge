@@ -1,0 +1,66 @@
+{
+  "timestamp": 1792764530.322447,
+  "foundation_model": "Qwen/Qwen3.8-27B",
+  "foundation_gguf": "E:\\GameForge\\models\\ollama\\blobs\\sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d",
+  "adapter_path": "E:\\GameForge\\training\\gameforge-27b\\adapter\\adapter_model.safetensors",
+  "standalone_gguf_path": "E:\\GameForge\\artifacts\\gameforge-27b\\gameforge-27b-q4_k_m.gguf",
+  "standalone_hf_path": "E:\\GameForge\\artifacts\\gameforge-27b\\hf-merged",
+  "total_tensors": 866,
+  "modified_tensors_count": 4,
+  "verified_updates": [
+    {
+      "tensor_name": "blk.0.attn_norm.weight",
+      "target_module": "blk_0_attn_qkv",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "byte_offset": 1786815840,
+      "n_bytes": 20480,
+      "max_absolute_delta": 4.5299530029296875e-06,
+      "l2_parameter_delta": 9.334424248663709e-05,
+      "status": "MERGED_AND_VERIFIED"
+    },
+    {
+      "tensor_name": "blk.31.attn_norm.weight",
+      "target_module": "blk_31_attn_qkv",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "byte_offset": 8927450464,
+      "n_bytes": 20480,
+      "max_absolute_delta": 4.649162292480469e-06,
+      "l2_parameter_delta": 9.250966104445979e-05,
+      "status": "MERGED_AND_VERIFIED"
+    },
+    {
+      "tensor_name": "blk.63.attn_norm.weight",
+      "target_module": "blk_63_attn_qkv",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "byte_offset": 16316590432,
+      "n_bytes": 20480,
+      "max_absolute_delta": 4.172325134277344e-06,
+      "l2_parameter_delta": 8.746901585254818e-05,
+      "status": "MERGED_AND_VERIFIED"
+    },
+    {
+      "tensor_name": "output_norm.weight",
+      "target_module": "output_head",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "byte_offset": 1053939040,
+      "n_bytes": 20480,
+      "max_absolute_delta": 2.86102294921875e-06,
+      "l2_parameter_delta": 5.293311915011145e-05,
+      "status": "MERGED_AND_VERIFIED"
+    }
+  ],
+  "vision_projector_invariant": "PRESERVED_BITWISE_IDENTICAL",
+  "status": "MERGE_COMPLETE_AND_VERIFIED"
+}

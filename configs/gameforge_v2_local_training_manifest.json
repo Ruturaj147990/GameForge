@@ -1,0 +1,240 @@
+{
+  "manifest_version": "v2.0.0-local-amd",
+  "description": "GameForge V2 Local Training Manifest for AMD GPU specialist fine-tuning",
+  "created_at": "2026-10-20T15:45:00Z",
+  "source_id": "gameforge-v2-local-specialist-corpus",
+  "sample_count": 12,
+  "train_count": 6,
+  "dev_count": 6,
+  "samples": [
+    {
+      "sample_id": "GF2-LOC-001",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "unreal_gameplay_systems",
+      "title": "Unreal 5.7 Gameplay Ability System AttributeSet Replication",
+      "instruction": "Implement an Unreal Engine 5.7 C++ AttributeSet for Character Health and Stamina with network replication, clamp clamping in PreAttributeChange, and OnRep callbacks using GAMEPLAYATTRIBUTE_REPNOTIFY.",
+      "input": "",
+      "output": "// GameForge Specialist: Unreal Engine 5.7 C++ GAS AttributeSet Implementation\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"AttributeSet.h\"\n#include \"AbilitySystemComponent.h\"\n#include \"Net/UnrealNetwork.h\"\n#include \"GFCharacterAttributeSet.generated.h\"\n\n#define ATTRIBUTE_ACCESSORS(ClassName, PropertyName) \\\n    GAMEPLAYATTRIBUTE_PROPERTY_GETTER(ClassName, PropertyName) \\\n    GAMEPLAYATTRIBUTE_VALUE_GETTER(PropertyName) \\\n    GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \\\n    GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName)\n\nUCLASS()\nclass GAMEFORGE_API UGFCharacterAttributeSet : public UAttributeSet\n{\n    GENERATED_BODY()\n\npublic:\n    UGFCharacterAttributeSet();\n\n    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;\n    virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;\n    virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;\n\n    UPROPERTY(BlueprintReadOnly, Category = \"Attributes|Health\", ReplicatedUsing = OnRep_Health)\n    FGameplayAttributeData Health;\n    ATTRIBUTE_ACCESSORS(UGFCharacterAttributeSet, Health)\n\n    UPROPERTY(BlueprintReadOnly, Category = \"Attributes|Health\", ReplicatedUsing = OnRep_MaxHealth)\n    FGameplayAttributeData MaxHealth;\n    ATTRIBUTE_ACCESSORS(UGFCharacterAttributeSet, MaxHealth)\n\n    UPROPERTY(BlueprintReadOnly, Category = \"Attributes|Stamina\", ReplicatedUsing = OnRep_Stamina)\n    FGameplayAttributeData Stamina;\n    ATTRIBUTE_ACCESSORS(UGFCharacterAttributeSet, Stamina)\n\nprotected:\n    UFUNCTION()\n    virtual void OnRep_Health(const FGameplayAttributeData& OldHealth);\n\n    UFUNCTION()\n    virtual void OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth);\n\n    UFUNCTION()\n    virtual void OnRep_Stamina(const FGameplayAttributeData& OldStamina);\n};\n\n// Source Implementation\n#include \"GFCharacterAttributeSet.h\"\n#include \"GameplayEffectExtension.h\"\n\nUGFCharacterAttributeSet::UGFCharacterAttributeSet()\n    : Health(100.0f)\n    , MaxHealth(100.0f)\n    , Stamina(100.0f)\n{\n}\n\nvoid UGFCharacterAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const\n{\n    Super::GetLifetimeReplicatedProps(OutLifetimeProps);\n\n    DOREPLIFETIME_CONDITION_NOTIFY(UGFCharacterAttributeSet, Health, COND_None, REPNOTIFY_Always);\n    DOREPLIFETIME_CONDITION_NOTIFY(UGFCharacterAttributeSet, MaxHealth, COND_None, REPNOTIFY_Always);\n    DOREPLIFETIME_CONDITION_NOTIFY(UGFCharacterAttributeSet, Stamina, COND_None, REPNOTIFY_Always);\n}\n\nvoid UGFCharacterAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)\n{\n    Super::PreAttributeChange(Attribute, NewValue);\n\n    if (Attribute == GetHealthAttribute())\n    {\n        NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxHealth());\n    }\n}\n\nvoid UGFCharacterAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)\n{\n    Super::PostGameplayEffectExecute(Data);\n\n    if (Data.EvaluatedData.Attribute == GetHealthAttribute())\n    {\n        SetHealth(FMath::Clamp(GetHealth(), 0.0f, GetMaxHealth()));\n    }\n}\n\nvoid UGFCharacterAttributeSet::OnRep_Health(const FGameplayAttributeData& OldHealth)\n{\n    GAMEPLAYATTRIBUTE_REPNOTIFY(UGFCharacterAttributeSet, Health, OldHealth);\n}\n\nvoid UGFCharacterAttributeSet::OnRep_MaxHealth(const FGameplayAttributeData& OldMaxHealth)\n{\n    GAMEPLAYATTRIBUTE_REPNOTIFY(UGFCharacterAttributeSet, MaxHealth, OldMaxHealth);\n}\n\nvoid UGFCharacterAttributeSet::OnRep_Stamina(const FGameplayAttributeData& OldStamina)\n{\n    GAMEPLAYATTRIBUTE_REPNOTIFY(UGFCharacterAttributeSet, Stamina, OldStamina);\n}\n",
+      "split": "train",
+      "sha256": "ecaf28a4899da9fd56b090495503e51f97f20882b6e806fd4aea0dbd7ab5a4c3",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-002",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "unreal_gameplay_systems",
+      "title": "Unreal Engine 5.7 Enhanced Input Binding in Modular Character Component",
+      "instruction": "Write an Unreal Engine 5.7 C++ ActorComponent that sets up Enhanced Input actions (Move, Look, Jump) bound dynamically when the owning pawn possesses an input controller.",
+      "input": "",
+      "output": "// GameForge Specialist: Unreal Engine 5.7 Modular Enhanced Input Component\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"Components/ActorComponent.h\"\n#include \"EnhancedInputComponent.h\"\n#include \"EnhancedInputSubsystems.h\"\n#include \"InputActionValue.h\"\n#include \"GFEnhancedInputComponent.generated.h\"\n\nUCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))\nclass GAMEFORGE_API UGFEnhancedInputComponent : public UActorComponent\n{\n    GENERATED_BODY()\n\npublic:\n    UGFEnhancedInputComponent();\n\n    void InitializePlayerInput(UEnhancedInputComponent* PlayerInputComponent);\n\n    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = \"Input\")\n    TObjectPtr<UInputMappingContext> DefaultMappingContext;\n\n    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = \"Input\")\n    TObjectPtr<UInputAction> MoveAction;\n\n    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = \"Input\")\n    TObjectPtr<UInputAction> LookAction;\n\n    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = \"Input\")\n    TObjectPtr<UInputAction> JumpAction;\n\nprotected:\n    void HandleMove(const FInputActionValue& Value);\n    void HandleLook(const FInputActionValue& Value);\n    void HandleJump();\n    void HandleStopJumping();\n};\n\n#include \"GFEnhancedInputComponent.h\"\n#include \"GameFramework/Character.h\"\n\nUGFEnhancedInputComponent::UGFEnhancedInputComponent()\n{\n    PrimaryComponentTick.bCanEverTick = false;\n}\n\nvoid UGFEnhancedInputComponent::InitializePlayerInput(UEnhancedInputComponent* PlayerInputComponent)\n{\n    check(PlayerInputComponent);\n    ACharacter* OwningChar = Cast<ACharacter>(GetOwner());\n    if (!OwningChar) return;\n\n    if (APlayerController* PC = Cast<APlayerController>(OwningChar->GetController()))\n    {\n        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))\n        {\n            Subsystem->AddMappingContext(DefaultMappingContext, 0);\n        }\n    }\n\n    if (MoveAction)\n    {\n        PlayerInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &UGFEnhancedInputComponent::HandleMove);\n    }\n    if (LookAction)\n    {\n        PlayerInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &UGFEnhancedInputComponent::HandleLook);\n    }\n    if (JumpAction)\n    {\n        PlayerInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &UGFEnhancedInputComponent::HandleJump);\n        PlayerInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &UGFEnhancedInputComponent::HandleStopJumping);\n    }\n}\n\nvoid UGFEnhancedInputComponent::HandleMove(const FInputActionValue& Value)\n{\n    ACharacter* OwningChar = Cast<ACharacter>(GetOwner());\n    if (!OwningChar || !OwningChar->Controller) return;\n\n    const FVector2D MoveVector = Value.Get<FVector2D>();\n    const FRotator ControlRotation = OwningChar->Controller->GetControlRotation();\n    const FRotator YawRotation(0.f, ControlRotation.Yaw, 0.f);\n\n    const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);\n    const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);\n\n    OwningChar->AddMovementInput(ForwardDirection, MoveVector.Y);\n    OwningChar->AddMovementInput(RightDirection, MoveVector.X);\n}\n\nvoid UGFEnhancedInputComponent::HandleLook(const FInputActionValue& Value)\n{\n    ACharacter* OwningChar = Cast<ACharacter>(GetOwner());\n    if (!OwningChar) return;\n\n    const FVector2D LookVector = Value.Get<FVector2D>();\n    OwningChar->AddControllerYawInput(LookVector.X);\n    OwningChar->AddControllerPitchInput(LookVector.Y);\n}\n\nvoid UGFEnhancedInputComponent::HandleJump()\n{\n    if (ACharacter* OwningChar = Cast<ACharacter>(GetOwner()))\n    {\n        OwningChar->Jump();\n    }\n}\n\nvoid UGFEnhancedInputComponent::HandleStopJumping()\n{\n    if (ACharacter* OwningChar = Cast<ACharacter>(GetOwner()))\n    {\n        OwningChar->StopJumping();\n    }\n}\n",
+      "split": "dev",
+      "sha256": "6f0a3175ea805ebde157869d786098afa0f2a81e33192bbe82c650998516df5e",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-003",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "unity_gameplay_architecture",
+      "title": "Unity C# ScriptableObject Event Bus Architecture",
+      "instruction": "Create a decoupled ScriptableObject-based GameEvent and EventListener architecture in Unity C# with zero runtime memory allocations and parameter support.",
+      "input": "",
+      "output": "// GameForge Specialist: Unity ScriptableObject Event System\nusing System;\nusing System.Collections.Generic;\nusing UnityEngine;\n\n[CreateAssetMenu(fileName = \"NewGameEvent\", menuName = \"GameForge/Events/GameEvent\")]\npublic class GameEvent<T> : ScriptableObject\n{\n    private readonly List<Action<T>> _listeners = new List<Action<T>>(16);\n\n    public void RegisterListener(Action<T> listener)\n    {\n        if (listener != null && !_listeners.Contains(listener))\n        {\n            _listeners.Add(listener);\n        }\n    }\n\n    public void UnregisterListener(Action<T> listener)\n    {\n        if (listener != null)\n        {\n            _listeners.Remove(listener);\n        }\n    }\n\n    public void Raise(T value)\n    {\n        // Iterate backwards to allow listeners to unregister during callback without index corruption\n        for (int i = _listeners.Count - 1; i >= 0; i--)\n        {\n            _listeners[i]?.Invoke(value);\n        }\n    }\n}\n\n// Void GameEvent specialization for parameterless events\n[CreateAssetMenu(fileName = \"NewVoidGameEvent\", menuName = \"GameForge/Events/VoidGameEvent\")]\npublic class VoidGameEvent : ScriptableObject\n{\n    private readonly List<Action> _listeners = new List<Action>(16);\n\n    public void RegisterListener(Action listener)\n    {\n        if (listener != null && !_listeners.Contains(listener))\n        {\n            _listeners.Add(listener);\n        }\n    }\n\n    public void UnregisterListener(Action listener)\n    {\n        if (listener != null)\n        {\n            _listeners.Remove(listener);\n        }\n    }\n\n    public void Raise()\n    {\n        for (int i = _listeners.Count - 1; i >= 0; i--)\n        {\n            _listeners[i]?.Invoke();\n        }\n    }\n}\n\n// Event Listener Component\npublic class VoidEventListener : MonoBehaviour\n{\n    [SerializeField] private VoidGameEvent _gameEvent;\n    [SerializeField] private UnityEngine.Events.UnityEvent _response;\n\n    private void OnEnable()\n    {\n        if (_gameEvent != null)\n        {\n            _gameEvent.RegisterListener(OnEventRaised);\n        }\n    }\n\n    private void OnDisable()\n    {\n        if (_gameEvent != null)\n        {\n            _gameEvent.UnregisterListener(OnEventRaised);\n        }\n    }\n\n    private void OnEventRaised()\n    {\n        _response?.Invoke();\n    }\n}\n",
+      "split": "train",
+      "sha256": "a973f28e177d98f14f257774f685749b03ab11342b85c13317ba6b661b2cfb08",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-004",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "unity_gameplay_architecture",
+      "title": "Unity C# High-Performance Object Pool with Generic Factory",
+      "instruction": "Implement a thread-safe, allocation-free generic ObjectPool in Unity C# with pre-warming, max capacity bounds, and IPoolable callbacks.",
+      "input": "",
+      "output": "// GameForge Specialist: High-Performance Unity C# Object Pool\nusing System;\nusing System.Collections.Generic;\nusing UnityEngine;\n\npublic interface IPoolable\n{\n    void OnSpawnFromPool();\n    void OnReturnToPool();\n}\n\npublic class ObjectPool<T> where T : Component, IPoolable\n{\n    private readonly Stack<T> _pool;\n    private readonly Func<T> _factoryMethod;\n    private readonly Transform _parentTransform;\n    private readonly int _maxCapacity;\n\n    public int ActiveCount { get; private set; }\n    public int InactiveCount => _pool.Count;\n\n    public ObjectPool(Func<T> factoryMethod, int prewarmCount = 10, int maxCapacity = 100, Transform parent = null)\n    {\n        _factoryMethod = factoryMethod ?? throw new ArgumentNullException(nameof(factoryMethod));\n        _maxCapacity = maxCapacity;\n        _parentTransform = parent;\n        _pool = new Stack<T>(maxCapacity);\n\n        for (int i = 0; i < prewarmCount; i++)\n        {\n            T instance = CreateNewInstance();\n            instance.gameObject.SetActive(false);\n            _pool.Push(instance);\n        }\n    }\n\n    private T CreateNewInstance()\n    {\n        T item = _factoryMethod();\n        if (_parentTransform != null)\n        {\n            item.transform.SetParent(_parentTransform, false);\n        }\n        return item;\n    }\n\n    public T Get(Vector3 position, Quaternion rotation)\n    {\n        T item = _pool.Count > 0 ? _pool.Pop() : CreateNewInstance();\n        item.transform.SetPositionAndRotation(position, rotation);\n        item.gameObject.SetActive(true);\n        ActiveCount++;\n        item.OnSpawnFromPool();\n        return item;\n    }\n\n    public void Release(T item)\n    {\n        if (item == null) return;\n\n        item.OnReturnToPool();\n        item.gameObject.SetActive(false);\n        ActiveCount--;\n\n        if (_pool.Count < _maxCapacity)\n        {\n            _pool.Push(item);\n        }\n        else\n        {\n            UnityEngine.Object.Destroy(item.gameObject);\n        }\n    }\n}\n",
+      "split": "dev",
+      "sha256": "c6b965d982256ca0803b91eaf880175b64ce0d693d6b6b7fb94828d28975c8d1",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-005",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "godot_scene_architecture",
+      "title": "Godot 4.x CharacterBody3D Finite State Machine with GDScript",
+      "instruction": "Implement a hierarchical Finite State Machine (FSM) in Godot 4.x GDScript with states Idle, Move, and Jump, handling velocity, physics_process, and transitions cleanly.",
+      "input": "",
+      "output": "# GameForge Specialist: Godot 4.x Hierarchical State Machine\n# State.gd\nclass_name State extends Node\n\nvar character: CharacterBody3D\nvar state_machine: StateMachine\n\nfunc enter() -> void:\n    pass\n\nfunc exit() -> void:\n    pass\n\nfunc process_input(_event: InputEvent) -> void:\n    pass\n\nfunc process_physics(_delta: float) -> State:\n    return null\n\n# StateMachine.gd\nclass_name StateMachine extends Node\n\n@export var initial_state: State\nvar current_state: State\n\nfunc _ready() -> void:\n    var parent_character = get_parent() as CharacterBody3D\n    for child in get_children():\n        if child is State:\n            child.character = parent_character\n            child.state_machine = self\n    if initial_state:\n        transition_to(initial_state)\n\nfunc _unhandled_input(event: InputEvent) -> void:\n    if current_state:\n        current_state.process_input(event)\n\nfunc _physics_process(delta: float) -> void:\n    if current_state:\n        var next_state = current_state.process_physics(delta)\n        if next_state and next_state != current_state:\n            transition_to(next_state)\n\nfunc transition_to(target_state: State) -> void:\n    if not target_state:\n        return\n    if current_state:\n        current_state.exit()\n    current_state = target_state\n    current_state.enter()\n\n# IdleState.gd\nclass_name IdleState extends State\n\n@export var move_state: State\n@export var jump_state: State\n\nfunc process_physics(delta: float) -> State:\n    if not character.is_on_floor():\n        character.velocity.y -= ProjectSettings.get_setting(\"physics/3d/default_gravity\") * delta\n    else:\n        character.velocity.x = move_toward(character.velocity.x, 0.0, 10.0 * delta)\n        character.velocity.z = move_toward(character.velocity.z, 0.0, 10.0 * delta)\n\n    character.move_and_slide()\n\n    if Input.is_action_just_pressed(\"jump\") and character.is_on_floor():\n        return jump_state\n\n    var input_dir = Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\")\n    if input_dir.length_squared() > 0.01:\n        return move_state\n\n    return null\n",
+      "split": "train",
+      "sha256": "c7509fc56941fa11a71d30eb4ffd98b269a31d7dabf32f92e52c438ef3d29615",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-006",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "cross_engine_translation",
+      "title": "Cross-Engine Health Component Translation (Unreal C++ to Unity C# and Godot GDScript)",
+      "instruction": "Show how to translate an authoritative Health Component with damage application, death events, and healing clamping between Unreal C++, Unity C#, and Godot 4 GDScript while preserving identical contract semantics.",
+      "input": "",
+      "output": "// GameForge Specialist: Semantic Cross-Engine Component Translation\n\n// 1. Unreal Engine 5.7 C++\nUCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))\nclass GAMEFORGE_API UHealthComponent : public UActorComponent\n{\n    GENERATED_BODY()\npublic:\n    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthChanged, float, NewHealth);\n    DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDeath);\n\n    UPROPERTY(BlueprintAssignable) FOnHealthChanged OnHealthChanged;\n    UPROPERTY(BlueprintAssignable) FOnDeath OnDeath;\n\n    UFUNCTION(BlueprintCallable)\n    void ApplyDamage(float Amount)\n    {\n        if (bIsDead || Amount <= 0.0f) return;\n        CurrentHealth = FMath::Clamp(CurrentHealth - Amount, 0.0f, MaxHealth);\n        OnHealthChanged.Broadcast(CurrentHealth);\n        if (CurrentHealth <= 0.0f) { bIsDead = true; OnDeath.Broadcast(); }\n    }\n\nprivate:\n    float CurrentHealth = 100.0f;\n    float MaxHealth = 100.0f;\n    bool bIsDead = false;\n};\n\n// 2. Unity C# Equivalent\npublic class HealthComponent : MonoBehaviour\n{\n    public event Action<float> OnHealthChanged;\n    public event Action OnDeath;\n\n    [SerializeField] private float maxHealth = 100f;\n    private float currentHealth;\n    private bool isDead;\n\n    private void Awake() { currentHealth = maxHealth; }\n\n    public void ApplyDamage(float amount)\n    {\n        if (isDead || amount <= 0f) return;\n        currentHealth = Mathf.Clamp(currentHealth - amount, 0f, maxHealth);\n        OnHealthChanged?.Invoke(currentHealth);\n        if (currentHealth <= 0f) { isDead = true; OnDeath?.Invoke(); }\n    }\n}\n\n# 3. Godot 4 GDScript Equivalent\nclass_name HealthComponent extends Node\n\nsignal health_changed(new_health: float)\nsignal died()\n\n@export var max_health: float = 100.0\nvar current_health: float = 100.0\nvar is_dead: bool = false\n\nfunc _ready() -> void:\n    current_health = max_health\n\nfunc apply_damage(amount: float) -> void:\n    if is_dead or amount <= 0.0:\n        return\n    current_health = clampf(current_health - amount, 0.0, max_health)\n    health_changed.emit(current_health)\n    if current_health <= 0.0:\n        is_dead = true\n        died.emit()\n",
+      "split": "dev",
+      "sha256": "ae96e0ea782ccdb48cc892ef7a2c9f4f69064652f992a9cbe9b6eff081199dfb",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-007",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "multiplayer_networking",
+      "title": "Server-Authoritative Movement Replication with Client Prediction in Unreal Engine C++",
+      "instruction": "Explain and implement server-authoritative projectile launching with client-side visual prediction and server confirmation RPCs in Unreal Engine C++.",
+      "input": "",
+      "output": "// GameForge Specialist: Unreal Engine Network RPCs & Prediction\n#pragma once\n\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"GFWeaponCharacter.generated.h\"\n\nUCLASS()\nclass GAMEFORGE_API AGFWeaponCharacter : public ACharacter\n{\n    GENERATED_BODY()\n\npublic:\n    void FireWeapon();\n\nprotected:\n    UFUNCTION(Server, Reliable, WithValidation)\n    void Server_FireWeapon(FVector FireLocation, FVector FireDirection);\n\n    UFUNCTION(NetMulticast, Unreliable)\n    void Multicast_SpawnMuzzleFX(FVector Location);\n\n    void SpawnProjectileLocalPrediction(const FVector& Location, const FVector& Direction);\n};\n\n// Source Implementation\n#include \"GFWeaponCharacter.h\"\n\nvoid AGFWeaponCharacter::FireWeapon()\n{\n    FVector StartLoc = GetActorLocation() + GetActorForwardVector() * 50.f;\n    FVector Direction = GetControlRotation().Vector();\n\n    // 1. Client prediction: Immediately trigger local cosmetic feedback\n    if (IsLocallyControlled())\n    {\n        SpawnProjectileLocalPrediction(StartLoc, Direction);\n    }\n\n    // 2. Server RPC: Authoritative verification\n    Server_FireWeapon(StartLoc, Direction);\n}\n\nbool AGFWeaponCharacter::Server_FireWeapon_Validate(FVector FireLocation, FVector FireDirection)\n{\n    // Anti-cheat verification: Verify location is within tolerance of character position\n    float DistanceSq = FVector::DistSquared(FireLocation, GetActorLocation());\n    return DistanceSq < 25000.0f; // Max tolerance 150 units\n}\n\nvoid AGFWeaponCharacter::Server_FireWeapon_Implementation(FVector FireLocation, FVector FireDirection)\n{\n    // Authoritative projectile spawn on server\n    FActorSpawnParameters SpawnParams;\n    SpawnParams.Owner = this;\n    SpawnParams.Instigator = this;\n\n    // Spawn authoritative damage-dealing projectile\n    // Notify clients for cosmetic particle effects\n    Multicast_SpawnMuzzleFX(FireLocation);\n}\n\nvoid AGFWeaponCharacter::Multicast_SpawnMuzzleFX_Implementation(FVector Location)\n{\n    // Don't duplicate for locally controlled client if already predicted\n    if (!IsLocallyControlled())\n    {\n        // Play Niagara system at Location\n    }\n}\n\nvoid AGFWeaponCharacter::SpawnProjectileLocalPrediction(const FVector& Location, const FVector& Direction)\n{\n    // Spawn cosmetic-only client projectile\n}\n",
+      "split": "train",
+      "sha256": "410f79c5aeae44f28ff3b0fb400037e4257444aeb85956adcaee4b5f227d307c",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-008",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "performance_optimization",
+      "title": "High-Performance 2D/3D Spatial Hash Grid for Proximity Queries",
+      "instruction": "Implement a cache-friendly 2D Spatial Hash Grid in C# / C++ that provides O(1) entity insertion, removal, and range queries without heap allocations during game loop execution.",
+      "input": "",
+      "output": "// GameForge Specialist: Zero-Allocation Spatial Hash Grid\n#include <vector>\n#include <unordered_map>\n#include <cmath>\n#include <cstdint>\n\nstruct SpatialEntity\n{\n    uint32_t ID;\n    float X, Y;\n};\n\nclass SpatialHashGrid\n{\npublic:\n    explicit SpatialHashGrid(float InCellSize, size_t ExpectedEntities = 1024)\n        : CellSize(InCellSize)\n    {\n        EntityBuffer.reserve(ExpectedEntities);\n    }\n\n    void Insert(uint32_t ID, float X, float Y)\n    {\n        int64_t Key = ComputeHash(X, Y);\n        BucketMap[Key].push_back(ID);\n        EntityBuffer.push_back({ID, X, Y});\n    }\n\n    void QueryRange(float X, float Y, float Radius, std::vector<uint32_t>& OutResults) const\n    {\n        OutResults.clear();\n        int32_t MinX = static_cast<int32_t>(std::floor((X - Radius) / CellSize));\n        int32_t MaxX = static_cast<int32_t>(std::floor((X + Radius) / CellSize));\n        int32_t MinY = static_cast<int32_t>(std::floor((Y - Radius) / CellSize));\n        int32_t MaxY = static_cast<int32_t>(std::floor((Y + Radius) / CellSize));\n\n        float RadiusSq = Radius * Radius;\n\n        for (int32_t cx = MinX; cx <= MaxX; ++cx)\n        {\n            for (int32_t cy = MinY; cy <= MaxY; ++cy)\n            {\n                int64_t Key = (static_cast<int64_t>(cx) << 32) ^ static_cast<int64_t>(cy);\n                auto it = BucketMap.find(Key);\n                if (it != BucketMap.end())\n                {\n                    for (uint32_t ID : it->second)\n                    {\n                        const SpatialEntity& E = EntityBuffer[ID];\n                        float DX = E.X - X;\n                        float DY = E.Y - Y;\n                        if (DX * DX + DY * DY <= RadiusSq)\n                        {\n                            OutResults.push_back(ID);\n                        }\n                    }\n                }\n            }\n        }\n    }\n\n    void Clear()\n    {\n        BucketMap.clear();\n        EntityBuffer.clear();\n    }\n\nprivate:\n    float CellSize;\n    std::unordered_map<int64_t, std::vector<uint32_t>> BucketMap;\n    std::vector<SpatialEntity> EntityBuffer;\n\n    int64_t ComputeHash(float X, float Y) const\n    {\n        int32_t CX = static_cast<int32_t>(std::floor(X / CellSize));\n        int32_t CY = static_cast<int32_t>(std::floor(Y / CellSize));\n        return (static_cast<int64_t>(CX) << 32) ^ static_cast<int64_t>(CY);\n    }\n};\n",
+      "split": "dev",
+      "sha256": "77cad24a030f39f99d2fb6981f52de520cc28bd9ad8ab73dd88c641a07903f3d",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-009",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "game_math_and_physics",
+      "title": "Ballistic Arc Trajectory and Interception Math",
+      "instruction": "Derive and implement the mathematical equation in C++ to calculate the launch angle needed to hit a target position (target_x, target_y) with fixed muzzle velocity v under gravity g.",
+      "input": "",
+      "output": "// GameForge Specialist: Ballistic Trajectory Closed-Form Solver\n#include <cmath>\n#include <optional>\n#include <utility>\n\nstruct BallisticSolution\n{\n    float LowAngleRad;   // Direct fire trajectory\n    float HighAngleRad;  // Mortar / lob trajectory\n};\n\n// Solves standard projectile motion:\n// y = x * tan(theta) - (g * x^2) / (2 * v^2 * cos^2(theta))\n// Substituting 1/cos^2(theta) = 1 + tan^2(theta) gives a quadratic in tan(theta).\nstd::optional<BallisticSolution> SolveBallisticArc(float DistanceX, float TargetHeightY, float Velocity, float Gravity)\n{\n    if (DistanceX <= 0.0f || Velocity <= 0.0f || Gravity <= 0.0f)\n    {\n        return std::nullopt;\n    }\n\n    float V2 = Velocity * Velocity;\n    float V4 = V2 * V2;\n    float Discriminant = V4 - Gravity * (Gravity * DistanceX * DistanceX + 2.0f * TargetHeightY * V2);\n\n    // Target is out of physical range\n    if (Discriminant < 0.0f)\n    {\n        return std::nullopt;\n    }\n\n    float Root = std::sqrt(Discriminant);\n    float TanThetaLow = (V2 - Root) / (Gravity * DistanceX);\n    float TanThetaHigh = (V2 + Root) / (Gravity * DistanceX);\n\n    BallisticSolution Sol;\n    Sol.LowAngleRad = std::atan(TanThetaLow);\n    Sol.HighAngleRad = std::atan(TanThetaHigh);\n    return Sol;\n}\n",
+      "split": "train",
+      "sha256": "2c3aaf6685f09bdd3cc321864a124b15a9908e2bbdee98a6e5975f83ea20e95c",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-010",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "roblox_luau_architecture",
+      "title": "Roblox Luau Strict Type-Checked Client-Server Network Service",
+      "instruction": "Write a Roblox Luau strict-mode network controller and service using RemoteFunctions and RemoteEvents with parameter validation and rate limiting.",
+      "input": "",
+      "output": "--!strict\n-- GameForge Specialist: Roblox Luau Strict Network Service Architecture\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nexport type TransactionRequest = {\n    ItemId: string,\n    Quantity: number,\n}\n\nexport type TransactionResult = {\n    Success: boolean,\n    RemainingCoins: number,\n    ErrorMessage: string?,\n}\n\nlocal ShopService = {}\nShopService.__index = ShopService\n\nlocal RateLimits: { [Player]: number } = {}\nlocal RATE_LIMIT_COOLDOWN = 0.5 -- Seconds\n\nlocal PurchaseRemote: RemoteFunction = Instance.new(\"RemoteFunction\")\nPurchaseRemote.Name = \"PurchaseItemRemote\"\nPurchaseRemote.Parent = ReplicatedStorage\n\nfunction ShopService.ProcessPurchase(player: Player, request: TransactionRequest): TransactionResult\n    local now = os.clock()\n    local lastRequest = RateLimits[player] or 0\n    if (now - lastRequest) < RATE_LIMIT_COOLDOWN then\n        return {\n            Success = false,\n            RemainingCoins = 0,\n            ErrorMessage = \"Rate limit exceeded. Please slow down.\",\n        }\n    end\n    RateLimits[player] = now\n\n    -- Validate input types and values\n    if type(request.ItemId) ~= \"string\" or type(request.Quantity) ~= \"number\" then\n        return {\n            Success = false,\n            RemainingCoins = 0,\n            ErrorMessage = \"Malformed transaction payload.\",\n        }\n    end\n\n    if request.Quantity <= 0 or request.Quantity > 99 then\n        return {\n            Success = false,\n            RemainingCoins = 0,\n            ErrorMessage = \"Invalid quantity specified.\",\n        }\n    end\n\n    -- Process transaction authoritatively\n    return {\n        Success = true,\n        RemainingCoins = 150,\n        ErrorMessage = nil,\n    }\nend\n\nPurchaseRemote.OnServerInvoke = ShopService.ProcessPurchase\n\nPlayers.PlayerRemoving:Connect(function(player: Player)\n    RateLimits[player] = nil\nend)\n\nreturn ShopService\n",
+      "split": "dev",
+      "sha256": "1475efa0b2fd02f881f086e09cb4e36074541818f91f396646fc8125d1af6478",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-011",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "uefn_verse_systems",
+      "title": "UEFN Verse Concurrency (sync / race / spawn) for Game Round Manager",
+      "instruction": "Implement a UEFN Verse round manager device with countdown timer, player elimination listeners, and concurrent race conditions for victory triggers.",
+      "input": "",
+      "output": "# GameForge Specialist: UEFN Verse Round Manager with Concurrency\nusing { /Fortnite.com/Devices }\nusing { /Verse.org/Simulation }\nusing { /UnrealEngine.com/Temporary/Diagnostics }\n\nround_manager_device := class(creative_device):\n    @editable CountdownBillboard: billboard_device = billboard_device{}\n    @editable CaptureZone: capture_area_device = capture_area_device{}\n    @editable RoundDurationSeconds: int = 120\n\n    var IsRoundActive: logic = false\n\n    OnBegin<override>()<suspends>:void =\n        StartRoundFlow()\n\n    StartRoundFlow()<suspends>:void =\n        set IsRoundActive = true\n        # Run race condition: Round ends when timer expires OR capture zone captured\n        race:\n            RunRoundTimer()\n            AwaitCaptureCondition()\n        EndRound()\n\n    RunRoundTimer()<suspends>:void =\n        var RemainingTime: int = RoundDurationSeconds\n        loop:\n            if (RemainingTime <= 0):\n                break\n            Sleep(1.0)\n            set RemainingTime -= 1\n\n    AwaitCaptureCondition()<suspends>:void =\n        CaptureZone.ItemCapturedEvent.Await()\n\n    EndRound():void =\n        set IsRoundActive = false\n",
+      "split": "train",
+      "sha256": "90bda823dbe9b71c0cdc47e497bfac01794c3470474d142015357870c6e09d8e",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    },
+    {
+      "sample_id": "GF2-LOC-012",
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "category": "bevy_rust_ecs",
+      "title": "Bevy Engine Rust ECS System Scheduling and Change Detection",
+      "instruction": "Write an idiomatic Bevy Engine (Rust) ECS system implementing health regeneration, velocity decay, and change detection with clean Query filters.",
+      "input": "",
+      "output": "// GameForge Specialist: Bevy Engine Rust ECS Architecture\nuse bevy::prelude::*;\n\n#[derive(Component)]\npub struct Health {\n    pub current: f32,\n    pub max: f32,\n    pub regen_rate: f32,\n}\n\n#[derive(Component)]\npub struct Velocity(pub Vec3);\n\n#[derive(Component)]\npub struct Friction(pub f32);\n\npub fn health_regen_system(\n    time: Res<Time>,\n    mut query: Query<&mut Health>,\n) {\n    let dt = time.delta_secs();\n    for mut health in &mut query {\n        if health.current < health.max {\n            health.current = (health.current + health.regen_rate * dt).min(health.max);\n        }\n    }\n}\n\npub fn velocity_damping_system(\n    time: Res<Time>,\n    mut query: Query<(&mut Velocity, &Friction)>,\n) {\n    let dt = time.delta_secs();\n    for (mut velocity, friction) in &mut query {\n        let damping = (-friction.0 * dt).exp();\n        velocity.0 *= damping;\n    }\n}\n\n// System running only when Health component changes\npub fn health_change_logger_system(\n    query: Query<(Entity, &Health), Changed<Health>>,\n) {\n    for (entity, health) in &query {\n        info!(\"Entity {:?} health modified: {:.1}/{:.1}\", entity, health.current, health.max);\n    }\n}\n",
+      "split": "dev",
+      "sha256": "8658b79175f45737a68dc26c13bcdc25f41166bafeecf31aa7401d71a2a6d908",
+      "provenance": {
+        "author": "Product Owner / GameForge Local Engineering",
+        "creation_method": "independently_authored_expert_spec",
+        "creation_date": "2026-10-20",
+        "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+        "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+        "review_status": "CONFIRMED_FOR_TRAINING"
+      }
+    }
+  ],
+  "manifest_sha256": "8e84a3ab3625285797a06ef517d693fcb5b751289366917be982c12ec456f587"
+}

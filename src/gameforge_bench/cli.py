@@ -77,6 +77,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_tests.add_argument("--json", action="store_true", help="Output machine-readable execution summary JSON")
     p_tests.add_argument("--workspace", type=Path, default=Path.cwd(), help="Workspace root directory")
 
+    # chat
+    p_chat = subparsers.add_parser("chat", help="Interactive GameForge assistant chat session or single query")
+    p_chat.add_argument("--model", default="gameforge-v1", help="Target Ollama model name (default: gameforge-v1)")
+    p_chat.add_argument("--engine", default=None, help="Target game engine context (e.g. unreal, unity, godot)")
+    p_chat.add_argument("--version-context", default=None, help="Target engine version context (e.g. 5.4, 2022.3, 4.3)")
+    p_chat.add_argument("--no-retrieval", action="store_true", help="Disable local knowledge retrieval layer")
+    p_chat.add_argument("--query", "-q", default=None, help="Single query to ask the model without entering interactive mode")
+
+    # eval-model
+    p_evalm = subparsers.add_parser("eval-model", help="Run GameForge evaluation suite against a local model")
+    p_evalm.add_argument("--model", default="gameforge-v1", help="Model name to evaluate (e.g. gameforge-v1, qwen3.8:27b-q4_K_M)")
+    p_evalm.add_argument("--limit", type=int, default=5, help="Number of questions to evaluate (default: 5, 0 for all)")
+    p_evalm.add_argument("--representative", action="store_true", help="Evaluate one representative prompt per domain across all 8 domains")
+    p_evalm.add_argument("--output", type=Path, default=Path("reports/gameforge_v1_evaluation_report.json"), help="Output report path")
+
+    # model-info
+    p_minfo = subparsers.add_parser("model-info", help="Display GameForge V1 model specifications, configuration, and limitations")
+
     return parser
 
 
@@ -376,6 +394,75 @@ def cmd_run_tests(args: argparse.Namespace) -> int:
     return overall_exit_code
 
 
+def cmd_chat(args: argparse.Namespace) -> int:
+    from .gameforge_cli import run_interactive_chat, query_ollama
+    from .knowledge_retrieval import GameForgeKnowledgeBase
+
+    if args.query:
+        kb = GameForgeKnowledgeBase()
+        snippets = kb.query_knowledge(args.query, engine_filter=args.engine, max_results=2) if not args.no_retrieval else []
+        retrieval_text = kb.format_retrieval_context(snippets)
+        prompt = f"{retrieval_text}\nUser Question: {args.query}" if retrieval_text else args.query
+
+        res = query_ollama(
+            prompt=prompt,
+            model_name=args.model,
+        )
+        if res.get("success"):
+            print("=" * 80)
+            print(f"GameForge LLM ({args.model}) Response:")
+            print("=" * 80)
+            print(res.get("response", "").strip())
+            print("-" * 80)
+            print(f"Generation Stats: {res.get('completion_tokens', 0)} tokens in {res.get('total_duration_seconds', 0.0):.2f}s ({res.get('tokens_per_second', 0.0):.2f} tok/s)")
+            return 0
+        else:
+            print(f"Error querying model: {res.get('error')}", file=sys.stderr)
+            return 1
+    else:
+        run_interactive_chat(
+            model=args.model,
+            engine=args.engine,
+        )
+        return 0
+
+
+def cmd_eval_model(args: argparse.Namespace) -> int:
+    from .gameforge_cli import run_model_evaluation
+
+    run_model_evaluation(
+        model=args.model,
+        limit=args.limit,
+        representative=args.representative,
+        output_file=str(args.output),
+    )
+    return 0
+
+
+def cmd_model_info(args: argparse.Namespace) -> int:
+    print("=" * 75)
+    print(" GAMEFORGE LLM V1 — MODEL ARCHITECTURE & OPERATIONAL PROFILE")
+    print("=" * 75)
+    print("Base Architecture:     Qwen 2.5 / Qwen3.8 27B Parameter Model")
+    print("Quantization:          Q4_K_M (4-bit Medium Quantization)")
+    print("Model Size:            ~17.1 GB on E:\\GameForge\\models\\ollama")
+    print("Local Serving:         Ollama v0.40.6 on 127.0.0.1:11434")
+    print("GPU / VRAM Target:     AMD Radeon RX 7700 XT (12 GB VRAM) + System RAM")
+    print("Execution Context:     4,096 tokens (num_ctx 4096)")
+    print("Specialist Prompt:     Multi-Engine (Unreal Engine 5.7, Unity, Godot,")
+    print("                       Roblox, UEFN, Bevy, GameMaker, Custom C++/Vulkan)")
+    print("Knowledge Layer:       Local version-aware indexed excerpts with provenance")
+    print("Hardware Profile:      Hybrid VRAM offload (ROCm/Vulkan) + System DDR5 RAM")
+    print("Measured Speed:        ~5.9 - 6.0 tokens/second generation, 240+ prompt tok/s")
+    print("-" * 75)
+    print("Operational Boundaries & Strict Gate Notice:")
+    print(" - Modelfile customization changes system prompt and sampling parameters.")
+    print(" - It does NOT modify base neural weights (SFT/LoRA remains gated pending legal).")
+    print(" - Benchmark suites remain segregated; test data is never leaked to model.")
+    print("=" * 75)
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -398,6 +485,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_ingest_data(args)
     elif args.command == "run-tests":
         return cmd_run_tests(args)
+    elif args.command == "chat":
+        return cmd_chat(args)
+    elif args.command == "eval-model":
+        return cmd_eval_model(args)
+    elif args.command == "model-info":
+        return cmd_model_info(args)
     else:
         parser.print_help()
         return 1

@@ -55,33 +55,210 @@ class ModelResponse:
     raw_telemetry: Dict[str, Any] = field(default_factory=dict)
 
 
+def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, Optional[str]]:
+    """Applies a unified diff to original text cleanly.
+    
+    Returns (success, result_text, error_message).
+    """
+    orig_lines = original_text.splitlines(keepends=True)
+    diff_lines = diff_text.splitlines(keepends=True)
+    
+    hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+    
+    out_lines: List[str] = []
+    orig_idx = 0
+    i = 0
+    n = len(diff_lines)
+    
+    # Skip diff file headers (--- / +++)
+    while i < n and (diff_lines[i].startswith("---") or diff_lines[i].startswith("+++")):
+        i += 1
+        
+    while i < n:
+        line = diff_lines[i]
+        match = hunk_header_re.match(line)
+        if not match:
+            # If not a hunk header, skip comments or unexpected lines
+            i += 1
+            continue
+            
+        orig_start = int(match.group(1)) - 1  # 1-indexed to 0-indexed
+        orig_count = int(match.group(2)) if match.group(2) is not None else 1
+        i += 1
+        
+        # Advance original lines up to hunk start
+        while orig_idx < orig_start and orig_idx < len(orig_lines):
+            out_lines.append(orig_lines[orig_idx])
+            orig_idx += 1
+            
+        while i < n and not diff_lines[i].startswith("@@"):
+            hline = diff_lines[i]
+            prefix = hline[0] if len(hline) > 0 else ""
+            content = hline[1:] if len(hline) > 0 else ""
+            
+            if prefix == " ":
+                # Context line: must match original
+                if orig_idx < len(orig_lines):
+                    if orig_lines[orig_idx].rstrip("\r\n") != content.rstrip("\r\n"):
+                        return False, original_text, f"Diff context mismatch: expected {content.strip()!r}, got {orig_lines[orig_idx].strip()!r}"
+                    out_lines.append(orig_lines[orig_idx])
+                    orig_idx += 1
+                else:
+                    return False, original_text, "Diff context line exceeds original file length"
+            elif prefix == "-":
+                # Deletion line: advance original index
+                if orig_idx < len(orig_lines):
+                    if orig_lines[orig_idx].rstrip("\r\n") != content.rstrip("\r\n"):
+                        return False, original_text, f"Diff deletion mismatch: expected {content.strip()!r}, got {orig_lines[orig_idx].strip()!r}"
+                    orig_idx += 1
+                else:
+                    return False, original_text, "Diff deletion line exceeds original file length"
+            elif prefix == "+":
+                # Addition line: append to output
+                out_lines.append(content)
+            elif prefix == "\\":
+                # '\ No newline at end of file'
+                pass
+            i += 1
+            
+    # Append any remaining original lines
+    while orig_idx < len(orig_lines):
+        out_lines.append(orig_lines[orig_idx])
+        orig_idx += 1
+        
+    return True, "".join(out_lines), None
+
+
 def extract_code_blocks(text: str, allowed_paths: Optional[List[str]] = None) -> Dict[str, str]:
-    """Extracts code blocks from model response mapped to target file paths."""
+    """Extracts code blocks and unified diffs from model response mapped to target file paths."""
     patches: Dict[str, str] = {}
     
-    # Pattern 1: Explicit file path annotation like "### File: Source/GameForgePilot/..." or "**File:** `path`"
+    # Pattern 1: Explicit file path annotation
+    # Matches:
+    # "### File: Source/GameForgePilot/..."
+    # "**File:** `path`"
+    # "// File: path"
+    # "### `path`"
+    # "File: `path`"
     file_header_pattern = re.compile(
-        r"(?:###|//|#|\*\*)\s*(?:File|Path|Target):\s*`?([a-zA-Z0-9_\-\./\\]+)`?\s*(?:\*\*)?\s*\n```(?:[a-zA-Z0-9_+\-]+)?\n(.*?)```",
+        r"(?:###|//|#|\*)+\s*(?:File|Path|Target)?[:\*]*\s*`?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9_]+)`?[:\*]*"
+        r"(?:[^\n`]*\n){1,4}\s*```(?:[a-zA-Z0-9_+\-]+)?\r?\n(.*?)```",
         re.DOTALL | re.IGNORECASE,
     )
     for match in file_header_pattern.finditer(text):
-        path_str = match.group(1).strip().replace("\\", "/")
+        path_str = match.group(1).strip().replace("\\", "/").lstrip("/")
         content = match.group(2)
         patches[path_str] = content
 
+    # Pattern 1b: Header immediately adjacent: "### File: path\n```cpp\n..."
+    if not patches:
+        tight_pattern = re.compile(
+            r"(?:###|//|#|\*)+\s*(?:File|Path|Target)?[:\*]*\s*`?([a-zA-Z0-9_\-\./\\]+)`?[:\*]*\s*\r?\n```(?:[a-zA-Z0-9_+\-]+)?\r?\n(.*?)```",
+            re.DOTALL | re.IGNORECASE,
+        )
+        for match in tight_pattern.finditer(text):
+            path_str = match.group(1).strip().replace("\\", "/").lstrip("/")
+            content = match.group(2)
+            patches[path_str] = content
+
+    # Pattern 1c: Diff block with diff headers "--- a/path\n+++ b/path"
+    if not patches:
+        diff_pattern = re.compile(
+            r"```(?:diff|patch)?\r?\n---\s+[ab]?/?([^\n\r]+)\r?\n\+\+\+\s+[ab]?/?([^\n\r]+)\r?\n(.*?)```",
+            re.DOTALL | re.IGNORECASE,
+        )
+        for match in diff_pattern.finditer(text):
+            path_str = match.group(2).strip().replace("\\", "/").lstrip("/")
+            content = match.group(0)[len("```diff\n"):-len("```")] if match.group(0).startswith("```") else match.group(3)
+            patches[path_str] = content
+
     # Pattern 2: Generic code blocks if no explicit file annotations matched
     if not patches:
-        generic_pattern = re.compile(r"```(?:cpp|c\+\+|csharp|cs|yaml|json)?\n(.*?)```", re.DOTALL | re.IGNORECASE)
+        generic_pattern = re.compile(r"```(?:cpp|c\+\+|csharp|cs|yaml|json)?\r?\n(.*?)```", re.DOTALL | re.IGNORECASE)
         matches = generic_pattern.findall(text)
         if matches and allowed_paths:
-            # Map primary code block to first allowed edit path if it looks like a path
+            # Map primary code block to first allowed edit path that has a file extension
             for ap in allowed_paths:
-                clean_ap = ap.strip().replace("\\", "/")
-                if "/" in clean_ap or clean_ap.endswith((".cpp", ".h", ".cs", ".yaml", ".json")):
+                clean_ap = ap.strip().replace("\\", "/").lstrip("/")
+                if clean_ap.endswith((".cpp", ".h", ".cs", ".yaml", ".json")):
                     patches[clean_ap] = matches[0]
                     break
 
     return patches
+
+
+def validate_patch_target(
+    rel_path: str,
+    allowed_paths: List[str],
+    forbidden_edits: List[str],
+    base_dir: Path,
+) -> Tuple[bool, Optional[str], Optional[Path]]:
+    """Validates that candidate patch target conforms strictly to path allowlists and security policies."""
+    norm_rel = rel_path.replace("\\", "/").strip().lstrip("/")
+    
+    # 1. Path traversal security check
+    if ".." in Path(norm_rel).parts or norm_rel.startswith("../"):
+        return False, f"SECURITY REJECTION: Path traversal attempt detected ({rel_path})", None
+
+    # 2. Protected test / benchmark oracle check
+    lower_norm = norm_rel.lower()
+    protected_fragments = [
+        "graders/protected", "graders/reference_solutions", "acceptance_criteria",
+        "hidden_tests", ".git", "eval_manifest.json", "model_register.json",
+        "benchmark_tasks", "probes/protectedgrader"
+    ]
+    if any(p in lower_norm for p in protected_fragments):
+        return False, f"SECURITY REJECTION: Modification of protected benchmark file forbidden ({rel_path})", None
+
+    # 3. Explicit task forbidden edits check
+    for fb in forbidden_edits:
+        fb_clean = fb.lower().strip()
+        if fb_clean and (fb_clean in lower_norm or any(part == fb_clean for part in lower_norm.split("/"))):
+            return False, f"POLICY REJECTION: Path violates forbidden edits ({fb}): {rel_path}", None
+
+    # 4. Resolve path against base directory
+    direct_target = (base_dir / norm_rel).resolve()
+    try:
+        direct_target.relative_to(base_dir.resolve())
+    except ValueError:
+        return False, f"SECURITY REJECTION: Resolved path escapes workspace ({direct_target})", None
+
+    # If direct file does not exist, search for existing project file with matching basename
+    resolved_target = direct_target
+    if not direct_target.is_file():
+        filename = Path(norm_rel).name
+        candidates = list(base_dir.glob(f"**/{filename}"))
+        # Prefer Source/ or Content/ subtrees
+        src_cands = [c for c in candidates if "source" in str(c).lower() and not any(p in c.parts for p in ["Binaries", "Intermediate", "Saved", ".vs"])]
+        if src_cands:
+            resolved_target = src_cands[0]
+        elif candidates:
+            valid_cands = [c for c in candidates if not any(p in c.parts for p in ["Binaries", "Intermediate", "Saved", ".vs"])]
+            if valid_cands:
+                resolved_target = valid_cands[0]
+
+    # 5. Check task allowed_edit_paths
+    rel_to_base = resolved_target.relative_to(base_dir).as_posix()
+    is_allowed = False
+    for ap in allowed_paths:
+        norm_ap = ap.replace("\\", "/").rstrip("/")
+        if norm_rel.startswith(norm_ap) or rel_to_base.startswith(norm_ap) or norm_rel.endswith(norm_ap) or rel_to_base.endswith(norm_ap):
+            is_allowed = True
+            break
+        # Semantic keyword allowlists (only if norm_ap is a general category, not a specific source file)
+        is_concrete_file = any(norm_ap.endswith(ext) for ext in [".cpp", ".h", ".cs", ".uasset", ".json", ".yaml"])
+        if not is_concrete_file:
+            if "source" in norm_ap.lower() and ("source/" in rel_to_base.lower() or rel_to_base.lower().endswith((".cpp", ".h", ".cs"))):
+                is_allowed = True
+                break
+            if "content" in norm_ap.lower() and ("content/" in rel_to_base.lower() or rel_to_base.lower().endswith((".uasset", ".json"))):
+                is_allowed = True
+                break
+
+    if not is_allowed:
+        return False, f"POLICY REJECTION: Target path not within task allowed edit paths: {rel_path}", None
+
+    return True, None, resolved_target
 
 
 def invoke_candidate(
@@ -269,45 +446,72 @@ def run_attempt(
                 shutil.copy2(item, dest)
 
     # 4. Apply extracted candidate patches
-    if model_response.success and model_response.code_patches:
-        for rel_path, code in model_response.code_patches.items():
-            # Check policy: is rel_path within allowed_edit_paths or source tree?
-            norm_rel = rel_path.replace("\\", "/").lstrip("/")
-            allowed = False
-            for ap in task_spec.allowed_edit_paths:
-                norm_ap = ap.replace("\\", "/").rstrip("/")
-                if norm_rel.startswith(norm_ap) or norm_rel.endswith(norm_ap.split("/")[-1]):
-                    allowed = True
-                    break
-                elif "source" in norm_ap.lower() and ("source/" in norm_rel.lower() or norm_rel.lower().endswith((".cpp", ".h", ".cs"))):
-                    allowed = True
-                    break
-                elif "content" in norm_ap.lower() and ("content/" in norm_rel.lower() or norm_rel.lower().endswith((".uasset", ".json"))):
-                    allowed = True
-                    break
-            
-            target_path = attempt_candidate_dir / norm_rel
-            old_content = ""
-            if target_path.is_file():
-                old_content = target_path.read_text(encoding="utf-8", errors="replace")
+    patches_to_apply = dict(model_response.code_patches)
+    if not patches_to_apply and model_response.raw_output:
+        patches_to_apply = extract_code_blocks(model_response.raw_output, task_spec.allowed_edit_paths)
 
-            if allowed:
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                target_path.write_text(code, encoding="utf-8")
-                patch_success = True
-                
-                # Compute unified diff
-                diff_lines = list(difflib.unified_diff(
-                    old_content.splitlines(keepends=True),
-                    code.splitlines(keepends=True),
-                    fromfile=f"a/{norm_rel}",
-                    tofile=f"b/{norm_rel}",
-                ))
-                diffs[norm_rel] = "".join(diff_lines)
+    rejection_reasons: Dict[str, str] = {}
+    patch_application_errors: Dict[str, str] = {}
+    effective_files_modified = 0
+
+    if model_response.success and patches_to_apply:
+        for rel_path, patch_content in patches_to_apply.items():
+            is_valid, err_msg, resolved_target = validate_patch_target(
+                rel_path=rel_path,
+                allowed_paths=task_spec.allowed_edit_paths,
+                forbidden_edits=task_spec.forbidden_edits,
+                base_dir=attempt_candidate_dir,
+            )
+            if not is_valid or resolved_target is None:
+                rejection_reasons[rel_path] = err_msg or "Path validation failed"
+                continue
+
+            old_content = ""
+            if resolved_target.is_file():
+                old_content = resolved_target.read_text(encoding="utf-8", errors="replace")
+
+            # Check if patch is unified diff
+            new_content = patch_content
+            if patch_content.startswith("---") or "\n@@ -" in patch_content or patch_content.startswith("@@ -"):
+                diff_ok, applied_text, diff_err = apply_unified_diff(old_content, patch_content)
+                if not diff_ok:
+                    patch_application_errors[rel_path] = diff_err or "Unified diff hunk application failed"
+                    continue
+                new_content = applied_text
+
+            # Compute unified diff against baseline
+            diff_lines = list(difflib.unified_diff(
+                old_content.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"a/{rel_path}",
+                tofile=f"b/{rel_path}",
+            ))
+            diff_text = "".join(diff_lines)
+
+            # Check if change is genuinely different
+            if old_content != new_content and diff_text.strip():
+                resolved_target.parent.mkdir(parents=True, exist_ok=True)
+                resolved_target.write_text(new_content, encoding="utf-8")
+                diffs[rel_path] = diff_text
+                effective_files_modified += 1
+            else:
+                # Candidate output was identical to baseline file
+                rejection_reasons[rel_path] = "Candidate content was bitwise identical to starter fixture (no effective change)"
 
     # Save diffs
     diff_file = output_dir / "candidate_diffs.patch"
     diff_file.write_text("\n\n".join(f"# {p}\n{d}" for p, d in diffs.items()), encoding="utf-8")
+
+    # Save patch application audit log
+    patch_audit = {
+        "patches_extracted_count": len(patches_to_apply),
+        "patches_applied_count": len(diffs),
+        "effective_files_modified": effective_files_modified,
+        "is_genuinely_different": (effective_files_modified > 0),
+        "rejection_reasons": rejection_reasons,
+        "patch_application_errors": patch_application_errors,
+    }
+    (output_dir / "patch_application_audit.json").write_text(json.dumps(patch_audit, indent=2), encoding="utf-8")
 
     # 5. Run grading pipeline on the candidate workspace
     run_result = runner.run_task(
@@ -317,6 +521,25 @@ def run_attempt(
         candidate_id=candidate_config.get("candidate_id", "cand"),
         candidate_type="model_candidate",
     )
+
+    # STRICT GROUNDING ENFORCEMENT:
+    # If this is a native code task (T2/T3) requiring implementation:
+    # A task with zero applied patches or zero effective changes must NEVER be awarded a passing score!
+    raw_grading_status = run_result.get("status", "UNVERIFIED")
+    final_status = raw_grading_status
+    failure_cause = None
+
+    if getattr(task_spec, "native_execution_required", True) and "engine_neutral" not in task_spec.category:
+        if len(diffs) == 0:
+            final_status = "FAIL_NO_PATCHES_APPLIED"
+            failure_cause = "Zero candidate patches were applied to project workspace"
+        elif effective_files_modified == 0:
+            final_status = "FAIL_NO_GENUINE_CHANGES"
+            failure_cause = "Candidate changes were identical to starter fixture (zero delta)"
+        elif patch_application_errors:
+            if final_status == "PASS":
+                final_status = "PARTIAL_PATCH_APPLICATION_FAILURE"
+                failure_cause = f"Some patches failed application: {list(patch_application_errors.keys())}"
 
     attempt_record = {
         "attempt_id": attempt_id,
@@ -334,11 +557,17 @@ def run_attempt(
             "completion_tokens": model_response.completion_tokens,
             "latency_seconds": model_response.total_duration_seconds,
             "cost_usd": model_response.cost_usd,
-            "patches_extracted_count": len(model_response.code_patches),
+            "patches_extracted_count": len(patches_to_apply),
             "patches_applied_count": len(diffs),
+            "effective_files_modified": effective_files_modified,
+            "is_genuinely_different": (effective_files_modified > 0),
+            "rejections": rejection_reasons,
+            "patch_errors": patch_application_errors,
         },
         "grading": {
-            "overall_status": run_result.get("status", "UNVERIFIED"),
+            "overall_status": final_status,
+            "raw_harness_status": raw_grading_status,
+            "failure_cause": failure_cause,
             "report_file": run_result.get("report_file"),
             "layers": run_result.get("report", {}).get("layers", {}),
             "probes_passed": sum(1 for p in run_result.get("report", {}).get("probes", {}).values() if p.get("passed")),
@@ -347,6 +576,7 @@ def run_attempt(
         "evidence": {
             "raw_output_path": str(raw_output_path),
             "diff_path": str(diff_file),
+            "patch_audit_path": str(output_dir / "patch_application_audit.json"),
             "eval_workspace": str(attempt_candidate_dir),
         },
     }

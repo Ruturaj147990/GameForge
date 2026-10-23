@@ -25,7 +25,10 @@
       "revision": "git-head-audited-20261019",
       "rights_holder": "GameForge Authors / Pending Legal Review",
       "exact_license": "MIT (Asserted, rights unreviewed for training use)",
-      "intended_uses": ["EVALUATION", "BENCHMARK_FIXTURE"],
+      "intended_uses": [
+        "EVALUATION",
+        "BENCHMARK_FIXTURE"
+      ],
       "permitted_uses": {
         "training": false,
         "evaluation": true,
@@ -33,7 +36,10 @@
       },
       "evidence_reference": "doc://licensing/internal_cleanroom_review_pending",
       "review_status": "REVIEW_REQUIRED",
-      "split_restrictions": ["dev", "eval_public"],
+      "split_restrictions": [
+        "dev",
+        "eval_public"
+      ],
       "removal_obligations": "Must be removed immediately upon copyright notice or licensing determination.",
       "notes": "Audited in Step 6: Internal authorship claims require copyright assignment and legal clearance before entering training splits."
     },
@@ -44,7 +50,10 @@
       "revision": "v1.0.0-frozen",
       "rights_holder": "GameForge Authors / Pending Legal Review",
       "exact_license": "Apache-2.0 (Asserted, rights unreviewed for training use)",
-      "intended_uses": ["EVALUATION", "SPECIFICATION"],
+      "intended_uses": [
+        "EVALUATION",
+        "SPECIFICATION"
+      ],
       "permitted_uses": {
         "training": false,
         "evaluation": true,
@@ -52,7 +61,10 @@
       },
       "evidence_reference": "doc://licensing/specs_terms_review_pending",
       "review_status": "REVIEW_REQUIRED",
-      "split_restrictions": ["dev", "eval_public"],
+      "split_restrictions": [
+        "dev",
+        "eval_public"
+      ],
       "removal_obligations": "Tombstone and invalidate downstream derived specs upon notice.",
       "notes": "Audited in Step 6: Engine-neutral contracts require formal IP review before model training ingestion."
     },
@@ -63,7 +75,10 @@
       "revision": "synthetic-v1",
       "rights_holder": "GameForge Test Suite",
       "exact_license": "CC0-1.0",
-      "intended_uses": ["TRAINING_TEST", "EVALUATION_TEST"],
+      "intended_uses": [
+        "TRAINING_TEST",
+        "EVALUATION_TEST"
+      ],
       "permitted_uses": {
         "training": true,
         "evaluation": true,
@@ -71,7 +86,10 @@
       },
       "evidence_reference": "tests/unit/test_data_factory.py",
       "review_status": "CONFIRMED_FOR_TRAINING",
-      "split_restrictions": ["train", "dev"],
+      "split_restrictions": [
+        "train",
+        "dev"
+      ],
       "removal_obligations": "None (pure synthetic test data)",
       "notes": "Approved solely for unit testing and CI test validation of the data factory pipeline."
     },
@@ -82,7 +100,9 @@
       "revision": "private-oracle-v1",
       "rights_holder": "GameForge Governance",
       "exact_license": "PROPRIETARY_HELD_OUT",
-      "intended_uses": ["PRIVATE_EVALUATION"],
+      "intended_uses": [
+        "PRIVATE_EVALUATION"
+      ],
       "permitted_uses": {
         "training": false,
         "evaluation": true,
@@ -90,9 +110,61 @@
       },
       "evidence_reference": "graders/protected/",
       "review_status": "RESTRICTED_EVAL_ONLY",
-      "split_restrictions": ["eval_private"],
+      "split_restrictions": [
+        "eval_private"
+      ],
       "removal_obligations": "Quarantined indefinitely. Must never be ingested into any training manifest.",
       "notes": "Strictly quarantined from any training corpus. Contamination checks enforce isolation."
+    },
+    {
+      "source_id": "gameforge-v2-local-specialist-corpus",
+      "name": "GameForge V2 Local Specialist Multi-Engine Training Corpus",
+      "provenance": "Independently authored specialist game development training examples for GameForge V2 local AMD execution",
+      "revision": "v2.0.0-local-20261020",
+      "rights_holder": "Product Owner / GameForge Local Project",
+      "exact_license": "Proprietary / Authorized for Internal GameForge Training",
+      "intended_uses": [
+        "TRAINING",
+        "EVALUATION"
+      ],
+      "permitted_uses": {
+        "training": true,
+        "evaluation": true,
+        "redistribution": false
+      },
+      "evidence_reference": "doc://internal/v2_local_specialist_authoring_20261020",
+      "review_status": "CONFIRMED_FOR_TRAINING",
+      "split_restrictions": [
+        "train",
+        "dev"
+      ],
+      "removal_obligations": "Remove immediately upon author notice.",
+      "notes": "Specifically authored for local AMD GPU fine-tuning; zero third-party copyright encumbrance; validated against benchmark contamination."
+    },
+    {
+      "source_id": "gameforge-27b-specialist-corpus",
+      "name": "GameForge 27B Specialist Multi-Engine Training Corpus",
+      "provenance": "Independently authored specialist game development training corpus for GameForge 27B model engineering",
+      "revision": "v27b.1.0-20261023",
+      "rights_holder": "Product Owner / GameForge Engineering Authorized",
+      "exact_license": "Apache-2.0 / Authorized for GameForge Internal Training",
+      "intended_uses": [
+        "TRAINING",
+        "EVALUATION"
+      ],
+      "permitted_uses": {
+        "training": true,
+        "evaluation": true,
+        "redistribution": false
+      },
+      "evidence_reference": "E:/GameForge/datasets/gameforge-27b/manifest.json",
+      "review_status": "CONFIRMED_FOR_TRAINING",
+      "split_restrictions": [
+        "train",
+        "dev"
+      ],
+      "removal_obligations": "Remove immediately upon author notice.",
+      "notes": "Specially authored for 27B foundation model specialization; zero third-party copyright encumbrance; zero benchmark contamination."
     }
   ]
 }

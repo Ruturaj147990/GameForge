@@ -1,0 +1,13 @@
+{
+  "timestamp": 1792764530.322447,
+  "model_name": "gameforge-27b",
+  "target_file": "E:\\GameForge\\artifacts\\gameforge-27b\\gameforge-27b-q4_k_m.gguf",
+  "file_size_bytes": 16810714464,
+  "file_size_gb": 16.81,
+  "architecture": "qwen35",
+  "parameter_count": "27.3B",
+  "quantization": "Q4_K_M",
+  "standalone_inference_ready": true,
+  "requires_separate_adapter": false,
+  "status": "EXPORT_VALIDATED"
+}

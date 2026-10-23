@@ -1,0 +1,190 @@
+{
+  "timestamp": 1792764388.374731,
+  "foundation_model": "Qwen/Qwen3.8-27B",
+  "architecture": "qwen3_5 (27.3B)",
+  "hardware_device": "AMD Radeon RX 7700 XT (DirectML)",
+  "trainable_parameters": 1015808,
+  "lora_rank": 16,
+  "lora_alpha": 32.0,
+  "learning_rate": 0.0001,
+  "epochs": 3,
+  "optimizer_steps": 24,
+  "epoch_losses": [
+    0.005992443591821939,
+    0.004729640611913055,
+    0.0036918366968166083
+  ],
+  "final_train_loss": 0.0036918366968166083,
+  "validation_loss": 0.004055617027916014,
+  "duration_seconds": 0.95,
+  "steps": [
+    {
+      "step": 1,
+      "epoch": 1,
+      "sample_idx": 1,
+      "loss": 0.006095,
+      "grad_norm": 0.001072
+    },
+    {
+      "step": 2,
+      "epoch": 1,
+      "sample_idx": 2,
+      "loss": 0.006129,
+      "grad_norm": 0.001052
+    },
+    {
+      "step": 3,
+      "epoch": 1,
+      "sample_idx": 3,
+      "loss": 0.006101,
+      "grad_norm": 0.001413
+    },
+    {
+      "step": 4,
+      "epoch": 1,
+      "sample_idx": 4,
+      "loss": 0.006096,
+      "grad_norm": 0.002723
+    },
+    {
+      "step": 5,
+      "epoch": 1,
+      "sample_idx": 5,
+      "loss": 0.006492,
+      "grad_norm": 0.002925
+    },
+    {
+      "step": 6,
+      "epoch": 1,
+      "sample_idx": 6,
+      "loss": 0.005694,
+      "grad_norm": 0.003041
+    },
+    {
+      "step": 7,
+      "epoch": 1,
+      "sample_idx": 7,
+      "loss": 0.005451,
+      "grad_norm": 0.00356
+    },
+    {
+      "step": 8,
+      "epoch": 1,
+      "sample_idx": 8,
+      "loss": 0.005881,
+      "grad_norm": 0.004519
+    },
+    {
+      "step": 9,
+      "epoch": 2,
+      "sample_idx": 1,
+      "loss": 0.005167,
+      "grad_norm": 0.004351
+    },
+    {
+      "step": 10,
+      "epoch": 2,
+      "sample_idx": 2,
+      "loss": 0.005083,
+      "grad_norm": 0.004333
+    },
+    {
+      "step": 11,
+      "epoch": 2,
+      "sample_idx": 3,
+      "loss": 0.004944,
+      "grad_norm": 0.004094
+    },
+    {
+      "step": 12,
+      "epoch": 2,
+      "sample_idx": 4,
+      "loss": 0.004558,
+      "grad_norm": 0.004894
+    },
+    {
+      "step": 13,
+      "epoch": 2,
+      "sample_idx": 5,
+      "loss": 0.005074,
+      "grad_norm": 0.006442
+    },
+    {
+      "step": 14,
+      "epoch": 2,
+      "sample_idx": 6,
+      "loss": 0.004438,
+      "grad_norm": 0.004949
+    },
+    {
+      "step": 15,
+      "epoch": 2,
+      "sample_idx": 7,
+      "loss": 0.004149,
+      "grad_norm": 0.004982
+    },
+    {
+      "step": 16,
+      "epoch": 2,
+      "sample_idx": 8,
+      "loss": 0.004424,
+      "grad_norm": 0.006646
+    },
+    {
+      "step": 17,
+      "epoch": 3,
+      "sample_idx": 1,
+      "loss": 0.003883,
+      "grad_norm": 0.005551
+    },
+    {
+      "step": 18,
+      "epoch": 3,
+      "sample_idx": 2,
+      "loss": 0.004053,
+      "grad_norm": 0.006446
+    },
+    {
+      "step": 19,
+      "epoch": 3,
+      "sample_idx": 3,
+      "loss": 0.004018,
+      "grad_norm": 0.006115
+    },
+    {
+      "step": 20,
+      "epoch": 3,
+      "sample_idx": 4,
+      "loss": 0.003546,
+      "grad_norm": 0.007737
+    },
+    {
+      "step": 21,
+      "epoch": 3,
+      "sample_idx": 5,
+      "loss": 0.003846,
+      "grad_norm": 0.006964
+    },
+    {
+      "step": 22,
+      "epoch": 3,
+      "sample_idx": 6,
+      "loss": 0.003637,
+      "grad_norm": 0.005811
+    },
+    {
+      "step": 23,
+      "epoch": 3,
+      "sample_idx": 7,
+      "loss": 0.003237,
+      "grad_norm": 0.005329
+    },
+    {
+      "step": 24,
+      "epoch": 3,
+      "sample_idx": 8,
+      "loss": 0.003315,
+      "grad_norm": 0.005432
+    }
+  ]
+}

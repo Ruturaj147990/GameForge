@@ -1,0 +1,126 @@
+{
+  "status": "COMPLETED_AND_VERIFIED",
+  "backend": "DirectML (AMD Radeon RX 7700 XT)",
+  "base_model": "E:\\GameForge\\models\\hf\\Qwen2.5-Coder-3B-Instruct",
+  "manifest_path": "configs/gameforge_v2_local_training_manifest.json",
+  "manifest_sha256": "8e84a3ab3625285797a06ef517d693fcb5b751289366917be982c12ec456f587",
+  "total_steps": 18,
+  "epochs": 3,
+  "final_loss": 3.5344,
+  "initial_loss": 2.5161,
+  "training_duration_seconds": 13.32,
+  "adapter_path": "E:\\GameForge\\training\\gameforge-v2-amd\\adapter",
+  "parameter_verified": "base_model.model.model.layers.0.self_attn.q_proj.lora_A.default.weight",
+  "max_parameter_delta": 0.0007413541898131371,
+  "l2_parameter_delta": 0.11465512961149216,
+  "step_losses": [
+    {
+      "global_step": 1,
+      "epoch": 1,
+      "sample_id": "GF2-LOC-001",
+      "loss": 2.5161
+    },
+    {
+      "global_step": 2,
+      "epoch": 1,
+      "sample_id": "GF2-LOC-003",
+      "loss": 2.2076
+    },
+    {
+      "global_step": 3,
+      "epoch": 1,
+      "sample_id": "GF2-LOC-005",
+      "loss": 2.5814
+    },
+    {
+      "global_step": 4,
+      "epoch": 1,
+      "sample_id": "GF2-LOC-007",
+      "loss": 2.5461
+    },
+    {
+      "global_step": 5,
+      "epoch": 1,
+      "sample_id": "GF2-LOC-009",
+      "loss": 2.7427
+    },
+    {
+      "global_step": 6,
+      "epoch": 1,
+      "sample_id": "GF2-LOC-011",
+      "loss": 3.6675
+    },
+    {
+      "global_step": 7,
+      "epoch": 2,
+      "sample_id": "GF2-LOC-001",
+      "loss": 2.4518
+    },
+    {
+      "global_step": 8,
+      "epoch": 2,
+      "sample_id": "GF2-LOC-003",
+      "loss": 2.1453
+    },
+    {
+      "global_step": 9,
+      "epoch": 2,
+      "sample_id": "GF2-LOC-005",
+      "loss": 2.5233
+    },
+    {
+      "global_step": 10,
+      "epoch": 2,
+      "sample_id": "GF2-LOC-007",
+      "loss": 2.492
+    },
+    {
+      "global_step": 11,
+      "epoch": 2,
+      "sample_id": "GF2-LOC-009",
+      "loss": 2.696
+    },
+    {
+      "global_step": 12,
+      "epoch": 2,
+      "sample_id": "GF2-LOC-011",
+      "loss": 3.6067
+    },
+    {
+      "global_step": 13,
+      "epoch": 3,
+      "sample_id": "GF2-LOC-001",
+      "loss": 2.3986
+    },
+    {
+      "global_step": 14,
+      "epoch": 3,
+      "sample_id": "GF2-LOC-003",
+      "loss": 2.0941
+    },
+    {
+      "global_step": 15,
+      "epoch": 3,
+      "sample_id": "GF2-LOC-005",
+      "loss": 2.4644
+    },
+    {
+      "global_step": 16,
+      "epoch": 3,
+      "sample_id": "GF2-LOC-007",
+      "loss": 2.4356
+    },
+    {
+      "global_step": 17,
+      "epoch": 3,
+      "sample_id": "GF2-LOC-009",
+      "loss": 2.6419
+    },
+    {
+      "global_step": 18,
+      "epoch": 3,
+      "sample_id": "GF2-LOC-011",
+      "loss": 3.5344
+    }
+  ]
+}

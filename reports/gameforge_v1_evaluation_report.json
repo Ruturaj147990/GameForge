@@ -1,0 +1,90 @@
+{
+  "evaluation_timestamp": 1792474879.4172413,
+  "model": "gameforge-v1",
+  "baseline_model": "qwen3.8:27b-q4_K_M",
+  "questions_evaluated": 5,
+  "mean_rubric_adherence": 0.21,
+  "mean_tokens_per_second": 5.84,
+  "detailed_results": [
+    {
+      "question_id": "MATH_01",
+      "title": "Euler Angles vs Quaternions in 3D Rotation",
+      "category": "engine_independent_math",
+      "target_engine": "neutral",
+      "model_tested": "gameforge-v1",
+      "success": true,
+      "tokens_generated": 512,
+      "speed_tokens_per_sec": 5.81,
+      "rubric_total_concepts": 5,
+      "rubric_matched_concepts": [
+        "gimbal lock"
+      ],
+      "rubric_score": 0.2,
+      "raw_response_snippet": "### Mathematical Analysis of Gimbal Lock and Quaternion Rotation\n\n#### 1. Why Euler Angles Cause Gimbal Lock\n\nEuler angles represent 3D rotation as a sequence of three elemental rotations around specific axes (e.g., Z-Y-X or Y-X-Z). The fundamental issue arises from the **non-commutativity** of 3D rotations and the **singularity** of the coordinate frame when one axis aligns with another.\n\n**The S..."
+    },
+    {
+      "question_id": "MATH_02",
+      "title": "Separating Axis Theorem (SAT) for 2D Convex Polygons",
+      "category": "engine_independent_math",
+      "target_engine": "neutral",
+      "model_tested": "gameforge-v1",
+      "success": true,
+      "tokens_generated": 512,
+      "speed_tokens_per_sec": 5.83,
+      "rubric_total_concepts": 5,
+      "rubric_matched_concepts": [
+        "minimum translation vector"
+      ],
+      "rubric_score": 0.2,
+      "raw_response_snippet": "The **Separating Axis Theorem (SAT)** is a fundamental algorithm in computational geometry used to determine if two convex polygons intersect and, if they do, to calculate the **Minimum Translation Vector (MTV)** required to separate them. It is widely used in 2D physics engines (like Box2D, Godot's 2D physics, and custom Unity/Godot 2D systems) because it is deterministic, efficient for convex sh..."
+    },
+    {
+      "question_id": "MATH_03",
+      "title": "Smooth Damp vs Lerp Frame-Rate Independence",
+      "category": "engine_independent_math",
+      "target_engine": "neutral",
+      "model_tested": "gameforge-v1",
+      "success": true,
+      "tokens_generated": 512,
+      "speed_tokens_per_sec": 5.83,
+      "rubric_total_concepts": 4,
+      "rubric_matched_concepts": [
+        "exponential decay"
+      ],
+      "rubric_score": 0.25,
+      "raw_response_snippet": "The standard linear interpolation function `lerp(a, b, t)` is frame-rate dependent when used in a per-frame update loop because it assumes a fixed time step for the interpolation factor `t`.\n\n### Why Standard Lerp is Frame-Rate Dependent\n\nIn a typical game loop, you might see code like this:\n```cpp\n// Pseudo-code for frame-rate dependent lerp\ncurrentValue = lerp(currentValue, targetValue, 0.1f);\n`..."
+    },
+    {
+      "question_id": "MATH_04",
+      "title": "Swept Sphere vs Raycast Continuous Collision",
+      "category": "engine_independent_math",
+      "target_engine": "neutral",
+      "model_tested": "gameforge-v1",
+      "success": true,
+      "tokens_generated": 512,
+      "speed_tokens_per_sec": 5.91,
+      "rubric_total_concepts": 5,
+      "rubric_matched_concepts": [
+        "tunneling"
+      ],
+      "rubric_score": 0.2,
+      "raw_response_snippet": "# Discrete Raycasting vs. Continuous Swept Sphere Collision\n\n## 1. Core Conceptual Difference\n\n| Feature | Discrete Raycast | Continuous Swept Sphere |\n| :--- | :--- | :--- |\n| **Query Type** | Line segment vs. static geometry | Volume (capsule/cylinder) swept over time vs. static geometry |\n| **Temporal Awareness** | None (instantaneous) | Yes (integrates velocity $\\vec{v}$ and $\\Delta t$) |\n| **..."
+    },
+    {
+      "question_id": "MATH_05",
+      "title": "A* Pathfinding Heuristic Admissibility",
+      "category": "engine_independent_math",
+      "target_engine": "neutral",
+      "model_tested": "gameforge-v1",
+      "success": true,
+      "tokens_generated": 512,
+      "speed_tokens_per_sec": 5.81,
+      "rubric_total_concepts": 5,
+      "rubric_matched_concepts": [
+        "octile distance"
+      ],
+      "rubric_score": 0.2,
+      "raw_response_snippet": "To ensure A* pathfinding yields an optimal path on an 8-directional grid, the heuristic function $h(n)$ must satisfy two critical properties: **admissibility** and **consistency** (also known as monotonicity).\n\n### 1. The Mathematically Admissible and Consistent Heuristic\n\nFor an 8-directional grid where:\n- Orthogonal movement (N, S, E, W) has a cost of $1.0$.\n- Diagonal movement (NE, NW, SE, SW) ..."
+    }
+  ]
+}

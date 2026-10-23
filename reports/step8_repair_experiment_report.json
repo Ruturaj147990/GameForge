@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "session_id": "repair_session_t2-004-health-damage_8c72fa01",
+  "task_id": "t2-004-health-damage",
+  "engine": "unreal",
+  "clean_snapshot_hash": "fae4d31e7c03c87594fbbed5bf05a1bde9e415781e8af6fb82545308b260dce9",
+  "initial_status": "PARTIAL_BUILD",
+  "repair_iterations": 1,
+  "max_allowed_repair_iterations": 3,
+  "final_status": "PASS",
+  "tool_calls_trace": [
+    {
+      "step_index": 0,
+      "tool_name": "compile_project",
+      "action_payload": {
+        "iteration": 0
+      },
+      "observation_result": {
+        "status": "PARTIAL_BUILD",
+        "probes_passed": 0,
+        "probes_total": 16,
+        "error_log": "HealthComponent.cpp(42): error C2143: syntax error: missing ';' before '}'"
+      },
+      "diagnostics": {
+        "failure_class": "COMPILER_SYNTAX_ERROR",
+        "targeted_file": "Source/GameForgePilot/Private/HealthComponent.cpp",
+        "line_number": 42,
+        "recommended_fix": "Add missing semicolon to complete statement."
+      }
+    },
+    {
+      "step_index": 1,
+      "tool_name": "write_file",
+      "action_payload": {
+        "path": "Source/GameForgePilot/Private/HealthComponent.cpp",
+        "repair_type": "SYNTAX_REPAIR"
+      },
+      "observation_result": {
+        "bytes_written": 3893,
+        "status": "SUCCESS"
+      },
+      "diagnostics": {
+        "failure_class": "NONE"
+      }
+    },
+    {
+      "step_index": 2,
+      "tool_name": "run_probes",
+      "action_payload": {
+        "iteration": 1
+      },
+      "observation_result": {
+        "status": "PASS",
+        "probes_passed": 16,
+        "probes_total": 16
+      },
+      "diagnostics": {
+        "failure_class": "NONE"
+      }
+    }
+  ],
+  "outcome_verification": {
+    "verified_by_engine": true,
+    "non_zero_patches_verified": true,
+    "regression_tests_passed": true,
+    "hidden_grader_untampered": true
+  }
+}

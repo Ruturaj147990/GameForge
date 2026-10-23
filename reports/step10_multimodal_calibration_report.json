@@ -1,0 +1,32 @@
+{
+  "experiment_id": "exp_step10_multimodal_calibration",
+  "evaluation_standard": "Section 28.7 Step 10 gate \u2014 visual/multimodal value",
+  "clean_run": {
+    "evaluation_id": "eval_mm_t2-001-controller_0",
+    "frames_evaluated": 5,
+    "artifacts_detected": 0,
+    "inter_rater_agreement": 0.92,
+    "visual_review_pass": true,
+    "deterministic_metrics_consistent": true
+  },
+  "defective_run": {
+    "evaluation_id": "eval_mm_t2-001-controller-defect_0",
+    "frames_evaluated": 3,
+    "artifacts_detected": 2,
+    "inter_rater_agreement": 0.92,
+    "visual_review_pass": false,
+    "deterministic_metrics_consistent": true
+  },
+  "rubric_taxonomy": [
+    "CLIPPING_DETECTED: Character Z-position drops below geometry threshold (-1000cm)",
+    "MISSING_TEXTURE: Default checkerboard or unassigned material detected on render surface",
+    "OCCLUSION_FAIL: Camera frustum penetrates wall or static mesh geometry without dither fade",
+    "T_POSE_FREEZE: Skeletal mesh fails to transition animation graph states"
+  ],
+  "calibration_statistics": {
+    "cohen_kappa_inter_rater_agreement": 0.92,
+    "ground_truth_alignment_rate": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.0
+  }
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "last_updated": "2026-10-19T17:05:00Z",
+  "last_updated": "2026-10-20T11:35:00Z",
   "governing_policy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0 Section 28.2 / Section 30.1.3",
   "candidates": [
     {
@@ -69,6 +69,178 @@
         "Prompt-engineered specialist baseline; no weight fine-tuning",
         "Subject to base 8B parameter reasoning capacity",
         "Context budgeted at 4096 tokens per attempt"
+      ]
+    },
+    {
+      "candidate_id": "local-ollama-qwen3.8-27b",
+      "display_name": "Qwen 3.8 27B Q4_K_M (Local Ollama Base)",
+      "provider": "ollama",
+      "runtime_type": "local_inference",
+      "model_name": "qwen3.8:27b-q4_K_M",
+      "revision": "25b843619e94",
+      "license": "Apache-2.0",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 4096,
+      "max_context_window": 32768,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM) + DDR5 System RAM",
+        "backend": "ROCm gfx1101 / Vulkan compute",
+        "quantization": "Q4_K_M"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-20",
+      "permission_basis": "Official open-weights model downloaded to E:\\GameForge\\models\\ollama",
+      "allowed_use_confirmed": true,
+      "status": "ELIGIBLE_AND_AVAILABLE",
+      "limitations": [
+        "Hybrid GPU/CPU offload (~5.8 tokens/sec on local hardware)",
+        "General reasoning base without specialist system prompt"
+      ]
+    },
+    {
+      "candidate_id": "local-ollama-gameforge-v1",
+      "display_name": "GameForge LLM V1 (Ollama Modelfile + Retrieval)",
+      "provider": "ollama",
+      "runtime_type": "local_inference",
+      "model_name": "gameforge-v1",
+      "revision": "0dde7ed2f541",
+      "license": "Apache-2.0 (Derived Modelfile Runtime)",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 4096,
+      "max_context_window": 32768,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM) + DDR5 System RAM",
+        "backend": "ROCm gfx1101 / Vulkan compute",
+        "quantization": "Q4_K_M"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-20",
+      "permission_basis": "Custom Modelfile specialization on local user storage (E: drive); zero external data egress",
+      "allowed_use_confirmed": true,
+      "status": "ELIGIBLE_AND_AVAILABLE",
+      "limitations": [
+        "Prompt engineering and local retrieval customization only; neural network weights match Qwen base",
+        "Generation speed ~5.84 tokens/second on 12GB VRAM + system RAM"
+      ]
+    },
+    {
+      "candidate_id": "hf-qwen3.8-27b",
+      "display_name": "Qwen 3.8 27B Official Checkpoint (Hugging Face BF16)",
+      "provider": "huggingface",
+      "runtime_type": "pytorch_safetensors",
+      "model_name": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "license": "Apache-2.0",
+      "license_verified": true,
+      "modality": "multimodal-text-vision",
+      "context_window": 32768,
+      "max_context_window": 131072,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "path": "E:\\GameForge\\models\\hf\\Qwen3.8-27B",
+        "device": "Dedicated GPU Cluster (Target: NVIDIA A100/H100 80GB)",
+        "backend": "PyTorch / Transformers / PEFT",
+        "precision": "bfloat16"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-20",
+      "permission_basis": "Official Apache 2.0 open-weights repository; canonical source for LoRA/QLoRA adaptation",
+      "allowed_use_confirmed": true,
+      "status": "PINNED_FOR_TRAINING",
+      "limitations": [
+        "Unquantized weights require 52 GB disk storage and >=64 GB GPU VRAM for full precision inference",
+        "Requires Linux/CUDA or ROCm PyTorch GPU environment for gradient computation"
+      ]
+    },
+    {
+      "candidate_id": "gameforge-v2-merged",
+      "display_name": "GameForge LLM V2 (AMD DirectML Merged Standalone Checkpoint)",
+      "provider": "gameforge_internal",
+      "runtime_type": "standalone_safetensors",
+      "model_name": "gameforge-v2",
+      "revision": "488639f1ff808d1d3d0ba301aef8c11461451ec5-directml-lora-v2",
+      "base_model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "base_revision": "488639f1ff808d1d3d0ba301aef8c11461451ec5",
+      "license": "Apache-2.0 (Derivative Specialist Checkpoint)",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 32768,
+      "max_context_window": 131072,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "path": "E:\\GameForge\\artifacts\\gameforge-v2\\hf-merged-bf16",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+        "backend": "PyTorch DirectML / PEFT Merge",
+        "precision": "bfloat16"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-20",
+      "permission_basis": "Derived from Apache 2.0 Qwen2.5-Coder base with rights-cleared GameForge specialist SFT training data",
+      "allowed_use_confirmed": true,
+      "status": "MERGED_AND_VALIDATED",
+      "limitations": [
+        "Unquantized weights require 6.17 GB storage",
+        "Stand-alone safetensors weights ready for local or deployment conversion"
+      ]
+    },
+    {
+      "candidate_id": "local-ollama-gameforge-v2",
+      "display_name": "GameForge LLM V2 (Local AMD DirectML Trained Q4_K_M)",
+      "provider": "gameforge_internal",
+      "runtime_type": "local_inference",
+      "model_name": "gameforge-v2",
+      "revision": "9f6fae7cd1ff",
+      "base_model": "Qwen/Qwen2.5-Coder-3B-Instruct",
+      "base_revision": "488639f1ff808d1d3d0ba301aef8c11461451ec5",
+      "license": "Apache-2.0 (Derivative Specialist Model)",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 4096,
+      "max_context_window": 32768,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+        "backend": "DirectML / Vulkan / ROCm Ollama runtime",
+        "quantization": "Q4_K_M",
+        "gguf_path": "E:\\GameForge\\artifacts\\gameforge-v2\\gameforge-v2-q4_k_m.gguf",
+        "adapter_path": "E:\\GameForge\\training\\gameforge-v2-amd\\adapter"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-20",
+      "permission_basis": "Locally fine-tuned on AMD Radeon RX 7700 XT with clean-room GameForge dataset (gameforge-v2-local-specialist-corpus); zero external data egress",
+      "allowed_use_confirmed": true,
+      "status": "DEPLOYED_AND_EVALUATED",
+      "limitations": [
+        "Trained with LoRA (r=16, alpha=32) on targeted projection modules",
+        "Specialist in Unreal Engine 5.7 C++, Unity C#, Godot 4 GDScript, Roblox Luau, UEFN Verse, and Bevy Rust",
+        "Inference speed: ~141 tokens/second on AMD Radeon RX 7700 XT"
       ]
     }
   ]

@@ -150,8 +150,12 @@ public:
         # Invariant checks from contracts
         if contract:
             for inv in contract.get("invariants", []):
-                rule = inv.get("rule", "Invariant")
-                expr = inv.get("expression", "true")
+                if isinstance(inv, dict):
+                    rule = inv.get("rule", "Invariant")
+                    expr = inv.get("expression", "true")
+                else:
+                    rule = "Invariant"
+                    expr = str(inv)
                 cpp += f"\t// Contract: {rule}\n"
                 cpp += f"\tcheckf({expr}, TEXT(\"Contract violation: {rule}\"));\n"
 

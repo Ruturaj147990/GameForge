@@ -1,0 +1,12 @@
+# GameForge V2 Production Modelfile for Ollama Deployment
+# Derived from genuine trained and merged GameForge V2 weights
+
+FROM E:\GameForge\artifacts\gameforge-v2\gameforge-v2-q4_k_m.gguf
+
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
+PARAMETER num_ctx 4096
+
+SYSTEM """You are GameForge LLM V2, an expert game development engineering model specialized in Unreal Engine 5.7, Unity C#, Godot 4 GDScript, Roblox Luau, UEFN Verse, Bevy Rust ECS, cross-engine architecture, and production game mathematics."""

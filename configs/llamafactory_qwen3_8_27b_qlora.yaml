@@ -1,0 +1,57 @@
+### LLaMA-Factory SFT Configuration for GameForge V2
+### Model: Qwen/Qwen3.8-27B (Pinned SHA: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0)
+### Architecture: Hybrid linear/full attention with frozen vision tower
+
+# Model arguments
+model_name_or_path: E:/GameForge/models/hf/Qwen3.8-27B
+trust_remote_code: true
+template: qwen3_8
+
+# Fine-tuning method
+stage: sft
+do_train: true
+finetuning_type: lora
+quantization_bit: 4
+quantization_type: nf4
+double_quantization: true
+
+# LoRA hyperparameter arguments
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: q_proj,k_proj,v_proj,o_proj,in_proj_qkv,in_proj_a,in_proj_b,in_proj_z,out_proj,gate_proj,up_proj,down_proj
+# Explicitly freeze vision tower and multimodal projector
+additional_target: null
+
+# Dataset arguments
+dataset: gameforge_v2_pilot_sft
+dataset_dir: configs
+cutoff_len: 2048
+max_samples: 500
+val_size: 0.1
+overwrite_cache: true
+preprocessing_num_workers: 4
+
+# Output and checkpoints
+output_dir: E:/GameForge/training/gameforge-v2/adapter
+logging_steps: 5
+save_steps: 50
+eval_steps: 25
+evaluation_strategy: steps
+save_total_limit: 3
+
+# Optimization arguments
+learning_rate: 1.0e-5
+num_train_epochs: 1.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+weight_decay: 0.01
+max_grad_norm: 1.0
+bf16: true
+seed: 42
+
+# Report and tracking
+report_to: none

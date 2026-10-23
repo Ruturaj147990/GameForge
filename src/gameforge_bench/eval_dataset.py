@@ -1,0 +1,532 @@
+"""GameForge LLM V1 60-Question Evaluation Benchmark Dataset.
+
+Covers:
+- Engine-independent game programming & 3D math (10 questions)
+- Unreal Engine 5.x C++ and Blueprints (10 questions)
+- Unity 2022.3 / 6.0 C# and Architecture (10 questions)
+- Godot 4.3 GDScript and Node Tree (8 questions)
+- Other Engines (Roblox Luau, UEFN Verse, Bevy Rust, Custom C++) (6 questions)
+- Cross-Engine Translation and Semantic Mapping (6 questions)
+- Debugging, Profiling, and Frame Hitch Elimination (5 questions)
+- Network Replication, Prediction, and Game Design Systems (5 questions)
+Total: 60 comprehensive evaluation questions.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from typing import List, Dict, Any
+
+
+EVALUATION_QUESTIONS: List[Dict[str, Any]] = [
+    # Category 1: Engine-Independent Math & Physics (1-10)
+    {
+        "id": "MATH_01",
+        "category": "engine_independent_math",
+        "title": "Euler Angles vs Quaternions in 3D Rotation",
+        "prompt": "Explain mathematically why Euler angle rotation order causes Gimbal Lock, why Quaternions eliminate it, and provide the exact mathematical formula for rotating a 3D vector v by a unit quaternion q.",
+        "rubric_required_concepts": ["gimbal lock", "degree of freedom", "quaternion multiplication", "q * v * q^-1", "pitch +/- 90 degrees"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_02",
+        "category": "engine_independent_math",
+        "title": "Separating Axis Theorem (SAT) for 2D Convex Polygons",
+        "prompt": "Describe the Separating Axis Theorem (SAT) for 2D convex polygons. How are the test projection axes derived from polygon edges, and how is the minimum translation vector (MTV) calculated?",
+        "rubric_required_concepts": ["perpendicular normal", "projection dot product", "overlap test", "minimum translation vector", "convexity requirement"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_03",
+        "category": "engine_independent_math",
+        "title": "Smooth Damp vs Lerp Frame-Rate Independence",
+        "prompt": "Why is standard lerp(a, b, t) frame-rate dependent when used in a per-frame update loop, and how do you formulate an exact exponential decay lerp that produces mathematically identical motion regardless of delta time?",
+        "rubric_required_concepts": ["exponential decay", "1 - exp(-decay * dt)", "delta time dependency", "halflife formulation"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_04",
+        "category": "engine_independent_math",
+        "title": "Swept Sphere vs Raycast Continuous Collision",
+        "prompt": "Compare discrete raycasting with continuous swept sphere collision detection. When would a discrete raycast tunnel through thin geometry, and how does swept sphere radius testing prevent tunneling?",
+        "rubric_required_concepts": ["tunneling", "capsule extrusion", "quadratic intersection", "swept volume", "time of impact"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_05",
+        "category": "engine_independent_math",
+        "title": "A* Pathfinding Heuristic Admissibility",
+        "prompt": "In an A* pathfinding algorithm on a grid with 8-directional movement, what is the mathematically admissible and consistent heuristic distance function, and what happens to path optimality if the heuristic overestimates cost?",
+        "rubric_required_concepts": ["octile distance", "admissible heuristic", "never overestimates", "consistency / triangle inequality", "suboptimal paths"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_06",
+        "category": "engine_independent_math",
+        "title": "Coyote Time and Jump Buffering Invariants",
+        "prompt": "Define the gameplay mechanics 'Coyote Time' and 'Jump Buffering'. Detail the state machine transitions, timestamp variables, and mathematical expiration conditions needed to implement them without wall-clock sleep.",
+        "rubric_required_concepts": ["coyote timer", "jump buffer window", "grounded transition", "timestamp delta", "deterministic clock"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_07",
+        "category": "engine_independent_math",
+        "title": "Spatial Hash Grid for Broad-Phase Collision",
+        "prompt": "Explain the architecture of a 2D/3D Spatial Hash Grid for broad-phase collision. How are cell coordinates computed from float world positions, and how does cell sizing impact memory and query efficiency?",
+        "rubric_required_concepts": ["floor(pos / cell_size)", "hash function", "prime multiplier", "cell size matching object radius", "broad-phase pruning"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_08",
+        "category": "engine_independent_math",
+        "title": "Hermite and Bezier Curve Velocity Calculation",
+        "prompt": "How do you compute the instantaneous tangent velocity vector of a cubic Bezier curve at parameter t in [0, 1] without finite difference approximation?",
+        "rubric_required_concepts": ["first derivative", "3(1-t)^2(P1-P0)", "6(1-t)t(P2-P1)", "tangent vector normalization"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_09",
+        "category": "engine_independent_math",
+        "title": "Object Pooling Lifecycle and Memory Fragmentation",
+        "prompt": "Explain how an Object Pool prevents garbage collection stalls and heap fragmentation during high-frequency projectile spawning. Detail the Acquire and Release lifecycle contract.",
+        "rubric_required_concepts": ["pre-allocation", "free list / ring buffer", "reset state invariant", "avoid dynamic heap allocation", "gc pause elimination"],
+        "target_engine": "neutral"
+    },
+    {
+        "id": "MATH_10",
+        "category": "engine_independent_math",
+        "title": "Frustum Culling Plane-Sphere Test",
+        "prompt": "Provide the exact algebraic test for determining whether a bounding sphere with center C and radius r is completely outside, intersecting, or completely inside a view frustum defined by 6 plane equations.",
+        "rubric_required_concepts": ["plane dot product: dot(N, C) + D", "distance < -radius outside", "distance > radius inside", "normalized plane equations"],
+        "target_engine": "neutral"
+    },
+
+    # Category 2: Unreal Engine 5.x C++ & Blueprints (11-20)
+    {
+        "id": "UE_01",
+        "category": "unreal_engine",
+        "title": "Native Health Component with Delegate Broadcast",
+        "prompt": "Write a complete production-ready Unreal Engine 5 C++ UHealthComponent (.h and .cpp) with MaxHealth, CurrentHealth, an invulnerability window, OnHealthChanged delegate, and OnDeath delegate. Ensure no macros are omitted.",
+        "rubric_required_concepts": ["UCLASS", "GENERATED_BODY", "UPROPERTY", "DECLARE_DYNAMIC_MULTICAST_DELEGATE", "FMath::Clamp", "CreateDefaultSubobject"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_02",
+        "category": "unreal_engine",
+        "title": "Enhanced Input Subsystem C++ Binding",
+        "prompt": "Demonstrate how to bind a C++ Character to an Enhanced Input Action (IA_Move) using UEnhancedInputComponent and apply 2D vector input to CharacterMovementComponent relative to the camera orbit.",
+        "rubric_required_concepts": ["UEnhancedInputComponent", "BindAction", "ETriggerEvent::Triggered", "FVector2D", "GetControlRotation", "AddMovementInput"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_03",
+        "category": "unreal_engine",
+        "title": "Overlap Collision Delegate Signature",
+        "prompt": "What is the exact signature of the OnComponentBeginOverlap delegate in Unreal Engine 5, and what macro must decorate the C++ callback function to prevent runtime reflection crashes?",
+        "rubric_required_concepts": ["UFUNCTION()", "UPrimitiveComponent* OverlappedComponent", "AActor* OtherActor", "UPrimitiveComponent* OtherComp", "int32 OtherBodyIndex", "bool bFromSweep", "const FHitResult& SweepResult"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_04",
+        "category": "unreal_engine",
+        "title": "Gameplay Ability System (GAS) AttributeSet Design",
+        "prompt": "Explain how AttributeSets work in Unreal's Gameplay Ability System (GAS). How do you define attributes, and why must PreAttributeChange and PostGameplayEffectExecute handle health clamping differently?",
+        "rubric_required_concepts": ["UAttributeSet", "GAMEPLAYATTRIBUTE_PROPERTY_GETTER", "PreAttributeChange clamps values", "PostGameplayEffectExecute handles damage meta-attribute", "GameplayEffectModCallbackData"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_05",
+        "category": "unreal_engine",
+        "title": "Async Asset Loading with TSoftObjectPtr",
+        "prompt": "Why should high-poly meshes and sounds in Unreal C++ be referenced using TSoftObjectPtr instead of raw pointers, and how does UAssetManager::GetStreamableManager() asynchronously stream them into memory?",
+        "rubric_required_concepts": ["TSoftObjectPtr", "hard reference avoidance", "memory footprint reduction", "RequestAsyncLoad", "FStreamableDelegate"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_06",
+        "category": "unreal_engine",
+        "title": "Multiplayer Server RPC Validation",
+        "prompt": "Write an Unreal C++ Server RPC function declaration and implementation with WithValidation for a weapon firing action. What does the _Validate method do?",
+        "rubric_required_concepts": ["UFUNCTION(Server, Reliable, WithValidation)", "_Implementation", "_Validate", "anti-cheat boundary", "returns bool"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_07",
+        "category": "unreal_engine",
+        "title": "UMG C++ Binding via WidgetTree or BindWidget",
+        "prompt": "How do you bind a C++ UUserWidget subclass to a Designer UMG ProgressBar using the meta=(BindWidget) specifier without runtime manual casting?",
+        "rubric_required_concepts": ["UPROPERTY(meta=(BindWidget))", "UProgressBar*", "matching variable name in designer", "NativeConstruct", "SetPercent"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_08",
+        "category": "unreal_engine",
+        "title": "StateTree vs BehaviorTree in UE 5.4/5.7",
+        "prompt": "Compare Unreal Engine's StateTree framework with legacy Behavior Trees for AI. What architectural and performance advantages does StateTree provide?",
+        "rubric_required_concepts": ["StateTree lightweight struct evaluation", "hierarchical state machine", "no blackboard overhead", "direct property bindings", "Mass Entity integration"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_09",
+        "category": "unreal_engine",
+        "title": "PCG (Procedural Content Generation) Graph Architecture",
+        "prompt": "Explain the core pipeline of Unreal's PCG framework: how are points generated, filtered by landscape/collision, and transformed into Hierarchical Instanced Static Meshes (HISM)?",
+        "rubric_required_concepts": ["PCG Graph", "Surface Sampler", "Density Filter", "Bounds Modifier", "Static Mesh Spawner", "HISM"],
+        "target_engine": "unreal"
+    },
+    {
+        "id": "UE_10",
+        "category": "unreal_engine",
+        "title": "Chaos Physics Substepping and Fixed Tick",
+        "prompt": "In Unreal Engine 5 Chaos Physics, why is physics substepping critical for fast-moving vehicles or projectiles, and how do you configure it in DefaultEngine.ini?",
+        "rubric_required_concepts": ["substepping", "max substep delta time", "numerical stability", "physics tick sync", "Chaos solver iterations"],
+        "target_engine": "unreal"
+    },
+
+    # Category 3: Unity 2022.3 / 6.0 C# & Architecture (21-30)
+    {
+        "id": "UNITY_01",
+        "category": "unity",
+        "title": "Decoupled Health System with C# Action Delegates",
+        "prompt": "Write a complete Unity C# Health component using ScriptableObjects or C# Action delegates for OnHealthChanged and OnDeath. Include invulnerability timing, Clamp, and proper unbinding in OnDisable.",
+        "rubric_required_concepts": ["MonoBehaviour", "Action<float, float>", "Mathf.Clamp", "OnDisable unbinding", "Time.time or simulation clock", "SerializeField"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_02",
+        "category": "unity",
+        "title": "Unity 6 vs Unity 2022 Rigidbody Physics API",
+        "prompt": "In Unity 6, what API replaced Rigidbody.velocity and Rigidbody.angularVelocity, and why was this change made by Unity Technologies?",
+        "rubric_required_concepts": ["linearVelocity", "angularVelocity", "clarity vs angular rate", "PhysX / Havok alignment", "backward compatibility"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_03",
+        "category": "unity",
+        "title": "DOTS / Entities 1.0 IJobEntity Architecture",
+        "prompt": "Write a complete Unity DOTS (Entities 1.0+) IComponentData struct and an IJobEntity system that translates positions of entities possessing a Translation/LocalTransform and a Velocity component.",
+        "rubric_required_concepts": ["IComponentData", "ISystem", "IJobEntity", "LocalTransform", "ref LocalTransform", "in Velocity", "BurstCompile"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_04",
+        "category": "unity",
+        "title": "Unity ScriptableObject Architecture for Game Events",
+        "prompt": "Explain Ryan Hipple's ScriptableObject architecture for game events and modular variables. How does it eliminate direct scene dependencies between player and UI?",
+        "rubric_required_concepts": ["GameEvent ScriptableObject", "GameEventListener MonoBehaviour", "decoupled architecture", "no singleton manager required", "reusable asset channels"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_05",
+        "category": "unity",
+        "title": "Addressables Async Asset Management",
+        "prompt": "How does the Unity Addressables system handle asset loading, instantiation, and memory release? Write a code sample loading a GameObject via AssetReference and releasing its memory handle on destruction.",
+        "rubric_required_concepts": ["Addressables.LoadAssetAsync", "AsyncOperationHandle", "Addressables.Release", "AssetReference", "memory leak avoidance"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_06",
+        "category": "unity",
+        "title": "Input System Package InputAction Phase Callbacks",
+        "prompt": "Contrast the new Unity Input System's `started`, `performed`, and `canceled` callback phases. When is `performed` triggered for a Value action versus a Button action?",
+        "rubric_required_concepts": ["started on initial threshold", "performed on full trigger/value change", "canceled on release", "InputAction.CallbackContext", "PlayerInput component"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_07",
+        "category": "unity",
+        "title": "UI Toolkit vs uGUI Canvas Draw Calls",
+        "prompt": "Why does UI Toolkit achieve superior CPU and GPU performance over Canvas-based uGUI for dense inventory layouts? Detail the UXML/USS retained-mode rendering architecture.",
+        "rubric_required_concepts": ["retained mode UI", "no canvas mesh regeneration", "dynamic batching", "UXML structure", "USS stylesheet styling", "reduced draw calls"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_08",
+        "category": "unity",
+        "title": "Custom PropertyDrawer and Editor Scripting",
+        "prompt": "Write a custom PropertyDrawer for a serialized struct `[RangeFloat]` displaying a min-max slider in the Unity Inspector using EditorGUI.MinMaxSlider.",
+        "rubric_required_concepts": ["PropertyDrawer", "CustomPropertyDrawer", "OnGUI", "EditorGUI.MinMaxSlider", "SerializedProperty", "EditorGUI.BeginProperty"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_09",
+        "category": "unity",
+        "title": "Mecanim Animator Parameters and Hash Caching",
+        "prompt": "Why should Animator.StringToHash() be cached in static readonly fields instead of passing string literals to Animator.SetFloat() every frame?",
+        "rubric_required_concepts": ["string hashing overhead", "garbage generation avoidance", "static readonly int", "cache hash in awake", "CPU cycle preservation"],
+        "target_engine": "unity"
+    },
+    {
+        "id": "UNITY_10",
+        "category": "unity",
+        "title": "Unity Universal Render Pipeline (URP) Custom Render Pass",
+        "prompt": "Explain how to author a custom ScriptableRenderPass in URP to apply a fullscreen outline post-processing effect using CommandBuffer and Blitter.",
+        "rubric_required_concepts": ["ScriptableRendererFeature", "ScriptableRenderPass", "Execute method", "CommandBuffer", "Blitter.BlitCameraTexture", "RenderPassEvent"],
+        "target_engine": "unity"
+    },
+
+    # Category 4: Godot 4.3 GDScript & Node Architecture (31-38)
+    {
+        "id": "GODOT_01",
+        "category": "godot",
+        "title": "CharacterBody3D Kinematic Locomotion in GDScript",
+        "prompt": "Write a complete Godot 4.3 GDScript for a 3D player character using CharacterBody3D, with gravity, jump, sprint, camera direction alignment, and move_and_slide().",
+        "rubric_required_concepts": ["extends CharacterBody3D", "@export var speed", "_physics_process", "is_on_floor()", "move_and_slide()", "Input.get_vector()"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_02",
+        "category": "godot",
+        "title": "Godot 4 Signals and Callable Connection",
+        "prompt": "How do typed signals work in Godot 4? Write GDScript declaring a signal with parameters, connecting it to another node via code with a one-shot flag, and emitting it.",
+        "rubric_required_concepts": ["signal health_changed(new_val, max_val)", "connect(callable)", "CONNECT_ONE_SHOT", "emit()", "type safety in Godot 4"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_03",
+        "category": "godot",
+        "title": "Godot Custom Resource System for Item Databases",
+        "prompt": "Explain how Godot's Resource class functions as an equivalent to Unity's ScriptableObject. Write a GDScript custom Resource defining ItemData and demonstrate how it is loaded from disk.",
+        "rubric_required_concepts": ["class_name ItemData extends Resource", "@export var item_name: String", "ResourceLoader.load()", ".tres file format", "shared instance behavior"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_04",
+        "category": "godot",
+        "title": "Godot Area3D Collision Filtering with Collision Layers/Masks",
+        "prompt": "Explain the exact difference between Collision Layers and Collision Masks in Godot 4. If a Player is on Layer 1 and an Enemy projectile is on Layer 2, what must their respective layers and masks be for the projectile to detect the player?",
+        "rubric_required_concepts": ["Layer = 'what I am'", "Mask = 'what I look for'", "projectile mask includes bit 1", "area_entered / body_entered signals"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_05",
+        "category": "godot",
+        "title": "Godot AnimationTree StateMachine Playback",
+        "prompt": "How do you control an AnimationTree configured with an AnimationNodeStateMachine in Godot 4 via GDScript? Write code retrieving the playback object and triggering travel to an 'Attack' state.",
+        "rubric_required_concepts": ["$AnimationTree.get('parameters/playback')", "AnimationNodeStateMachinePlayback", "travel('Attack')", "is_playing()"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_06",
+        "category": "godot",
+        "title": "Godot MultiplayerSynchronizer and RPCs",
+        "prompt": "Explain how Godot 4's high-level multiplayer framework synchronizes actor positions using MultiplayerSynchronizer and RPC annotations (`@rpc('authority', 'call_local')`).",
+        "rubric_required_concepts": ["MultiplayerSynchronizer", "replication property list", "@rpc annotation", "is_multiplayer_authority()", "RPCMode"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_07",
+        "category": "godot",
+        "title": "Godot Visual Shaders vs Text Shaders",
+        "prompt": "In Godot 4 shading language, write a spatial fragment shader implementing a rim lighting / Fresnel effect based on the dot product of vertex normal and view vector.",
+        "rubric_required_concepts": ["shader_type spatial", "fragment()", "NORMAL", "VIEW", "dot(NORMAL, VIEW)", "pow(1.0 - dot, exponent)"],
+        "target_engine": "godot"
+    },
+    {
+        "id": "GODOT_08",
+        "category": "godot",
+        "title": "Godot 4 C# vs GDScript Performance Comparison",
+        "prompt": "Compare Godot 4 C# (.NET 8) with GDScript. In what specific game development scenarios (e.g. math-heavy generation, pathfinding loops, UI bindings) is C# significantly faster, and what is the marshaling cost between C# and the Godot C++ core?",
+        "rubric_required_concepts": ["JIT compilation", "heavy numerical loops", "GDExtension/Core marshaling", "garbage collector overhead", "GDScript native C++ binding optimization"],
+        "target_engine": "godot"
+    },
+
+    # Category 5: Other Game Engines & Ecosystems (39-44)
+    {
+        "id": "ENG_01",
+        "category": "other_engines",
+        "title": "Roblox Studio Luau Client-Server Replication",
+        "prompt": "In Roblox Studio Luau, explain the Client-Server networking boundary. Write a ServerScript and a LocalScript communicating safely via a RemoteFunction to purchase an in-game item without client-side currency exploitation.",
+        "rubric_required_concepts": ["RemoteFunction", "ServerScriptService", "ReplicatedStorage", "player verification on server", "server-side currency check"],
+        "target_engine": "roblox"
+    },
+    {
+        "id": "ENG_02",
+        "category": "other_engines",
+        "title": "UEFN Verse Language Concurrency and Weak Typing",
+        "prompt": "Explain how Epic Games' Verse programming language in UEFN handles structured concurrency using `sync`, `race`, and `branch`. Provide a Verse code snippet illustrating a timeout race between player interaction and a countdown timer.",
+        "rubric_required_concepts": ["race block", "structured concurrency", "suspends specifier", "Sleep()", "Event.Await()"],
+        "target_engine": "uefn"
+    },
+    {
+        "id": "ENG_03",
+        "category": "other_engines",
+        "title": "Bevy Engine (Rust) Entity-Component-System (ECS)",
+        "prompt": "Write a complete Rust system in Bevy 0.14+ querying entities with `Transform` and `Velocity` components, updating their positions according to delta time (`Res<Time>`).",
+        "rubric_required_concepts": ["Query<(&mut Transform, &Velocity)>", "Res<Time>", "time.delta_seconds()", "App::new().add_systems(Update, ...)", "Rust borrow checker safety"],
+        "target_engine": "bevy"
+    },
+    {
+        "id": "ENG_04",
+        "category": "other_engines",
+        "title": "GameMaker Language (GML) State Machine and Delta Timing",
+        "prompt": "In GameMaker (GML), how do you implement a robust finite state machine using enums and method variables, and how do you achieve framerate-independent movement using `delta_time`?",
+        "rubric_required_concepts": ["enum state", "function pointers / method variables", "delta_time / 1000000", "switch (current_state)", "step event"],
+        "target_engine": "gamemaker"
+    },
+    {
+        "id": "ENG_05",
+        "category": "other_engines",
+        "title": "Custom C++ Game Engine Vulkan Swapchain Recreation",
+        "prompt": "In a custom C++ game engine utilizing Vulkan, why must the VkSwapchainKHR be destroyed and recreated upon window resize, and how do you handle VK_ERROR_OUT_OF_DATE_KHR during vkAcquireNextImageKHR?",
+        "rubric_required_concepts": ["VK_ERROR_OUT_OF_DATE_KHR", "vkDeviceWaitIdle", "recreate swapchain, image views, and framebuffers", "surface capabilities query"],
+        "target_engine": "custom_engine"
+    },
+    {
+        "id": "ENG_06",
+        "category": "other_engines",
+        "title": "O3DE (Open 3D Engine) Component Bus (EBus) Architecture",
+        "prompt": "Explain the Event Bus (EBus) architectural pattern in O3DE. How does it decouple communication between components on the same entity without direct C++ pointer dependencies?",
+        "rubric_required_concepts": ["EBus", "EBusTraits", "Handler / Sender", "EntityId address", "decoupled broadcast pattern"],
+        "target_engine": "o3de"
+    },
+
+    # Category 6: Cross-Engine Translation & Semantic Mapping (45-50)
+    {
+        "id": "TRANS_01",
+        "category": "cross_engine_translation",
+        "title": "Unreal C++ ActorComponent to Unity C# MonoBehaviour",
+        "prompt": "Translate a C++ Unreal Engine UActorComponent that listens to actor collision and deals damage into an equivalent Unity C# MonoBehaviour component. Explicitly identify coordinate and lifecycle differences.",
+        "rubric_required_concepts": ["UActorComponent -> MonoBehaviour", "OnComponentBeginOverlap -> OnTriggerEnter / OnCollisionEnter", "AActor -> GameObject", "cm to meters conversion", "Z-up vs Y-up"],
+        "target_engine": "cross_engine"
+    },
+    {
+        "id": "TRANS_02",
+        "category": "cross_engine_translation",
+        "title": "Unity C# Rigidbody.AddForce to Godot 4 RigidBody3D.apply_force",
+        "prompt": "Map Unity's ForceMode (Force, Acceleration, Impulse, VelocityChange) to their mathematical equivalents and API methods in Godot 4 RigidBody3D and Unreal Engine 5 PrimitiveComponent.",
+        "rubric_required_concepts": ["Force (continuous with mass)", "Impulse (instant with mass)", "Acceleration (continuous ignore mass)", "VelocityChange (instant ignore mass)", "apply_force vs apply_impulse"],
+        "target_engine": "cross_engine"
+    },
+    {
+        "id": "TRANS_03",
+        "category": "cross_engine_translation",
+        "title": "Godot 4 Signal Bus to Unreal Engine Multicast Delegates",
+        "prompt": "Compare an Autoload Global Signal Bus in Godot 4 with a GameInstance Subsystem with Multicast Delegates in Unreal Engine 5. Provide side-by-side code snippets.",
+        "rubric_required_concepts": ["Autoload Singleton in Godot", "UGameInstanceSubsystem in Unreal", "DECLARE_DYNAMIC_MULTICAST_DELEGATE", "signal emission", "lifecycle persistence across level loads"],
+        "target_engine": "cross_engine"
+    },
+    {
+        "id": "TRANS_04",
+        "category": "cross_engine_translation",
+        "title": "Transform Coordinate Conversion: Unreal (Z-up) to Unity (Y-up)",
+        "prompt": "Provide the exact matrix transformation required to export a 3D skeletal animation asset from Unreal Engine (Left-Handed, Z-Up) into Unity (Left-Handed, Y-Up) without mirror-image flipping or rotational distortion.",
+        "rubric_required_concepts": ["basis change matrix", "swap Y and Z axes", "quaternion component mapping (x, z, y, -w)", "unit scale conversion factor 0.01"],
+        "target_engine": "cross_engine"
+    },
+    {
+        "id": "TRANS_05",
+        "category": "cross_engine_translation",
+        "title": "Prefabs (Unity) vs Blueprints (Unreal) vs PackedScenes (Godot)",
+        "prompt": "Critically analyze the semantic differences between Unity Prefabs (and Prefab Variants), Unreal Blueprint Classes, and Godot PackedScenes. How does each handle nested inheritance and property overrides?",
+        "rubric_required_concepts": ["prefab nested overrides", "blueprint class inheritance vs composition", "packedscene instancing as scene tree", "circular reference handling"],
+        "target_engine": "cross_engine"
+    },
+    {
+        "id": "TRANS_06",
+        "category": "cross_engine_translation",
+        "title": "Multi-Engine Health Invariant Contract",
+        "prompt": "Define a formal language-agnostic contract for Health: invariants, preconditions, and postconditions. Then show how it compiles to: (1) Unreal checkf assertions, (2) Unity UnityEngine.Assertions, and (3) Godot assert().",
+        "rubric_required_concepts": ["CurrentHealth >= 0 && <= MaxHealth", "checkf(expr, text)", "Assert.IsTrue(expr)", "assert(expr, text)", "fail-fast assertion design"],
+        "target_engine": "cross_engine"
+    },
+
+    # Category 7: Debugging, Profiling & Frame Optimization (51-55)
+    {
+        "id": "PERF_01",
+        "category": "debugging_and_performance",
+        "title": "Diagnosing CPU Garbage Collection Frame Spikes",
+        "prompt": "In a 60 FPS action game running in Unity or C# custom engine, frame drops occur every 4 seconds. How do you use the CPU Profiler to isolate garbage allocations, and what are the top 3 hidden allocation culprits in game loops?",
+        "rubric_required_concepts": ["GC.Alloc column in profiler", "string concatenation in loops", "LINQ allocations", "boxing value types", "coroutine allocations"],
+        "target_engine": "performance"
+    },
+    {
+        "id": "PERF_02",
+        "category": "debugging_and_performance",
+        "title": "Unreal Engine Unreal Insights Trace Analysis",
+        "prompt": "Explain how to capture and analyze an Unreal Insights trace (`-trace=default,cpu,gpu,frame`). How do you distinguish a GPU-bound frame (e.g. Lumen/Nanite) from a GameThread CPU bottleneck?",
+        "rubric_required_concepts": ["Unreal Insights", "GameThread vs RHIThread vs GPU time", "stat unit", "Lumen screen probe cost", "Nanite rasterization limits"],
+        "target_engine": "performance"
+    },
+    {
+        "id": "PERF_03",
+        "category": "debugging_and_performance",
+        "title": "Draw Call Reduction and Static/Dynamic Batching",
+        "prompt": "What causes a draw call, why do state changes (materials, textures, shaders) break batching, and how do GPU Instancing and Texture Atlases resolve the draw call ceiling?",
+        "rubric_required_concepts": ["set pass call / state change", "material switching overhead", "GPU Instancing", "Texture Atlas", "Uniform Buffer Objects"],
+        "target_engine": "performance"
+    },
+    {
+        "id": "PERF_04",
+        "category": "debugging_and_performance",
+        "title": "Resolving Circular Dependency Deadlocks in C++",
+        "prompt": "In an Unreal Engine or custom C++ engine codebase, Class A references Class B and Class B references Class A, causing compilation failure. How do you resolve this using forward declarations and inline pointer dereferencing?",
+        "rubric_required_concepts": ["forward declaration (`class B;`)", "move #include to .cpp", "opaque pointer storage", "incomplete type resolution"],
+        "target_engine": "debugging"
+    },
+    {
+        "id": "PERF_05",
+        "category": "debugging_and_performance",
+        "title": "Shader Permutation Explosion Management",
+        "prompt": "What causes shader permutation explosion in high-end game engines, and how can technical artists configure shader feature toggles and static switches to keep cook times and memory footprint acceptable?",
+        "rubric_required_concepts": ["preprocessor `#ifdef` combinatorial explosion", "static switch parameter", "shader pipeline cache (PSO)", "stripping unused permutations", "cook-time optimization"],
+        "target_engine": "performance"
+    },
+
+    # Category 8: Networking, Netcode & Advanced Systems (56-60)
+    {
+        "id": "NET_01",
+        "category": "networking_and_systems",
+        "title": "Client-Side Prediction and Server Reconciliation",
+        "prompt": "Explain the architectural pipeline of Client-Side Prediction and Server Reconciliation for competitive multiplayer movement. Detail input history buffers, tick synchronization, and error replay.",
+        "rubric_required_concepts": ["input buffer with sequence numbers", "immediate client application", "authoritative server state packet", "reconciliation delta threshold", "replaying unacknowledged inputs"],
+        "target_engine": "networking"
+    },
+    {
+        "id": "NET_02",
+        "category": "networking_and_systems",
+        "title": "Rollback Netcode (GGPO Style) vs Lockstep",
+        "prompt": "Compare deterministic lockstep netcode with GGPO-style rollback netcode for fighting games. Why does rollback deliver zero perceptible input latency, and what are the strict determinism requirements on the game simulation?",
+        "rubric_required_concepts": ["deterministic simulation", "no unseeded floating point drift", "state snapshot and restore", "instant input response", "rollback and fast-forward frames"],
+        "target_engine": "networking"
+    },
+    {
+        "id": "NET_03",
+        "category": "networking_and_systems",
+        "title": "Lag Compensation and Rewind Hit Registration",
+        "prompt": "How does server-side lag compensation work for hitscan weapons in multiplayer shooters? How does the server rewind historical hitboxes to match what the client saw at render time?",
+        "rubric_required_concepts": ["server history buffer of player hitboxes", "client ping / latency interpolation", "rewind world hitboxes to tick t", "raycast query against historical poses", "un-rewind restore"],
+        "target_engine": "networking"
+    },
+    {
+        "id": "NET_04",
+        "category": "networking_and_systems",
+        "title": "Procedural Dungeon Generation via Wave Function Collapse",
+        "prompt": "Detail how the Wave Function Collapse (WFC) algorithm is applied to procedural 3D level design: superposition of tiles, socket adjacency constraints, entropy calculation, and backtracking upon contradiction.",
+        "rubric_required_concepts": ["superposition", "lowest entropy selection", "collapse state", "constraint propagation", "backtracking on contradiction"],
+        "target_engine": "game_design_systems"
+    },
+    {
+        "id": "NET_05",
+        "category": "networking_and_systems",
+        "title": "Animation State Machine Motion Matching",
+        "prompt": "Compare traditional blend-space animation state machines with modern Motion Matching (e.g. UE5 Motion Symphony / Pose Search). How does trajectory query matching select optimal animation poses dynamically?",
+        "rubric_required_concepts": ["motion matching", "future trajectory prediction", "feature vector (pose, foot velocity, hip trajectory)", "k-d tree / nearest neighbor search", "blend tree elimination"],
+        "target_engine": "animation_systems"
+    }
+]
+
+
+def get_evaluation_dataset() -> List[Dict[str, Any]]:
+    return EVALUATION_QUESTIONS
+
+
+def export_dataset_json(out_path: str = "configs/gameforge_v1_eval_dataset.json"):
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump({"version": "1.0.0", "total_questions": len(EVALUATION_QUESTIONS), "questions": EVALUATION_QUESTIONS}, f, indent=2)
+    print(f"Exported {len(EVALUATION_QUESTIONS)} evaluation questions to {out_path}")
+
+
+if __name__ == "__main__":
+    export_dataset_json()
