@@ -1,0 +1,79 @@
+```cpp
+// InteractableComponent.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "InteractableComponent.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInteractedSignature, APawn*, InstigatorPawn);
+
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class UInteractableComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	UInteractableComponent();
+
+	/** Delegate broadcast when interaction occurs */
+	UPROPERTY(BlueprintAssignable, Category = "Interaction")
+	FOnInteractedSignature OnInteracted;
+
+	/** Maximum squared distance for interaction */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction", meta = (ClampMin = "0.0"))
+	float InteractionDistance = 200.0f;
+
+	/**
+	 * Attempts to interact with this component.
+	 * @param InstigatorPawn The pawn attempting the interaction.
+	 * @return True if interaction was successful, false otherwise.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	bool Interact(APawn* InstigatorPawn);
+
+protected:
+	/** Cached reference to the owning actor for distance checks */
+	TObjectPtr<AActor> OwningActor;
+
+	virtual void BeginPlay() override;
+};
+```
+
+```cpp
+// InteractableComponent.cpp
+#include "InteractableComponent.h"
+#include "GameFramework/Pawn.h"
+
+UInteractableComponent::UInteractableComponent()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
+}
+
+void UInteractableComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	OwningActor = GetOwner();
+}
+
+bool UInteractableComponent::Interact(APawn* InstigatorPawn)
+{
+	if (!InstigatorPawn || !OwningActor)
+	{
+		return false;
+	}
+
+	const FVector PawnLocation = InstigatorPawn->GetActorLocation();
+	const FVector ActorLocation = OwningActor->GetActorLocation();
+
+	const float SquaredDistance = FVector::DistSquared(PawnLocation, ActorLocation);
+	if (SquaredDistance > FMath::Square(InteractionDistance))
+	{
+		return false;
+	}
+
+	OnInteracted.Broadcast(InstigatorPawn);
+	return true;
+}
+```

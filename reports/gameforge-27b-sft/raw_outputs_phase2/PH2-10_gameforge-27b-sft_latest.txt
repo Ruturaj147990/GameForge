@@ -1,0 +1,10 @@
+```cpp
+#include "CoreMinimal.h"
+
+FVector ReflectVector(const FVector& Velocity, const FVector& SurfaceNormal)
+{
+    const FVector NormalizedNormal = SurfaceNormal.GetSafeNormal();
+    const float DotProduct = FVector::DotProduct(Velocity, NormalizedNormal);
+    return Velocity - 2.0f * DotProduct * NormalizedNormal;
+}
+```

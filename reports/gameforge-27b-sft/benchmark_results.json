@@ -1,0 +1,2706 @@
+{
+  "timestamp": "2026-10-24 00:11:58",
+  "hardware": "AMD Radeon RX 7700 XT 12GB VRAM / Vulkan Ollama Backend",
+  "generation_config": {
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "think": false,
+    "max_tokens_regression": 300,
+    "max_tokens_benchmark": 250
+  },
+  "regression_30_tasks": {
+    "totals": {
+      "qwen3.8:27b-q4_K_M": 138,
+      "gameforge-27b:latest": 138,
+      "gameforge-27b-sft:latest": 155
+    },
+    "max_possible": 300,
+    "percentages": {
+      "qwen3.8:27b-q4_K_M": 46.0,
+      "gameforge-27b:latest": 46.0,
+      "gameforge-27b-sft:latest": 51.67
+    },
+    "records": {
+      "qwen3.8:27b-q4_K_M": [
+        {
+          "task_id": "REG-01",
+          "topic": "Replication & Authority",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "UCLASS(",
+            "GENERATED_BODY()",
+            "ReplicatedUsing"
+          ],
+          "eval_count": 220,
+          "tps": 5.74,
+          "latency": 39.68,
+          "is_truncated": true,
+          "response_preview": "```cpp // HealthComponent.h #pragma once  #include \"CoreMinimal.h\" #include \"Components/ActorComponent.h\" #include \"HealthComponent.generated.h\"  DECLARE_DYNAMI..."
+        },
+        {
+          "task_id": "REG-02",
+          "topic": "RPC Validation & Security",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.73,
+          "latency": 39.39,
+          "is_truncated": true,
+          "response_preview": "```cpp // WeaponComponent.h #pragma once  #include \"CoreMinimal.h\" #include \"Components/ActorComponent.h\" #include \"WeaponComponent.generated.h\"  class AWeapon;..."
+        },
+        {
+          "task_id": "REG-03",
+          "topic": "Memory & TObjectPtr",
+          "score": 3,
+          "max_score": 10,
+          "matches": [
+            "UGameInstanceSubsystem"
+          ],
+          "eval_count": 220,
+          "tps": 5.78,
+          "latency": 39.05,
+          "is_truncated": true,
+          "response_preview": "# UGameInstanceSubsystem for Caching Player Inventory UDataAsset Objects  ## Implementation  ```cpp // InventoryCacheSubsystem.h #pragma once  #include \"CoreMin..."
+        },
+        {
+          "task_id": "REG-04",
+          "topic": "Delegates & Events",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam",
+            "BlueprintAssignable"
+          ],
+          "eval_count": 220,
+          "tps": 5.79,
+          "latency": 38.95,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, you can declare a dynamic multicast delegate using the `DECLARE_DYNAMIC_MULTICAST_DELEGATE` macro. Here's how to do it for `OnPlayerDied` ..."
+        },
+        {
+          "task_id": "REG-05",
+          "topic": "Gameplay Ability System (GAS)",
+          "score": 2,
+          "max_score": 10,
+          "matches": [
+            "UAttributeSet"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.77,
+          "is_truncated": true,
+          "response_preview": "```cpp // Copyright 1998-2025 Epic Games, Inc. All Rights Reserved.  #pragma once  #include \"CoreMinimal.h\" #include \"GameplayTagContainer.h\" #include \"Attribut..."
+        },
+        {
+          "task_id": "REG-06",
+          "topic": "Collision & Sweep Tracing",
+          "score": 9,
+          "max_score": 10,
+          "matches": [
+            "LineTraceSingleByChannel",
+            "FCollisionQueryParams",
+            "AddIgnoredActor"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.76,
+          "is_truncated": true,
+          "response_preview": "```cpp #include \"Engine/World.h\" #include \"Engine/HitResult.h\" #include \"DrawDebugHelpers.h\" #include \"Engine/EngineTypes.h\"  void AMyActor::TraceForward2000() ..."
+        },
+        {
+          "task_id": "REG-07",
+          "topic": "AI & Behavior Trees",
+          "score": 5,
+          "max_score": 10,
+          "matches": [
+            "UBTTaskNode",
+            "GetRandomReachablePointInRadius"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.95,
+          "is_truncated": true,
+          "response_preview": "Here is a complete implementation of a custom `UBTTaskNode` for Unreal Engine 5.7. This task finds a random reachable point on the navigation mesh within a 1500..."
+        },
+        {
+          "task_id": "REG-08",
+          "topic": "Network Optimization",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "DOREPLIFETIME_CONDITION",
+            "COND_OwnerOnly"
+          ],
+          "eval_count": 220,
+          "tps": 5.8,
+          "latency": 38.88,
+          "is_truncated": true,
+          "response_preview": "# Using `DOREPLIFETIME_CONDITION` with `COND_OwnerOnly` in UE 5.7  ## Core Concept  `DOREPLIFETIME_CONDITION` is a macro that registers a property for network r..."
+        },
+        {
+          "task_id": "REG-09",
+          "topic": "Enhanced Input System",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.83,
+          "latency": 38.92,
+          "is_truncated": true,
+          "response_preview": "Here is how to bind an Enhanced Input Action to a character jump function in Unreal Engine 5.7 using C++.  ### Prerequisites 1. You have an `InputAction` asset ..."
+        },
+        {
+          "task_id": "REG-10",
+          "topic": "Tick Avoidance & Timers",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.83,
+          "latency": 38.74,
+          "is_truncated": true,
+          "response_preview": "# Why Tick is Harmful for Performance in Unreal Engine  ## The Problem with `Tick()`  In Unreal Engine, `Tick()` is called **every frame** for every actor that ..."
+        },
+        {
+          "task_id": "REG-11",
+          "topic": "CharacterBody3D Controller",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "CharacterBody3D",
+            "velocity",
+            "is_on_floor()"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.83,
+          "is_truncated": true,
+          "response_preview": "```gdscript extends CharacterBody3D  @export var speed: float = 5.0 @export var jump_velocity: float = 4.0 @export var gravity: float = -9.8  var velocity: Vect..."
+        },
+        {
+          "task_id": "REG-12",
+          "topic": "Entities 1.0+ & Burst",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "[BurstCompile]",
+            "IJobEntity",
+            "ref "
+          ],
+          "eval_count": 220,
+          "tps": 5.84,
+          "latency": 38.63,
+          "is_truncated": true,
+          "response_preview": "```csharp using Unity.Burst; using Unity.Collections; using Unity.Entities; using Unity.Mathematics; using Unity.Transforms;  namespace MyGame.Systems {     [Bu..."
+        },
+        {
+          "task_id": "REG-13",
+          "topic": "Network Security & Remotes",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "player",
+            "balance"
+          ],
+          "eval_count": 220,
+          "tps": 5.72,
+          "latency": 39.44,
+          "is_truncated": true,
+          "response_preview": "```lua -- ServerScript.lua -- Secure server-side handler for item purchases via RemoteFunction  local Players = game:GetService(\"Players\") local ReplicatedStora..."
+        },
+        {
+          "task_id": "REG-14",
+          "topic": "Creative Device Concurrency",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.72,
+          "latency": 39.45,
+          "is_truncated": true,
+          "response_preview": "```verse import \"unreal/verse/verse\" import \"unreal/verse/verse/actor\" import \"unreal/verse/verse/actor/actor\" import \"unreal/verse/verse/actor/actor/actor\" imp..."
+        },
+        {
+          "task_id": "REG-15",
+          "topic": "ECS Query Systems",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "Query<",
+            "Transform",
+            "despawn"
+          ],
+          "eval_count": 220,
+          "tps": 5.67,
+          "latency": 39.82,
+          "is_truncated": true,
+          "response_preview": "```rust use bevy::prelude::*;  /// Component representing the velocity of an entity. #[derive(Component, Debug, Clone, Copy)] pub struct Velocity {     pub x: f..."
+        },
+        {
+          "task_id": "REG-16",
+          "topic": "Quaternion SLERP",
+          "score": 2,
+          "max_score": 10,
+          "matches": [
+            "dot"
+          ],
+          "eval_count": 220,
+          "tps": 5.72,
+          "latency": 39.48,
+          "is_truncated": true,
+          "response_preview": "```cpp #include <cmath> #include <cstddef>  struct Quaternion {     float x;     float y;     float z;     float w;      Quaternion(float x = 0.0f, float y = 0...."
+        },
+        {
+          "task_id": "REG-17",
+          "topic": "Mass Entity & ECS",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.73,
+          "latency": 39.65,
+          "is_truncated": true,
+          "response_preview": "# MassEntity in UE 5.7 vs. Traditional UObject Actors  ## Conceptual Overview  ### Traditional UObject Actors (Component-Based)  In classic Unreal Engine, gamep..."
+        },
+        {
+          "task_id": "REG-18",
+          "topic": "World Partition & Data Layers",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "UDataLayerManager"
+          ],
+          "eval_count": 220,
+          "tps": 5.74,
+          "latency": 39.33,
+          "is_truncated": true,
+          "response_preview": "# Dynamically Activating/Deactivating Data Layers in UE 5.7 C++  In Unreal Engine 5.7, Data Layers are managed through `UDataLayerManager` and the `FDataLayerAs..."
+        },
+        {
+          "task_id": "REG-19",
+          "topic": "Async Asset Loading",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "FStreamableManager",
+            "RequestAsyncLoad"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.77,
+          "is_truncated": true,
+          "response_preview": "```cpp #include \"Engine/StreamableManager.h\" #include \"Engine/StaticMesh.h\" #include \"Engine/AssetManager.h\" #include \"UObject/NameTypes.h\"  void UMyClass::Load..."
+        },
+        {
+          "task_id": "REG-20",
+          "topic": "Slate C++ UI Construction",
+          "score": 5,
+          "max_score": 10,
+          "matches": [
+            "SCompoundWidget",
+            "OnClicked"
+          ],
+          "eval_count": 220,
+          "tps": 5.83,
+          "latency": 38.66,
+          "is_truncated": true,
+          "response_preview": "```cpp // MyCompoundWidget.h #pragma once  #include \"CoreMinimal.h\" #include \"Widgets/SCompoundWidget.h\" #include \"Widgets/DeclarativeSyntaxSupport.h\" #include ..."
+        },
+        {
+          "task_id": "REG-21",
+          "topic": "Aspects & Baker",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 39.01,
+          "is_truncated": true,
+          "response_preview": "In Unity 6 with Entities 1.3 (formerly DOTS), the baking process involves converting authoring components (MonoBehaviours) into native components (`IComponentDa..."
+        },
+        {
+          "task_id": "REG-22",
+          "topic": "Signals & Callables",
+          "score": 10,
+          "max_score": 10,
+          "matches": [
+            "signal ",
+            ".connect(",
+            ".emit("
+          ],
+          "eval_count": 220,
+          "tps": 5.83,
+          "latency": 38.69,
+          "is_truncated": true,
+          "response_preview": "```gdscript extends Node  # Declare a custom signal with arguments signal player_died(health: int, cause: String) signal score_changed(new_score: int, old_score..."
+        },
+        {
+          "task_id": "REG-23",
+          "topic": "Token Bucket Rate Limiting",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "os.clock()",
+            "capacity",
+            "tokens"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.94,
+          "is_truncated": true,
+          "response_preview": "```lua -- TokenBucketRateLimiter.lua -- An in-memory token bucket rate limiter for network requests in Roblox Luau. -- Tokens are refilled based on delta time a..."
+        },
+        {
+          "task_id": "REG-24",
+          "topic": "Fail Expressions & Logic",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "<decides>"
+          ],
+          "eval_count": 220,
+          "tps": 5.8,
+          "latency": 38.88,
+          "is_truncated": true,
+          "response_preview": "# Verse's Failure Handling with `<decides>`  ## How `<decides>` Works  In the **Verse** programming language, `<decides>` is a control-flow construct that handl..."
+        },
+        {
+          "task_id": "REG-25",
+          "topic": "App Schedule & Plugins",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "Startup",
+            "Update"
+          ],
+          "eval_count": 220,
+          "tps": 5.8,
+          "latency": 38.9,
+          "is_truncated": true,
+          "response_preview": "# Structuring a Bevy 0.14 Plugin  Below is a complete, idiomatic example of a Bevy 0.14 plugin that demonstrates:  - Custom resource registration - Startup sche..."
+        },
+        {
+          "task_id": "REG-26",
+          "topic": "Vector Reflection",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "V - 2",
+            "normal"
+          ],
+          "eval_count": 220,
+          "tps": 5.85,
+          "latency": 38.66,
+          "is_truncated": true,
+          "response_preview": "# Vector Reflection Formula: Derivation and C++ Implementation  ## Mathematical Derivation  When a vector **V** (incident direction) strikes a surface with unit..."
+        },
+        {
+          "task_id": "REG-27",
+          "topic": "Fast Array Serialization",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "FFastArraySerializer"
+          ],
+          "eval_count": 220,
+          "tps": 5.77,
+          "latency": 39.17,
+          "is_truncated": true,
+          "response_preview": "# FFastArraySerializer for UE 5.7 C++  Below is a production-ready `FFastArraySerializer` implementation designed for high-performance multiplayer item inventor..."
+        },
+        {
+          "task_id": "REG-28",
+          "topic": "Chaos Physics Substepping",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "Chaos",
+            "substep"
+          ],
+          "eval_count": 220,
+          "tps": 5.83,
+          "latency": 38.8,
+          "is_truncated": true,
+          "response_preview": "# Chaos Physics Substepping & External Force Callbacks in UE 5.7 C++  ## Overview  In Unreal Engine 5.7, Chaos physics supports **substepping** (multiple physic..."
+        },
+        {
+          "task_id": "REG-29",
+          "topic": "NativeArray & Memory Safety",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "NativeArray<",
+            "Allocator.TempJob"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.89,
+          "is_truncated": true,
+          "response_preview": "```csharp using UnityEngine; using Unity.Collections; using Unity.Jobs; using Unity.Mathematics;  public class NativeArrayDemo : MonoBehaviour {     private voi..."
+        },
+        {
+          "task_id": "REG-30",
+          "topic": "Camera Frustum Culling",
+          "score": 3,
+          "max_score": 10,
+          "matches": [
+            "plane"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.84,
+          "is_truncated": true,
+          "response_preview": "```cpp #include <cmath> #include <array>  struct Vector3 {     float x, y, z;          Vector3() : x(0), y(0), z(0) {}     Vector3(float x, float y, float z) : ..."
+        }
+      ],
+      "gameforge-27b:latest": [
+        {
+          "task_id": "REG-01",
+          "topic": "Replication & Authority",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "UCLASS(",
+            "GENERATED_BODY()",
+            "ReplicatedUsing"
+          ],
+          "eval_count": 220,
+          "tps": 5.8,
+          "latency": 55.28,
+          "is_truncated": true,
+          "response_preview": "```cpp // HealthComponent.h #pragma once  #include \"CoreMinimal.h\" #include \"Components/ActorComponent.h\" #include \"HealthComponent.generated.h\"  DECLARE_DYNAMI..."
+        },
+        {
+          "task_id": "REG-02",
+          "topic": "RPC Validation & Security",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.76,
+          "latency": 39.31,
+          "is_truncated": true,
+          "response_preview": "Here is the implementation of a server-reliable RPC `Server_FireWeapon` in Unreal Engine 5.7 C++.  ### Key Design Points: 1. **Reliability**: Uses `Reliable` to..."
+        },
+        {
+          "task_id": "REG-03",
+          "topic": "Memory & TObjectPtr",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "UGameInstanceSubsystem",
+            "TObjectPtr<"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.86,
+          "is_truncated": true,
+          "response_preview": "Here is the implementation of a `UGameInstanceSubsystem` in Unreal Engine 5.7 C++ that caches `UDataAsset` objects for player inventories.  ### Key Design Decis..."
+        },
+        {
+          "task_id": "REG-04",
+          "topic": "Delegates & Events",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam",
+            "BlueprintAssignable"
+          ],
+          "eval_count": 220,
+          "tps": 5.78,
+          "latency": 39.14,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, the standard approach for creating a dynamic multicast delegate that is exposed to Blueprints is to use the `DECLARE_DYNAMIC_MULTICAST_DEL..."
+        },
+        {
+          "task_id": "REG-05",
+          "topic": "Gameplay Ability System (GAS)",
+          "score": 3,
+          "max_score": 10,
+          "matches": [
+            "FGameplayAttributeData"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.95,
+          "is_truncated": true,
+          "response_preview": "Here is a robust implementation of a `HealthAttributeSet` for Unreal Engine 5.7.  ### Key Design Decisions: 1.  **`GAMEPLAYATTRIBUTE_PROPERTY_GETTER`**: Used fo..."
+        },
+        {
+          "task_id": "REG-06",
+          "topic": "Collision & Sweep Tracing",
+          "score": 1,
+          "max_score": 10,
+          "matches": [
+            "ECollisionChannel"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.86,
+          "is_truncated": true,
+          "response_preview": "Here is a robust, production-ready implementation for Unreal Engine 5.7.  ### Key Design Decisions: 1.  **`FHitResult` by Reference**: Standard UE practice to a..."
+        },
+        {
+          "task_id": "REG-07",
+          "topic": "AI & Behavior Trees",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 39.11,
+          "is_truncated": true,
+          "response_preview": "Here is the implementation of `UBTTask_FindRandomPatrol` for Unreal Engine 5.7.  ### Key Design Decisions: 1.  **Navigation System Integration**: Uses `UNavigat..."
+        },
+        {
+          "task_id": "REG-08",
+          "topic": "Network Optimization",
+          "score": 10,
+          "max_score": 10,
+          "matches": [
+            "DOREPLIFETIME_CONDITION",
+            "COND_OwnerOnly",
+            "bandwidth"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.93,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, `DOREPLIFETIME_CONDITION` is the standard macro for controlling **when** a property is replicated. Using `COND_OwnerOnly` is a critical op..."
+        },
+        {
+          "task_id": "REG-09",
+          "topic": "Enhanced Input System",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "UEnhancedInputComponent",
+            "BindAction"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 39.17,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, the standard approach for binding Enhanced Input Actions to C++ functions involves using `UEnhancedInputComponent` and the `BindAction` me..."
+        },
+        {
+          "task_id": "REG-10",
+          "topic": "Tick Avoidance & Timers",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.94,
+          "is_truncated": true,
+          "response_preview": "# Why `Tick` is Harmful for Performance in UE 5.7  ## The Problem with `Tick`  In Unreal Engine, `AActor::Tick()` (and by extension `UActorComponent::Tick()`) i..."
+        },
+        {
+          "task_id": "REG-11",
+          "topic": "CharacterBody3D Controller",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "CharacterBody3D",
+            "velocity",
+            "is_on_floor()"
+          ],
+          "eval_count": 220,
+          "tps": 5.79,
+          "latency": 39.35,
+          "is_truncated": true,
+          "response_preview": "```gdscript extends CharacterBody3D  @export var speed: float = 5.0 @export var jump_velocity: float = 4.0 @export var gravity: float = -9.8  var velocity: Vect..."
+        },
+        {
+          "task_id": "REG-12",
+          "topic": "Entities 1.0+ & Burst",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "[BurstCompile]",
+            "IJobEntity"
+          ],
+          "eval_count": 220,
+          "tps": 5.78,
+          "latency": 39.13,
+          "is_truncated": true,
+          "response_preview": "Here is a complete, production-ready implementation for Unity 6 (DOTS Entities 1.3).  ### Key Architectural Decisions 1.  **`IJobEntity`**: Used for maximum per..."
+        },
+        {
+          "task_id": "REG-13",
+          "topic": "Network Security & Remotes",
+          "score": 2,
+          "max_score": 10,
+          "matches": [
+            "player"
+          ],
+          "eval_count": 220,
+          "tps": 5.79,
+          "latency": 39.07,
+          "is_truncated": true,
+          "response_preview": "```lua -- ServerScript.lua -- Secure server-side handler for item purchases via RemoteFunction  local Players = game:GetService(\"Players\") local ReplicatedStora..."
+        },
+        {
+          "task_id": "REG-14",
+          "topic": "Creative Device Concurrency",
+          "score": 3,
+          "max_score": 10,
+          "matches": [
+            "creative_device"
+          ],
+          "eval_count": 220,
+          "tps": 5.83,
+          "latency": 38.82,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine's Verse (UEFN), you don't use C++ classes directly in the creative scripting layer. Instead, you use **Verse** (a Rust-like language) to define..."
+        },
+        {
+          "task_id": "REG-15",
+          "topic": "ECS Query Systems",
+          "score": 5,
+          "max_score": 10,
+          "matches": [
+            "Transform",
+            "despawn"
+          ],
+          "eval_count": 220,
+          "tps": 5.76,
+          "latency": 39.26,
+          "is_truncated": true,
+          "response_preview": "Here is a robust Bevy 0.14 ECS system that fulfills your requirements.  ### Key Design Decisions: 1.  **Component Structure**: Uses `Transform` (for position/ro..."
+        },
+        {
+          "task_id": "REG-16",
+          "topic": "Quaternion SLERP",
+          "score": 2,
+          "max_score": 10,
+          "matches": [
+            "dot"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.91,
+          "is_truncated": true,
+          "response_preview": "# Quaternion Spherical Linear Interpolation (SLERP)  ## Implementation  ```cpp #include <cmath> #include <cstdint>  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500..."
+        },
+        {
+          "task_id": "REG-17",
+          "topic": "Mass Entity & ECS",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.78,
+          "latency": 39.12,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, **MassEntity** represents a fundamental shift in the ECS (Entity-Component-System) architecture, moving away from the traditional OOP (Obj..."
+        },
+        {
+          "task_id": "REG-18",
+          "topic": "World Partition & Data Layers",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "UDataLayerManager"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.89,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, `UDataLayerManager` is the central authority for managing Data Layers. To dynamically activate or deactivate them at runtime, you typicall..."
+        },
+        {
+          "task_id": "REG-19",
+          "topic": "Async Asset Loading",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "FStreamableManager",
+            "RequestAsyncLoad"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.88,
+          "is_truncated": true,
+          "response_preview": "```cpp #include \"Engine/StreamableManager.h\" #include \"Engine/StaticMesh.h\" #include \"Engine/AssetManager.h\" #include \"UObject/NameTypes.h\"  void UMyComponent::..."
+        },
+        {
+          "task_id": "REG-20",
+          "topic": "Slate C++ UI Construction",
+          "score": 5,
+          "max_score": 10,
+          "matches": [
+            "SCompoundWidget",
+            "OnClicked"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 39.12,
+          "is_truncated": true,
+          "response_preview": "Here is a complete, production-ready implementation of an `SCompoundWidget` in Unreal Engine 5.7 using Slate C++.  ### Key Design Decisions: 1.  **`SCompoundWid..."
+        },
+        {
+          "task_id": "REG-21",
+          "topic": "Aspects & Baker",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 38.91,
+          "is_truncated": true,
+          "response_preview": "In Unity 6 (specifically using the Entities package version 1.3+), the baking process has shifted significantly towards **`Baker`** classes that implement the *..."
+        },
+        {
+          "task_id": "REG-22",
+          "topic": "Signals & Callables",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "signal ",
+            ".connect("
+          ],
+          "eval_count": 220,
+          "tps": 5.79,
+          "latency": 39.08,
+          "is_truncated": true,
+          "response_preview": "```gdscript # player.gd extends CharacterBody2D  # 1. Declare a custom signal with typed arguments signal health_changed(new_health: int, max_health: int) signa..."
+        },
+        {
+          "task_id": "REG-23",
+          "topic": "Token Bucket Rate Limiting",
+          "score": 5,
+          "max_score": 10,
+          "matches": [
+            "capacity",
+            "tokens"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 39.01,
+          "is_truncated": true,
+          "response_preview": "```lua -- TokenBucketRateLimiter.lua -- In-memory token bucket rate limiter for network requests in Roblox Luau. -- Refills tokens based on delta time and clamp..."
+        },
+        {
+          "task_id": "REG-24",
+          "topic": "Fail Expressions & Logic",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "<decides>"
+          ],
+          "eval_count": 220,
+          "tps": 5.77,
+          "latency": 39.26,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine's Verse (the scripting language for UEFN), failure handling is distinct from traditional C++ exceptions or Rust's `Result` types. Verse uses a ..."
+        },
+        {
+          "task_id": "REG-25",
+          "topic": "App Schedule & Plugins",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "Startup",
+            "Update"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.93,
+          "is_truncated": true,
+          "response_preview": "Here is a robust structure for a Bevy 0.14 plugin.  In Bevy 0.14, the `Plugin` trait has changed slightly: 1.  `build` is now `fn build(&self, app: &mut App)`. ..."
+        },
+        {
+          "task_id": "REG-26",
+          "topic": "Vector Reflection",
+          "score": 10,
+          "max_score": 10,
+          "matches": [
+            "V - 2",
+            "dot",
+            "normal"
+          ],
+          "eval_count": 220,
+          "tps": 5.77,
+          "latency": 39.27,
+          "is_truncated": true,
+          "response_preview": "# Vector Reflection Formula: Derivation & Implementation  ## Mathematical Derivation  Given an incident vector **V** hitting a surface with unit normal **N**, t..."
+        },
+        {
+          "task_id": "REG-27",
+          "topic": "Fast Array Serialization",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "FFastArraySerializer"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 38.94,
+          "is_truncated": true,
+          "response_preview": "Here is a high-performance `FFastArraySerializer` implementation for Unreal Engine 5.7.  ### Design Philosophy 1.  **Zero-Allocation Hot Path**: Uses `TArray`'s..."
+        },
+        {
+          "task_id": "REG-28",
+          "topic": "Chaos Physics Substepping",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "Chaos",
+            "substep"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 39.0,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, Chaos Physics substepping is primarily configured through **Project Settings** and **Physics Asset** settings, but you can also influence ..."
+        },
+        {
+          "task_id": "REG-29",
+          "topic": "NativeArray & Memory Safety",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "NativeArray<",
+            "Allocator.TempJob"
+          ],
+          "eval_count": 220,
+          "tps": 5.82,
+          "latency": 39.21,
+          "is_truncated": true,
+          "response_preview": "# NativeArray<float3> with Allocator.TempJob and JobHandle Dependencies  Below is a complete, production-grade demonstration showing the full lifecycle: **alloc..."
+        },
+        {
+          "task_id": "REG-30",
+          "topic": "Camera Frustum Culling",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "plane",
+            "distance",
+            "radius"
+          ],
+          "eval_count": 220,
+          "tps": 5.81,
+          "latency": 39.03,
+          "is_truncated": true,
+          "response_preview": "# Sphere-Frustum Intersection Test  ## Overview  The sphere-frustum intersection test checks whether a sphere (defined by center `C` and radius `r`) intersects ..."
+        }
+      ],
+      "gameforge-27b-sft:latest": [
+        {
+          "task_id": "REG-01",
+          "topic": "Replication & Authority",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "UCLASS(",
+            "GENERATED_BODY()",
+            "ReplicatedUsing"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 52.76,
+          "is_truncated": true,
+          "response_preview": "```cpp // HealthComponent.h #pragma once  #include \"CoreMinimal.h\" #include \"Components/ActorComponent.h\" #include \"HealthComponent.generated.h\"  DECLARE_DYNAMI..."
+        },
+        {
+          "task_id": "REG-02",
+          "topic": "RPC Validation & Security",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.89,
+          "is_truncated": true,
+          "response_preview": "```cpp // WeaponComponent.h #pragma once  #include \"CoreMinimal.h\" #include \"Components/ActorComponent.h\" #include \"WeaponComponent.generated.h\"  class UProject..."
+        },
+        {
+          "task_id": "REG-03",
+          "topic": "Memory & TObjectPtr",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "UGameInstanceSubsystem",
+            "TObjectPtr<"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.82,
+          "is_truncated": true,
+          "response_preview": "Here is the implementation of a `UGameInstanceSubsystem` in Unreal Engine 5.7 C++ that caches player inventory `UDataAsset` objects.  ### Why Raw Pointers Are D..."
+        },
+        {
+          "task_id": "REG-04",
+          "topic": "Delegates & Events",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam",
+            "BlueprintAssignable"
+          ],
+          "eval_count": 220,
+          "tps": 6.05,
+          "latency": 37.84,
+          "is_truncated": true,
+          "response_preview": "```cpp // In your header file (e.g., MyCharacter.h) #pragma once  #include \"CoreMinimal.h\" #include \"GameFramework/Character.h\" #include \"MyCharacter.generated...."
+        },
+        {
+          "task_id": "REG-05",
+          "topic": "Gameplay Ability System (GAS)",
+          "score": 2,
+          "max_score": 10,
+          "matches": [
+            "UAttributeSet"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.77,
+          "is_truncated": true,
+          "response_preview": "```cpp // Copyright 2024 GameForge. All Rights Reserved.  #pragma once  #include \"CoreMinimal.h\" #include \"GameplayTagContainer.h\" #include \"GameplayAbilityType..."
+        },
+        {
+          "task_id": "REG-06",
+          "topic": "Collision & Sweep Tracing",
+          "score": 9,
+          "max_score": 10,
+          "matches": [
+            "LineTraceSingleByChannel",
+            "FCollisionQueryParams",
+            "AddIgnoredActor"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.86,
+          "is_truncated": true,
+          "response_preview": "```cpp #include \"Engine/World.h\" #include \"Engine/HitResult.h\" #include \"Engine/DrawDebugHelpers.h\" #include \"Engine/EngineTypes.h\"  void AMyActor::TraceForward..."
+        },
+        {
+          "task_id": "REG-07",
+          "topic": "AI & Behavior Trees",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "UBTTaskNode",
+            "ExecuteTask",
+            "GetRandomReachablePointInRadius"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.84,
+          "is_truncated": true,
+          "response_preview": "Here is a complete implementation of a custom `UBTTaskNode` for Unreal Engine 5.7.  ### Key Design Decisions: 1.  **Thread Safety**: `UBTTaskNode::ExecuteTask` ..."
+        },
+        {
+          "task_id": "REG-08",
+          "topic": "Network Optimization",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "DOREPLIFETIME_CONDITION",
+            "COND_OwnerOnly"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.78,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, `DOREPLIFETIME_CONDITION` is the standard macro used to define replication conditions for properties. When you want to replicate an array ..."
+        },
+        {
+          "task_id": "REG-09",
+          "topic": "Enhanced Input System",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "UEnhancedInputComponent",
+            "BindAction"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.88,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, the standard approach for binding Enhanced Input Actions to character functions involves using `UEnhancedInputComponent` and the `BindActi..."
+        },
+        {
+          "task_id": "REG-10",
+          "topic": "Tick Avoidance & Timers",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.79,
+          "is_truncated": true,
+          "response_preview": "# Why `Tick` is Harmful for Performance in UE 5.7  ## The Problem with `Tick`  In Unreal Engine, `Tick` is called **every frame** (typically 60\u2013144 times per se..."
+        },
+        {
+          "task_id": "REG-11",
+          "topic": "CharacterBody3D Controller",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "CharacterBody3D",
+            "velocity",
+            "is_on_floor()"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.86,
+          "is_truncated": true,
+          "response_preview": "```gdscript extends CharacterBody3D  @export var speed: float = 5.0 @export var jump_velocity: float = 4.0 @export var gravity: float = -9.8  var velocity: Vect..."
+        },
+        {
+          "task_id": "REG-12",
+          "topic": "Entities 1.0+ & Burst",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "[BurstCompile]",
+            "IJobEntity",
+            "ref "
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.82,
+          "is_truncated": true,
+          "response_preview": "```csharp using Unity.Burst; using Unity.Collections; using Unity.Entities; using Unity.Mathematics; using Unity.Transforms;  namespace GameForge.DOTS {     [Bu..."
+        },
+        {
+          "task_id": "REG-13",
+          "topic": "Network Security & Remotes",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "player",
+            "balance"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.8,
+          "is_truncated": true,
+          "response_preview": "```lua -- ServerScriptService/PurchaseHandler.server.luau local ReplicatedStorage = game:GetService(\"ReplicatedStorage\") local Players = game:GetService(\"Player..."
+        },
+        {
+          "task_id": "REG-14",
+          "topic": "Creative Device Concurrency",
+          "score": 3,
+          "max_score": 10,
+          "matches": [
+            "creative_device"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.77,
+          "is_truncated": true,
+          "response_preview": "Here is a complete UEFN Verse `creative_device` implementation for a timer race.  ### Key Design Decisions 1.  **`race`**: Used to compete the `player_trigger` ..."
+        },
+        {
+          "task_id": "REG-15",
+          "topic": "ECS Query Systems",
+          "score": 5,
+          "max_score": 10,
+          "matches": [
+            "Transform",
+            "despawn"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.84,
+          "is_truncated": true,
+          "response_preview": "In Bevy 0.14, the ECS API has shifted significantly from earlier versions. Specifically:  1.  **`Transform`** is now split into `GlobalTransform` and `Transform..."
+        },
+        {
+          "task_id": "REG-16",
+          "topic": "Quaternion SLERP",
+          "score": 2,
+          "max_score": 10,
+          "matches": [
+            "dot"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.78,
+          "is_truncated": true,
+          "response_preview": "```cpp #include <cmath> #include <algorithm>  struct Quaternion {     float x, y, z, w;      Quaternion(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w ..."
+        },
+        {
+          "task_id": "REG-17",
+          "topic": "Mass Entity & ECS",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 6.04,
+          "latency": 37.95,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, **MassEntity** represents a fundamental shift in how entities are managed, moving from a traditional object-oriented hierarchy to a **Data..."
+        },
+        {
+          "task_id": "REG-18",
+          "topic": "World Partition & Data Layers",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "UDataLayerManager"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.77,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, `UDataLayerManager` is the primary API for managing Data Layers at runtime. Data Layers allow you to dynamically enable or disable sets of..."
+        },
+        {
+          "task_id": "REG-19",
+          "topic": "Async Asset Loading",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "FStreamableManager",
+            "RequestAsyncLoad"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.82,
+          "is_truncated": true,
+          "response_preview": "```cpp #include \"Engine/StreamableManager.h\" #include \"Engine/StaticMesh.h\" #include \"Engine/AssetManager.h\" #include \"UObject/NameTypes.h\"  void UMyComponent::..."
+        },
+        {
+          "task_id": "REG-20",
+          "topic": "Slate C++ UI Construction",
+          "score": 3,
+          "max_score": 10,
+          "matches": [
+            "SCompoundWidget"
+          ],
+          "eval_count": 220,
+          "tps": 6.04,
+          "latency": 38.02,
+          "is_truncated": true,
+          "response_preview": "```cpp #include \"Widgets/SCompoundWidget.h\" #include \"Widgets/Text/STextBlock.h\" #include \"Widgets/Input/SButton.h\" #include \"Widgets/Layout/SBox.h\" #include \"W..."
+        },
+        {
+          "task_id": "REG-21",
+          "topic": "Aspects & Baker",
+          "score": 0,
+          "max_score": 10,
+          "matches": [],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.77,
+          "is_truncated": true,
+          "response_preview": "In Unity 6 with Entities 1.3 (formerly DOTS), the baking process involves converting data from the GameObject-based authoring system into the ECS (Entity Compon..."
+        },
+        {
+          "task_id": "REG-22",
+          "topic": "Signals & Callables",
+          "score": 10,
+          "max_score": 10,
+          "matches": [
+            "signal ",
+            ".connect(",
+            ".emit("
+          ],
+          "eval_count": 194,
+          "tps": 6.08,
+          "latency": 33.5,
+          "is_truncated": false,
+          "response_preview": "```gdscript # player.gd extends CharacterBody2D  # Declare a custom signal with arguments signal health_changed(new_health: int, max_health: int) signal died  f..."
+        },
+        {
+          "task_id": "REG-23",
+          "topic": "Token Bucket Rate Limiting",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "os.clock()",
+            "capacity",
+            "tokens"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.82,
+          "is_truncated": true,
+          "response_preview": "```lua -- TokenBucketRateLimiter.lua -- In-memory token bucket rate limiter for Roblox Luau network requests. -- Refills tokens based on delta time and clamps t..."
+        },
+        {
+          "task_id": "REG-24",
+          "topic": "Fail Expressions & Logic",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "<decides>"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.87,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine's Verse (used in UEFN), failure handling is distinct from traditional C++ or Rust approaches. Verse does not use exceptions or `Result` types i..."
+        },
+        {
+          "task_id": "REG-25",
+          "topic": "App Schedule & Plugins",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "Startup",
+            "Update"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.79,
+          "is_truncated": true,
+          "response_preview": "In Bevy 0.14, the plugin system has been significantly refactored to use **Schedules** (formerly `Stage`) and **Systems** (formerly `System`). The key changes i..."
+        },
+        {
+          "task_id": "REG-26",
+          "topic": "Vector Reflection",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "V - 2",
+            "normal"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.87,
+          "is_truncated": true,
+          "response_preview": "# Vector Reflection Formula: Derivation & C++ Implementation  ## Mathematical Derivation  Given an incident vector **V** hitting a surface with unit normal **N*..."
+        },
+        {
+          "task_id": "REG-27",
+          "topic": "Fast Array Serialization",
+          "score": 4,
+          "max_score": 10,
+          "matches": [
+            "FFastArraySerializer"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.77,
+          "is_truncated": true,
+          "response_preview": "# FFastArraySerializer for UE 5.7 C++  Below is a production-ready, high-performance `FFastArraySerializer` designed for replicating item inventories in multipl..."
+        },
+        {
+          "task_id": "REG-28",
+          "topic": "Chaos Physics Substepping",
+          "score": 7,
+          "max_score": 10,
+          "matches": [
+            "Chaos",
+            "substep"
+          ],
+          "eval_count": 220,
+          "tps": 6.06,
+          "latency": 37.87,
+          "is_truncated": true,
+          "response_preview": "In Unreal Engine 5.7, Chaos Physics substepping is configured primarily through **Project Settings** and **Body Instance** properties, while external force call..."
+        },
+        {
+          "task_id": "REG-29",
+          "topic": "NativeArray & Memory Safety",
+          "score": 6,
+          "max_score": 10,
+          "matches": [
+            "NativeArray<",
+            "Allocator.TempJob"
+          ],
+          "eval_count": 220,
+          "tps": 6.05,
+          "latency": 37.94,
+          "is_truncated": true,
+          "response_preview": "```csharp using Unity.Collections; using Unity.Jobs; using Unity.Mathematics; using UnityEngine;  public class NativeArrayFloat3Demo : MonoBehaviour {     priva..."
+        },
+        {
+          "task_id": "REG-30",
+          "topic": "Camera Frustum Culling",
+          "score": 8,
+          "max_score": 10,
+          "matches": [
+            "plane",
+            "distance",
+            "radius"
+          ],
+          "eval_count": 220,
+          "tps": 6.07,
+          "latency": 37.94,
+          "is_truncated": true,
+          "response_preview": "```cpp #include <cmath> #include <array>  struct Plane {     float A, B, C, D; };  struct Sphere {     float x, y, z;     float radius; };  /**  * Tests whether..."
+        }
+      ]
+    }
+  },
+  "benchmark_50_tasks": {
+    "totals": {
+      "qwen3.8:27b-q4_K_M": 250,
+      "gameforge-27b:latest": 250,
+      "gameforge-27b-sft:latest": 250
+    },
+    "max_possible": 500,
+    "percentages": {
+      "qwen3.8:27b-q4_K_M": 50.0,
+      "gameforge-27b:latest": 50.0,
+      "gameforge-27b-sft:latest": 50.0
+    },
+    "records": {
+      "qwen3.8:27b-q4_K_M": [
+        {
+          "task_id": "GF-BENCH-01",
+          "category": "Reflection & Specifiers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 158,
+          "tps": 5.84,
+          "latency": 49.48
+        },
+        {
+          "task_id": "GF-BENCH-02",
+          "category": "Replication & RPCs",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.8,
+          "latency": 44.08
+        },
+        {
+          "task_id": "GF-BENCH-03",
+          "category": "Networking",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 210,
+          "tps": 5.79,
+          "latency": 37.47
+        },
+        {
+          "task_id": "GF-BENCH-04",
+          "category": "Memory & Pointers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 43.97
+        },
+        {
+          "task_id": "GF-BENCH-05",
+          "category": "Garbage Collection",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.93
+        },
+        {
+          "task_id": "GF-BENCH-06",
+          "category": "Gameplay Ability System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.28
+        },
+        {
+          "task_id": "GF-BENCH-07",
+          "category": "Gameplay Ability System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.8,
+          "latency": 44.12
+        },
+        {
+          "task_id": "GF-BENCH-08",
+          "category": "Blueprint Interoperability",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.03
+        },
+        {
+          "task_id": "GF-BENCH-09",
+          "category": "Delegates",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.53
+        },
+        {
+          "task_id": "GF-BENCH-10",
+          "category": "Enhanced Input",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.21
+        },
+        {
+          "task_id": "GF-BENCH-11",
+          "category": "Subsystems",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.71,
+          "latency": 45.14
+        },
+        {
+          "task_id": "GF-BENCH-12",
+          "category": "AI & Navigation",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 43.99
+        },
+        {
+          "task_id": "GF-BENCH-13",
+          "category": "Collision & Physics",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.26
+        },
+        {
+          "task_id": "GF-BENCH-14",
+          "category": "Multiplayer Security",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.94
+        },
+        {
+          "task_id": "GF-BENCH-15",
+          "category": "Build System & Modules",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 143,
+          "tps": 5.82,
+          "latency": 25.68
+        },
+        {
+          "task_id": "GF-BENCH-16",
+          "category": "Performance & Profiling",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.93
+        },
+        {
+          "task_id": "GF-BENCH-17",
+          "category": "World Partition",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.21
+        },
+        {
+          "task_id": "GF-BENCH-18",
+          "category": "Async Loading",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.91
+        },
+        {
+          "task_id": "GF-BENCH-19",
+          "category": "Core Redirects",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.05
+        },
+        {
+          "task_id": "GF-BENCH-20",
+          "category": "Niagara Integration",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 44.33
+        },
+        {
+          "task_id": "GF-BENCH-21",
+          "category": "Animation & Montages",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.0
+        },
+        {
+          "task_id": "GF-BENCH-22",
+          "category": "SaveGame System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.29
+        },
+        {
+          "task_id": "GF-BENCH-23",
+          "category": "Network Dormancy",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 43.98
+        },
+        {
+          "task_id": "GF-BENCH-24",
+          "category": "Mass Entity & ECS",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.8,
+          "latency": 44.03
+        },
+        {
+          "task_id": "GF-BENCH-25",
+          "category": "Slate & CommonUI",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.25
+        },
+        {
+          "task_id": "GF-BENCH-26",
+          "category": "Root Motion",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.05
+        },
+        {
+          "task_id": "GF-BENCH-27",
+          "category": "Sound & Audio",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.1
+        },
+        {
+          "task_id": "GF-BENCH-28",
+          "category": "FastArraySerializer",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.21
+        },
+        {
+          "task_id": "GF-BENCH-29",
+          "category": "Smart Pointers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.07
+        },
+        {
+          "task_id": "GF-BENCH-30",
+          "category": "Packaging & CI",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.83
+        },
+        {
+          "task_id": "GF-BENCH-31",
+          "category": "Job System & Burst",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 136,
+          "tps": 5.83,
+          "latency": 24.51
+        },
+        {
+          "task_id": "GF-BENCH-32",
+          "category": "ScriptableObjects",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.47
+        },
+        {
+          "task_id": "GF-BENCH-33",
+          "category": "Physics & FixedUpdate",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.28
+        },
+        {
+          "task_id": "GF-BENCH-34",
+          "category": "Async & UniTask",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 44.47
+        },
+        {
+          "task_id": "GF-BENCH-35",
+          "category": "CharacterBody3D",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.99
+        },
+        {
+          "task_id": "GF-BENCH-36",
+          "category": "Signals & Decoupling",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.09
+        },
+        {
+          "task_id": "GF-BENCH-37",
+          "category": "Multiplayer RPCs",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 44.19
+        },
+        {
+          "task_id": "GF-BENCH-38",
+          "category": "Node Lifecycle",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.08
+        },
+        {
+          "task_id": "GF-BENCH-39",
+          "category": "RemoteEvent Security",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.34
+        },
+        {
+          "task_id": "GF-BENCH-40",
+          "category": "Task Scheduler",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.09
+        },
+        {
+          "task_id": "GF-BENCH-41",
+          "category": "DataStore2 / ProfileService",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.21
+        },
+        {
+          "task_id": "GF-BENCH-42",
+          "category": "Verse Concurrency",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.24
+        },
+        {
+          "task_id": "GF-BENCH-43",
+          "category": "Verse Spatial Math",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.93
+        },
+        {
+          "task_id": "GF-BENCH-44",
+          "category": "Verse Devices",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.4
+        },
+        {
+          "task_id": "GF-BENCH-45",
+          "category": "Rust ECS Query",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 154,
+          "tps": 5.83,
+          "latency": 27.43
+        },
+        {
+          "task_id": "GF-BENCH-46",
+          "category": "Events & Commands",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.82,
+          "latency": 43.96
+        },
+        {
+          "task_id": "GF-BENCH-47",
+          "category": "Resource Mutation",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.35
+        },
+        {
+          "task_id": "GF-BENCH-48",
+          "category": "Quaternions & Rotations",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.1
+        },
+        {
+          "task_id": "GF-BENCH-49",
+          "category": "Spatial Partitioning",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.24
+        },
+        {
+          "task_id": "GF-BENCH-50",
+          "category": "Network Synchronization",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.81,
+          "latency": 44.36
+        }
+      ],
+      "gameforge-27b:latest": [
+        {
+          "task_id": "GF-BENCH-01",
+          "category": "Reflection & Specifiers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 61.51
+        },
+        {
+          "task_id": "GF-BENCH-02",
+          "category": "Replication & RPCs",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.75,
+          "latency": 44.55
+        },
+        {
+          "task_id": "GF-BENCH-03",
+          "category": "Networking",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.34
+        },
+        {
+          "task_id": "GF-BENCH-04",
+          "category": "Memory & Pointers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.23
+        },
+        {
+          "task_id": "GF-BENCH-05",
+          "category": "Garbage Collection",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.51
+        },
+        {
+          "task_id": "GF-BENCH-06",
+          "category": "Gameplay Ability System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.25
+        },
+        {
+          "task_id": "GF-BENCH-07",
+          "category": "Gameplay Ability System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.57
+        },
+        {
+          "task_id": "GF-BENCH-08",
+          "category": "Blueprint Interoperability",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.25
+        },
+        {
+          "task_id": "GF-BENCH-09",
+          "category": "Delegates",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.76,
+          "latency": 44.49
+        },
+        {
+          "task_id": "GF-BENCH-10",
+          "category": "Enhanced Input",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.77,
+          "latency": 44.39
+        },
+        {
+          "task_id": "GF-BENCH-11",
+          "category": "Subsystems",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.78,
+          "latency": 44.31
+        },
+        {
+          "task_id": "GF-BENCH-12",
+          "category": "AI & Navigation",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.53
+        },
+        {
+          "task_id": "GF-BENCH-13",
+          "category": "Collision & Physics",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.23
+        },
+        {
+          "task_id": "GF-BENCH-14",
+          "category": "Multiplayer Security",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.47
+        },
+        {
+          "task_id": "GF-BENCH-15",
+          "category": "Build System & Modules",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.24
+        },
+        {
+          "task_id": "GF-BENCH-16",
+          "category": "Performance & Profiling",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.5,
+          "latency": 46.49
+        },
+        {
+          "task_id": "GF-BENCH-17",
+          "category": "World Partition",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.53,
+          "latency": 46.36
+        },
+        {
+          "task_id": "GF-BENCH-18",
+          "category": "Async Loading",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.68,
+          "latency": 45.16
+        },
+        {
+          "task_id": "GF-BENCH-19",
+          "category": "Core Redirects",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.4
+        },
+        {
+          "task_id": "GF-BENCH-20",
+          "category": "Niagara Integration",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.44
+        },
+        {
+          "task_id": "GF-BENCH-21",
+          "category": "Animation & Montages",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.69,
+          "latency": 45.05
+        },
+        {
+          "task_id": "GF-BENCH-22",
+          "category": "SaveGame System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.4
+        },
+        {
+          "task_id": "GF-BENCH-23",
+          "category": "Network Dormancy",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.2
+        },
+        {
+          "task_id": "GF-BENCH-24",
+          "category": "Mass Entity & ECS",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.65,
+          "latency": 45.64
+        },
+        {
+          "task_id": "GF-BENCH-25",
+          "category": "Slate & CommonUI",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.63,
+          "latency": 45.5
+        },
+        {
+          "task_id": "GF-BENCH-26",
+          "category": "Root Motion",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.66,
+          "latency": 45.25
+        },
+        {
+          "task_id": "GF-BENCH-27",
+          "category": "Sound & Audio",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.65,
+          "latency": 45.3
+        },
+        {
+          "task_id": "GF-BENCH-28",
+          "category": "FastArraySerializer",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.68,
+          "latency": 45.15
+        },
+        {
+          "task_id": "GF-BENCH-29",
+          "category": "Smart Pointers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.68,
+          "latency": 45.47
+        },
+        {
+          "task_id": "GF-BENCH-30",
+          "category": "Packaging & CI",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.66,
+          "latency": 45.34
+        },
+        {
+          "task_id": "GF-BENCH-31",
+          "category": "Job System & Burst",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.72,
+          "latency": 44.93
+        },
+        {
+          "task_id": "GF-BENCH-32",
+          "category": "ScriptableObjects",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.66,
+          "latency": 45.66
+        },
+        {
+          "task_id": "GF-BENCH-33",
+          "category": "Physics & FixedUpdate",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.41
+        },
+        {
+          "task_id": "GF-BENCH-34",
+          "category": "Async & UniTask",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.3
+        },
+        {
+          "task_id": "GF-BENCH-35",
+          "category": "CharacterBody3D",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.51
+        },
+        {
+          "task_id": "GF-BENCH-36",
+          "category": "Signals & Decoupling",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.28
+        },
+        {
+          "task_id": "GF-BENCH-37",
+          "category": "Multiplayer RPCs",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.59
+        },
+        {
+          "task_id": "GF-BENCH-38",
+          "category": "Node Lifecycle",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.56
+        },
+        {
+          "task_id": "GF-BENCH-39",
+          "category": "RemoteEvent Security",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.19
+        },
+        {
+          "task_id": "GF-BENCH-40",
+          "category": "Task Scheduler",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.68,
+          "latency": 45.46
+        },
+        {
+          "task_id": "GF-BENCH-41",
+          "category": "DataStore2 / ProfileService",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.62,
+          "latency": 45.65
+        },
+        {
+          "task_id": "GF-BENCH-42",
+          "category": "Verse Concurrency",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.67,
+          "latency": 45.23
+        },
+        {
+          "task_id": "GF-BENCH-43",
+          "category": "Verse Spatial Math",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.45
+        },
+        {
+          "task_id": "GF-BENCH-44",
+          "category": "Verse Devices",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.64,
+          "latency": 45.39
+        },
+        {
+          "task_id": "GF-BENCH-45",
+          "category": "Rust ECS Query",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.55,
+          "latency": 46.52
+        },
+        {
+          "task_id": "GF-BENCH-46",
+          "category": "Events & Commands",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.56,
+          "latency": 46.19
+        },
+        {
+          "task_id": "GF-BENCH-47",
+          "category": "Resource Mutation",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.58,
+          "latency": 45.94
+        },
+        {
+          "task_id": "GF-BENCH-48",
+          "category": "Quaternions & Rotations",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.75,
+          "latency": 44.6
+        },
+        {
+          "task_id": "GF-BENCH-49",
+          "category": "Spatial Partitioning",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.71,
+          "latency": 44.95
+        },
+        {
+          "task_id": "GF-BENCH-50",
+          "category": "Network Synchronization",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.76,
+          "latency": 44.56
+        }
+      ],
+      "gameforge-27b-sft:latest": [
+        {
+          "task_id": "GF-BENCH-01",
+          "category": "Reflection & Specifiers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 232,
+          "tps": 6.03,
+          "latency": 55.08
+        },
+        {
+          "task_id": "GF-BENCH-02",
+          "category": "Replication & RPCs",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 6.06,
+          "latency": 42.84
+        },
+        {
+          "task_id": "GF-BENCH-03",
+          "category": "Networking",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 6.04,
+          "latency": 42.96
+        },
+        {
+          "task_id": "GF-BENCH-04",
+          "category": "Memory & Pointers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.79,
+          "latency": 44.72
+        },
+        {
+          "task_id": "GF-BENCH-05",
+          "category": "Garbage Collection",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.75,
+          "latency": 53.87
+        },
+        {
+          "task_id": "GF-BENCH-06",
+          "category": "Gameplay Ability System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.01,
+          "latency": 50.95
+        },
+        {
+          "task_id": "GF-BENCH-07",
+          "category": "Gameplay Ability System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.0,
+          "latency": 51.08
+        },
+        {
+          "task_id": "GF-BENCH-08",
+          "category": "Blueprint Interoperability",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.09,
+          "latency": 50.41
+        },
+        {
+          "task_id": "GF-BENCH-09",
+          "category": "Delegates",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.91,
+          "latency": 51.94
+        },
+        {
+          "task_id": "GF-BENCH-10",
+          "category": "Enhanced Input",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.02,
+          "latency": 50.81
+        },
+        {
+          "task_id": "GF-BENCH-11",
+          "category": "Subsystems",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.05,
+          "latency": 50.55
+        },
+        {
+          "task_id": "GF-BENCH-12",
+          "category": "AI & Navigation",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.93,
+          "latency": 51.71
+        },
+        {
+          "task_id": "GF-BENCH-13",
+          "category": "Collision & Physics",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.98,
+          "latency": 51.28
+        },
+        {
+          "task_id": "GF-BENCH-14",
+          "category": "Multiplayer Security",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.91,
+          "latency": 52.35
+        },
+        {
+          "task_id": "GF-BENCH-15",
+          "category": "Build System & Modules",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.88,
+          "latency": 52.32
+        },
+        {
+          "task_id": "GF-BENCH-16",
+          "category": "Performance & Profiling",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.94,
+          "latency": 51.59
+        },
+        {
+          "task_id": "GF-BENCH-17",
+          "category": "World Partition",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.88,
+          "latency": 52.28
+        },
+        {
+          "task_id": "GF-BENCH-18",
+          "category": "Async Loading",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.86,
+          "latency": 52.49
+        },
+        {
+          "task_id": "GF-BENCH-19",
+          "category": "Core Redirects",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.91,
+          "latency": 51.98
+        },
+        {
+          "task_id": "GF-BENCH-20",
+          "category": "Niagara Integration",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.91,
+          "latency": 52.25
+        },
+        {
+          "task_id": "GF-BENCH-21",
+          "category": "Animation & Montages",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.92,
+          "latency": 51.91
+        },
+        {
+          "task_id": "GF-BENCH-22",
+          "category": "SaveGame System",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.88,
+          "latency": 52.26
+        },
+        {
+          "task_id": "GF-BENCH-23",
+          "category": "Network Dormancy",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.88,
+          "latency": 52.28
+        },
+        {
+          "task_id": "GF-BENCH-24",
+          "category": "Mass Entity & ECS",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.92,
+          "latency": 51.85
+        },
+        {
+          "task_id": "GF-BENCH-25",
+          "category": "Slate & CommonUI",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.96,
+          "latency": 51.48
+        },
+        {
+          "task_id": "GF-BENCH-26",
+          "category": "Root Motion",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 174,
+          "tps": 5.01,
+          "latency": 36.06
+        },
+        {
+          "task_id": "GF-BENCH-27",
+          "category": "Sound & Audio",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.95,
+          "latency": 51.54
+        },
+        {
+          "task_id": "GF-BENCH-28",
+          "category": "FastArraySerializer",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.95,
+          "latency": 51.58
+        },
+        {
+          "task_id": "GF-BENCH-29",
+          "category": "Smart Pointers",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.97,
+          "latency": 51.34
+        },
+        {
+          "task_id": "GF-BENCH-30",
+          "category": "Packaging & CI",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.96,
+          "latency": 51.75
+        },
+        {
+          "task_id": "GF-BENCH-31",
+          "category": "Job System & Burst",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 135,
+          "tps": 5.03,
+          "latency": 28.1
+        },
+        {
+          "task_id": "GF-BENCH-32",
+          "category": "ScriptableObjects",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.97,
+          "latency": 51.7
+        },
+        {
+          "task_id": "GF-BENCH-33",
+          "category": "Physics & FixedUpdate",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.95,
+          "latency": 51.59
+        },
+        {
+          "task_id": "GF-BENCH-34",
+          "category": "Async & UniTask",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.94,
+          "latency": 51.79
+        },
+        {
+          "task_id": "GF-BENCH-35",
+          "category": "CharacterBody3D",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.94,
+          "latency": 51.62
+        },
+        {
+          "task_id": "GF-BENCH-36",
+          "category": "Signals & Decoupling",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.97,
+          "latency": 51.34
+        },
+        {
+          "task_id": "GF-BENCH-37",
+          "category": "Multiplayer RPCs",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.94,
+          "latency": 51.63
+        },
+        {
+          "task_id": "GF-BENCH-38",
+          "category": "Node Lifecycle",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.95,
+          "latency": 51.56
+        },
+        {
+          "task_id": "GF-BENCH-39",
+          "category": "RemoteEvent Security",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.95,
+          "latency": 51.56
+        },
+        {
+          "task_id": "GF-BENCH-40",
+          "category": "Task Scheduler",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 4.97,
+          "latency": 51.28
+        },
+        {
+          "task_id": "GF-BENCH-41",
+          "category": "DataStore2 / ProfileService",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.02,
+          "latency": 50.84
+        },
+        {
+          "task_id": "GF-BENCH-42",
+          "category": "Verse Concurrency",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.03,
+          "latency": 50.74
+        },
+        {
+          "task_id": "GF-BENCH-43",
+          "category": "Verse Spatial Math",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.02,
+          "latency": 51.12
+        },
+        {
+          "task_id": "GF-BENCH-44",
+          "category": "Verse Devices",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.01,
+          "latency": 50.89
+        },
+        {
+          "task_id": "GF-BENCH-45",
+          "category": "Rust ECS Query",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.03,
+          "latency": 50.79
+        },
+        {
+          "task_id": "GF-BENCH-46",
+          "category": "Events & Commands",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.05,
+          "latency": 50.9
+        },
+        {
+          "task_id": "GF-BENCH-47",
+          "category": "Resource Mutation",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.01,
+          "latency": 50.95
+        },
+        {
+          "task_id": "GF-BENCH-48",
+          "category": "Quaternions & Rotations",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 214,
+          "tps": 5.04,
+          "latency": 43.47
+        },
+        {
+          "task_id": "GF-BENCH-49",
+          "category": "Spatial Partitioning",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.02,
+          "latency": 50.84
+        },
+        {
+          "task_id": "GF-BENCH-50",
+          "category": "Network Synchronization",
+          "score": 5,
+          "max_score": 10,
+          "eval_count": 250,
+          "tps": 5.04,
+          "latency": 51.04
+        }
+      ]
+    }
+  }
+}

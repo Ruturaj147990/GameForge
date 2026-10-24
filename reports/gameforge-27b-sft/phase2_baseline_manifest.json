@@ -1,0 +1,53 @@
+{
+  "manifest_version": "2.1.0",
+  "phase": "PHASE_2_BASELINE",
+  "timestamp": "2026-10-24T10:55:00+05:30",
+  "production_model": {
+    "tag": "gameforge-27b-sft:latest",
+    "ollama_id": "38d78286fde2",
+    "base_foundation": "qwen3.8:27b-q4_K_M",
+    "architecture": "qwen35",
+    "parameters": 27320000000,
+    "quantization": "Q4_K_M",
+    "artifact_path": "E:\\GameForge\\artifacts\\gameforge-27b-sft\\gameforge-27b-sft-q4_k_m.gguf",
+    "artifact_size_bytes": 16810714464,
+    "artifact_sha256": "d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b",
+    "vision_projector_digest": "sha256:ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e",
+    "vision_projector_size_bytes": 931146016,
+    "multimodal_verified": true
+  },
+  "runtime_environment": {
+    "os": "Windows 11 Pro (10.0.26300)",
+    "host_gpu": "AMD Radeon RX 7700 XT (12GB GDDR6 VRAM)",
+    "inference_engine": "Ollama v0.40.6 / llama-server with Vulkan Backend",
+    "binary_path": "E:\\GameForge\\ollama_bin\\ollama.exe",
+    "ollama_models_dir": "E:\\GameForge\\models\\ollama",
+    "active_host": "http://127.0.0.1:11434"
+  },
+  "generation_defaults": {
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "top_k": 20,
+    "context_length": 4096,
+    "think": false,
+    "stop_tokens": [
+      "<|im_start|>",
+      "<|im_end|>",
+      "<|endoftext|>",
+      "### Input",
+      "### Instruction"
+    ]
+  },
+  "lineage_and_retirement": {
+    "retired_tags": ["gameforge-v1:latest"],
+    "preserved_tags": [
+      "gameforge-27b-sft:latest",
+      "gameforge-27b:latest",
+      "gameforge-v2:latest",
+      "qwen3.8:27b-q4_K_M"
+    ],
+    "training_updates": 940,
+    "training_train_loss": 4.0715,
+    "training_val_loss": 3.5461
+  }
+}

@@ -1,0 +1,50 @@
+```csharp
+using UnityEngine;
+
+public class PlayerStamina : MonoBehaviour
+{
+    [Header("Stamina Settings")]
+    [SerializeField] private float maxStamina = 100f;
+    [SerializeField] private float currentStamina = 100f;
+    [SerializeField] private float regenRate = 10f;
+    [SerializeField] private float cooldownDelay = 1f;
+
+    private float lastUseTime = -1f;
+
+    public float CurrentStamina => currentStamina;
+    public float MaxStamina => maxStamina;
+
+    private void Start()
+    {
+        currentStamina = maxStamina;
+    }
+
+    public bool UseStamina(float amount)
+    {
+        if (amount <= 0f)
+            return true;
+
+        if (currentStamina >= amount)
+        {
+            currentStamina -= amount;
+            lastUseTime = Time.time;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void Update()
+    {
+        if (currentStamina < maxStamina)
+        {
+            float timeSinceLastUse = Time.time - lastUseTime;
+            if (timeSinceLastUse >= cooldownDelay)
+            {
+                currentStamina += regenRate * Time.deltaTime;
+                currentStamina = Mathf.Clamp(currentStamina, 0f, maxStamina);
+            }
+        }
+    }
+}
+```

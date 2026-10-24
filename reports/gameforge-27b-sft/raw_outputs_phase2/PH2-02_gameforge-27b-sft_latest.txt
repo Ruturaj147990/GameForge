@@ -1,0 +1,93 @@
+```cpp
+// ACharacter.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "ACharacter.generated.h"
+
+class AItem;
+
+UCLASS()
+class ACharacter : public ACharacterBase
+{
+	GENERATED_BODY()
+
+public:
+	ACharacter();
+
+	// Client-side method to attempt pickup
+	UFUNCTION(Client, Reliable)
+	void AttemptPickup(AItem* Item);
+
+	// Server RPC for pickup
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_PickupItem(AItem* Item);
+
+	bool Server_PickupItem_Validate(AItem* Item);
+	void Server_PickupItem_Implementation(AItem* Item);
+
+private:
+	// Helper to check if item is valid and within range
+	bool IsItemValidAndInRange(AItem* Item) const;
+};
+```
+
+```cpp
+// ACharacter.cpp
+#include "ACharacter.h"
+#include "Item.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+
+ACharacter::ACharacter()
+{
+	PrimaryActorTick.bCanEverTick = false;
+}
+
+void ACharacter::AttemptPickup(AItem* Item)
+{
+	if (!Item)
+	{
+		return;
+	}
+
+	// Only allow local player to initiate pickup
+	if (GetLocalRole() == ROLE_Authority)
+	{
+		// If we're the authority, call server directly
+		Server_PickupItem(Item);
+	}
+	else
+	{
+		// Send to server
+		Server_PickupItem(Item);
+	}
+}
+
+bool ACharacter::Server_PickupItem_Validate(AItem* Item)
+{
+	// Validate item is not null
+	if (!Item)
+	{
+		return false;
+	}
+
+	// Validate item is valid (not already picked up, etc.)
+	if (!Item->IsValidForPickup())
+	{
+		return false;
+	}
+
+	// Validate distance
+	const float MaxPickupDistance = 200.0f;
+	const FVector Distance = GetActorLocation() - Item->GetActorLocation();
+	if (Distance.SizeSquared() > FMath::Square(MaxPickupDistance))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void ACharacter::Server_PickupItem_

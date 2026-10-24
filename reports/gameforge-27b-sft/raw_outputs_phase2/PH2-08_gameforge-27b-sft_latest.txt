@@ -1,0 +1,23 @@
+```csharp
+using Unity.Entities;
+using UnityEngine;
+
+public struct MoveSpeed : IComponentData
+{
+    public float Value;
+}
+
+public class MoveSpeedAuthoring : MonoBehaviour
+{
+    public float value = 1f;
+}
+
+public class MoveSpeedBaker : Baker<MoveSpeedAuthoring>
+{
+    public override void Bake(MoveSpeedAuthoring authoring)
+    {
+        var entity = GetEntity(TransformUsageFlags.Dynamic);
+        AddComponent(entity, new MoveSpeed { Value = authoring.value });
+    }
+}
+```

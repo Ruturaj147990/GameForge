@@ -1,0 +1,56 @@
+```cpp
+#include "Engine/NetSerialization.h"
+#include "Engine/NetUnrealNetwork.h"
+
+UENUM(BlueprintType)
+enum class EPlayerTeam : uint8
+{
+    None,
+    Red,
+    Blue
+};
+
+UCLASS()
+class AMyCharacter : public ACharacter
+{
+    GENERATED_BODY()
+
+public:
+    AMyCharacter();
+
+    UPROPERTY(ReplicatedUsing = OnRep_PlayerTeam, BlueprintReadOnly)
+    EPlayerTeam PlayerTeam;
+
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+protected:
+    virtual void BeginPlay() override;
+
+    UFUNCTION()
+    void OnRep_PlayerTeam();
+};
+
+void AMyCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME(AMyCharacter, PlayerTeam);
+}
+
+void AMyCharacter::OnRep_PlayerTeam()
+{
+    // Handle team change on the client
+    UE_LOG(LogTemp, Display, TEXT("PlayerTeam changed to: %d"), static_cast<int32>(PlayerTeam));
+}
+
+void AMyCharacter::BeginPlay()
+{
+    Super::BeginPlay();
+}
+
+AMyCharacter::AMyCharacter()
+{
+    PrimaryActorTick.bCanEverTick = false;
+    PlayerTeam = EPlayerTeam::None;
+}
+```

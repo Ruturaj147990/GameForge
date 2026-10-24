@@ -1,0 +1,49 @@
+## Diagnosis
+
+The compiler is reporting **C2027: use of undefined type 'UStaticMesh'** at `MyActor.cpp:42`. The engine's `CoreUObject.h` only provides a *forward declaration* of `UStaticMesh`, which is sufficient for pointers but not for any code that needs the full class definition (e.g., calling methods, accessing members, or using it in a `TObjectPtr` that requires the complete type at that translation unit).
+
+## Required Include
+
+```cpp
+#include "Engine/StaticMesh.h"
+```
+
+## Code Fix
+
+Add the missing header at the top of `MyActor.cpp` (or better, in the corresponding `.h` if the member is exposed publicly):
+
+```cpp
+// MyActor.cpp
+#include "MyActor.h"
+#include "Engine/StaticMesh.h"   // <-- ADD THIS
+
+void AMyActor::SomeFunction()
+{
+    // Line 42 — now compiles because UStaticMesh is fully defined
+    UStaticMesh* Mesh = GetStaticMeshComponent()->GetStaticMesh();
+    // ...
+}
+```
+
+If `UStaticMesh*` is a **member variable** in `MyActor.h`, the include belongs in the header:
+
+```cpp
+// MyActor.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/StaticMesh.h"   // <-- ADD HERE
+#include "MyActor.generated.h"
+
+UCLASS()
+class AMyActor : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(VisibleAnywhere)
+    TObjectPtr<UStaticMesh> Mesh;   // full type required → include needed in .h
+};
+```
+
+> **Rule of thumb:** If you only store a `TObjectPtr<UStaticMesh>` or raw pointer, a forward declaration (`class UStaticMesh;`) is enough. The moment you *dereference* it, call its methods, or the compiler needs its size/layout, you must include `"Engine/StaticMesh.h"`.

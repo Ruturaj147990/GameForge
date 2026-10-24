@@ -79,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # chat
     p_chat = subparsers.add_parser("chat", help="Interactive GameForge assistant chat session or single query")
-    p_chat.add_argument("--model", default="gameforge-v1", help="Target Ollama model name (default: gameforge-v1)")
+    p_chat.add_argument("--model", default="gameforge-27b-sft", help="Target Ollama model name (default: gameforge-27b-sft)")
     p_chat.add_argument("--engine", default=None, help="Target game engine context (e.g. unreal, unity, godot)")
     p_chat.add_argument("--version-context", default=None, help="Target engine version context (e.g. 5.4, 2022.3, 4.3)")
     p_chat.add_argument("--no-retrieval", action="store_true", help="Disable local knowledge retrieval layer")
@@ -87,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # eval-model
     p_evalm = subparsers.add_parser("eval-model", help="Run GameForge evaluation suite against a local model")
-    p_evalm.add_argument("--model", default="gameforge-v1", help="Model name to evaluate (e.g. gameforge-v1, qwen3.8:27b-q4_K_M)")
+    p_evalm.add_argument("--model", default="gameforge-27b-sft", help="Model name to evaluate (default: gameforge-27b-sft)")
     p_evalm.add_argument("--limit", type=int, default=5, help="Number of questions to evaluate (default: 5, 0 for all)")
     p_evalm.add_argument("--representative", action="store_true", help="Evaluate one representative prompt per domain across all 8 domains")
     p_evalm.add_argument("--output", type=Path, default=Path("reports/gameforge_v1_evaluation_report.json"), help="Output report path")

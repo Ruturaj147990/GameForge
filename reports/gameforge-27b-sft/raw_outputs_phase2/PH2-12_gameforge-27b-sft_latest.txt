@@ -1,0 +1,31 @@
+```gdscript
+extends Area3D
+
+@export var damage: int = 25
+
+func _ready() -> void:
+	body_entered.connect(_on_body_entered)
+
+func _on_body_entered(body: Node3D) -> void:
+	if body.has_method("take_damage"):
+		body.take_damage(damage)
+		_spawn_hit_effect()
+	queue_free()
+
+func _spawn_hit_effect() -> void:
+	var particle_system := CPUParticles3D.new()
+	particle_system.amount = 10
+	particle_system.lifetime = 0.5
+	particle_system.direction = Vector3.ZERO
+	particle_system.spread = 180.0
+	particle_system.initial_velocity_min = 5.0
+	particle_system.initial_velocity_max = 15.0
+	particle_system.gravity = Vector3(0, -9.8, 0)
+	particle_system.scale_amount_min = 0.1
+	particle_system.scale_amount_max = 0.3
+	get_parent().add_child(particle_system)
+	particle_system.global_position = global_position
+	particle_system.emitting = true
+	await get_tree().create_timer(0.5).timeout
+	particle_system.queue_free()
+```

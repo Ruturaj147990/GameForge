@@ -1,0 +1,48 @@
+In Unreal Engine 5, Event Dispatchers are **not** called directly from the `Event AnyDamage` node in a linear chain. Instead, the logic is split:
+
+1.  **`Event AnyDamage`** triggers the damage calculation.
+2.  **Health Calculation** updates the health variable.
+3.  **Branch** checks if health is <= 0.
+4.  **If true**, it calls a **Function** (e.g., `HandlePlayerDeath`) or directly triggers the **Event Dispatcher** if it’s defined in the same class.
+
+However, **Event Dispatchers are typically used to notify *other* systems** (e.g., UI, GameMode, AI). The standard pattern is:
+
+-   **Player Character** (or Pawn) has the `OnPlayerDeath` Event Dispatcher.
+-   **Other Blueprints** (e.g., HUD, GameMode) bind to this dispatcher.
+-   When the player dies, the Player Character **broadcasts** the dispatcher.
+
+### Exact Node Sequence in the Player Character Blueprint
+
+#### 1. **Variables & Event Dispatcher Setup**
+-   **Variable**: `Health` (Float, default 100.0)
+-   **Event Dispatcher**: `OnPlayerDeath` (no parameters, or include `Instigator`/`DamageType` if needed)
+
+#### 2. **Event Graph Logic**
+
+```
+[Event AnyDamage]
+    |
+    v
+[Get Health] --> [Subtract (Damage)] --> [Set Health]
+    |
+    v
+[Branch (Health <= 0?)]
+    |
+    +-- [True] --> [Call OnPlayerDeath Dispatcher]
+    |
+    +-- [False] --> [End]
+```
+
+### Detailed Node Breakdown
+
+#### **Node 1: `Event AnyDamage`**
+-   **Type**: Event
+-   **Inputs**: `Damage` (Float), `DamageType` (DamageType), `Instigator` (Actor), `HitLocation` (Vector)
+-   **Output**: `Exec` (execution pin)
+-   **Purpose**: Triggers whenever the player takes damage.
+
+#### **Node 2: `Get Health`**
+-   **Type**: Get Variable
+-   **Input**: None
+-   **Output**: `Health` (Float)
+-   **Purpose**: Retrieves the current health

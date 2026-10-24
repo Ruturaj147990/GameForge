@@ -1,0 +1,97 @@
+{
+  "manifest_version": "2.0.0",
+  "timestamp": "2026-10-24T00:35:00+05:30",
+  "model_metadata": {
+    "recommended_model_tag": "gameforge-27b-sft:latest",
+    "ollama_model_id": "38d78286fde2",
+    "base_model": "qwen3.8:27b-q4_K_M",
+    "base_model_ollama_id": "25b843619e94",
+    "architecture": "qwen35",
+    "total_parameters": 27320000000,
+    "quantization_format": "Q4_K_M",
+    "bits_per_weight": 4.92,
+    "standalone_gguf_path": "E:\\GameForge\\artifacts\\gameforge-27b-sft\\gameforge-27b-sft-q4_k_m.gguf",
+    "standalone_gguf_size_bytes": 16810714464,
+    "standalone_gguf_sha256": "d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b",
+    "vision_projector_blob_sha256": "ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e",
+    "multimodal_vision_capable": true,
+    "release_status": "PRODUCTION_RECOMMENDED"
+  },
+  "training_provenance": {
+    "method": "DirectML GPU-Accelerated Parameter-Efficient Supervised Fine-Tuning (LoRA)",
+    "target_hardware": "AMD Radeon RX 7700 XT (12GB VRAM)",
+    "trainable_parameters": 2785280,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "optimizer_steps": 940,
+    "epochs": 2,
+    "initial_cross_entropy_loss": 8.5610,
+    "final_train_loss": 4.0715,
+    "final_val_loss": 3.5461,
+    "train_dataset_path": "E:\\GameForge\\datasets\\gameforge-27b-sft\\gameforge_27b_sft_train.jsonl",
+    "train_dataset_sha256": "df5ccc71c00e2a81831c2a106a77d33b58fb827e02580a8767937d5705a39cb6",
+    "train_samples_count": 470,
+    "val_dataset_path": "E:\\GameForge\\datasets\\gameforge-27b-sft\\gameforge_27b_sft_val.jsonl",
+    "val_dataset_sha256": "a8ec5be009ca412e6dffea3a4441050a4db6a908a8e3d81b2a95c91ff3bcbe68",
+    "val_samples_count": 48
+  },
+  "empirical_benchmarks": {
+    "independent_regression_30_tasks": {
+      "base_foundation_score": 138,
+      "previous_candidate_score": 138,
+      "gameforge_27b_sft_score": 155,
+      "max_score": 300,
+      "percentage": 51.67,
+      "delta_vs_base": "+17 pts (+5.7% absolute)"
+    },
+    "multi_engine_50_tasks": {
+      "base_foundation_score": 250,
+      "previous_candidate_score": 250,
+      "gameforge_27b_sft_score": 250,
+      "max_score": 500,
+      "percentage": 50.0,
+      "delta_vs_base": "0 pts (No regression)"
+    },
+    "short_before_after_8_tasks": {
+      "baseline_unaugmented_score": 21,
+      "upgraded_code_first_v2_score": 51,
+      "max_score": 80,
+      "percentage": 63.75,
+      "delta_vs_baseline": "+30 pts (+37.5% absolute)"
+    },
+    "multimodal_visual_debugging": {
+      "verified": true,
+      "task_score": "10 / 10",
+      "image_decode_time_ms": 411,
+      "test_case": "UnrealBuildTool C2027 undefined type 'UStaticMesh' screenshot diagnosis"
+    }
+  },
+  "runtime_configuration": {
+    "inference_engine": "Ollama v0.40.6 / llama-server with Vulkan Backend",
+    "gpu_offload_layers": 37,
+    "cpu_mapped_layers": 28,
+    "dedicated_vram_usage_mib": 8675.96,
+    "cpu_buffer_usage_mib": 7094.39,
+    "generation_tokens_per_sec": 5.8,
+    "context_window_default": 4096,
+    "context_window_max": 262144,
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "top_k": 20
+  },
+  "lifecycle_retirement": {
+    "retired_models": [
+      {
+        "tag": "gameforge-v1:latest",
+        "reason": "Obsolete prompt-wrapper baseline superseded by genuinely fine-tuned weights",
+        "retirement_date": "2026-10-24"
+      }
+    ],
+    "preserved_models": [
+      "qwen3.8:27b-q4_K_M",
+      "gameforge-27b:latest",
+      "gameforge-v2:latest",
+      "gameforge-27b-sft:latest"
+    ]
+  }
+}

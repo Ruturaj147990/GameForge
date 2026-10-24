@@ -1,0 +1,102 @@
+{
+  "manifest_version": "2.1.0",
+  "phase": "PHASE_2_FINAL_RELEASE",
+  "timestamp": "2026-10-24T11:50:00+05:30",
+  "model_metadata": {
+    "recommended_model_tag": "gameforge-27b-sft:latest",
+    "ollama_model_id": "03d36e692be8",
+    "base_model": "qwen3.8:27b-q4_K_M",
+    "base_model_ollama_id": "25b843619e94",
+    "architecture": "qwen35",
+    "total_parameters": 27320000000,
+    "quantization_format": "Q4_K_M",
+    "bits_per_weight": 4.92,
+    "standalone_gguf_path": "E:\\GameForge\\artifacts\\gameforge-27b-sft\\gameforge-27b-sft-q4_k_m.gguf",
+    "standalone_gguf_size_bytes": 16810714464,
+    "standalone_gguf_sha256": "d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b",
+    "vision_projector_blob_sha256": "ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e",
+    "system_prompt_digest": "sha256:2d79a3c952ec15fcfb50c210f437680ff03731582634153bb6dcf55f8cbac406",
+    "multimodal_vision_capable": true,
+    "release_status": "PRODUCTION_VERIFIED_V2.1"
+  },
+  "training_provenance": {
+    "method": "DirectML GPU-Accelerated Parameter-Efficient Supervised Fine-Tuning (LoRA)",
+    "target_hardware": "AMD Radeon RX 7700 XT (12GB VRAM)",
+    "trainable_parameters": 2785280,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "optimizer_steps": 940,
+    "epochs": 2,
+    "initial_cross_entropy_loss": 8.5610,
+    "final_train_loss": 4.0715,
+    "final_val_loss": 3.5461,
+    "train_dataset_path": "E:\\GameForge\\datasets\\gameforge-27b-sft\\gameforge_27b_sft_train.jsonl",
+    "train_dataset_sha256": "df5ccc71c00e2a81831c2a106a77d33b58fb827e02580a8767937d5705a39cb6",
+    "train_samples_count": 470,
+    "val_dataset_path": "E:\\GameForge\\datasets\\gameforge-27b-sft\\gameforge_27b_sft_val.jsonl",
+    "val_dataset_sha256": "a8ec5be009ca412e6dffea3a4441050a4db6a908a8e3d81b2a95c91ff3bcbe68",
+    "val_samples_count": 48
+  },
+  "empirical_benchmarks": {
+    "phase2_broader_16_tasks": {
+      "score": 153,
+      "max_score": 160,
+      "percentage": 95.62,
+      "perfect_10_tasks_count": 13,
+      "evaluation_harness": "scripts/run_phase2_broader_eval.py",
+      "results_csv": "reports/gameforge-27b-sft/phase2_evaluation_results.csv"
+    },
+    "phase2_targeted_retest_3_tasks": {
+      "baseline_score": 28,
+      "candidate_promoted_score": 30,
+      "max_score": 30,
+      "percentage": 100.0,
+      "ph2_02_server_rpc": "10 / 10 (tokens reduced from 512 TRUNC to 272 COMPLETE)",
+      "ph2_03_gameplay_ability": "10 / 10 (focused activation lifecycle)",
+      "ph2_11_bttask_navigation": "10 / 10 (explicit EBTNodeResult::Succeeded)"
+    },
+    "phase2_holdout_validation_4_tasks": {
+      "score": 40,
+      "max_score": 40,
+      "percentage": 100.0,
+      "regressions_count": 0,
+      "results_csv": "reports/gameforge-27b-sft/phase2_holdout_results.csv"
+    },
+    "multimodal_visual_debugging": {
+      "verified": true,
+      "task_score": "10 / 10",
+      "test_case": "UnrealBuildTool C2027 undefined type 'UStaticMesh' screenshot diagnosis"
+    }
+  },
+  "runtime_configuration": {
+    "inference_engine": "Ollama v0.40.6 / llama-server with Vulkan Backend",
+    "gpu_offload_layers": 37,
+    "cpu_mapped_layers": 28,
+    "generation_tokens_per_sec": 4.7,
+    "context_window_default": 4096,
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "top_k": 20,
+    "think": false
+  },
+  "lifecycle_retirement": {
+    "retired_models": [
+      {
+        "tag": "gameforge-v1:latest",
+        "reason": "Obsolete prompt-wrapper baseline superseded by fine-tuned weights",
+        "retirement_date": "2026-10-24"
+      },
+      {
+        "tag": "gameforge-27b-sft-candidate:latest",
+        "reason": "Temporary evaluation tag promoted into canonical gameforge-27b-sft:latest",
+        "retirement_date": "2026-10-24"
+      }
+    ],
+    "preserved_models": [
+      "qwen3.8:27b-q4_K_M",
+      "gameforge-27b:latest",
+      "gameforge-v2:latest",
+      "gameforge-27b-sft:latest"
+    ]
+  }
+}

@@ -1,0 +1,69 @@
+```cpp
+// FindPatrolLocation.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "BehaviorTree/BTTaskNode.h"
+#include "FindPatrolLocation.generated.h"
+
+UCLASS()
+class UBTTask_FindPatrolLocation : public UBTTaskNode
+{
+	GENERATED_BODY()
+
+public:
+	UBTTask_FindPatrolLocation(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+
+	UPROPERTY(EditAnywhere, Category = "Patrol")
+	float PatrolRadius = 500.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Patrol")
+	FBlackboardKeySelector LocationKey;
+};
+```
+
+```cpp
+// FindPatrolLocation.cpp
+#include "FindPatrolLocation.h"
+#include "BehaviorTree/BehaviorTreeComponent.h"
+#include "NavigationSystem.h"
+#include "GameFramework/Pawn.h"
+
+UBTTask_FindPatrolLocation::UBTTask_FindPatrolLocation(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	NodeName = TEXT("Find Patrol Location");
+}
+
+EBTNodeResult::Type UBTTask_FindPatrolLocation::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
+{
+	// Get the owning actor
+	AActor* OwnerActor = OwnerComp.GetOwner();
+	if (!OwnerActor)
+	{
+		return EBTNodeResult::Failed;
+	}
+
+	// Get the navigation system
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(OwnerActor->GetWorld());
+	if (!NavSys)
+	{
+		return EBTNodeResult::Failed;
+	}
+
+	// Get the current location of the owner
+	FVector CurrentLocation = OwnerActor->GetActorLocation();
+
+	// Find a random reachable point within the specified radius
+	FVector RandomPatrolLocation;
+	if (!NavSys->GetRandomReachablePointInRadius(CurrentLocation, PatrolRadius, RandomPatrolLocation))
+	{
+		return EBTNodeResult::Failed;
+	}
+
+	// Store the location in the blackboard
+	FBlackboardValueData ValueData;
+	ValueData.SetVector(RandomPatrolLocation);
+	OwnerComp.GetBlackboard

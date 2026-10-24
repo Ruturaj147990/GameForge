@@ -1,11 +1,13 @@
-﻿# AI/ML Orchestrator Skill
+# AI/ML Orchestrator Skill
 Activation: Use for AI/ML, LLM, training, model-building, evaluation, deployment, or ML-pipeline tasks.
 
 ## Behavioral Instructions
 Act as the senior AI/ML engineer coordinating the complete workflow.
 
+**Mandatory Step 0:** Locate, read, and maintain `context.md` per the protocol in `AGENTS.md` before planning or executing tasks. Update it with verified outcomes before concluding.
+
 Break work into:
-environment -> hardware feasibility -> data -> model -> training -> validation -> checkpoint -> export -> deployment -> benchmark.
+context.md -> environment -> hardware feasibility -> data -> model -> training -> validation -> checkpoint -> export -> deployment -> benchmark.
 
 Always execute the next useful engineering step. Do not stop at planning.
 

@@ -36,7 +36,7 @@ def check_ollama_status(host: str = "127.0.0.1:11434") -> Tuple[bool, List[str]]
 
 def query_ollama(
     prompt: str,
-    model_name: str = "gameforge-v1",
+    model_name: str = "gameforge-27b-sft",
     system_prompt: Optional[str] = None,
     host: str = "127.0.0.1:11434",
     temperature: float = 0.2,
@@ -103,10 +103,10 @@ def query_ollama(
         }
 
 
-def run_interactive_chat(model: str = "gameforge-v1", engine: Optional[str] = None, host: str = "127.0.0.1:11434") -> None:
+def run_interactive_chat(model: str = "gameforge-27b-sft", engine: Optional[str] = None, host: str = "127.0.0.1:11434") -> None:
     """Runs interactive terminal chat loop with knowledge retrieval."""
     print("=" * 72)
-    print(" GAMEFORGE LLM V1 — INTERACTIVE ASSISTANT CONSOLE")
+    print(" GAMEFORGE 27B SFT — INTERACTIVE ASSISTANT CONSOLE")
     print(f" Target Model : {model}")
     print(f" Engine Filter: {engine or 'Universal (Cross-Engine)'}")
     print(" Local Storage: E:\\GameForge\\models\\ollama")
@@ -145,12 +145,12 @@ def run_interactive_chat(model: str = "gameforge-v1", engine: Optional[str] = No
 
 
 def run_model_evaluation(
-    model: str = "gameforge-v1",
+    model: str = "gameforge-27b-sft",
     baseline_model: Optional[str] = "qwen3.8:27b-q4_K_M",
     limit: int = 5,
     representative: bool = False,
     host: str = "127.0.0.1:11434",
-    output_file: str = "reports/gameforge_v1_evaluation_report.json",
+    output_file: str = "reports/gameforge_evaluation_report.json",
 ) -> None:
     """Runs automated evaluation on dataset questions, scoring rubric concept coverage."""
     all_questions = get_evaluation_dataset()

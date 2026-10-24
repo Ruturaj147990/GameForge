@@ -1,0 +1,74 @@
+```cpp
+// GameSaveSubsystem.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "GameSaveSubsystem.generated.h"
+
+class USaveGame;
+
+UCLASS()
+class UGameSaveSubsystem : public UGameInstanceSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	// UGameInstanceSubsystem interface
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+
+	// Save/Load API
+	UFUNCTION(BlueprintCallable, Category = "SaveGame")
+	void SaveGameToSlot(int32 SlotIndex);
+
+	UFUNCTION(BlueprintCallable, Category = "SaveGame")
+	bool LoadGameFromSlot(int32 SlotIndex);
+
+private:
+	// Helper to construct the save file path for a given slot
+	FString GetSaveFilePath(int32 SlotIndex) const;
+
+	// Pointer to the current save game object (managed by subsystem)
+	TObjectPtr<USaveGame> CurrentSaveGame;
+};
+```
+
+```cpp
+// GameSaveSubsystem.cpp
+#include "GameSaveSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "Engine/AssetManager.h"
+#include "Engine/Engine.h"
+#include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/Archive.h"
+#include "Serialization/BufferArchive.h"
+#include "Kismet/GameplayStatics.h"
+
+void UGameSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+
+	// Optionally load the default save game asset or create a new one
+	// For now, we'll assume USaveGame is a UObject with UPROPERTYs for player data
+	// In production, you'd load from a default asset or create a new instance
+	CurrentSaveGame = NewObject<USaveGame>(this);
+}
+
+void UGameSaveSubsystem::Deinitialize()
+{
+	// Clean up any pending operations
+	if (CurrentSaveGame)
+	{
+		CurrentSaveGame = nullptr;
+	}
+
+	Super::Deinitialize();
+}
+
+FString UGameSaveSubsystem::GetSaveFilePath(int32 SlotIndex) const
+{
+	const FString SaveDir = FPaths::ProjectSavedDir() / TEXT("Saves");
+	const FString FileName = FString::Printf(TEXT("PlayerSave_%d.sav"), SlotIndex

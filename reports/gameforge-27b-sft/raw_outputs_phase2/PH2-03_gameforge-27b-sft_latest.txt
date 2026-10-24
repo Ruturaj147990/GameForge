@@ -1,0 +1,73 @@
+```cpp
+// UGA_FireWeapon.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Abilities/GameplayAbility.h"
+#include "GA_FireWeapon.generated.h"
+
+class AProjectile;
+
+/**
+ * Gameplay Ability to fire a weapon.
+ * Checks for State.Weapon.Ready tag, commits cost, spawns projectile, and ends ability.
+ */
+UCLASS()
+class UGA_FireWeapon : public UGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	UGA_FireWeapon();
+
+	// Called when the ability is activated
+	virtual void ActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* TriggerEventData) override;
+
+	// Called when the ability is ended
+	virtual void EndAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		bool bReplicateEndAbility,
+		bool bWasCancelled) override;
+
+private:
+	// Tag indicating the weapon is ready to fire
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	FGameplayTag WeaponReadyTag;
+
+	// Tag for the projectile to spawn
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	FGameplayTag ProjectileTag;
+
+	// Class of the projectile to spawn
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	TSubclassOf<AProjectile> ProjectileClass;
+
+	// Cost to commit when firing
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	FGameplayEffectContextHandle CostContext;
+};
+```
+
+```cpp
+// UGA_FireWeapon.cpp
+#include "GA_FireWeapon.h"
+#include "Abilities/GameplayAbilitySpec.h"
+#include "Abilities/GameplayAbilityActorInfo.h"
+#include "Abilities/GameplayAbilitySystemComponent.h"
+#include "GameplayTagContainer.h"
+#include "GameplayEffectContextHandle.h"
+#include "GameplayTagManager.h"
+#include "Engine/World.h"
+#include "Engine/Engine.h"
+#include "Kismet/GameplayStatics.h"
+#include "Projectile.h"
+
+UGA_FireWeapon::UGA_FireWeapon()
+{
+	// Set default tags
+	WeaponReadyTag = FGameplayTag::RequestGameplayTag

@@ -1,0 +1,19 @@
+```cpp
+void UInventoryComponent::DropItem(int32 SlotIndex)
+{
+    if (!IsValidIndex(SlotIndex))
+    {
+        return;
+    }
+
+    AItem* Item = Items[SlotIndex];
+    if (!IsValid(Item))
+    {
+        Items.RemoveAt(SlotIndex);
+        return;
+    }
+
+    Item->Destroy();
+    Items.RemoveAt(SlotIndex);
+}
+```
