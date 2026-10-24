@@ -1,0 +1,259 @@
+"""GameForge IDE — QThread-based Agent Service.
+
+Bridges the synchronous/async AgentRuntime to PySide6's Qt signal system,
+running inference in a background worker thread so the UI never blocks.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import threading
+import time
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+
+
+class _AgentWorker(QObject):
+    """Runs the agent loop in a dedicated QThread.
+
+    Emits Qt signals for every event yielded by AgentRuntime so the main
+    thread can update widgets safely.
+    """
+
+    token_received = Signal(str)           # incremental token text
+    status_changed = Signal(str, dict)     # (status_label, metadata)
+    tool_called = Signal(str, dict)        # (tool_name, args)
+    tool_result = Signal(str, dict)        # (tool_name, result)
+    diff_pending = Signal(str, dict)       # (diff_id, metadata)
+    error_occurred = Signal(str)           # error message
+    task_done = Signal(str)                # final full text
+
+    def __init__(
+        self,
+        workspace_root: Path,
+        parent: Optional[QObject] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.workspace_root = workspace_root
+        self._session_id: Optional[str] = None
+        self._prompt: str = ""
+        self._stop_flag = threading.Event()
+        # Lazy imports to avoid loading heavy deps until first use
+        self._runtime = None
+        self._session_manager = None
+        self._router = None
+
+    def _ensure_runtime(self) -> None:
+        if self._runtime is not None:
+            return
+        from ...backend.agent.runtime import AgentRuntime
+        from ...backend.providers.router import ModelRouter
+        from ...backend.session_manager import SessionManager
+
+        self._session_manager = SessionManager(self.workspace_root)
+        self._router = ModelRouter()
+        self._runtime = AgentRuntime(
+            workspace_root=self.workspace_root,
+            session_manager=self._session_manager,
+            model_router=self._router,
+        )
+
+    def set_task(self, session_id: str, prompt: str) -> None:
+        self._session_id = session_id
+        self._prompt = prompt
+        self._stop_flag.clear()
+
+    @Slot()
+    def run(self) -> None:  # noqa: D102
+        try:
+            self._ensure_runtime()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self._stream())
+            finally:
+                try:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                except Exception:
+                    pass
+                loop.close()
+        except Exception as exc:
+            self.error_occurred.emit(str(exc))
+
+    async def _stream(self) -> None:
+        full_text = ""
+        stream_gen = self._runtime.execute_task_stream(
+            self._session_id, self._prompt
+        )
+        try:
+            async for event in stream_gen:
+                if self._stop_flag.is_set():
+                    self.task_done.emit(full_text or "[Cancelled by user]")
+                    return
+                etype = event.event_type
+                if etype == "token":
+                    full_text += event.content
+                    self.token_received.emit(event.content)
+                elif etype == "status":
+                    self.status_changed.emit(event.content, event.metadata)
+                elif etype == "tool_call":
+                    self.tool_called.emit(
+                        event.metadata.get("tool", ""), event.metadata.get("args", {})
+                    )
+                elif etype == "tool_result":
+                    self.tool_result.emit(
+                        event.metadata.get("tool", ""), event.metadata.get("result", {})
+                    )
+                elif etype == "diff_pending":
+                    self.diff_pending.emit(
+                        event.metadata.get("diff_id", ""), event.metadata
+                    )
+                elif etype == "error":
+                    self.error_occurred.emit(event.content)
+                    return
+                elif etype == "done":
+                    self.task_done.emit(full_text or event.content)
+                    return
+            if not self._stop_flag.is_set():
+                self.task_done.emit(full_text)
+        finally:
+            if hasattr(stream_gen, "aclose"):
+                try:
+                    await stream_gen.aclose()
+                except Exception:
+                    pass
+
+    def stop(self) -> None:
+        self._stop_flag.set()
+
+    # Public session helpers ---------------------------------------------------
+
+    def create_session(
+        self,
+        name: str = "Chat Session",
+        model_name: str = "gameforge-27b-sft:latest",
+        provider_type: str = "ollama",
+    ) -> str:
+        """Creates a new session and returns its ID."""
+        self._ensure_runtime()
+        session = self._session_manager.create_session(
+            name=name, model_name=model_name, provider_type=provider_type
+        )
+        return session.session_id
+
+    def list_models(self) -> list:
+        """Returns list of available model dicts."""
+        self._ensure_runtime()
+        return [m.model_dump() for m in self._router.list_all_models()]
+
+    @property
+    def session_manager(self):
+        self._ensure_runtime()
+        return self._session_manager
+
+
+class AgentService(QObject):
+    """Public-facing service that manages the worker QThread lifecycle.
+
+    Usage::
+        service = AgentService(workspace_root)
+        service.token_received.connect(my_slot)
+        service.send(session_id, "Write a UE5 GameMode subclass")
+    """
+
+    # Mirror worker signals at service level for ergonomic connection
+    token_received = Signal(str)
+    status_changed = Signal(str, dict)
+    tool_called = Signal(str, dict)
+    tool_result = Signal(str, dict)
+    diff_pending = Signal(str, dict)
+    error_occurred = Signal(str)
+    task_done = Signal(str)
+    _trigger_run = Signal()
+
+    def __init__(self, workspace_root: Path, parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
+        self.workspace_root = workspace_root
+
+        self._thread = QThread()
+        self._worker = _AgentWorker(workspace_root)
+        self._worker.moveToThread(self._thread)
+
+        # Wire worker → service signals
+        self._worker.token_received.connect(self.token_received)
+        self._worker.status_changed.connect(self.status_changed)
+        self._worker.tool_called.connect(self.tool_called)
+        self._worker.tool_result.connect(self.tool_result)
+        self._worker.diff_pending.connect(self.diff_pending)
+        self._worker.error_occurred.connect(self.error_occurred)
+        self._worker.task_done.connect(self.task_done)
+        self._trigger_run.connect(self._worker.run)
+
+        # Start the thread (the worker runs tasks on demand, not on start)
+        self._thread.start()
+
+        self._busy = False
+        self._stopping = False
+        self.task_done.connect(self._on_done)
+        self.error_occurred.connect(self._on_done_err)
+
+    def _on_done(self, _: str) -> None:
+        self._busy = False
+        self._stopping = False
+
+    def _on_done_err(self, _: str) -> None:
+        self._busy = False
+        self._stopping = False
+
+    @property
+    def is_busy(self) -> bool:
+        return self._busy
+
+    @property
+    def is_stopping(self) -> bool:
+        return self._stopping
+
+    def send(self, session_id: str, prompt: str) -> bool:
+        """Dispatch a prompt to the agent.  Returns False if busy."""
+        if self._busy:
+            return False
+        self._busy = True
+        self._worker.set_task(session_id, prompt)
+        self._trigger_run.emit()
+        return True
+
+    def stop(self) -> None:
+        """Request cancellation; remain busy until the worker actually exits."""
+        if not self._busy:
+            return
+        self._stopping = True
+        self._worker.stop()
+
+    def create_session(self, **kwargs) -> str:
+        return self._worker.create_session(**kwargs)
+
+    def list_models(self) -> list:
+        return self._worker.list_models()
+
+    @property
+    def session_manager(self):
+        return self._worker.session_manager
+
+    def shutdown(self) -> None:
+        """Terminate background thread on application exit."""
+        self._busy = False
+        self._worker.stop()
+        if self._thread.isRunning():
+            self._thread.quit()
+            self._thread.wait(3000)
+        self._busy = False
+        self._stopping = False
+
+    def __del__(self) -> None:
+        try:
+            self.shutdown()
+        except Exception:
+            pass

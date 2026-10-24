@@ -253,10 +253,11 @@ def test_ac_22_engine_capability_honesty(workspace_root):
 
 
 def test_ac_23_product_deferral(workspace_root):
-    """AC-23: Windows desktop application remains deferred."""
+    """AC-23: Windows desktop priority follows the latest recorded decision."""
     roadmap_file = workspace_root / "GAMEFORGE_ROADMAP.csv"
     with open(roadmap_file, "r", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     step13 = next((r for r in rows if r["step_id"] == "STEP_13"), None)
     assert step13 is not None
-    assert "DEFERRED" in step13["acceptance_gate"].upper() or "DEFERRED" in step13["current_status"].upper()
+    assert "IN_PROGRESS" in step13["current_status"].upper()
+    assert "PACKAGING" in step13["current_status"].upper()

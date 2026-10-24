@@ -2441,7 +2441,7 @@ The complete blueprint package includes companion files intended to be used dire
 1. `GAMEFORGE_MASTER_BLUEPRINT.md` — this document, the narrative master specification and strategic roadmap.
 2. `ENGINE_FEATURE_COVERAGE_MATRIX.csv` — an initial matrix with one row per listed engine/feature-domain pair. It is a tracking register, not proof that listed features are implemented or that the taxonomy captures every API.
 3. `GAMEFORGE_ROADMAP.csv` — a compact machine-readable roadmap with current status, purpose, deliverables and acceptance gates.
-4. `GAMEFORGE_MASTER_BLUEPRINT_V1_ARCHIVE.md` — retained prior draft for history and comparison.
+4. `archive/GAMEFORGE_MASTER_BLUEPRINT_V1_ARCHIVE.md` — retained prior draft in archive/ for history and comparison.
 5. `README.txt` in the package — explains the files and current status caveat.
 
 The coverage matrix starts with 31 engine/framework entries and more than one hundred feature domains, creating thousands of trackable engine/domain records. It deliberately keeps most rows at catalogued/planned level until evidence is added. A record becomes verified only after an appropriate test, code/artifact inspection or engine run is attached.

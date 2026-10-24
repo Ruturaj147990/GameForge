@@ -1,0 +1,7 @@
+file_path,category,size_bytes,action,status,reason,retained_replacement
+src/gameforge_ide/frontend/app.js,legacy_web_ui,16578,REMOVE,DELETED,Superseded by PySide6 ChatPanel and AgentService Qt signals,src/gameforge_ide/desktop/panels/chat_panel.py
+src/gameforge_ide/frontend/index.html,legacy_web_ui,12868,REMOVE,DELETED,Superseded by PySide6 MainWindow (QMainWindow),src/gameforge_ide/desktop/main_window.py
+src/gameforge_ide/frontend/style.css,legacy_web_ui,12185,REMOVE,DELETED,Superseded by PySide6 dark_theme.py QSS stylesheet,src/gameforge_ide/desktop/styles/dark_theme.py
+src/gameforge_ide/frontend,legacy_directory,0,REMOVE,DELETED,Purged obsolete folder containing retired browser assets,src/gameforge_ide/desktop
+src/gameforge_ide/backend/app.py,backend_bridge,5755,REFACTOR,MODIFIED,Removed StaticFiles mount; retained loopback Unreal plugin bridge,src/gameforge_ide/backend/app.py
+src/gameforge_ide/launcher.py,application_entry,2283,REFACTOR,MODIFIED,Native PySide6 desktop window is default; --serve is optional,src/gameforge_ide/launcher.py

@@ -53,3 +53,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# GameForge session data and transient runs
+.gameforge/
+reports/run_*.json

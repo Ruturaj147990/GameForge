@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.0",
+	"FriendlyName": "GameForge Unreal Bridge",
+	"Description": "In-Editor Agentic Game-Development Bridge connecting Unreal Engine 5.7 to the GameForge IDE and local GameForge 27B model.",
+	"Category": "AI Development Tools",
+	"CreatedBy": "GameForge Systems",
+	"CreatedByURL": "https://gameforge.ai",
+	"DocsURL": "https://gameforge.ai/docs",
+	"MarketplaceURL": "",
+	"SupportURL": "https://gameforge.ai/support",
+	"EngineVersion": "5.7.0",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GameForgeEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	]
+}

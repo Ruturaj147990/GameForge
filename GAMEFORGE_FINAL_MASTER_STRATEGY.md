@@ -1,14 +1,16 @@
 # GAMEFORGE FINAL MASTER STRATEGY
 ## The Authoritative Source of Truth for Vision, Requirements, Architecture, Engine Coverage, Benchmarks, Training, Governance, and Roadmap
 
-**Version:** 3.1.0 — Progress ledger and sequential execution protocol update (19 October 2026)  
-**Status:** AUTHORITATIVE SINGLE SOURCE OF TRUTH. Step 4 has been audited and verified at E4; Step 5 is UNRESOLVED / NOT ACCEPTED — EVIDENCE INTEGRITY AND TEST GATE OPEN; Step 6 is USER-AUTHORIZED PRE-GATE IMPLEMENTATION IN PROGRESS — NOT ACCEPTED. Steps 7–15 remain gated/planned or research-gated.  
+**Version:** 3.1.1 — Progress ledger and D-029 product-priority reconciliation (24 October 2026)
+**Status:** AUTHORITATIVE SINGLE SOURCE OF TRUTH. The long-term ML/data roadmap remains governed by its evidence gates. By later Product-Priority Decision D-029 and D-030–D-037, the current implementation priority is Step 13 (GameForge IDE); the former desktop deferral and older Step 6 active-row instructions are superseded for current execution. Step 13 is in progress, not accepted; AgentRuntime/desktop model streaming, populated Unreal actor/asset context and manual menu validation, bridge timeout/token lifecycle hardening, performance/UI validation, and packaging gates remain open. All 195 unit and 45 protected tests pass.
 **Primary objective:** Build a world-leading game-development specialist AI whose intended intelligence spans game engines and whose first deep real-engine execution target is Unreal Engine 5.7.4. Establish measurable capability, compare existing models, specialize only with rights-cleared data and execution feedback, and build the full Windows product only after the model-and-agent loop proves value.
 
 > **Evidence discipline:** The benchmark and Game IR concepts originate in the supplied GameForge v0.1 draft. The combined roadmap and architecture below are synthesis and engineering recommendations. None of the proposed advantages should be treated as proven until measured. Engine versions, licensing, model licenses, APIs, and tool availability must be verified when each implementation decision is made; this blueprint does not claim fresh verification.
 
 
-**Current project status (19 October 2026):** Step 4 evidence has been audited and reconciled at E4. Step 5 remains UNRESOLVED / NOT ACCEPTED due to reviewer findings regarding test discovery scope, candidate diffs, and scorecard consistency. Under explicit user direction, Step 6 rights-aware data factory work is in progress as a user-authorized pre-gate implementation branch without certifying Step 5 or waiving subsequent gates.
+**Historical project status (19 October 2026):** Step 4 evidence had been audited and reconciled at E4. Step 5 remained UNRESOLVED / NOT ACCEPTED due to reviewer findings regarding test discovery scope, candidate diffs, and scorecard consistency. Step 6 rights-aware data factory work was a user-authorized pre-gate branch. These are historical ML roadmap states and do not override the later D-029 IDE priority.
+
+**Current priority override (24 October 2026):** Product-Priority Decision D-029 makes the native Windows IDE the active product priority, with applicable subsequent decisions D-030–D-037. Continue incremental Step 13 engineering while preserving the independent Step 5/6 model-training gates. No training, paid inference, packaging installation, publication, or infrastructure spend is implied by this priority.
 
 **Engine version policy:** Pin existing fixtures and baseline runs to the locally reported Unreal Engine 5.7.4 installation until the initial benchmark is frozen. Unreal Engine 5.8 was announced by Epic in June 2026; it is a later version, not the version installed in the supplied environment. Add a version-migration task rather than silently changing the baseline ([official Unreal Engine 5.8 announcement](https://www.unrealengine.com/news/unreal-engine-5-8-is-now-available)).
 
@@ -18,7 +20,7 @@
 
 ## 1. Executive decision
 
-### Build the intelligence first—not the desktop app
+### Historical sequencing thesis; current execution follows later D-029
 
 The project should proceed in this order:
 
@@ -602,7 +604,7 @@ Use this table as the single high-level project tracker. It must be updated only
 | Step 10 — Multimodal quality | Reason over screenshots, scenes, animation, audio and profiler output | FRAMEWORK_AND_CALIBRATION_VERIFIED | Multimodal contract schema, temporal playtest alignment engine, spatial artifact detection, and unit tests verified | Grounded in exact telemetry, separate from visual heuristics |
 | Step 11 — Character Bundle | Produce a connected playable character from mesh through animation and controller | BUNDLE_PIPELINE_VERIFIED | Character bundle schema, validator with broken asset rejection, Unreal C++ blueprint code generator, and unit tests verified | Validates mesh, skeleton, skin weights, animation clips, and movement controller |
 | Step 12 — Multi-engine native execution | Add and verify more real engine backends | PLANNED — ENGINE/toolchain gated | Unity C# counterparts are authored; real Unity execution was reported unavailable | Do not claim Unity/Godot runtime parity before running them |
-| Step 13 — Windows app | Ship the user-facing desktop product | DEFERRED — DEPENDS ON PROVEN MODEL/AGENT LOOP | Architecture direction exists | Do not let app work displace proof of model capability |
+| Step 13 — Windows app | Ship the user-facing desktop product | ACTIVE / IN PROGRESS by Product-Priority Decision D-029 and D-030–D-037 | Native PySide6 shell, agent/provider/tool foundation, approval-reviewed diffs, persisted theme/layout, command palette and bounded context are implemented; 195 unit and 45 protected tests pass; UE 5.7.4 Win64 auth-enabled plugin build/editor load and authenticated editor-originated context sync pass via console command; canonical Ollama direct generation and provider stream pass | AgentRuntime/desktop stream, populated actor/asset context, manual menu check, timeout/token lifecycle hardening, DPI/performance evidence and packaging remain open |
 | Step 14 — Scale/architecture decision | Decide model scale, experts, RL and multimodal route | RESEARCH_GATE | Candidate approaches are documented | Do not assume frontier-from-scratch training is affordable or necessary |
 | Step 15 — Production readiness | Security, reliability, licensing, release, observability | FUTURE — DEPENDS ON SECURITY/LEGAL REVIEW | Risk areas are identified | Do not run arbitrary hostile native code in the current host boundary |
 
@@ -2427,7 +2429,7 @@ This file is the durable source of instructions and the ordered plan. It is not 
 
 For every milestone:
 
-1. Read this canonical master strategy first, then inspect the actual repository, current milestone ledger, latest handoff report, Git state and required toolchains.
+1. Read this canonical master strategy first, then inspect the actual repository, current milestone ledger, latest handoff report, Git state and required toolchains. Apply later explicit user decisions such as D-029 when older strategy rows conflict, and record reconciliation.
 2. Determine the lowest-numbered milestone that is not accepted by evidence. Do not use old prompts or archived documents as competing instructions.
 3. Write an internal scoped work plan directly from the relevant milestone's required artifacts and acceptance gate; then implement the work rather than stopping after planning.
 4. Execute applicable tests to completion, inspect logs/results, repair failures and rerun regression checks.
@@ -2468,11 +2470,11 @@ This table is the automatic sequence. Section 28 contains the detailed acceptanc
 | 10 — Multimodal evaluation | FRAMEWORK_AND_CALIBRATION_VERIFIED | Implemented multimodal contract schema, temporal playtest alignment engine, spatial artifact detection, and unit tests passing 2/2. | Held-out improvements are measured; visual/temporal scores are calibrated; non-visual deterministic metrics remain separate. |
 | 11 — Character Bundle prototype | BUNDLE_PIPELINE_VERIFIED | Implemented Character Bundle schema, validator with broken asset rejection, Unreal C++ blueprint code generator, and unit tests passing 3/3. | Native import and runtime checks pass for rig/pose/animation/controller/collision/performance; a known-broken asset is rejected; provenance complete. |
 | 12 — Expand native engine execution | PLANNED; toolchain-gated | First install/enable only with permission; add one engine at a time using native fixture, build/import, probes, saved-asset inspection, defect tests and versioned docs. Start with Unity/Godot based on user demand and feasibility. | Each engine/feature claims only its measured support level; real runtime verification is completed per engine/version; cross-engine parity is measured, not assumed. |
-| 13 — Windows application | DEFERRED; depends on proven agent loop | Design app shell, project detection, task planning, diff/review, engine/tool permissions, run/test reports, cancellation, rollback, secret/cost visibility, settings and update path. | End-to-end user workflow is reliable, reversible, secure enough for stated threat model, and measurably useful in user evaluation. |
+| 13 — Windows application | ACTIVE by later Product-Priority Decision D-029; this row supersedes the earlier deferral | Implement and validate the native desktop, project detection, task planning, diff/review, engine/tool permissions, run/test reports, cancellation, rollback, settings and deployment path. | End-to-end user workflow is reliable, reversible, secure enough for the stated threat model, and measurably useful in user evaluation. |
 | 14 — Scale/model architecture decision | RESEARCH_GATE | Compare base sizes, fine-tunes, adapters, routing/MoE, multimodal backbones and local/cloud split under matched quality/cost/latency/VRAM tests. Evaluate learned simulators only if useful. | A specific capability ceiling is measured; cheaper alternatives are tested; costs and hardware constraints are disclosed; scale-up has an approved budget and expected-value hypothesis. |
 | 15 — Production/security/legal readiness | FUTURE; depends on preceding product path | Threat model; OS-level sandbox deployment; provenance/legal review; secrets/network controls; CI; release/version pinning; telemetry/privacy; rollback; incident/runbook; user support. | Tested security boundaries, legal clearance for intended use, complete regression/soak/reproducibility suite, operational acceptance and documented residual risks. |
 
-**Mandatory continuation rule:** once a step's gate is satisfied, immediately start the next row in sequence without asking the user to select the next task, until the session ends, a genuine blocker is reached, or an approval-only action is required. Do not leap over a gate. Do not conduct paid training or API evaluation without authorization. The current active row at this revision is Step 6 (Rights-Aware Data Factory).
+**Mandatory continuation rule:** once a step's gate is satisfied, immediately start the next row in sequence without asking the user to select the next task, until the session ends, a genuine blocker is reached, or an approval-only action is required. Do not leap over a gate. Do not conduct paid training or API evaluation without authorization. The current active row is Step 13 (GameForge IDE) by D-029; Steps 5–7 remain independent prerequisites for model training only.
 
 ## 30.2 Priorities
 
@@ -2530,30 +2532,16 @@ Lifecycle state and evidence level are separate axes. `REAL_ENGINE_VERIFIED` mus
 
 ## 30.5 Exact current next actions
 
-**Current next milestone: Step 6 — Rights-aware data factory.** Steps 1–4 are audited and verified at E4; Step 5 existing-model baseline evaluation has been executed under frozen manifest `gameforge-bench-v0.2.0-baseline` with two local candidates and accepted by measured evidence (Pass@1 90.9%, 100% variance agreement on repeated runs, $0.00 cost, zero private test leakage). Step 6 dataset readiness is now active.
+**Current Step 13 execution queue:**
+1. Keep the 195 unit and 45 protected tests green; run with local socket access and workspace `TEMP`/`TMP` paths in this sandbox.
+2. Complete the prompt matrix (attachments, RTL, path metacharacters, empty/repeated sends, offline/timeout/disconnect) and ensure the active prompt remains intact.
+3. Verify the AgentRuntime/desktop prompt and tool roundtrip using the now-verified local Ollama provider stream; always send `think: false`.
+4. In a disposable UE 5.7.4 project with content, use the menu or `GameForge.SyncContext` and verify actual selected actor and open asset-editor paths; the authenticated command-path transfer already passes with empty values in the content-free host.
+5. Measure cold/warm startup, streaming responsiveness, CPU/RAM/VRAM and Unreal build pressure on the declared hardware; keep targets separate from results.
+6. Complete Windows DPI/minimum-size and keyboard/accessibility checks.
+7. Package only after an authorized packager is available; do not install software, publish or sign without the required approval.
 
-Execute Step 6 in this order:
-1. Define and validate the formal trajectory schema (`schemas/trajectory_schema.json`).
-2. Establish the dataset source and license register (`configs/dataset_source_register.json`) with approved provenance policies.
-3. Define strict train/dev/eval_private split boundaries with private evaluation isolation.
-4. Implement automated deduplication and contamination detection against private benchmark tasks (`src/gameforge_bench/data_factory.py`).
-5. Curate initial clean-room task trajectories and controlled defect examples.
-6. Verify human review coverage and zero confidential/proprietary data leakage.
-
-
-1. Reconfirm the current repository, pinned Unreal Engine 5.7.4 environment, task inventory, and all four reference pilots. Run `validate-specs` and the applicable regression suites.
-2. Freeze a baseline benchmark release manifest: task IDs, task and acceptance versions, starting fixture hashes, engine/tool versions, hidden split membership (kept private), permitted context, permitted tools, retry policy, wall-clock/token/tool budgets, and report schema.
-3. Select at least two existing model configurations that can legally and practically be evaluated. Create a model register containing provider/model/revision, license/terms, modality, context window, tool support, pricing if relevant, deployment, date and permission basis.
-4. Prefer already available or no-cost/local candidates when adequate. Do not use saved credentials, call paid APIs, rent GPU/cloud resources, or accept terms without the required authorization. If this blocks comparison, complete the protocol and environment preparation, record the blocker, and do not fabricate results or pass the baseline gate.
-5. Define an adapter contract for invoking model candidates under identical prompts, project context, allowed tools, retry rules, timeouts and task budgets. Keep candidate identity hidden from graders where practical.
-6. Run candidates over a carefully selected initial subset of genuine engine tasks and engine-neutral tasks. Include at minimum controller, health/damage, pickup/composition, HUD, projectile and several engine-neutral tasks after checking their live status. Use clean snapshots and the same engine/version.
-7. Preserve raw outputs, tool traces, diffs, build/runtime logs, hidden-grader results, time, tokens, cost and error classifications. Repeat a subset to estimate variance.
-8. Score each grading layer separately. Distinguish compile success from behavior, assets, performance, regressions, cross-engine reasoning and human-reviewed quality. Do not collapse all outcomes into one score without also publishing per-domain results.
-9. Analyze failures and identify the most valuable missing-data categories. Do not tune prompts after seeing only one model's results without applying the same protocol to all candidates.
-10. Produce `GAMEFORGE_STEP5_BASELINE_REPORT.md`, update the model register and derived roadmap, and mark Step 5 passed only when every gate in Section 28.2 is satisfied.
-11. When Step 5 passes, automatically proceed to Step 6 (rights-aware data factory) if the session can continue safely; otherwise persist exact resume state and make Step 6 the unambiguous next milestone.
-
-After Step 5, the mandated sequence is: Step 6 rights-aware data factory; Step 7 SFT/adapter proof of value; Step 8 tool-use and outcome-verifiable repair learning; Step 9 controlled Game IR experiment; Step 10 multimodal evaluation; Step 11 Character Bundle prototype; Step 12 per-engine native execution expansion; Step 13 Windows application; Step 14 scale/model-architecture decision; Step 15 production/security/legal readiness. The detailed deliverables and gates in Sections 28.3–28.12 govern these steps. No step may bypass its prerequisites.
+The model/data roadmap remains independent: Steps 5/6 gates are prerequisites for training and are not waived by active Step 13 IDE work. Steps 14–15 remain future research/production gates.
 
 ## 30.6 Questions that require evidence rather than assumptions
 
@@ -2608,7 +2596,7 @@ The original source package contained the V2 master blueprint, the V1 archive, t
 | Source artifact | Reported size | Reported content count | Use in this revision |
 |---|---:|---:|---|
 | `GAMEFORGE_MASTER_BLUEPRINT.md` V2 | 136,588 bytes | 2,465 lines | Main source body preserved, amended and promoted into this version |
-| `GAMEFORGE_MASTER_BLUEPRINT_V1_ARCHIVE.md` | 38,096 bytes | 566 lines | Historical comparison/archive |
+| `archive/GAMEFORGE_MASTER_BLUEPRINT_V1_ARCHIVE.md` | 38,096 bytes | 566 lines | Historical comparison/archive |
 | `GAMEFORGE_ROADMAP.csv` | 3,639 bytes | 16 lines: header + 15 milestone rows | Operational roadmap retained and status-caveated |
 | `ENGINE_FEATURE_COVERAGE_MATRIX.csv` V1 | 1,651,073 bytes | 4,525 lines: header + 4,524 records | Migrated to Registry v2.1 while preserving V1 in archive |
 | `README.txt` from package ZIP | 921 bytes | 9 lines | Package/status caveat incorporated |
@@ -2627,14 +2615,15 @@ The matrix comprises 39 canonical `engine_id` values × 116 `feature_domain` val
 | `C-6` — Phase and step numbering | Older phase tables and the 15-step operational roadmap used different numbering/gates. | `STEP_1`–`STEP_15` are the operational source of truth. Phase numbers are narrative groupings only; every milestone has its own acceptance gate. Steps 14 and 15 now have explicit gates in Sections 28.11–28.12. |
 | `C-7` — Pilot mapping | The original six pilot list drifted from how work was actually staged; Step 4 was pending when v3.0.0 was written. | Step 1: controller/movement/camera and input exercised within it; Step 2: health/damage; Step 3: pickup/stamina/player composition; Step 4: HUD/projectile and cross-engine benchmark foundations are reported complete in the supplied handoff summary. Independent audit remains part of Step 5 preparation. A standalone input-mapping task remains in the wider inventory. |
 
-## 32.3 Current milestone state at this document revision
+## 32.3 Current milestone state at this document revision — reconciled 24 October 2026
 
 The authoritative milestone ledger remains Section 16.1 and the compact register is `GAMEFORGE_ROADMAP.csv`:
 
 - **Steps 1–3:** reported complete in supplied handoff reports, with narrow Unreal Engine 5.7.4 scope. Reported test results have not been independently rerun as part of this master-document update.
 - **Step 4:** AUDITED AND RECONCILED (E4_REPORTED_REAL_ENGINE). Audited in STEP4_AUDIT_REPORT.md with 114 unique automated tests (49 unit, 45 protected oracles, 20 real integration tests); 12 HUD probes, 12 projectile probes; prior pilots verified without regression on real Unreal Engine 5.7.4.
 - **Step 5:** UNRESOLVED / NOT ACCEPTED — EVIDENCE INTEGRITY AND TEST GATE OPEN. Historical baseline evaluation run preserved in GAMEFORGE_STEP5_BASELINE_REPORT.md; review findings concerning candidate diffs, test discovery, and scorecard consistency remain under investigation. No baseline score is fabricated.
-- **Step 6:** USER-AUTHORIZED PRE-GATE IMPLEMENTATION IN PROGRESS — NOT ACCEPTED. Authorized by user direction; trajectory schema v1.0, rights-enforcing source register, deduplication, group splitting, and protected contamination scanner implemented. Training remains blocked until formal legal source review.
+- **Step 6:** PRE-GATE IMPLEMENTATION COMPLETE — TRAINING GATE CLOSED PENDING EXTERNAL LEGAL REVIEW. Rights-aware dataset work is preserved; no training execution authorized by D-029.
+- **Step 13:** ACTIVE by D-029; native desktop implementation in progress. Current fresh evidence: 195 unit tests passed in 17.82s and 45 protected graders passed. API tests pass with local socket access. UE 5.7.4 Win64 auth-enabled plugin build/editor load and authenticated editor-originated context sync via `GameForge.SyncContext` passed; actor/open-asset payload remains empty and menu click was not automated. Direct canonical Ollama generation and `OllamaProvider.stream_chat()` pass with `think: false`; AgentRuntime/desktop UI streaming, repeatable performance measures, and desktop executable packaging remain open. Bridge timeout/token lifecycle hardening remains open.
 - **Steps 7–15:** planned or research-gated. No supplied evidence establishes a completed proprietary training dataset, specialist fine-tuning run, RLVR run, validated Game IR compiler, integrated character generation pipeline, full multi-engine native execution, or finished Windows product.
 
 ## 32.4 Phase and milestone mapping

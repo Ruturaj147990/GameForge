@@ -1,0 +1,79 @@
+"""Git Version Control Inspection Tools for GameForge IDE."""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+from typing import Any, Dict
+
+
+class GitTools:
+    """Provides non-destructive git inspection utilities for the IDE."""
+
+    def __init__(self, workspace_root: Path):
+        self.workspace_root = workspace_root.resolve()
+
+    def get_status(self) -> Dict[str, Any]:
+        """Returns structured git status (branch, modified, untracked)."""
+        try:
+            # Branch name
+            branch_proc = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=str(self.workspace_root),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else "unknown"
+
+            # Porcelain status
+            stat_proc = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(self.workspace_root),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            lines = stat_proc.stdout.splitlines()
+            modified = []
+            untracked = []
+            for line in lines:
+                code = line[:2].strip()
+                path = line[3:].strip()
+                if code == "??":
+                    untracked.append(path)
+                else:
+                    modified.append({"status_code": code, "path": path})
+
+            return {
+                "status": "SUCCESS",
+                "branch": branch,
+                "clean": len(lines) == 0,
+                "modified_count": len(modified),
+                "untracked_count": len(untracked),
+                "modified": modified,
+                "untracked": untracked,
+            }
+        except Exception as e:
+            return {"status": "ERROR", "error": str(e)}
+
+    def get_diff(self, path: str = "") -> Dict[str, Any]:
+        """Returns unstaged git diff."""
+        try:
+            cmd = ["git", "diff"]
+            if path:
+                cmd.append(path)
+            diff_proc = subprocess.run(
+                cmd,
+                cwd=str(self.workspace_root),
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            return {
+                "status": "SUCCESS",
+                "diff": diff_proc.stdout,
+                "has_changes": len(diff_proc.stdout.strip()) > 0,
+            }
+        except Exception as e:
+            return {"status": "ERROR", "error": str(e)}

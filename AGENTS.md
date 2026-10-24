@@ -1,8 +1,8 @@
-# GameForge — Antigravity Agent Guidelines & Operating Protocol
+# GameForge — Codex Agent Guidelines & Operating Protocol
 
 ## Mandatory Project Context Protocol
 
-All Antigravity agents, subagents, and sessions operating on the GameForge project must strictly follow this protocol. Engineering continuity across context compactions, session restarts, and reboots depends on this durable workflow.
+All Codex agents, subagents, and sessions operating on the GameForge project must strictly follow this protocol. Engineering continuity across context compactions, session restarts, and reboots depends on this durable workflow.
 
 ### 1. At the Beginning of Every GameForge Task
 1. **Locate and read the canonical `context.md`** at the repository root (`E:\gameforge_step1\context.md`) before planning, investigating, or modifying the project.
@@ -43,3 +43,13 @@ All Antigravity agents, subagents, and sessions operating on the GameForge proje
 - Do not use stale context to override a current user request.
 - Update `context.md` to reflect a new direction only when supported by explicit user direction or verified empirical evidence.
 - Distinguish evidence states: `[VERIFIED]`, `[REPORTED]`, `[UNVERIFIED]`, `[BLOCKED]`, and `[SUPERSEDED]`.
+
+## Codex Project Quick Reference
+
+- Canonical source repository: `E:\gameforge_step1`; large artifacts and mirrored context: `E:\GameForge`.
+- Native IDE entry point: `python -m src.gameforge_ide.launcher`; use `--serve` only for the loopback Unreal bridge (`localhost`, `127.0.0.1`, or `::1`).
+- Native IDE preferences (Studio Dark/Light, geometry, and dock state) persist in the selected workspace's `.gameforge/ide_settings.ini`; use Ctrl+T to switch themes and View → Reset Layout to restore the default docks.
+- Test commands: `pytest tests/unit/` and `pytest graders/protected/`. If the sandbox denies its C: temporary directory, create `E:\gameforge_step1\scratch\pytest_os_temp` and set `TEMP` and `TMP` to that path for the test process only.
+- Keep `graders/protected/`, model weights, Ollama blobs, datasets, training lineage, legal records, and user changes intact. Never weaken a protected oracle.
+- Agent-issued command execution must remain allowlisted, shell-free, workspace-contained, and approval-gated. The embedded terminal is user-controlled and is not an OS sandbox.
+- Before packaging, obtain approval to install a packager; current host has PySide6 6.12.0 but no PyInstaller. Do not bundle model weights.
