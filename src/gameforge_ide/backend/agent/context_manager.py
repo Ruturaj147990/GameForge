@@ -68,7 +68,7 @@ class ContextManager:
             end = starts[position + 1][0] if position + 1 < len(starts) else len(lines)
             section = lines[start:end]
             if letter == "G":
-                # Keep the current state and the next action, while avoiding
+                # Keep the current state and the next action concisely, avoiding
                 # repeating the full architecture inventory in every model call.
                 current = next(
                     (idx for idx, line in enumerate(section) if line.startswith("- **Current State:**")),
@@ -79,11 +79,14 @@ class ContextManager:
                     None,
                 )
                 if current is not None and next_action is not None:
-                    current_end = next(
-                        (idx for idx in range(current + 1, len(section)) if section[idx].startswith("- **")),
-                        next_action,
-                    )
-                    section = section[:current_end] + [""] + section[next_action:next_action + 1]
+                    # Capture concise current state summary (first sentence/350 chars)
+                    curr_text = section[current]
+                    if len(curr_text) > 350:
+                        curr_text = curr_text[:350].rstrip() + "... [details in context.md]"
+                    next_text = section[next_action]
+                    if len(next_text) > 350:
+                        next_text = next_text[:350].rstrip() + "... [details in context.md]"
+                    section = [section[0], "", curr_text, "", next_text]
             selected.append("\n".join(section).strip())
 
         summary = "\n\n".join(part for part in selected if part)
@@ -119,9 +122,23 @@ class ContextManager:
             f"{unreal_context_note}\n"
             "=== AVAILABLE TOOLS ===\n"
             f"{tools_description}\n\n"
+            "=== TOOL CALL FORMAT ===\n"
+            "To inspect the workspace, search, or create code, respond with a tool JSON block in this exact format:\n"
+            "```json\n"
+            '{\n  "tool": "tool_name",\n  "args": {"arg_name": "value"}\n}\n'
+            "```\n\n"
+            "Example 1 (Inspect existing projects):\n"
+            "```json\n"
+            '{\n  "tool": "unreal_find_projects",\n  "args": {}\n}\n'
+            "```\n\n"
+            "Example 2 (Create or edit a project file):\n"
+            "```json\n"
+            '{\n  "tool": "propose_edit",\n  "args": {"subpath": "MyGame.uproject", "replacement_content": "{\\n  \\"FileVersion\\": 3\\n}"}\n}\n'
+            "```\n\n"
+            "When the user asks you to create, build, or inspect a game or project, invoke the appropriate tool immediately.\n\n"
             "=== OPERATING PROTOCOL ===\n"
-            "1. When given a task, first inspect relevant files using read_file or search_code.\n"
-            "2. Propose concrete changes using propose_edit (which generates a reviewable diff).\n"
+            "1. When given an actionable game development task, begin immediately by invoking a tool (such as unreal_find_projects, list_dir, or propose_edit).\n"
+            "2. Propose concrete changes using propose_edit (which generates a reviewable diff for the developer).\n"
             "3. Staged mode: Never run model inference concurrently with heavy Unreal compilation.\n"
-            "4. Provide concise, direct code and plans without unnecessary conversational boilerplate.\n"
+            "4. Provide concise, direct code and plans without unnecessary conversational delay.\n"
         )

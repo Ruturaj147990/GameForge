@@ -70,7 +70,11 @@ class UnrealEngineTools:
         IGNORE_PARTS = {"Intermediate", "Saved", "Binaries", ".git", "scratch", "reports", "node_modules", ".venv"}
 
         for p in self.workspace_root.glob("**/*.uproject"):
-            if any(part in IGNORE_PARTS for part in p.parts):
+            try:
+                rel_parts = p.relative_to(self.workspace_root).parts
+            except ValueError:
+                rel_parts = p.parts
+            if any(part in IGNORE_PARTS for part in rel_parts[:-1]):
                 continue
             canonical = str(p.resolve())
             if canonical in seen_paths:

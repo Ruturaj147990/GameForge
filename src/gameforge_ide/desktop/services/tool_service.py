@@ -42,6 +42,12 @@ class ToolService(QObject):
         self._pool = QThreadPool.globalInstance()
         self._gateway = None
 
+    def set_workspace(self, new_workspace: Path) -> None:
+        """Switch active workspace directory and recreate ToolGateway."""
+        self.workspace_root = Path(new_workspace).resolve()
+        self._gateway = None
+
+
     def _ensure_gateway(self):
         if self._gateway is not None:
             return

@@ -22,14 +22,17 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QDockWidget,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QSizePolicy,
     QSplitter,
     QStatusBar,
@@ -79,7 +82,7 @@ class MainWindow(QMainWindow):
         self._tools = ToolService(workspace_root, parent=self)
 
         # ── Window meta ──────────────────────────────────────────────────
-        self.setWindowTitle("GameForge IDE — Agentic Game Development Environment")
+        self._update_window_title()
         self.setMinimumSize(1280, 780)
         self.resize(1600, 960)
 
@@ -100,9 +103,14 @@ class MainWindow(QMainWindow):
 
         # ── Connect cross-panel signals ──────────────────────────────────
         self._chat_panel.diff_pending.connect(self._on_diff_pending)
+        self._chat_panel.slash_command_executed.connect(self._on_slash_command)
+        self._chat_panel.model_changed.connect(self._on_chat_model_changed)
 
         # ── Deferred startup health-check ────────────────────────────────
-        QTimer.singleShot(800, self._check_ollama_status)
+        self._health_timer = QTimer(self)
+        self._health_timer.setSingleShot(True)
+        self._health_timer.timeout.connect(self._check_ollama_status)
+        self._health_timer.start(800)
 
     # ── Menu bar ─────────────────────────────────────────────────────────────
 
@@ -111,6 +119,13 @@ class MainWindow(QMainWindow):
 
         # File
         file_menu = mb.addMenu("&File")
+        act_open = QAction("Open Folder…", self)
+        act_open.setObjectName("file_open_folder")
+        act_open.setShortcut(QKeySequence("Ctrl+O"))
+        act_open.setToolTip("Open workspace folder (Ctrl+O)")
+        act_open.triggered.connect(self._open_folder)
+        file_menu.addAction(act_open)
+
         act_new = QAction("New Session", self)
         act_new.setObjectName("file_new_session")
         act_new.setShortcut(QKeySequence("Ctrl+N"))
@@ -189,6 +204,7 @@ class MainWindow(QMainWindow):
         tb.setObjectName("main_toolbar")
         tb.setMovable(False)
         tb.setIconSize(QSize(16, 16))
+        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.addToolBar(Qt.TopToolBarArea, tb)
 
         # Logo / brand label
@@ -196,8 +212,26 @@ class MainWindow(QMainWindow):
         brand.setStyleSheet("color: #6c63ff; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
         tb.addWidget(brand)
 
+        # Workspace badge / switch button (like VS Code / Antigravity)
+        self._tb_workspace_btn = QPushButton(f"📁 {self._workspace.name}")
+        self._tb_workspace_btn.setObjectName("tb_workspace_badge")
+        self._tb_workspace_btn.setToolTip(f"Active Workspace: {self._workspace}\nClick to choose another folder…")
+        self._tb_workspace_btn.setStyleSheet(
+            "QPushButton { background: #1a1f2c; color: #a5b4fc; border: 1px solid #374151; "
+            "border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px; margin-right: 6px; } "
+            "QPushButton:hover { background: #262f45; border-color: #6366f1; color: #ffffff; }"
+        )
+        self._tb_workspace_btn.clicked.connect(self._open_folder)
+        tb.addWidget(self._tb_workspace_btn)
+
+        act_open_folder = QAction("📂 Open Folder…", self)
+        act_open_folder.setObjectName("tb_open_folder")
+        act_open_folder.setToolTip("Open workspace folder (Ctrl+O)")
+        act_open_folder.triggered.connect(self._open_folder)
+        tb.addAction(act_open_folder)
+
         sep = QWidget()
-        sep.setFixedWidth(12)
+        sep.setFixedWidth(8)
         tb.addWidget(sep)
 
         act_new_session = QAction("＋ New Session", self)
@@ -230,6 +264,25 @@ class MainWindow(QMainWindow):
         )
         tb.addAction(self._act_tb_terminal)
 
+        tb.addSeparator()
+
+        lbl_model = QLabel("Model: ")
+        lbl_model.setStyleSheet("color: #9ca3af; font-size: 11px; font-weight: 600; margin-left: 4px;")
+        tb.addWidget(lbl_model)
+
+        self._tb_model_combo = QComboBox()
+        self._tb_model_combo.setObjectName("tb_model_combo")
+        self._tb_model_combo.setMinimumWidth(220)
+        self._tb_model_combo.setStyleSheet(
+            "QComboBox { background: #1a1f2c; color: #a5b4fc; border: 1px solid #374151; "
+            "border-radius: 4px; padding: 3px 8px; font-weight: 600; font-size: 11px; } "
+            "QComboBox:hover { border-color: #6366f1; } "
+            "QComboBox::drop-down { border: none; width: 18px; }"
+        )
+        self._tb_model_combo.addItem("gameforge-27b-sft:latest")
+        self._tb_model_combo.currentTextChanged.connect(self._on_top_model_changed)
+        tb.addWidget(self._tb_model_combo)
+
         # Spacer to push status to right
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -244,7 +297,7 @@ class MainWindow(QMainWindow):
     # ── Central widget (Chat) ─────────────────────────────────────────────────
 
     def _build_central(self) -> None:
-        self._chat_panel = ChatPanel(self._agent, parent=self)
+        self._chat_panel = ChatPanel(self._agent, workspace_root=self._workspace, parent=self)
         self.setCentralWidget(self._chat_panel)
 
     # ── Dock panels ───────────────────────────────────────────────────────────
@@ -256,6 +309,7 @@ class MainWindow(QMainWindow):
 
         # ── Explorer (left) ──────────────────────────────────────────────
         self._explorer = ExplorerPanel(self._tools, self._workspace, parent=self)
+        self._explorer.open_folder_requested.connect(self._open_folder)
         self._dock_explorer = self._make_dock("Explorer", self._explorer, Qt.LeftDockWidgetArea)
         self._dock_explorer.setMinimumWidth(220)
         self._dock_explorer.setMaximumWidth(400)
@@ -318,8 +372,9 @@ class MainWindow(QMainWindow):
         sb.setObjectName("main_status_bar")
         self.setStatusBar(sb)
 
-        self._status_lbl = QLabel(f"Workspace: {self._workspace}")
+        self._status_lbl = QLabel(f"Workspace: {self._workspace.name}")
         self._status_lbl.setObjectName("status_workspace")
+        self._status_lbl.setToolTip(str(self._workspace))
         sb.addWidget(self._status_lbl)
 
         sb.addPermanentWidget(QLabel("|"))
@@ -338,6 +393,62 @@ class MainWindow(QMainWindow):
 
     # ── Slots ─────────────────────────────────────────────────────────────────
 
+    def _update_window_title(self) -> None:
+        self.setWindowTitle(f"GameForge IDE — {self._workspace.name} — [{self._workspace}]")
+
+    @Slot()
+    def _open_folder(self) -> None:
+        """Prompt user with native directory picker dialog and switch workspace."""
+        chosen = QFileDialog.getExistingDirectory(
+            self,
+            "Open Workspace Folder",
+            str(self._workspace),
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+        )
+        if chosen:
+            self.switch_workspace(Path(chosen))
+
+    def switch_workspace(self, new_workspace: Path | str) -> None:
+        """Switch active workspace directory across all panels and services."""
+        target = Path(new_workspace).resolve()
+        if not target.exists():
+            QMessageBox.warning(self, "Invalid Workspace", f"The directory does not exist:\n{target}")
+            return
+
+        self._workspace = target
+        self._update_window_title()
+
+        # Persist chosen workspace in local settings
+        settings_path = self._workspace / ".gameforge" / "ide_settings.ini"
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            self._settings = QSettings(str(settings_path), QSettings.IniFormat)
+            self._settings.setValue("workspace/last_opened", str(self._workspace))
+            self._settings.sync()
+        except Exception:
+            pass
+
+        # Reconfigure services
+        self._agent.set_workspace(self._workspace)
+        self._tools.set_workspace(self._workspace)
+
+        # Reconfigure panels
+        self._explorer.set_workspace(self._workspace, tool_service=self._tools)
+        self._unreal_panel.set_workspace(self._tools, self._workspace)
+        self._chat_panel.set_workspace(self._agent, self._workspace)
+        self._terminal.set_workspace(self._workspace)
+        self._diff_panel.clear()
+
+        # Update toolbar and status bar labels
+        if hasattr(self, "_tb_workspace_btn"):
+            self._tb_workspace_btn.setText(f"📁 {self._workspace.name}")
+            self._tb_workspace_btn.setToolTip(f"Active Workspace: {self._workspace}\nClick to choose another folder…")
+        if hasattr(self, "_status_lbl"):
+            self._status_lbl.setText(f"Workspace: {self._workspace.name}")
+            self._status_lbl.setToolTip(str(self._workspace))
+
+        self.statusBar().showMessage(f"Switched workspace to: {self._workspace.name}", 4000)
+
     @Slot()
     def _new_session(self) -> None:
         self._chat_panel._new_session()
@@ -349,7 +460,8 @@ class MainWindow(QMainWindow):
         apply_theme(QApplication.instance(), self._theme)
         self._settings.setValue("appearance/theme", self._theme)
         self._settings.sync()
-        self.statusBar().showMessage(f"Studio {self._theme.title()} theme enabled.", 3000)
+        from .styles.dark_theme import get_theme_display_name
+        self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
 
     @Slot()
     def _reset_layout(self) -> None:
@@ -368,6 +480,7 @@ class MainWindow(QMainWindow):
                 self._ollama_indicator.setStyleSheet(theme_stylesheet(
                     "color: #00d9a3; font-size: 12px; padding-right: 12px; font-weight: 600;"
                 ))
+                self._sync_models_to_toolbar()
             else:
                 self._ollama_indicator.setText("● Ollama: offline")
                 self._ollama_indicator.setStyleSheet(theme_stylesheet(
@@ -378,6 +491,51 @@ class MainWindow(QMainWindow):
             self._ollama_indicator.setStyleSheet(theme_stylesheet(
                 "color: #ff6b6b; font-size: 12px; padding-right: 12px;"
             ))
+
+    def _sync_models_to_toolbar(self) -> None:
+        """Populate the top toolbar model combo with available models."""
+        try:
+            models = self._agent.list_models()
+            current = self._tb_model_combo.currentText() or self._chat_panel._current_model
+            self._tb_model_combo.blockSignals(True)
+            self._tb_model_combo.clear()
+            for m in models:
+                self._tb_model_combo.addItem(m.get("id", m.get("name", "unknown")))
+            idx = self._tb_model_combo.findText(current)
+            if idx >= 0:
+                self._tb_model_combo.setCurrentIndex(idx)
+            elif self._tb_model_combo.count() > 0:
+                self._tb_model_combo.setCurrentIndex(0)
+            self._tb_model_combo.blockSignals(False)
+        except Exception:
+            pass
+
+    @Slot(str)
+    def _on_top_model_changed(self, model_name: str) -> None:
+        """When user selects a model from the top main toolbar."""
+        if not model_name:
+            return
+        if hasattr(self, "_model_status"):
+            self._model_status.setText(f"Model: {model_name}")
+        self._chat_panel.set_model(model_name)
+        self.statusBar().showMessage(f"Active model set to: {model_name}", 3000)
+
+    @Slot(str)
+    def _on_chat_model_changed(self, model_name: str) -> None:
+        """When model is changed inside ChatPanel (e.g. via combo or /model command)."""
+        if not hasattr(self, "_tb_model_combo") or not model_name:
+            return
+        if hasattr(self, "_model_status"):
+            self._model_status.setText(f"Model: {model_name}")
+        if self._tb_model_combo.currentText() != model_name:
+            self._tb_model_combo.blockSignals(True)
+            idx = self._tb_model_combo.findText(model_name)
+            if idx >= 0:
+                self._tb_model_combo.setCurrentIndex(idx)
+            else:
+                self._tb_model_combo.addItem(model_name)
+                self._tb_model_combo.setCurrentText(model_name)
+            self._tb_model_combo.blockSignals(False)
 
     @Slot(str, dict)
     def _on_diff_pending(self, diff_id: str, meta: dict) -> None:
@@ -394,6 +552,46 @@ class MainWindow(QMainWindow):
     def _on_diff_rejected(self, diff_id: str) -> None:
         self.statusBar().showMessage(f"❌ Diff {diff_id} rejected.", 4000)
 
+    @Slot(str, str)
+    def _on_slash_command(self, cmd: str, full_cmd: str) -> None:
+        """Handle slash command actions triggered from ChatPanel."""
+        if cmd == "/build":
+            self._dock_unreal.show()
+            self._dock_unreal.raise_()
+            self._unreal_panel._on_build()
+            self.statusBar().showMessage("⚙️ Staged build triggered via /build command.", 4000)
+        elif cmd == "/diff":
+            self._dock_diff.setVisible(not self._dock_diff.isVisible())
+            if self._dock_diff.isVisible():
+                self._dock_diff.raise_()
+        elif cmd == "/terminal":
+            self._dock_terminal.setVisible(not self._dock_terminal.isVisible())
+            if self._dock_terminal.isVisible():
+                self._dock_terminal.raise_()
+        elif cmd == "/explorer":
+            self._dock_explorer.setVisible(not self._dock_explorer.isVisible())
+            if self._dock_explorer.isVisible():
+                self._dock_explorer.raise_()
+        elif cmd in ("/ue", "/context"):
+            self._dock_unreal.show()
+            self._dock_unreal.raise_()
+            self._unreal_panel._refresh()
+            self.statusBar().showMessage("🎮 Unreal Engine context synced.", 3000)
+        elif cmd == "/undo":
+            if self._diff_panel._btn_rollback.isEnabled():
+                self._dock_diff.show()
+                self._dock_diff.raise_()
+                self._diff_panel._on_rollback()
+                self.statusBar().showMessage("↩️ Rollback initiated via /undo.", 4000)
+            else:
+                self.statusBar().showMessage("ℹ️ No active applied diff available to rollback.", 4000)
+        elif cmd == "/test":
+            self._dock_terminal.show()
+            self._dock_terminal.raise_()
+            self._terminal.run_command("pytest tests/unit/ -q")
+            self.statusBar().showMessage("🧪 Test verification started in terminal.", 4000)
+
+
     def _show_about(self) -> None:
         QMessageBox.about(
             self,
@@ -408,6 +606,7 @@ class MainWindow(QMainWindow):
     def _command_palette_commands(self):
         """Return only currently implemented user-facing commands."""
         return [
+            ("File: Open Workspace Folder…", self._open_folder),
             ("New Session", self._new_session),
             ("Clear Chat", self._chat_panel._clear_chat),
             ("Check Ollama", self._check_ollama_status),
@@ -519,6 +718,8 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
 
+        if hasattr(self, "_health_timer") and self._health_timer is not None:
+            self._health_timer.stop()
         if hasattr(self, "_terminal") and self._terminal is not None:
             try:
                 self._terminal.closeEvent(event)

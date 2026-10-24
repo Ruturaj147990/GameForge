@@ -31,7 +31,7 @@ class AgentRuntime:
         workspace_root: Path,
         session_manager: SessionManager,
         model_router: ModelRouter,
-        max_iterations: int = 6,
+        max_iterations: int = 12,
     ):
         self.workspace_root = workspace_root.resolve()
         self.session_manager = session_manager
@@ -101,6 +101,14 @@ class AgentRuntime:
             selected_indices.add(pinned_index)
             remaining -= pinned_tokens
 
+        # Also prioritize the newest active turn (the latest user prompt/observation)
+        latest_index = len(messages) - 1
+        if latest_index >= 0 and latest_index not in selected_indices:
+            latest_tokens = cls.estimate_tokens(messages[latest_index].get("content", ""))
+            if latest_tokens <= remaining:
+                selected_indices.add(latest_index)
+                remaining -= latest_tokens
+
         omitted = 0
         for index in range(len(messages) - 1, -1, -1):
             if index in selected_indices:
@@ -112,6 +120,10 @@ class AgentRuntime:
             else:
                 omitted += 1
         selected = [message for index, message in enumerate(messages) if index in selected_indices]
+        # Invariant: Multi-turn LLM chat prompts must end with a user turn so the model knows to respond.
+        while len(selected) > 1 and selected[-1].get("role") == "assistant":
+            selected.pop()
+
         used = input_budget - remaining
         return selected, {
             "estimated_input_tokens": used,
@@ -119,9 +131,10 @@ class AgentRuntime:
             "omitted_history_messages": omitted,
         }
 
+
     def _extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
         """Extracts structured tool invocation from model output."""
-        # Match ```json {"tool": "name", "args": {...}} ```
+        # 1. Match ```json {"tool": "name", "args": {...}} ```
         pattern = re.compile(r"```(?:json)?\s*(\{\s*\"tool\"\s*:\s*\"[^\"]+\".*?\})\s*```", re.DOTALL)
         m = pattern.search(text)
         if m:
@@ -132,18 +145,83 @@ class AgentRuntime:
             except Exception:
                 pass
 
-        # Match single-line {"tool": "...", "args": {...}}
-        pattern2 = re.compile(r"(\{\s*\"tool\"\s*:\s*\"[^\"]+\"\s*,\s*\"args\"\s*:\s*\{.*?\}\s*\})", re.DOTALL)
-        m2 = pattern2.search(text)
-        if m2:
-            try:
-                data = json.loads(m2.group(1))
-                if "tool" in data and "args" in data:
-                    return {"name": data["tool"], "arguments": data["args"]}
-            except Exception:
-                pass
+        # 2. Match single or multi-line {"tool": "...", "args": {...}} with brace balancing
+        start_pos = 0
+        while True:
+            idx = text.find('"tool"', start_pos)
+            if idx == -1:
+                break
+            brace_idx = text.rfind('{', 0, idx)
+            if brace_idx != -1:
+                brace_count = 0
+                in_str = False
+                escape = False
+                for j in range(brace_idx, len(text)):
+                    ch = text[j]
+                    if escape:
+                        escape = False
+                        continue
+                    if ch == '\\':
+                        escape = True
+                        continue
+                    if ch == '"':
+                        in_str = not in_str
+                        continue
+                    if not in_str:
+                        if ch == '{':
+                            brace_count += 1
+                        elif ch == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                candidate = text[brace_idx : j + 1]
+                                try:
+                                    data = json.loads(candidate)
+                                    if "tool" in data and "args" in data:
+                                        return {"name": data["tool"], "arguments": data["args"]}
+                                except Exception:
+                                    pass
+                                break
+                # Fallback if text was truncated right before the final closing brace
+                if brace_count == 1 and not in_str:
+                    candidate = text[brace_idx:].strip() + "}"
+                    try:
+                        data = json.loads(candidate)
+                        if "tool" in data and "args" in data:
+                            return {"name": data["tool"], "arguments": data["args"]}
+                    except Exception:
+                        pass
+            start_pos = idx + 6
 
         return None
+
+    @staticmethod
+    def _is_actionable_task(user_prompt: str, model_response: str) -> bool:
+        """Determines if the prompt or response indicates an actionable creation/inspection task."""
+        p_lower = user_prompt.lower().strip()
+        r_lower = model_response.lower()
+
+        # Action intent indicators in model response
+        model_intents = (
+            "let me start by", "let's start by", "let me inspect", "let me check",
+            "let me first", "i'll create", "i will create", "i'll start", "i will start",
+            "let me begin", "i'll build", "i will build", "let's inspect", "let's create",
+            "let me examine", "let's examine", "let me set up", "i'll set up"
+        )
+        if any(intent in r_lower for intent in model_intents):
+            return True
+
+        # Action keywords in user prompt
+        action_keywords = {
+            "create", "build", "make", "implement", "generate", "inspect", "fix", "refactor",
+            "write", "setup", "develop", "code", "author"
+        }
+        words = set(re.findall(r"\b\w+\b", p_lower))
+        if words.intersection(action_keywords):
+            # Exclude purely theoretical explanatory queries
+            if not p_lower.startswith(("how to", "how do", "what is", "why", "explain", "describe", "can you explain")):
+                return True
+
+        return False
 
     def _record_prompt_and_get_history(
         self, session_id: str, user_prompt: str, history_limit: int = 8
@@ -179,7 +257,7 @@ class AgentRuntime:
         system_prompt = self.context_manager.build_system_prompt(tools_desc, active_model=session.model_name)
         provider = self.router.get_provider(session.provider_type)
         capabilities = provider.get_capabilities(session.model_name)
-        output_tokens = min(1024, max(256, capabilities.max_context // 3))
+        output_tokens = min(2048, max(512, capabilities.max_context // 2))
 
         # 2. Record user message and reload the session snapshot. SessionManager
         # operations return independent objects, so the earlier `session`
@@ -206,6 +284,7 @@ class AgentRuntime:
         )
 
         iteration = 0
+        _tool_call_counts: dict = {}  # Tracks repeated (tool, args) combos for loop detection
         while iteration < self.max_iterations:
             iteration += 1
             yield AgentEvent(
@@ -234,13 +313,34 @@ class AgentRuntime:
             # Check for tool call in response
             tool_call = self._extract_tool_call(full_response)
             if not tool_call:
-                # Direct conversational response, task iteration complete
-                self.session_manager.append_message(session_id, "assistant", full_response)
-                yield AgentEvent(event_type="done", content="Task completed.", metadata={"full_text": full_response})
-                return
+                if iteration == 1 and self._is_actionable_task(user_prompt, full_response):
+                    # Autonomous action continuation: model stated intent or user requested an action task
+                    conversation_history.append({"role": "assistant", "content": full_response})
+                    conversation_history.append({
+                        "role": "user",
+                        "content": (
+                            "Proceed with the task now. Emit the required tool call block "
+                            "(e.g. `list_dir`, `unreal_find_projects`, or `propose_edit`) to inspect "
+                            "the workspace or create the required project files."
+                        ),
+                    })
+                    yield AgentEvent(
+                        event_type="status",
+                        content="PLANNING",
+                        metadata={"action": "proceeding_to_tool_call", "iteration": iteration},
+                    )
+                    continue
+                else:
+                    # Direct conversational response, task iteration complete
+                    self.session_manager.append_message(session_id, "assistant", full_response)
+                    yield AgentEvent(event_type="done", content="Task completed.", metadata={"full_text": full_response})
+                    return
 
             tool_name = tool_call["name"]
             tool_args = tool_call["arguments"]
+            # --- Loop detection: track (tool_name, args_repr) call history ---
+            _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+            _tool_call_counts[_tool_key] = _tool_call_counts.get(_tool_key, 0) + 1
 
             yield AgentEvent(
                 event_type="tool_call",
@@ -322,12 +422,60 @@ class AgentRuntime:
                 metadata={"tool": tool_name, "result": tool_result},
             )
 
-            # Append tool result to history for next iteration
+            # Bound tool observation cleanly to ensure it fits comfortably within the token budget
+            obs_json = json.dumps(tool_result, indent=2, ensure_ascii=False)
+            if len(obs_json) > 600 and isinstance(tool_result, dict):
+                summary_info = {}
+                for k, v in tool_result.items():
+                    if isinstance(v, list) and len(v) > 3:
+                        compact_list = []
+                        for item in v[:3]:
+                            if isinstance(item, dict):
+                                compact_item = {ik: iv for ik, iv in item.items() if ik in ("name", "path", "uproject_path", "status")}
+                                compact_list.append(compact_item if compact_item else str(item)[:60])
+                            else:
+                                compact_list.append(str(item)[:60])
+                        summary_info[k] = compact_list
+                        summary_info[f"total_{k}"] = len(v)
+                        summary_info["note"] = f"Displaying first 3 of {len(v)} {k} to preserve context budget."
+                    elif isinstance(v, str) and len(v) > 350:
+                        summary_info[k] = v[:350] + "... [truncated]"
+                    else:
+                        summary_info[k] = v
+                obs_json = json.dumps(summary_info, indent=2, ensure_ascii=False)
+            if len(obs_json) > 900:
+                obs_json = obs_json[:900] + "\n... [truncated]"
+
+            # Build continuation nudge — be specific based on the tool that just ran
+            _repeated = _tool_call_counts.get(_tool_key, 0) >= 2
+            if _repeated:
+                # Hard anti-loop nudge: force the model off the repeated tool
+                continuation_nudge = (
+                    f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                    f"NOTE: You have already called `{tool_name}` with these same arguments. "
+                    "Do NOT call it again. You have enough information. "
+                    "Proceed to the NEXT step: if you need to create project files, call `propose_edit`. "
+                    "If you need to inspect a directory, call `list_dir`. If you need engine info, call `unreal_engine_info`. "
+                    "Otherwise synthesize your final answer."
+                )
+            elif tool_name in ("unreal_find_projects", "unreal_engine_info", "list_dir"):
+                continuation_nudge = (
+                    f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                    "You now have the required workspace/engine information. "
+                    "Proceed to create or edit the project files using `propose_edit`. "
+                    "Do not call discovery tools again unless you need a specific piece of information not yet retrieved."
+                )
+            else:
+                continuation_nudge = (
+                    f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                    "Continue the task. If you need to create or edit project files, invoke `propose_edit` using the JSON format. "
+                    "If you need more information, invoke another tool. Otherwise synthesize the final answer."
+                )
+
+            # Append assistant response + contextual observation for next iteration
             conversation_history.append({"role": "assistant", "content": full_response})
-            conversation_history.append({
-                "role": "user",
-                "content": f"[Tool Observation for `{tool_name}`]:\n{json.dumps(tool_result, indent=2)}\n\nNext action or final conclusion?",
-            })
+            conversation_history.append({"role": "user", "content": continuation_nudge})
+
             try:
                 conversation_history, budget = self.fit_history_to_context(
                     system_prompt,

@@ -29,6 +29,7 @@ class ExplorerPanel(QWidget):
     """Workspace file-system explorer with lazy directory expansion."""
 
     file_selected = Signal(str)   # absolute path of selected file
+    open_folder_requested = Signal()
 
     def __init__(self, tool_service: ToolService, workspace_root: Path, parent=None) -> None:
         super().__init__(parent)
@@ -36,6 +37,13 @@ class ExplorerPanel(QWidget):
         self._workspace = workspace_root
         self._build_ui()
         QTimer.singleShot(200, self._populate_root)
+
+    def set_workspace(self, new_workspace: Path, tool_service: Optional[ToolService] = None) -> None:
+        """Switch active workspace directory and reload tree."""
+        if tool_service is not None:
+            self._tools = tool_service
+        self._workspace = Path(new_workspace).resolve()
+        self._populate_root()
 
     # ── UI Construction ─────────────────────────────────────────────────────
 
@@ -55,6 +63,13 @@ class ExplorerPanel(QWidget):
         hdr_layout.addWidget(lbl)
         hdr_layout.addStretch()
 
+        btn_open = QPushButton("📂")
+        btn_open.setObjectName("btn_explorer_open")
+        btn_open.setFixedSize(24, 24)
+        btn_open.setToolTip("Open Folder / Switch Workspace…")
+        btn_open.clicked.connect(self.open_folder_requested.emit)
+        hdr_layout.addWidget(btn_open)
+
         btn_refresh = QPushButton("↻")
         btn_refresh.setObjectName("btn_explorer_refresh")
         btn_refresh.setFixedSize(24, 24)
@@ -62,6 +77,7 @@ class ExplorerPanel(QWidget):
         btn_refresh.clicked.connect(self._populate_root)
         hdr_layout.addWidget(btn_refresh)
         layout.addWidget(header)
+
 
         # Search bar
         self._search = QLineEdit()

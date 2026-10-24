@@ -133,6 +133,12 @@ class TerminalPanel(QWidget):
         self._output.appendPlainText("\n--- Restarting shell ---\n")
         self._start_shell()
 
+    def set_workspace(self, new_workspace: Path) -> None:
+        """Switch active terminal directory to new workspace."""
+        self._workspace = Path(new_workspace).resolve()
+        self._restart_shell()
+
+
     # ── Output handlers ──────────────────────────────────────────────────────
 
     @Slot()

@@ -2,10 +2,25 @@
 
 **Execution Authority:** Product-Priority Decision D-029  
 **Host Environment:** Windows 11 Pro, AMD Ryzen 5 7600X, 32GB DDR5, AMD Radeon RX 7700 XT (12GB VRAM)  
-**Execution Timestamp Range:** 2026-10-24T13:00:00+05:30 to 2026-10-24T18:15:45+05:30  
+**Execution Timestamp Range:** 2026-10-24T13:00:00+05:30 to 2026-10-24T19:50:00+05:30  
 **Status:** Incremental native IDE execution; release gates remain partial or blocked as logged  
 
 ---
+
+### [2026-10-24T19:50:00+05:30] — Decision D-040: Antigravity and Claude Code Developer Ergonomics with Live Unreal Linking
+- **Slash Command System:** Implemented `/build`, `/ue`, `/context`, `/clear`, `/new`, `/diff`, `/terminal`, and `/help` in `ChatPanel`. Wired direct signal emission `slash_command_executed` to `MainWindow` to toggle docks and trigger staged builds automatically.
+- **Context Chips Bar:** Added one-click token insertion chips (`@ue`, `@actor`, `@asset`, `⚙ /build`, `🗑 /clear`) positioned above the composer, facilitating prompt enrichment without manual syntax memorization.
+- **Automated Unreal Linking:** Implemented periodic polling of `.gameforge/unreal_context.json` with dynamic badge updates (`UE Linked: <Project>` / `Unreal: Disconnected`) directly in the chat status bar.
+- **Acceptance Tests:** Added `test_chat_slash_commands_and_chips` and `test_chat_unreal_context_sync_updates_badge` to `tests/unit/test_desktop_acceptance.py`.
+- **Suite Passes:** Full unit test suite: **196 passed in 9.55s**; protected benchmark oracles: **45 passed in 0.04s**. Zero regressions. Recorded Decision D-040.
+
+### [2026-10-24T19:00:00+05:30] — Priority 1 Desktop Agent Workflow Closure and Bridge Hardening
+- **Agent Workflow:** Migrated `OllamaProvider.stream_chat()` to Ollama `/api/chat`, supporting true structured multi-turn conversation and observation returns. Preserved `build_stream_payload` and `build_chat_payload`.
+- **Context Management:** Compacted Section G summary text in system prompt to prevent token budget starvation, allowing conversation history and observation returns to fit within the 4,096 context budget. Bounded JSON observation serializations to prevent context buffer overflows.
+- **Desktop UI Integration:** Verified live `MainWindow` -> `ChatPanel` -> `AgentService` -> `AgentRuntime` -> `OllamaProvider` (`gameforge-27b-sft:latest`) -> `ToolGateway` (`list_dir`) -> tool observation -> continuation -> final response (460 tokens streamed into UI) and user stop/cancellation in `test_desktop_agent_stream.py`.
+- **Unreal Bridge Hardening:** Enforced strict local loopback address checking in `FGameForgeBridgeClient` constructor (rejecting non-loopback URLs) and set an explicit 5.0-second timeout on editor HTTP requests. Verified populated actor/open-asset metadata ingestion lifecycle.
+- **Suite Passes:** Full unit test suite: **195 passed in 9.00s**; protected benchmark oracles: **45 passed in 0.04s**. Zero regressions.
+- **Packaging:** PyInstaller remains unavailable in Python 3.14 environment and installation was not authorized. Specification `GameForge.spec` and portable runner `release/GameForge.bat` are verified and intact. Recorded Decision D-038.
 
 ### [2026-10-24T18:15:45+05:30] — Authenticated Unreal Context Sync and Full Verification
 - **Security:** Unreal context GET/POST require the per-run `GAMEFORGE_BRIDGE_TOKEN` bearer value; server fails closed if unset and compares with constant time. UE plugin reads the inherited token and sends Authorization. Protected API tests cover unset, wrong, and valid tokens.
@@ -254,6 +269,44 @@
 - **Repair:** The service stays busy/stopping until worker done/error; an attempted send cannot dispatch or replace worker fields. New-session action requests stop, clears the active bubble, and ignores old task events until completion. Stop UI now stays disabled from sending while cancellation is pending.
 - **Changed files:** `src/gameforge_ide/desktop/services/agent_service.py`, `src/gameforge_ide/desktop/panels/chat_panel.py`, `tests/unit/test_desktop_acceptance.py`, `GAMEFORGE_DEFECTS_AND_REPAIRS.csv`, `GAMEFORGE_CAPABILITY_MATRIX.md`, `GAMEFORGE_TEST_REPORT.md`, `GAMEFORGE_CODEX_MIGRATION_REPORT.md`, and `context.md`.
 - **Verification:** `python -m py_compile` across context/runtime/provider/service/UI modules — exit 0. `python -m pytest tests/unit/test_gameforge_ide.py tests/unit/test_desktop_acceptance.py -q --basetemp .pytest_codex_agent_lifecycle_final` — exit 0, **39 passed in 3.55s**. `python -m pytest graders/protected/ -q --basetemp .pytest_codex_protected_agent_lifecycle` — exit 0, **45 passed in 0.05s**. Current unit collection: **188**, collection only.
-- **Remaining:** Worker cancellation can still wait for the provider's bounded network timeout; validate full provider timeout/fault behavior and context-window budget later.
+### [2026-10-24T21:28:00+05:30] — Claude Code & Google Antigravity Parity: Autonomous Continuation, Terminal Logs, Cross-Instance Diffs & Parity Slash Commands
+- **Root Cause & Diagnosis:**
+  - Investigated user report: *"gameforge has not started to make the tic tac toe game yet."*
+  - **Issue 1 (Turn 1):** Model emitted conversational intent on Turn 1 (*"I'll create a complete 2D Tic Tac Toe game..."*) without wrapping a tool JSON block. Because no tool call was extracted, `AgentRuntime` assumed direct conversational completion and ended the task.
+  - **Issue 2 (Turn 2):** When tool `unreal_find_projects` executed, it returned all 35 projects (~17 KB JSON). History budgeting omitted the newest observation because it exceeded the remaining headroom (~790 tokens vs 769 available), leaving an assistant message as the final item in the `messages` array. Ollama `/api/chat` interprets a trailing assistant message as an already-answered query and returned 0 tokens.
+- **Engineering Repairs Executed:**
+  - **Autonomous Action Continuation (`AGT-02`):** Added `_is_actionable_task()` in `runtime.py`. When action intent or creation keywords are detected without a tool block, runtime continues autonomously with an explicit nudge to emit the required tool block.
+  - **Compact Observation Bounding:** Bound tool observation JSON cleanly (compacting lists to top 3 items with key fields and string truncations) producing valid, highly informative JSON under ~180 tokens (~530 characters).
+  - **History Invariant & Priority Budgeting:** `fit_history_to_context` now prioritizes both the pinned user prompt and the active latest user observation turn before processing older history. Enforced the invariant that the message array must never terminate on an assistant turn.
+  - **Live Terminal Logging:** Wired real-time console logs into `AgentService._stream()` (`[GameForge Agent] Prompt received...`, `[GameForge Agent Status]...`, `[GameForge Agent Tool] >>> Calling...`, `[GameForge Agent Diff] Diff pending...`).
+  - **Persistent Cross-Instance Diffs (`DIF-01` / `DIF-03`):** Persisted proposed diff records to `.gameforge/diffs/{diff_id}.json` with base64 binary fidelity. `ToolService` and `DiffPanel` in the native desktop UI can now seamlessly discover, approve, apply, and rollback diffs created across processes or threads.
+  - **Parity Slash Commands (`MOD-01`):** Implemented `/export` (saving Markdown transcripts to `.gameforge/exports/`), `/resume [id]` (session switching), `/model [name]`, `/permissions`, `/plan`, `/undo` (atomic rollback), and `/test`.
+- **Empirical Verification:**
+  - **End-to-End Workflow Verification:** Executed `test_full_tictactoe.py` with `gameforge-27b-sft:latest` on local Ollama:
+    - Iteration 1: Inspected engine with `unreal_engine_info` (UE 5.7.4 detected).
+    - Iteration 2: Scanned projects with `unreal_find_projects`.
+    - Iteration 3: Discovered directory structure with `list_dir`.
+    - Iteration 4: Authored `TicTacToe/TicTacToe.uproject` via `propose_edit` with complete valid JSON structure (`FileVersion: 3`, `EngineAssociation: "5.7"`, `Description: "2D Tic Tac Toe Game"`, UMG/Slate dependencies).
+    - Emitted `diff_pending` event and paused at `WAITING_APPROVAL` with `diff_id` awaiting developer approval in DiffPanel.
+  - **Cross-Instance Diff Lifecycle:** Verified in `test_diff_persistence.py` and `test_cross_instance_diff_persistence_and_rollback`: Proposed by Instance A $\rightarrow$ Applied by Instance B $\rightarrow$ Atomic write verified $\rightarrow$ Rolled back by Instance C $\rightarrow$ Bit-identical file removal verified.
+  - **Regression Test Suites:**
+    - `pytest tests/unit/ -q`: **198 passed, 0 failures in 12.07s**.
+    - `pytest graders/protected/ -q`: **45 passed, 0 failures in 0.03s**.
+    - Total automated test baseline: **243 passed, 0 failures**.
+- **Changed Files:**
+  - `src/gameforge_ide/backend/agent/runtime.py`
+  - `src/gameforge_ide/backend/agent/context_manager.py`
+  - `src/gameforge_ide/backend/tools/gateway.py`
+  - `src/gameforge_ide/backend/tools/edit_tools.py`
+  - `src/gameforge_ide/backend/session_manager.py`
+  - `src/gameforge_ide/desktop/panels/chat_panel.py`
+  - `src/gameforge_ide/desktop/main_window.py`
+  - `src/gameforge_ide/desktop/services/agent_service.py`
+  - `tests/unit/test_desktop_acceptance.py`
+  - `GAMEFORGE_PRODUCT_PARITY_MATRIX.md`
+  - `GAMEFORGE_IDE_EXECUTION_LOG.md`
+  - `DECISION_LOG.csv` (D-041)
+  - `context.md` (mirrored to `E:\GameForge\context.md`)
+
 
 

@@ -17,6 +17,9 @@ The full machine-readable UI interaction registry is [`configs/ui_interaction_re
 | `view_toggle_theme` / Ctrl+T | View menu | Switch Studio Dark/Light and persist choice | None | Wired; inline palette round-trip and preference restoration tested |
 | `view_reset_layout` | View menu | Restore default dock state and window size | None | Wired; hide/reset and saved dock-visibility restoration tested |
 | `command_palette` / Ctrl+K | Help menu / Main window | Search and dispatch supported commands | Search text or choose a listed command | Wired; filter and dispatch tested |
+| `chat_slash_commands` | Chat | Execute developer slash commands (`/build`, `/ue`, `/context`, `/clear`, `/new`, `/diff`, `/terminal`, `/help`) | Slash prefix in prompt composer | Wired; direct local dispatch tested |
+| `chat_chips_bar` | Chat | One-click context chips (`@ue`, `@actor`, `@asset`, `⚙ /build`, `🗑 /clear`) | Chat panel active | Wired; composer token insertion tested |
+| `chat_unreal_sync_badge` | Chat status bar | Live Unreal Editor context indicator | Workspace `.gameforge/unreal_context.json` present | Wired; periodic sync and badge update tested |
 | `file_quit` / Ctrl+Q | File menu | Close application | Confirmation dialog unless disabled by test harness | Wired |
 | `model_combo` | Chat | Select model for session | Model must be listed by provider | Wired; live model listing not verified now |
 | `btn_new_session` | Chat | Create a new session | None | Wired |

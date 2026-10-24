@@ -229,11 +229,11 @@ class ToolGateway:
                 res = tool_search_code(self.boundary, **arguments)
             elif name == "propose_edit":
                 res = self.edit_tools.propose_edit(**arguments)
-            elif name == "apply_edit":
+            elif name in ("apply_edit", "apply_diff"):
                 res = self.edit_tools.apply_diff(**arguments)
-            elif name == "reject_edit":
+            elif name in ("reject_edit", "reject_diff"):
                 res = self.edit_tools.reject_diff(**arguments)
-            elif name == "rollback_edit":
+            elif name in ("rollback_edit", "rollback_diff"):
                 res = self.edit_tools.rollback_diff(**arguments)
             elif name == "run_command":
                 res = self.terminal_tools.run_command(**arguments)

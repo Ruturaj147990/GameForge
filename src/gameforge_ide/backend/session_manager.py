@@ -96,6 +96,17 @@ class SessionManager:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(session.model_dump(), f, indent=2)
 
+    def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
+        """Update model_name (and optionally provider_type) on an existing session."""
+        session = self.get_session(session_id)
+        if not session:
+            return False
+        session.model_name = model_name
+        if provider_type:
+            session.provider_type = provider_type
+        self.save_session(session)
+        return True
+
     def list_sessions(self) -> List[Dict[str, Any]]:
         sessions = []
         for p in self.storage_dir.glob("*.json"):
@@ -152,3 +163,50 @@ class SessionManager:
         session.diff_history.append(diff)
         self.save_session(session)
         return diff
+
+    def export_session(self, session_id: str, format: str = "markdown") -> Path:
+        """Export session transcript and tool execution log to markdown."""
+        session = self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+        export_dir = self.workspace_path / ".gameforge" / "exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        export_path = export_dir / f"{session_id}.md"
+
+        lines = [
+            f"# GameForge Session Export: {session.name}",
+            f"- **Session ID:** `{session.session_id}`",
+            f"- **Model:** `{session.model_name}` ({session.provider_type})",
+            f"- **Created:** `{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(session.created_at))}`",
+            f"- **Updated:** `{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(session.updated_at))}`",
+            f"- **Message Count:** {len(session.messages)}",
+            "",
+            "## Conversation Transcript",
+            "",
+        ]
+        for msg in session.messages:
+            role_header = f"### [{msg.role.upper()}] ({time.strftime('%H:%M:%S', time.localtime(msg.timestamp))})"
+            lines.append(role_header)
+            lines.append(msg.content)
+            lines.append("")
+
+        if session.tool_history:
+            lines.append("## Tool Execution History")
+            lines.append("")
+            for tool in session.tool_history:
+                lines.append(f"- **Tool:** `{tool.tool_name}` — Status: `{tool.status}`")
+                lines.append(f"  - Arguments: `{tool.arguments}`")
+                lines.append(f"  - Output preview: `{tool.output[:200]}`")
+            lines.append("")
+
+        export_path.write_text("\n".join(lines), encoding="utf-8")
+        return export_path
+
+    def delete_session(self, session_id: str) -> bool:
+        """Delete session checkpoint from disk."""
+        path = self.storage_dir / f"{session_id}.json"
+        if path.exists():
+            path.unlink()
+            return True
+        return False
+

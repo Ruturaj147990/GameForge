@@ -59,6 +59,18 @@ class UnrealPanel(QWidget):
         self._tools.tool_result.connect(self._on_tool_result)
         QTimer.singleShot(300, self._refresh)
 
+    def set_workspace(self, tool_service: ToolService, new_workspace: Path) -> None:
+        """Switch active workspace directory for Unreal tools."""
+        try:
+            self._tools.tool_result.disconnect(self._on_tool_result)
+        except Exception:
+            pass
+        self._tools = tool_service
+        self._workspace = Path(new_workspace).resolve()
+        self._tools.tool_result.connect(self._on_tool_result)
+        self._refresh()
+
+
     # ── UI Construction ─────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:

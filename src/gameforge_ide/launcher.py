@@ -17,7 +17,7 @@ from pathlib import Path
 WORKSPACE_ROOT = Path(r"E:\gameforge_step1").resolve()
 
 
-def _launch_native_desktop() -> None:
+def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
     """Launch the genuine native PySide6 QMainWindow desktop application."""
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import Qt
@@ -38,11 +38,16 @@ def _launch_native_desktop() -> None:
     from .desktop.styles.dark_theme import apply_theme
     apply_theme(app, "dark")
 
+    target_ws = Path(workspace_path).resolve() if workspace_path else WORKSPACE_ROOT
+    if not target_ws.exists():
+        target_ws.mkdir(parents=True, exist_ok=True)
+
     from .desktop.main_window import MainWindow
-    window = MainWindow(WORKSPACE_ROOT)
+    window = MainWindow(target_ws)
     window.show()
 
     sys.exit(app.exec())
+
 
 
 def _launch_server(host: str = "127.0.0.1", port: int = 8000) -> None:
@@ -69,6 +74,12 @@ def main() -> None:
         description="GameForge IDE — Agentic Game Development Environment"
     )
     parser.add_argument(
+        "workspace",
+        nargs="?",
+        default=None,
+        help="Optional workspace folder to open (default: E:\\gameforge_step1).",
+    )
+    parser.add_argument(
         "--serve",
         action="store_true",
         help="Start the FastAPI backend server instead of the native desktop UI.",
@@ -90,7 +101,8 @@ def main() -> None:
         _launch_server(args.host, args.port)
     else:
         # Native desktop is the default
-        _launch_native_desktop()
+        _launch_native_desktop(args.workspace)
+
 
 
 if __name__ == "__main__":

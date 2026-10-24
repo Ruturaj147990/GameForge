@@ -101,8 +101,36 @@ class OllamaProvider(ModelProvider):
         }
 
     @staticmethod
+    def build_chat_payload(
+        model_id: str,
+        messages: List[Dict[str, str]],
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.2,
+        max_tokens: int = 2048,
+        num_ctx: int = 4096,
+    ) -> Dict[str, Any]:
+        """Build structured chat payload for Ollama /api/chat preserving multi-turn roles."""
+        chat_messages = []
+        if system_prompt:
+            chat_messages.append({"role": "system", "content": system_prompt})
+        for m in messages:
+            chat_messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+
+        return {
+            "model": model_id,
+            "messages": chat_messages,
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "num_ctx": num_ctx,
+            },
+            "think": False,
+        }
+
+    @staticmethod
     def parse_stream_lines(lines) -> Iterator[StreamChunk]:
-        """Decode Ollama's newline-delimited JSON response records."""
+        """Decode Ollama's newline-delimited JSON response records from /api/chat or /api/generate."""
         for line in lines:
             if not line:
                 continue
@@ -111,8 +139,13 @@ class OllamaProvider(ModelProvider):
             except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
                 continue
             done = chunk.get("done", False)
+            # /api/chat sends token in chunk["message"]["content"], /api/generate sends in chunk["response"]
+            msg = chunk.get("message", {})
+            token = msg.get("content", "") if isinstance(msg, dict) else ""
+            if not token and "response" in chunk:
+                token = chunk.get("response", "")
             yield StreamChunk(
-                token=chunk.get("response", ""),
+                token=token,
                 is_final=done,
                 metadata={"eval_count": chunk.get("eval_count", 0)} if done else {},
             )
@@ -128,10 +161,10 @@ class OllamaProvider(ModelProvider):
         max_tokens: int = 2048,
         **kwargs: Any,
     ) -> AsyncIterator[StreamChunk]:
-        """Streams completion tokens from Ollama /api/generate or /api/chat."""
-        url = f"http://{self.host}/api/generate"
+        """Streams completion tokens from Ollama /api/chat."""
+        url = f"http://{self.host}/api/chat"
         
-        payload = self.build_stream_payload(
+        payload = self.build_chat_payload(
             model_id=model_id,
             messages=messages,
             system_prompt=system_prompt,

@@ -14,8 +14,16 @@
 #include "Serialization/JsonSerializer.h"
 
 FGameForgeBridgeClient::FGameForgeBridgeClient(const FString& InIDEServerUrl)
-	: IDEServerUrl(InIDEServerUrl)
 {
+	if (InIDEServerUrl.StartsWith(TEXT("http://127.0.0.1:")) || InIDEServerUrl.StartsWith(TEXT("http://localhost:")) || InIDEServerUrl.StartsWith(TEXT("http://[::1]:")))
+	{
+		IDEServerUrl = InIDEServerUrl;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GameForge Bridge URL must be a local loopback address. Defaulting to http://127.0.0.1:8000"));
+		IDEServerUrl = TEXT("http://127.0.0.1:8000");
+	}
 }
 
 FGameForgeBridgeClient::~FGameForgeBridgeClient()
@@ -95,6 +103,7 @@ void FGameForgeBridgeClient::SendContextToIDE()
 	FJsonSerializer::Serialize(JsonObj.ToSharedRef(), Writer);
 
 	TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
+	Request->SetTimeout(5.0f);
 	Request->OnProcessRequestComplete().BindRaw(this, &FGameForgeBridgeClient::OnContextResponseReceived);
 	Request->SetURL(IDEServerUrl + TEXT("/api/unreal/context"));
 	Request->SetVerb(TEXT("POST"));
@@ -107,6 +116,7 @@ void FGameForgeBridgeClient::SendContextToIDE()
 void FGameForgeBridgeClient::PingIDE(TFunction<void(bool bConnected)> OnComplete)
 {
 	TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
+	Request->SetTimeout(3.0f);
 	Request->SetURL(IDEServerUrl + TEXT("/api/health"));
 	Request->SetVerb(TEXT("GET"));
 	Request->OnProcessRequestComplete().BindLambda([OnComplete](FHttpRequestPtr Req, FHttpResponsePtr Resp, bool bSuccess)

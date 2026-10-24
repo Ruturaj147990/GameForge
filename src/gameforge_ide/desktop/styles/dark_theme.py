@@ -12,69 +12,101 @@ from PySide6.QtWidgets import QApplication, QPlainTextEdit, QTextEdit
 
 GAMEFORGE_DARK_QSS = """
 /* ────────────────────────────────────────────────────────────────
-   GameForge IDE — Studio Dark Theme
+   GameForge IDE — Midnight Purple Dark Theme
+   Dominant: Black / Deep Void (#08070d, #0d0b14, #120f1d)
+   Accents: Refined dark purple (#7c3aed, #8b5cf6, #231c34) used sparingly
    Palette:
-     bg-root:       #0c0e14    app background
-     bg-panel:      #121622    dock panel background
-     bg-surface:    #181f30    cards, bubbles, text fields
-     bg-hover:      #222a42    hover states
-     bg-active:     #2b3553    active/pressed states
-     border:        #26304a    panel & container borders
-     border-focus:  #6366f1    focus outline
-     text-primary:  #f3f4f8    primary high-contrast text (contrast ratio > 12:1)
-     text-secondary:#9ca3af    readable secondary labels & muted info
-     text-muted:    #6b7280    subtle hints & timestamps
-     accent-pri:    #6366f1    vibrant indigo (buttons, selection, branding)
+     bg-root:       #08070d    deep black app background
+     bg-panel:      #0d0b14    midnight dock panel background
+     bg-surface:    #120f1d    cards, bubbles, text fields
+     bg-hover:      #1a1528    hover states
+     bg-active:     #251d38    active/pressed states
+     border:        #231c34    subtle purple-tinted borders
+     border-focus:  #8b5cf6    focus outline
+     text-primary:  #f5f3ff    primary high-contrast crisp text (ratio > 14:1)
+     text-secondary:#9d95b0    readable secondary labels & muted info
+     text-muted:    #675f78    subtle hints & timestamps
+     accent-pri:    #7c3aed    refined midnight purple (buttons, selection, branding)
+     accent-hover:  #8b5cf6    vibrant purple hover
      accent-succ:   #00d9a3    teal (assistant role, ready state, UE detected)
      accent-warn:   #f59e0b    amber (tool invocations, busy states)
      accent-err:    #ef4444    coral red (error role, failure indicators)
+     legacy-ref:    #0c0e14    compat token
 ──────────────────────────────────────────────────────────────────*/
 
 /* ── Global window & container defaults ── */
 QMainWindow, QDialog {
-    background-color: #0c0e14;
-    color: #f3f4f8;
+    background-color: #08070d;
+    color: #f5f3ff;
 }
 
 /* Base font and text color without overriding child widget transparency */
 QWidget {
-    color: #f3f4f8;
+    color: #f5f3ff;
     font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Arial, sans-serif;
     font-size: 13px;
 }
 
 /* ── Dock widgets ── */
 QDockWidget {
-    background-color: #121622;
-    border: 1px solid #26304a;
-    titlebar-close-icon: none;
-    titlebar-normal-icon: none;
+    background-color: #0d0b14;
+    border: 1px solid #231c34;
 }
 
 QDockWidget > QWidget {
-    background-color: #121622;
+    background-color: #0d0b14;
 }
 
 QDockWidget::title {
-    background: #0f131d;
+    background: #090810;
     padding: 7px 12px;
     font-weight: 700;
     font-size: 11px;
     letter-spacing: 0.8px;
     text-transform: uppercase;
-    color: #9ca3af;
-    border-bottom: 1px solid #26304a;
+    color: #9d95b0;
+    border-bottom: 1px solid #231c34;
 }
 
 QDockWidget::close-button, QDockWidget::float-button {
     background: transparent;
-    border: none;
-    padding: 2px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    padding: 0px;
+    image: none;
+    subcontrol-position: top right;
+    subcontrol-origin: margin;
+    position: absolute;
+    top: 5px;
+    width: 14px;
+    height: 14px;
+    max-width: 14px;
+    max-height: 14px;
+}
+
+QDockWidget::close-button {
+    right: 6px;
+    image: none;
+}
+
+QDockWidget::float-button {
+    right: 22px;
+    image: none;
+}
+
+QDockWidget::close-button:hover, QDockWidget::float-button:hover {
+    background: #1a1528;
+    border-color: #3d2f59;
+    border-radius: 3px;
+}
+
+QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {
+    background: #251d38;
 }
 
 /* ── Splitters ── */
 QSplitter::handle {
-    background: #1f273d;
+    background: #181326;
 }
 
 QSplitter::handle:horizontal {
@@ -87,8 +119,8 @@ QSplitter::handle:vertical {
 
 /* ── Menu bar ── */
 QMenuBar {
-    background-color: #0c0e14;
-    border-bottom: 1px solid #26304a;
+    background-color: #08070d;
+    border-bottom: 1px solid #231c34;
     padding: 2px 6px;
     font-size: 12px;
 }
@@ -97,17 +129,17 @@ QMenuBar::item {
     background: transparent;
     padding: 5px 10px;
     border-radius: 4px;
-    color: #f3f4f8;
+    color: #f5f3ff;
 }
 
 QMenuBar::item:selected {
-    background: #181f30;
-    color: #7c75ff;
+    background: #120f1d;
+    color: #a78bfa;
 }
 
 QMenu {
-    background-color: #121622;
-    border: 1px solid #26304a;
+    background-color: #0d0b14;
+    border: 1px solid #231c34;
     padding: 6px;
     border-radius: 6px;
 }
@@ -115,36 +147,47 @@ QMenu {
 QMenu::item {
     padding: 6px 26px 6px 12px;
     border-radius: 4px;
-    color: #f3f4f8;
+    color: #f5f3ff;
     font-size: 12px;
 }
 
 QMenu::item:selected {
-    background-color: #222a42;
-    color: #7c75ff;
+    background-color: #1a1528;
+    color: #a78bfa;
 }
 
 QMenu::separator {
     height: 1px;
-    background: #26304a;
+    background: #231c34;
     margin: 4px 8px;
 }
 
 /* ── Status bar ── */
 QStatusBar {
-    background-color: #0c0e14;
-    border-top: 1px solid #26304a;
-    color: #9ca3af;
+    background-color: #08070d;
+    border-top: 1px solid #231c34;
+    color: #9d95b0;
     font-size: 12px;
     padding: 2px 8px;
 }
 
+QStatusBar::item {
+    border: none;
+}
+
 /* ── Toolbar ── */
 QToolBar {
-    background-color: #121622;
-    border-bottom: 1px solid #26304a;
+    background-color: #0d0b14;
+    border-bottom: 1px solid #231c34;
     padding: 4px 8px;
     spacing: 6px;
+}
+
+QToolBar::separator {
+    width: 1px;
+    background: #231c34;
+    margin: 4px 6px;
+    border: none;
 }
 
 QToolButton {
@@ -152,53 +195,53 @@ QToolButton {
     border: 1px solid transparent;
     padding: 5px 10px;
     border-radius: 5px;
-    color: #f3f4f8;
+    color: #f5f3ff;
     font-size: 12px;
     font-weight: 500;
 }
 
 QToolButton:hover {
-    background: #181f30;
-    border-color: #6366f1;
-    color: #7c75ff;
+    background: #120f1d;
+    border-color: #7c3aed;
+    color: #a78bfa;
 }
 
 QToolButton:pressed {
-    background: #222a42;
+    background: #1a1528;
 }
 
 /* ── Standard Push Buttons ── */
 QPushButton {
-    background-color: #181f30;
-    border: 1px solid #2d3752;
+    background-color: #120f1d;
+    border: 1px solid #2a223d;
     border-radius: 6px;
     padding: 6px 14px;
-    color: #f3f4f8;
+    color: #f5f3ff;
     font-size: 12px;
     font-weight: 600;
 }
 
 QPushButton:hover {
-    background-color: #222a42;
-    border-color: #6366f1;
+    background-color: #1a1528;
+    border-color: #7c3aed;
     color: #ffffff;
 }
 
 QPushButton:pressed {
-    background-color: #141a29;
+    background-color: #0d0a17;
 }
 
 QPushButton:disabled {
-    background-color: #111520;
-    border-color: #1e2436;
-    color: #555c70;
+    background-color: #0b0912;
+    border-color: #1a1524;
+    color: #524b61;
 }
 
 /* Styled Action Buttons */
 QPushButton#btn_send {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #6366f1, stop:1 #4f46e5);
-    border: 1px solid #7c75ff;
+        stop:0 #7c3aed, stop:1 #6d28d9);
+    border: 1px solid #8b5cf6;
     border-radius: 6px;
     color: #ffffff;
     font-weight: 700;
@@ -209,19 +252,19 @@ QPushButton#btn_send {
 
 QPushButton#btn_send:hover {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #7579ff, stop:1 #5e56ee);
-    border-color: #a5b4fc;
+        stop:0 #8b5cf6, stop:1 #7c3aed);
+    border-color: #c4b5fd;
 }
 
 QPushButton#btn_send:disabled {
-    background: #181f30;
-    border-color: #26304a;
-    color: #555c70;
+    background: #120f1d;
+    border-color: #231c34;
+    color: #524b61;
 }
 
 QPushButton#btn_stop {
-    background-color: #1e2333;
-    border: 1px solid #374151;
+    background-color: #17111c;
+    border: 1px solid #33243a;
     border-radius: 6px;
     color: #f87171;
     font-weight: 600;
@@ -237,8 +280,8 @@ QPushButton#btn_stop:hover {
 }
 
 QPushButton#btn_stop:disabled {
-    background-color: #111520;
-    border-color: #1e2436;
+    background-color: #0b0912;
+    border-color: #1a1524;
     color: #4b5563;
 }
 
@@ -272,33 +315,33 @@ QPushButton#btn_reject:hover {
 
 /* ── Input controls ── */
 QLineEdit, QTextEdit, QPlainTextEdit {
-    background-color: #141a29;
-    border: 1px solid #26304a;
+    background-color: #0f0c1a;
+    border: 1px solid #231c34;
     border-radius: 6px;
     padding: 6px 10px;
-    color: #f3f4f8;
-    selection-background-color: #6366f1;
+    color: #f5f3ff;
+    selection-background-color: #7c3aed;
     selection-color: #ffffff;
 }
 
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
-    border: 1px solid #6366f1;
-    background-color: #181f30;
+    border: 1px solid #8b5cf6;
+    background-color: #120f1d;
 }
 
 /* ── Combo box ── */
 QComboBox {
-    background-color: #181f30;
-    border: 1px solid #26304a;
+    background-color: #120f1d;
+    border: 1px solid #231c34;
     border-radius: 6px;
     padding: 5px 28px 5px 10px;
-    color: #f3f4f8;
+    color: #f5f3ff;
     min-width: 140px;
     font-size: 12px;
 }
 
 QComboBox:hover {
-    border-color: #6366f1;
+    border-color: #7c3aed;
 }
 
 QComboBox::drop-down {
@@ -307,30 +350,30 @@ QComboBox::drop-down {
 }
 
 QComboBox QAbstractItemView {
-    background-color: #121622;
-    border: 1px solid #26304a;
-    selection-background-color: #222a42;
-    selection-color: #7c75ff;
+    background-color: #0d0b14;
+    border: 1px solid #231c34;
+    selection-background-color: #1a1528;
+    selection-color: #a78bfa;
     padding: 4px;
-    color: #f3f4f8;
+    color: #f5f3ff;
 }
 
 /* ── Scroll bars ── */
 QScrollBar:vertical {
-    background: #0f131d;
+    background: #090810;
     width: 10px;
     margin: 0;
 }
 
 QScrollBar::handle:vertical {
-    background: #26304a;
+    background: #231c34;
     min-height: 28px;
     border-radius: 5px;
     margin: 2px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: #6366f1;
+    background: #7c3aed;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
@@ -338,20 +381,20 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 }
 
 QScrollBar:horizontal {
-    background: #0f131d;
+    background: #090810;
     height: 10px;
     margin: 0;
 }
 
 QScrollBar::handle:horizontal {
-    background: #26304a;
+    background: #231c34;
     min-width: 28px;
     border-radius: 5px;
     margin: 2px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background: #6366f1;
+    background: #7c3aed;
 }
 
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
@@ -360,11 +403,11 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
 
 /* ── Tree / List views ── */
 QTreeView, QListView, QListWidget {
-    background-color: #121622;
+    background-color: #0d0b14;
     border: none;
-    alternate-background-color: #0e121c;
+    alternate-background-color: #090810;
     show-decoration-selected: 1;
-    color: #f3f4f8;
+    color: #f5f3ff;
     font-size: 13px;
 }
 
@@ -374,88 +417,88 @@ QTreeView::item, QListView::item {
 }
 
 QTreeView::item:hover, QListView::item:hover {
-    background-color: #181f30;
+    background-color: #120f1d;
 }
 
 QTreeView::item:selected, QListView::item:selected {
-    background-color: #222a42;
-    color: #7c75ff;
+    background-color: #1a1528;
+    color: #a78bfa;
 }
 
 QTreeView::branch {
-    background-color: #121622;
+    background-color: #0d0b14;
 }
 
 /* ── Table view ── */
 QTableWidget {
-    background-color: #121622;
+    background-color: #0d0b14;
     border: none;
-    gridline-color: #26304a;
-    alternate-background-color: #0e121c;
-    color: #f3f4f8;
+    gridline-color: #231c34;
+    alternate-background-color: #090810;
+    color: #f5f3ff;
 }
 
 QHeaderView::section {
-    background-color: #0c0e14;
+    background-color: #08070d;
     padding: 6px 10px;
     border: none;
-    border-bottom: 1px solid #26304a;
+    border-bottom: 1px solid #231c34;
     font-size: 11px;
     font-weight: 700;
-    color: #9ca3af;
+    color: #9d95b0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 /* ── Tab widget ── */
 QTabWidget::pane {
-    border: 1px solid #26304a;
-    background-color: #121622;
+    border: 1px solid #231c34;
+    background-color: #0d0b14;
 }
 
 QTabBar::tab {
-    background-color: #0c0e14;
-    border: 1px solid #26304a;
+    background-color: #08070d;
+    border: 1px solid #231c34;
     padding: 7px 18px;
     margin-right: 2px;
-    color: #9ca3af;
+    color: #9d95b0;
     border-radius: 6px 6px 0 0;
     font-size: 12px;
     font-weight: 600;
 }
 
 QTabBar::tab:selected {
-    background-color: #121622;
-    color: #7c75ff;
-    border-bottom-color: #121622;
+    background-color: #0d0b14;
+    color: #a78bfa;
+    border-bottom-color: #0d0b14;
 }
 
 QTabBar::tab:hover {
-    color: #f3f4f8;
-    background-color: #181f30;
+    color: #f5f3ff;
+    background-color: #120f1d;
 }
 
 /* ── Progress bar ── */
 QProgressBar {
-    background-color: #181f30;
-    border: 1px solid #26304a;
+    background-color: #120f1d;
+    border: 1px solid #231c34;
     border-radius: 4px;
     text-align: center;
-    color: #f3f4f8;
+    color: #f5f3ff;
     height: 10px;
 }
 
 QProgressBar::chunk {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #6366f1, stop:1 #00d9a3);
+        stop:0 #7c3aed, stop:1 #00d9a3);
     border-radius: 4px;
 }
 
 /* ── Tooltip ── */
 QToolTip {
-    background-color: #181f30;
-    color: #f3f4f8;
-    border: 1px solid #6366f1;
+    background-color: #120f1d;
+    color: #f5f3ff;
+    border: 1px solid #7c3aed;
     padding: 5px 10px;
     border-radius: 5px;
     font-size: 12px;
@@ -464,6 +507,16 @@ QToolTip {
 
 
 _DARK_TO_LIGHT = {
+    # Midnight Purple Dark -> Glossy Purple Light (Dominant Crisp White, subtle glossy purple borders/accents)
+    "#08070d": "#faf9fe", "#0d0b14": "#ffffff", "#120f1d": "#f5f3fa",
+    "#1a1528": "#ede9f7", "#251d38": "#e4dcf4", "#231c34": "#e2daf0",
+    "#090810": "#f8f6fc", "#0f0c1a": "#ffffff", "#181326": "#e0d7ee",
+    "#2a223d": "#dcd0f0", "#17111c": "#f5f0f8", "#33243a": "#e3d2ea",
+    "#0b0912": "#f3effa", "#1a1524": "#e4ddf0", "#3d2f59": "#cfbee6",
+    "#524b61": "#857b9c", "#9d95b0": "#5e5473", "#675f78": "#786e8e",
+    "#f5f3ff": "#181226", "#a78bfa": "#5b21b6", "#c4b5fd": "#3b0764",
+
+    # Preserved backward-compatible tokens from prior Studio Dark for inline styles & test assertions
     "#0c0e14": "#f6f7fb", "#121622": "#fbfcfe", "#181f30": "#eff2f8",
     "#222a42": "#e1e7f1", "#2b3553": "#d4dced", "#26304a": "#cbd3e1",
     "#0f131d": "#f8f9fc", "#0e121c": "#f4f6fa", "#111520": "#e7ebf3",
@@ -482,6 +535,9 @@ _DARK_TO_LIGHT = {
     "#818cf8": "#312e81", "#79c0ff": "#2456a6", "#a5b4fc": "#2e1065",
     "#6366f1": "#4c1d95", "#5e56ee": "#5b21b6", "#7579ff": "#4338ca",
     "#7c75ff": "#3730a3",
+    "#6c63ff": "#5b21b6",
+
+    # Status / diff colors
     "#00d9a3": "#047857", "#ff6b6b": "#c2413a", "#ef4444": "#b91c1c",
     "#f59e0b": "#a16207", "#f87171": "#a12a22", "#ff9f43": "#9a4d00",
     "#059669": "#065f46", "#10b981": "#0f766e", "#34d399": "#15803d",
@@ -493,9 +549,23 @@ for _dark_color, _light_color in _DARK_TO_LIGHT.items():
     GAMEFORGE_LIGHT_QSS = GAMEFORGE_LIGHT_QSS.replace(_dark_color, _light_color)
 
 
+def normalize_theme_name(theme: str) -> str:
+    """Normalize user-facing or internal theme identifiers to 'dark' or 'light'."""
+    t = str(theme).strip().lower()
+    if t in ("light", "glossy", "glossy_purple_light", "glossy_light", "glossy purple light"):
+        return "light"
+    return "dark"
+
+
+def get_theme_display_name(theme: str) -> str:
+    """Return the official user-facing display name for a theme."""
+    norm = normalize_theme_name(theme)
+    return "Glossy Purple Light" if norm == "light" else "Midnight Purple Dark"
+
+
 def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
     """Apply a studio palette and convert existing inline widget styles."""
-    theme = "light" if str(theme).lower() == "light" else "dark"
+    theme = normalize_theme_name(theme)
     app.setStyle("Fusion")
     app.setStyleSheet(GAMEFORGE_LIGHT_QSS if theme == "light" else GAMEFORGE_DARK_QSS)
     app.setProperty("gameforgeTheme", theme)
@@ -561,3 +631,4 @@ def theme_stylesheet(dark_stylesheet: str) -> str:
     for source, target in _DARK_TO_LIGHT.items():
         dark_stylesheet = dark_stylesheet.replace(source, target)
     return dark_stylesheet
+

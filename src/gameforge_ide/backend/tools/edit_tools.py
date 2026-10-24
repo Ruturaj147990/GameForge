@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import difflib
 import hashlib
+import json
 import os
 import tempfile
 import uuid
@@ -20,6 +22,45 @@ class EditTools:
         self.boundary = boundary
         self.pending_diffs: Dict[str, Dict[str, Any]] = {}
         self.applied_diffs: Dict[str, Dict[str, Any]] = {}
+        self.diffs_dir = self.boundary.workspace_root / ".gameforge" / "diffs"
+        try:
+            self.diffs_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+    def _save_diff_to_disk(self, rec: Dict[str, Any]) -> None:
+        try:
+            self.diffs_dir.mkdir(parents=True, exist_ok=True)
+            diff_id = rec["diff_id"]
+            data = {
+                "diff_id": diff_id,
+                "file_path": rec.get("file_path", ""),
+                "target_file": rec.get("target_file", ""),
+                "original_text": rec.get("original_text", ""),
+                "new_text": rec.get("new_text", ""),
+                "original_bytes_b64": base64.b64encode(rec.get("original_bytes", b"")).decode("ascii"),
+                "new_bytes_b64": base64.b64encode(rec.get("new_bytes", b"")).decode("ascii"),
+                "original_sha256": rec.get("original_sha256", ""),
+                "new_sha256": rec.get("new_sha256", ""),
+                "diff_patch": rec.get("diff_patch", ""),
+                "status": rec.get("status", "PENDING_APPROVAL"),
+            }
+            target_path = self.diffs_dir / f"{diff_id}.json"
+            target_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _load_diff_from_disk(self, diff_id: str) -> Optional[Dict[str, Any]]:
+        target_path = self.diffs_dir / f"{diff_id}.json"
+        if not target_path.exists():
+            return None
+        try:
+            data = json.loads(target_path.read_text(encoding="utf-8"))
+            data["original_bytes"] = base64.b64decode(data.get("original_bytes_b64", ""))
+            data["new_bytes"] = base64.b64decode(data.get("new_bytes_b64", ""))
+            return data
+        except Exception:
+            return None
 
     @staticmethod
     def _digest(content: bytes) -> str:
@@ -44,6 +85,7 @@ class EditTools:
             except FileNotFoundError:
                 pass
             raise
+
 
     def propose_edit(
         self,
@@ -101,6 +143,7 @@ class EditTools:
             "status": "PENDING_APPROVAL",
         }
         self.pending_diffs[diff_id] = diff_record
+        self._save_diff_to_disk(diff_record)
 
         return {
             "status": "PENDING_APPROVAL",
@@ -113,7 +156,11 @@ class EditTools:
     def apply_diff(self, diff_id: str) -> Dict[str, Any]:
         """Applies an approved diff to the filesystem and saves rollback state."""
         if diff_id not in self.pending_diffs:
-            return {"status": "ERROR", "error": f"Pending diff {diff_id} not found."}
+            loaded = self._load_diff_from_disk(diff_id)
+            if loaded and loaded.get("status") == "PENDING_APPROVAL":
+                self.pending_diffs[diff_id] = loaded
+            else:
+                return {"status": "ERROR", "error": f"Pending diff {diff_id} not found."}
 
         rec = self.pending_diffs[diff_id]
         target_file = Path(rec["target_file"])
@@ -136,6 +183,7 @@ class EditTools:
             rec["status"] = "APPLIED"
             self.applied_diffs[diff_id] = rec
             del self.pending_diffs[diff_id]
+            self._save_diff_to_disk(rec)
 
             return {
                 "status": "SUCCESS",
@@ -149,9 +197,15 @@ class EditTools:
     def reject_diff(self, diff_id: str, reason: str = "User rejected") -> Dict[str, Any]:
         """Rejects a proposed diff and discards it without touching the filesystem."""
         if diff_id not in self.pending_diffs:
-            return {"status": "ERROR", "error": f"Pending diff {diff_id} not found."}
+            loaded = self._load_diff_from_disk(diff_id)
+            if loaded and loaded.get("status") == "PENDING_APPROVAL":
+                self.pending_diffs[diff_id] = loaded
+            else:
+                return {"status": "ERROR", "error": f"Pending diff {diff_id} not found."}
 
         rec = self.pending_diffs.pop(diff_id)
+        rec["status"] = "REJECTED"
+        self._save_diff_to_disk(rec)
         return {
             "status": "REJECTED",
             "diff_id": diff_id,
@@ -162,7 +216,11 @@ class EditTools:
     def rollback_diff(self, diff_id: str) -> Dict[str, Any]:
         """Rolls back an applied diff to its original pre-edit state."""
         if diff_id not in self.applied_diffs:
-            return {"status": "ERROR", "error": f"Applied diff {diff_id} not found for rollback."}
+            loaded = self._load_diff_from_disk(diff_id)
+            if loaded and loaded.get("status") == "APPLIED":
+                self.applied_diffs[diff_id] = loaded
+            else:
+                return {"status": "ERROR", "error": f"Applied diff {diff_id} not found for rollback."}
 
         rec = self.applied_diffs[diff_id]
         target_file = Path(rec["target_file"])
@@ -186,11 +244,13 @@ class EditTools:
                 self._atomic_write(target_file, rec["original_bytes"])
 
             rec["status"] = "ROLLED_BACK"
+            self._save_diff_to_disk(rec)
             return {
                 "status": "SUCCESS",
                 "diff_id": diff_id,
                 "file_path": rec["file_path"],
                 "message": f"Successfully rolled back {rec['file_path']} to pre-edit state.",
             }
+
         except Exception as e:
             return {"status": "ERROR", "error": f"Rollback failed: {e}"}

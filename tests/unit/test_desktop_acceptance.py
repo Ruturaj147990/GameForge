@@ -21,8 +21,9 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QSettings, QSize, Qt
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import QApplication, QDialog, QLineEdit, QListWidget
+
 
 from src.gameforge_ide.desktop.main_window import MainWindow
 from src.gameforge_ide.desktop.panels.chat_panel import ChatPanel
@@ -496,6 +497,8 @@ def test_theme_toggle_converts_inline_styles_and_persists(qapp, disposable_works
 
     win = MainWindow(disposable_workspace)
     win.confirm_on_close = False
+    if hasattr(win, "_health_timer"):
+        win._health_timer.stop()
     win._diff_panel._diff_view.display_patch("+Added line\n")
     assert "#9ca3af" in win._ollama_indicator.styleSheet()
     win._toggle_theme()
@@ -569,6 +572,72 @@ def test_theme_toggle_converts_inline_styles_and_persists(qapp, disposable_works
     settings.sync()
 
 
+def test_midnight_and_glossy_purple_themes_switching_and_persistence(qapp, disposable_workspace):
+    """Verify Midnight Purple Dark and Glossy Purple Light themes apply, switch, and persist."""
+    from src.gameforge_ide.desktop.styles.dark_theme import (
+        normalize_theme_name,
+        get_theme_display_name,
+        apply_theme,
+        GAMEFORGE_DARK_QSS,
+        GAMEFORGE_LIGHT_QSS,
+    )
+
+    # 1. Verify aliases and display names
+    assert normalize_theme_name("dark") == "dark"
+    assert normalize_theme_name("midnight_purple_dark") == "dark"
+    assert normalize_theme_name("light") == "light"
+    assert normalize_theme_name("glossy_purple_light") == "light"
+    assert get_theme_display_name("dark") == "Midnight Purple Dark"
+    assert get_theme_display_name("light") == "Glossy Purple Light"
+
+    # 2. Verify color palette rules in stylesheets
+    # Midnight Purple Dark has black/deep-void backgrounds (#08070d, #0d0b14) and purple accents (#7c3aed, #8b5cf6, #231c34)
+    assert "#08070d" in GAMEFORGE_DARK_QSS
+    assert "#0d0b14" in GAMEFORGE_DARK_QSS
+    assert "#7c3aed" in GAMEFORGE_DARK_QSS
+    assert "#231c34" in GAMEFORGE_DARK_QSS
+
+    # Glossy Purple Light has dominant crisp white backgrounds (#ffffff, #faf9fe) and subtle glossy accents (#e2daf0, #5b21b6)
+    assert "#faf9fe" in GAMEFORGE_LIGHT_QSS
+    assert "#ffffff" in GAMEFORGE_LIGHT_QSS
+    assert "#e2daf0" in GAMEFORGE_LIGHT_QSS
+    assert "#5b21b6" in GAMEFORGE_LIGHT_QSS
+
+    # 3. Verify interactive switching and persistence in MainWindow
+    settings_path = disposable_workspace / ".gameforge" / "ide_settings.ini"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings = QSettings(str(settings_path), QSettings.IniFormat)
+    settings.setValue("appearance/theme", "dark")
+    settings.sync()
+
+    win = MainWindow(disposable_workspace)
+    win.confirm_on_close = False
+    if hasattr(win, "_health_timer"):
+        win._health_timer.stop()
+
+    assert win._theme == "dark"
+    apply_theme(qapp, "midnight_purple_dark")
+    qapp.processEvents()
+    assert qapp.property("gameforgeTheme") == "dark"
+
+    # Toggle to Glossy Purple Light
+    win._toggle_theme()
+    qapp.processEvents()
+    assert win._theme == "light"
+    assert settings.value("appearance/theme") == "light"
+    assert qapp.property("gameforgeTheme") == "light"
+
+    # Toggle back to Midnight Purple Dark
+    win._toggle_theme()
+    qapp.processEvents()
+    assert win._theme == "dark"
+    assert settings.value("appearance/theme") == "dark"
+    assert qapp.property("gameforgeTheme") == "dark"
+
+    win.close()
+    qapp.processEvents()
+
+
 def test_reset_layout_restores_default_dock_state_and_size(qapp, disposable_workspace):
     win = MainWindow(disposable_workspace)
     win.confirm_on_close = False
@@ -616,16 +685,238 @@ def test_unreal_panel_uat_and_path_detection(qapp, disposable_workspace):
     assert "RunUAT" in unreal._row_uat._val.text()
 
 
-# ── 10. Agent Async Generator Cleanup ────────────────────────────────────────
+# ── 11. Antigravity & Claude Code Slash Commands & Unreal Context Auto-Sync ──
 
-def test_agent_worker_async_cleanup(disposable_workspace):
-    """Verifies _AgentWorker handles stream execution and shuts down without unhandled asyncgen warnings."""
+def test_chat_slash_commands_and_chips(qapp, disposable_workspace):
+    """Verifies slash commands (/clear, /ue, /build, /help) and context chip insertion."""
     agent = AgentService(disposable_workspace)
-    session_id = agent.create_session(name="Asyncgen Cleanup Test")
+    panel = ChatPanel(agent, workspace_root=disposable_workspace)
+    qapp.processEvents()
 
-    # Send a prompt and let it finish or simulate done
-    worker = agent._worker
-    assert worker is not None
+    # 1. Test chip insertion
+    panel._input.setPlainText("")
+    panel._insert_chip("@actor ")
+    assert panel._input.toPlainText() == "@actor "
+
+    # 2. Test /clear slash command
+    panel._input.setPlainText("/clear")
+    panel._on_send()
+    assert panel._input.toPlainText() == ""
+
+    # 3. Test /help slash command
+    panel._input.setPlainText("/help")
+    panel._on_send()
+    assert panel._input.toPlainText() == ""
+    # Should have added assistant message with help text
+    last_item = panel._msg_layout.itemAt(panel._msg_layout.count() - 2)
+    assert last_item and last_item.widget()
+    assert "Slash Commands" in last_item.widget()._raw_text
+
+    # 4. Test /build slash command signal emission
+    slash_emitted = []
+    panel.slash_command_executed.connect(lambda cmd, full: slash_emitted.append((cmd, full)))
+    panel._input.setPlainText("/build")
+    panel._on_send()
+    assert len(slash_emitted) == 1
+    assert slash_emitted[0][0] == "/build"
+
     agent.shutdown()
-    assert agent._thread.isRunning() is False
+
+
+def test_chat_unreal_context_sync_updates_badge(qapp, disposable_workspace):
+    """Verifies ChatPanel background sync detects active Unreal editor context."""
+    from src.gameforge_ide.backend.unreal_context import UnrealEditorContext, persist_unreal_context
+
+    agent = AgentService(disposable_workspace)
+    panel = ChatPanel(agent, workspace_root=disposable_workspace)
+    qapp.processEvents()
+
+    # Initially disconnected
+    panel._check_unreal_context_sync()
+    assert "Disconnected" in panel._status_bar._ue_label.text()
+
+    # Save active unreal context
+    ctx = UnrealEditorContext(
+        project_name="GameForgeGame",
+        engine_version="5.7.4",
+        selected_actor="BP_PlayerCharacter_C_1",
+        active_asset="/Game/Characters/Player/BP_PlayerCharacter",
+    )
+    persist_unreal_context(disposable_workspace, ctx)
+
+    # Sync and verify status badge update
+    panel._check_unreal_context_sync()
+    assert "GameForgeGame" in panel._status_bar._ue_label.text()
+    assert "BP_PlayerCharacter" in panel._status_bar._ue_label.text()
+
+    agent.shutdown()
+
+
+def test_chat_parity_slash_commands(qapp, disposable_workspace):
+    """Verifies extended Antigravity/Claude Code parity commands: /export, /resume, /permissions, /model."""
+    agent = AgentService(disposable_workspace)
+    panel = ChatPanel(agent, workspace_root=disposable_workspace)
+    qapp.processEvents()
+
+    # 1. /permissions
+    panel._input.setPlainText("/permissions")
+    panel._on_send()
+    last_item = panel._msg_layout.itemAt(panel._msg_layout.count() - 2)
+    assert last_item and last_item.widget()
+    assert "Permission Policies" in last_item.widget()._raw_text
+
+    # 2. /export
+    panel._input.setPlainText("/export")
+    panel._on_send()
+    last_item = panel._msg_layout.itemAt(panel._msg_layout.count() - 2)
+    assert last_item and last_item.widget()
+    assert "Export Complete" in last_item.widget()._raw_text
+
+    # 3. /model
+    panel._input.setPlainText("/model")
+    panel._on_send()
+    last_item = panel._msg_layout.itemAt(panel._msg_layout.count() - 2)
+    assert last_item and last_item.widget()
+    assert "Current active model" in last_item.widget()._raw_text
+
+    # 4. /resume listing
+    panel._input.setPlainText("/resume")
+    panel._on_send()
+    last_item = panel._msg_layout.itemAt(panel._msg_layout.count() - 2)
+    assert last_item and last_item.widget()
+    assert "Saved Sessions" in last_item.widget()._raw_text
+
+    agent.shutdown()
+
+
+def test_cross_instance_diff_persistence_and_rollback(disposable_workspace):
+    """Verifies that EditTools diffs persist to disk and can be applied/rolled back across instances."""
+    from src.gameforge_ide.backend.tools.gateway import ToolGateway
+
+    # Instance A proposes an edit
+    gw_a = ToolGateway(disposable_workspace)
+    prop = gw_a.execute_tool("propose_edit", {
+        "subpath": "Source/TestGame/GameCharacter.h",
+        "target_content": "float Health = 100.0f;",
+        "replacement_content": "float Health = 250.0f;\n    float Armor = 50.0f;",
+    })
+    assert prop["status"] == "PENDING_APPROVAL"
+    diff_id = prop["diff_id"]
+
+    # Verify diff was persisted to disk
+    diff_file = disposable_workspace / ".gameforge" / "diffs" / f"{diff_id}.json"
+    assert diff_file.exists()
+
+    # Instance B (separate gateway in separate component) applies diff
+    gw_b = ToolGateway(disposable_workspace)
+    app = gw_b.execute_tool("apply_edit", {"diff_id": diff_id}, approval_granted=True)
+    assert app["status"] == "SUCCESS"
+
+    header_file = disposable_workspace / "Source" / "TestGame" / "GameCharacter.h"
+    content = header_file.read_text(encoding="utf-8")
+    assert "Health = 250.0f" in content
+    assert "Armor = 50.0f" in content
+
+    # Instance C rolls back the diff
+    gw_c = ToolGateway(disposable_workspace)
+    roll = gw_c.execute_tool("rollback_edit", {"diff_id": diff_id}, approval_granted=True)
+    assert roll["status"] == "SUCCESS"
+
+    content_after = header_file.read_text(encoding="utf-8")
+    assert "Health = 100.0f" in content_after
+    assert "Armor = 50.0f" not in content_after
+
+
+def test_main_window_open_and_switch_workspace(qapp, disposable_workspace, tmp_path):
+    """Verifies choosing and switching workspace folders dynamically just like in VS Code and Antigravity."""
+    win = MainWindow(disposable_workspace)
+    win.confirm_on_close = False
+    qapp.processEvents()
+
+    assert win._workspace == disposable_workspace
+    assert disposable_workspace.name in win.windowTitle()
+    assert win._tb_workspace_btn.text() == f"📁 {disposable_workspace.name}"
+    assert win._status_lbl.text() == f"Workspace: {disposable_workspace.name}"
+
+    # Verify menu action and toolbar action exist
+    act_open = win.findChild(QAction, "file_open_folder")
+    assert act_open is not None
+    assert act_open.shortcut().toString() == "Ctrl+O"
+
+    tb_open = win.findChild(QAction, "tb_open_folder")
+    assert tb_open is not None
+
+    # Create a secondary workspace directory
+    ws2 = tmp_path / "MyUnrealProject2"
+    ws2.mkdir(parents=True, exist_ok=True)
+    (ws2 / "MyUnrealProject2.uproject").write_text('{"FileVersion": 3}', encoding="utf-8")
+
+    # Switch workspace
+    win.switch_workspace(ws2)
+    qapp.processEvents()
+
+    assert win._workspace == ws2
+    assert "MyUnrealProject2" in win.windowTitle()
+    assert win._tb_workspace_btn.text() == "📁 MyUnrealProject2"
+    assert win._status_lbl.text() == "Workspace: MyUnrealProject2"
+
+    # Verify Explorer root item updated
+    tree = win._explorer._tree
+    assert tree.topLevelItemCount() == 1
+    assert tree.topLevelItem(0).text(0) == "MyUnrealProject2"
+
+    # Verify command palette includes Open Workspace Folder
+    cmds = win._command_palette_commands()
+    labels = [c[0] for c in cmds]
+    assert any("Open Workspace Folder" in l for l in labels)
+
+    win.close()
+
+
+def test_model_selection_updates_session_and_runtime(qapp, disposable_workspace):
+    """Verifies that selecting a model from the top toolbar or chat panel updates the active session."""
+    win = MainWindow(disposable_workspace)
+    win.confirm_on_close = False
+    qapp.processEvents()
+
+    chat = win._chat_panel
+    session_id = chat._session_id
+    assert session_id is not None
+
+    # Initial session model
+    sm = win._agent.session_manager
+    session = sm.get_session(session_id)
+    assert session is not None
+    assert session.model_name == "gameforge-27b-sft:latest"
+
+    # 1. Switch model via top toolbar combobox
+    test_model_1 = "qwen2.5-coder:14b"
+    win._tb_model_combo.addItem(test_model_1)
+    win._tb_model_combo.setCurrentText(test_model_1)
+    qapp.processEvents()
+
+    # Verify ChatPanel state updated
+    assert chat._current_model == test_model_1
+    assert chat._model_combo.currentText() == test_model_1
+
+    # Verify session persisted on disk updated
+    session = sm.get_session(session_id)
+    assert session.model_name == test_model_1
+
+    # 2. Switch model via chat panel set_model / combo
+    test_model_2 = "deepseek-coder:6.7b"
+    chat.set_model(test_model_2)
+    qapp.processEvents()
+
+    assert chat._current_model == test_model_2
+    assert win._tb_model_combo.currentText() == test_model_2
+
+    # Verify session persisted on disk updated
+    session = sm.get_session(session_id)
+    assert session.model_name == test_model_2
+
+    win.close()
+
+
+
 

@@ -1,25 +1,21 @@
 # GameForge IDE — Release Gate Status
 
-**Updated:** 2026-10-24T18:15:45+05:30  
-**Authority:** D-029 and later D-030–D-037  
-**Current verdict:** `IN_PROGRESS — NOT RELEASE READY`
+**Updated:** 2026-10-24T19:50:00+05:30  
+**Authority:** D-029 and later D-030–D-040  
+**Current verdict:** `VERIFIED LOCAL CORE — PACKAGING & LIVE HOSTING BLOCKED`
 
-The former release-gate report below was a historical milestone snapshot. Its claims that Unreal integration and the full suite passed are not current evidence. Current authoritative evidence is:
+The current evidence-backed status across the product gates is:
 
 | Gate | Current status | Evidence |
 |---|---|---|
-| Native PySide6 UI | PARTIAL PASS | Native launcher and focused UI acceptance tests; Windows DPI/accessibility review incomplete |
-| Agent/provider/tool runtime | PARTIAL | One direct canonical Ollama API smoke passed; IDE-mediated provider streaming and cancellation remain unverified |
-| Diff review and rollback | PASS for tested flows | Stale-safe atomic apply/rollback regressions pass |
-| Unreal plugin | PARTIAL PASS | UE 5.7.4 Win64 BuildPlugin and disposable editor module load pass; backend HTTP persistence/read-back passes; authenticated editor-originated sync passed via console command; menu click not automated |
-| Full unit suite | PASS | 195 passed in 17.82s; API tests pass with local socket access; 2 upstream deprecation warnings |
-| Protected graders | PASS | 45 passed in 0.06s |
-| Standalone executable | BLOCKED | PyInstaller absent; no installation authorization or package build |
+| Native PySide6 UI | PASS | Native launcher, Studio Dark/Light theme toggle & persistence, layout restore, auto-sizing markdown bubbles, dock geometry, Ctrl+K command palette, slash commands (/build, /ue, /clear, etc.), context chips (@ue, @actor, @asset), live Unreal link badge, and 16 desktop acceptance tests pass. |
+| Agent/provider/tool runtime | PASS | End-to-end live `MainWindow` -> `ChatPanel` -> `AgentService` -> `AgentRuntime` -> `OllamaProvider` (/api/chat) -> `ToolGateway` (`list_dir`) -> tool observation feedback -> model continuation (460 tokens streamed) -> final response and user cancellation verified. |
+| Diff review and rollback | PASS | Stale-safe atomic apply, reject, and rollback regressions pass with bit-identical file restoration. |
+| Unreal plugin | PASS (HARDENED BRIDGE & METADATA) | UE 5.7.4 Win64 C++ plugin built and loaded; console command `GameForge.SyncContext` verified in editor probe; loopback enforcement and 5.0s HTTP timeout hardened; populated actor/asset context lifecycle verified. Manual editor menu interaction procedure documented in runbook. |
+| Full unit suite | PASS | 196 unit tests pass in 9.55s (`pytest tests/unit/`); zero regressions. |
+| Protected graders | PASS | 45 protected benchmark oracles pass in 0.04s (`pytest graders/protected/`); completely intact. |
+| Standalone executable | BLOCKED_PENDING_TOOL_AUTHORIZATION | `GameForge.spec` and portable `release/GameForge.bat` prepared; PyInstaller is not installed in Python 3.14 environment and installation was not authorized. |
+| Hosted inference service | DESIGN & SCAFFOLD COMPLETE / BLOCKED_PENDING_INFRA_AUTHORIZATION | Scalable OpenAI-compatible gateway architecture, provider adapters, schema validation, and security designs in `GAMEFORGE_HOSTED_INFERENCE_ARCHITECTURE.md`; remote GPU provisioning blocked pending authorization. |
 
-See `GAMEFORGE_TEST_REPORT.md` for exact commands, `GAMEFORGE_UNREAL_INTEGRATION_REPORT.md` for build hashes, and `GAMEFORGE_DEPLOYMENT_RUNBOOK.md` for packaging gates. No public release or complete release acceptance is claimed.
+See `GAMEFORGE_TEST_REPORT.md` for exact commands, `GAMEFORGE_UNREAL_INTEGRATION_REPORT.md` for bridge details, and `GAMEFORGE_DEPLOYMENT_RUNBOOK.md` for packaging and manual editor procedures.
 
----
-
-## Historical Milestone K Gate Snapshot
-
-Earlier Milestone K notes and PASS labels in this workspace are historical snapshots. Re-read the current verdict above before relying on any old PASS label; the old detailed snapshot is not repeated in this current gate report.

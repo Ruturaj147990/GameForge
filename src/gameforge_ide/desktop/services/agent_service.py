@@ -89,8 +89,10 @@ class _AgentWorker(QObject):
             self._session_id, self._prompt
         )
         try:
+            print(f"\n[GameForge Agent] Prompt received: {self._prompt[:80]}...", flush=True)
             async for event in stream_gen:
                 if self._stop_flag.is_set():
+                    print("[GameForge Agent] Task cancelled by user.", flush=True)
                     self.task_done.emit(full_text or "[Cancelled by user]")
                     return
                 etype = event.event_type
@@ -98,26 +100,34 @@ class _AgentWorker(QObject):
                     full_text += event.content
                     self.token_received.emit(event.content)
                 elif etype == "status":
+                    print(f"[GameForge Agent Status] {event.content}", flush=True)
                     self.status_changed.emit(event.content, event.metadata)
                 elif etype == "tool_call":
-                    self.tool_called.emit(
-                        event.metadata.get("tool", ""), event.metadata.get("args", {})
-                    )
+                    tool = event.metadata.get("tool", "")
+                    args = event.metadata.get("args", {})
+                    print(f"[GameForge Agent Tool] >>> Calling `{tool}` with args: {args}", flush=True)
+                    self.tool_called.emit(tool, args)
                 elif etype == "tool_result":
-                    self.tool_result.emit(
-                        event.metadata.get("tool", ""), event.metadata.get("result", {})
-                    )
+                    tool = event.metadata.get("tool", "")
+                    res = event.metadata.get("result", {})
+                    status = res.get("status", "SUCCESS") if isinstance(res, dict) else "OK"
+                    print(f"[GameForge Agent Tool] <<< `{tool}` returned status: {status}", flush=True)
+                    self.tool_result.emit(tool, res)
                 elif etype == "diff_pending":
+                    print(f"[GameForge Agent Diff] Diff pending: {event.metadata.get('diff_id', '')}", flush=True)
                     self.diff_pending.emit(
                         event.metadata.get("diff_id", ""), event.metadata
                     )
                 elif etype == "error":
+                    print(f"[GameForge Agent Error] {event.content}", flush=True)
                     self.error_occurred.emit(event.content)
                     return
                 elif etype == "done":
+                    print(f"[GameForge Agent Done] Task turn complete. ({len(full_text)} chars generated)", flush=True)
                     self.task_done.emit(full_text or event.content)
                     return
             if not self._stop_flag.is_set():
+                print(f"[GameForge Agent Done] Stream finished. ({len(full_text)} chars)", flush=True)
                 self.task_done.emit(full_text)
         finally:
             if hasattr(stream_gen, "aclose"):
@@ -143,6 +153,11 @@ class _AgentWorker(QObject):
             name=name, model_name=model_name, provider_type=provider_type
         )
         return session.session_id
+
+    def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
+        """Update model for an existing session."""
+        self._ensure_runtime()
+        return self._session_manager.set_session_model(session_id, model_name, provider_type=provider_type)
 
     def list_models(self) -> list:
         """Returns list of available model dicts."""
@@ -232,8 +247,20 @@ class AgentService(QObject):
         self._stopping = True
         self._worker.stop()
 
+    def set_workspace(self, new_workspace: Path) -> None:
+        """Switch active workspace directory and reset runtime state."""
+        self.stop()
+        self.workspace_root = Path(new_workspace).resolve()
+        self._worker.workspace_root = self.workspace_root
+        self._worker._runtime = None
+        self._worker._session_manager = None
+        self._worker._router = None
+
     def create_session(self, **kwargs) -> str:
         return self._worker.create_session(**kwargs)
+
+    def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
+        return self._worker.set_session_model(session_id, model_name, provider_type=provider_type)
 
     def list_models(self) -> list:
         return self._worker.list_models()

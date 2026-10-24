@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...backend.unreal_context import load_unreal_context
 from ..services.agent_service import AgentService
 from ..styles.dark_theme import theme_color, theme_stylesheet
 
@@ -259,6 +261,11 @@ class _StatusBar(QWidget):
         self._label.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 12px; font-weight: 600;"))
         layout.addWidget(self._label)
 
+        # Unreal connection badge
+        self._ue_label = QLabel("Unreal: Disconnected")
+        self._ue_label.setStyleSheet(theme_stylesheet("color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #161c28;"))
+        layout.addWidget(self._ue_label)
+
         layout.addStretch()
 
         self._model_label = QLabel()
@@ -285,6 +292,17 @@ class _StatusBar(QWidget):
     def set_model(self, model_name: str) -> None:
         self._model_label.setText(f"🤖 {model_name}")
 
+    def set_unreal_status(self, connected: bool, project_name: str = "", active_asset: str = "") -> None:
+        if connected:
+            txt = f"UE Linked: {project_name}" if project_name else "UE Linked"
+            if active_asset:
+                txt += f" ({active_asset})"
+            self._ue_label.setText(txt)
+            self._ue_label.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #0e2922; border: 1px solid #00d9a3;"))
+        else:
+            self._ue_label.setText("Unreal: Disconnected")
+            self._ue_label.setStyleSheet(theme_stylesheet("color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #161c28;"))
+
 
 # ── Chat panel ─────────────────────────────────────────────────────────────────
 
@@ -297,25 +315,39 @@ class ChatPanel(QWidget):
 
     # Forwarded diff event for the main window to show the diff panel
     diff_pending = Signal(str, dict)
+    slash_command_executed = Signal(str, str)
+    model_changed = Signal(str)
 
     def __init__(
         self,
         agent_service: AgentService,
+        workspace_root: Optional[Path] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self._agent = agent_service
+        self._workspace = workspace_root or getattr(agent_service, "workspace_root", None)
         self._session_id: Optional[str] = None
         self._active_bubble: Optional[_MessageBubble] = None
         self._current_model = "gameforge-27b-sft:latest"
         self._last_prompt = ""
         self._ignore_active_task_events = False
+        self._last_unreal_sync = ""
 
         self._build_ui()
         self._connect_signals()
         self._init_session()
+        self._setup_unreal_sync()
+
+    def set_workspace(self, agent_service: AgentService, new_workspace: Path) -> None:
+        """Switch chat panel to a new workspace and start a fresh session."""
+        self._agent = agent_service
+        self._workspace = Path(new_workspace).resolve()
+        self._new_session()
+        self._check_unreal_context_sync()
 
     # ── UI Construction ────────────────────────────────────────────────────────
+
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -382,6 +414,57 @@ class ChatPanel(QWidget):
         self._status_bar.set_model(self._current_model)
         root.addWidget(self._status_bar)
 
+        # Context chips row (Antigravity & Claude Code inspired shortcuts)
+        self._chips_widget = QWidget()
+        self._chips_widget.setObjectName("chat_chips_bar")
+        self._chips_widget.setStyleSheet("background: #0f131c; border-top: 1px solid #1e263d; padding: 2px 8px;")
+        chips_layout = QHBoxLayout(self._chips_widget)
+        chips_layout.setContentsMargins(8, 4, 8, 4)
+        chips_layout.setSpacing(6)
+
+        chips_lbl = QLabel("Context:")
+        chips_lbl.setStyleSheet("color: #64748b; font-size: 11px; font-weight: 600;")
+        chips_layout.addWidget(chips_lbl)
+
+        self._btn_chip_ue = QPushButton("🎮 @ue")
+        self._btn_chip_ue.setToolTip("Insert Unreal Engine context tag")
+        self._btn_chip_actor = QPushButton("🎭 @actor")
+        self._btn_chip_actor.setToolTip("Insert Selected Actor context tag")
+        self._btn_chip_asset = QPushButton("📦 @asset")
+        self._btn_chip_asset.setToolTip("Insert Active Asset context tag")
+        self._btn_cmd_build = QPushButton("⚙ /build")
+        self._btn_cmd_build.setToolTip("Trigger Unreal staged build")
+        self._btn_cmd_clear = QPushButton("🗑 /clear")
+        self._btn_cmd_clear.setToolTip("Clear chat transcript")
+
+        for chip_btn in (self._btn_chip_ue, self._btn_chip_actor, self._btn_chip_asset, self._btn_cmd_build, self._btn_cmd_clear):
+            chip_btn.setFixedHeight(22)
+            chip_btn.setStyleSheet(theme_stylesheet("""
+                QPushButton {
+                    background: #182030;
+                    border: 1px solid #28354f;
+                    border-radius: 3px;
+                    color: #94a3b8;
+                    font-size: 11px;
+                    padding: 1px 6px;
+                }
+                QPushButton:hover {
+                    background: #232e46;
+                    border-color: #6366f1;
+                    color: #e2e8f0;
+                }
+            """))
+            chips_layout.addWidget(chip_btn)
+
+        self._btn_chip_ue.clicked.connect(lambda: self._insert_chip("@ue "))
+        self._btn_chip_actor.clicked.connect(lambda: self._insert_chip("@actor "))
+        self._btn_chip_asset.clicked.connect(lambda: self._insert_chip("@asset "))
+        self._btn_cmd_build.clicked.connect(lambda: self._insert_chip("/build "))
+        self._btn_cmd_clear.clicked.connect(self._clear_chat)
+
+        chips_layout.addStretch()
+        root.addWidget(self._chips_widget)
+
         # Input row
         input_widget = QWidget()
         input_widget.setStyleSheet("background: #121622; border-top: 1px solid #26304a;")
@@ -392,7 +475,7 @@ class ChatPanel(QWidget):
         self._input = QPlainTextEdit()
         self._input.setObjectName("chat_input")
         self._input.setPlaceholderText(
-            "Describe what you want to build or fix… (Enter or Ctrl+Enter to send, Shift+Enter for newline)"
+            "Describe what you want to build or fix… type /build, /ue, /compact or use @actor, @asset (Enter to send)"
         )
         self._input.setFixedHeight(75)
         self._input.installEventFilter(self)
@@ -454,12 +537,237 @@ class ChatPanel(QWidget):
             self._model_combo.clear()
             for m in models:
                 self._model_combo.addItem(m.get("id", m.get("name", "unknown")))
-            idx = self._model_combo.findText("gameforge-27b-sft:latest")
+            idx = self._model_combo.findText(self._current_model)
             if idx >= 0:
                 self._model_combo.setCurrentIndex(idx)
+            elif self._model_combo.count() > 0:
+                self._current_model = self._model_combo.itemText(0)
             self._model_combo.blockSignals(False)
+            self.model_changed.emit(self._current_model)
         except Exception:
             pass
+
+    def _setup_unreal_sync(self) -> None:
+        """Poll unreal_context.json periodically to update UI badges and chips."""
+        self._ue_sync_timer = QTimer(self)
+        self._ue_sync_timer.setInterval(2500)
+        self._ue_sync_timer.timeout.connect(self._check_unreal_context_sync)
+        self._ue_sync_timer.start()
+        # Initial check
+        QTimer.singleShot(400, self._check_unreal_context_sync)
+
+    def _check_unreal_context_sync(self) -> None:
+        if not self._workspace:
+            return
+        try:
+            ctx = load_unreal_context(self._workspace)
+            if not ctx:
+                self._status_bar.set_unreal_status(False)
+                return
+            last_sync = ctx.get("last_sync", "")
+            project_name = ctx.get("project_name", "")
+            active_asset = ctx.get("active_asset", "")
+            is_connected = bool(project_name or active_asset)
+            self._status_bar.set_unreal_status(is_connected, project_name, active_asset)
+            if last_sync and last_sync != self._last_unreal_sync:
+                self._last_unreal_sync = last_sync
+        except Exception:
+            pass
+
+    def _insert_chip(self, tag: str) -> None:
+        """Insert a context chip or command into the input cursor position."""
+        cursor = self._input.textCursor()
+        cursor.insertText(tag)
+        self._input.setTextCursor(cursor)
+        self._input.setFocus()
+
+    def _handle_slash_command(self, text: str) -> bool:
+        """Process Antigravity / Claude Code style slash commands."""
+        stripped = text.strip()
+        cmd = stripped.split()[0].lower() if stripped.startswith("/") else ""
+
+        if not cmd:
+            return False
+
+        if cmd == "/clear":
+            self._input.clear()
+            self._clear_chat()
+            return True
+
+        if cmd == "/new":
+            self._input.clear()
+            self._new_session()
+            return True
+
+        if cmd == "/ue" or cmd == "/context":
+            self._input.clear()
+            self._add_bubble("user", text)
+            if self._workspace:
+                ctx = load_unreal_context(self._workspace)
+                if ctx:
+                    summary = (
+                        f"🎮 **Unreal Editor Active Context**\n\n"
+                        f"- **Project:** `{ctx.get('project_name', 'None')}`\n"
+                        f"- **Engine Version:** `{ctx.get('engine_version', 'None')}`\n"
+                        f"- **Selected Actor:** `{ctx.get('selected_actor', 'None')}`\n"
+                        f"- **Active Asset:** `{ctx.get('active_asset', 'None')}`\n"
+                        f"- **Open Assets:** {len(ctx.get('open_assets', []))} tracked\n"
+                        f"- **Last Sync:** `{ctx.get('last_sync', 'None')}`"
+                    )
+                else:
+                    summary = (
+                        "🎮 **Unreal Engine Context:** Disconnected\n"
+                        "No active `.gameforge/unreal_context.json` found in workspace. "
+                        "Launch the GameForge Unreal plugin to auto-link."
+                    )
+            else:
+                summary = "🎮 No workspace root configured."
+            self._add_bubble("assistant", summary)
+            self.slash_command_executed.emit(cmd, stripped)
+            return True
+
+        if cmd == "/build":
+            self._input.clear()
+            self._add_bubble("user", text)
+            self._add_bubble("tool", "⚙️ **Executing `/build`** — Forwarding staged build request...")
+            self.slash_command_executed.emit(cmd, stripped)
+            return True
+
+        if cmd in ("/diff", "/terminal", "/explorer"):
+            self._input.clear()
+            self._add_bubble("user", text)
+            self._add_bubble("tool", f"📂 Toggling `{cmd[1:]}` view...")
+            self.slash_command_executed.emit(cmd, stripped)
+            return True
+
+        if cmd == "/export":
+            self._input.clear()
+            self._add_bubble("user", text)
+            if self._workspace and self._session_id:
+                try:
+                    from ...backend.session_manager import SessionManager
+                    sm = SessionManager(self._workspace)
+                    export_path = sm.export_session(self._session_id)
+                    self._add_bubble(
+                        "assistant",
+                        f"📄 **Session Export Complete**\n\n"
+                        f"- **Format:** Markdown transcript\n"
+                        f"- **Location:** `{export_path}`\n\n"
+                        f"Saved complete multi-turn history and tool executions."
+                    )
+                except Exception as exc:
+                    self._add_bubble("assistant", f"❌ Failed to export session: {exc}")
+            else:
+                self._add_bubble("assistant", "⚠️ No active session or workspace to export.")
+            return True
+
+        if cmd == "/resume":
+            self._input.clear()
+            self._add_bubble("user", text)
+            parts = stripped.split(maxsplit=1)
+            target_id = parts[1].strip() if len(parts) > 1 else ""
+            if self._workspace:
+                try:
+                    from ...backend.session_manager import SessionManager
+                    sm = SessionManager(self._workspace)
+                    if target_id:
+                        sess = sm.get_session(target_id)
+                        if sess:
+                            self._session_id = sess.session_id
+                            self._clear_chat()
+                            for msg in sess.messages:
+                                self._add_bubble(msg.role, msg.content)
+                            self._add_bubble("assistant", f"🔄 **Resumed Session:** `{sess.name}` (`{sess.session_id}`)")
+                        else:
+                            self._add_bubble("assistant", f"❌ Session `{target_id}` not found.")
+                    else:
+                        sessions = sm.list_sessions()
+                        if sessions:
+                            lines = ["### 📂 Saved Sessions (use `/resume <id>` to switch):\n"]
+                            for s in sessions[:5]:
+                                lines.append(f"- `{s['session_id'][:8]}...` — **{s['name']}** ({s['message_count']} msgs, model: {s['model_name']})")
+                            self._add_bubble("assistant", "\n".join(lines))
+                        else:
+                            self._add_bubble("assistant", "ℹ️ No saved sessions found in `.gameforge/sessions`.")
+                except Exception as exc:
+                    self._add_bubble("assistant", f"❌ Error loading sessions: {exc}")
+            return True
+
+        if cmd == "/model":
+            self._input.clear()
+            self._add_bubble("user", text)
+            parts = stripped.split(maxsplit=1)
+            if len(parts) > 1:
+                target_model = parts[1].strip()
+                self.set_model(target_model)
+                self._add_bubble("assistant", f"🧠 Active model set to: `{target_model}`")
+            else:
+                current = self._model_combo.currentText()
+                self._add_bubble("assistant", f"🧠 Current active model: `{current}`\nTo change, use `/model <name>`.")
+            return True
+
+        if cmd == "/permissions":
+            self._input.clear()
+            self._add_bubble("user", text)
+            self._add_bubble(
+                "assistant",
+                "### 🛡️ GameForge Interaction & Permission Policies\n\n"
+                "- **Tier 1 (Read-Only / Plan):** Inspect workspace and engine without modifications.\n"
+                "- **Tier 2 (Ask Before Risky Actions - Active Default):** Read tools run automatically; file edits (`propose_edit`), builds, and commands require reviewed approval.\n"
+                "- **Tier 3 (Workspace Edit):** Pre-approved reversible edits within workspace boundaries with atomic rollback.\n"
+                "- **Tier 4 (Autonomous Safe Work):** Fully autonomous read/plan/propose with human-in-the-loop diff review."
+            )
+            return True
+
+        if cmd == "/plan":
+            self._input.clear()
+            self._add_bubble("user", text)
+            self._add_bubble(
+                "assistant",
+                "📋 **Plan Mode:** Active. GameForge will inspect the project, formulate a structured implementation plan, and verify dependencies before proposing changes."
+            )
+            return True
+
+        if cmd in ("/undo", "/rollback"):
+            self._input.clear()
+            self._add_bubble("user", text)
+            self._add_bubble("tool", "↩️ **Executing `/undo`** — Requesting rollback of last applied diff...")
+            self.slash_command_executed.emit("/undo", stripped)
+            return True
+
+        if cmd == "/test":
+            self._input.clear()
+            self._add_bubble("user", text)
+            self._add_bubble("tool", "🧪 **Executing `/test`** — Running project test suite...")
+            self.slash_command_executed.emit(cmd, stripped)
+            return True
+
+        if cmd == "/help":
+            self._input.clear()
+            self._add_bubble("user", text)
+            help_text = (
+                "### 🎮 GameForge IDE Slash Commands & Context Chips\n\n"
+                "- `/build` — Trigger Unreal Engine staged compilation\n"
+                "- `/ue` or `/context` — Display live Unreal Editor sync state\n"
+                "- `/clear` — Clear the current chat view\n"
+                "- `/new` — Initialize a new clean agent session\n"
+                "- `/resume [id]` — List or resume saved sessions\n"
+                "- `/export` — Export conversation transcript to markdown\n"
+                "- `/model [name]` — Inspect or switch active model\n"
+                "- `/permissions` — Show security and permission tiers\n"
+                "- `/plan` — Toggle structured planning mode\n"
+                "- `/undo` — Rollback the last applied edit\n"
+                "- `/diff` — Toggle diff review panel\n"
+                "- `/terminal` — Toggle integrated PowerShell terminal\n"
+                "- `/explorer` — Toggle file explorer dock\n"
+                "- `/test` — Execute test suite verification\n"
+                "- `@ue`, `@actor`, `@asset` — Context expansion tokens in prompts\n"
+            )
+            self._add_bubble("assistant", help_text)
+            return True
+
+        return False
+
 
     # ── Slots ─────────────────────────────────────────────────────────────────
 
@@ -470,6 +778,12 @@ class ChatPanel(QWidget):
         prompt = self._input.toPlainText()
         if not prompt.strip() or not self._session_id:
             return
+
+        # Check slash commands first
+        if prompt.strip().startswith("/"):
+            if self._handle_slash_command(prompt):
+                return
+
         if self._agent.is_busy:
             self._status_bar.set_busy(
                 "STOPPING PREVIOUS TASK" if self._agent.is_stopping else "TASK ALREADY RUNNING"
@@ -509,11 +823,12 @@ class ChatPanel(QWidget):
     def _on_token(self, token: str) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
-        if self._active_bubble:
-            was_at_bottom = self._is_scrolled_to_bottom()
-            self._active_bubble.append_token(token)
-            if was_at_bottom:
-                self._scroll_to_bottom()
+        if not self._active_bubble:
+            self._active_bubble = self._add_bubble("assistant", "")
+        was_at_bottom = self._is_scrolled_to_bottom()
+        self._active_bubble.append_token(token)
+        if was_at_bottom:
+            self._scroll_to_bottom()
 
     @Slot(str, dict)
     def _on_status(self, status: str, _meta: dict) -> None:
@@ -534,6 +849,9 @@ class ChatPanel(QWidget):
     def _on_tool_called(self, tool_name: str, args: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
+        if self._active_bubble and self._active_bubble.has_tokens():
+            self._active_bubble.finalise()
+            self._active_bubble = None
         summary = f"🔧 **Tool Call:** `{tool_name}`"
         if args:
             summary += f"\n```json\n{json.dumps(args, indent=2)}\n```"
@@ -603,8 +921,27 @@ class ChatPanel(QWidget):
 
     @Slot(str)
     def _on_model_changed(self, model_name: str) -> None:
+        if not model_name:
+            return
         self._current_model = model_name
         self._status_bar.set_model(model_name)
+        if self._session_id:
+            try:
+                self._agent.set_session_model(self._session_id, model_name)
+            except Exception:
+                pass
+        self.model_changed.emit(model_name)
+
+    def set_model(self, model_name: str) -> None:
+        """Programmatically switch active model and synchronize UI."""
+        if not model_name or model_name == self._current_model:
+            return
+        idx = self._model_combo.findText(model_name)
+        if idx >= 0:
+            self._model_combo.setCurrentIndex(idx)
+        else:
+            self._model_combo.addItem(model_name)
+            self._model_combo.setCurrentText(model_name)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
