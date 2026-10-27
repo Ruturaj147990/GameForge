@@ -1,0 +1,42 @@
+Here is a production-ready, memory-safe C++ implementation for Spherical Linear Interpolation (SLERP) within the Unreal Engine 5.7.4 ecosystem.
+
+This implementation adheres to Unreal conventions:
+- Uses `FQuat` (Unreal's quaternion type).
+- Handles the "shortest path" logic by inverting the quaternion if the dot product is negative.
+- Clamps the interpolation factor `t` to `[0, 1]`.
+- Includes a fallback to standard linear interpolation (LERP) for very small angles to avoid numerical instability (singularity) when `t` is near 0 or 1.
+
+### Implementation: `GameMath_Slerp.cpp`
+
+```cpp
+// GameMath_Slerp.cpp
+// Implements robust Quaternion Spherical Linear Interpolation (SLERP)
+// for Unreal Engine 5.7.4.
+
+#include "GameMath_Slerp.h"
+#include "Math/UnrealMathUtility.h" // For FMath utilities
+
+namespace GameMath
+{
+	/**
+	 * Performs Spherical Linear Interpolation (SLERP) between two orientations.
+	 * 
+	 * @param StartQuat The starting orientation (Q1).
+	 * @param EndQuat   The target orientation (Q2).
+	 * @param T         The interpolation factor. Must be clamped internally to [0, 1].
+	 * @param MaxError  The maximum error allowed for the fallback LERP (default 0.0001).
+	 *                  Used to avoid numerical instability when Start and End are nearly identical.
+	 * 
+	 * @return The interpolated FQuat.
+	 * 
+	 * @note This function automatically handles the shortest path check.
+	 *       If the dot product between StartQuat and EndQuat is negative,
+	 *       EndQuat is inverted to ensure the interpolation follows the shortest arc.
+	 */
+	FQuat Slerp(const FQuat& StartQuat, const FQuat& EndQuat, float T, float MaxError)
+	{
+		// 1. Clamp T to [0, 1] to ensure safety against invalid inputs
+		T = FMath::Clamp(T, 0.0f, 1.0f);
+
+		// 2. Calculate the dot product to determine the angle between quaternions
+		//    We

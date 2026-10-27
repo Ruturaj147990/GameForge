@@ -1,0 +1,61 @@
+Here is the production-ready implementation of a high-performance, networked Inventory System for Unreal Engine 5.7.
+
+This solution utilizes **`FFastArraySerializer`** and **`FFastArraySerializerItem`** to minimize bandwidth usage during replication. It leverages **`UObject::IsGarbage`** checks to avoid replicating deleted items and uses **`FFastArraySerializer::AddItem`** with a custom item struct to handle delta updates efficiently.
+
+### Architecture Overview
+
+1.  **`FInventoryItem`**: A lightweight `struct` containing only replicated data (no `UObject` pointers). This is crucial for `FFastArraySerializer` to work efficiently.
+2.  **`AInventory`**: The actor holding the inventory. It overrides `ReplicateData` to handle the serialization logic.
+3.  **`FFastArraySerializerItem`**: A custom struct defining how a single item is serialized (Delta mode).
+4.  **`FFastArraySerializer`**: The engine's built-in serializer used to generate the delta payload.
+
+---
+
+### Step 1: Define the Inventory Item Struct
+
+Create `InventoryItem.h`. This struct must be `struct` (not `class`) to be serializable without UObject overhead.
+
+```cpp
+// InventoryItem.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Containers/Array.h"
+#include "InventoryItem.generated.h"
+
+// Forward declaration to avoid circular includes if needed
+// struct FInventoryItem;
+
+UENUM(BlueprintType)
+enum class EInventoryItemType : uint8
+{
+    Consumable,
+    Weapon,
+    Armor,
+    Consumable,
+    Consumable
+};
+
+/**
+ * Lightweight struct for inventory items.
+ * Must NOT inherit from UObject.
+ * Only contains data that needs to be replicated.
+ */
+USTRUCT(BlueprintType)
+struct FInventoryItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    FString ItemName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    EInventoryItemType ItemType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    int32 Quantity;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    int32 ItemID; // Unique ID for delta tracking
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory

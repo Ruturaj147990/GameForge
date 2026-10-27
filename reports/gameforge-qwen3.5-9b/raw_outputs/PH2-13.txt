@@ -1,0 +1,68 @@
+Here is a production-ready, decoupled state machine implementation for Unreal Engine 5.7.4. This design utilizes the Enhanced Input system principles (decoupled logic), proper memory management via `TSubclassOf`, and safe transition guards.
+
+### Design Overview
+1.  **`ICharacterState`**: An interface defining the lifecycle (`Enter`, `Update`, `Exit`).
+2.  **`CharacterStateManager`**: A `UObject` that holds the current state instance and handles transitions. It uses `TSubclassOf` to allow runtime polymorphism without casting.
+3.  **Safety**: Transitions are guarded by checking if the target state is valid and ensuring the current state is properly exited before entering a new one.
+
+### Implementation Files
+
+#### 1. `CharacterState.h`
+Defines the interface and the base class for states.
+
+```cpp
+// CharacterState.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/Interface.h"
+#include "CharacterState.generated.h"
+
+// Forward declaration to avoid circular includes if CharacterStateManager is included here
+class UCharacterStateManager;
+
+/**
+ * Interface for Character States.
+ * Implements the decoupled state pattern.
+ */
+UINTERFACE(MinimalAPI)
+class UCharacterStateInterface : public UInterface
+{
+	GENERATED_BODY()
+};
+
+class GAMEFORGE_API ICharacterState
+{
+	GENERATED_BODY()
+
+public:
+	// Called when the state is entered.
+	UFUNCTION(BlueprintImplementableEvent, Category = "State")
+	virtual void Enter(UCharacterStateManager* Owner) {}
+
+	// Called every tick while in this state.
+	UFUNCTION(BlueprintImplementableEvent, Category = "State")
+	virtual void Update(UCharacterStateManager* Owner, float DeltaTime) {}
+
+	// Called when the state is exited.
+	UFUNCTION(BlueprintImplementableEvent, Category = "State")
+	virtual void Exit(UCharacterStateManager* Owner) {}
+};
+
+/**
+ * Base class for concrete state implementations.
+ * Provides default empty implementations and helper macros.
+ */
+UCLASS()
+class GAMEFORGE_API ACharacterStateBase : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	ACharacterStateBase() {}
+
+protected:
+	// Override these in derived classes
+	virtual void Enter(UCharacterStateManager* Owner) override {}
+	virtual void Update(UCharacterStateManager* Owner, float DeltaTime) override {}
+	virtual void Exit(UCharacter

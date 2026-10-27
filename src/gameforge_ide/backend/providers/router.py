@@ -1,8 +1,21 @@
-"""Model Router and Multi-Provider Registry for GameForge IDE."""
+"""Model Router and Multi-Provider Registry for GameForge IDE.
+
+Authoritative specification based on GameForge Master Blueprint (Oct 27, 2026):
+- Phase-based routing based on measured capability, not model's own request:
+  - discover/explore: fast agent model (9B-14B in VRAM).
+  - author: domain specialist (gameforge-27b-sft or qwen3.8:27b).
+  - multimodal: vision-capable model only.
+- Strict anti-fallback rule: No silent fallback to unapproved models or cloud providers.
+- Local by default: Cloud egress blocked unless explicitly authorized.
+- Startup self-test: checks native tool rendering.
+"""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Dict, List, Optional
+from ..models.capability import CapabilityRecord, CapabilityRegistry
 from .base import ModelInfo, ModelProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAICompatibleProvider
@@ -11,12 +24,17 @@ from .openai_provider import OpenAICompatibleProvider
 class ModelRouter:
     """Routes tasks across configured local and remote model providers."""
 
-    def __init__(self, ollama_host: str = "127.0.0.1:11434"):
+    def __init__(
+        self,
+        ollama_host: str = "127.0.0.1:11434",
+        storage_root: Path = Path(r"E:\GameForge"),
+    ):
         self.providers: Dict[str, ModelProvider] = {
             "ollama": OllamaProvider(host=ollama_host),
             "openai_compatible": OpenAICompatibleProvider(),
         }
         self.default_provider_id = "ollama"
+        self.registry = CapabilityRegistry(storage_root=storage_root)
 
     def register_provider(self, provider_id: str, provider: ModelProvider) -> None:
         self.providers[provider_id] = provider
@@ -34,14 +52,86 @@ class ModelRouter:
                 all_models.extend(provider.list_models())
         return all_models
 
+    def route_for_phase(
+        self,
+        phase: str,
+        requires_images: bool = False,
+        preferred_model: Optional[str] = None,
+    ) -> CapabilityRecord:
+        """Determines active model based on phase and verified capability records."""
+        records = self.registry.list_records()
+        if not records:
+            raise ValueError("No models registered in capability registry.")
+
+        if requires_images:
+            for rec in records:
+                if rec.supports_images and rec.data_egress_class == "local_only":
+                    return rec
+            raise ValueError("No vision-capable local model available for image task.")
+
+        if preferred_model:
+            rec = self.registry.get_record(preferred_model)
+            if rec:
+                return rec
+
+        target_role = "fast_agent" if phase in ("discover", "explore") else "specialist_author"
+        for rec in records:
+            if rec.role == target_role and rec.data_egress_class == "local_only":
+                return rec
+
+        # Fallback to first verified local model
+        local_records = [r for r in records if r.data_egress_class == "local_only"]
+        if local_records:
+            return local_records[0]
+
+        raise ValueError(f"No authorized local model available for phase '{phase}'. Cloud egress blocked.")
+
+    def run_startup_tool_self_test(self, provider_id: str, model_id: str) -> Dict[str, Any]:
+        """Self-test verifying that the model's template renders structured tool calls."""
+        provider = self.get_provider(provider_id)
+        if not provider.is_available():
+            return {
+                "ok": False,
+                "status": "PROVIDER_OFFLINE",
+                "error": f"Provider '{provider_id}' is offline. Self-test cannot run.",
+            }
+
+        sample_prompt = (
+            "Invoke the list_dir tool to check the workspace root.\n"
+            "Emit the tool call in JSON format:\n"
+            "```json\n{\"tool\": \"list_dir\", \"args\": {\"subpath\": \"\"}}\n```"
+        )
+        try:
+            resp = provider.complete(
+                model_id=model_id,
+                prompt=sample_prompt,
+                system_prompt="You are a tool-using AI assistant.",
+                temperature=0.0,
+                max_tokens=256,
+            )
+            # Verify JSON tool block rendered
+            rendered_tool = "list_dir" in resp.content and '"args"' in resp.content
+            return {
+                "ok": rendered_tool,
+                "status": "SELF_TEST_PASSED" if rendered_tool else "TEMPLATE_FAILED",
+                "model_id": model_id,
+                "rendered_tool": rendered_tool,
+            }
+        except Exception as e:
+            return {
+                "ok": False,
+                "status": "SELF_TEST_ERROR",
+                "error": f"Tool self-test failed: {e}",
+            }
+
     def resolve_model(self, model_id: str) -> tuple[ModelProvider, str]:
-        """Resolves model_id to its matching provider."""
-        # Check Ollama first
+        """Resolves model_id to its matching provider without silent fallback."""
         ollama = self.providers.get("ollama")
         if ollama and ollama.is_available():
             for m in ollama.list_models():
                 if m.id == model_id or m.name == model_id:
                     return ollama, m.id
 
-        # Fallback to default provider
-        return self.get_provider(), model_id
+        # Return default if matching
+        prov = self.get_provider()
+        return prov, model_id

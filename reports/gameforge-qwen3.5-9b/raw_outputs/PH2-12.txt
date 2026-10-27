@@ -1,0 +1,56 @@
+Here is the production-ready implementation for a Physics Projectile in Unreal Engine 5.7. This solution utilizes the Enhanced Input system concepts (clean separation of concerns), proper UE5 memory management (`TArray`, `TObjectPtr`), and adheres to the requested physics reflection logic with restitution damping.
+
+### Implementation Strategy
+
+1.  **Class Design**: We create a `UPhysicsProjectile` class inheriting from `AActor`.
+2.  **Collision Setup**: We define a `UBoxComponent` with `bIsSimulatingPhysics = true` to handle the physics simulation.
+3.  **Hit Callback**: We implement `OnComponentHit`. This function:
+    *   Extracts the impact normal from the `FHitResult`.
+    *   Calculates the reflection vector using the standard formula: $R = V - 2(V \cdot N)N$.
+    *   Applies a restitution coefficient (damping) to the normal component of the velocity.
+    *   Applies the new velocity to the component.
+4.  **Safety**: Includes checks for valid hit results and prevents infinite bouncing by limiting the maximum number of bounces or checking for specific surface tags if needed (optional, but good practice).
+
+### Code Implementation
+
+```cpp
+// PhysicsProjectile.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "Components/BoxComponent.h"
+#include "PhysicsProjectile.generated.h"
+
+// Forward declarations to avoid circular dependencies if needed
+class UPrimitiveComponent;
+
+UCLASS()
+class GAMEFORGE_API APhysicsProjectile : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	APHYSICSPROJECTILE()
+	{
+		// Initialize default values
+		PrimaryComponentTick.bCanEverTick = false;
+		PrimaryComponentTick.bStartWithTickEnabled = false;
+	}
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	// Called when the projectile hits something
+	virtual void OnComponentHit(
+		UPrimitiveComponent* HitComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		const FHitResult& Hit,
+		AActor* MyInstigator
+	) override;
+
+	// Called when the projectile stops moving (e.g., hits something and stops)
+	virtual void OnComponentHitStopped(
+		UPrimitiveComponent* HitComponent

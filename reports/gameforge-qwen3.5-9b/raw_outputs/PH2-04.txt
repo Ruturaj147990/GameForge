@@ -1,0 +1,66 @@
+Here is the optimized implementation for the Sensor Component. This approach eliminates the overhead of the default `Tick` system (which runs at 30/60/120Hz by default) and replaces it with a precise, low-frequency polling mechanism using `FTimerHandle`.
+
+### Implementation Details
+1.  **Constructor**: Sets `bCanEverTick = false` to prevent the engine from calling `TickComponent`.
+2.  **BeginPlay**: Initializes the `FTimerHandle` and schedules `PollSensors` via `GetWorld()->GetTimerManager().SetTimer`.
+3.  **PollSensors**: Contains the logic previously intended for `Tick`.
+4.  **Memory Safety**: Uses `TArray` with `MoveTemp` to avoid unnecessary allocations inside the timer callback.
+
+### Code: `SensorComponent.h`
+
+```cpp
+// SensorComponent.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "SensorComponent.generated.h"
+
+// Forward declarations for dependencies if any
+class UWorld;
+
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class SENSORCOMPONENT_API USensorComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	USensorComponent();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	/** 
+	 * Polls sensor data at a fixed rate (5 Hz).
+	 * Called by the TimerHandle, not Tick.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Sensor|Polling")
+	void PollSensors();
+
+	// Optional: Method to stop polling (e.g., on Game Over)
+	UFUNCTION(BlueprintCallable, Category = "Sensor|Control")
+	void StopPolling();
+
+protected:
+	// Timer handle for the polling loop
+	FTimerHandle PollingTimerHandle;
+
+	// Configuration for polling rate (seconds)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sensor")
+	float PollingIntervalSeconds = 0.2f; // 5 Hz
+
+	// Optional: Flag to allow dynamic enabling/disabling of polling
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sensor")
+	bool bIsPollingEnabled = true;
+};
+```
+
+### Code: `SensorComponent.cpp`
+
+```cpp
+// SensorComponent.cpp
+#include "SensorComponent.h"
+#include "Kismet/GameplayStatics.h"
+
+USensorComponent::

@@ -1,0 +1,39 @@
+```cpp
+// MoveSpeed.cs
+using Unity.Entities;
+
+public struct MoveSpeed : IComponentData
+{
+    public float Speed;
+}
+
+// MoveSpeedAuthoring.cs
+using Unity.Entities;
+using UnityEngine;
+
+public class MoveSpeedAuthoring : MonoBehaviour, IComponentCreator<MoveSpeed>
+{
+    [SerializeField] private float _speed;
+
+    public MoveSpeed CreateComponent(Entity entity)
+    {
+        return new MoveSpeed { Speed = _speed };
+    }
+}
+
+// MoveSpeedBaker.cs
+using Unity.Entities;
+using Unity.Bakery;
+using UnityEngine;
+
+public class MoveSpeedBaker : Baker<MoveSpeedAuthoring>
+{
+    public override void Baker(Entity entity, BakerContext context)
+    {
+        var moveSpeedAuthoring = context.GetComponent<MoveSpeedAuthoring>(entity);
+        var moveSpeed = moveSpeedAuthoring.CreateComponent(entity);
+        
+        context.AddComponent(new MoveSpeed { Speed = moveSpeed.Speed });
+    }
+}
+```

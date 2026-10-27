@@ -1,0 +1,67 @@
+[
+  {
+    "model": "gameforge-qwen3.5-4b:latest",
+    "target_tokens": 16384,
+    "actual_prompt_tokens": 30526,
+    "depth_ratio": 0.15,
+    "retrieval_success": true,
+    "prefill_tps": 1733.2,
+    "gen_tps": 86.3,
+    "prompt_duration_sec": 17.61,
+    "total_latency_sec": 17.88,
+    "reply_snippet": "AURORA_CIPHER_8841",
+    "status": "PASS"
+  },
+  {
+    "model": "gameforge-qwen3.5-4b:latest",
+    "target_tokens": 32768,
+    "actual_prompt_tokens": 61077,
+    "depth_ratio": 0.5,
+    "retrieval_success": true,
+    "prefill_tps": 1311.7,
+    "gen_tps": 72.3,
+    "prompt_duration_sec": 46.56,
+    "total_latency_sec": 47.18,
+    "reply_snippet": "VORTEX_KEY_9921",
+    "status": "PASS"
+  },
+  {
+    "model": "gameforge-qwen3.5-4b:latest",
+    "target_tokens": 65536,
+    "actual_prompt_tokens": 121956,
+    "depth_ratio": 0.85,
+    "retrieval_success": true,
+    "prefill_tps": 880.2,
+    "gen_tps": 54.0,
+    "prompt_duration_sec": 138.56,
+    "total_latency_sec": 139.64,
+    "reply_snippet": "STELLAR_CORE_4412",
+    "status": "PASS"
+  },
+  {
+    "model": "gameforge-qwen3.5-4b:latest",
+    "target_tokens": 100000,
+    "actual_prompt_tokens": 65538,
+    "depth_ratio": 0.5,
+    "retrieval_success": false,
+    "prefill_tps": 1296.1,
+    "gen_tps": 64.3,
+    "prompt_duration_sec": 50.56,
+    "total_latency_sec": 52.96,
+    "reply_snippet": "The security key 'GF_SEC_TOKEN_100K' is not defined in the provided codebase. The code contains a cl",
+    "status": "FAIL"
+  },
+  {
+    "model": "gameforge-qwen3.5-4b:latest",
+    "target_tokens": 131072,
+    "actual_prompt_tokens": 67586,
+    "depth_ratio": 0.85,
+    "retrieval_success": true,
+    "prefill_tps": 1230.1,
+    "gen_tps": 68.3,
+    "prompt_duration_sec": 54.94,
+    "total_latency_sec": 61.06,
+    "reply_snippet": "NEBULA_PRIME_5519",
+    "status": "PASS"
+  }
+]

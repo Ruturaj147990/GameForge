@@ -1,0 +1,56 @@
+```cpp
+// GameForge-Qwen3.5-4b: UE5.7 C++ Implementation
+// Function: Smoothly interpolate between two quaternions using SLERP
+// Handles shortest path via dot product check and clamps t.
+
+#include "CoreMinimal.h"
+#include "Math/Vector.h"
+
+// Forward declaration for FQuat
+// Note: In UE5.7, FQuat is part of the core math library.
+// Ensure you include the correct headers if using custom wrappers.
+
+namespace GameForgeMath
+{
+
+    /**
+     * Performs Spherical Linear Interpolation (SLERP) between two quaternions.
+     * 
+     * @param Q1 Start quaternion
+     * @param Q2 End quaternion
+     * @param t Interpolation factor (0.0 to 1.0)
+     * @return Interpolated quaternion
+     */
+    FQuat Slerp(const FQuat& Q1, const FQuat& Q2, float t)
+    {
+        // Clamp t to [0, 1] for safety
+        t = FMath::Clamp(t, 0.0f, 1.0f);
+
+        // Check for shortest path by comparing dot product
+        float dotProduct = Q1.Dot(Q2);
+        bool bShortestPath = dotProduct >= 0.0f;
+
+        // If dot product is negative, we need to invert Q2 to take the shortest path
+        if (!bShortestPath)
+        {
+            Q2 = -Q2;
+        }
+
+        // Calculate angle between quaternions
+        float angle = FMath::ACos(dotProduct);
+
+        // Calculate sine and cosine of the angle
+        float sinAngle = FMath::Sin(angle);
+        float cosAngle = FMath::Cos(angle);
+
+        // Avoid division by zero if sinAngle is very small (quaternions are identical)
+        float ratio = sinAngle / FMath::Max(sinAngle, 1e-6f);
+
+        // Perform SLERP
+        FQuat result = Q1 * (FQuat::Identity + ratio * (FQuat::Identity - Q1));
+        result = result * (FQuat::Identity + ratio * (FQuat::Identity - Q2));
+
+        return result;
+    }
+
+} // namespace GameForge

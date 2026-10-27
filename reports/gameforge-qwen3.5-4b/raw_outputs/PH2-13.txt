@@ -1,0 +1,89 @@
+```cpp
+// ICharacterState.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "Interfaces/ICharacterState.generated.h"
+
+UINTERFACE(MinimalAPI, Meta = DefaultApi, Blueprintable)
+class UCHARACTERSTATEINTERFACE : public UInterface
+{
+public:
+};
+
+struct FCharacterStateEntry
+{
+    UFUNCTION(BlueprintCallable, Category = "CharacterState")
+    virtual void Enter() = 0;
+
+    UFUNCTION(BlueprintCallable, Category = "CharacterState")
+    virtual void Update(float DeltaTime) = 0;
+
+    UFUNCTION(BlueprintCallable, Category = "CharacterState")
+    virtual void Exit() = 0;
+
+    virtual ~ICharacterState() {}
+};
+
+// CharacterStateManager.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "Interfaces/ICharacterState.h"
+#include "CharacterStateManager.generated.h"
+
+class ACharacter;
+class UCharacterState;
+
+UCLASS()
+class GAMEFORGE_API UCharacterStateManager : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    UCharacterStateManager();
+
+    // Lifecycle Management
+    void OnCharacterSpawned(ACharacter* InCharacter);
+    void OnCharacterDying(ACharacter* InCharacter);
+
+    // State Transition Logic
+    void TransitionToState(UCharacterState* InState);
+    void TransitionFromState(UCharacterState* InState);
+
+    // Query
+    UCharacterState* GetCurrentState() const;
+
+protected:
+    ACharacter* m_Character;
+    UCharacterState* m_CurrentState;
+    bool b_IsInitialized;
+
+    // Internal helper for safe transition
+    void ExecuteTransition(ACharacter* InCharacter, UCharacterState* InState);
+};
+```
+
+```cpp
+// CharacterStateManager.cpp
+#include "CharacterStateManager.h"
+#include "GameFramework/Character.h"
+#include "Interfaces/ICharacterState.h"
+
+UCharacterStateManager::UCharacterStateManager()
+    : m_Character(nullptr)
+    , m_CurrentState(nullptr)
+    , b_IsInitialized(false)
+{
+}
+
+void UCharacterStateManager::OnCharacterSpawned(ACharacter* InCharacter)
+{
+    m_Character = InCharacter;
+    b_IsInitialized = true;
+    
+    // Default state initialization (e.g., Idle)
+    if (m_CurrentState == nullptr)
+    {

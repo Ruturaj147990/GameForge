@@ -1,0 +1,34 @@
+### Blueprint Node Sequence for `OnPlayerDeath` Event Dispatcher
+
+To implement a robust `OnPlayerDeath` event dispatcher in Unreal Engine 5.7, follow this exact node sequence. This logic ensures the event triggers only when health drops to zero or below, utilizing Enhanced Input concepts where applicable.
+
+#### 1. Event Trigger Node
+*   **Node:** `Event Any Damage` (or `Event Take Damage` if using specific damage types)
+*   **Logic:** This is the entry point. It fires whenever the actor takes damage.
+*   **Parameters:** `Damage` (Float), `DamageType` (Optional).
+
+#### 2. Health Calculation Node
+*   **Node:** `Get Health`
+*   **Logic:** Retrieves the current health value of the actor.
+*   **Connection:** Output of `Event Any Damage` -> Input of `Get Health`.
+
+#### 3. Branch Condition Node
+*   **Node:** `Branch` (or `If Greater Than` / `If Less Than or Equal`)
+*   **Logic:** Evaluates the condition `Health <= 0`.
+*   **Configuration:**
+    *   **Condition:** `Get Health` <= `0.0`
+    *   **Note:** Use `Branch` for a clean UI structure allowing distinct "True" and "False" paths, or `If Less Than or Equal` for a linear flow.
+*   **Connection:** Output of `Get Health` -> Condition Input.
+
+#### 4. Dispatcher Call Node (True Path)
+*   **Node:** `Call Event Dispatcher`
+*   **Logic:** Invokes the registered `OnPlayerDeath` event on the target object.
+*   **Parameters:**
+    *   **Target:** The specific Actor or Class you wish to notify (e.g., `GameMode`, `GameState`, or a specific `APlayerController`).
+    *   **Event Name:** `OnPlayerDeath` (Must match the name of the event defined in the target's class).
+    *   **Parameters:** Pass relevant data (e.g., `Damage`, `DamageType`, `DeathLocation`) to the target.
+*   **Connection:** Output of `Branch` (True) -> Input of `Call Event Dispatcher`.
+
+#### 5. Optional: False Path (Health > 0)
+*   **Node:** `Call Event Dispatcher` (Optional)
+*   **Logic:** If you

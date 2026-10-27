@@ -1,0 +1,83 @@
+```cpp
+// InventoryItem.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "FFastArraySerializer.h"
+#include "FFastArraySerializerItem.h"
+#include "InventoryItem.generated.h"
+
+UCLASS()
+class GAMEFORGE_API AInventoryItem : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    AInventoryItem();
+
+    // Inventory State
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    int32 ItemID;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    FString ItemName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
+    float ItemWeight;
+
+    // Serialization Helpers
+    void SerializeToFFastArray(const TArray<FFastArraySerializerItem>& outArray);
+    void DeserializeFromFFastArray(const TArray<FFastArraySerializerItem>& inArray);
+
+protected:
+    virtual void BeginPlay() override;
+};
+
+// InventoryItem.cpp
+#include "InventoryItem.h"
+#include "FFastArraySerializer.h"
+#include "FFastArraySerializerItem.h"
+
+AInventoryItem::AInventoryItem()
+{
+    PrimaryActorTick.bCanEverTick = false;
+}
+
+void AInventoryItem::BeginPlay()
+{
+    Super::BeginPlay();
+    // Initialize default values if needed
+    if (ItemID <= 0) ItemID = 1;
+}
+
+void AInventoryItem::SerializeToFFastArray(const TArray<FFastArraySerializerItem>& outArray)
+{
+    FFastArraySerializer serializer;
+    serializer.AddValue(ItemID);
+    serializer.AddValue(FString::ToUTF8String(ItemName));
+    serializer.AddValue(ItemWeight);
+
+    for (const auto& item : serializer.GetItems())
+    {
+        outArray.Add(item);
+    }
+}
+
+void AInventoryItem::DeserializeFromFFastArray(const TArray<FFastArraySerializerItem>& inArray)
+{
+    FFastArraySerializer serializer;
+    serializer.Deserialize(inArray);
+
+    ItemID = serializer.GetValue<int32>();
+    ItemName = FString::FromUTF8(serializer.GetValue<FString>());
+    ItemWeight = serializer.GetValue<float>();
+}
+```
+
+```cpp
+// InventorySystem.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor

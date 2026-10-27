@@ -1,0 +1,9 @@
+{
+  "model_name": "gameforge-qwen3.5-4b:latest",
+  "merged_gguf_path": "E:\\GameForge\\artifacts\\gameforge-qwen3.5-4b\\gameforge-qwen3.5-4b-q4_k_m.gguf",
+  "merged_gguf_sha256": "2353155701a96721e78f20ce75af22db5b93cfdbdb90e4c0d73faf48c0658431",
+  "merged_tensors_count": 6,
+  "inference_tokens_per_sec": 97.21,
+  "inference_sample": "```cpp\n// ACharacter.h\n#pragma once\n#include \"CoreMinimal.h\"\n#include \"GameFramework/Character.h\"\n#include \"InputActionValue.h\"\n#include \"EnhancedInputComponent.h\"\n#include \"ACharacter.generated.h\"\n\nUCLASS()\nclass UMyCharacter : public ACharacter\n{\n    GENERATED_BODY()\n\npublic:\n    UPROPERTY(EditAny",
+  "status": "deployed_and_verified"
+}

@@ -1,0 +1,53 @@
+Here is the implementation of `UGA_FireWeapon` adhering to Unreal Engine 5.7 conventions, utilizing Enhanced Input, GAS, and proper memory management.
+
+### Implementation Details
+
+This class implements the core firing logic:
+1.  **Tag Check**: Verifies `State.Weapon.Ready` on the owning character.
+2.  **Cost Commit**: Uses `CommitAbility` to handle resource costs (ammo, cooldowns).
+3.  **Projectile Spawning**: Spawns a projectile actor at the weapon's muzzle location with proper velocity calculation.
+4.  **Lifecycle Management**: Correctly handles `EndAbility` with the specified parameters (`bFinishAbility = true`, `bResetCooldown = false`).
+
+### File: `FireWeaponAbility.h`
+
+```cpp
+// FireWeaponAbility.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameplayAbility.h"
+#include "FireWeaponAbility.generated.h"
+
+/**
+ * Gameplay Ability for firing a weapon.
+ * Handles tag checks, cost commitment, projectile spawning, and ability lifecycle.
+ */
+UCLASS()
+class GAMEFORGE_API UGA_FireWeapon : public UGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	UGA_FireWeapon();
+
+protected:
+	// Called when the ability is activated (e.g., by pressing a key or activating an input action)
+	virtual void ActivateAbility() override;
+
+	// Called when the ability ends (e.g., due to cost failure, tag loss, or manual end)
+	virtual void EndAbility(FGameplayAbilityEndHandle Handle, FGameplayAbilityActorInfo ActorInfo, FGameplayAbilityActivationInfo ActivationInfo, bool bFinishAbility, bool bResetCooldown) override;
+
+	// Called when the ability is cancelled (e.g., by pressing a key or activating an input action)
+	virtual void CancelAbility(FGameplayAbilityEndHandle Handle, FGameplayAbilityActorInfo ActorInfo, FGameplayAbilityActivationInfo ActivationInfo) override;
+
+protected:
+	// Helper to spawn the projectile
+	UFUNCTION(BlueprintCallable, Category = "Gameplay|FireWeapon")
+	void SpawnProjectile(const FGameplayAbilityActorInfo* ActorInfo);
+
+private:
+	// Reference to the projectile class to spawn
+	UPROPERTY(EditDefaultsOnly, Category = "FireWeapon")
+	TSubclassOf<AActor> ProjectileClass;
+
+	// Optional: Custom cost structure if not using simple float cost

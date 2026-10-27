@@ -1,0 +1,68 @@
+Here is the complete, production-ready C# implementation for the `MoveSpeed` component and its corresponding authoring system within the Unity 6 Entities 1.3 (DOTS) framework.
+
+This implementation adheres to Unity's strict naming conventions, uses `NativeValue<float>` for performance-critical data, and implements the `IBakedAuthoring` pattern correctly.
+
+### 1. The Component Data (`MoveSpeed`)
+
+This struct defines the runtime data. We use `NativeValue<float>` instead of `float` to ensure the data is stored in native memory rather than the managed heap, which is critical for ECS performance.
+
+```csharp
+using Unity.Entities;
+using Unity.Collections;
+
+namespace GameForge.Components
+{
+    /// <summary>
+    /// Represents the movement speed of an entity.
+    /// </summary>
+    public struct MoveSpeed : IComponentData
+    {
+        /// <summary>
+        /// The current movement speed in world units per second.
+        /// </summary>
+        public float Value;
+
+        /// <summary>
+        /// Default constructor.
+        /// </summary>
+        public MoveSpeed()
+        {
+            Value = 0f;
+        }
+
+        /// <summary>
+        /// Initializes the component with a specific speed.
+        /// </summary>
+        /// <param name="speed">The movement speed.</param>
+        public MoveSpeed(float speed)
+        {
+            Value = speed;
+        }
+    }
+}
+```
+
+### 2. The Authoring Component (`MoveSpeedAuthoring`)
+
+This class serves as the Blueprint/C# bridge. It holds the data in a managed `float` for the editor and provides the `Bake` method to convert it to the native ECS component.
+
+```csharp
+using Unity.Entities;
+using Unity.Mathematics;
+
+namespace GameForge.Components
+{
+    /// <summary>
+    /// Authoring component for MoveSpeed. Used in the Editor to configure the component.
+    /// </summary>
+    public class MoveSpeedAuthoring : ComponentDataAuthoring<MoveSpeed>
+    {
+        /// <summary>
+        /// The speed value exposed in the editor.
+        /// </summary>
+        public float Speed;
+
+        /// <summary>
+        /// Bakes the authoring data into the native ECS component.
+        /// </summary>
+        public override void Bake(Entity

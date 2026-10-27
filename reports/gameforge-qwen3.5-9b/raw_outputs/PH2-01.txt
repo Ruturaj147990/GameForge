@@ -1,0 +1,64 @@
+Here is the production-ready implementation of `UInteractableComponent` for Unreal Engine 5.7.
+
+This implementation adheres to modern UE C++ conventions:
+- Uses `TObjectPtr` for actor/component references to ensure memory safety.
+- Implements `FOnInteractedSignature` as a `MulticastDelegate` to handle multiple listeners (e.g., UI, Audio, Gameplay).
+- Uses `FVector::DistSquared` for efficient distance checking.
+- Includes proper `UCLASS` macros, `UFUNCTION` bindings, and `UINTERFACE` for Blueprint compatibility.
+
+### File: `Game/Components/InteractableComponent.h`
+
+```cpp
+// Game/Components/InteractableComponent.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+
+#include "InteractableComponent.generated.h"
+
+/**
+ * Delegate signature for when an interaction occurs.
+ * Allows multiple subscribers (UI, Audio, Gameplay) to react to an interaction.
+ */
+USTRUCT(BlueprintType)
+struct FGameFramework_API FOnInteractedSignature
+{
+	GENERATED_BODY()
+
+	/** Called when the actor/component is interacted with. */
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnInteractedSignature, const AActor* InteractedActor, const FOnInteractedSignature::FDelegateInstance& DelegateInstance);
+};
+
+/**
+ * UInteractableComponent provides a standardized interface for objects that can be interacted with.
+ * Supports distance checks, instigator validation, and event broadcasting.
+ */
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class GAMEFRAMEWORK_API UInteractableComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	UInteractableComponent();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	// Called when the component is attached to an actor.
+	virtual void AttachToActor(AActor* NewOwner) override;
+
+	/**
+	 * Handles the interaction logic.
+	 * 
+	 * @param InstigatorPawn The pawn that initiated the interaction.
+	 * @return true if interaction was successful, false otherwise.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Interaction", meta=(BlueprintInternalUseOnly = "true"))
+	bool Interact(APawn* InstigatorPawn);
+
+	/**
+	 *

@@ -1,0 +1,17 @@
+task_id,domain,title,score,max_score,percentage,tokens,tps,latency_sec,matched_rubrics,error
+PH2-01,UE 5.7 C++ Core,ActorComponent with Delegate & Distance Check,7,10,70.0,512,63.2,13.42,DistSquared; TObjectPtr; UInteractableComponent,None
+PH2-02,UE 5.7 Networking,Reliable Server RPC with Validation,0,10,0.0,512,63.2,8.34,,None
+PH2-03,UE 5.7 GAS,GameplayAbility Lifecycle & Tag Checks,8,10,80.0,512,63.2,8.36,CommitAbility; EndAbility; UGameplayAbility,None
+PH2-04,UE 5.7 Performance,Tick Avoidance & Timer Subsystem,10,10,100.0,512,63.2,8.34,bCanEverTick = false; SetTimer; TimerManager; 0.2,None
+PH2-05,UE 5.7 Code Repair,Safe Array Removal & Pointer Validation,3,10,30.0,512,63.2,8.36,RemoveAt,None
+PH2-06,Blueprint Workflow,Event Dispatcher & Damage Handling,10,10,100.0,512,63.1,8.36,Event AnyDamage; Branch; OnPlayerDeath,None
+PH2-07,Unity 6 Gameplay,Player Stamina Regeneration MonoBehaviour,3,10,30.0,512,62.6,8.42,UseStamina,None
+PH2-08,Unity 6 DOTS,Entities 1.3 Baker & Dynamic Usage Flags,3,10,30.0,512,62.7,8.42,IComponentData,None
+PH2-09,Godot 4 GDScript,Typed Signals & Health Component,10,10,100.0,458,19.5,23.75,signal health_changed; signal died; clamp; .emit(,None
+PH2-10,Game Mathematics,3D Rotation Quaternions & SLERP,10,10,100.0,512,17.3,29.92,dot; clamp; slerp; shortest path,None
+PH2-11,AI / Navigation,Behavior Tree Task Node & Blackboards,10,10,100.0,512,16.8,30.71,UBTTaskNode; FBlackboardKeySelector; EBTNodeResult; ExecuteTask,None
+PH2-12,Physics & Collision,Surface Normal Reflection & Chaos Collision,7,10,70.0,512,17.2,30.35,OnComponentHit; HitResult; restitution,None
+PH2-13,Game Architecture,State Machine & Decoupled State Pattern,6,10,60.0,512,19.2,26.9,Enter; Update; Exit,None
+PH2-14,Multiplayer State,Fast Array Serialization & Delta Replication,7,10,70.0,512,19.3,26.74,FFastArraySerializer; FFastArraySerializerItem,None
+PH2-15,Version Awareness,UE 5.7 Invariants vs Legacy Deprecations,10,10,100.0,512,19.4,26.71,TObjectPtr; Chaos; Enhanced Input,None
+PH2-16,Visual Debugging,Compiler Error OCR & Code Diagnosis,10,10,100.0,401,19.2,21.3,C2027; UStaticMesh; Engine/StaticMesh.h,None

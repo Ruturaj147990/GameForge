@@ -546,11 +546,17 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_diff_applied(self, diff_id: str) -> None:
-        self.statusBar().showMessage(f"✅ Diff {diff_id} applied successfully.", 4000)
+        self.statusBar().showMessage(f"✅ Diff {diff_id} applied successfully. Resuming task...", 4000)
+        session_id = getattr(self._chat_panel, "_session_id", None)
+        if session_id and hasattr(self, "_agent"):
+            self._agent.resume_after_diff(session_id, diff_id, approved=True)
 
     @Slot(str)
     def _on_diff_rejected(self, diff_id: str) -> None:
         self.statusBar().showMessage(f"❌ Diff {diff_id} rejected.", 4000)
+        session_id = getattr(self._chat_panel, "_session_id", None)
+        if session_id and hasattr(self, "_agent"):
+            self._agent.resume_after_diff(session_id, diff_id, approved=False)
 
     @Slot(str, str)
     def _on_slash_command(self, cmd: str, full_cmd: str) -> None:

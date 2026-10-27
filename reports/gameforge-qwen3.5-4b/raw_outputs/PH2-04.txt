@@ -1,0 +1,67 @@
+```cpp
+// SensorComponent.h
+#pragma once
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "Components/SensorComponent.h"
+#include "SensorComponent.generated.h"
+
+UCLASS()
+class SENSORCOMPONENT_API ASensorComponent : public ASensorComponent
+{
+    GENERATED_BODY()
+
+public:
+    ASensorComponent();
+
+protected:
+    virtual void BeginPlay() override;
+
+private:
+    void PollSensors();
+
+    FTimerHandle SensorPollTimer;
+    bool bIsInitialized;
+};
+```
+
+```cpp
+// SensorComponent.cpp
+#include "SensorComponent.h"
+#include "GameFramework/Actor.h"
+
+ASensorComponent::ASensorComponent()
+{
+    // Disable automatic ticking to prevent overhead and ensure precise control
+    bCanEverTick = false;
+    bIsInitialized = false;
+}
+
+void ASensorComponent::BeginPlay()
+{
+    Super::BeginPlay();
+
+    if (GetWorld())
+    {
+        // Set timer for 5 Hz (0.2 seconds)
+        GetWorld()->GetTimerManager().SetTimer(
+            SensorPollTimer,
+            this,
+            &ASensorComponent::PollSensors,
+            0.2f,
+            true, // Repeat
+            FTimerType::Periodic
+        );
+        bIsInitialized = true;
+    }
+}
+
+void ASensorComponent::PollSensors()
+{
+    // Implementation of sensor polling logic here
+    // Example: Read sensor data, update state, etc.
+    // Ensure this function is marked with 'ForceTick' if it modifies game state
+    // and needs to be processed by the game loop, though typically 
+    // direct timer callbacks bypass the tick system for performance.
+}
+```

@@ -1,0 +1,16 @@
+{
+  "model_name": "gameforge-qwen3.5-9b",
+  "foundation_checkpoint": "Qwen/Qwen3.5-9B",
+  "device": "DirectML (AMD Radeon RX 7700 XT\u0000)",
+  "hidden_size": 4096,
+  "intermediate_size": 12288,
+  "num_layers": 32,
+  "lora_rank": 16,
+  "lora_alpha": 32.0,
+  "learning_rate": 0.00018,
+  "epochs": 2,
+  "max_seq_len": 384,
+  "trainable_params": 2097152,
+  "train_samples_count": 478,
+  "val_samples_count": 54
+}

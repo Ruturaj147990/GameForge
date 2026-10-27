@@ -1,0 +1,85 @@
+```cpp
+// UInteractableComponent.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/ActorComponent.h"
+#include "InteractableComponent.generated.h"
+
+using FOnInteractedSignature = delegate_t<void(APawn* InstigatorPawn)>;
+
+UCLASS(meta = (ToolTip = "Component that defines interaction logic for actors"))
+class GAMEFORGE_API UInteractableComponent : public UActorComponent
+{
+    GENERATED_BODY()
+
+public:
+    UInteractableComponent();
+
+    virtual void Deactivate() override;
+
+protected:
+    virtual void Activate() override;
+
+public:
+    // Delegate
+    UPROPERTY(BlueprintAssignable, Category = "Interaction")
+    FOnInteractedSignature OnInteracted;
+
+    // Interaction Distance
+    UPROPERTY(EditDefaultsOnly, Category = "Interaction", DefaultValue = 500.0f)
+    float InteractionDistance;
+
+    // Interaction State
+    UPROPERTY(EditDefaultsOnly, Category = "Interaction", DefaultValue = false)
+    bool bCanInteract;
+
+    // Interaction Logic
+    virtual bool CanInteract(APawn* InstigatorPawn) const;
+
+    // Interaction Method
+    virtual void Interact(APawn* InstigatorPawn);
+
+private:
+    // Member Variables
+    TObjectPtr<APawn> LastInteractor;
+    float LastInteractionTime;
+};
+```
+
+```cpp
+// UInteractableComponent.cpp
+#include "InteractableComponent.h"
+#include "GameFramework/Pawn.h"
+#include "Components/ActorComponent.h"
+
+UInteractableComponent::UInteractableComponent()
+{
+    LastInteractionTime = 0.0f;
+}
+
+void UInteractableComponent::Deactivate()
+{
+    Super::Deactivate();
+    LastInteractor = nullptr;
+    LastInteractionTime = 0.0f;
+}
+
+void UInteractableComponent::Activate()
+{
+    Super::Activate();
+    LastInteractor = nullptr;
+    LastInteractionTime = 0.0f;
+}
+
+bool UInteractableComponent::CanInteract(APawn* InstigatorPawn) const
+{
+    if (!InstigatorPawn)
+    {
+        return false;
+    }
+
+    FVector PlayerLocation = InstigatorPawn->GetActorLocation();
+    FVector ActorLocation = GetActorLocation();
+
+    float DistanceSquared = FVector::DistSquared(PlayerLocation, Actor

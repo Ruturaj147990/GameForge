@@ -1,0 +1,20 @@
+```cpp
+void UInventoryComponent::DropItem(int32 SlotIndex) {
+    // Validate SlotIndex bounds
+    if (!IsValidIndex(SlotIndex, GetMaxSlotIndex())) {
+        UE_LOG(LogTemp, Warning, TEXT("DropItem: Invalid slot index %d"), SlotIndex);
+        return;
+    }
+
+    // Validate Item pointer
+    AItem* Item = Items[SlotIndex];
+    if (!IsValid(Item)) {
+        UE_LOG(LogTemp, Warning, TEXT("DropItem: Item at slot %d is null"), SlotIndex);
+        return;
+    }
+
+    // Destroy item before removing from array to ensure clean state
+    Item->Destroy();
+    Items.RemoveAt(SlotIndex);
+}
+```

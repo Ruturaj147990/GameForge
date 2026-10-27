@@ -1,0 +1,61 @@
+[
+  {
+    "model": "gameforge-qwen3.5-9b:latest",
+    "target_tokens": 16384,
+    "actual_prompt_tokens": 30562,
+    "depth_ratio": 0.15,
+    "retrieval_success": true,
+    "prefill_tps": 1133.1,
+    "gen_tps": 59.1,
+    "prompt_duration_sec": 26.97,
+    "total_latency_sec": 27.31,
+    "reply_snippet": "AURORA_CIPHER_8841",
+    "status": "PASS"
+  },
+  {
+    "model": "gameforge-qwen3.5-9b:latest",
+    "target_tokens": 32768,
+    "actual_prompt_tokens": 61113,
+    "depth_ratio": 0.5,
+    "retrieval_success": true,
+    "prefill_tps": 935.6,
+    "gen_tps": 53.1,
+    "prompt_duration_sec": 65.32,
+    "total_latency_sec": 65.91,
+    "reply_snippet": "VORTEX_KEY_9921",
+    "status": "PASS"
+  },
+  {
+    "model": "gameforge-qwen3.5-9b:latest",
+    "target_tokens": 65536,
+    "depth_ratio": 0.85,
+    "retrieval_success": false,
+    "status": "ERROR: timed out"
+  },
+  {
+    "model": "gameforge-qwen3.5-9b:latest",
+    "target_tokens": 100000,
+    "actual_prompt_tokens": 65538,
+    "depth_ratio": 0.5,
+    "retrieval_success": false,
+    "prefill_tps": 664.9,
+    "gen_tps": 47.5,
+    "prompt_duration_sec": 98.57,
+    "total_latency_sec": 101.17,
+    "reply_snippet": "The security key 'GF_SEC_TOKEN_100K' is not defined in the provided codebase.",
+    "status": "FAIL"
+  },
+  {
+    "model": "gameforge-qwen3.5-9b:latest",
+    "target_tokens": 131072,
+    "actual_prompt_tokens": 67586,
+    "depth_ratio": 0.85,
+    "retrieval_success": true,
+    "prefill_tps": 849.6,
+    "gen_tps": 17.6,
+    "prompt_duration_sec": 79.55,
+    "total_latency_sec": 87.36,
+    "reply_snippet": "NEBULA_PRIME_5519",
+    "status": "PASS"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "model_name": "gameforge-qwen3.5-9b:latest",
+  "merged_gguf_path": "E:\\GameForge\\artifacts\\gameforge-qwen3.5-9b\\gameforge-qwen3.5-9b-q4_k_m.gguf",
+  "merged_gguf_sha256": "e1a7d1a50527609e7ebe8aa78c31388103d29495e6b46b16dc0d24ee4fccc906",
+  "merged_tensors_count": 6,
+  "inference_tokens_per_sec": 63.91,
+  "inference_sample": "Here is the implementation of a production-ready `UGameInstanceSubsystem` for player session tracking in Unreal Engine 5.7.4.\n\nThis implementation adheres to strict UE conventions:\n- Uses `TObjectPtr` and `TWeakObjectPtr` for safe lifetime management.\n- Implements `IInterface` for clean dependency i",
+  "status": "deployed_and_verified"
+}

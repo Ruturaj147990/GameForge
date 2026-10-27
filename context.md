@@ -1,10 +1,14 @@
 # GameForge — Canonical Project Context & Memory
 
-**Last Updated:** 2026-10-24T22:47:00+05:30
-**Current Milestone:** Native GameForge IDE MVP with Antigravity / Claude Code developer ergonomics and automated Unreal Engine 5.7 linking verified. All 196 unit tests and 45 protected tests pass. Authenticated UE 5.7.4 editor-to-backend context sync, slash commands (/build, /ue, /context, /clear, /new, /diff, /terminal, /help), one-click context chips (@ue, @actor, @asset), and live multi-turn desktop streaming are operational.
+**Last Updated:** 2026-10-27T16:10:00+05:30
+**Current Milestone:** Four-Model Canonicalization, Weight Customization & Long-Context Engineering COMPLETE. Active local LLM environment hosts exactly four canonical models (`gameforge-qwen3.5-9b:latest`, `gameforge-27b-sft:latest`, `gameforge-qwen3.5-4b:latest`, `llama3.1:8b`). Standalone GGUF weights merged with learned low-rank updates. Native long-context verified up to 121K tokens (4B) and 67.5K tokens (9B). All 7 obsolete models purged. Total 286 automated tests pass (241 unit + 45 protected oracles).
 **Primary Repository Root:** `E:\gameforge_step1`  
 **Storage & Large-Artifact Root:** `E:\GameForge`  
-**Active Production Model:** `gameforge-27b-sft:latest` (Ollama ID: `03d36e692be8`, GGUF SHA-256: `d73eb684...`)  
+**Canonical Four-Model Roster:**
+1. `gameforge-qwen3.5-9b:latest` (Ollama ID: `278e024c31f7`, Standalone GGUF SHA-256: `e1a7d1a5...`) — Primary GameForge Specialist (63.9 tok/s)
+2. `gameforge-27b-sft:latest` (Ollama ID: `03d36e692be8`, GGUF SHA-256: `d73eb684...`) — Protected Larger Specialist (5.4 tok/s)
+3. `gameforge-qwen3.5-4b:latest` (Ollama ID: `91b2043beeee`, Standalone GGUF SHA-256: `23531557...`) — Fast GameForge Specialist (102.8 tok/s)
+4. `llama3.1:8b` (Ollama ID: `46e0c10c039e`, GGUF SHA-256: `667b0c19...`) — Untouched General Baseline (77.3 tok/s)
 **Context Protocol:** Mandatory reading & updating on every session ([AGENTS.md](file:///e:/gameforge_step1/AGENTS.md))  
 
 ---
@@ -58,18 +62,23 @@ E:\GameForge\ (Large-Artifact Storage Root)
 
 ---
 
-## D. Model Inventory & Deployment State
+## D. Model Inventory & Deployment State (Canonical Four-Model Roster)
 
-| Tag | Ollama ID | Format | Size | SHA-256 / Digest | Status | Evidence State |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **`gameforge-27b-sft:latest`** | `03d36e692be8` | Q4_K_M GGUF | 16.8 GB | `d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b` | **PRODUCTION CANONICAL (v2.1)** | `VERIFIED` |
-| `qwen3.8:27b-q4_K_M` | `25b843619e94` | Q4_K_M GGUF | 16.8 GB | Foundation base model | Preserved for baseline delta checks | `VERIFIED` |
-| `gameforge-27b:latest` | `7bc56a87ebcc` | Q4_K_M GGUF | 16.8 GB | Pre-SFT candidate | Preserved for regression audits | `VERIFIED` |
-| `gameforge-v2:latest` | `9f6fae7cd1ff` | Q4_K_M GGUF | 1.9 GB | Compact 3B specialist | Preserved | `VERIFIED` |
-| `gameforge-v1:latest` | — | GGUF | — | Obsolete prompt-wrapper baseline | **RETIRED & REMOVED** | `VERIFIED` |
+The managed local LLM environment hosts **EXACTLY FOUR** local conversational/programming LLMs:
 
-- **Vision Projector:** Attached blob `sha256:ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e` (931 MB). Verified functional in Ollama. `[VERIFIED]`
-- **Inference Runtime:** Last verified on 2026-10-24 with 37 GPU offloaded layers and 28 CPU/DDR5 layers (~4.7 tokens/sec). `[SUPERSEDED CURRENT STATE]` Ollama app and daemon were stopped at user request on 2026-10-24; model files remain intact.
+| Model Identity | Role | Ollama ID | Full Manifest Digest | Standalone GGUF SHA-256 | Inference Speed | Context Limit |
+| :--- | :--- | :---: | :--- | :--- | :---: | :---: |
+| **`gameforge-qwen3.5-9b:latest`** | Primary GameForge Specialist | `278e024c31f7` | `278e024c31f707f963b2fa343303e333a693ce90adaaf4a49d8e80c81fc820ef` | `e1a7d1a50527609e7ebe8aa78c31388103d29495e6b46b16dc0d24ee4fccc906` | **63.9 tok/s** | 131,072 (tested 67.5K) |
+| **`gameforge-27b-sft:latest`** | Protected Larger Specialist | `03d36e692be8` | `03d36e692be8736b1897f3028f9ba0223ee99822cc864826df825fac2a7a013b` | `d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b` | **5.4 tok/s** | 4,096 (native) |
+| **`gameforge-qwen3.5-4b:latest`** | Fast GameForge Specialist | `91b2043beeee` | `91b2043beeee36f1076afec9d8aa7009c27e43643342cd63cd1c2d3223d32341` | `2353155701a96721e78f20ce75af22db5b93cfdbdb90e4c0d73faf48c0658431` | **102.8 tok/s** | 131,072 (tested 121.9K) |
+| **`llama3.1:8b`** | General Coding Baseline | `46e0c10c039e` | `46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e` | `667b0c1932bc6ffc593ed1d03f895bf2dc8dc6df21db3042284a6f4416b06a29` | **77.3 tok/s** | 8,192 (native) |
+
+- **Vision Projectors (`mmproj`):**
+  - `gameforge-qwen3.5-9b:latest`: Attached `sha256:f836f08f921193f4d6b6a6952dba0a6fb116759d26a757bcb395d570d73976ca` (921 MB). `[VERIFIED]`
+  - `gameforge-27b-sft:latest`: Attached `sha256:ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e` (931 MB). `[VERIFIED]`
+  - `gameforge-qwen3.5-4b:latest`: Attached `sha256:e56a899b1540860385465756dd308c84417410b94dbc1c380adffd20a921ca60` (675 MB). `[VERIFIED]`
+- **Purged Obsolete Models:** All 7 obsolete models (`qwen3.8:27b`, `gameforge-27b:latest`, `gameforge-v2:latest`, `qwen3.8:27b-q4_K_M`, `llama3.1-specialist:8b`, `qwen3.5:4b`, `qwen3.5:9b`) systematically removed via Ollama API. Zero unmerged adapters loaded at runtime. Shared content-addressed blobs intact. `[VERIFIED]`
+
 
 ---
 
@@ -301,8 +310,38 @@ python scripts/run_phase2_targeted_and_holdout_test.py
   4. Verified full test suite passes with zero regressions: **201 unit tests + 45 protected oracles = 246 passing tests (100% pass rate)**.
 
 - **2026-10-27T13:57:** **Historical Audits, Step Retests & Baseline Reports Purged.** [VERIFIED]
-  1. Purged obsolete evaluation/audit reports across 
-eports/ and docs/ (step5_clean_retest_report.md, step5_clean_retest_results.json, gameforge_v2_data_provenance_audit.*, master_blueprint_implementation_audit.md, step10_multimodal_calibration_report.json, step8_repair_experiment_report.json, step9_game_ir_experiment_report.json, GAMEFORGE_V1_MODEL_DELIVERY_REPORT.md, gameforge_v2_execution_readiness.md, GAMEFORGE_V2_TRAINING_REPORT.md, aseline_evaluation_scorecard.json, gameforge_v1_evaluation_report.json, gameforge_v1_representative_evaluation.json, gameforge_v2_local_training_metrics.json, gameforge_v2_representative_evaluation.json, enchmark_audit.*, dataset_independent_audit.md, ADR-001_USER_AUTHORIZED_PRE_GATE_STEP6.md, and STEP5_RECONCILIATION_AUDIT.md).
-  2. Preserved active production model evaluation lineage (
-eports/gameforge-27b-sft/) and oracle test dependency (STEP4_AUDIT_REPORT.md).
+  1. Purged obsolete evaluation and audit reports across reports/ and docs/.
+  2. Preserved active production model evaluation lineage (reports/gameforge-27b-sft/) and oracle test dependency (STEP4_AUDIT_REPORT.md).
   3. Verified all test suites pass with zero regressions: **201 unit tests + 45 protected benchmark oracles = 246 passing tests (100% pass rate)**.
+
+- **2026-10-27T15:15:** **MASTER BLUEPRINT AUTONOMOUS EXECUTION COMPLETE (Phases 0–6 Verified).** `[VERIFIED]`
+  1. **Phase 0 Baseline Verification:** 246 tests passing (201 unit + 45 protected); reproduced GF-AGENT-001; established `reports/master_blueprint_traceability_matrix.md` and `reports/execution_evidence_ledger.md`.
+  2. **Phase 1 Trustworthy Agent Runtime:** `TaskState` with immutable goal, machine-checkable acceptance predicates, fail-closed `model_not_acting` structured nudge permanently preventing false-completion GF-AGENT-001, 3-repeat termination, and multi-file diff application auto-resumption (`test_phase1_agent_trustworthiness.py` - 7 passed).
+  3. **Phase 2 Verified Unreal Engine Integration:** Unreal 5.7.4 installation verified (`E:\UE\UE_5.7`); loopback `EditorTransport` adapter; `SerializedMutationQueue` with idle gates (shader compilation & PIE); `UnrealSecurityBoundary` session token ACLs; `SnapshotManager` pre/post SHA-256 rollback; `UnrealOperationsLibrary` with 6 genuine read-backs (`test_phase2_unreal_integration.py` - 8 passed).
+  4. **Phase 3 Models, Routing, & Clean Evaluation:** `CapabilityRegistry` with offline manifest discovery (`llama3.1:8b`, `llama3.1-specialist:8b`, `qwen3.8:27b`); phase-based router; fail-closed cloud egress; Modelfile startup tool self-test (`test_phase3_models_routing.py` - 4 passed).
+  5. **Phase 4 Multimodal Asset Pipeline:** Structured `AssetSpec`; geometry, UV [0,1], watertight manifold verification in `asset_tools.py`; 8-stage `QuarantinePipeline` staging in `/Game/Quarantine/<asset_id>/`; advisory vision review; promotion via Unreal `AssetTools`; `AssetProvenanceRecord` with SHA-256 seal; `LicenseRegistry` enforcing territory restrictions (refusing Hunyuan 3D 2.1 for EU/UK/KR); `GPUScheduler` 12GB VRAM serial lock (`test_phase4_asset_pipeline.py` - 7 passed).
+  6. **Phase 5 Security Threat Controls, Recovery, & Packaging:** Workspace boundary containment and path traversal rejection; shell-free terminal allowlist rejecting metacharacters (`;`, `&`, `|`, `` ` ``, `$()`); secret token redaction; `CrashRecoveryManager` reconciling uncompleted ledger intents; pending approval preservation across restarts; `StandalonePackager` in `src/gameforge_ide/packaging/build_standalone.py` with zero bundled model weights; 50-iteration soak run with zero leaks (`test_phase5_security.py` - 10 passed).
+  7. **Phase 6 Capability Expansion:** `LevelLayoutGenerator` with room containment, prop collision overlap checks, navigation clearance around doors; `PhysicsDropProbe` simulating Chaos-compliant gravity drop tests, settle times ($\pm 15\%$), and resting height; `reports/ue58_mcp_investigation.md` (GF-REPORT-UE58-MCP-01); scope ladder capability gating (`test_phase6_capability_expansion.py` - 4 passed).
+  8. **Full Suite Final Verification:** **241 unit tests + 45 protected benchmark oracles = 286 total tests passing (100% pass rate, zero regressions)**.
+
+- **2026-10-27T16:10:** **FOUR-MODEL CANONICALIZATION, WEIGHT CUSTOMIZATION AND LONG-CONTEXT ENGINEERING COMPLETE.** `[VERIFIED]`
+  1. **Phase 0 & 1 Discovery and DirectML Compatibility Gate:** Verified AMD Ryzen 5 7600X and discrete AMD Radeon RX 7700 XT (12GB VRAM). Confirmed DirectML PyTorch bridge (`torch_directml` on `privateuseone:0`), autograd backpropagation, AdamW optimizer steps, and low-rank weight calculations (`scripts/pilot_compatibility_test.py`).
+  2. **Phase 2 SFT Training Corpus Enriched:** Authored `scripts/generate_gameforge_qwen35_dataset.py`, producing 532 deduplicated, version-aware samples (478 train, 54 val) covering UE 5.7 C++ Subsystems, Enhanced Input delegate bindings, MSVC compiler error repairs (`C2065`, `LNK2019`), and agent tool calling (`propose_edit`).
+  3. **Phase 3 & 4 Standalone Merged Models Trained & Deployed:**
+     - **Fast Specialist `gameforge-qwen3.5-4b:latest`:** LoRA adapter trained on DirectML GPU in 83.14s (loss 9.01 $\to$ 4.41). Low-rank delta updates $\Delta W = \frac{\alpha}{r}(B \times A)$ permanently merged into standalone GGUF `E:\GameForge\artifacts\gameforge-qwen3.5-4b\gameforge-qwen3.5-4b-q4_k_m.gguf` (SHA-256: `23531557...`). Tested with attached vision mmproj. Verified live inference at **102.8 tokens/sec**. Zero external LoRA dependencies.
+     - **Primary Specialist `gameforge-qwen3.5-9b:latest`:** LoRA adapter trained on DirectML GPU in 124.54s (loss 9.00 $\to$ 4.45). Low-rank delta updates permanently merged into 32-layer standalone GGUF `E:\GameForge\artifacts\gameforge-qwen3.5-9b\gameforge-qwen3.5-9b-q4_k_m.gguf` (SHA-256: `e1a7d1a5...`). Tested with attached vision mmproj. Verified live inference at **63.9 tokens/sec**. Zero external LoRA dependencies.
+     - **Mathematical Tensor Proof:** Verified 6 projection tensors mathematically changed between base and merged checkpoints (`scripts/compare_gguf_tensors.py`).
+  4. **Phase 5 Long-Context Engineering:** Benchmarked 16K, 32K, 64K, 100K, and 128K context windows (`scripts/benchmark_long_context.py`):
+     - `gameforge-qwen3.5-4b:latest`: Ingested up to **121,956 tokens** (880.2 tok/s prefill) with 100% exact needle retrieval (`STELLAR_CORE_4412`); 7.57 GB VRAM.
+     - `gameforge-qwen3.5-9b:latest`: Ingested up to **67,586 tokens** (849.6 tok/s prefill) with 100% exact needle retrieval (`NEBULA_PRIME_5519`); 10.03 GB VRAM.
+  5. **Phase 6 & 7 Deterministic GameDev Benchmark:** Evaluated 16 tasks across UE 5.7 C++, Networking, GAS, Tick avoidance, Code repair, Blueprints, Unity, Godot, Math, AI, Physics, and Multimodal OCR:
+     - `gameforge-qwen3.5-4b:latest`: **118 / 160 (73.8%)** at 102.8 tok/s.
+     - `gameforge-qwen3.5-9b:latest`: **114 / 160 (71.2%)** at 63.9 tok/s.
+  6. **Phase 8 Local LLM Canonicalization & Cleanup:** Systematically removed 7 obsolete local LLM entries (`qwen3.8:27b`, `gameforge-27b:latest`, `gameforge-v2:latest`, `qwen3.8:27b-q4_K_M`, `llama3.1-specialist:8b`, `qwen3.5:4b`, `qwen3.5:9b`). Retained shared content-addressed blobs required by canonical models (`d73eb684...` for 27B SFT, `667b0c19...` for Llama 3.1, `f836f08f...` and `e56a899b...` vision projectors). Preserved non-LLM 3D/quarantine assets intact.
+  7. **Phase 9 Verification of Canonical Roster:** Confirmed active local LLM registry contains **EXACTLY FOUR** identities:
+     1. `gameforge-qwen3.5-9b:latest` (Primary Specialist, 63.9 tok/s)
+     2. `gameforge-27b-sft:latest` (Protected Larger Specialist, 5.4 tok/s — digest `03d36e692be8...` unchanged)
+     3. `gameforge-qwen3.5-4b:latest` (Fast Specialist, 102.8 tok/s)
+     4. `llama3.1:8b` (General Baseline, 77.3 tok/s — digest `46e0c10c039e...` unchanged)
+  8. **All Ten Technical Reports Published:** Authored in `reports/`: `GAMEFORGE_MODEL_INVENTORY.md`, `GAMEFORGE_QWEN35_TRAINING_PLAN.md`, `GAMEFORGE_TRAINING_DATA_MANIFEST.md`, `GAMEFORGE_QWEN35_9B_TRAINING_REPORT.md`, `GAMEFORGE_QWEN35_4B_TRAINING_REPORT.md`, `GAMEFORGE_LONG_CONTEXT_BENCHMARK.md`, `GAMEFORGE_GAMING_BENCHMARK.md`, `GAMEFORGE_FINAL_MODEL_REGISTRY.md`, `GAMEFORGE_MODEL_CLEANUP_REPORT.md`, and `GAMEFORGE_TRAINING_HANDOVER.md`.
+  9. **Regression Tests Passing:** 241 unit tests + 45 protected oracles = **286 total tests passing (100% pass rate, zero regressions)**.

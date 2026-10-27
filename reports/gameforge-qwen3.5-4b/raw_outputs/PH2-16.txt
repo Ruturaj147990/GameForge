@@ -1,0 +1,19 @@
+```json
+{
+  "error_code": "C2027",
+  "error_message": "use of undeclared type 'UStaticMesh'",
+  "missing_type": "UStaticMesh",
+  "file": "Source/MyGame/MyActor.cpp",
+  "line": 42,
+  "fix": "#include "UnrealEngine/Public/Engine.h"",
+  "tool_call": {
+    "type": "propose_edit",
+    "parameters": {
+      "file": "Source/MyGame/MyActor.cpp",
+      "operation": "insert",
+      "position": 0,
+      "content": "#include \"Engine.h\""
+    }
+  }
+}
+```

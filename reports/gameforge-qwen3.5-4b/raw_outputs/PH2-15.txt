@@ -1,0 +1,31 @@
+### UE 5.7 Core C++ API Shifts vs UE 4.x/5.0
+
+#### 1. Memory Management: `TObjectPtr` vs Raw Pointers
+*   **Status**: `TObjectPtr` is the **only** supported pointer type for UObject-derived classes. Raw pointers (`TObject*`) are deprecated and will cause compilation errors in 5.7.
+*   **Key Change**: The engine enforces RAII (Resource Acquisition Is Initialization) for all UObject instances.
+*   **Implementation**:
+    *   **Declaration**: Use `TObjectPtr<YourClass>`.
+    *   **Null Check**: Use `IsValid()` instead of `nullptr`.
+    *   **Ownership**: Use `MakeShareable()` for heap allocation. Use `MakeUnique()` for single-object ownership.
+    *   **Reference Counting**: The engine handles `AddRef`/`Release` automatically. Do not call `Release()` manually unless you are explicitly transferring ownership via `MakeUnique()`.
+    *   **Example**:
+        ```cpp
+        // UE 4.x Style (Deprecated)
+        MyClass* obj = new MyClass();
+        if (obj) { /* ... */ }
+
+        // UE 5.7 Style (Required)
+        TObjectPtr<MyClass> obj = MakeUnique<MyClass>();
+        if (IsValid(obj)) { /* ... */ }
+        // obj is automatically deleted when it goes out of scope
+        ```
+
+#### 2. Physics Engine: Chaos Physics replacing PhysX
+*   **Status**: PhysX is deprecated. Chaos Physics is the default and only supported engine in UE 5.7.
+*   **Key Changes**:
+    *   **Rigid Body**: `FPhysXBodyInstance` is removed. Use `FChaosRigidBodyInstance`.
+    *   **Collision**: `FPhysXShape` is removed. Use `FChaosShape`.
+    *   **Solver**: `FPhysXSolver` is removed. Use `FChaosSolver`.
+    *   **Integration**: `FPhysXWorld` is removed. Use `FChaosWorld`.
+    *   **API Surface**: The API is significantly cleaner but requires more explicit configuration for advanced features (e.g., custom constraints).
+    *   **Migration**: Existing `FPhysXBodyInstance` classes must be rewritten to inherit from `FChaosRigidBodyInstance

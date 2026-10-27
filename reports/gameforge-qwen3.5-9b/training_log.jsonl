@@ -1,0 +1,956 @@
+{"step": 1, "epoch": 1, "sample_id": "GF-UE57-SUBSYS-003", "domain": "Unreal Engine 5.7", "loss": 9.008423, "grad_norm": 0.027283}
+{"step": 2, "epoch": 1, "sample_id": "ue57-gas-017", "domain": "Unreal Engine 5.7", "loss": 9.009679, "grad_norm": 0.028536}
+{"step": 3, "epoch": 1, "sample_id": "roblox-sec-022", "domain": "Roblox Luau", "loss": 9.012881, "grad_norm": 0.029918}
+{"step": 4, "epoch": 1, "sample_id": "roblox-sec-032", "domain": "Roblox Luau", "loss": 9.010657, "grad_norm": 0.035875}
+{"step": 5, "epoch": 1, "sample_id": "ue57-ai-030", "domain": "Unreal Engine 5.7", "loss": 9.004947, "grad_norm": 0.051992}
+{"step": 6, "epoch": 1, "sample_id": "gamemath-038", "domain": "Game Mathematics", "loss": 9.009778, "grad_norm": 0.04872}
+{"step": 7, "epoch": 1, "sample_id": "roblox-sec-002", "domain": "Roblox Luau", "loss": 8.998741, "grad_norm": 0.065827}
+{"step": 8, "epoch": 1, "sample_id": "GF-AGENT-TOOL-002", "domain": "GameForge Agent Protocol", "loss": 8.998842, "grad_norm": 0.08013}
+{"step": 9, "epoch": 1, "sample_id": "roblox-sec-021", "domain": "Roblox Luau", "loss": 8.987731, "grad_norm": 0.085322}
+{"step": 10, "epoch": 1, "sample_id": "godot4-char-068", "domain": "Godot 4", "loss": 8.996279, "grad_norm": 0.077771}
+{"step": 11, "epoch": 1, "sample_id": "godot4-char-017", "domain": "Godot 4", "loss": 8.990657, "grad_norm": 0.088718}
+{"step": 12, "epoch": 1, "sample_id": "ue57-rep-022", "domain": "Unreal Engine 5.7", "loss": 8.963637, "grad_norm": 0.126692}
+{"step": 13, "epoch": 1, "sample_id": "bevy-rust-004", "domain": "Bevy Rust", "loss": 8.933293, "grad_norm": 0.204415}
+{"step": 14, "epoch": 1, "sample_id": "ue57-mem-023", "domain": "Unreal Engine 5.7", "loss": 8.928228, "grad_norm": 0.203012}
+{"step": 15, "epoch": 1, "sample_id": "ue57-prof-026", "domain": "Unreal Engine 5.7", "loss": 8.955527, "grad_norm": 0.159215}
+{"step": 16, "epoch": 1, "sample_id": "bevy-rust-008", "domain": "Bevy Rust", "loss": 8.857108, "grad_norm": 0.36519}
+{"step": 17, "epoch": 1, "sample_id": "ue57-gas-029", "domain": "Unreal Engine 5.7", "loss": 8.832787, "grad_norm": 0.402433}
+{"step": 18, "epoch": 1, "sample_id": "ue57-gas-002", "domain": "Unreal Engine 5.7", "loss": 8.78285, "grad_norm": 0.517407}
+{"step": 19, "epoch": 1, "sample_id": "ue57-rep-025", "domain": "Unreal Engine 5.7", "loss": 8.776978, "grad_norm": 0.521777}
+{"step": 20, "epoch": 1, "sample_id": "unity-dots-061", "domain": "Unity DOTS", "loss": 8.565475, "grad_norm": 0.611712}
+{"step": 21, "epoch": 1, "sample_id": "unity-dots-046", "domain": "Unity DOTS", "loss": 8.594126, "grad_norm": 1.432165}
+{"step": 22, "epoch": 1, "sample_id": "roblox-sec-039", "domain": "Roblox Luau", "loss": 8.77842, "grad_norm": 1.342004}
+{"step": 23, "epoch": 1, "sample_id": "ue57-ai-024", "domain": "Unreal Engine 5.7", "loss": 8.746368, "grad_norm": 1.379986}
+{"step": 24, "epoch": 1, "sample_id": "unity-dots-038", "domain": "Unity DOTS", "loss": 8.551256, "grad_norm": 1.451926}
+{"step": 25, "epoch": 1, "sample_id": "gamemath-010", "domain": "Game Mathematics", "loss": 8.759212, "grad_norm": 0.158392}
+{"step": 26, "epoch": 1, "sample_id": "uefn-verse-007", "domain": "UEFN Verse", "loss": 8.827381, "grad_norm": 0.379612}
+{"step": 27, "epoch": 1, "sample_id": "bevy-rust-032", "domain": "Bevy Rust", "loss": 8.624303, "grad_norm": 0.630767}
+{"step": 28, "epoch": 1, "sample_id": "gamemath-026", "domain": "Game Mathematics", "loss": 8.783361, "grad_norm": 0.452152}
+{"step": 29, "epoch": 1, "sample_id": "ue57-rep-020", "domain": "Unreal Engine 5.7", "loss": 8.687987, "grad_norm": 0.627722}
+{"step": 30, "epoch": 1, "sample_id": "ue57-mem-015", "domain": "Unreal Engine 5.7", "loss": 8.618176, "grad_norm": 0.74058}
+{"step": 31, "epoch": 1, "sample_id": "unity-dots-056", "domain": "Unity DOTS", "loss": 8.420847, "grad_norm": 0.994376}
+{"step": 32, "epoch": 1, "sample_id": "uefn-verse-037", "domain": "UEFN Verse", "loss": 8.751788, "grad_norm": 0.408429}
+{"step": 33, "epoch": 1, "sample_id": "uefn-verse-027", "domain": "UEFN Verse", "loss": 8.740108, "grad_norm": 0.600362}
+{"step": 34, "epoch": 1, "sample_id": "unity-dots-020", "domain": "Unity DOTS", "loss": 8.310866, "grad_norm": 0.832509}
+{"step": 35, "epoch": 1, "sample_id": "godot4-char-063", "domain": "Godot 4", "loss": 8.752449, "grad_norm": 0.925607}
+{"step": 36, "epoch": 1, "sample_id": "unity-dots-017", "domain": "Unity DOTS", "loss": 8.247653, "grad_norm": 0.789232}
+{"step": 37, "epoch": 1, "sample_id": "ue57-ai-009", "domain": "Unreal Engine 5.7", "loss": 8.524234, "grad_norm": 0.679179}
+{"step": 38, "epoch": 1, "sample_id": "roblox-sec-005", "domain": "Roblox Luau", "loss": 8.540195, "grad_norm": 0.507561}
+{"step": 39, "epoch": 1, "sample_id": "ue57-ai-002", "domain": "Unreal Engine 5.7", "loss": 8.504584, "grad_norm": 0.693504}
+{"step": 40, "epoch": 1, "sample_id": "gamemath-022", "domain": "Game Mathematics", "loss": 8.710402, "grad_norm": 0.450263}
+{"step": 41, "epoch": 1, "sample_id": "uefn-verse-019", "domain": "UEFN Verse", "loss": 8.603125, "grad_norm": 0.472257}
+{"step": 42, "epoch": 1, "sample_id": "bevy-rust-005", "domain": "Bevy Rust", "loss": 8.407315, "grad_norm": 0.719618}
+{"step": 43, "epoch": 1, "sample_id": "ue57-trace-029", "domain": "Unreal Engine 5.7", "loss": 8.193933, "grad_norm": 0.843939}
+{"step": 44, "epoch": 1, "sample_id": "ue57-prof-009", "domain": "Unreal Engine 5.7", "loss": 8.491366, "grad_norm": 0.358698}
+{"step": 45, "epoch": 1, "sample_id": "roblox-sec-004", "domain": "Roblox Luau", "loss": 8.4671, "grad_norm": 0.740095}
+{"step": 46, "epoch": 1, "sample_id": "ue57-prof-002", "domain": "Unreal Engine 5.7", "loss": 8.464622, "grad_norm": 0.440623}
+{"step": 47, "epoch": 1, "sample_id": "bevy-rust-013", "domain": "Bevy Rust", "loss": 8.375052, "grad_norm": 0.894552}
+{"step": 48, "epoch": 1, "sample_id": "unity-dots-037", "domain": "Unity DOTS", "loss": 7.923287, "grad_norm": 0.997648}
+{"step": 49, "epoch": 1, "sample_id": "bevy-rust-007", "domain": "Bevy Rust", "loss": 8.223242, "grad_norm": 0.957062}
+{"step": 50, "epoch": 1, "sample_id": "ue57-gas-014", "domain": "Unreal Engine 5.7", "loss": 8.267426, "grad_norm": 0.637612}
+{"step": 51, "epoch": 1, "sample_id": "bevy-rust-026", "domain": "Bevy Rust", "loss": 8.171696, "grad_norm": 1.051731}
+{"step": 52, "epoch": 1, "sample_id": "ue57-prof-013", "domain": "Unreal Engine 5.7", "loss": 8.362468, "grad_norm": 0.919845}
+{"step": 53, "epoch": 1, "sample_id": "ue57-gas-021", "domain": "Unreal Engine 5.7", "loss": 8.161365, "grad_norm": 0.779495}
+{"step": 54, "epoch": 1, "sample_id": "ue57-gas-015", "domain": "Unreal Engine 5.7", "loss": 8.14984, "grad_norm": 0.948878}
+{"step": 55, "epoch": 1, "sample_id": "uefn-verse-012", "domain": "UEFN Verse", "loss": 8.310328, "grad_norm": 1.028701}
+{"step": 56, "epoch": 1, "sample_id": "unity-dots-025", "domain": "Unity DOTS", "loss": 7.364015, "grad_norm": 1.13293}
+{"step": 57, "epoch": 1, "sample_id": "bevy-rust-021", "domain": "Bevy Rust", "loss": 8.116001, "grad_norm": 2.449102}
+{"step": 58, "epoch": 1, "sample_id": "ue57-gas-024", "domain": "Unreal Engine 5.7", "loss": 8.269362, "grad_norm": 2.672767}
+{"step": 59, "epoch": 1, "sample_id": "gamemath-039", "domain": "Game Mathematics", "loss": 8.985129, "grad_norm": 4.063228}
+{"step": 60, "epoch": 1, "sample_id": "ue57-gas-028", "domain": "Unreal Engine 5.7", "loss": 8.184209, "grad_norm": 2.500671}
+{"step": 61, "epoch": 1, "sample_id": "unity-dots-052", "domain": "Unity DOTS", "loss": 7.237905, "grad_norm": 1.033488}
+{"step": 62, "epoch": 1, "sample_id": "ue57-gas-011", "domain": "Unreal Engine 5.7", "loss": 8.029745, "grad_norm": 1.751346}
+{"step": 63, "epoch": 1, "sample_id": "roblox-sec-037", "domain": "Roblox Luau", "loss": 8.101359, "grad_norm": 1.603655}
+{"step": 64, "epoch": 1, "sample_id": "gamemath-021", "domain": "Game Mathematics", "loss": 8.4849, "grad_norm": 1.889607}
+{"step": 65, "epoch": 1, "sample_id": "GF-UE57-SUBSYS-001", "domain": "Unreal Engine 5.7", "loss": 7.795894, "grad_norm": 0.979348}
+{"step": 66, "epoch": 1, "sample_id": "ue57-rep-010", "domain": "Unreal Engine 5.7", "loss": 7.996552, "grad_norm": 0.926607}
+{"step": 67, "epoch": 1, "sample_id": "gamemath-035", "domain": "Game Mathematics", "loss": 8.390957, "grad_norm": 0.724295}
+{"step": 68, "epoch": 1, "sample_id": "ue57-rep-027", "domain": "Unreal Engine 5.7", "loss": 7.961327, "grad_norm": 0.983931}
+{"step": 69, "epoch": 1, "sample_id": "godot4-char-033", "domain": "Godot 4", "loss": 8.485522, "grad_norm": 1.224575}
+{"step": 70, "epoch": 1, "sample_id": "ue57-trace-010", "domain": "Unreal Engine 5.7", "loss": 7.641939, "grad_norm": 1.708355}
+{"step": 71, "epoch": 1, "sample_id": "unity-dots-059", "domain": "Unity DOTS", "loss": 7.24621, "grad_norm": 1.532405}
+{"step": 72, "epoch": 1, "sample_id": "ue57-rep-033", "domain": "Unreal Engine 5.7", "loss": 7.824958, "grad_norm": 0.923111}
+{"step": 73, "epoch": 1, "sample_id": "unity-dots-077", "domain": "Unity DOTS", "loss": 7.168164, "grad_norm": 1.248718}
+{"step": 74, "epoch": 1, "sample_id": "ue57-trace-008", "domain": "Unreal Engine 5.7", "loss": 7.484668, "grad_norm": 1.991593}
+{"step": 75, "epoch": 1, "sample_id": "unity-dots-045", "domain": "Unity DOTS", "loss": 7.086821, "grad_norm": 1.29473}
+{"step": 76, "epoch": 1, "sample_id": "godot4-char-048", "domain": "Godot 4", "loss": 8.422354, "grad_norm": 2.537944}
+{"step": 77, "epoch": 1, "sample_id": "ue57-prof-008", "domain": "Unreal Engine 5.7", "loss": 7.80735, "grad_norm": 1.467367}
+{"step": 78, "epoch": 1, "sample_id": "ue57-prof-003", "domain": "Unreal Engine 5.7", "loss": 7.762438, "grad_norm": 1.535871}
+{"step": 79, "epoch": 1, "sample_id": "godot4-char-052", "domain": "Godot 4", "loss": 8.364543, "grad_norm": 2.916559}
+{"step": 80, "epoch": 1, "sample_id": "uefn-verse-010", "domain": "UEFN Verse", "loss": 8.114328, "grad_norm": 1.911499}
+{"step": 81, "epoch": 1, "sample_id": "bevy-rust-028", "domain": "Bevy Rust", "loss": 7.828344, "grad_norm": 3.258002}
+{"step": 82, "epoch": 1, "sample_id": "uefn-verse-035", "domain": "UEFN Verse", "loss": 8.061848, "grad_norm": 1.651587}
+{"step": 83, "epoch": 1, "sample_id": "ue57-mem-013", "domain": "Unreal Engine 5.7", "loss": 7.605028, "grad_norm": 2.038116}
+{"step": 84, "epoch": 1, "sample_id": "bevy-rust-033", "domain": "Bevy Rust", "loss": 7.675176, "grad_norm": 2.544161}
+{"step": 85, "epoch": 1, "sample_id": "roblox-sec-030", "domain": "Roblox Luau", "loss": 8.037135, "grad_norm": 2.722639}
+{"step": 86, "epoch": 1, "sample_id": "godot4-char-064", "domain": "Godot 4", "loss": 8.06208, "grad_norm": 1.62666}
+{"step": 87, "epoch": 1, "sample_id": "godot4-char-030", "domain": "Godot 4", "loss": 8.024632, "grad_norm": 1.926782}
+{"step": 88, "epoch": 1, "sample_id": "godot4-char-035", "domain": "Godot 4", "loss": 8.006061, "grad_norm": 2.016763}
+{"step": 89, "epoch": 1, "sample_id": "ue57-mem-007", "domain": "Unreal Engine 5.7", "loss": 7.532903, "grad_norm": 1.346127}
+{"step": 90, "epoch": 1, "sample_id": "ue57-trace-028", "domain": "Unreal Engine 5.7", "loss": 7.260505, "grad_norm": 2.116108}
+{"step": 91, "epoch": 1, "sample_id": "bevy-rust-024", "domain": "Bevy Rust", "loss": 7.47432, "grad_norm": 1.414284}
+{"step": 92, "epoch": 1, "sample_id": "unity-dots-062", "domain": "Unity DOTS", "loss": 6.83251, "grad_norm": 1.471079}
+{"step": 93, "epoch": 1, "sample_id": "ue57-rep-040", "domain": "Unreal Engine 5.7", "loss": 7.604038, "grad_norm": 2.069974}
+{"step": 94, "epoch": 1, "sample_id": "uefn-verse-025", "domain": "UEFN Verse", "loss": 7.860897, "grad_norm": 1.699277}
+{"step": 95, "epoch": 1, "sample_id": "uefn-verse-039", "domain": "UEFN Verse", "loss": 7.827859, "grad_norm": 1.620118}
+{"step": 96, "epoch": 1, "sample_id": "ue57-ai-010", "domain": "Unreal Engine 5.7", "loss": 7.469717, "grad_norm": 3.806575}
+{"step": 97, "epoch": 1, "sample_id": "ue57-rep-007", "domain": "Unreal Engine 5.7", "loss": 7.612418, "grad_norm": 2.54968}
+{"step": 98, "epoch": 1, "sample_id": "godot4-char-002", "domain": "Godot 4", "loss": 7.607464, "grad_norm": 2.853833}
+{"step": 99, "epoch": 1, "sample_id": "ue57-gas-034", "domain": "Unreal Engine 5.7", "loss": 7.5626, "grad_norm": 2.077881}
+{"step": 100, "epoch": 1, "sample_id": "ue57-gas-003", "domain": "Unreal Engine 5.7", "loss": 7.540788, "grad_norm": 1.861158}
+{"step": 101, "epoch": 1, "sample_id": "roblox-sec-033", "domain": "Roblox Luau", "loss": 7.854721, "grad_norm": 2.722893}
+{"step": 102, "epoch": 1, "sample_id": "unity-dots-024", "domain": "Unity DOTS", "loss": 6.684541, "grad_norm": 2.469102}
+{"step": 103, "epoch": 1, "sample_id": "unity-dots-054", "domain": "Unity DOTS", "loss": 6.765142, "grad_norm": 2.183921}
+{"step": 104, "epoch": 1, "sample_id": "unity-dots-067", "domain": "Unity DOTS", "loss": 6.771188, "grad_norm": 2.068528}
+{"step": 105, "epoch": 1, "sample_id": "unity-dots-058", "domain": "Unity DOTS", "loss": 6.694417, "grad_norm": 1.947696}
+{"step": 106, "epoch": 1, "sample_id": "unity-dots-031", "domain": "Unity DOTS", "loss": 6.538855, "grad_norm": 2.21046}
+{"step": 107, "epoch": 1, "sample_id": "gamemath-019", "domain": "Game Mathematics", "loss": 7.772685, "grad_norm": 2.33164}
+{"step": 108, "epoch": 1, "sample_id": "unity-dots-055", "domain": "Unity DOTS", "loss": 6.547215, "grad_norm": 2.600576}
+{"step": 109, "epoch": 1, "sample_id": "unity-dots-079", "domain": "Unity DOTS", "loss": 6.56785, "grad_norm": 1.816515}
+{"step": 110, "epoch": 1, "sample_id": "ue57-mem-021", "domain": "Unreal Engine 5.7", "loss": 7.215002, "grad_norm": 3.245755}
+{"step": 111, "epoch": 1, "sample_id": "ue57-rep-018", "domain": "Unreal Engine 5.7", "loss": 7.463307, "grad_norm": 3.019652}
+{"step": 112, "epoch": 1, "sample_id": "gamemath-036", "domain": "Game Mathematics", "loss": 7.588939, "grad_norm": 3.387509}
+{"step": 113, "epoch": 1, "sample_id": "uefn-verse-033", "domain": "UEFN Verse", "loss": 7.624187, "grad_norm": 2.449307}
+{"step": 114, "epoch": 1, "sample_id": "bevy-rust-037", "domain": "Bevy Rust", "loss": 7.085853, "grad_norm": 3.628384}
+{"step": 115, "epoch": 1, "sample_id": "unity-dots-073", "domain": "Unity DOTS", "loss": 6.386299, "grad_norm": 5.049631}
+{"step": 116, "epoch": 1, "sample_id": "ue57-mem-010", "domain": "Unreal Engine 5.7", "loss": 7.082201, "grad_norm": 3.078631}
+{"step": 117, "epoch": 1, "sample_id": "godot4-char-065", "domain": "Godot 4", "loss": 7.114403, "grad_norm": 3.452477}
+{"step": 118, "epoch": 1, "sample_id": "ue57-ai-008", "domain": "Unreal Engine 5.7", "loss": 7.181374, "grad_norm": 2.551956}
+{"step": 119, "epoch": 1, "sample_id": "roblox-sec-047", "domain": "Roblox Luau", "loss": 7.580523, "grad_norm": 3.09877}
+{"step": 120, "epoch": 1, "sample_id": "gamemath-027", "domain": "Game Mathematics", "loss": 7.301888, "grad_norm": 3.176983}
+{"step": 121, "epoch": 1, "sample_id": "ue57-ai-017", "domain": "Unreal Engine 5.7", "loss": 6.805851, "grad_norm": 2.492041}
+{"step": 122, "epoch": 1, "sample_id": "ue57-trace-003", "domain": "Unreal Engine 5.7", "loss": 6.761311, "grad_norm": 2.624847}
+{"step": 123, "epoch": 1, "sample_id": "bevy-rust-031", "domain": "Bevy Rust", "loss": 6.718958, "grad_norm": 3.131425}
+{"step": 124, "epoch": 1, "sample_id": "ue57-trace-009", "domain": "Unreal Engine 5.7", "loss": 6.866846, "grad_norm": 2.687552}
+{"step": 125, "epoch": 1, "sample_id": "ue57-mem-009", "domain": "Unreal Engine 5.7", "loss": 7.234778, "grad_norm": 3.074375}
+{"step": 126, "epoch": 1, "sample_id": "unity-dots-042", "domain": "Unity DOTS", "loss": 6.240886, "grad_norm": 3.303725}
+{"step": 127, "epoch": 1, "sample_id": "unity-dots-069", "domain": "Unity DOTS", "loss": 6.371806, "grad_norm": 3.215}
+{"step": 128, "epoch": 1, "sample_id": "ue57-rep-003", "domain": "Unreal Engine 5.7", "loss": 7.270058, "grad_norm": 3.326576}
+{"step": 129, "epoch": 1, "sample_id": "ue57-rep-005", "domain": "Unreal Engine 5.7", "loss": 7.114546, "grad_norm": 2.757546}
+{"step": 130, "epoch": 1, "sample_id": "gamemath-037", "domain": "Game Mathematics", "loss": 7.091879, "grad_norm": 4.1305}
+{"step": 131, "epoch": 1, "sample_id": "ue57-mem-035", "domain": "Unreal Engine 5.7", "loss": 6.831905, "grad_norm": 3.852698}
+{"step": 132, "epoch": 1, "sample_id": "gamemath-011", "domain": "Game Mathematics", "loss": 7.123425, "grad_norm": 5.770959}
+{"step": 133, "epoch": 1, "sample_id": "godot4-char-053", "domain": "Godot 4", "loss": 6.926614, "grad_norm": 4.070967}
+{"step": 134, "epoch": 1, "sample_id": "bevy-rust-020", "domain": "Bevy Rust", "loss": 6.642218, "grad_norm": 3.605555}
+{"step": 135, "epoch": 1, "sample_id": "ue57-rep-038", "domain": "Unreal Engine 5.7", "loss": 7.049869, "grad_norm": 2.161243}
+{"step": 136, "epoch": 1, "sample_id": "ue57-ai-003", "domain": "Unreal Engine 5.7", "loss": 6.684605, "grad_norm": 2.447179}
+{"step": 137, "epoch": 1, "sample_id": "ue57-trace-005", "domain": "Unreal Engine 5.7", "loss": 6.556148, "grad_norm": 3.345375}
+{"step": 138, "epoch": 1, "sample_id": "godot4-char-050", "domain": "Godot 4", "loss": 6.752104, "grad_norm": 3.61145}
+{"step": 139, "epoch": 1, "sample_id": "ue57-mem-031", "domain": "Unreal Engine 5.7", "loss": 6.682489, "grad_norm": 3.749633}
+{"step": 140, "epoch": 1, "sample_id": "gamemath-024", "domain": "Game Mathematics", "loss": 6.886323, "grad_norm": 4.375987}
+{"step": 141, "epoch": 1, "sample_id": "bevy-rust-003", "domain": "Bevy Rust", "loss": 6.583922, "grad_norm": 3.428781}
+{"step": 142, "epoch": 1, "sample_id": "godot4-char-040", "domain": "Godot 4", "loss": 6.593404, "grad_norm": 3.483575}
+{"step": 143, "epoch": 1, "sample_id": "unity-dots-070", "domain": "Unity DOTS", "loss": 5.970718, "grad_norm": 4.61511}
+{"step": 144, "epoch": 1, "sample_id": "unity-dots-018", "domain": "Unity DOTS", "loss": 5.994401, "grad_norm": 5.60157}
+{"step": 145, "epoch": 1, "sample_id": "unity-dots-021", "domain": "Unity DOTS", "loss": 5.903946, "grad_norm": 5.242603}
+{"step": 146, "epoch": 1, "sample_id": "GF-UE57-INPUT-003", "domain": "Unreal Engine 5.7", "loss": 7.709485, "grad_norm": 3.500558}
+{"step": 147, "epoch": 1, "sample_id": "bevy-rust-016", "domain": "Bevy Rust", "loss": 6.493472, "grad_norm": 4.239233}
+{"step": 148, "epoch": 1, "sample_id": "godot4-char-038", "domain": "Godot 4", "loss": 6.460141, "grad_norm": 4.177671}
+{"step": 149, "epoch": 1, "sample_id": "ue57-mem-020", "domain": "Unreal Engine 5.7", "loss": 6.529926, "grad_norm": 5.041119}
+{"step": 150, "epoch": 1, "sample_id": "unity-dots-023", "domain": "Unity DOTS", "loss": 5.706061, "grad_norm": 3.400794}
+{"step": 151, "epoch": 1, "sample_id": "unity-dots-076", "domain": "Unity DOTS", "loss": 5.805046, "grad_norm": 4.001923}
+{"step": 152, "epoch": 1, "sample_id": "ue57-prof-010", "domain": "Unreal Engine 5.7", "loss": 6.68619, "grad_norm": 4.038522}
+{"step": 153, "epoch": 1, "sample_id": "ue57-trace-026", "domain": "Unreal Engine 5.7", "loss": 6.261636, "grad_norm": 3.961275}
+{"step": 154, "epoch": 1, "sample_id": "gamemath-034", "domain": "Game Mathematics", "loss": 6.638604, "grad_norm": 5.447048}
+{"step": 155, "epoch": 1, "sample_id": "roblox-sec-001", "domain": "Roblox Luau", "loss": 7.381717, "grad_norm": 4.181428}
+{"step": 156, "epoch": 1, "sample_id": "uefn-verse-024", "domain": "UEFN Verse", "loss": 7.30689, "grad_norm": 3.06194}
+{"step": 157, "epoch": 1, "sample_id": "ue57-prof-011", "domain": "Unreal Engine 5.7", "loss": 6.611873, "grad_norm": 4.471601}
+{"step": 158, "epoch": 1, "sample_id": "ue57-trace-006", "domain": "Unreal Engine 5.7", "loss": 6.241396, "grad_norm": 3.656905}
+{"step": 159, "epoch": 1, "sample_id": "uefn-verse-020", "domain": "UEFN Verse", "loss": 7.210958, "grad_norm": 2.879086}
+{"step": 160, "epoch": 1, "sample_id": "ue57-mem-022", "domain": "Unreal Engine 5.7", "loss": 6.332575, "grad_norm": 4.655301}
+{"step": 161, "epoch": 1, "sample_id": "godot4-char-069", "domain": "Godot 4", "loss": 6.401073, "grad_norm": 4.3377}
+{"step": 162, "epoch": 1, "sample_id": "bevy-rust-039", "domain": "Bevy Rust", "loss": 6.341001, "grad_norm": 4.663753}
+{"step": 163, "epoch": 1, "sample_id": "GF-UE57-REPAIR-002", "domain": "Unreal Engine 5.7", "loss": 7.964091, "grad_norm": 4.742352}
+{"step": 164, "epoch": 1, "sample_id": "ue57-gas-026", "domain": "Unreal Engine 5.7", "loss": 6.876828, "grad_norm": 3.193149}
+{"step": 165, "epoch": 1, "sample_id": "unity-dots-016", "domain": "Unity DOTS", "loss": 5.504835, "grad_norm": 5.0276}
+{"step": 166, "epoch": 1, "sample_id": "godot4-char-010", "domain": "Godot 4", "loss": 6.316607, "grad_norm": 4.773422}
+{"step": 167, "epoch": 1, "sample_id": "roblox-sec-009", "domain": "Roblox Luau", "loss": 7.213661, "grad_norm": 4.376038}
+{"step": 168, "epoch": 1, "sample_id": "roblox-sec-036", "domain": "Roblox Luau", "loss": 7.091899, "grad_norm": 3.914272}
+{"step": 169, "epoch": 1, "sample_id": "ue57-trace-007", "domain": "Unreal Engine 5.7", "loss": 6.103122, "grad_norm": 4.620589}
+{"step": 170, "epoch": 1, "sample_id": "bevy-rust-009", "domain": "Bevy Rust", "loss": 6.363347, "grad_norm": 4.09481}
+{"step": 171, "epoch": 1, "sample_id": "godot4-char-021", "domain": "Godot 4", "loss": 6.161297, "grad_norm": 4.58923}
+{"step": 172, "epoch": 1, "sample_id": "ue57-prof-001", "domain": "Unreal Engine 5.7", "loss": 6.655964, "grad_norm": 3.807189}
+{"step": 173, "epoch": 1, "sample_id": "godot4-char-018", "domain": "Godot 4", "loss": 6.059497, "grad_norm": 4.427258}
+{"step": 174, "epoch": 1, "sample_id": "godot4-char-008", "domain": "Godot 4", "loss": 6.01348, "grad_norm": 4.152579}
+{"step": 175, "epoch": 1, "sample_id": "godot4-char-041", "domain": "Godot 4", "loss": 5.889592, "grad_norm": 3.722182}
+{"step": 176, "epoch": 1, "sample_id": "godot4-char-013", "domain": "Godot 4", "loss": 5.769671, "grad_norm": 3.290749}
+{"step": 177, "epoch": 1, "sample_id": "godot4-char-043", "domain": "Godot 4", "loss": 5.697224, "grad_norm": 3.433262}
+{"step": 178, "epoch": 1, "sample_id": "godot4-char-004", "domain": "Godot 4", "loss": 5.631288, "grad_norm": 4.116005}
+{"step": 179, "epoch": 1, "sample_id": "unity-dots-005", "domain": "Unity DOTS", "loss": 6.079955, "grad_norm": 14.453856}
+{"step": 180, "epoch": 1, "sample_id": "ue57-mem-002", "domain": "Unreal Engine 5.7", "loss": 6.934594, "grad_norm": 11.467664}
+{"step": 181, "epoch": 1, "sample_id": "gamemath-007", "domain": "Game Mathematics", "loss": 7.093414, "grad_norm": 9.308563}
+{"step": 182, "epoch": 1, "sample_id": "roblox-sec-031", "domain": "Roblox Luau", "loss": 6.930648, "grad_norm": 6.373081}
+{"step": 183, "epoch": 1, "sample_id": "roblox-sec-003", "domain": "Roblox Luau", "loss": 6.90459, "grad_norm": 6.162462}
+{"step": 184, "epoch": 1, "sample_id": "ue57-rep-014", "domain": "Unreal Engine 5.7", "loss": 7.145264, "grad_norm": 4.723894}
+{"step": 185, "epoch": 1, "sample_id": "godot4-char-044", "domain": "Godot 4", "loss": 5.28177, "grad_norm": 4.798251}
+{"step": 186, "epoch": 1, "sample_id": "unity-dots-039", "domain": "Unity DOTS", "loss": 5.674392, "grad_norm": 5.364236}
+{"step": 187, "epoch": 1, "sample_id": "ue57-ai-011", "domain": "Unreal Engine 5.7", "loss": 6.235846, "grad_norm": 4.498792}
+{"step": 188, "epoch": 1, "sample_id": "ue57-mem-027", "domain": "Unreal Engine 5.7", "loss": 6.380266, "grad_norm": 4.076303}
+{"step": 189, "epoch": 1, "sample_id": "godot4-char-003", "domain": "Godot 4", "loss": 5.259281, "grad_norm": 5.449317}
+{"step": 190, "epoch": 1, "sample_id": "ue57-gas-023", "domain": "Unreal Engine 5.7", "loss": 6.797295, "grad_norm": 3.83001}
+{"step": 191, "epoch": 1, "sample_id": "unity-dots-022", "domain": "Unity DOTS", "loss": 5.462358, "grad_norm": 4.894014}
+{"step": 192, "epoch": 1, "sample_id": "roblox-sec-017", "domain": "Roblox Luau", "loss": 6.559199, "grad_norm": 4.496868}
+{"step": 193, "epoch": 1, "sample_id": "ue57-ai-001", "domain": "Unreal Engine 5.7", "loss": 6.243286, "grad_norm": 4.127432}
+{"step": 194, "epoch": 1, "sample_id": "ue57-gas-031", "domain": "Unreal Engine 5.7", "loss": 6.691375, "grad_norm": 3.386281}
+{"step": 195, "epoch": 1, "sample_id": "uefn-verse-011", "domain": "UEFN Verse", "loss": 7.017004, "grad_norm": 3.247171}
+{"step": 196, "epoch": 1, "sample_id": "gamemath-032", "domain": "Game Mathematics", "loss": 6.236314, "grad_norm": 5.244015}
+{"step": 197, "epoch": 1, "sample_id": "ue57-rep-031", "domain": "Unreal Engine 5.7", "loss": 6.702226, "grad_norm": 3.299703}
+{"step": 198, "epoch": 1, "sample_id": "ue57-gas-004", "domain": "Unreal Engine 5.7", "loss": 6.665562, "grad_norm": 3.569178}
+{"step": 199, "epoch": 1, "sample_id": "unity-dots-019", "domain": "Unity DOTS", "loss": 5.317445, "grad_norm": 5.561492}
+{"step": 200, "epoch": 1, "sample_id": "unity-dots-051", "domain": "Unity DOTS", "loss": 5.368132, "grad_norm": 4.47081}
+{"step": 201, "epoch": 1, "sample_id": "ue57-ai-004", "domain": "Unreal Engine 5.7", "loss": 6.083227, "grad_norm": 4.148942}
+{"step": 202, "epoch": 1, "sample_id": "ue57-rep-028", "domain": "Unreal Engine 5.7", "loss": 6.481435, "grad_norm": 4.929388}
+{"step": 203, "epoch": 1, "sample_id": "ue57-mem-001", "domain": "Unreal Engine 5.7", "loss": 6.064738, "grad_norm": 4.368803}
+{"step": 204, "epoch": 1, "sample_id": "uefn-verse-016", "domain": "UEFN Verse", "loss": 6.948663, "grad_norm": 3.95281}
+{"step": 205, "epoch": 1, "sample_id": "unity-dots-033", "domain": "Unity DOTS", "loss": 5.196444, "grad_norm": 9.775819}
+{"step": 206, "epoch": 1, "sample_id": "unity-dots-011", "domain": "Unity DOTS", "loss": 5.071808, "grad_norm": 8.258588}
+{"step": 207, "epoch": 1, "sample_id": "godot4-char-011", "domain": "Godot 4", "loss": 5.463832, "grad_norm": 7.866027}
+{"step": 208, "epoch": 1, "sample_id": "ue57-mem-004", "domain": "Unreal Engine 5.7", "loss": 6.065211, "grad_norm": 5.039955}
+{"step": 209, "epoch": 1, "sample_id": "ue57-trace-012", "domain": "Unreal Engine 5.7", "loss": 5.712204, "grad_norm": 4.804903}
+{"step": 210, "epoch": 1, "sample_id": "ue57-gas-025", "domain": "Unreal Engine 5.7", "loss": 6.328385, "grad_norm": 3.750073}
+{"step": 211, "epoch": 1, "sample_id": "roblox-sec-012", "domain": "Roblox Luau", "loss": 6.481749, "grad_norm": 6.413966}
+{"step": 212, "epoch": 1, "sample_id": "unity-dots-034", "domain": "Unity DOTS", "loss": 5.020738, "grad_norm": 5.568413}
+{"step": 213, "epoch": 1, "sample_id": "ue57-mem-030", "domain": "Unreal Engine 5.7", "loss": 5.798561, "grad_norm": 4.355331}
+{"step": 214, "epoch": 1, "sample_id": "ue57-mem-029", "domain": "Unreal Engine 5.7", "loss": 5.805758, "grad_norm": 3.977755}
+{"step": 215, "epoch": 1, "sample_id": "ue57-gas-016", "domain": "Unreal Engine 5.7", "loss": 6.181747, "grad_norm": 3.350016}
+{"step": 216, "epoch": 1, "sample_id": "godot4-char-036", "domain": "Godot 4", "loss": 5.238873, "grad_norm": 6.518316}
+{"step": 217, "epoch": 1, "sample_id": "ue57-rep-030", "domain": "Unreal Engine 5.7", "loss": 6.110019, "grad_norm": 4.860459}
+{"step": 218, "epoch": 1, "sample_id": "ue57-trace-027", "domain": "Unreal Engine 5.7", "loss": 5.581048, "grad_norm": 4.503077}
+{"step": 219, "epoch": 1, "sample_id": "godot4-char-032", "domain": "Godot 4", "loss": 5.138927, "grad_norm": 6.274165}
+{"step": 220, "epoch": 1, "sample_id": "gamemath-025", "domain": "Game Mathematics", "loss": 5.98399, "grad_norm": 6.885244}
+{"step": 221, "epoch": 1, "sample_id": "unity-dots-003", "domain": "Unity DOTS", "loss": 5.065684, "grad_norm": 5.963272}
+{"step": 222, "epoch": 1, "sample_id": "roblox-sec-024", "domain": "Roblox Luau", "loss": 6.204059, "grad_norm": 5.739581}
+{"step": 223, "epoch": 1, "sample_id": "gamemath-004", "domain": "Game Mathematics", "loss": 6.017313, "grad_norm": 5.780287}
+{"step": 224, "epoch": 1, "sample_id": "ue57-prof-007", "domain": "Unreal Engine 5.7", "loss": 6.574988, "grad_norm": 5.364382}
+{"step": 225, "epoch": 1, "sample_id": "uefn-verse-026", "domain": "UEFN Verse", "loss": 6.89423, "grad_norm": 4.449172}
+{"step": 226, "epoch": 1, "sample_id": "godot4-char-019", "domain": "Godot 4", "loss": 4.899818, "grad_norm": 5.520116}
+{"step": 227, "epoch": 1, "sample_id": "ue57-rep-032", "domain": "Unreal Engine 5.7", "loss": 6.357932, "grad_norm": 5.896998}
+{"step": 228, "epoch": 1, "sample_id": "ue57-trace-018", "domain": "Unreal Engine 5.7", "loss": 5.54812, "grad_norm": 5.095778}
+{"step": 229, "epoch": 1, "sample_id": "unity-dots-050", "domain": "Unity DOTS", "loss": 4.981169, "grad_norm": 4.564752}
+{"step": 230, "epoch": 1, "sample_id": "ue57-mem-033", "domain": "Unreal Engine 5.7", "loss": 5.601323, "grad_norm": 5.579744}
+{"step": 231, "epoch": 1, "sample_id": "gamemath-002", "domain": "Game Mathematics", "loss": 5.760545, "grad_norm": 5.443404}
+{"step": 232, "epoch": 1, "sample_id": "uefn-verse-022", "domain": "UEFN Verse", "loss": 6.771643, "grad_norm": 4.625532}
+{"step": 233, "epoch": 1, "sample_id": "GF-UE57-INPUT-004", "domain": "Unreal Engine 5.7", "loss": 7.502973, "grad_norm": 8.059956}
+{"step": 234, "epoch": 1, "sample_id": "ue57-ai-023", "domain": "Unreal Engine 5.7", "loss": 5.557528, "grad_norm": 4.877182}
+{"step": 235, "epoch": 1, "sample_id": "ue57-gas-020", "domain": "Unreal Engine 5.7", "loss": 5.994102, "grad_norm": 4.206693}
+{"step": 236, "epoch": 1, "sample_id": "gamemath-012", "domain": "Game Mathematics", "loss": 5.494102, "grad_norm": 5.967768}
+{"step": 237, "epoch": 1, "sample_id": "bevy-rust-029", "domain": "Bevy Rust", "loss": 6.070795, "grad_norm": 5.073336}
+{"step": 238, "epoch": 1, "sample_id": "uefn-verse-036", "domain": "UEFN Verse", "loss": 6.677644, "grad_norm": 4.024832}
+{"step": 239, "epoch": 1, "sample_id": "ue57-mem-028", "domain": "Unreal Engine 5.7", "loss": 5.493587, "grad_norm": 5.209214}
+{"step": 240, "epoch": 1, "sample_id": "ue57-prof-023", "domain": "Unreal Engine 5.7", "loss": 6.136973, "grad_norm": 4.534734}
+{"step": 241, "epoch": 1, "sample_id": "uefn-verse-030", "domain": "UEFN Verse", "loss": 6.600629, "grad_norm": 4.013954}
+{"step": 242, "epoch": 1, "sample_id": "gamemath-008", "domain": "Game Mathematics", "loss": 5.687028, "grad_norm": 5.846917}
+{"step": 243, "epoch": 1, "sample_id": "ue57-mem-019", "domain": "Unreal Engine 5.7", "loss": 5.463719, "grad_norm": 4.988147}
+{"step": 244, "epoch": 1, "sample_id": "GF-AGENT-TOOL-001", "domain": "GameForge Agent Protocol", "loss": 8.44977, "grad_norm": 8.83853}
+{"step": 245, "epoch": 1, "sample_id": "ue57-trace-016", "domain": "Unreal Engine 5.7", "loss": 5.33679, "grad_norm": 6.700802}
+{"step": 246, "epoch": 1, "sample_id": "ue57-ai-027", "domain": "Unreal Engine 5.7", "loss": 5.457303, "grad_norm": 4.535558}
+{"step": 247, "epoch": 1, "sample_id": "unity-dots-074", "domain": "Unity DOTS", "loss": 4.996586, "grad_norm": 5.267507}
+{"step": 248, "epoch": 1, "sample_id": "ue57-gas-012", "domain": "Unreal Engine 5.7", "loss": 5.816486, "grad_norm": 4.697089}
+{"step": 249, "epoch": 1, "sample_id": "ue57-prof-027", "domain": "Unreal Engine 5.7", "loss": 6.064951, "grad_norm": 4.068794}
+{"step": 250, "epoch": 1, "sample_id": "unity-dots-071", "domain": "Unity DOTS", "loss": 4.921969, "grad_norm": 5.325935}
+{"step": 251, "epoch": 1, "sample_id": "GF-UE57-INPUT-002", "domain": "Unreal Engine 5.7", "loss": 7.18983, "grad_norm": 6.035765}
+{"step": 252, "epoch": 1, "sample_id": "GF-UE57-SUBSYS-002", "domain": "Unreal Engine 5.7", "loss": 6.53271, "grad_norm": 5.815647}
+{"step": 253, "epoch": 1, "sample_id": "roblox-sec-041", "domain": "Roblox Luau", "loss": 6.246455, "grad_norm": 6.958976}
+{"step": 254, "epoch": 1, "sample_id": "godot4-char-060", "domain": "Godot 4", "loss": 5.220981, "grad_norm": 8.387952}
+{"step": 255, "epoch": 1, "sample_id": "uefn-verse-029", "domain": "UEFN Verse", "loss": 6.489651, "grad_norm": 4.101772}
+{"step": 256, "epoch": 1, "sample_id": "godot4-char-027", "domain": "Godot 4", "loss": 5.082215, "grad_norm": 7.42024}
+{"step": 257, "epoch": 1, "sample_id": "roblox-sec-025", "domain": "Roblox Luau", "loss": 6.058316, "grad_norm": 6.06034}
+{"step": 258, "epoch": 1, "sample_id": "roblox-sec-050", "domain": "Roblox Luau", "loss": 5.984053, "grad_norm": 5.670465}
+{"step": 259, "epoch": 1, "sample_id": "roblox-sec-007", "domain": "Roblox Luau", "loss": 5.86175, "grad_norm": 4.456314}
+{"step": 260, "epoch": 1, "sample_id": "gamemath-014", "domain": "Game Mathematics", "loss": 5.449435, "grad_norm": 11.142275}
+{"step": 261, "epoch": 1, "sample_id": "ue57-prof-025", "domain": "Unreal Engine 5.7", "loss": 6.244499, "grad_norm": 14.936348}
+{"step": 262, "epoch": 1, "sample_id": "ue57-prof-006", "domain": "Unreal Engine 5.7", "loss": 6.50622, "grad_norm": 14.676073}
+{"step": 263, "epoch": 1, "sample_id": "godot4-char-037", "domain": "Godot 4", "loss": 4.713277, "grad_norm": 6.244271}
+{"step": 264, "epoch": 1, "sample_id": "ue57-rep-034", "domain": "Unreal Engine 5.7", "loss": 6.622299, "grad_norm": 7.148065}
+{"step": 265, "epoch": 1, "sample_id": "unity-dots-049", "domain": "Unity DOTS", "loss": 4.998592, "grad_norm": 7.43847}
+{"step": 266, "epoch": 1, "sample_id": "ue57-trace-017", "domain": "Unreal Engine 5.7", "loss": 5.332158, "grad_norm": 5.660437}
+{"step": 267, "epoch": 1, "sample_id": "roblox-sec-027", "domain": "Roblox Luau", "loss": 5.606388, "grad_norm": 7.43699}
+{"step": 268, "epoch": 1, "sample_id": "ue57-rep-026", "domain": "Unreal Engine 5.7", "loss": 6.425068, "grad_norm": 6.939123}
+{"step": 269, "epoch": 1, "sample_id": "bevy-rust-010", "domain": "Bevy Rust", "loss": 5.883542, "grad_norm": 5.291691}
+{"step": 270, "epoch": 1, "sample_id": "godot4-char-012", "domain": "Godot 4", "loss": 4.636958, "grad_norm": 6.641245}
+{"step": 271, "epoch": 1, "sample_id": "ue57-ai-013", "domain": "Unreal Engine 5.7", "loss": 5.548823, "grad_norm": 12.940276}
+{"step": 272, "epoch": 1, "sample_id": "ue57-prof-016", "domain": "Unreal Engine 5.7", "loss": 5.927686, "grad_norm": 8.672864}
+{"step": 273, "epoch": 1, "sample_id": "ue57-rep-013", "domain": "Unreal Engine 5.7", "loss": 6.040844, "grad_norm": 4.3853}
+{"step": 274, "epoch": 1, "sample_id": "godot4-char-055", "domain": "Godot 4", "loss": 4.584875, "grad_norm": 5.585335}
+{"step": 275, "epoch": 1, "sample_id": "gamemath-028", "domain": "Game Mathematics", "loss": 5.308196, "grad_norm": 7.944969}
+{"step": 276, "epoch": 1, "sample_id": "ue57-mem-026", "domain": "Unreal Engine 5.7", "loss": 5.701413, "grad_norm": 8.150771}
+{"step": 277, "epoch": 1, "sample_id": "godot4-char-056", "domain": "Godot 4", "loss": 4.516935, "grad_norm": 5.784947}
+{"step": 278, "epoch": 1, "sample_id": "gamemath-005", "domain": "Game Mathematics", "loss": 5.42733, "grad_norm": 6.899916}
+{"step": 279, "epoch": 1, "sample_id": "ue57-gas-030", "domain": "Unreal Engine 5.7", "loss": 5.820821, "grad_norm": 6.074052}
+{"step": 280, "epoch": 1, "sample_id": "godot4-char-015", "domain": "Godot 4", "loss": 4.377005, "grad_norm": 5.302616}
+{"step": 281, "epoch": 1, "sample_id": "ue57-prof-015", "domain": "Unreal Engine 5.7", "loss": 5.828448, "grad_norm": 7.085229}
+{"step": 282, "epoch": 1, "sample_id": "godot4-char-051", "domain": "Godot 4", "loss": 4.317734, "grad_norm": 4.806427}
+{"step": 283, "epoch": 1, "sample_id": "ue57-trace-015", "domain": "Unreal Engine 5.7", "loss": 5.13687, "grad_norm": 6.873994}
+{"step": 284, "epoch": 1, "sample_id": "ue57-mem-008", "domain": "Unreal Engine 5.7", "loss": 5.77297, "grad_norm": 8.990513}
+{"step": 285, "epoch": 1, "sample_id": "ue57-gas-001", "domain": "Unreal Engine 5.7", "loss": 5.878099, "grad_norm": 5.935299}
+{"step": 286, "epoch": 1, "sample_id": "godot4-char-049", "domain": "Godot 4", "loss": 4.1901, "grad_norm": 5.804228}
+{"step": 287, "epoch": 1, "sample_id": "unity-dots-068", "domain": "Unity DOTS", "loss": 5.027559, "grad_norm": 7.601756}
+{"step": 288, "epoch": 1, "sample_id": "ue57-trace-020", "domain": "Unreal Engine 5.7", "loss": 5.054082, "grad_norm": 7.277095}
+{"step": 289, "epoch": 1, "sample_id": "uefn-verse-023", "domain": "UEFN Verse", "loss": 6.488769, "grad_norm": 4.973873}
+{"step": 290, "epoch": 1, "sample_id": "ue57-rep-037", "domain": "Unreal Engine 5.7", "loss": 6.035502, "grad_norm": 6.993955}
+{"step": 291, "epoch": 1, "sample_id": "ue57-trace-025", "domain": "Unreal Engine 5.7", "loss": 4.925012, "grad_norm": 5.529869}
+{"step": 292, "epoch": 1, "sample_id": "roblox-sec-042", "domain": "Roblox Luau", "loss": 5.833497, "grad_norm": 8.933638}
+{"step": 293, "epoch": 1, "sample_id": "GF-UE57-SUBSYS-004", "domain": "Unreal Engine 5.7", "loss": 6.35864, "grad_norm": 4.979992}
+{"step": 294, "epoch": 1, "sample_id": "ue57-ai-007", "domain": "Unreal Engine 5.7", "loss": 5.604905, "grad_norm": 5.281372}
+{"step": 295, "epoch": 1, "sample_id": "bevy-rust-019", "domain": "Bevy Rust", "loss": 6.011659, "grad_norm": 5.602897}
+{"step": 296, "epoch": 1, "sample_id": "uefn-verse-005", "domain": "UEFN Verse", "loss": 6.483941, "grad_norm": 4.404776}
+{"step": 297, "epoch": 1, "sample_id": "godot4-char-054", "domain": "Godot 4", "loss": 4.458539, "grad_norm": 7.359247}
+{"step": 298, "epoch": 1, "sample_id": "unity-dots-063", "domain": "Unity DOTS", "loss": 4.91239, "grad_norm": 5.686476}
+{"step": 299, "epoch": 1, "sample_id": "godot4-char-026", "domain": "Godot 4", "loss": 4.431077, "grad_norm": 7.247098}
+{"step": 300, "epoch": 1, "sample_id": "ue57-ai-021", "domain": "Unreal Engine 5.7", "loss": 5.260345, "grad_norm": 4.468621}
+{"step": 301, "epoch": 1, "sample_id": "godot4-char-022", "domain": "Godot 4", "loss": 4.353015, "grad_norm": 6.860674}
+{"step": 302, "epoch": 1, "sample_id": "unity-dots-014", "domain": "Unity DOTS", "loss": 4.732581, "grad_norm": 7.201477}
+{"step": 303, "epoch": 1, "sample_id": "ue57-rep-029", "domain": "Unreal Engine 5.7", "loss": 6.104531, "grad_norm": 4.825173}
+{"step": 304, "epoch": 1, "sample_id": "bevy-rust-012", "domain": "Bevy Rust", "loss": 5.876258, "grad_norm": 5.892566}
+{"step": 305, "epoch": 1, "sample_id": "roblox-sec-034", "domain": "Roblox Luau", "loss": 5.674323, "grad_norm": 7.120353}
+{"step": 306, "epoch": 1, "sample_id": "ue57-ai-015", "domain": "Unreal Engine 5.7", "loss": 5.144436, "grad_norm": 5.530153}
+{"step": 307, "epoch": 1, "sample_id": "unity-dots-044", "domain": "Unity DOTS", "loss": 4.764925, "grad_norm": 6.843915}
+{"step": 308, "epoch": 1, "sample_id": "bevy-rust-015", "domain": "Bevy Rust", "loss": 5.692403, "grad_norm": 5.398887}
+{"step": 309, "epoch": 1, "sample_id": "roblox-sec-020", "domain": "Roblox Luau", "loss": 5.536669, "grad_norm": 6.902046}
+{"step": 310, "epoch": 1, "sample_id": "ue57-trace-019", "domain": "Unreal Engine 5.7", "loss": 4.811399, "grad_norm": 6.022462}
+{"step": 311, "epoch": 1, "sample_id": "roblox-sec-008", "domain": "Roblox Luau", "loss": 5.488024, "grad_norm": 6.203382}
+{"step": 312, "epoch": 1, "sample_id": "ue57-mem-006", "domain": "Unreal Engine 5.7", "loss": 5.607364, "grad_norm": 10.509695}
+{"step": 313, "epoch": 1, "sample_id": "ue57-ai-029", "domain": "Unreal Engine 5.7", "loss": 5.206552, "grad_norm": 11.105824}
+{"step": 314, "epoch": 1, "sample_id": "unity-dots-078", "domain": "Unity DOTS", "loss": 4.695353, "grad_norm": 9.353494}
+{"step": 315, "epoch": 1, "sample_id": "roblox-sec-045", "domain": "Roblox Luau", "loss": 5.337106, "grad_norm": 6.95534}
+{"step": 316, "epoch": 1, "sample_id": "uefn-verse-008", "domain": "UEFN Verse", "loss": 6.361354, "grad_norm": 5.057874}
+{"step": 317, "epoch": 1, "sample_id": "roblox-sec-046", "domain": "Roblox Luau", "loss": 5.285595, "grad_norm": 6.877299}
+{"step": 318, "epoch": 1, "sample_id": "unity-dots-006", "domain": "Unity DOTS", "loss": 4.562408, "grad_norm": 9.780089}
+{"step": 319, "epoch": 1, "sample_id": "GF-UE57-REPAIR-004", "domain": "Unreal Engine 5.7", "loss": 7.668941, "grad_norm": 9.461232}
+{"step": 320, "epoch": 1, "sample_id": "ue57-mem-012", "domain": "Unreal Engine 5.7", "loss": 5.278329, "grad_norm": 7.493174}
+{"step": 321, "epoch": 1, "sample_id": "godot4-char-047", "domain": "Godot 4", "loss": 4.690872, "grad_norm": 12.780428}
+{"step": 322, "epoch": 1, "sample_id": "unity-dots-002", "domain": "Unity DOTS", "loss": 4.471078, "grad_norm": 5.16193}
+{"step": 323, "epoch": 1, "sample_id": "godot4-char-001", "domain": "Godot 4", "loss": 4.642595, "grad_norm": 10.51566}
+{"step": 324, "epoch": 1, "sample_id": "ue57-prof-014", "domain": "Unreal Engine 5.7", "loss": 5.771305, "grad_norm": 5.783754}
+{"step": 325, "epoch": 1, "sample_id": "godot4-char-042", "domain": "Godot 4", "loss": 4.512472, "grad_norm": 7.934968}
+{"step": 326, "epoch": 1, "sample_id": "ue57-trace-021", "domain": "Unreal Engine 5.7", "loss": 4.90911, "grad_norm": 6.999544}
+{"step": 327, "epoch": 1, "sample_id": "ue57-rep-023", "domain": "Unreal Engine 5.7", "loss": 5.848102, "grad_norm": 6.643194}
+{"step": 328, "epoch": 1, "sample_id": "godot4-char-034", "domain": "Godot 4", "loss": 4.347136, "grad_norm": 7.044321}
+{"step": 329, "epoch": 1, "sample_id": "ue57-mem-016", "domain": "Unreal Engine 5.7", "loss": 5.093106, "grad_norm": 6.013519}
+{"step": 330, "epoch": 1, "sample_id": "unity-dots-010", "domain": "Unity DOTS", "loss": 4.353107, "grad_norm": 9.011642}
+{"step": 331, "epoch": 1, "sample_id": "ue57-rep-039", "domain": "Unreal Engine 5.7", "loss": 6.083479, "grad_norm": 5.638945}
+{"step": 332, "epoch": 1, "sample_id": "uefn-verse-028", "domain": "UEFN Verse", "loss": 6.154873, "grad_norm": 4.702982}
+{"step": 333, "epoch": 1, "sample_id": "godot4-char-031", "domain": "Godot 4", "loss": 4.254379, "grad_norm": 7.914032}
+{"step": 334, "epoch": 1, "sample_id": "ue57-gas-010", "domain": "Unreal Engine 5.7", "loss": 5.618269, "grad_norm": 5.938575}
+{"step": 335, "epoch": 1, "sample_id": "ue57-prof-019", "domain": "Unreal Engine 5.7", "loss": 5.671366, "grad_norm": 6.620768}
+{"step": 336, "epoch": 1, "sample_id": "GF-UE57-REPAIR-003", "domain": "Unreal Engine 5.7", "loss": 7.693408, "grad_norm": 8.97724}
+{"step": 337, "epoch": 1, "sample_id": "unity-dots-080", "domain": "Unity DOTS", "loss": 4.7736, "grad_norm": 7.461015}
+{"step": 338, "epoch": 1, "sample_id": "bevy-rust-006", "domain": "Bevy Rust", "loss": 5.918667, "grad_norm": 7.84745}
+{"step": 339, "epoch": 1, "sample_id": "unity-dots-029", "domain": "Unity DOTS", "loss": 4.518745, "grad_norm": 6.496835}
+{"step": 340, "epoch": 1, "sample_id": "unity-dots-066", "domain": "Unity DOTS", "loss": 4.527128, "grad_norm": 6.128881}
+{"step": 341, "epoch": 1, "sample_id": "gamemath-009", "domain": "Game Mathematics", "loss": 5.649037, "grad_norm": 8.88564}
+{"step": 342, "epoch": 1, "sample_id": "godot4-char-070", "domain": "Godot 4", "loss": 4.243606, "grad_norm": 7.681435}
+{"step": 343, "epoch": 1, "sample_id": "roblox-sec-040", "domain": "Roblox Luau", "loss": 5.482223, "grad_norm": 8.557958}
+{"step": 344, "epoch": 1, "sample_id": "ue57-ai-026", "domain": "Unreal Engine 5.7", "loss": 5.018209, "grad_norm": 6.925781}
+{"step": 345, "epoch": 1, "sample_id": "ue57-mem-003", "domain": "Unreal Engine 5.7", "loss": 5.306792, "grad_norm": 7.324477}
+{"step": 346, "epoch": 1, "sample_id": "roblox-sec-048", "domain": "Roblox Luau", "loss": 5.364505, "grad_norm": 7.489592}
+{"step": 347, "epoch": 1, "sample_id": "godot4-char-006", "domain": "Godot 4", "loss": 4.225993, "grad_norm": 7.780971}
+{"step": 348, "epoch": 1, "sample_id": "unity-dots-053", "domain": "Unity DOTS", "loss": 4.401666, "grad_norm": 8.626927}
+{"step": 349, "epoch": 1, "sample_id": "ue57-gas-027", "domain": "Unreal Engine 5.7", "loss": 5.614528, "grad_norm": 6.871103}
+{"step": 350, "epoch": 1, "sample_id": "godot4-char-029", "domain": "Godot 4", "loss": 4.127641, "grad_norm": 7.064701}
+{"step": 351, "epoch": 1, "sample_id": "gamemath-006", "domain": "Game Mathematics", "loss": 5.421903, "grad_norm": 11.167576}
+{"step": 352, "epoch": 1, "sample_id": "bevy-rust-030", "domain": "Bevy Rust", "loss": 5.678221, "grad_norm": 7.791444}
+{"step": 353, "epoch": 1, "sample_id": "godot4-char-007", "domain": "Godot 4", "loss": 4.030575, "grad_norm": 6.481051}
+{"step": 354, "epoch": 1, "sample_id": "godot4-char-020", "domain": "Godot 4", "loss": 3.960444, "grad_norm": 6.366567}
+{"step": 355, "epoch": 1, "sample_id": "unity-dots-008", "domain": "Unity DOTS", "loss": 4.343915, "grad_norm": 10.195868}
+{"step": 356, "epoch": 1, "sample_id": "godot4-char-059", "domain": "Godot 4", "loss": 3.857014, "grad_norm": 5.787191}
+{"step": 357, "epoch": 1, "sample_id": "uefn-verse-015", "domain": "UEFN Verse", "loss": 6.191524, "grad_norm": 6.029772}
+{"step": 358, "epoch": 1, "sample_id": "bevy-rust-027", "domain": "Bevy Rust", "loss": 5.703063, "grad_norm": 8.945107}
+{"step": 359, "epoch": 1, "sample_id": "ue57-trace-001", "domain": "Unreal Engine 5.7", "loss": 5.19274, "grad_norm": 10.307574}
+{"step": 360, "epoch": 1, "sample_id": "ue57-prof-005", "domain": "Unreal Engine 5.7", "loss": 5.882371, "grad_norm": 8.592808}
+{"step": 361, "epoch": 1, "sample_id": "ue57-trace-002", "domain": "Unreal Engine 5.7", "loss": 5.033202, "grad_norm": 9.053977}
+{"step": 362, "epoch": 1, "sample_id": "ue57-rep-016", "domain": "Unreal Engine 5.7", "loss": 6.215259, "grad_norm": 9.153026}
+{"step": 363, "epoch": 1, "sample_id": "uefn-verse-021", "domain": "UEFN Verse", "loss": 6.071915, "grad_norm": 5.053825}
+{"step": 364, "epoch": 1, "sample_id": "roblox-sec-013", "domain": "Roblox Luau", "loss": 5.273049, "grad_norm": 9.013018}
+{"step": 365, "epoch": 1, "sample_id": "ue57-rep-004", "domain": "Unreal Engine 5.7", "loss": 6.077786, "grad_norm": 6.362206}
+{"step": 366, "epoch": 1, "sample_id": "ue57-rep-024", "domain": "Unreal Engine 5.7", "loss": 5.994057, "grad_norm": 4.84994}
+{"step": 367, "epoch": 1, "sample_id": "bevy-rust-035", "domain": "Bevy Rust", "loss": 5.533712, "grad_norm": 6.093818}
+{"step": 368, "epoch": 1, "sample_id": "gamemath-018", "domain": "Game Mathematics", "loss": 5.245269, "grad_norm": 8.579773}
+{"step": 369, "epoch": 1, "sample_id": "ue57-mem-018", "domain": "Unreal Engine 5.7", "loss": 5.173597, "grad_norm": 8.045279}
+{"step": 370, "epoch": 1, "sample_id": "ue57-prof-004", "domain": "Unreal Engine 5.7", "loss": 5.7124, "grad_norm": 6.676447}
+{"step": 371, "epoch": 1, "sample_id": "ue57-gas-033", "domain": "Unreal Engine 5.7", "loss": 5.439177, "grad_norm": 4.824834}
+{"step": 372, "epoch": 1, "sample_id": "ue57-ai-012", "domain": "Unreal Engine 5.7", "loss": 4.917143, "grad_norm": 5.239945}
+{"step": 373, "epoch": 1, "sample_id": "gamemath-031", "domain": "Game Mathematics", "loss": 5.249587, "grad_norm": 8.925939}
+{"step": 374, "epoch": 1, "sample_id": "ue57-ai-025", "domain": "Unreal Engine 5.7", "loss": 4.850651, "grad_norm": 5.285882}
+{"step": 375, "epoch": 1, "sample_id": "ue57-prof-018", "domain": "Unreal Engine 5.7", "loss": 5.408018, "grad_norm": 6.572819}
+{"step": 376, "epoch": 1, "sample_id": "unity-dots-036", "domain": "Unity DOTS", "loss": 4.602211, "grad_norm": 8.210663}
+{"step": 377, "epoch": 1, "sample_id": "GF-UE57-INPUT-001", "domain": "Unreal Engine 5.7", "loss": 6.874222, "grad_norm": 8.659392}
+{"step": 378, "epoch": 1, "sample_id": "unity-dots-075", "domain": "Unity DOTS", "loss": 4.62919, "grad_norm": 8.987112}
+{"step": 379, "epoch": 1, "sample_id": "ue57-rep-017", "domain": "Unreal Engine 5.7", "loss": 5.513614, "grad_norm": 9.425075}
+{"step": 380, "epoch": 1, "sample_id": "ue57-gas-019", "domain": "Unreal Engine 5.7", "loss": 5.253945, "grad_norm": 6.654093}
+{"step": 381, "epoch": 1, "sample_id": "godot4-char-025", "domain": "Godot 4", "loss": 4.800624, "grad_norm": 11.257713}
+{"step": 382, "epoch": 1, "sample_id": "ue57-mem-005", "domain": "Unreal Engine 5.7", "loss": 5.115721, "grad_norm": 11.195892}
+{"step": 383, "epoch": 1, "sample_id": "godot4-char-009", "domain": "Godot 4", "loss": 4.774794, "grad_norm": 11.245583}
+{"step": 384, "epoch": 1, "sample_id": "bevy-rust-023", "domain": "Bevy Rust", "loss": 5.623884, "grad_norm": 8.591433}
+{"step": 385, "epoch": 1, "sample_id": "godot4-char-062", "domain": "Godot 4", "loss": 4.612024, "grad_norm": 9.978674}
+{"step": 386, "epoch": 1, "sample_id": "ue57-trace-024", "domain": "Unreal Engine 5.7", "loss": 4.605754, "grad_norm": 6.881529}
+{"step": 387, "epoch": 1, "sample_id": "uefn-verse-032", "domain": "UEFN Verse", "loss": 6.094227, "grad_norm": 5.434118}
+{"step": 388, "epoch": 1, "sample_id": "ue57-gas-009", "domain": "Unreal Engine 5.7", "loss": 5.251801, "grad_norm": 7.814381}
+{"step": 389, "epoch": 1, "sample_id": "godot4-char-014", "domain": "Godot 4", "loss": 4.215632, "grad_norm": 8.310182}
+{"step": 390, "epoch": 1, "sample_id": "ue57-prof-012", "domain": "Unreal Engine 5.7", "loss": 5.385138, "grad_norm": 8.988967}
+{"step": 391, "epoch": 1, "sample_id": "ue57-gas-013", "domain": "Unreal Engine 5.7", "loss": 5.15728, "grad_norm": 9.591619}
+{"step": 392, "epoch": 1, "sample_id": "unity-dots-064", "domain": "Unity DOTS", "loss": 4.556184, "grad_norm": 11.087334}
+{"step": 393, "epoch": 1, "sample_id": "roblox-sec-006", "domain": "Roblox Luau", "loss": 5.341365, "grad_norm": 9.828899}
+{"step": 394, "epoch": 1, "sample_id": "uefn-verse-006", "domain": "UEFN Verse", "loss": 6.035302, "grad_norm": 5.619961}
+{"step": 395, "epoch": 1, "sample_id": "roblox-sec-035", "domain": "Roblox Luau", "loss": 5.267, "grad_norm": 8.842308}
+{"step": 396, "epoch": 1, "sample_id": "bevy-rust-025", "domain": "Bevy Rust", "loss": 5.360155, "grad_norm": 9.11757}
+{"step": 397, "epoch": 1, "sample_id": "ue57-trace-023", "domain": "Unreal Engine 5.7", "loss": 4.595131, "grad_norm": 11.481061}
+{"step": 398, "epoch": 1, "sample_id": "ue57-rep-035", "domain": "Unreal Engine 5.7", "loss": 5.59833, "grad_norm": 8.782617}
+{"step": 399, "epoch": 1, "sample_id": "ue57-gas-022", "domain": "Unreal Engine 5.7", "loss": 5.085225, "grad_norm": 6.811}
+{"step": 400, "epoch": 1, "sample_id": "ue57-gas-032", "domain": "Unreal Engine 5.7", "loss": 5.047326, "grad_norm": 6.259281}
+{"step": 401, "epoch": 1, "sample_id": "roblox-sec-018", "domain": "Roblox Luau", "loss": 5.116391, "grad_norm": 8.040929}
+{"step": 402, "epoch": 1, "sample_id": "uefn-verse-009", "domain": "UEFN Verse", "loss": 5.953114, "grad_norm": 5.532732}
+{"step": 403, "epoch": 1, "sample_id": "unity-dots-032", "domain": "Unity DOTS", "loss": 4.503579, "grad_norm": 9.181526}
+{"step": 404, "epoch": 1, "sample_id": "gamemath-001", "domain": "Game Mathematics", "loss": 5.466105, "grad_norm": 9.907884}
+{"step": 405, "epoch": 1, "sample_id": "gamemath-015", "domain": "Game Mathematics", "loss": 5.071014, "grad_norm": 9.458337}
+{"step": 406, "epoch": 1, "sample_id": "godot4-char-057", "domain": "Godot 4", "loss": 4.449566, "grad_norm": 11.991777}
+{"step": 407, "epoch": 1, "sample_id": "ue57-mem-025", "domain": "Unreal Engine 5.7", "loss": 5.029016, "grad_norm": 9.048834}
+{"step": 408, "epoch": 1, "sample_id": "unity-dots-013", "domain": "Unity DOTS", "loss": 4.27248, "grad_norm": 8.139591}
+{"step": 409, "epoch": 1, "sample_id": "ue57-mem-017", "domain": "Unreal Engine 5.7", "loss": 4.946316, "grad_norm": 7.480952}
+{"step": 410, "epoch": 1, "sample_id": "godot4-char-024", "domain": "Godot 4", "loss": 4.35945, "grad_norm": 11.175445}
+{"step": 411, "epoch": 1, "sample_id": "uefn-verse-034", "domain": "UEFN Verse", "loss": 5.750554, "grad_norm": 6.428007}
+{"step": 412, "epoch": 1, "sample_id": "ue57-gas-007", "domain": "Unreal Engine 5.7", "loss": 4.990491, "grad_norm": 7.837072}
+{"step": 413, "epoch": 1, "sample_id": "unity-dots-027", "domain": "Unity DOTS", "loss": 4.260562, "grad_norm": 6.652411}
+{"step": 414, "epoch": 1, "sample_id": "godot4-char-067", "domain": "Godot 4", "loss": 4.23397, "grad_norm": 10.64322}
+{"step": 415, "epoch": 1, "sample_id": "uefn-verse-038", "domain": "UEFN Verse", "loss": 5.701293, "grad_norm": 6.263346}
+{"step": 416, "epoch": 1, "sample_id": "uefn-verse-014", "domain": "UEFN Verse", "loss": 5.637645, "grad_norm": 5.816921}
+{"step": 417, "epoch": 1, "sample_id": "unity-dots-015", "domain": "Unity DOTS", "loss": 4.011565, "grad_norm": 6.18409}
+{"step": 418, "epoch": 1, "sample_id": "bevy-rust-018", "domain": "Bevy Rust", "loss": 5.465971, "grad_norm": 8.916777}
+{"step": 419, "epoch": 1, "sample_id": "ue57-gas-005", "domain": "Unreal Engine 5.7", "loss": 5.096929, "grad_norm": 10.593057}
+{"step": 420, "epoch": 1, "sample_id": "ue57-rep-009", "domain": "Unreal Engine 5.7", "loss": 5.947156, "grad_norm": 7.67032}
+{"step": 421, "epoch": 1, "sample_id": "bevy-rust-011", "domain": "Bevy Rust", "loss": 5.448606, "grad_norm": 7.693086}
+{"step": 422, "epoch": 1, "sample_id": "ue57-rep-008", "domain": "Unreal Engine 5.7", "loss": 5.709759, "grad_norm": 8.719743}
+{"step": 423, "epoch": 1, "sample_id": "ue57-trace-022", "domain": "Unreal Engine 5.7", "loss": 4.712593, "grad_norm": 9.135766}
+{"step": 424, "epoch": 1, "sample_id": "ue57-mem-034", "domain": "Unreal Engine 5.7", "loss": 4.878533, "grad_norm": 7.797535}
+{"step": 425, "epoch": 1, "sample_id": "unity-dots-048", "domain": "Unity DOTS", "loss": 4.201536, "grad_norm": 9.53}
+{"step": 426, "epoch": 1, "sample_id": "ue57-rep-006", "domain": "Unreal Engine 5.7", "loss": 5.674382, "grad_norm": 6.55202}
+{"step": 427, "epoch": 1, "sample_id": "godot4-char-023", "domain": "Godot 4", "loss": 4.432944, "grad_norm": 11.596878}
+{"step": 428, "epoch": 1, "sample_id": "ue57-ai-006", "domain": "Unreal Engine 5.7", "loss": 5.108186, "grad_norm": 7.356872}
+{"step": 429, "epoch": 1, "sample_id": "ue57-ai-019", "domain": "Unreal Engine 5.7", "loss": 4.771479, "grad_norm": 6.662347}
+{"step": 430, "epoch": 1, "sample_id": "gamemath-017", "domain": "Game Mathematics", "loss": 5.046487, "grad_norm": 9.185088}
+{"step": 431, "epoch": 1, "sample_id": "uefn-verse-013", "domain": "UEFN Verse", "loss": 5.668396, "grad_norm": 5.988125}
+{"step": 432, "epoch": 1, "sample_id": "ue57-prof-024", "domain": "Unreal Engine 5.7", "loss": 5.43767, "grad_norm": 7.138175}
+{"step": 433, "epoch": 1, "sample_id": "bevy-rust-002", "domain": "Bevy Rust", "loss": 5.36831, "grad_norm": 7.264267}
+{"step": 434, "epoch": 1, "sample_id": "godot4-char-039", "domain": "Godot 4", "loss": 4.403859, "grad_norm": 10.059437}
+{"step": 435, "epoch": 1, "sample_id": "ue57-mem-032", "domain": "Unreal Engine 5.7", "loss": 4.801602, "grad_norm": 11.892675}
+{"step": 436, "epoch": 1, "sample_id": "uefn-verse-017", "domain": "UEFN Verse", "loss": 5.576868, "grad_norm": 5.617655}
+{"step": 437, "epoch": 1, "sample_id": "ue57-trace-030", "domain": "Unreal Engine 5.7", "loss": 4.504174, "grad_norm": 8.232128}
+{"step": 438, "epoch": 1, "sample_id": "gamemath-033", "domain": "Game Mathematics", "loss": 5.008809, "grad_norm": 11.148208}
+{"step": 439, "epoch": 1, "sample_id": "ue57-trace-011", "domain": "Unreal Engine 5.7", "loss": 4.471407, "grad_norm": 10.092426}
+{"step": 440, "epoch": 1, "sample_id": "ue57-ai-014", "domain": "Unreal Engine 5.7", "loss": 4.518254, "grad_norm": 6.887239}
+{"step": 441, "epoch": 1, "sample_id": "gamemath-029", "domain": "Game Mathematics", "loss": 4.818204, "grad_norm": 10.622717}
+{"step": 442, "epoch": 1, "sample_id": "ue57-trace-013", "domain": "Unreal Engine 5.7", "loss": 4.252524, "grad_norm": 7.000559}
+{"step": 443, "epoch": 1, "sample_id": "roblox-sec-014", "domain": "Roblox Luau", "loss": 5.405632, "grad_norm": 11.228908}
+{"step": 444, "epoch": 1, "sample_id": "godot4-char-028", "domain": "Godot 4", "loss": 4.307724, "grad_norm": 13.521356}
+{"step": 445, "epoch": 1, "sample_id": "unity-dots-065", "domain": "Unity DOTS", "loss": 4.403104, "grad_norm": 13.924483}
+{"step": 446, "epoch": 1, "sample_id": "ue57-gas-018", "domain": "Unreal Engine 5.7", "loss": 4.986791, "grad_norm": 8.426595}
+{"step": 447, "epoch": 1, "sample_id": "gamemath-023", "domain": "Game Mathematics", "loss": 4.580205, "grad_norm": 11.589268}
+{"step": 448, "epoch": 1, "sample_id": "unity-dots-047", "domain": "Unity DOTS", "loss": 4.393291, "grad_norm": 10.094447}
+{"step": 449, "epoch": 1, "sample_id": "unity-dots-040", "domain": "Unity DOTS", "loss": 4.279071, "grad_norm": 9.242872}
+{"step": 450, "epoch": 1, "sample_id": "roblox-sec-049", "domain": "Roblox Luau", "loss": 5.35955, "grad_norm": 10.808428}
+{"step": 451, "epoch": 1, "sample_id": "ue57-rep-015", "domain": "Unreal Engine 5.7", "loss": 5.391982, "grad_norm": 9.463128}
+{"step": 452, "epoch": 1, "sample_id": "ue57-prof-020", "domain": "Unreal Engine 5.7", "loss": 5.32048, "grad_norm": 11.226215}
+{"step": 453, "epoch": 1, "sample_id": "ue57-prof-022", "domain": "Unreal Engine 5.7", "loss": 5.38699, "grad_norm": 10.884599}
+{"step": 454, "epoch": 1, "sample_id": "roblox-sec-044", "domain": "Roblox Luau", "loss": 5.224124, "grad_norm": 9.911061}
+{"step": 455, "epoch": 1, "sample_id": "ue57-gas-008", "domain": "Unreal Engine 5.7", "loss": 4.998255, "grad_norm": 7.738296}
+{"step": 456, "epoch": 1, "sample_id": "roblox-sec-019", "domain": "Roblox Luau", "loss": 5.119256, "grad_norm": 9.255185}
+{"step": 457, "epoch": 1, "sample_id": "unity-dots-012", "domain": "Unity DOTS", "loss": 4.120227, "grad_norm": 8.524761}
+{"step": 458, "epoch": 1, "sample_id": "ue57-rep-036", "domain": "Unreal Engine 5.7", "loss": 5.579686, "grad_norm": 8.194825}
+{"step": 459, "epoch": 1, "sample_id": "gamemath-003", "domain": "Game Mathematics", "loss": 4.796005, "grad_norm": 10.373263}
+{"step": 460, "epoch": 1, "sample_id": "bevy-rust-017", "domain": "Bevy Rust", "loss": 5.273399, "grad_norm": 8.349208}
+{"step": 461, "epoch": 1, "sample_id": "roblox-sec-010", "domain": "Roblox Luau", "loss": 4.91298, "grad_norm": 8.163757}
+{"step": 462, "epoch": 1, "sample_id": "unity-dots-004", "domain": "Unity DOTS", "loss": 4.126117, "grad_norm": 8.070779}
+{"step": 463, "epoch": 1, "sample_id": "ue57-ai-028", "domain": "Unreal Engine 5.7", "loss": 4.633513, "grad_norm": 12.278447}
+{"step": 464, "epoch": 1, "sample_id": "ue57-mem-011", "domain": "Unreal Engine 5.7", "loss": 5.054842, "grad_norm": 13.246462}
+{"step": 465, "epoch": 1, "sample_id": "ue57-rep-002", "domain": "Unreal Engine 5.7", "loss": 5.338447, "grad_norm": 7.752199}
+{"step": 466, "epoch": 1, "sample_id": "ue57-gas-006", "domain": "Unreal Engine 5.7", "loss": 4.864947, "grad_norm": 14.275925}
+{"step": 467, "epoch": 1, "sample_id": "bevy-rust-036", "domain": "Bevy Rust", "loss": 5.308179, "grad_norm": 11.136985}
+{"step": 468, "epoch": 1, "sample_id": "bevy-rust-040", "domain": "Bevy Rust", "loss": 5.145899, "grad_norm": 8.110589}
+{"step": 469, "epoch": 1, "sample_id": "gamemath-020", "domain": "Game Mathematics", "loss": 4.624139, "grad_norm": 10.42625}
+{"step": 470, "epoch": 1, "sample_id": "godot4-char-046", "domain": "Godot 4", "loss": 4.61914, "grad_norm": 12.610838}
+{"step": 471, "epoch": 1, "sample_id": "bevy-rust-001", "domain": "Bevy Rust", "loss": 5.180259, "grad_norm": 7.815886}
+{"step": 472, "epoch": 1, "sample_id": "godot4-char-061", "domain": "Godot 4", "loss": 4.529449, "grad_norm": 11.76649}
+{"step": 473, "epoch": 1, "sample_id": "godot4-char-005", "domain": "Godot 4", "loss": 4.40669, "grad_norm": 10.835485}
+{"step": 474, "epoch": 1, "sample_id": "bevy-rust-014", "domain": "Bevy Rust", "loss": 4.992179, "grad_norm": 7.530484}
+{"step": 475, "epoch": 1, "sample_id": "ue57-rep-001", "domain": "Unreal Engine 5.7", "loss": 5.425941, "grad_norm": 9.667126}
+{"step": 476, "epoch": 1, "sample_id": "godot4-char-066", "domain": "Godot 4", "loss": 4.117819, "grad_norm": 8.54043}
+{"step": 477, "epoch": 1, "sample_id": "ue57-trace-014", "domain": "Unreal Engine 5.7", "loss": 4.475374, "grad_norm": 12.379058}
+{"step": 478, "epoch": 1, "sample_id": "ue57-rep-011", "domain": "Unreal Engine 5.7", "loss": 5.381163, "grad_norm": 6.932867}
+{"step": 479, "epoch": 2, "sample_id": "GF-UE57-SUBSYS-003", "domain": "Unreal Engine 5.7", "loss": 6.438888, "grad_norm": 8.838897}
+{"step": 480, "epoch": 2, "sample_id": "ue57-gas-017", "domain": "Unreal Engine 5.7", "loss": 4.862613, "grad_norm": 8.428388}
+{"step": 481, "epoch": 2, "sample_id": "roblox-sec-022", "domain": "Roblox Luau", "loss": 5.02886, "grad_norm": 10.71169}
+{"step": 482, "epoch": 2, "sample_id": "roblox-sec-032", "domain": "Roblox Luau", "loss": 5.001364, "grad_norm": 9.637181}
+{"step": 483, "epoch": 2, "sample_id": "ue57-ai-030", "domain": "Unreal Engine 5.7", "loss": 4.718496, "grad_norm": 10.299528}
+{"step": 484, "epoch": 2, "sample_id": "gamemath-038", "domain": "Game Mathematics", "loss": 4.888369, "grad_norm": 12.726981}
+{"step": 485, "epoch": 2, "sample_id": "roblox-sec-002", "domain": "Roblox Luau", "loss": 4.896901, "grad_norm": 7.289211}
+{"step": 486, "epoch": 2, "sample_id": "GF-AGENT-TOOL-002", "domain": "GameForge Agent Protocol", "loss": 8.529852, "grad_norm": 14.457555}
+{"step": 487, "epoch": 2, "sample_id": "roblox-sec-021", "domain": "Roblox Luau", "loss": 4.824383, "grad_norm": 6.770234}
+{"step": 488, "epoch": 2, "sample_id": "godot4-char-068", "domain": "Godot 4", "loss": 4.017358, "grad_norm": 8.073098}
+{"step": 489, "epoch": 2, "sample_id": "godot4-char-017", "domain": "Godot 4", "loss": 3.980325, "grad_norm": 7.603384}
+{"step": 490, "epoch": 2, "sample_id": "ue57-rep-022", "domain": "Unreal Engine 5.7", "loss": 5.319843, "grad_norm": 10.92082}
+{"step": 491, "epoch": 2, "sample_id": "bevy-rust-004", "domain": "Bevy Rust", "loss": 5.013808, "grad_norm": 8.496212}
+{"step": 492, "epoch": 2, "sample_id": "ue57-mem-023", "domain": "Unreal Engine 5.7", "loss": 5.232675, "grad_norm": 11.496949}
+{"step": 493, "epoch": 2, "sample_id": "ue57-prof-026", "domain": "Unreal Engine 5.7", "loss": 5.498117, "grad_norm": 10.20505}
+{"step": 494, "epoch": 2, "sample_id": "bevy-rust-008", "domain": "Bevy Rust", "loss": 4.953238, "grad_norm": 8.113244}
+{"step": 495, "epoch": 2, "sample_id": "ue57-gas-029", "domain": "Unreal Engine 5.7", "loss": 4.83581, "grad_norm": 9.436917}
+{"step": 496, "epoch": 2, "sample_id": "ue57-gas-002", "domain": "Unreal Engine 5.7", "loss": 4.823596, "grad_norm": 7.303041}
+{"step": 497, "epoch": 2, "sample_id": "ue57-rep-025", "domain": "Unreal Engine 5.7", "loss": 5.199839, "grad_norm": 10.32204}
+{"step": 498, "epoch": 2, "sample_id": "unity-dots-061", "domain": "Unity DOTS", "loss": 4.671345, "grad_norm": 9.054755}
+{"step": 499, "epoch": 2, "sample_id": "unity-dots-046", "domain": "Unity DOTS", "loss": 4.55324, "grad_norm": 9.074339}
+{"step": 500, "epoch": 2, "sample_id": "roblox-sec-039", "domain": "Roblox Luau", "loss": 4.777563, "grad_norm": 10.145119}
+{"step": 501, "epoch": 2, "sample_id": "ue57-ai-024", "domain": "Unreal Engine 5.7", "loss": 4.543594, "grad_norm": 7.891421}
+{"step": 502, "epoch": 2, "sample_id": "unity-dots-038", "domain": "Unity DOTS", "loss": 4.247587, "grad_norm": 10.217264}
+{"step": 503, "epoch": 2, "sample_id": "gamemath-010", "domain": "Game Mathematics", "loss": 4.782146, "grad_norm": 10.649722}
+{"step": 504, "epoch": 2, "sample_id": "uefn-verse-007", "domain": "UEFN Verse", "loss": 6.073664, "grad_norm": 7.151159}
+{"step": 505, "epoch": 2, "sample_id": "bevy-rust-032", "domain": "Bevy Rust", "loss": 5.05626, "grad_norm": 9.348072}
+{"step": 506, "epoch": 2, "sample_id": "gamemath-026", "domain": "Game Mathematics", "loss": 4.627093, "grad_norm": 10.031531}
+{"step": 507, "epoch": 2, "sample_id": "ue57-rep-020", "domain": "Unreal Engine 5.7", "loss": 5.020075, "grad_norm": 9.169454}
+{"step": 508, "epoch": 2, "sample_id": "ue57-mem-015", "domain": "Unreal Engine 5.7", "loss": 4.939979, "grad_norm": 10.11763}
+{"step": 509, "epoch": 2, "sample_id": "unity-dots-056", "domain": "Unity DOTS", "loss": 4.228426, "grad_norm": 16.920891}
+{"step": 510, "epoch": 2, "sample_id": "uefn-verse-037", "domain": "UEFN Verse", "loss": 5.790204, "grad_norm": 6.826343}
+{"step": 511, "epoch": 2, "sample_id": "uefn-verse-027", "domain": "UEFN Verse", "loss": 5.738873, "grad_norm": 6.090187}
+{"step": 512, "epoch": 2, "sample_id": "unity-dots-020", "domain": "Unity DOTS", "loss": 3.921843, "grad_norm": 7.889132}
+{"step": 513, "epoch": 2, "sample_id": "godot4-char-063", "domain": "Godot 4", "loss": 4.592434, "grad_norm": 13.687152}
+{"step": 514, "epoch": 2, "sample_id": "unity-dots-017", "domain": "Unity DOTS", "loss": 3.938334, "grad_norm": 8.003768}
+{"step": 515, "epoch": 2, "sample_id": "ue57-ai-009", "domain": "Unreal Engine 5.7", "loss": 4.868662, "grad_norm": 8.425257}
+{"step": 516, "epoch": 2, "sample_id": "roblox-sec-005", "domain": "Roblox Luau", "loss": 4.926163, "grad_norm": 11.305472}
+{"step": 517, "epoch": 2, "sample_id": "ue57-ai-002", "domain": "Unreal Engine 5.7", "loss": 4.790116, "grad_norm": 16.032557}
+{"step": 518, "epoch": 2, "sample_id": "gamemath-022", "domain": "Game Mathematics", "loss": 4.61158, "grad_norm": 12.30714}
+{"step": 519, "epoch": 2, "sample_id": "uefn-verse-019", "domain": "UEFN Verse", "loss": 5.391524, "grad_norm": 6.395358}
+{"step": 520, "epoch": 2, "sample_id": "bevy-rust-005", "domain": "Bevy Rust", "loss": 5.012228, "grad_norm": 8.891795}
+{"step": 521, "epoch": 2, "sample_id": "ue57-trace-029", "domain": "Unreal Engine 5.7", "loss": 4.58601, "grad_norm": 9.073072}
+{"step": 522, "epoch": 2, "sample_id": "ue57-prof-009", "domain": "Unreal Engine 5.7", "loss": 5.581679, "grad_norm": 9.41188}
+{"step": 523, "epoch": 2, "sample_id": "roblox-sec-004", "domain": "Roblox Luau", "loss": 4.85641, "grad_norm": 14.259584}
+{"step": 524, "epoch": 2, "sample_id": "ue57-prof-002", "domain": "Unreal Engine 5.7", "loss": 5.38663, "grad_norm": 8.407076}
+{"step": 525, "epoch": 2, "sample_id": "bevy-rust-013", "domain": "Bevy Rust", "loss": 4.840085, "grad_norm": 6.900022}
+{"step": 526, "epoch": 2, "sample_id": "unity-dots-037", "domain": "Unity DOTS", "loss": 3.990011, "grad_norm": 14.734154}
+{"step": 527, "epoch": 2, "sample_id": "bevy-rust-007", "domain": "Bevy Rust", "loss": 4.806633, "grad_norm": 7.959994}
+{"step": 528, "epoch": 2, "sample_id": "ue57-gas-014", "domain": "Unreal Engine 5.7", "loss": 4.876654, "grad_norm": 8.640965}
+{"step": 529, "epoch": 2, "sample_id": "bevy-rust-026", "domain": "Bevy Rust", "loss": 4.713601, "grad_norm": 6.309525}
+{"step": 530, "epoch": 2, "sample_id": "ue57-prof-013", "domain": "Unreal Engine 5.7", "loss": 5.082937, "grad_norm": 6.721791}
+{"step": 531, "epoch": 2, "sample_id": "ue57-gas-021", "domain": "Unreal Engine 5.7", "loss": 4.837445, "grad_norm": 9.383974}
+{"step": 532, "epoch": 2, "sample_id": "ue57-gas-015", "domain": "Unreal Engine 5.7", "loss": 4.741141, "grad_norm": 7.626597}
+{"step": 533, "epoch": 2, "sample_id": "uefn-verse-012", "domain": "UEFN Verse", "loss": 5.383434, "grad_norm": 6.612741}
+{"step": 534, "epoch": 2, "sample_id": "unity-dots-025", "domain": "Unity DOTS", "loss": 4.080051, "grad_norm": 16.294199}
+{"step": 535, "epoch": 2, "sample_id": "bevy-rust-021", "domain": "Bevy Rust", "loss": 4.729172, "grad_norm": 8.648895}
+{"step": 536, "epoch": 2, "sample_id": "ue57-gas-024", "domain": "Unreal Engine 5.7", "loss": 4.526496, "grad_norm": 6.848498}
+{"step": 537, "epoch": 2, "sample_id": "gamemath-039", "domain": "Game Mathematics", "loss": 4.737322, "grad_norm": 11.967587}
+{"step": 538, "epoch": 2, "sample_id": "ue57-gas-028", "domain": "Unreal Engine 5.7", "loss": 4.381012, "grad_norm": 6.964126}
+{"step": 539, "epoch": 2, "sample_id": "unity-dots-052", "domain": "Unity DOTS", "loss": 4.261301, "grad_norm": 11.103925}
+{"step": 540, "epoch": 2, "sample_id": "ue57-gas-011", "domain": "Unreal Engine 5.7", "loss": 4.212563, "grad_norm": 6.152172}
+{"step": 541, "epoch": 2, "sample_id": "roblox-sec-037", "domain": "Roblox Luau", "loss": 5.154235, "grad_norm": 12.208958}
+{"step": 542, "epoch": 2, "sample_id": "gamemath-021", "domain": "Game Mathematics", "loss": 4.574922, "grad_norm": 11.242262}
+{"step": 543, "epoch": 2, "sample_id": "GF-UE57-SUBSYS-001", "domain": "Unreal Engine 5.7", "loss": 6.474631, "grad_norm": 13.401142}
+{"step": 544, "epoch": 2, "sample_id": "ue57-rep-010", "domain": "Unreal Engine 5.7", "loss": 5.202539, "grad_norm": 10.420732}
+{"step": 545, "epoch": 2, "sample_id": "gamemath-035", "domain": "Game Mathematics", "loss": 4.510627, "grad_norm": 11.24944}
+{"step": 546, "epoch": 2, "sample_id": "ue57-rep-027", "domain": "Unreal Engine 5.7", "loss": 5.246277, "grad_norm": 7.93051}
+{"step": 547, "epoch": 2, "sample_id": "godot4-char-033", "domain": "Godot 4", "loss": 5.159372, "grad_norm": 17.162064}
+{"step": 548, "epoch": 2, "sample_id": "ue57-trace-010", "domain": "Unreal Engine 5.7", "loss": 4.459913, "grad_norm": 11.399273}
+{"step": 549, "epoch": 2, "sample_id": "unity-dots-059", "domain": "Unity DOTS", "loss": 4.145677, "grad_norm": 8.887192}
+{"step": 550, "epoch": 2, "sample_id": "ue57-rep-033", "domain": "Unreal Engine 5.7", "loss": 5.038126, "grad_norm": 10.148421}
+{"step": 551, "epoch": 2, "sample_id": "unity-dots-077", "domain": "Unity DOTS", "loss": 4.255823, "grad_norm": 8.96559}
+{"step": 552, "epoch": 2, "sample_id": "ue57-trace-008", "domain": "Unreal Engine 5.7", "loss": 4.417891, "grad_norm": 9.259408}
+{"step": 553, "epoch": 2, "sample_id": "unity-dots-045", "domain": "Unity DOTS", "loss": 4.039701, "grad_norm": 8.899834}
+{"step": 554, "epoch": 2, "sample_id": "godot4-char-048", "domain": "Godot 4", "loss": 4.755158, "grad_norm": 13.094716}
+{"step": 555, "epoch": 2, "sample_id": "ue57-prof-008", "domain": "Unreal Engine 5.7", "loss": 5.263637, "grad_norm": 7.569417}
+{"step": 556, "epoch": 2, "sample_id": "ue57-prof-003", "domain": "Unreal Engine 5.7", "loss": 5.192679, "grad_norm": 7.464714}
+{"step": 557, "epoch": 2, "sample_id": "godot4-char-052", "domain": "Godot 4", "loss": 4.579881, "grad_norm": 11.449599}
+{"step": 558, "epoch": 2, "sample_id": "uefn-verse-010", "domain": "UEFN Verse", "loss": 5.616807, "grad_norm": 7.246099}
+{"step": 559, "epoch": 2, "sample_id": "bevy-rust-028", "domain": "Bevy Rust", "loss": 4.859128, "grad_norm": 8.458539}
+{"step": 560, "epoch": 2, "sample_id": "uefn-verse-035", "domain": "UEFN Verse", "loss": 5.531892, "grad_norm": 6.547116}
+{"step": 561, "epoch": 2, "sample_id": "ue57-mem-013", "domain": "Unreal Engine 5.7", "loss": 5.214983, "grad_norm": 10.870607}
+{"step": 562, "epoch": 2, "sample_id": "bevy-rust-033", "domain": "Bevy Rust", "loss": 4.809893, "grad_norm": 8.27618}
+{"step": 563, "epoch": 2, "sample_id": "roblox-sec-030", "domain": "Roblox Luau", "loss": 4.933307, "grad_norm": 9.466296}
+{"step": 564, "epoch": 2, "sample_id": "godot4-char-064", "domain": "Godot 4", "loss": 4.241009, "grad_norm": 9.250861}
+{"step": 565, "epoch": 2, "sample_id": "godot4-char-030", "domain": "Godot 4", "loss": 4.132349, "grad_norm": 8.724485}
+{"step": 566, "epoch": 2, "sample_id": "godot4-char-035", "domain": "Godot 4", "loss": 4.038792, "grad_norm": 7.76431}
+{"step": 567, "epoch": 2, "sample_id": "ue57-mem-007", "domain": "Unreal Engine 5.7", "loss": 5.294827, "grad_norm": 14.617957}
+{"step": 568, "epoch": 2, "sample_id": "ue57-trace-028", "domain": "Unreal Engine 5.7", "loss": 4.597799, "grad_norm": 14.85469}
+{"step": 569, "epoch": 2, "sample_id": "bevy-rust-024", "domain": "Bevy Rust", "loss": 4.846695, "grad_norm": 10.784992}
+{"step": 570, "epoch": 2, "sample_id": "unity-dots-062", "domain": "Unity DOTS", "loss": 4.352837, "grad_norm": 11.591981}
+{"step": 571, "epoch": 2, "sample_id": "ue57-rep-040", "domain": "Unreal Engine 5.7", "loss": 5.216627, "grad_norm": 11.015532}
+{"step": 572, "epoch": 2, "sample_id": "uefn-verse-025", "domain": "UEFN Verse", "loss": 5.297484, "grad_norm": 6.945534}
+{"step": 573, "epoch": 2, "sample_id": "uefn-verse-039", "domain": "UEFN Verse", "loss": 5.279004, "grad_norm": 8.003372}
+{"step": 574, "epoch": 2, "sample_id": "ue57-ai-010", "domain": "Unreal Engine 5.7", "loss": 4.883896, "grad_norm": 14.613349}
+{"step": 575, "epoch": 2, "sample_id": "ue57-rep-007", "domain": "Unreal Engine 5.7", "loss": 5.272326, "grad_norm": 7.131484}
+{"step": 576, "epoch": 2, "sample_id": "godot4-char-002", "domain": "Godot 4", "loss": 3.953632, "grad_norm": 12.567013}
+{"step": 577, "epoch": 2, "sample_id": "ue57-gas-034", "domain": "Unreal Engine 5.7", "loss": 4.847714, "grad_norm": 9.091143}
+{"step": 578, "epoch": 2, "sample_id": "ue57-gas-003", "domain": "Unreal Engine 5.7", "loss": 4.821221, "grad_norm": 8.224632}
+{"step": 579, "epoch": 2, "sample_id": "roblox-sec-033", "domain": "Roblox Luau", "loss": 5.015555, "grad_norm": 10.150433}
+{"step": 580, "epoch": 2, "sample_id": "unity-dots-024", "domain": "Unity DOTS", "loss": 4.105104, "grad_norm": 12.706384}
+{"step": 581, "epoch": 2, "sample_id": "unity-dots-054", "domain": "Unity DOTS", "loss": 4.327675, "grad_norm": 12.926264}
+{"step": 582, "epoch": 2, "sample_id": "unity-dots-067", "domain": "Unity DOTS", "loss": 4.093026, "grad_norm": 8.985881}
+{"step": 583, "epoch": 2, "sample_id": "unity-dots-058", "domain": "Unity DOTS", "loss": 4.136631, "grad_norm": 8.35465}
+{"step": 584, "epoch": 2, "sample_id": "unity-dots-031", "domain": "Unity DOTS", "loss": 4.019183, "grad_norm": 8.157372}
+{"step": 585, "epoch": 2, "sample_id": "gamemath-019", "domain": "Game Mathematics", "loss": 5.002568, "grad_norm": 11.56119}
+{"step": 586, "epoch": 2, "sample_id": "unity-dots-055", "domain": "Unity DOTS", "loss": 3.747239, "grad_norm": 7.119504}
+{"step": 587, "epoch": 2, "sample_id": "unity-dots-079", "domain": "Unity DOTS", "loss": 3.673663, "grad_norm": 8.179685}
+{"step": 588, "epoch": 2, "sample_id": "ue57-mem-021", "domain": "Unreal Engine 5.7", "loss": 5.029772, "grad_norm": 11.532577}
+{"step": 589, "epoch": 2, "sample_id": "ue57-rep-018", "domain": "Unreal Engine 5.7", "loss": 5.153555, "grad_norm": 11.254568}
+{"step": 590, "epoch": 2, "sample_id": "gamemath-036", "domain": "Game Mathematics", "loss": 4.997531, "grad_norm": 13.491267}
+{"step": 591, "epoch": 2, "sample_id": "uefn-verse-033", "domain": "UEFN Verse", "loss": 5.284989, "grad_norm": 9.643846}
+{"step": 592, "epoch": 2, "sample_id": "bevy-rust-037", "domain": "Bevy Rust", "loss": 4.948934, "grad_norm": 11.083067}
+{"step": 593, "epoch": 2, "sample_id": "unity-dots-073", "domain": "Unity DOTS", "loss": 3.399895, "grad_norm": 6.637327}
+{"step": 594, "epoch": 2, "sample_id": "ue57-mem-010", "domain": "Unreal Engine 5.7", "loss": 4.90522, "grad_norm": 11.289768}
+{"step": 595, "epoch": 2, "sample_id": "godot4-char-065", "domain": "Godot 4", "loss": 4.944906, "grad_norm": 16.012039}
+{"step": 596, "epoch": 2, "sample_id": "ue57-ai-008", "domain": "Unreal Engine 5.7", "loss": 5.085972, "grad_norm": 9.301382}
+{"step": 597, "epoch": 2, "sample_id": "roblox-sec-047", "domain": "Roblox Luau", "loss": 5.13049, "grad_norm": 11.542243}
+{"step": 598, "epoch": 2, "sample_id": "gamemath-027", "domain": "Game Mathematics", "loss": 4.676708, "grad_norm": 9.995302}
+{"step": 599, "epoch": 2, "sample_id": "ue57-ai-017", "domain": "Unreal Engine 5.7", "loss": 4.69189, "grad_norm": 11.714989}
+{"step": 600, "epoch": 2, "sample_id": "ue57-trace-003", "domain": "Unreal Engine 5.7", "loss": 4.538288, "grad_norm": 11.717042}
+{"step": 601, "epoch": 2, "sample_id": "bevy-rust-031", "domain": "Bevy Rust", "loss": 4.831613, "grad_norm": 8.045461}
+{"step": 602, "epoch": 2, "sample_id": "ue57-trace-009", "domain": "Unreal Engine 5.7", "loss": 4.456128, "grad_norm": 7.417373}
+{"step": 603, "epoch": 2, "sample_id": "ue57-mem-009", "domain": "Unreal Engine 5.7", "loss": 4.824887, "grad_norm": 13.494846}
+{"step": 604, "epoch": 2, "sample_id": "unity-dots-042", "domain": "Unity DOTS", "loss": 3.915754, "grad_norm": 10.758067}
+{"step": 605, "epoch": 2, "sample_id": "unity-dots-069", "domain": "Unity DOTS", "loss": 3.714288, "grad_norm": 8.416797}
+{"step": 606, "epoch": 2, "sample_id": "ue57-rep-003", "domain": "Unreal Engine 5.7", "loss": 4.973321, "grad_norm": 6.256379}
+{"step": 607, "epoch": 2, "sample_id": "ue57-rep-005", "domain": "Unreal Engine 5.7", "loss": 4.990234, "grad_norm": 10.953703}
+{"step": 608, "epoch": 2, "sample_id": "gamemath-037", "domain": "Game Mathematics", "loss": 4.479752, "grad_norm": 11.935259}
+{"step": 609, "epoch": 2, "sample_id": "ue57-mem-035", "domain": "Unreal Engine 5.7", "loss": 4.604277, "grad_norm": 10.370019}
+{"step": 610, "epoch": 2, "sample_id": "gamemath-011", "domain": "Game Mathematics", "loss": 4.437493, "grad_norm": 9.959138}
+{"step": 611, "epoch": 2, "sample_id": "godot4-char-053", "domain": "Godot 4", "loss": 4.712693, "grad_norm": 12.554651}
+{"step": 612, "epoch": 2, "sample_id": "bevy-rust-020", "domain": "Bevy Rust", "loss": 4.815856, "grad_norm": 9.611527}
+{"step": 613, "epoch": 2, "sample_id": "ue57-rep-038", "domain": "Unreal Engine 5.7", "loss": 4.769482, "grad_norm": 11.208187}
+{"step": 614, "epoch": 2, "sample_id": "ue57-ai-003", "domain": "Unreal Engine 5.7", "loss": 4.589808, "grad_norm": 9.536942}
+{"step": 615, "epoch": 2, "sample_id": "ue57-trace-005", "domain": "Unreal Engine 5.7", "loss": 4.237332, "grad_norm": 9.105569}
+{"step": 616, "epoch": 2, "sample_id": "godot4-char-050", "domain": "Godot 4", "loss": 4.511553, "grad_norm": 12.403514}
+{"step": 617, "epoch": 2, "sample_id": "ue57-mem-031", "domain": "Unreal Engine 5.7", "loss": 4.413493, "grad_norm": 7.559918}
+{"step": 618, "epoch": 2, "sample_id": "gamemath-024", "domain": "Game Mathematics", "loss": 4.255852, "grad_norm": 10.646377}
+{"step": 619, "epoch": 2, "sample_id": "bevy-rust-003", "domain": "Bevy Rust", "loss": 4.764567, "grad_norm": 8.706448}
+{"step": 620, "epoch": 2, "sample_id": "godot4-char-040", "domain": "Godot 4", "loss": 4.326384, "grad_norm": 11.867192}
+{"step": 621, "epoch": 2, "sample_id": "unity-dots-070", "domain": "Unity DOTS", "loss": 3.965279, "grad_norm": 11.850545}
+{"step": 622, "epoch": 2, "sample_id": "unity-dots-018", "domain": "Unity DOTS", "loss": 3.865927, "grad_norm": 9.968997}
+{"step": 623, "epoch": 2, "sample_id": "unity-dots-021", "domain": "Unity DOTS", "loss": 3.770813, "grad_norm": 10.51236}
+{"step": 624, "epoch": 2, "sample_id": "GF-UE57-INPUT-003", "domain": "Unreal Engine 5.7", "loss": 7.123099, "grad_norm": 10.775599}
+{"step": 625, "epoch": 2, "sample_id": "bevy-rust-016", "domain": "Bevy Rust", "loss": 4.728763, "grad_norm": 8.352044}
+{"step": 626, "epoch": 2, "sample_id": "godot4-char-038", "domain": "Godot 4", "loss": 4.019589, "grad_norm": 9.931797}
+{"step": 627, "epoch": 2, "sample_id": "ue57-mem-020", "domain": "Unreal Engine 5.7", "loss": 4.376503, "grad_norm": 7.846811}
+{"step": 628, "epoch": 2, "sample_id": "unity-dots-023", "domain": "Unity DOTS", "loss": 3.541829, "grad_norm": 12.11185}
+{"step": 629, "epoch": 2, "sample_id": "unity-dots-076", "domain": "Unity DOTS", "loss": 3.672525, "grad_norm": 8.506762}
+{"step": 630, "epoch": 2, "sample_id": "ue57-prof-010", "domain": "Unreal Engine 5.7", "loss": 5.236617, "grad_norm": 9.738863}
+{"step": 631, "epoch": 2, "sample_id": "ue57-trace-026", "domain": "Unreal Engine 5.7", "loss": 4.278411, "grad_norm": 10.110669}
+{"step": 632, "epoch": 2, "sample_id": "gamemath-034", "domain": "Game Mathematics", "loss": 4.54274, "grad_norm": 15.316302}
+{"step": 633, "epoch": 2, "sample_id": "roblox-sec-001", "domain": "Roblox Luau", "loss": 5.228025, "grad_norm": 15.286817}
+{"step": 634, "epoch": 2, "sample_id": "uefn-verse-024", "domain": "UEFN Verse", "loss": 5.521774, "grad_norm": 7.839614}
+{"step": 635, "epoch": 2, "sample_id": "ue57-prof-011", "domain": "Unreal Engine 5.7", "loss": 5.163938, "grad_norm": 8.884248}
+{"step": 636, "epoch": 2, "sample_id": "ue57-trace-006", "domain": "Unreal Engine 5.7", "loss": 4.266047, "grad_norm": 10.26237}
+{"step": 637, "epoch": 2, "sample_id": "uefn-verse-020", "domain": "UEFN Verse", "loss": 5.411794, "grad_norm": 7.561182}
+{"step": 638, "epoch": 2, "sample_id": "ue57-mem-022", "domain": "Unreal Engine 5.7", "loss": 4.497719, "grad_norm": 8.780534}
+{"step": 639, "epoch": 2, "sample_id": "godot4-char-069", "domain": "Godot 4", "loss": 4.129925, "grad_norm": 11.703128}
+{"step": 640, "epoch": 2, "sample_id": "bevy-rust-039", "domain": "Bevy Rust", "loss": 4.669683, "grad_norm": 8.470002}
+{"step": 641, "epoch": 2, "sample_id": "GF-UE57-REPAIR-002", "domain": "Unreal Engine 5.7", "loss": 7.239328, "grad_norm": 9.593781}
+{"step": 642, "epoch": 2, "sample_id": "ue57-gas-026", "domain": "Unreal Engine 5.7", "loss": 4.863316, "grad_norm": 9.921408}
+{"step": 643, "epoch": 2, "sample_id": "unity-dots-016", "domain": "Unity DOTS", "loss": 3.631504, "grad_norm": 8.96184}
+{"step": 644, "epoch": 2, "sample_id": "godot4-char-010", "domain": "Godot 4", "loss": 4.055527, "grad_norm": 10.485897}
+{"step": 645, "epoch": 2, "sample_id": "roblox-sec-009", "domain": "Roblox Luau", "loss": 4.973067, "grad_norm": 9.16161}
+{"step": 646, "epoch": 2, "sample_id": "roblox-sec-036", "domain": "Roblox Luau", "loss": 4.880286, "grad_norm": 9.114823}
+{"step": 647, "epoch": 2, "sample_id": "ue57-trace-007", "domain": "Unreal Engine 5.7", "loss": 4.278359, "grad_norm": 13.812163}
+{"step": 648, "epoch": 2, "sample_id": "bevy-rust-009", "domain": "Bevy Rust", "loss": 4.689528, "grad_norm": 11.01634}
+{"step": 649, "epoch": 2, "sample_id": "godot4-char-021", "domain": "Godot 4", "loss": 3.857458, "grad_norm": 8.13681}
+{"step": 650, "epoch": 2, "sample_id": "ue57-prof-001", "domain": "Unreal Engine 5.7", "loss": 5.170394, "grad_norm": 11.203969}
+{"step": 651, "epoch": 2, "sample_id": "godot4-char-018", "domain": "Godot 4", "loss": 3.740594, "grad_norm": 8.657014}
+{"step": 652, "epoch": 2, "sample_id": "godot4-char-008", "domain": "Godot 4", "loss": 3.683761, "grad_norm": 9.351743}
+{"step": 653, "epoch": 2, "sample_id": "godot4-char-041", "domain": "Godot 4", "loss": 3.61542, "grad_norm": 7.84738}
+{"step": 654, "epoch": 2, "sample_id": "godot4-char-013", "domain": "Godot 4", "loss": 3.482136, "grad_norm": 5.952063}
+{"step": 655, "epoch": 2, "sample_id": "godot4-char-043", "domain": "Godot 4", "loss": 3.404751, "grad_norm": 6.149497}
+{"step": 656, "epoch": 2, "sample_id": "godot4-char-004", "domain": "Godot 4", "loss": 3.278342, "grad_norm": 7.351168}
+{"step": 657, "epoch": 2, "sample_id": "unity-dots-005", "domain": "Unity DOTS", "loss": 4.485444, "grad_norm": 22.497599}
+{"step": 658, "epoch": 2, "sample_id": "ue57-mem-002", "domain": "Unreal Engine 5.7", "loss": 5.322635, "grad_norm": 20.616867}
+{"step": 659, "epoch": 2, "sample_id": "gamemath-007", "domain": "Game Mathematics", "loss": 5.656222, "grad_norm": 20.444208}
+{"step": 660, "epoch": 2, "sample_id": "roblox-sec-031", "domain": "Roblox Luau", "loss": 5.217556, "grad_norm": 17.360619}
+{"step": 661, "epoch": 2, "sample_id": "roblox-sec-003", "domain": "Roblox Luau", "loss": 5.146434, "grad_norm": 16.295462}
+{"step": 662, "epoch": 2, "sample_id": "ue57-rep-014", "domain": "Unreal Engine 5.7", "loss": 5.814966, "grad_norm": 12.731969}
+{"step": 663, "epoch": 2, "sample_id": "godot4-char-044", "domain": "Godot 4", "loss": 3.240258, "grad_norm": 10.968311}
+{"step": 664, "epoch": 2, "sample_id": "unity-dots-039", "domain": "Unity DOTS", "loss": 4.300545, "grad_norm": 12.251441}
+{"step": 665, "epoch": 2, "sample_id": "ue57-ai-011", "domain": "Unreal Engine 5.7", "loss": 4.994657, "grad_norm": 10.712996}
+{"step": 666, "epoch": 2, "sample_id": "ue57-mem-027", "domain": "Unreal Engine 5.7", "loss": 4.852224, "grad_norm": 8.968598}
+{"step": 667, "epoch": 2, "sample_id": "godot4-char-003", "domain": "Godot 4", "loss": 3.295639, "grad_norm": 8.095989}
+{"step": 668, "epoch": 2, "sample_id": "ue57-gas-023", "domain": "Unreal Engine 5.7", "loss": 4.883294, "grad_norm": 7.137077}
+{"step": 669, "epoch": 2, "sample_id": "unity-dots-022", "domain": "Unity DOTS", "loss": 4.095671, "grad_norm": 9.156142}
+{"step": 670, "epoch": 2, "sample_id": "roblox-sec-017", "domain": "Roblox Luau", "loss": 4.724333, "grad_norm": 9.261107}
+{"step": 671, "epoch": 2, "sample_id": "ue57-ai-001", "domain": "Unreal Engine 5.7", "loss": 4.919274, "grad_norm": 7.715705}
+{"step": 672, "epoch": 2, "sample_id": "ue57-gas-031", "domain": "Unreal Engine 5.7", "loss": 4.697274, "grad_norm": 6.490984}
+{"step": 673, "epoch": 2, "sample_id": "uefn-verse-011", "domain": "UEFN Verse", "loss": 5.505269, "grad_norm": 6.528154}
+{"step": 674, "epoch": 2, "sample_id": "gamemath-032", "domain": "Game Mathematics", "loss": 4.719187, "grad_norm": 10.682069}
+{"step": 675, "epoch": 2, "sample_id": "ue57-rep-031", "domain": "Unreal Engine 5.7", "loss": 5.103754, "grad_norm": 6.745649}
+{"step": 676, "epoch": 2, "sample_id": "ue57-gas-004", "domain": "Unreal Engine 5.7", "loss": 4.506837, "grad_norm": 7.200917}
+{"step": 677, "epoch": 2, "sample_id": "unity-dots-019", "domain": "Unity DOTS", "loss": 3.790753, "grad_norm": 8.514616}
+{"step": 678, "epoch": 2, "sample_id": "unity-dots-051", "domain": "Unity DOTS", "loss": 4.179387, "grad_norm": 10.360345}
+{"step": 679, "epoch": 2, "sample_id": "ue57-ai-004", "domain": "Unreal Engine 5.7", "loss": 4.617824, "grad_norm": 8.353397}
+{"step": 680, "epoch": 2, "sample_id": "ue57-rep-028", "domain": "Unreal Engine 5.7", "loss": 4.743675, "grad_norm": 7.899306}
+{"step": 681, "epoch": 2, "sample_id": "ue57-mem-001", "domain": "Unreal Engine 5.7", "loss": 4.367458, "grad_norm": 8.35349}
+{"step": 682, "epoch": 2, "sample_id": "uefn-verse-016", "domain": "UEFN Verse", "loss": 5.446473, "grad_norm": 10.192315}
+{"step": 683, "epoch": 2, "sample_id": "unity-dots-033", "domain": "Unity DOTS", "loss": 3.680658, "grad_norm": 17.393248}
+{"step": 684, "epoch": 2, "sample_id": "unity-dots-011", "domain": "Unity DOTS", "loss": 3.569973, "grad_norm": 9.060507}
+{"step": 685, "epoch": 2, "sample_id": "godot4-char-011", "domain": "Godot 4", "loss": 4.67367, "grad_norm": 19.897032}
+{"step": 686, "epoch": 2, "sample_id": "ue57-mem-004", "domain": "Unreal Engine 5.7", "loss": 4.435788, "grad_norm": 18.005262}
+{"step": 687, "epoch": 2, "sample_id": "ue57-trace-012", "domain": "Unreal Engine 5.7", "loss": 4.323565, "grad_norm": 9.619127}
+{"step": 688, "epoch": 2, "sample_id": "ue57-gas-025", "domain": "Unreal Engine 5.7", "loss": 4.216838, "grad_norm": 9.649395}
+{"step": 689, "epoch": 2, "sample_id": "roblox-sec-012", "domain": "Roblox Luau", "loss": 5.135186, "grad_norm": 14.19379}
+{"step": 690, "epoch": 2, "sample_id": "unity-dots-034", "domain": "Unity DOTS", "loss": 3.401197, "grad_norm": 12.083715}
+{"step": 691, "epoch": 2, "sample_id": "ue57-mem-030", "domain": "Unreal Engine 5.7", "loss": 4.206034, "grad_norm": 10.670478}
+{"step": 692, "epoch": 2, "sample_id": "ue57-mem-029", "domain": "Unreal Engine 5.7", "loss": 4.224729, "grad_norm": 9.130685}
+{"step": 693, "epoch": 2, "sample_id": "ue57-gas-016", "domain": "Unreal Engine 5.7", "loss": 4.081288, "grad_norm": 7.876617}
+{"step": 694, "epoch": 2, "sample_id": "godot4-char-036", "domain": "Godot 4", "loss": 4.405621, "grad_norm": 16.530354}
+{"step": 695, "epoch": 2, "sample_id": "ue57-rep-030", "domain": "Unreal Engine 5.7", "loss": 4.7896, "grad_norm": 12.346551}
+{"step": 696, "epoch": 2, "sample_id": "ue57-trace-027", "domain": "Unreal Engine 5.7", "loss": 4.113269, "grad_norm": 9.056334}
+{"step": 697, "epoch": 2, "sample_id": "godot4-char-032", "domain": "Godot 4", "loss": 4.212973, "grad_norm": 14.253154}
+{"step": 698, "epoch": 2, "sample_id": "gamemath-025", "domain": "Game Mathematics", "loss": 4.818495, "grad_norm": 13.556603}
+{"step": 699, "epoch": 2, "sample_id": "unity-dots-003", "domain": "Unity DOTS", "loss": 3.739261, "grad_norm": 14.555756}
+{"step": 700, "epoch": 2, "sample_id": "roblox-sec-024", "domain": "Roblox Luau", "loss": 4.83146, "grad_norm": 12.179968}
+{"step": 701, "epoch": 2, "sample_id": "gamemath-004", "domain": "Game Mathematics", "loss": 4.829501, "grad_norm": 12.073609}
+{"step": 702, "epoch": 2, "sample_id": "ue57-prof-007", "domain": "Unreal Engine 5.7", "loss": 5.458268, "grad_norm": 13.19454}
+{"step": 703, "epoch": 2, "sample_id": "uefn-verse-026", "domain": "UEFN Verse", "loss": 5.412907, "grad_norm": 8.034113}
+{"step": 704, "epoch": 2, "sample_id": "godot4-char-019", "domain": "Godot 4", "loss": 3.883779, "grad_norm": 10.114758}
+{"step": 705, "epoch": 2, "sample_id": "ue57-rep-032", "domain": "Unreal Engine 5.7", "loss": 5.061145, "grad_norm": 12.623639}
+{"step": 706, "epoch": 2, "sample_id": "ue57-trace-018", "domain": "Unreal Engine 5.7", "loss": 4.114373, "grad_norm": 9.150503}
+{"step": 707, "epoch": 2, "sample_id": "unity-dots-050", "domain": "Unity DOTS", "loss": 3.718606, "grad_norm": 10.024993}
+{"step": 708, "epoch": 2, "sample_id": "ue57-mem-033", "domain": "Unreal Engine 5.7", "loss": 4.229767, "grad_norm": 10.413811}
+{"step": 709, "epoch": 2, "sample_id": "gamemath-002", "domain": "Game Mathematics", "loss": 4.518246, "grad_norm": 11.029187}
+{"step": 710, "epoch": 2, "sample_id": "uefn-verse-022", "domain": "UEFN Verse", "loss": 5.28304, "grad_norm": 10.784602}
+{"step": 711, "epoch": 2, "sample_id": "GF-UE57-INPUT-004", "domain": "Unreal Engine 5.7", "loss": 6.928729, "grad_norm": 16.922325}
+{"step": 712, "epoch": 2, "sample_id": "ue57-ai-023", "domain": "Unreal Engine 5.7", "loss": 4.394016, "grad_norm": 9.910331}
+{"step": 713, "epoch": 2, "sample_id": "ue57-gas-020", "domain": "Unreal Engine 5.7", "loss": 4.209201, "grad_norm": 8.64706}
+{"step": 714, "epoch": 2, "sample_id": "gamemath-012", "domain": "Game Mathematics", "loss": 4.236358, "grad_norm": 12.106278}
+{"step": 715, "epoch": 2, "sample_id": "bevy-rust-029", "domain": "Bevy Rust", "loss": 5.020314, "grad_norm": 10.363423}
+{"step": 716, "epoch": 2, "sample_id": "uefn-verse-036", "domain": "UEFN Verse", "loss": 5.152581, "grad_norm": 6.899653}
+{"step": 717, "epoch": 2, "sample_id": "ue57-mem-028", "domain": "Unreal Engine 5.7", "loss": 4.184786, "grad_norm": 9.623019}
+{"step": 718, "epoch": 2, "sample_id": "ue57-prof-023", "domain": "Unreal Engine 5.7", "loss": 4.985436, "grad_norm": 11.231266}
+{"step": 719, "epoch": 2, "sample_id": "uefn-verse-030", "domain": "UEFN Verse", "loss": 5.043263, "grad_norm": 8.072106}
+{"step": 720, "epoch": 2, "sample_id": "gamemath-008", "domain": "Game Mathematics", "loss": 4.303584, "grad_norm": 11.178496}
+{"step": 721, "epoch": 2, "sample_id": "ue57-mem-019", "domain": "Unreal Engine 5.7", "loss": 4.162766, "grad_norm": 9.346157}
+{"step": 722, "epoch": 2, "sample_id": "GF-AGENT-TOOL-001", "domain": "GameForge Agent Protocol", "loss": 9.667784, "grad_norm": 18.494049}
+{"step": 723, "epoch": 2, "sample_id": "ue57-trace-016", "domain": "Unreal Engine 5.7", "loss": 4.034867, "grad_norm": 9.000702}
+{"step": 724, "epoch": 2, "sample_id": "ue57-ai-027", "domain": "Unreal Engine 5.7", "loss": 4.271537, "grad_norm": 8.347158}
+{"step": 725, "epoch": 2, "sample_id": "unity-dots-074", "domain": "Unity DOTS", "loss": 3.965562, "grad_norm": 9.78946}
+{"step": 726, "epoch": 2, "sample_id": "ue57-gas-012", "domain": "Unreal Engine 5.7", "loss": 4.244218, "grad_norm": 8.292596}
+{"step": 727, "epoch": 2, "sample_id": "ue57-prof-027", "domain": "Unreal Engine 5.7", "loss": 4.9452, "grad_norm": 9.417026}
+{"step": 728, "epoch": 2, "sample_id": "unity-dots-071", "domain": "Unity DOTS", "loss": 3.923747, "grad_norm": 9.926239}
+{"step": 729, "epoch": 2, "sample_id": "GF-UE57-INPUT-002", "domain": "Unreal Engine 5.7", "loss": 6.528801, "grad_norm": 7.624009}
+{"step": 730, "epoch": 2, "sample_id": "GF-UE57-SUBSYS-002", "domain": "Unreal Engine 5.7", "loss": 5.947294, "grad_norm": 8.549753}
+{"step": 731, "epoch": 2, "sample_id": "roblox-sec-041", "domain": "Roblox Luau", "loss": 5.164626, "grad_norm": 12.365088}
+{"step": 732, "epoch": 2, "sample_id": "godot4-char-060", "domain": "Godot 4", "loss": 4.533836, "grad_norm": 14.514868}
+{"step": 733, "epoch": 2, "sample_id": "uefn-verse-029", "domain": "UEFN Verse", "loss": 5.006874, "grad_norm": 6.627492}
+{"step": 734, "epoch": 2, "sample_id": "godot4-char-027", "domain": "Godot 4", "loss": 4.37833, "grad_norm": 13.014684}
+{"step": 735, "epoch": 2, "sample_id": "roblox-sec-025", "domain": "Roblox Luau", "loss": 4.878768, "grad_norm": 9.16227}
+{"step": 736, "epoch": 2, "sample_id": "roblox-sec-050", "domain": "Roblox Luau", "loss": 4.789614, "grad_norm": 7.963269}
+{"step": 737, "epoch": 2, "sample_id": "roblox-sec-007", "domain": "Roblox Luau", "loss": 4.683347, "grad_norm": 7.303134}
+{"step": 738, "epoch": 2, "sample_id": "gamemath-014", "domain": "Game Mathematics", "loss": 4.67449, "grad_norm": 15.603697}
+{"step": 739, "epoch": 2, "sample_id": "ue57-prof-025", "domain": "Unreal Engine 5.7", "loss": 5.087075, "grad_norm": 18.532654}
+{"step": 740, "epoch": 2, "sample_id": "ue57-prof-006", "domain": "Unreal Engine 5.7", "loss": 5.19059, "grad_norm": 14.743235}
+{"step": 741, "epoch": 2, "sample_id": "godot4-char-037", "domain": "Godot 4", "loss": 3.932028, "grad_norm": 8.956406}
+{"step": 742, "epoch": 2, "sample_id": "ue57-rep-034", "domain": "Unreal Engine 5.7", "loss": 5.39328, "grad_norm": 12.930865}
+{"step": 743, "epoch": 2, "sample_id": "unity-dots-049", "domain": "Unity DOTS", "loss": 4.04013, "grad_norm": 12.972747}
+{"step": 744, "epoch": 2, "sample_id": "ue57-trace-017", "domain": "Unreal Engine 5.7", "loss": 4.265787, "grad_norm": 9.678554}
+{"step": 745, "epoch": 2, "sample_id": "roblox-sec-027", "domain": "Roblox Luau", "loss": 4.407742, "grad_norm": 10.679292}
+{"step": 746, "epoch": 2, "sample_id": "ue57-rep-026", "domain": "Unreal Engine 5.7", "loss": 5.12924, "grad_norm": 8.407828}
+{"step": 747, "epoch": 2, "sample_id": "bevy-rust-010", "domain": "Bevy Rust", "loss": 4.834443, "grad_norm": 9.867772}
+{"step": 748, "epoch": 2, "sample_id": "godot4-char-012", "domain": "Godot 4", "loss": 3.870025, "grad_norm": 11.65721}
+{"step": 749, "epoch": 2, "sample_id": "ue57-ai-013", "domain": "Unreal Engine 5.7", "loss": 4.405074, "grad_norm": 8.183347}
+{"step": 750, "epoch": 2, "sample_id": "ue57-prof-016", "domain": "Unreal Engine 5.7", "loss": 4.781694, "grad_norm": 6.882529}
+{"step": 751, "epoch": 2, "sample_id": "ue57-rep-013", "domain": "Unreal Engine 5.7", "loss": 4.77341, "grad_norm": 9.607241}
+{"step": 752, "epoch": 2, "sample_id": "godot4-char-055", "domain": "Godot 4", "loss": 3.752352, "grad_norm": 10.15299}
+{"step": 753, "epoch": 2, "sample_id": "gamemath-028", "domain": "Game Mathematics", "loss": 4.613788, "grad_norm": 12.543775}
+{"step": 754, "epoch": 2, "sample_id": "ue57-mem-026", "domain": "Unreal Engine 5.7", "loss": 4.604299, "grad_norm": 11.458735}
+{"step": 755, "epoch": 2, "sample_id": "godot4-char-056", "domain": "Godot 4", "loss": 3.624933, "grad_norm": 8.841974}
+{"step": 756, "epoch": 2, "sample_id": "gamemath-005", "domain": "Game Mathematics", "loss": 4.600933, "grad_norm": 11.27529}
+{"step": 757, "epoch": 2, "sample_id": "ue57-gas-030", "domain": "Unreal Engine 5.7", "loss": 4.402864, "grad_norm": 10.60247}
+{"step": 758, "epoch": 2, "sample_id": "godot4-char-015", "domain": "Godot 4", "loss": 3.461982, "grad_norm": 8.1961}
+{"step": 759, "epoch": 2, "sample_id": "ue57-prof-015", "domain": "Unreal Engine 5.7", "loss": 4.783452, "grad_norm": 10.260736}
+{"step": 760, "epoch": 2, "sample_id": "godot4-char-051", "domain": "Godot 4", "loss": 3.45388, "grad_norm": 8.201783}
+{"step": 761, "epoch": 2, "sample_id": "ue57-trace-015", "domain": "Unreal Engine 5.7", "loss": 4.1643, "grad_norm": 11.599719}
+{"step": 762, "epoch": 2, "sample_id": "ue57-mem-008", "domain": "Unreal Engine 5.7", "loss": 4.576807, "grad_norm": 15.471885}
+{"step": 763, "epoch": 2, "sample_id": "ue57-gas-001", "domain": "Unreal Engine 5.7", "loss": 4.484644, "grad_norm": 10.957596}
+{"step": 764, "epoch": 2, "sample_id": "godot4-char-049", "domain": "Godot 4", "loss": 3.277665, "grad_norm": 9.497043}
+{"step": 765, "epoch": 2, "sample_id": "unity-dots-068", "domain": "Unity DOTS", "loss": 4.25492, "grad_norm": 16.844791}
+{"step": 766, "epoch": 2, "sample_id": "ue57-trace-020", "domain": "Unreal Engine 5.7", "loss": 4.040919, "grad_norm": 11.923593}
+{"step": 767, "epoch": 2, "sample_id": "uefn-verse-023", "domain": "UEFN Verse", "loss": 5.411282, "grad_norm": 9.557139}
+{"step": 768, "epoch": 2, "sample_id": "ue57-rep-037", "domain": "Unreal Engine 5.7", "loss": 4.956718, "grad_norm": 11.02548}
+{"step": 769, "epoch": 2, "sample_id": "ue57-trace-025", "domain": "Unreal Engine 5.7", "loss": 3.895608, "grad_norm": 8.129767}
+{"step": 770, "epoch": 2, "sample_id": "roblox-sec-042", "domain": "Roblox Luau", "loss": 4.905001, "grad_norm": 16.280266}
+{"step": 771, "epoch": 2, "sample_id": "GF-UE57-SUBSYS-004", "domain": "Unreal Engine 5.7", "loss": 5.628265, "grad_norm": 7.930115}
+{"step": 772, "epoch": 2, "sample_id": "ue57-ai-007", "domain": "Unreal Engine 5.7", "loss": 4.550402, "grad_norm": 10.088844}
+{"step": 773, "epoch": 2, "sample_id": "bevy-rust-019", "domain": "Bevy Rust", "loss": 5.016634, "grad_norm": 8.865704}
+{"step": 774, "epoch": 2, "sample_id": "uefn-verse-005", "domain": "UEFN Verse", "loss": 5.214743, "grad_norm": 7.262553}
+{"step": 775, "epoch": 2, "sample_id": "godot4-char-054", "domain": "Godot 4", "loss": 3.803384, "grad_norm": 13.444079}
+{"step": 776, "epoch": 2, "sample_id": "unity-dots-063", "domain": "Unity DOTS", "loss": 4.10767, "grad_norm": 9.111331}
+{"step": 777, "epoch": 2, "sample_id": "godot4-char-026", "domain": "Godot 4", "loss": 3.757544, "grad_norm": 12.083902}
+{"step": 778, "epoch": 2, "sample_id": "ue57-ai-021", "domain": "Unreal Engine 5.7", "loss": 4.248456, "grad_norm": 8.44486}
+{"step": 779, "epoch": 2, "sample_id": "godot4-char-022", "domain": "Godot 4", "loss": 3.642129, "grad_norm": 10.077852}
+{"step": 780, "epoch": 2, "sample_id": "unity-dots-014", "domain": "Unity DOTS", "loss": 3.89898, "grad_norm": 9.233756}
+{"step": 781, "epoch": 2, "sample_id": "ue57-rep-029", "domain": "Unreal Engine 5.7", "loss": 4.936464, "grad_norm": 8.230928}
+{"step": 782, "epoch": 2, "sample_id": "bevy-rust-012", "domain": "Bevy Rust", "loss": 4.913233, "grad_norm": 9.712934}
+{"step": 783, "epoch": 2, "sample_id": "roblox-sec-034", "domain": "Roblox Luau", "loss": 4.745335, "grad_norm": 11.997411}
+{"step": 784, "epoch": 2, "sample_id": "ue57-ai-015", "domain": "Unreal Engine 5.7", "loss": 4.067322, "grad_norm": 13.021149}
+{"step": 785, "epoch": 2, "sample_id": "unity-dots-044", "domain": "Unity DOTS", "loss": 3.810316, "grad_norm": 13.245161}
+{"step": 786, "epoch": 2, "sample_id": "bevy-rust-015", "domain": "Bevy Rust", "loss": 4.680466, "grad_norm": 9.814138}
+{"step": 787, "epoch": 2, "sample_id": "roblox-sec-020", "domain": "Roblox Luau", "loss": 4.617218, "grad_norm": 14.935289}
+{"step": 788, "epoch": 2, "sample_id": "ue57-trace-019", "domain": "Unreal Engine 5.7", "loss": 3.942739, "grad_norm": 8.159153}
+{"step": 789, "epoch": 2, "sample_id": "roblox-sec-008", "domain": "Roblox Luau", "loss": 4.510886, "grad_norm": 10.81057}
+{"step": 790, "epoch": 2, "sample_id": "ue57-mem-006", "domain": "Unreal Engine 5.7", "loss": 4.607342, "grad_norm": 12.505762}
+{"step": 791, "epoch": 2, "sample_id": "ue57-ai-029", "domain": "Unreal Engine 5.7", "loss": 4.182973, "grad_norm": 13.616141}
+{"step": 792, "epoch": 2, "sample_id": "unity-dots-078", "domain": "Unity DOTS", "loss": 3.807773, "grad_norm": 17.570232}
+{"step": 793, "epoch": 2, "sample_id": "roblox-sec-045", "domain": "Roblox Luau", "loss": 4.31488, "grad_norm": 9.118712}
+{"step": 794, "epoch": 2, "sample_id": "uefn-verse-008", "domain": "UEFN Verse", "loss": 5.105355, "grad_norm": 7.50469}
+{"step": 795, "epoch": 2, "sample_id": "roblox-sec-046", "domain": "Roblox Luau", "loss": 4.242963, "grad_norm": 9.325389}
+{"step": 796, "epoch": 2, "sample_id": "unity-dots-006", "domain": "Unity DOTS", "loss": 3.67639, "grad_norm": 9.703364}
+{"step": 797, "epoch": 2, "sample_id": "GF-UE57-REPAIR-004", "domain": "Unreal Engine 5.7", "loss": 7.628229, "grad_norm": 13.824823}
+{"step": 798, "epoch": 2, "sample_id": "ue57-mem-012", "domain": "Unreal Engine 5.7", "loss": 4.33603, "grad_norm": 13.216272}
+{"step": 799, "epoch": 2, "sample_id": "godot4-char-047", "domain": "Godot 4", "loss": 3.949681, "grad_norm": 15.033902}
+{"step": 800, "epoch": 2, "sample_id": "unity-dots-002", "domain": "Unity DOTS", "loss": 3.586493, "grad_norm": 10.601215}
+{"step": 801, "epoch": 2, "sample_id": "godot4-char-001", "domain": "Godot 4", "loss": 3.907723, "grad_norm": 12.570561}
+{"step": 802, "epoch": 2, "sample_id": "ue57-prof-014", "domain": "Unreal Engine 5.7", "loss": 5.057831, "grad_norm": 9.419005}
+{"step": 803, "epoch": 2, "sample_id": "godot4-char-042", "domain": "Godot 4", "loss": 3.717911, "grad_norm": 10.223201}
+{"step": 804, "epoch": 2, "sample_id": "ue57-trace-021", "domain": "Unreal Engine 5.7", "loss": 4.169956, "grad_norm": 9.93181}
+{"step": 805, "epoch": 2, "sample_id": "ue57-rep-023", "domain": "Unreal Engine 5.7", "loss": 4.827146, "grad_norm": 11.756479}
+{"step": 806, "epoch": 2, "sample_id": "godot4-char-034", "domain": "Godot 4", "loss": 3.501143, "grad_norm": 8.306818}
+{"step": 807, "epoch": 2, "sample_id": "ue57-mem-016", "domain": "Unreal Engine 5.7", "loss": 4.15592, "grad_norm": 9.53773}
+{"step": 808, "epoch": 2, "sample_id": "unity-dots-010", "domain": "Unity DOTS", "loss": 3.479204, "grad_norm": 13.751211}
+{"step": 809, "epoch": 2, "sample_id": "ue57-rep-039", "domain": "Unreal Engine 5.7", "loss": 5.027171, "grad_norm": 9.356869}
+{"step": 810, "epoch": 2, "sample_id": "uefn-verse-028", "domain": "UEFN Verse", "loss": 5.102184, "grad_norm": 9.287678}
+{"step": 811, "epoch": 2, "sample_id": "godot4-char-031", "domain": "Godot 4", "loss": 3.428225, "grad_norm": 12.392018}
+{"step": 812, "epoch": 2, "sample_id": "ue57-gas-010", "domain": "Unreal Engine 5.7", "loss": 4.53507, "grad_norm": 10.563865}
+{"step": 813, "epoch": 2, "sample_id": "ue57-prof-019", "domain": "Unreal Engine 5.7", "loss": 4.837838, "grad_norm": 8.948742}
+{"step": 814, "epoch": 2, "sample_id": "GF-UE57-REPAIR-003", "domain": "Unreal Engine 5.7", "loss": 7.298895, "grad_norm": 11.740746}
+{"step": 815, "epoch": 2, "sample_id": "unity-dots-080", "domain": "Unity DOTS", "loss": 3.812782, "grad_norm": 10.944181}
+{"step": 816, "epoch": 2, "sample_id": "bevy-rust-006", "domain": "Bevy Rust", "loss": 4.980741, "grad_norm": 11.055158}
+{"step": 817, "epoch": 2, "sample_id": "unity-dots-029", "domain": "Unity DOTS", "loss": 3.669039, "grad_norm": 9.374117}
+{"step": 818, "epoch": 2, "sample_id": "unity-dots-066", "domain": "Unity DOTS", "loss": 3.692548, "grad_norm": 9.430739}
+{"step": 819, "epoch": 2, "sample_id": "gamemath-009", "domain": "Game Mathematics", "loss": 5.01173, "grad_norm": 11.551851}
+{"step": 820, "epoch": 2, "sample_id": "godot4-char-070", "domain": "Godot 4", "loss": 3.590365, "grad_norm": 12.440266}
+{"step": 821, "epoch": 2, "sample_id": "roblox-sec-040", "domain": "Roblox Luau", "loss": 4.686637, "grad_norm": 12.429233}
+{"step": 822, "epoch": 2, "sample_id": "ue57-ai-026", "domain": "Unreal Engine 5.7", "loss": 4.438729, "grad_norm": 9.503407}
+{"step": 823, "epoch": 2, "sample_id": "ue57-mem-003", "domain": "Unreal Engine 5.7", "loss": 4.31032, "grad_norm": 9.971642}
+{"step": 824, "epoch": 2, "sample_id": "roblox-sec-048", "domain": "Roblox Luau", "loss": 4.559231, "grad_norm": 11.020721}
+{"step": 825, "epoch": 2, "sample_id": "godot4-char-006", "domain": "Godot 4", "loss": 3.569711, "grad_norm": 10.773052}
+{"step": 826, "epoch": 2, "sample_id": "unity-dots-053", "domain": "Unity DOTS", "loss": 3.645731, "grad_norm": 14.393072}
+{"step": 827, "epoch": 2, "sample_id": "ue57-gas-027", "domain": "Unreal Engine 5.7", "loss": 4.440845, "grad_norm": 10.027864}
+{"step": 828, "epoch": 2, "sample_id": "godot4-char-029", "domain": "Godot 4", "loss": 3.474757, "grad_norm": 9.012004}
+{"step": 829, "epoch": 2, "sample_id": "gamemath-006", "domain": "Game Mathematics", "loss": 4.763865, "grad_norm": 14.736406}
+{"step": 830, "epoch": 2, "sample_id": "bevy-rust-030", "domain": "Bevy Rust", "loss": 4.727452, "grad_norm": 11.249266}
+{"step": 831, "epoch": 2, "sample_id": "godot4-char-007", "domain": "Godot 4", "loss": 3.384017, "grad_norm": 8.670893}
+{"step": 832, "epoch": 2, "sample_id": "godot4-char-020", "domain": "Godot 4", "loss": 3.295298, "grad_norm": 8.520025}
+{"step": 833, "epoch": 2, "sample_id": "unity-dots-008", "domain": "Unity DOTS", "loss": 3.549977, "grad_norm": 12.582413}
+{"step": 834, "epoch": 2, "sample_id": "godot4-char-059", "domain": "Godot 4", "loss": 3.158438, "grad_norm": 7.69483}
+{"step": 835, "epoch": 2, "sample_id": "uefn-verse-015", "domain": "UEFN Verse", "loss": 5.253414, "grad_norm": 9.878178}
+{"step": 836, "epoch": 2, "sample_id": "bevy-rust-027", "domain": "Bevy Rust", "loss": 4.89318, "grad_norm": 12.527653}
+{"step": 837, "epoch": 2, "sample_id": "ue57-trace-001", "domain": "Unreal Engine 5.7", "loss": 4.4105, "grad_norm": 14.222929}
+{"step": 838, "epoch": 2, "sample_id": "ue57-prof-005", "domain": "Unreal Engine 5.7", "loss": 5.050046, "grad_norm": 11.810617}
+{"step": 839, "epoch": 2, "sample_id": "ue57-trace-002", "domain": "Unreal Engine 5.7", "loss": 4.271198, "grad_norm": 11.523049}
+{"step": 840, "epoch": 2, "sample_id": "ue57-rep-016", "domain": "Unreal Engine 5.7", "loss": 5.048146, "grad_norm": 12.725404}
+{"step": 841, "epoch": 2, "sample_id": "uefn-verse-021", "domain": "UEFN Verse", "loss": 5.124345, "grad_norm": 8.382854}
+{"step": 842, "epoch": 2, "sample_id": "roblox-sec-013", "domain": "Roblox Luau", "loss": 4.545189, "grad_norm": 14.147891}
+{"step": 843, "epoch": 2, "sample_id": "ue57-rep-004", "domain": "Unreal Engine 5.7", "loss": 4.901641, "grad_norm": 9.980134}
+{"step": 844, "epoch": 2, "sample_id": "ue57-rep-024", "domain": "Unreal Engine 5.7", "loss": 4.827243, "grad_norm": 8.465052}
+{"step": 845, "epoch": 2, "sample_id": "bevy-rust-035", "domain": "Bevy Rust", "loss": 4.679775, "grad_norm": 9.576806}
+{"step": 846, "epoch": 2, "sample_id": "gamemath-018", "domain": "Game Mathematics", "loss": 4.681391, "grad_norm": 11.891821}
+{"step": 847, "epoch": 2, "sample_id": "ue57-mem-018", "domain": "Unreal Engine 5.7", "loss": 4.303323, "grad_norm": 11.191733}
+{"step": 848, "epoch": 2, "sample_id": "ue57-prof-004", "domain": "Unreal Engine 5.7", "loss": 4.945489, "grad_norm": 9.583255}
+{"step": 849, "epoch": 2, "sample_id": "ue57-gas-033", "domain": "Unreal Engine 5.7", "loss": 4.294882, "grad_norm": 7.574176}
+{"step": 850, "epoch": 2, "sample_id": "ue57-ai-012", "domain": "Unreal Engine 5.7", "loss": 4.238067, "grad_norm": 7.946301}
+{"step": 851, "epoch": 2, "sample_id": "gamemath-031", "domain": "Game Mathematics", "loss": 4.502628, "grad_norm": 12.051479}
+{"step": 852, "epoch": 2, "sample_id": "ue57-ai-025", "domain": "Unreal Engine 5.7", "loss": 4.232373, "grad_norm": 9.606005}
+{"step": 853, "epoch": 2, "sample_id": "ue57-prof-018", "domain": "Unreal Engine 5.7", "loss": 4.6379, "grad_norm": 9.893902}
+{"step": 854, "epoch": 2, "sample_id": "unity-dots-036", "domain": "Unity DOTS", "loss": 3.910163, "grad_norm": 11.279862}
+{"step": 855, "epoch": 2, "sample_id": "GF-UE57-INPUT-001", "domain": "Unreal Engine 5.7", "loss": 6.538927, "grad_norm": 10.890863}
+{"step": 856, "epoch": 2, "sample_id": "unity-dots-075", "domain": "Unity DOTS", "loss": 4.056611, "grad_norm": 14.016589}
+{"step": 857, "epoch": 2, "sample_id": "ue57-rep-017", "domain": "Unreal Engine 5.7", "loss": 4.6925, "grad_norm": 10.770206}
+{"step": 858, "epoch": 2, "sample_id": "ue57-gas-019", "domain": "Unreal Engine 5.7", "loss": 4.154667, "grad_norm": 8.283117}
+{"step": 859, "epoch": 2, "sample_id": "godot4-char-025", "domain": "Godot 4", "loss": 4.443103, "grad_norm": 18.877275}
+{"step": 860, "epoch": 2, "sample_id": "ue57-mem-005", "domain": "Unreal Engine 5.7", "loss": 4.2909, "grad_norm": 15.035726}
+{"step": 861, "epoch": 2, "sample_id": "godot4-char-009", "domain": "Godot 4", "loss": 4.34608, "grad_norm": 18.076664}
+{"step": 862, "epoch": 2, "sample_id": "bevy-rust-023", "domain": "Bevy Rust", "loss": 4.879941, "grad_norm": 11.846741}
+{"step": 863, "epoch": 2, "sample_id": "godot4-char-062", "domain": "Godot 4", "loss": 4.088644, "grad_norm": 14.300576}
+{"step": 864, "epoch": 2, "sample_id": "ue57-trace-024", "domain": "Unreal Engine 5.7", "loss": 4.019823, "grad_norm": 8.843628}
+{"step": 865, "epoch": 2, "sample_id": "uefn-verse-032", "domain": "UEFN Verse", "loss": 5.173836, "grad_norm": 7.840359}
+{"step": 866, "epoch": 2, "sample_id": "ue57-gas-009", "domain": "Unreal Engine 5.7", "loss": 4.11799, "grad_norm": 9.819552}
+{"step": 867, "epoch": 2, "sample_id": "godot4-char-014", "domain": "Godot 4", "loss": 3.706053, "grad_norm": 10.729483}
+{"step": 868, "epoch": 2, "sample_id": "ue57-prof-012", "domain": "Unreal Engine 5.7", "loss": 4.692397, "grad_norm": 10.230902}
+{"step": 869, "epoch": 2, "sample_id": "ue57-gas-013", "domain": "Unreal Engine 5.7", "loss": 4.008645, "grad_norm": 10.104174}
+{"step": 870, "epoch": 2, "sample_id": "unity-dots-064", "domain": "Unity DOTS", "loss": 3.972386, "grad_norm": 15.791866}
+{"step": 871, "epoch": 2, "sample_id": "roblox-sec-006", "domain": "Roblox Luau", "loss": 4.613841, "grad_norm": 10.596456}
+{"step": 872, "epoch": 2, "sample_id": "uefn-verse-006", "domain": "UEFN Verse", "loss": 5.039232, "grad_norm": 8.039267}
+{"step": 873, "epoch": 2, "sample_id": "roblox-sec-035", "domain": "Roblox Luau", "loss": 4.54416, "grad_norm": 10.383805}
+{"step": 874, "epoch": 2, "sample_id": "bevy-rust-025", "domain": "Bevy Rust", "loss": 4.548747, "grad_norm": 10.227205}
+{"step": 875, "epoch": 2, "sample_id": "ue57-trace-023", "domain": "Unreal Engine 5.7", "loss": 3.928334, "grad_norm": 10.248175}
+{"step": 876, "epoch": 2, "sample_id": "ue57-rep-035", "domain": "Unreal Engine 5.7", "loss": 4.713659, "grad_norm": 10.812886}
+{"step": 877, "epoch": 2, "sample_id": "ue57-gas-022", "domain": "Unreal Engine 5.7", "loss": 3.920595, "grad_norm": 9.027198}
+{"step": 878, "epoch": 2, "sample_id": "ue57-gas-032", "domain": "Unreal Engine 5.7", "loss": 3.858745, "grad_norm": 8.662066}
+{"step": 879, "epoch": 2, "sample_id": "roblox-sec-018", "domain": "Roblox Luau", "loss": 4.354362, "grad_norm": 11.402372}
+{"step": 880, "epoch": 2, "sample_id": "uefn-verse-009", "domain": "UEFN Verse", "loss": 4.912432, "grad_norm": 8.299089}
+{"step": 881, "epoch": 2, "sample_id": "unity-dots-032", "domain": "Unity DOTS", "loss": 3.923761, "grad_norm": 14.326972}
+{"step": 882, "epoch": 2, "sample_id": "gamemath-001", "domain": "Game Mathematics", "loss": 5.071326, "grad_norm": 15.51751}
+{"step": 883, "epoch": 2, "sample_id": "gamemath-015", "domain": "Game Mathematics", "loss": 4.600825, "grad_norm": 13.7095}
+{"step": 884, "epoch": 2, "sample_id": "godot4-char-057", "domain": "Godot 4", "loss": 3.993069, "grad_norm": 18.003792}
+{"step": 885, "epoch": 2, "sample_id": "ue57-mem-025", "domain": "Unreal Engine 5.7", "loss": 4.345416, "grad_norm": 13.504336}
+{"step": 886, "epoch": 2, "sample_id": "unity-dots-013", "domain": "Unity DOTS", "loss": 3.73522, "grad_norm": 10.871064}
+{"step": 887, "epoch": 2, "sample_id": "ue57-mem-017", "domain": "Unreal Engine 5.7", "loss": 4.254687, "grad_norm": 11.57914}
+{"step": 888, "epoch": 2, "sample_id": "godot4-char-024", "domain": "Godot 4", "loss": 3.864349, "grad_norm": 15.935287}
+{"step": 889, "epoch": 2, "sample_id": "uefn-verse-034", "domain": "UEFN Verse", "loss": 4.767094, "grad_norm": 9.252383}
+{"step": 890, "epoch": 2, "sample_id": "ue57-gas-007", "domain": "Unreal Engine 5.7", "loss": 3.941723, "grad_norm": 11.423237}
+{"step": 891, "epoch": 2, "sample_id": "unity-dots-027", "domain": "Unity DOTS", "loss": 3.689998, "grad_norm": 9.432417}
+{"step": 892, "epoch": 2, "sample_id": "godot4-char-067", "domain": "Godot 4", "loss": 3.696859, "grad_norm": 14.080956}
+{"step": 893, "epoch": 2, "sample_id": "uefn-verse-038", "domain": "UEFN Verse", "loss": 4.715212, "grad_norm": 9.76336}
+{"step": 894, "epoch": 2, "sample_id": "uefn-verse-014", "domain": "UEFN Verse", "loss": 4.653586, "grad_norm": 9.27194}
+{"step": 895, "epoch": 2, "sample_id": "unity-dots-015", "domain": "Unity DOTS", "loss": 3.41814, "grad_norm": 10.291387}
+{"step": 896, "epoch": 2, "sample_id": "bevy-rust-018", "domain": "Bevy Rust", "loss": 4.724807, "grad_norm": 10.936021}
+{"step": 897, "epoch": 2, "sample_id": "ue57-gas-005", "domain": "Unreal Engine 5.7", "loss": 4.097422, "grad_norm": 14.809882}
+{"step": 898, "epoch": 2, "sample_id": "ue57-rep-009", "domain": "Unreal Engine 5.7", "loss": 4.939729, "grad_norm": 13.318959}
+{"step": 899, "epoch": 2, "sample_id": "bevy-rust-011", "domain": "Bevy Rust", "loss": 4.696804, "grad_norm": 10.359476}
+{"step": 900, "epoch": 2, "sample_id": "ue57-rep-008", "domain": "Unreal Engine 5.7", "loss": 4.706479, "grad_norm": 10.097826}
+{"step": 901, "epoch": 2, "sample_id": "ue57-trace-022", "domain": "Unreal Engine 5.7", "loss": 4.174432, "grad_norm": 10.173279}
+{"step": 902, "epoch": 2, "sample_id": "ue57-mem-034", "domain": "Unreal Engine 5.7", "loss": 4.12995, "grad_norm": 12.673956}
+{"step": 903, "epoch": 2, "sample_id": "unity-dots-048", "domain": "Unity DOTS", "loss": 3.599625, "grad_norm": 10.808134}
+{"step": 904, "epoch": 2, "sample_id": "ue57-rep-006", "domain": "Unreal Engine 5.7", "loss": 4.672076, "grad_norm": 8.191115}
+{"step": 905, "epoch": 2, "sample_id": "godot4-char-023", "domain": "Godot 4", "loss": 3.970254, "grad_norm": 16.246763}
+{"step": 906, "epoch": 2, "sample_id": "ue57-ai-006", "domain": "Unreal Engine 5.7", "loss": 4.657792, "grad_norm": 13.631782}
+{"step": 907, "epoch": 2, "sample_id": "ue57-ai-019", "domain": "Unreal Engine 5.7", "loss": 4.392862, "grad_norm": 10.897755}
+{"step": 908, "epoch": 2, "sample_id": "gamemath-017", "domain": "Game Mathematics", "loss": 4.533957, "grad_norm": 11.941626}
+{"step": 909, "epoch": 2, "sample_id": "uefn-verse-013", "domain": "UEFN Verse", "loss": 4.760002, "grad_norm": 7.715247}
+{"step": 910, "epoch": 2, "sample_id": "ue57-prof-024", "domain": "Unreal Engine 5.7", "loss": 4.896311, "grad_norm": 8.96047}
+{"step": 911, "epoch": 2, "sample_id": "bevy-rust-002", "domain": "Bevy Rust", "loss": 4.629892, "grad_norm": 9.931011}
+{"step": 912, "epoch": 2, "sample_id": "godot4-char-039", "domain": "Godot 4", "loss": 3.894443, "grad_norm": 13.468076}
+{"step": 913, "epoch": 2, "sample_id": "ue57-mem-032", "domain": "Unreal Engine 5.7", "loss": 4.043383, "grad_norm": 11.809519}
+{"step": 914, "epoch": 2, "sample_id": "uefn-verse-017", "domain": "UEFN Verse", "loss": 4.644479, "grad_norm": 7.564766}
+{"step": 915, "epoch": 2, "sample_id": "ue57-trace-030", "domain": "Unreal Engine 5.7", "loss": 4.010745, "grad_norm": 10.920865}
+{"step": 916, "epoch": 2, "sample_id": "gamemath-033", "domain": "Game Mathematics", "loss": 4.361353, "grad_norm": 13.963398}
+{"step": 917, "epoch": 2, "sample_id": "ue57-trace-011", "domain": "Unreal Engine 5.7", "loss": 3.983245, "grad_norm": 10.609737}
+{"step": 918, "epoch": 2, "sample_id": "ue57-ai-014", "domain": "Unreal Engine 5.7", "loss": 4.097875, "grad_norm": 9.699416}
+{"step": 919, "epoch": 2, "sample_id": "gamemath-029", "domain": "Game Mathematics", "loss": 4.340631, "grad_norm": 14.898058}
+{"step": 920, "epoch": 2, "sample_id": "ue57-trace-013", "domain": "Unreal Engine 5.7", "loss": 3.702721, "grad_norm": 8.109681}
+{"step": 921, "epoch": 2, "sample_id": "roblox-sec-014", "domain": "Roblox Luau", "loss": 4.87922, "grad_norm": 17.343903}
+{"step": 922, "epoch": 2, "sample_id": "godot4-char-028", "domain": "Godot 4", "loss": 3.840578, "grad_norm": 18.471375}
+{"step": 923, "epoch": 2, "sample_id": "unity-dots-065", "domain": "Unity DOTS", "loss": 3.996137, "grad_norm": 18.611279}
+{"step": 924, "epoch": 2, "sample_id": "ue57-gas-018", "domain": "Unreal Engine 5.7", "loss": 4.179445, "grad_norm": 11.860075}
+{"step": 925, "epoch": 2, "sample_id": "gamemath-023", "domain": "Game Mathematics", "loss": 4.13881, "grad_norm": 18.523319}
+{"step": 926, "epoch": 2, "sample_id": "unity-dots-047", "domain": "Unity DOTS", "loss": 3.911016, "grad_norm": 14.936927}
+{"step": 927, "epoch": 2, "sample_id": "unity-dots-040", "domain": "Unity DOTS", "loss": 3.750633, "grad_norm": 13.20379}
+{"step": 928, "epoch": 2, "sample_id": "roblox-sec-049", "domain": "Roblox Luau", "loss": 4.746927, "grad_norm": 13.145727}
+{"step": 929, "epoch": 2, "sample_id": "ue57-rep-015", "domain": "Unreal Engine 5.7", "loss": 4.589372, "grad_norm": 12.18216}
+{"step": 930, "epoch": 2, "sample_id": "ue57-prof-020", "domain": "Unreal Engine 5.7", "loss": 4.633852, "grad_norm": 10.251535}
+{"step": 931, "epoch": 2, "sample_id": "ue57-prof-022", "domain": "Unreal Engine 5.7", "loss": 4.704253, "grad_norm": 12.120129}
+{"step": 932, "epoch": 2, "sample_id": "roblox-sec-044", "domain": "Roblox Luau", "loss": 4.639432, "grad_norm": 12.422189}
+{"step": 933, "epoch": 2, "sample_id": "ue57-gas-008", "domain": "Unreal Engine 5.7", "loss": 4.20292, "grad_norm": 10.389307}
+{"step": 934, "epoch": 2, "sample_id": "roblox-sec-019", "domain": "Roblox Luau", "loss": 4.535978, "grad_norm": 11.300209}
+{"step": 935, "epoch": 2, "sample_id": "unity-dots-012", "domain": "Unity DOTS", "loss": 3.601612, "grad_norm": 9.361494}
+{"step": 936, "epoch": 2, "sample_id": "ue57-rep-036", "domain": "Unreal Engine 5.7", "loss": 4.681586, "grad_norm": 11.098804}
+{"step": 937, "epoch": 2, "sample_id": "gamemath-003", "domain": "Game Mathematics", "loss": 4.364564, "grad_norm": 14.353276}
+{"step": 938, "epoch": 2, "sample_id": "bevy-rust-017", "domain": "Bevy Rust", "loss": 4.661848, "grad_norm": 10.329794}
+{"step": 939, "epoch": 2, "sample_id": "roblox-sec-010", "domain": "Roblox Luau", "loss": 4.212269, "grad_norm": 8.933397}
+{"step": 940, "epoch": 2, "sample_id": "unity-dots-004", "domain": "Unity DOTS", "loss": 3.598132, "grad_norm": 12.864678}
+{"step": 941, "epoch": 2, "sample_id": "ue57-ai-028", "domain": "Unreal Engine 5.7", "loss": 4.159049, "grad_norm": 10.226532}
+{"step": 942, "epoch": 2, "sample_id": "ue57-mem-011", "domain": "Unreal Engine 5.7", "loss": 4.382504, "grad_norm": 13.742953}
+{"step": 943, "epoch": 2, "sample_id": "ue57-rep-002", "domain": "Unreal Engine 5.7", "loss": 4.676514, "grad_norm": 10.706053}
+{"step": 944, "epoch": 2, "sample_id": "ue57-gas-006", "domain": "Unreal Engine 5.7", "loss": 3.983516, "grad_norm": 9.043162}
+{"step": 945, "epoch": 2, "sample_id": "bevy-rust-036", "domain": "Bevy Rust", "loss": 4.580166, "grad_norm": 10.530455}
+{"step": 946, "epoch": 2, "sample_id": "bevy-rust-040", "domain": "Bevy Rust", "loss": 4.544253, "grad_norm": 10.566131}
+{"step": 947, "epoch": 2, "sample_id": "gamemath-020", "domain": "Game Mathematics", "loss": 4.180651, "grad_norm": 12.230602}
+{"step": 948, "epoch": 2, "sample_id": "godot4-char-046", "domain": "Godot 4", "loss": 4.179675, "grad_norm": 16.577766}
+{"step": 949, "epoch": 2, "sample_id": "bevy-rust-001", "domain": "Bevy Rust", "loss": 4.508741, "grad_norm": 9.41935}
+{"step": 950, "epoch": 2, "sample_id": "godot4-char-061", "domain": "Godot 4", "loss": 4.057425, "grad_norm": 14.30816}
+{"step": 951, "epoch": 2, "sample_id": "godot4-char-005", "domain": "Godot 4", "loss": 3.909013, "grad_norm": 12.554132}
+{"step": 952, "epoch": 2, "sample_id": "bevy-rust-014", "domain": "Bevy Rust", "loss": 4.31677, "grad_norm": 9.772646}
+{"step": 953, "epoch": 2, "sample_id": "ue57-rep-001", "domain": "Unreal Engine 5.7", "loss": 4.480433, "grad_norm": 11.957015}
+{"step": 954, "epoch": 2, "sample_id": "godot4-char-066", "domain": "Godot 4", "loss": 3.640176, "grad_norm": 10.837467}
+{"step": 955, "epoch": 2, "sample_id": "ue57-trace-014", "domain": "Unreal Engine 5.7", "loss": 4.063915, "grad_norm": 15.107219}
+{"step": 956, "epoch": 2, "sample_id": "ue57-rep-011", "domain": "Unreal Engine 5.7", "loss": 4.452583, "grad_norm": 10.326201}

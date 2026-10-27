@@ -1,0 +1,65 @@
+Here is the production-ready C++ implementation for the `ACharacter` pickup system. This solution adheres to Unreal Engine 5.7 conventions, utilizes `Enhanced Input` patterns (implied via RPC usage), ensures memory safety with `TObjectPtr`, and implements strict authority checks.
+
+### Implementation Details
+
+1.  **Client Method (`AttemptPickup`)**: Handles the local interaction trigger. It performs a basic sanity check and sends the RPC.
+2.  **Server RPC (`Server_PickupItem`)**:
+    *   **Reliability**: Declared as `Server` (default is reliable).
+    *   **Validation**: Checks if the item is valid, owned by the player, and within interaction distance.
+    *   **Authority Check**: Explicitly verifies `IsLocallyControlled()` to prevent cheating.
+    *   **Logic**: Transfers ownership and adds the item to the inventory.
+3.  **Header/Implementation Separation**: Follows standard UE project structure.
+
+### 1. Header File (`CharacterPickup.h`)
+
+```cpp
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "Item.h" // Assuming AItem is defined elsewhere
+#include "CharacterPickup.generated.h"
+
+// Forward declaration to avoid circular includes if AItem includes ACharacter
+class AItem;
+
+/**
+ * Represents the distance threshold for picking up an item.
+ * Adjust based on your desired interaction radius.
+ */
+UCLASS()
+class GAMEFORGE_API ACharacterPickup : public ACharacter
+{
+	GENERATED_BODY()
+
+public:
+	ACharacterPickup();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	// =================================================================
+	// Client-Side Interaction
+	// =================================================================
+
+	/**
+	 * Attempts to pick up an item.
+	 * Called on the client (local or remote) when the player triggers the pickup.
+	 * 
+	 * @param Item The item to attempt to pick up.
+	 */
+	UFUNCTION(NetMulticast, Reliable)
+	void AttemptPickup(AItem* Item);
+
+	// =================================================================
+	// Server-Side Logic
+	// =================================================================
+
+	/**
+	 * Server-side handler for the pickup request.
+	 * This is a Reliable Server RPC.
+	 * 
+	 * @param Item The item to pick up.
+	 */
+	UFUNCTION(Server, Reliable)

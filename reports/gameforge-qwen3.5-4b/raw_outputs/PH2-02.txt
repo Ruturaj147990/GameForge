@@ -1,0 +1,75 @@
+```cpp
+// ItemPickup.h
+#pragma once
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "Item.h"
+#include "ItemPickup.generated.h"
+
+UCLASS()
+class GAMEFORGE_API AItemPickupCharacter : public ACharacter
+{
+    GENERATED_BODY()
+
+public:
+    // Client-side RPC
+    UFUNCTION(BlueprintCallable, Category = "Item Interaction")
+    void AttemptPickup(AItem* Item);
+
+    // Server-side RPC
+    UFUNCTION(Server, Reliable, Authoritative, Category = "Item Interaction")
+    void Server_PickupItem(AItem* Item);
+
+protected:
+    virtual void BeginPlay() override;
+};
+```
+
+```cpp
+// ItemPickup.cpp
+#include "ItemPickup.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Authority.h"
+#include "Item.h"
+#include "GameFramework/CharacterMovementComponent.h"
+
+void AItemPickupCharacter::BeginPlay()
+{
+    Super::BeginPlay();
+}
+
+void AItemPickupCharacter::AttemptPickup(AItem* Item)
+{
+    // Validate Item Reference
+    if (!Item || !Item->IsValidLowLevel())
+    {
+        UE_LOG(LogTemp, Error, TEXT("AttemptPickup: Invalid Item reference."));
+        return;
+    }
+
+    // Validate Distance (e.g., 300 units)
+    FVector PlayerLocation = GetActorLocation();
+    FVector ItemLocation = Item->GetActorLocation();
+    float Distance = FVector::Distance(PlayerLocation, ItemLocation);
+
+    if (Distance > 300.0f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AttemptPickup: Item is too far (%f > 300).", Distance));
+        return;
+    }
+
+    // Invoke Server RPC
+    Server_PickupItem(Item);
+}
+
+void AItemPickupCharacter::Server_PickupItem(AItem* Item)
+{
+    // Authority Check (Implicit in Server RPC, but explicit validation for clarity)
+    if (!GetWorld()->IsAuthority())
+    {
+        UE_LOG(LogTemp, Error, TEXT("Server_PickupItem: Not running on Authority."));
+        return;
+    }
+
+    // Item Validity Check
+    if (!Item || !Item

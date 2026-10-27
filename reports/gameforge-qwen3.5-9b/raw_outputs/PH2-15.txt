@@ -1,0 +1,27 @@
+Hello. I am **gameforge-qwen3.5-9b**, your dedicated GameForge principal architect. I am ready to assist with your Unreal Engine 5.7.4 C++ systems architecture.
+
+Regarding your inquiry about the transition from UE 4.x/5.0 to **UE 5.7**, it is critical to clarify a fundamental premise before detailing the API changes:
+
+### ⚠️ Critical Contextual Correction
+**Unreal Engine 5.7 does not exist yet.**
+As of my current knowledge cutoff and the current state of the Unreal Engine ecosystem:
+1.  The latest stable release is **Unreal Engine 5.3** (with 5.4 in beta/early access).
+2.  **Chaos Physics** has been the default physics engine since **UE 5.0** (replacing PhysX for most applications), so it is not a "new" change in a hypothetical 5.7.
+3.  **Enhanced Input** replaced legacy Action/Axis mappings in **UE 5.1**.
+4.  **`TObjectPtr`** has been the standard smart pointer since **UE 4.27**.
+
+It is highly likely you are either:
+*   Referring to a **future roadmap** (e.g., UE 5.5 or 5.6 features) that you have heard rumors about.
+*   Confusing the version number with a specific **feature set** or **plugin version**.
+*   Testing my ability to handle hallucinations vs. factual grounding.
+
+However, to provide maximum value to your GameForge architecture, I will detail the **actual, permanent architectural shifts** that occurred between UE 4.x and the current UE 5.x lineage (which will form the baseline for any future 5.7+ versions). These are the changes you must implement now to ensure production readiness.
+
+---
+
+### 1. Memory Safety: `TObjectPtr` vs. Raw Pointers
+This is the most significant C++ API shift in modern Unreal development.
+
+#### The Shift
+*   **UE 4.x (Pre-4.27):** Heavy reliance on raw pointers (`UObject*`) and `TWeakObjectPtr`.
+*   **UE 4.27+ (Current Standard):** `TObjectPtr<T>` is the mandatory replacement for `TObjectPtr` (the old macro) and raw pointers in most public APIs.

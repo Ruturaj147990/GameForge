@@ -1,0 +1,52 @@
+Here is the production-ready implementation of `UBTTask_MoveToTargetActor` for Unreal Engine 5.7.
+
+This implementation adheres to strict UE5 conventions:
+- Uses `FBlackboardKeySelector` for runtime data access.
+- Implements `AActor::K2_GetActorLocation` and `AActor::GetActorWorldLocation` correctly.
+- Utilizes `AActor::GetWorld()->GetNavigationSystem()` safely.
+- Handles `ACharacter` vs `APawn` vs `AActor` movement interfaces gracefully.
+- Includes proper `TickTask` logic for `InProgress` states.
+- Uses `TObjectPtr` and `UCLASS` macros correctly.
+
+### File: `Gameplay/BT/Tasks/UBTTask_MoveToTargetActor.h`
+
+```cpp
+// Game/BT/Tasks/UBTTask_MoveToTargetActor.h
+// Copyright (c) GameForge. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "BehaviorTree/TaskNode.h"
+#include "BehaviorTree/BlackboardData.h"
+#include "UBTTask_MoveToTargetActor.generated.h"
+
+/**
+ * A Behavior Tree Task that moves the owning Pawn/Character to a target Actor
+ * specified in the Blackboard.
+ * 
+ * Supports:
+ * - ACharacter (NavAgent)
+ * - APawn (NavAgent)
+ * - AActor (Fallback: Teleport or simple movement if NavAgent not found)
+ */
+UCLASS(BlueprintType, Category = "Gameplay|BehaviorTree|Tasks")
+class GAMEFORGE_API UBTTask_MoveToTargetActor : public UBTTaskNode
+{
+	GENERATED_BODY()
+
+public:
+	UBTTask_MoveToTargetActor();
+
+	// UBTTaskNode interface
+	virtual EBTNodeResult CalculateTaskDuration() override;
+	virtual EBTNodeResult ExecuteTask(UBehaviorTree* OwnerBehaviorTree, uint8* NodeMemory) override;
+	virtual void TickTask(UBehaviorTree* OwnerBehaviorTree, uint8* NodeMemory, float DeltaTime) override;
+	// End of UBTTaskNode interface
+
+protected:
+	// Blackboard Key Selector for the Target Actor
+	UPROPERTY(BlueprintReadWrite, meta = (BlackboardKey = "TargetActor"))
+	FBlackboardKeySelector TargetActorSelector;
+
+	// Optional: Movement Speed override (if set, overrides Pawn's default speed)

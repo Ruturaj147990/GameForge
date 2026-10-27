@@ -1,0 +1,16 @@
+```cpp
+// GameForge-Patch: PhysicsProjectileHitResponse
+// UE5.7 C++ | OnComponentHit | Reflection Calculation | Restitution
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "Math/UnrealMath.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+
+// Forward declaration
+class AProjectile;
+
+void UPhysicsProjectileComponent::OnComponentHit(UPrimitiveComponent* HitComponent, FHitResult& Hit, FLinearVelocity InVelocity, bool bSwing, TSubclassOf<UPrimitiveComponent> ComponentThatHit, FLinearColor HitColor, FLinearColor HitColor2, FLinearColor HitColor3, FLinearColor HitColor4, FLinearColor HitColor5, FLinearColor HitColor6, FLinearColor HitColor7, FLinearColor HitColor8, FLinearColor HitColor9, FLinearColor HitColor10, FLinearColor HitColor11, FLinearColor HitColor12, FLinearColor HitColor13, FLinearColor HitColor14, FLinearColor HitColor15, FLinearColor HitColor16, FLinearColor HitColor17, FLinearColor HitColor18, FLinearColor HitColor19, FLinearColor HitColor20, FLinearColor HitColor21, FLinearColor HitColor22, FLinearColor HitColor23, FLinearColor HitColor24, FLinearColor HitColor25, FLinearColor HitColor26, FLinearColor HitColor27, FLinearColor HitColor28, FLinearColor HitColor29, FLinearColor HitColor30, FLinearColor HitColor31, FLinearColor HitColor32, FLinearColor HitColor33, FLinearColor HitColor34, FLinearColor HitColor35, FLinearColor HitColor36, FLinearColor HitColor37, FLinearColor HitColor38, FLinearColor HitColor39, FLinearColor HitColor40, FLinearColor HitColor41, FLinearColor HitColor42, FLinearColor HitColor43, FLinearColor HitColor44, FLinearColor HitColor45, FLinear

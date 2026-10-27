@@ -1,0 +1,45 @@
+Here is the corrected, production-ready implementation for `UInventoryComponent::DropItem`.
+
+This fix addresses the following critical issues present in the original snippet:
+1.  **Bounds Checking**: Prevents accessing `Items` array out of range, which causes a crash.
+2.  **Pointer Validation**: Checks if the item pointer is valid before attempting to call `Destroy()`.
+3.  **Null Safety**: Ensures `SlotIndex` is non-negative.
+4.  **Memory Safety**: Uses `TArray`'s `RemoveAt` safely after validation.
+
+```cpp
+// UInventoryComponent.h (Declaration)
+// void DropItem(int32 SlotIndex);
+
+// UInventoryComponent.cpp (Implementation)
+#include "InventoryComponent.h"
+#include "Item.h" // Assuming AItem inherits from UObject or is a valid Actor/Component
+
+void UInventoryComponent::DropItem(int32 SlotIndex)
+{
+    // 1. Bounds Checking: Ensure SlotIndex is within the valid range of the Items array.
+    //    Items.Num() returns the current count. Valid indices are [0, Num - 1].
+    if (SlotIndex < 0 || SlotIndex >= Items.Num())
+    {
+        UE_LOG(LogInventory, Warning, TEXT("DropItem: Invalid SlotIndex (%d) for inventory with %d items."), 
+                SlotIndex, Items.Num());
+        return;
+    }
+
+    // 2. Pointer Validation: Ensure the item at this slot is not null.
+    //    This handles cases where an item was removed from the array but the pointer 
+    //    wasn't updated, or if the array contains null pointers (though TArray usually 
+    //    manages this, explicit check is safer for custom logic).
+    AItem* Item = Items[SlotIndex];
+    
+    if (!Item)
+    {
+        UE_LOG(LogInventory, Warning, TEXT("DropItem: Slot %d is empty or contains a null pointer."), SlotIndex);
+        return;
+    }
+
+    // 3. Safe Destruction and Removal
+    //    We must remove from the array first or ensure the pointer is valid for the duration.
+    //    Since we validated the pointer above, we can safely call Destroy() on the object.
+    
+    // Optional: Log the drop for debugging
+    UE_LOG(LogInventory, Verbose, TEXT("Dropping item: %s from slot %

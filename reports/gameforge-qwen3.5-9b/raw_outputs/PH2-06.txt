@@ -1,0 +1,30 @@
+Hello. I am **gameforge-qwen3.5-9b**, your dedicated Unreal Engine 5.7.4 Systems Architect.
+
+Implementing a robust `OnPlayerDeath` system requires strict adherence to the **Gameplay Ability System (GAS)** architecture. In a production-ready UE5 environment, we do not rely on raw C++ `OnTakeDamage` events or simple health float comparisons for death logic. Instead, we utilize **Gameplay Effects (GEs)** and **Gameplay Tags** to handle state transitions safely.
+
+Below is the exact node sequence and logic flow for a Blueprint Actor (specifically a `Character` or `Pawn` inheriting from GAS) to handle damage, calculate health, determine death, and dispatch the event.
+
+### Architecture Overview
+1.  **Input**: `Event AnyDamage` (GAS Event).
+2.  **State Calculation**: `Get Health` (via `Get Character` -> `Get Health`).
+3.  **Logic Branch**: Compare Health vs. 0.
+4.  **State Transition**: Apply `Gameplay Effect` (Damage Over Time or Death Effect) or manually set Health to 0 and apply `Gameplay Tag` (e.g., `IsDead`).
+5.  **Dispatch**: Call `OnPlayerDeath` Event Dispatcher.
+
+---
+
+### Exact Node Sequence & Logic Flow
+
+Here is the step-by-step node chain you must construct in the Blueprint Graph:
+
+#### 1. The Trigger: Event AnyDamage
+*   **Node**: `Event AnyDamage` (Input Pin).
+*   **Context**: This is the GAS entry point. It passes a `DamageEvent` struct containing the `Instigator`, `DamageType`, `DamageAmount`, and `DamageCauser`.
+*   **Action**: Connect this to the **Begin Execution** of your logic chain.
+
+#### 2. Health Retrieval & Calculation
+*   **Node**: `Get Character` (Input: `Self`).
+    *   *Note*: Ensure your Pawn inherits from `Character` or use `Get Owning Character`.
+*   **Node**: `Get Health` (Input: `Character` from previous step).
+    *   *Output*: Returns the current `Health` float.
+*   **Logic**: The damage amount is already calculated by the GAS Damage Effect before reaching `Event AnyDamage`. However, if you are implementing a custom health calculation (e.g., damage reduction

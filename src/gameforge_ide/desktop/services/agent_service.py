@@ -40,6 +40,8 @@ class _AgentWorker(QObject):
         self.workspace_root = workspace_root
         self._session_id: Optional[str] = None
         self._prompt: str = ""
+        self._resume_diff_id: Optional[str] = None
+        self._resume_approved: bool = True
         self._stop_flag = threading.Event()
         # Lazy imports to avoid loading heavy deps until first use
         self._runtime = None
@@ -64,6 +66,14 @@ class _AgentWorker(QObject):
     def set_task(self, session_id: str, prompt: str) -> None:
         self._session_id = session_id
         self._prompt = prompt
+        self._resume_diff_id = None
+        self._resume_approved = True
+        self._stop_flag.clear()
+
+    def set_resume_task(self, session_id: str, diff_id: str, approved: bool = True) -> None:
+        self._session_id = session_id
+        self._resume_diff_id = diff_id
+        self._resume_approved = approved
         self._stop_flag.clear()
 
     @Slot()
@@ -85,11 +95,17 @@ class _AgentWorker(QObject):
 
     async def _stream(self) -> None:
         full_text = ""
-        stream_gen = self._runtime.execute_task_stream(
-            self._session_id, self._prompt
-        )
+        if self._resume_diff_id is not None:
+            stream_gen = self._runtime.resume_task_after_diff(
+                self._session_id, self._resume_diff_id, approved=self._resume_approved
+            )
+            self._resume_diff_id = None
+        else:
+            stream_gen = self._runtime.execute_task_stream(
+                self._session_id, self._prompt
+            )
         try:
-            print(f"\n[GameForge Agent] Prompt received: {self._prompt[:80]}...", flush=True)
+            print(f"\n[GameForge Agent] Stream started for session {self._session_id}...", flush=True)
             async for event in stream_gen:
                 if self._stop_flag.is_set():
                     print("[GameForge Agent] Task cancelled by user.", flush=True)
@@ -237,6 +253,15 @@ class AgentService(QObject):
             return False
         self._busy = True
         self._worker.set_task(session_id, prompt)
+        self._trigger_run.emit()
+        return True
+
+    def resume_after_diff(self, session_id: str, diff_id: str, approved: bool = True) -> bool:
+        """Resume a suspended agent task following a diff approval or rejection."""
+        if self._busy:
+            return False
+        self._busy = True
+        self._worker.set_resume_task(session_id, diff_id, approved=approved)
         self._trigger_run.emit()
         return True
 

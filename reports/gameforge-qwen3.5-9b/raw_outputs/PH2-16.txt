@@ -1,0 +1,49 @@
+Looking at the error screenshot, I can identify:
+
+**Error Code:** `C2027`  
+**Error Message:** `use of undefined type 'UStaticMesh'`  
+**Missing Type:** `UStaticMesh`  
+**Required Fix:** Add the missing engine header include for `UStaticMesh`
+
+---
+
+### ✅ Exact Fix Required
+
+In your C++ file (`MyActor.cpp`), you need to add this include **at the top of the file**, before any class definitions or usage of `UStaticMesh`:
+
+```cpp
+#include "Engine/StaticMesh.h"
+```
+
+> 💡 Note: In Unreal Engine 5.7.4, the correct header is `StaticMesh.h`, not `StaticMesh.h` (though both may work due to case-insensitivity on Windows, it’s best to use the canonical form).
+
+---
+
+### 📁 Where to Place It
+
+Add this line near the top of `MyActor.cpp`, typically after other engine headers like `Core.h` or `GameFramework.h`, but before your actor class declaration:
+
+```cpp
+#include "Core.h"
+#include "GameFramework.h"
+#include "StaticMesh.h"  // ← ADD THIS LINE
+#include "MyActor.h"     // Your header file
+```
+
+---
+
+### ⚠️ Why This Happens
+
+The compiler doesn’t know what `UStaticMesh` is because its declaration hasn’t been included yet. Even if you’re using `TSubclassOf<UStaticMesh>` or similar, the type must be declared first — and that declaration lives in `StaticMesh.h`.
+
+---
+
+### ✅ Final Verification
+
+After adding the include:
+
+1. Save the file.
+2. Rebuild the project in Unreal Editor or via command line.
+3. The error should disappear.
+
+Let me know if you want help reviewing the full file context or integrating this into a larger system!

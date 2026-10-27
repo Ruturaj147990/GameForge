@@ -1,0 +1,46 @@
+Here is the complete, production-ready `HealthComponent.gd` script for Godot 4.3, adhering to strict typing, signal declaration, and memory safety conventions.
+
+```gdscript
+extends Node
+
+# Signal declarations with typed parameters
+signal health_changed(current: float, max: float)
+signal died
+
+# Exported property for the editor inspector
+@export var max_health: float = 100.0
+
+# Current health state
+var current_health: float = 0.0
+
+# Constructor to initialize health to max_health
+func _ready() -> void:
+	current_health = max_health
+
+# Method to apply damage
+# Clamps health between 0 and max_health, then emits signals
+func take_damage(amount: float) -> void:
+	if amount <= 0.0:
+		return
+
+	# Apply damage
+	current_health -= amount
+
+	# Clamp health to ensure it doesn't go below 0 or exceed max_health
+	# (Though logically it shouldn't exceed max unless healing logic is added later)
+	current_health = clamp(current_health, 0.0, max_health)
+
+	# Emit health_changed signal if health is still above 0
+	if current_health > 0.0:
+		health_changed.emit(current_health, max_health)
+	else:
+		# Emit died signal when health hits 0 or below
+		died.emit()
+```
+
+### Implementation Details:
+- **Signals**: Declared at the top with explicit type annotations (`float`) for `current` and `max`.
+- **Export**: `max_health` is marked with `@export` so it appears in the Godot Inspector.
+- **Initialization**: The `_ready()` method ensures `current_health` starts at `max_health`.
+- **Safety**: `take_damage()` includes a check for non-positive damage amounts and uses `clamp()` to prevent `current_health` from becoming negative or exceeding `max_health`.
+- **Signal Emission**: Uses the modern `.emit()` syntax. The `died` signal is only emitted when health drops to 0 or below, while `health_changed` is emitted for any valid state update above 0.

@@ -1,0 +1,73 @@
+```cpp
+// UBTTask_MoveToTargetActor.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "BehaviorTree/BehaviorTreeComponent.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "NavAgentComponent.h"
+#include "GameFramework/Actor.h"
+#include "BehaviorTree/BehaviorTreeTask.h"
+#include "UBTTask_MoveToTargetActor.generated.h"
+
+using FBlackboardKeySelector = TSharedPtr<UBlackboardKeySelector, ISharedData>;
+
+UCLASS(meta = (BlueprintType, BlueprintSpawnableClass))
+class GAMEFORGE_API UBTTask_MoveToTargetActor : public UBTTask
+{
+    GENERATED_BODY()
+
+public:
+    UBTTask_MoveToTargetActor();
+
+protected:
+    virtual void ExecuteTask() override;
+    virtual EBTNodeResult StaticExecuteTask() override;
+
+private:
+    void OnNavAgentReachedTarget();
+    void OnNavAgentFailedToReachTarget();
+
+    FBlackboardKeySelector TargetActorKey;
+    bool bIsMoving;
+    bool bHasReachedTarget;
+    float MoveSuccessThreshold;
+    float MoveFailureThreshold;
+    float MoveTimeout;
+    UNavAgentComponent* NavAgent;
+};
+```
+
+```cpp
+// UBTTask_MoveToTargetActor.cpp
+#include "UBTTask_MoveToTargetActor.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "NavAgentComponent.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "Kismet/GameplayStatics.h"
+
+UBTTask_MoveToTargetActor::UBTTask_MoveToTargetActor()
+    : bIsMoving(false)
+    , bHasReachedTarget(false)
+    , MoveSuccessThreshold(0.01f)
+    , MoveFailureThreshold(10.0f)
+    , MoveTimeout(10.0f)
+{
+    TargetActorKey.SetKeyPath("TargetActor");
+}
+
+void UBTTask_MoveToTargetActor::ExecuteTask()
+{
+    Super::ExecuteTask();
+
+    if (!bIsMoving)
+    {
+        bIsMoving = true;
+        bHasReachedTarget = false;
+
+        // Retrieve Target Actor from Blackboard
+        FBlackboardData TargetData;
+        if (!TargetActorKey.GetData(TargetData))
+        {
+            Set

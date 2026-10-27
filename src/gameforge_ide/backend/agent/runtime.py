@@ -1,4 +1,14 @@
-"""Bounded Agent Runtime and Execution Loop for GameForge IDE."""
+"""Bounded Agent Runtime and Execution Loop for GameForge IDE.
+
+Authoritative implementation conforming to GameForge Master Blueprint (Oct 27, 2026).
+Core Rules:
+1. The model proposes; the harness decides.
+2. Completion is evidence, not text (acceptance predicates over real state).
+3. Fail closed: missing predicates, unapplied diffs, or unacting models block completion.
+4. Bound every operation: tokens, repetitions, iterations, and wall-clock time.
+5. Repetition control: 3rd identical call terminates as BLOCKED (repetition_budget_exhausted).
+6. Suspended approvals: Diff approval resumes the same task.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +24,13 @@ from ..providers.router import ModelRouter
 from ..session_manager import Session, SessionManager
 from ..tools.gateway import ToolGateway
 from .context_manager import ContextManager
+from .task_state import (
+    LedgerEntry,
+    PendingApproval,
+    TaskAcceptancePredicate,
+    TaskBudget,
+    TaskState,
+)
 
 
 class AgentEvent(BaseModel):
@@ -39,6 +56,12 @@ class AgentRuntime:
         self.tool_gateway = ToolGateway(self.workspace_root)
         self.context_manager = ContextManager(self.workspace_root)
         self.max_iterations = max_iterations
+        self.tasks_dir = self.workspace_root / ".gameforge" / "tasks"
+        try:
+            self.tasks_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        self._active_tasks: Dict[str, TaskState] = {}
 
     def _format_tools_description(self) -> str:
         defs = self.tool_gateway.get_definitions()
@@ -131,7 +154,6 @@ class AgentRuntime:
             "omitted_history_messages": omitted,
         }
 
-
     def _extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
         """Extracts structured tool invocation from model output."""
         # 1. Match ```json {"tool": "name", "args": {...}} ```
@@ -198,19 +220,17 @@ class AgentRuntime:
     def _is_conversational(user_prompt: str) -> bool:
         """Return True when the prompt is clearly conversational and should never trigger tools."""
         p = user_prompt.strip().lower()
-        # Very short messages (≤5 words) that contain no action verbs are conversational
         words = re.findall(r"\b\w+\b", p)
+        action_keywords = {
+            "create", "build", "make", "implement", "generate", "inspect",
+            "fix", "refactor", "write", "setup", "develop", "code", "author",
+            "add", "remove", "delete", "update", "edit", "explore", "list",
+            "search", "check", "run", "verify", "test", "compile", "diff",
+        }
         if len(words) <= 5:
-            # Unless they contain an explicit action keyword
-            action_keywords = {
-                "create", "build", "make", "implement", "generate", "inspect",
-                "fix", "refactor", "write", "setup", "develop", "code", "author",
-                "add", "remove", "delete", "update", "edit",
-            }
             if not set(words).intersection(action_keywords):
                 return True
 
-        # Greetings and filler openers
         greeting_prefixes = (
             "hi", "hello", "hey", "sup", "yo", "hiya",
             "good morning", "good afternoon", "good evening",
@@ -222,7 +242,6 @@ class AgentRuntime:
             if p == prefix or p.startswith(prefix + " ") or p.startswith(prefix + ","):
                 return True
 
-        # Pure Q&A / explanation prompts
         qa_prefixes = (
             "what is", "what are", "what does", "what's",
             "who is", "where is", "when is", "why is", "why does",
@@ -237,41 +256,80 @@ class AgentRuntime:
 
     @staticmethod
     def _is_actionable_task(user_prompt: str, model_response: str) -> bool:
-        """Determines if the prompt or response indicates an actionable creation/inspection task."""
+        """Determines if the prompt or response indicates an actionable creation/mutation task."""
         p_lower = user_prompt.lower().strip()
         r_lower = model_response.lower()
 
-        # Action intent indicators in model response
         model_intents = (
             "let me start by", "let's start by", "let me inspect", "let me check",
             "let me first", "i'll create", "i will create", "i'll start", "i will start",
             "let me begin", "i'll build", "i will build", "let's inspect", "let's create",
-            "let me examine", "let's examine", "let me set up", "i'll set up"
+            "let me examine", "let's examine", "let me set up", "i'll set up", "let me explore",
         )
         if any(intent in r_lower for intent in model_intents):
             return True
 
-        # Action keywords in user prompt
         action_keywords = {
             "create", "build", "make", "implement", "generate", "inspect", "fix", "refactor",
-            "write", "setup", "develop", "code", "author"
+            "write", "setup", "develop", "code", "author", "explore", "list", "search",
+            "check", "run", "verify", "test", "compile", "diff", "apply",
         }
         words = set(re.findall(r"\b\w+\b", p_lower))
         if words.intersection(action_keywords):
-            # Exclude purely theoretical explanatory queries
             if not p_lower.startswith(("how to", "how do", "what is", "why", "explain", "describe", "can you explain")):
                 return True
 
         return False
 
+    def _propose_acceptance_predicates(self, user_prompt: str) -> List[TaskAcceptancePredicate]:
+        """Derives machine-checkable acceptance predicates from the user prompt."""
+        predicates: List[TaskAcceptancePredicate] = []
+        # Find file path mentions like GameName/GameName.uproject or *.cpp, *.h, *.py, etc.
+        path_matches = re.findall(r"[\w\-\./\\]+\.(?:uproject|cpp|h|cs|gd|py|json|md|ini|txt)", user_prompt)
+        for pm in path_matches:
+            clean_path = pm.strip("`'\" \t\r\n").replace("\\", "/")
+            if clean_path and not clean_path.startswith("http"):
+                predicates.append(
+                    TaskAcceptancePredicate(
+                        predicate_type="file_exists",
+                        target=clean_path,
+                    )
+                )
+                predicates.append(
+                    TaskAcceptancePredicate(
+                        predicate_type="file_changed",
+                        target=clean_path,
+                    )
+                )
+
+        if not predicates and self._is_actionable_task(user_prompt, ""):
+            # Fallback baseline: an actionable mutate task requires at least one file change
+            predicates.append(
+                TaskAcceptancePredicate(
+                    predicate_type="file_changed",
+                    target="*",
+                )
+            )
+
+        return predicates
+
+    def _save_task_state(self, task: TaskState) -> None:
+        """Persists the task object to .gameforge/tasks/{task_id}.json."""
+        try:
+            self.tasks_dir.mkdir(parents=True, exist_ok=True)
+            path = self.tasks_dir / f"{task.task_id}.json"
+            path.write_text(json.dumps(task.model_dump(), indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    def get_task_state(self, session_id: str) -> Optional[TaskState]:
+        """Returns the active task state associated with a session."""
+        return self._active_tasks.get(session_id)
+
     def _record_prompt_and_get_history(
         self, session_id: str, user_prompt: str, history_limit: int = 8
     ) -> tuple[Session, List[Dict[str, str]]]:
-        """Persist the prompt, then build provider history from the refreshed session.
-
-        SessionManager reads a fresh object from disk for each operation, so a
-        previously loaded Session does not see append_message mutations.
-        """
+        """Persist the prompt, then build provider history from the refreshed session."""
         self.session_manager.append_message(session_id, "user", user_prompt)
         session = self.session_manager.get_session(session_id)
         if session is None:
@@ -286,6 +344,7 @@ class AgentRuntime:
         self,
         session_id: str,
         user_prompt: str,
+        acceptance_predicates: Optional[List[TaskAcceptancePredicate]] = None,
     ) -> AsyncIterator[AgentEvent]:
         """Runs the bounded agent loop, yielding real-time events for WebSocket streaming."""
         session = self.session_manager.get_session(session_id)
@@ -293,21 +352,29 @@ class AgentRuntime:
             yield AgentEvent(event_type="error", content=f"Session {session_id} not found.")
             return
 
+        is_conversational = self._is_conversational(user_prompt)
+        intent = "answer" if is_conversational else "mutate"
+        predicates = acceptance_predicates or self._propose_acceptance_predicates(user_prompt)
+
+        task_state = TaskState(
+            session_id=session_id,
+            goal=user_prompt,
+            intent=intent,
+            acceptance=predicates,
+            budget=TaskBudget(max_iterations=self.max_iterations),
+            phase="author" if intent == "mutate" else "discover",
+        )
+        self._active_tasks[session_id] = task_state
+        self._save_task_state(task_state)
+
         # 1. Build context and preflight the prompt before provider execution.
         tools_desc = self._format_tools_description()
         system_prompt = self.context_manager.build_system_prompt(tools_desc, active_model=session.model_name)
         provider = self.router.get_provider(session.provider_type)
         capabilities = provider.get_capabilities(session.model_name)
-        # For small-context models (e.g. 4096 tokens), using half the context as output
-        # leaves no room for the system prompt + history. Cap output tokens at 1024
-        # so there's always at least ~2048 tokens for input on a 4096-ctx model,
-        # and scale up for larger context windows.
         output_tokens = min(1024, max(256, capabilities.max_context // 4))
 
-
-        # 2. Record user message and reload the session snapshot. SessionManager
-        # operations return independent objects, so the earlier `session`
-        # value would otherwise omit this turn from the provider payload.
+        # 2. Record user message and reload session
         try:
             session, conversation_history = self._record_prompt_and_get_history(
                 session_id, user_prompt, history_limit=10_000
@@ -321,16 +388,20 @@ class AgentRuntime:
                 pinned_message=pinned_prompt,
             )
         except Exception as exc:
+            task_state.terminal_status = "FAILED"
+            task_state.terminal_reason = str(exc)
+            self._save_task_state(task_state)
             yield AgentEvent(event_type="error", content=f"Prompt/context preflight failed: {exc}")
             return
+
         yield AgentEvent(
             event_type="status",
             content="PLANNING",
-            metadata={"message": "Analyzing project and goal...", **budget},
+            metadata={"message": "Analyzing project and goal...", "task_id": task_state.task_id, **budget},
         )
 
         # Short-circuit: conversational prompts get a direct reply with no tool dispatch.
-        if self._is_conversational(user_prompt):
+        if is_conversational:
             yield AgentEvent(
                 event_type="status",
                 content="THINKING",
@@ -346,21 +417,48 @@ class AgentRuntime:
                 num_ctx=capabilities.max_context,
             ):
                 if chunk.error:
+                    task_state.terminal_status = "FAILED"
+                    task_state.terminal_reason = chunk.error
+                    self._save_task_state(task_state)
                     yield AgentEvent(event_type="error", content=chunk.error)
                     return
                 if chunk.token:
                     full_response += chunk.token
                     yield AgentEvent(event_type="token", content=chunk.token)
             self.session_manager.append_message(session_id, "assistant", full_response)
-            yield AgentEvent(event_type="done", content="Conversational reply.", metadata={"full_text": full_response})
+            task_state.terminal_status = "COMPLETED"
+            self._save_task_state(task_state)
+            yield AgentEvent(
+                event_type="done",
+                content="Conversational reply.",
+                metadata={"full_text": full_response, "terminal_status": "COMPLETED"},
+            )
             return
 
         iteration = 0
-        _tool_call_counts: dict = {}  # Tracks repeated (tool, args) combos for loop detection
-        _edit_proposed = False  # True once propose_edit is successfully dispatched
-        _task_needs_edit = self._is_actionable_task(user_prompt, "")  # User asked to create/build?
+        _tool_call_counts: Dict[str, int] = {}
+        _cached_observations: Dict[str, Any] = {}
+        _modified_files: set[str] = set()
+        _tool_history: List[Dict[str, Any]] = []
+        _edit_proposed = False
+        _task_needs_edit = self._is_actionable_task(user_prompt, "")
+        _unmet_predicates_nudged = False
+
         while iteration < self.max_iterations:
             iteration += 1
+
+            # Check timeout budget
+            if task_state.budget.is_timed_out():
+                task_state.terminal_status = "BLOCKED"
+                task_state.terminal_reason = "timeout_exceeded"
+                self._save_task_state(task_state)
+                yield AgentEvent(
+                    event_type="error",
+                    content=f"Task BLOCKED: timeout_exceeded. Budget duration ({task_state.budget.timeout_seconds}s) reached.",
+                    metadata={"status": "BLOCKED", "reason": "timeout_exceeded"},
+                )
+                return
+
             yield AgentEvent(
                 event_type="status",
                 content="THINKING",
@@ -378,6 +476,9 @@ class AgentRuntime:
                 num_ctx=capabilities.max_context,
             ):
                 if chunk.error:
+                    task_state.terminal_status = "FAILED"
+                    task_state.terminal_reason = chunk.error
+                    self._save_task_state(task_state)
                     yield AgentEvent(event_type="error", content=chunk.error)
                     return
                 if chunk.token:
@@ -387,59 +488,101 @@ class AgentRuntime:
             # Check for tool call in response
             tool_call = self._extract_tool_call(full_response)
             if not tool_call:
-                # Determine if we should keep going or wrap up
                 task_actionable = self._is_actionable_task(user_prompt, full_response)
 
-                if _task_needs_edit and not _edit_proposed and iteration < self.max_iterations:
-                    # Task required creating/building something but no propose_edit yet — force it
-                    conversation_history.append({"role": "assistant", "content": full_response})
-                    conversation_history.append({
-                        "role": "user",
-                        "content": (
-                            "You have NOT created any files yet. You MUST call `propose_edit` NOW to create the project files. "
-                            "Do not describe the plan — emit the tool call block immediately. Example:\n"
-                            "```json\n"
-                            '{\n  "tool": "propose_edit",\n  "args": {\n    "subpath": "GameName/GameName.uproject",\n    "replacement_content": "{...}"\n  }\n}\n'
-                            "```"
-                        ),
-                    })
-                    yield AgentEvent(
-                        event_type="status",
-                        content="PLANNING",
-                        metadata={"action": "forcing_propose_edit", "iteration": iteration},
-                    )
-                    continue
-                elif iteration == 1 and task_actionable:
-                    # First iteration: model described intent but didn't emit a tool call yet
-                    conversation_history.append({"role": "assistant", "content": full_response})
-                    conversation_history.append({
-                        "role": "user",
-                        "content": (
-                            "Proceed with the task now. Emit the required tool call block "
-                            "(e.g. `list_dir`, `unreal_find_projects`, or `propose_edit`) to inspect "
-                            "the workspace or create the required project files."
-                        ),
-                    })
-                    yield AgentEvent(
-                        event_type="status",
-                        content="PLANNING",
-                        metadata={"action": "proceeding_to_tool_call", "iteration": iteration},
-                    )
-                    continue
-                else:
-                    # Genuine conversational / summary response — task is done
-                    self.session_manager.append_message(session_id, "assistant", full_response)
-                    yield AgentEvent(event_type="done", content="Task completed.", metadata={"full_text": full_response})
-                    return
+                # Evaluate predicates over real observed state
+                all_satisfied, unmet = task_state.evaluate_acceptance(
+                    self.workspace_root, _modified_files, _tool_history
+                )
+
+                if not all_satisfied and (task_state.intent == "mutate" or _task_needs_edit or task_actionable):
+                    if not _unmet_predicates_nudged and iteration < self.max_iterations:
+                        # Structured nudge listing unmet predicates and available tools
+                        _unmet_predicates_nudged = True
+                        conversation_history.append({"role": "assistant", "content": full_response})
+                        conversation_history.append({
+                            "role": "user",
+                            "content": (
+                                "[Acceptance Predicates Unmet]: The following required predicates are not yet satisfied:\n"
+                                + "\n".join(f"- {u}" for u in (unmet or ["file_changed: Required project files have not been created/modified"]))
+                                + "\n\nAvailable tools:\n"
+                                + self._format_tools_description()
+                                + "\n\nYou MUST call a tool now to make progress. Narrative explanations alone cannot complete this task."
+                            ),
+                        })
+                        yield AgentEvent(
+                            event_type="status",
+                            content="PLANNING",
+                            metadata={"action": "nudge_unmet_predicates", "unmet": unmet, "iteration": iteration},
+                        )
+                        continue
+                    else:
+                        # Second text-only output while predicates remain unmet — fail closed!
+                        task_state.terminal_status = "BLOCKED"
+                        task_state.terminal_reason = "model_not_acting"
+                        self._save_task_state(task_state)
+                        yield AgentEvent(
+                            event_type="error",
+                            content=(
+                                f"Task BLOCKED: model_not_acting. Acceptance predicates remain unmet: {', '.join(unmet) or 'files not modified'}. "
+                                "Model returned narrative text without calling required tools."
+                            ),
+                            metadata={
+                                "status": "BLOCKED",
+                                "reason": "model_not_acting",
+                                "unmet_predicates": unmet,
+                            },
+                        )
+                        return
+
+                # Genuine completion verified against acceptance predicates
+                task_state.terminal_status = "COMPLETED"
+                self._save_task_state(task_state)
+                self.session_manager.append_message(session_id, "assistant", full_response)
+                yield AgentEvent(
+                    event_type="done",
+                    content="Task completed successfully.",
+                    metadata={"full_text": full_response, "terminal_status": "COMPLETED"},
+                )
+                return
 
             tool_name = tool_call["name"]
             tool_args = tool_call["arguments"]
-            # Track if a file edit was ever proposed
+
+            # --- Repetition and Loop Control (Rule 4 & Blueprint §4.E) ---
+            _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+            call_count = _tool_call_counts.get(_tool_key, 0) + 1
+            _tool_call_counts[_tool_key] = call_count
+
+            if call_count >= 3:
+                # 3rd identical request terminates as BLOCKED
+                task_state.terminal_status = "BLOCKED"
+                task_state.terminal_reason = "repetition_budget_exhausted"
+                self._save_task_state(task_state)
+                yield AgentEvent(
+                    event_type="error",
+                    content=(
+                        f"Task BLOCKED: repetition_budget_exhausted. Tool '{tool_name}' was invoked "
+                        f"3 times with identical arguments. Harness terminates execution to prevent loop runaway."
+                    ),
+                    metadata={
+                        "status": "BLOCKED",
+                        "reason": "repetition_budget_exhausted",
+                        "tool": tool_name,
+                    },
+                )
+                return
+
+            # Record intent in write-ahead ledger
+            task_state.record_intent(
+                description=f"Calling {tool_name}",
+                tool_name=tool_name,
+                args=tool_args,
+            )
+            self._save_task_state(task_state)
+
             if tool_name == "propose_edit":
                 _edit_proposed = True
-            # --- Loop detection: track (tool_name, args_repr) call history ---
-            _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
-            _tool_call_counts[_tool_key] = _tool_call_counts.get(_tool_key, 0) + 1
 
             yield AgentEvent(
                 event_type="tool_call",
@@ -451,9 +594,6 @@ class AgentRuntime:
                 (item for item in self.tool_gateway.get_definitions() if item.name == tool_name),
                 None,
             )
-            # A proposed edit is intentionally non-mutating and its specific
-            # diff-review flow below supplies approval. Other dangerous actions
-            # cannot be performed merely because a model emitted JSON.
             if definition and definition.requires_approval and tool_name != "propose_edit":
                 tool_result = {
                     "status": "PENDING_APPROVAL",
@@ -481,13 +621,17 @@ class AgentRuntime:
                 yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"tool": tool_name})
                 return
 
-            # Execute tool
+            # Execute tool (or return cached observation if second repeat)
             yield AgentEvent(event_type="status", content="EXECUTING_TOOL", metadata={"tool": tool_name})
-            tool_result = self.tool_gateway.execute_tool(tool_name, tool_args)
+            if call_count == 2 and _tool_key in _cached_observations:
+                tool_result = _cached_observations[_tool_key]
+            else:
+                tool_result = self.tool_gateway.execute_tool(tool_name, tool_args)
+                _cached_observations[_tool_key] = tool_result
 
-            # Record in session
+            # Record in session and tool history
             diff_id = tool_result.get("diff_id")
-            rec = self.session_manager.record_tool(
+            self.session_manager.record_tool(
                 session_id=session_id,
                 tool_name=tool_name,
                 arguments=tool_args,
@@ -495,9 +639,31 @@ class AgentRuntime:
                 status=tool_result.get("status", "SUCCESS"),
                 diff_id=diff_id,
             )
+            _tool_history.append({
+                "tool_name": tool_name,
+                "arguments": tool_args,
+                "output": tool_result,
+                "status": tool_result.get("status", "SUCCESS"),
+            })
+
+            # Record in task ledger
+            task_state.record_result(
+                tool_name=tool_name,
+                result=tool_result,
+                pre_hash=tool_result.get("original_sha256"),
+                post_hash=tool_result.get("new_sha256"),
+            )
+            self._save_task_state(task_state)
 
             if diff_id and tool_result.get("status") == "PENDING_APPROVAL":
-                # Emits diff approval modal event
+                task_state.pending_approval = PendingApproval(
+                    approval_id=diff_id,
+                    diff_id=diff_id,
+                    file_path=tool_result.get("file_path", ""),
+                    base_hash=tool_result.get("original_sha256", ""),
+                )
+                self._save_task_state(task_state)
+
                 yield AgentEvent(
                     event_type="diff_pending",
                     content="Diff proposed. Awaiting developer approval.",
@@ -521,7 +687,7 @@ class AgentRuntime:
                 metadata={"tool": tool_name, "result": tool_result},
             )
 
-            # Bound tool observation cleanly to ensure it fits comfortably within the token budget
+            # Bound observation string to preserve token budget
             obs_json = json.dumps(tool_result, indent=2, ensure_ascii=False)
             if len(obs_json) > 600 and isinstance(tool_result, dict):
                 summary_info = {}
@@ -545,10 +711,8 @@ class AgentRuntime:
             if len(obs_json) > 900:
                 obs_json = obs_json[:900] + "\n... [truncated]"
 
-            # Build continuation nudge — be specific based on the tool that just ran
-            _repeated = _tool_call_counts.get(_tool_key, 0) >= 2
-            if _repeated:
-                # Hard anti-loop nudge: force the model off the repeated tool
+            # Build continuation nudge
+            if call_count >= 2:
                 continuation_nudge = (
                     f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
                     f"NOTE: You have already called `{tool_name}` with these same arguments. "
@@ -571,7 +735,6 @@ class AgentRuntime:
                     "If you need more information, invoke another tool. Otherwise synthesize the final answer."
                 )
 
-            # Append assistant response + contextual observation for next iteration
             conversation_history.append({"role": "assistant", "content": full_response})
             conversation_history.append({"role": "user", "content": continuation_nudge})
 
@@ -584,11 +747,91 @@ class AgentRuntime:
                     pinned_message=pinned_prompt,
                 )
             except ValueError as exc:
+                task_state.terminal_status = "FAILED"
+                task_state.terminal_reason = f"Context budget exceeded: {exc}"
+                self._save_task_state(task_state)
                 yield AgentEvent(event_type="error", content=f"Context budget exceeded after tool result: {exc}")
                 return
 
+        task_state.terminal_status = "FAILED"
+        task_state.terminal_reason = "iteration_limit_reached"
+        self._save_task_state(task_state)
         yield AgentEvent(
             event_type="done",
             content=f"Bounded iteration limit ({self.max_iterations}) reached.",
-            metadata={"status": "ITERATION_LIMIT"},
+            metadata={"status": "ITERATION_LIMIT", "terminal_status": "FAILED"},
         )
+
+    async def resume_task_after_diff(
+        self, session_id: str, diff_id: str, approved: bool = True
+    ) -> AsyncIterator[AgentEvent]:
+        """Resumes a suspended task after human diff review (Approve/Reject)."""
+        task_state = self._active_tasks.get(session_id)
+        if not task_state:
+            yield AgentEvent(
+                event_type="error",
+                content=f"No active suspended task found for session {session_id}.",
+            )
+            return
+
+        if not approved:
+            task_state.pending_approval = None
+            task_state.terminal_status = "CANCELLED"
+            task_state.terminal_reason = "diff_rejected_by_user"
+            self._save_task_state(task_state)
+            self.session_manager.append_message(
+                session_id, "user", f"[Review]: Diff {diff_id} was REJECTED by developer."
+            )
+            yield AgentEvent(
+                event_type="done",
+                content=f"Diff {diff_id} rejected. Task halted.",
+                metadata={"terminal_status": "CANCELLED"},
+            )
+            return
+
+        # Diff was approved and applied
+        target_file = ""
+        if task_state.pending_approval and task_state.pending_approval.diff_id == diff_id:
+            target_file = task_state.pending_approval.file_path
+        task_state.pending_approval = None
+
+        # Ledger update
+        task_state.ledger.append(
+            LedgerEntry(
+                phase=task_state.phase,
+                action_type="diff_apply",
+                payload={"diff_id": diff_id, "file_path": target_file, "status": "APPROVED"},
+            )
+        )
+
+        modified_files = {target_file} if target_file else set()
+        all_satisfied, unmet = task_state.evaluate_acceptance(
+            self.workspace_root, modified_files, []
+        )
+
+        self.session_manager.append_message(
+            session_id,
+            "user",
+            f"[Review]: Diff {diff_id} was APPROVED and APPLIED to {target_file or 'workspace'}.",
+        )
+
+        if all_satisfied:
+            task_state.terminal_status = "COMPLETED"
+            self._save_task_state(task_state)
+            yield AgentEvent(
+                event_type="done",
+                content=f"Diff {diff_id} applied and all acceptance predicates satisfied. Task completed.",
+                metadata={
+                    "task_id": task_state.task_id,
+                    "diff_id": diff_id,
+                    "terminal_status": "COMPLETED",
+                },
+            )
+        else:
+            # Continue task stream with remaining unmet predicates
+            prompt = (
+                f"Diff {diff_id} was applied successfully. "
+                f"Remaining unmet predicates: {', '.join(unmet)}. Proceed to complete the task."
+            )
+            async for event in self.execute_task_stream(session_id, prompt, task_state.acceptance):
+                yield event

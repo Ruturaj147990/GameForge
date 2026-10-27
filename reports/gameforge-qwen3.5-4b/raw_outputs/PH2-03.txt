@@ -1,0 +1,52 @@
+```cpp
+// UGA_FireWeapon.h
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameplayAbility.h"
+#include "GameplayTagContainer.h"
+#include "UGA_FireWeapon.generated.h"
+
+UCLASS()
+class UGA_FireWeapon : public AGameplayAbility
+{
+    GENERATED_BODY()
+
+public:
+    UGA_FireWeapon()
+    {
+        Cost = 10;
+        Duration = 0.5f;
+    }
+
+    virtual bool CanActivate(AActor* Actor, FGameplayTagContainer& RequiredTags, FGameplayTagContainer& GrantedTags, FGameplayEffectContext& Context) const override;
+    virtual bool CanActivateWithGameplayEffects(AActor* Actor, FGameplayTagContainer& RequiredTags, FGameplayTagContainer& GrantedTags, FGameplayEffectContext& Context) const override;
+    virtual void Activate(AActor* Actor, FGameplayEffectValue& Value) override;
+    virtual void EndAbility(FGameplayAbilityHandle Handle, const FActorInfo& ActorInfo, const FGameplayEffectValue& ActivationInfo, bool bEndEarly, bool bEndEarlyWithoutAnimation) override;
+
+private:
+    void SpawnProjectile(AActor* Actor, const FGameplayEffectValue& ActivationInfo);
+};
+```
+
+```cpp
+// UGA_FireWeapon.cpp
+#include "UGA_FireWeapon.h"
+#include "Projectiles/FireProjectile.h" // Assuming a projectile class exists
+#include "GameplayTagLibrary.h"
+#include "Components/ActorComponent.h"
+
+bool UGA_FireWeapon::CanActivate(AActor* Actor, FGameplayTagContainer& RequiredTags, FGameplayTagContainer& GrantedTags, FGameplayEffectContext& Context) const
+{
+    // Check for State.Weapon.Ready tag
+    if (!RequiredTags.HasTag(FGameplayTag::RequestState("State.Weapon.Ready")))
+    {
+        return false;
+    }
+    return true;
+}
+
+bool UGA_FireWeapon::CanActivateWithGameplayEffects(AActor* Actor, FGameplayTagContainer& RequiredTags, FGameplayTagContainer& GrantedTags, FGameplayEffectContext& Context) const
+{
+    // Check for State.Weapon.Ready tag
+    if (!RequiredTags.HasTag(FGameplayTag::RequestState("State.Weapon.Read
