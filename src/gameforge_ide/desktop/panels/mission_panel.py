@@ -133,6 +133,11 @@ class MissionPanel(QWidget):
         self._btn_refresh.clicked.connect(self.refresh_lists)
         self._tabs.addTab(games, "Games")
 
+        # Execution Plan (DAG multi-step planner)
+        from .plan_panel import PlanPanel
+        self._plan_panel = PlanPanel(self._workspace)
+        self._tabs.addTab(self._plan_panel, "Execution Plan")
+
         self._timer = QTimer(self)
         self._timer.setInterval(2000)
         self._timer.timeout.connect(self._sample)
@@ -150,6 +155,8 @@ class MissionPanel(QWidget):
 
     def set_workspace(self, workspace_root: Path) -> None:
         self._workspace = Path(workspace_root)
+        if hasattr(self, "_plan_panel"):
+            self._plan_panel._workspace = self._workspace
         self.refresh_lists()
 
     @Slot()
@@ -270,6 +277,8 @@ class MissionPanel(QWidget):
             self._games.addItem(item)
         if self._games.count() == 0:
             self._games.addItem(f"No games yet in {root}")
+        if hasattr(self, "_plan_panel"):
+            self._plan_panel.refresh_from_disk()
 
     def _on_cleanup(self) -> None:
         from PySide6.QtWidgets import QMessageBox

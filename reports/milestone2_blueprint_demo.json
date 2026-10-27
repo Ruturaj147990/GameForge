@@ -1,0 +1,569 @@
+{
+  "milestone": "MILESTONE_2_REAL_BLUEPRINT_GRAPH_V1",
+  "started_at": "2026-10-27T19:20:30+0530",
+  "steps": [
+    {
+      "step": "0_handshake",
+      "ok": true,
+      "elapsed_s": 0.043,
+      "data": {
+        "library_version": "2.0.0",
+        "engine_version": "5.7.4-51494982+++UE5+Release-5.7",
+        "project_file": "E:/GameForge/validation/live_ops_probe/GFProbe.uproject",
+        "project_name": "GFProbe",
+        "operations": [
+          "actors_in_level",
+          "asset_dependencies",
+          "asset_exists",
+          "blueprint_compile",
+          "blueprint_connect_pins",
+          "blueprint_create_node",
+          "blueprint_delete_node",
+          "blueprint_disconnect_pins",
+          "blueprint_inspect",
+          "blueprint_readback_graph",
+          "blueprint_save",
+          "blueprint_set_pin_default",
+          "compile_blueprint",
+          "create_blueprint",
+          "create_material",
+          "delete_actor",
+          "delete_asset",
+          "handshake",
+          "import_asset",
+          "list_assets",
+          "load_level",
+          "log_tail",
+          "new_level",
+          "pie_start",
+          "pie_status",
+          "pie_stop",
+          "quit_editor",
+          "rename_asset",
+          "save_all",
+          "set_actor_property",
+          "set_viewport_camera",
+          "spawn_actor",
+          "viewport_screenshot"
+        ],
+        "features": {
+          "EditorActorSubsystem": true,
+          "LevelEditorSubsystem": true,
+          "MaterialEditingLibrary": true,
+          "BlueprintEditorLibrary": true,
+          "InterchangeManager": true,
+          "AssetImportTask": true,
+          "MovieSceneSequence": true,
+          "NiagaraSystem": true,
+          "PCGGraph": false,
+          "ControlRigBlueprint": true,
+          "MetaSoundBuilderSubsystem": true,
+          "WidgetBlueprint": true,
+          "GeometryScript": false
+        }
+      }
+    },
+    {
+      "step": "1_create_blueprint",
+      "ok": true,
+      "elapsed_s": 0.064,
+      "data": {
+        "asset_path": "/Game/BP_GameForgeGraphProbe",
+        "parent_class": "Actor",
+        "exists": true
+      }
+    },
+    {
+      "step": "2_initial_readback",
+      "ok": true,
+      "elapsed_s": 0.032,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "graph_name": "EventGraph",
+        "node_count": 3,
+        "nodes": [
+          {
+            "node_id": "87EE53EA-4586-0F32-58E9-3AB87B82383A",
+            "node_name": "K2Node_Event_0",
+            "node_class": "K2Node_Event",
+            "title": "Event BeginPlay",
+            "pos_x": 0,
+            "pos_y": 0,
+            "event_name": "ReceiveBeginPlay",
+            "pins": [
+              {
+                "pin_name": "OutputDelegate",
+                "direction": "EGPD_Output",
+                "category": "delegate",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              }
+            ]
+          },
+          {
+            "node_id": "C57556E3-42F0-54BB-0C7B-C6B996EA8250",
+            "node_name": "K2Node_Event_1",
+            "node_class": "K2Node_Event",
+            "title": "Event ActorBeginOverlap",
+            "pos_x": 0,
+            "pos_y": 208,
+            "event_name": "ReceiveActorBeginOverlap",
+            "pins": [
+              {
+                "pin_name": "OutputDelegate",
+                "direction": "EGPD_Output",
+                "category": "delegate",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "OtherActor",
+                "direction": "EGPD_Output",
+                "category": "object",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              }
+            ]
+          },
+          {
+            "node_id": "F7B5F890-4004-517F-A785-5A9E08F87314",
+            "node_name": "K2Node_Event_2",
+            "node_class": "K2Node_Event",
+            "title": "Event Tick",
+            "pos_x": 0,
+            "pos_y": 416,
+            "event_name": "ReceiveTick",
+            "pins": [
+              {
+                "pin_name": "OutputDelegate",
+                "direction": "EGPD_Output",
+                "category": "delegate",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "DeltaSeconds",
+                "direction": "EGPD_Output",
+                "category": "real",
+                "sub_category": "float",
+                "default_value": "0.0",
+                "is_linked": false,
+                "linked_to": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "step": "3_create_print_node",
+      "ok": true,
+      "elapsed_s": 0.011,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "graph_name": "EventGraph",
+        "node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+        "node_name": "K2Node_CallFunction_0",
+        "node_class": "K2Node_CallFunction",
+        "title": "Print String",
+        "pos_x": 450,
+        "pos_y": 100,
+        "pins": [
+          {
+            "pin_name": "execute",
+            "direction": "EGPD_Input",
+            "category": "exec"
+          },
+          {
+            "pin_name": "then",
+            "direction": "EGPD_Output",
+            "category": "exec"
+          },
+          {
+            "pin_name": "self",
+            "direction": "EGPD_Input",
+            "category": "object"
+          },
+          {
+            "pin_name": "WorldContextObject",
+            "direction": "EGPD_Input",
+            "category": "object"
+          },
+          {
+            "pin_name": "InString",
+            "direction": "EGPD_Input",
+            "category": "string"
+          },
+          {
+            "pin_name": "bPrintToScreen",
+            "direction": "EGPD_Input",
+            "category": "bool"
+          },
+          {
+            "pin_name": "bPrintToLog",
+            "direction": "EGPD_Input",
+            "category": "bool"
+          },
+          {
+            "pin_name": "TextColor",
+            "direction": "EGPD_Input",
+            "category": "struct"
+          },
+          {
+            "pin_name": "Duration",
+            "direction": "EGPD_Input",
+            "category": "real"
+          },
+          {
+            "pin_name": "Key",
+            "direction": "EGPD_Input",
+            "category": "name"
+          }
+        ]
+      }
+    },
+    {
+      "step": "4_set_pin_default",
+      "ok": true,
+      "elapsed_s": 0.011,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+        "pin_name": "InString",
+        "requested_value": "GAMEFORGE_BLUEPRINT_GRAPH_V1",
+        "readback_value": "GAMEFORGE_BLUEPRINT_GRAPH_V1",
+        "matches": true
+      }
+    },
+    {
+      "step": "5_connect_pins",
+      "ok": true,
+      "elapsed_s": 0.011,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "from_node": "K2Node_Event_0",
+        "from_pin": "then",
+        "to_node": "K2Node_CallFunction_0",
+        "to_pin": "execute",
+        "verified_linked": true
+      }
+    },
+    {
+      "step": "6_verify_graph_readback",
+      "ok": true,
+      "elapsed_s": 0.011,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "graph_name": "EventGraph",
+        "node_count": 4,
+        "nodes": [
+          {
+            "node_id": "87EE53EA-4586-0F32-58E9-3AB87B82383A",
+            "node_name": "K2Node_Event_0",
+            "node_class": "K2Node_Event",
+            "title": "Event BeginPlay",
+            "pos_x": 0,
+            "pos_y": 0,
+            "event_name": "ReceiveBeginPlay",
+            "pins": [
+              {
+                "pin_name": "OutputDelegate",
+                "direction": "EGPD_Output",
+                "category": "delegate",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": true,
+                "linked_to": [
+                  {
+                    "target_node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+                    "target_node_title": "Print String",
+                    "target_pin_name": "execute"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "node_id": "C57556E3-42F0-54BB-0C7B-C6B996EA8250",
+            "node_name": "K2Node_Event_1",
+            "node_class": "K2Node_Event",
+            "title": "Event ActorBeginOverlap",
+            "pos_x": 0,
+            "pos_y": 208,
+            "event_name": "ReceiveActorBeginOverlap",
+            "pins": [
+              {
+                "pin_name": "OutputDelegate",
+                "direction": "EGPD_Output",
+                "category": "delegate",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "OtherActor",
+                "direction": "EGPD_Output",
+                "category": "object",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              }
+            ]
+          },
+          {
+            "node_id": "F7B5F890-4004-517F-A785-5A9E08F87314",
+            "node_name": "K2Node_Event_2",
+            "node_class": "K2Node_Event",
+            "title": "Event Tick",
+            "pos_x": 0,
+            "pos_y": 416,
+            "event_name": "ReceiveTick",
+            "pins": [
+              {
+                "pin_name": "OutputDelegate",
+                "direction": "EGPD_Output",
+                "category": "delegate",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "DeltaSeconds",
+                "direction": "EGPD_Output",
+                "category": "real",
+                "sub_category": "float",
+                "default_value": "0.0",
+                "is_linked": false,
+                "linked_to": []
+              }
+            ]
+          },
+          {
+            "node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+            "node_name": "K2Node_CallFunction_0",
+            "node_class": "K2Node_CallFunction",
+            "title": "Print String",
+            "pos_x": 450,
+            "pos_y": 100,
+            "function_name": "PrintString",
+            "function_class": "KismetSystemLibrary",
+            "pins": [
+              {
+                "pin_name": "execute",
+                "direction": "EGPD_Input",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": true,
+                "linked_to": [
+                  {
+                    "target_node_id": "87EE53EA-4586-0F32-58E9-3AB87B82383A",
+                    "target_node_title": "Event BeginPlay",
+                    "target_pin_name": "then"
+                  }
+                ]
+              },
+              {
+                "pin_name": "then",
+                "direction": "EGPD_Output",
+                "category": "exec",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "self",
+                "direction": "EGPD_Input",
+                "category": "object",
+                "sub_category": "None",
+                "default_value": "/Script/Engine.Default__KismetSystemLibrary",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "WorldContextObject",
+                "direction": "EGPD_Input",
+                "category": "object",
+                "sub_category": "None",
+                "default_value": "",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "InString",
+                "direction": "EGPD_Input",
+                "category": "string",
+                "sub_category": "None",
+                "default_value": "GAMEFORGE_BLUEPRINT_GRAPH_V1",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "bPrintToScreen",
+                "direction": "EGPD_Input",
+                "category": "bool",
+                "sub_category": "None",
+                "default_value": "true",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "bPrintToLog",
+                "direction": "EGPD_Input",
+                "category": "bool",
+                "sub_category": "None",
+                "default_value": "true",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "TextColor",
+                "direction": "EGPD_Input",
+                "category": "struct",
+                "sub_category": "None",
+                "default_value": "(R=0.000000,G=0.660000,B=1.000000,A=1.000000)",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "Duration",
+                "direction": "EGPD_Input",
+                "category": "real",
+                "sub_category": "float",
+                "default_value": "2.000000",
+                "is_linked": false,
+                "linked_to": []
+              },
+              {
+                "pin_name": "Key",
+                "direction": "EGPD_Input",
+                "category": "name",
+                "sub_category": "None",
+                "default_value": "None",
+                "is_linked": false,
+                "linked_to": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "step": "7_compile_blueprint",
+      "ok": true,
+      "elapsed_s": 0.032,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "status": "UpToDate",
+        "compiled_successfully": true,
+        "generated_class": "/Game/BP_GameForgeGraphProbe.BP_GameForgeGraphProbe_C"
+      }
+    },
+    {
+      "step": "8_save_blueprint",
+      "ok": true,
+      "elapsed_s": 0.032,
+      "data": {
+        "blueprint_path": "/Game/BP_GameForgeGraphProbe",
+        "package_name": "/Game/BP_GameForgeGraphProbe",
+        "saved": true,
+        "is_dirty": false
+      }
+    },
+    {
+      "step": "9_spawn_actor_instance",
+      "ok": true,
+      "elapsed_s": 0.158,
+      "data": {
+        "label": "BP_GameForgeGraphProbe_Instance",
+        "class": "/Game/BP_GameForgeGraphProbe.BP_GameForgeGraphProbe_C",
+        "path": "/Game/Maps/GF_Probe.GF_Probe:PersistentLevel.BP_GameForgeGraphProbe_C_0",
+        "location": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 100.0
+        },
+        "rotation": {
+          "pitch": 0.0,
+          "yaw": 0.0,
+          "roll": 0.0
+        }
+      }
+    },
+    {
+      "step": "10_pie_runtime_verification",
+      "ok": true,
+      "elapsed_s": 3.111,
+      "marker_found": true,
+      "matching_log_line": "[2026.10.27-13.50.39:326][ 48]LogBlueprintUserMessages: [BP_GameForgeGraphProbe_C_0] GAMEFORGE_BLUEPRINT_GRAPH_V1"
+    }
+  ],
+  "overall_status": "PASSED",
+  "completed_at": "2026-10-27T19:20:42+0530"
+}

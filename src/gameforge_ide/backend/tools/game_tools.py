@@ -29,7 +29,9 @@ from ...unreal.live_editor import LiveEditorLink
 from ...unreal.toolchain import UnrealToolchain
 
 READ_ONLY_EDITOR_OPS = {"handshake", "asset_exists", "list_assets", "asset_dependencies",
-                        "actors_in_level", "log_tail"}
+                        "actors_in_level", "log_tail", "blueprint_inspect", "blueprint_readback_graph",
+                        "widget_inspect", "widget_readback_tree", "widget_inspect_events",
+                        "widget_runtime_state", "gameplay_get_state"}
 
 
 class ApprovalStore:

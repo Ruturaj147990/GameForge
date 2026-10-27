@@ -103,10 +103,17 @@ class EditTools:
 
         # Check if target_content is present in file (if not creating fresh file)
         if original_text and target_content not in original_text:
-            return {
-                "status": "ERROR",
-                "error": f"Target content block not found in file: {subpath}",
-            }
+            norm_orig = original_text.replace("\r\n", "\n")
+            norm_target = target_content.replace("\r\n", "\n")
+            if norm_target in norm_orig:
+                if "\r\n" in original_text:
+                    target_content = norm_target.replace("\n", "\r\n")
+                    replacement_content = replacement_content.replace("\r\n", "\n").replace("\n", "\r\n")
+            else:
+                return {
+                    "status": "ERROR",
+                    "error": f"Target content block not found in file: {subpath}",
+                }
 
         if original_text:
             new_text = original_text.replace(target_content, replacement_content, 1)

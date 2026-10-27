@@ -1,0 +1,189 @@
+{
+  "demonstration": "Demonstration A: Real Unreal Workflow",
+  "uproject": "E:\\GameForge\\validation\\live_ops_probe\\GFProbe.uproject",
+  "actor_label": "GF_M1_Actor_6543",
+  "elapsed_seconds": 14.2,
+  "status": "COMPLETED",
+  "all_tasks_completed": true,
+  "tasks": {
+    "step1_inspect": {
+      "title": "Inspect level actors and engine state in GFProbe.uproject",
+      "status": "COMPLETED",
+      "error": null,
+      "acceptance": [
+        {
+          "predicate_id": "9f91fe45",
+          "predicate_type": "custom",
+          "target": "editor_responsive",
+          "expected": null,
+          "satisfied": true,
+          "evidence": null,
+          "evaluated_at": 1793106553.8033247
+        }
+      ],
+      "evidence_count": 1
+    },
+    "step2_mutate": {
+      "title": "Spawn actor 'GF_M1_Actor_6543' in active level",
+      "status": "COMPLETED",
+      "error": null,
+      "acceptance": [
+        {
+          "predicate_id": "50a95609",
+          "predicate_type": "unreal_actor_exists",
+          "target": "GF_M1_Actor_6543",
+          "expected": null,
+          "satisfied": true,
+          "evidence": "Actor 'GF_M1_Actor_6543' verified spawned and read-back confirmed",
+          "evaluated_at": 1793106553.8352175
+        }
+      ],
+      "evidence_count": 1
+    },
+    "step3_verify": {
+      "title": "Verify actor 'GF_M1_Actor_6543' via editor read-back",
+      "status": "COMPLETED",
+      "error": null,
+      "acceptance": [
+        {
+          "predicate_id": "e39f76bc",
+          "predicate_type": "unreal_actor_exists",
+          "target": "GF_M1_Actor_6543",
+          "expected": null,
+          "satisfied": true,
+          "evidence": "Actor 'GF_M1_Actor_6543' verified present in active level via Unreal read-back",
+          "evaluated_at": 1793106553.8579154
+        }
+      ],
+      "evidence_count": 1
+    }
+  },
+  "events": [
+    {
+      "event_type": "plan_started",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": null,
+      "status": "RUNNING",
+      "message": "Executing plan 'Spawn marker actor 'GF_M1_Actor_6543' in active level and verify editor state'",
+      "data": {},
+      "timestamp": 1793106543.7334473
+    },
+    {
+      "event_type": "task_ready",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step1_inspect",
+      "status": "READY",
+      "message": "Task 'Inspect level actors and engine state in GFProbe.uproject' is ready",
+      "data": {},
+      "timestamp": 1793106543.733501
+    },
+    {
+      "event_type": "task_started",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step1_inspect",
+      "status": "RUNNING",
+      "message": "Starting task 'Inspect level actors and engine state in GFProbe.uproject'",
+      "data": {},
+      "timestamp": 1793106543.733518
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step1_inspect",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Inspect level actors and engine state in GFProbe.uproject'",
+      "data": {},
+      "timestamp": 1793106553.8032348
+    },
+    {
+      "event_type": "task_completed",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step1_inspect",
+      "status": "COMPLETED",
+      "message": "Task 'Inspect level actors and engine state in GFProbe.uproject' COMPLETED with verified acceptance",
+      "data": {},
+      "timestamp": 1793106553.803362
+    },
+    {
+      "event_type": "task_ready",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step2_mutate",
+      "status": "READY",
+      "message": "Task 'Spawn actor 'GF_M1_Actor_6543' in active level' is ready",
+      "data": {},
+      "timestamp": 1793106553.80453
+    },
+    {
+      "event_type": "task_started",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step2_mutate",
+      "status": "RUNNING",
+      "message": "Starting task 'Spawn actor 'GF_M1_Actor_6543' in active level'",
+      "data": {},
+      "timestamp": 1793106553.8045542
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step2_mutate",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Spawn actor 'GF_M1_Actor_6543' in active level'",
+      "data": {},
+      "timestamp": 1793106553.8351219
+    },
+    {
+      "event_type": "task_completed",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step2_mutate",
+      "status": "COMPLETED",
+      "message": "Task 'Spawn actor 'GF_M1_Actor_6543' in active level' COMPLETED with verified acceptance",
+      "data": {},
+      "timestamp": 1793106553.8352578
+    },
+    {
+      "event_type": "task_ready",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step3_verify",
+      "status": "READY",
+      "message": "Task 'Verify actor 'GF_M1_Actor_6543' via editor read-back' is ready",
+      "data": {},
+      "timestamp": 1793106553.836354
+    },
+    {
+      "event_type": "task_started",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step3_verify",
+      "status": "RUNNING",
+      "message": "Starting task 'Verify actor 'GF_M1_Actor_6543' via editor read-back'",
+      "data": {},
+      "timestamp": 1793106553.8363755
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step3_verify",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Verify actor 'GF_M1_Actor_6543' via editor read-back'",
+      "data": {},
+      "timestamp": 1793106553.857832
+    },
+    {
+      "event_type": "task_completed",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": "step3_verify",
+      "status": "COMPLETED",
+      "message": "Task 'Verify actor 'GF_M1_Actor_6543' via editor read-back' COMPLETED with verified acceptance",
+      "data": {},
+      "timestamp": 1793106553.8579571
+    },
+    {
+      "event_type": "plan_completed",
+      "plan_id": "plan_39695d0dfd06",
+      "task_id": null,
+      "status": "COMPLETED",
+      "message": "Plan successfully COMPLETED",
+      "data": {},
+      "timestamp": 1793106553.8597093
+    }
+  ]
+}

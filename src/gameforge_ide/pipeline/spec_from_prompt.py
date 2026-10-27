@@ -16,9 +16,10 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 from ..recipes.grid_board_game.recipe import GridBoardParams
+from ..recipes.platformer.recipe import PlatformerParams
 
 _CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write)\b", re.I)
 
@@ -47,15 +48,20 @@ RECIPES: List[RecipeEntry] = [
     RecipeEntry("grid_board_game", "N-in-a-row board game", ["in a row", "grid game", "board game"],
                 "configurable grid and line length", {"board_size": 5, "win_length": 4,
                                                       "display_title": "Line Up", "project_name": "LineUp"}),
+    RecipeEntry("platformer", "3D Platformer", ["platformer", "3d platformer", "jump and run", "jumping game", "platform game", "parkour"],
+                "3D obstacle course with jumping, collectibles, checkpoints, and goal",
+                {"collectible_target": 5, "difficulty": "normal", "display_title": "3D Platformer", "project_name": "Platformer"}),
 ]
 
 _SIZE = re.compile(r"\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\b", re.I)
 _WIN = re.compile(r"\b(\d{1,2})\s*(?:in a row|in-a-row|to win)\b", re.I)
+_TARGET = re.compile(r"\b(\d{1,2})\s*(?:collectibles?|coins?|gems?|items?|stars?)\b", re.I)
 _NAME = re.compile(r"\b(?:called|named|titled)\s+[\"']?([A-Za-z][A-Za-z0-9 \-]{0,40}?)[\"']?"
                    r"(?=\s+(?:against|with|vs|versus|for|that|and|in|on|where|using|which)\b|[.,!;:]|\s*$)", re.I)
 _HOTSEAT = re.compile(r"\b(two[- ]player|2[- ]player|hot[- ]?seat|local multiplayer|pvp|against a friend|vs (?:a )?friend)\b", re.I)
 _AI_EASY = re.compile(r"\b(easy|beginner|random)\b", re.I)
 _AI_MED = re.compile(r"\b(medium|normal|greedy)\b", re.I)
+_DIFF = re.compile(r"\b(easy|normal|hard|expert)\b", re.I)
 _COLOR_WORDS = {"red": (1.0, 0.22, 0.2), "blue": (0.1, 0.45, 1.0), "green": (0.15, 0.8, 0.3),
                 "yellow": (1.0, 0.85, 0.1), "purple": (0.55, 0.25, 0.95), "orange": (1.0, 0.55, 0.1),
                 "pink": (1.0, 0.4, 0.7), "white": (0.95, 0.95, 0.95), "black": (0.05, 0.05, 0.06),
@@ -67,7 +73,7 @@ class GameSpec:
     matched: bool
     recipe_id: Optional[str] = None
     recipe_title: Optional[str] = None
-    params: Optional[GridBoardParams] = None
+    params: Optional[Union[GridBoardParams, PlatformerParams]] = None
     confidence: float = 0.0
     reasons: List[str] = field(default_factory=list)
     acceptance: List[str] = field(default_factory=list)
@@ -76,6 +82,9 @@ class GameSpec:
         if not self.matched or not self.params:
             return "No recipe matched: " + "; ".join(self.reasons)
         p = self.params
+        if isinstance(p, PlatformerParams):
+            return (f"{p.display_title}: 3D obstacle course, {p.collectible_target} collectibles, "
+                    f"{p.difficulty} difficulty. Unreal project `{p.project_name}`.")
         opp = f"vs computer ({p.ai_level})" if p.vs_ai else "two players, hot-seat"
         return (f"{p.display_title}: {p.board_size}x{p.board_size} board{', pieces drop down' if p.gravity else ''}, {p.win_length} in a row, {opp}. "
                 f"Unreal project `{p.project_name}`.")
@@ -132,6 +141,41 @@ def match_prompt(prompt: str) -> GameSpec:
                                         + ", ".join(sorted({r.title for r in RECIPES}))])
     d = dict(best.defaults)
     reasons = [f"matched recipe '{best.title}' on '{best_kw}'"]
+    if best.recipe_id == "platformer":
+        m = _TARGET.search(prompt)
+        if m:
+            d["collectible_target"] = int(m.group(1))
+            reasons.append(f"collectible target {m.group(1)} from prompt")
+        m = _DIFF.search(prompt)
+        if m:
+            d["difficulty"] = m.group(1).lower()
+            reasons.append(f"difficulty '{d['difficulty']}' from prompt")
+        m = _NAME.search(prompt)
+        if m:
+            title = m.group(1).strip()
+            d["display_title"] = title
+            d["project_name"] = _pascal(title)
+            reasons.append(f"title '{title}' from prompt")
+        params = PlatformerParams(
+            project_name=d["project_name"],
+            display_title=d["display_title"],
+            collectible_target=d["collectible_target"],
+            difficulty=d["difficulty"],
+        )
+        try:
+            params.validate()
+        except ValueError as exc:
+            return GameSpec(False, best.recipe_id, best.title, reasons=reasons + [f"invalid parameters: {exc}"])
+        acceptance = [
+            f"build_ok({params.project_name}Editor Win64 Development)",
+            f"automation_pass(GameForge.{params.project_name}.*)",
+            "level_readback(SpawnPoint, Collectible, FinishVolume, DirectionalLight)",
+            f"package_ok(Win64 Development) -> {params.project_name}.exe",
+            "packaged_selftest(GF_PLATFORMER_SELFTEST PASS: goal reached, collectibles registered)",
+            "packaged_screenshot_has_content",
+        ]
+        return GameSpec(True, best.recipe_id, best.title, params, 0.9, reasons, acceptance)
+
     m = _SIZE.search(prompt)
     if m and m.group(1) == m.group(2):
         d["board_size"] = int(m.group(1))
@@ -214,7 +258,7 @@ def refine_with_model(spec: GameSpec, prompt: str, complete_json: Callable[[str,
     return spec
 
 
-_FLAG = re.compile(r"--(hotseat|gravity|size|win|ai|title)(?:[=\s]+(\"[^\"]*\"|'[^']*'|[^\s-][^\s]*))?", re.I)
+_FLAG = re.compile(r"--(hotseat|gravity|size|win|ai|title|target|coins|difficulty)(?:[=\s]+(\"[^\"]*\"|'[^']*'|[^\s-][^\s]*))?", re.I)
 
 
 def expand_game_flags(text: str) -> str:
@@ -235,6 +279,10 @@ def expand_game_flags(text: str) -> str:
             phrases.append(f"{val}x{val}")
         elif flag == "win" and val.isdigit():
             phrases.append(f"{val} in a row")
+        elif (flag == "target" or flag == "coins") and val.isdigit():
+            phrases.append(f"{val} collectibles")
+        elif flag == "difficulty" and val:
+            phrases.append(f"{val}")
         elif flag == "ai" and val:
             phrases.append({"easy": "easy", "random": "easy", "medium": "medium", "greedy": "medium"}.get(val.lower(), ""))
         elif flag == "title" and val:

@@ -110,6 +110,17 @@ class LiveEditorLink:
         dest = self.project_dir / "Content" / "Python" / "gameforge_ops.py"
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(OPS_LIBRARY_SOURCE, dest)
+
+        # Deploy GameForge native plugin if binaries exist
+        plugin_src = Path(__file__).parent / "GameForge"
+        plugin_bin = plugin_src / "Binaries" / "Win64"
+        plugin_dest = self.project_dir / "Plugins" / "GameForge"
+        if plugin_bin.is_dir() and not (plugin_dest / "Binaries" / "Win64").is_dir():
+            plugin_dest.parent.mkdir(parents=True, exist_ok=True)
+            if plugin_dest.exists():
+                shutil.rmtree(plugin_dest)
+            shutil.copytree(plugin_src, plugin_dest)
+
         self._token = secrets.token_hex(32)
         self.token_file.parent.mkdir(parents=True, exist_ok=True)
         self.token_file.write_text(self._token, encoding="utf-8")
@@ -120,7 +131,7 @@ class LiveEditorLink:
         plugins = data.setdefault("Plugins", [])
         names = {p.get("Name") for p in plugins}
         changed = False
-        for name in ("PythonScriptPlugin", "EditorScriptingUtilities"):
+        for name in ("PythonScriptPlugin", "EditorScriptingUtilities", "GameForge"):
             if name not in names:
                 plugins.append({"Name": name, "Enabled": True})
                 changed = True

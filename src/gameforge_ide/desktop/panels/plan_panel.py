@@ -1,0 +1,297 @@
+"""Execution Plan Panel for GameForge IDE.
+
+Visualizes structured DAG plans, task dependencies, live state transitions,
+acceptance criteria verification, tool activity, diagnostics, and approvals.
+Complies with GameForge Master Blueprint and Milestone 1 specification.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QSplitter,
+    QTextBrowser,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ...backend.agent.plan_executor import PlanEvent
+from ...backend.agent.task_plan import TaskNode, TaskPlan
+
+STATUS_COLORS = {
+    "PLANNED": "#9d95b0",
+    "READY": "#8b5cf6",
+    "RUNNING": "#3b82f6",
+    "WAITING_APPROVAL": "#f59e0b",
+    "VERIFYING": "#06b6d4",
+    "REPAIRING": "#f97316",
+    "COMPLETED": "#00d9a3",
+    "BLOCKED": "#ef4444",
+    "FAILED": "#ef4444",
+    "CANCELLED": "#6b7280",
+}
+
+
+class PlanPanel(QWidget):
+    """Panel displaying active execution plan, DAG tasks, acceptance criteria, and live state."""
+
+    run_requested = Signal(object)
+    cancel_requested = Signal()
+    approval_review_requested = Signal(str)
+
+    def __init__(self, workspace_root: Path, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._workspace = Path(workspace_root).resolve()
+        self._active_plan: Optional[TaskPlan] = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        # Header: Goal & Status
+        header_card = QFrame()
+        header_card.setObjectName("planHeaderCard")
+        header_card.setStyleSheet(
+            "QFrame#planHeaderCard { background-color: #120f1d; border: 1px solid #231c34; border-radius: 6px; padding: 6px; }"
+        )
+        hl = QVBoxLayout(header_card)
+        hl.setContentsMargins(8, 8, 8, 8)
+        hl.setSpacing(6)
+
+        top_row = QHBoxLayout()
+        self._lbl_plan_id = QLabel("No active plan")
+        f = self._lbl_plan_id.font()
+        f.setBold(True)
+        self._lbl_plan_id.setFont(f)
+        self._lbl_status = QLabel("IDLE")
+        self._lbl_status.setStyleSheet(
+            "background-color: #231c34; color: #9d95b0; padding: 2px 8px; border-radius: 4px; font-weight: bold;"
+        )
+
+        top_row.addWidget(self._lbl_plan_id)
+        top_row.addStretch(1)
+        top_row.addWidget(self._lbl_status)
+        hl.addLayout(top_row)
+
+        self._lbl_goal = QLabel("Enter a task or slash command (/plan) to generate an execution plan.")
+        self._lbl_goal.setWordWrap(True)
+        self._lbl_goal.setStyleSheet("color: #9d95b0;")
+        hl.addWidget(self._lbl_goal)
+
+        # Progress bar
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
+        self._progress.setFixedHeight(14)
+        self._progress.setTextVisible(True)
+        hl.addWidget(self._progress)
+
+        # Controls row
+        btn_row = QHBoxLayout()
+        self._btn_resume = QPushButton("▶ Run / Resume")
+        self._btn_resume.clicked.connect(self._on_run_clicked)
+        self._btn_cancel = QPushButton("⏹ Cancel")
+        self._btn_cancel.clicked.connect(self._on_cancel_clicked)
+        self._btn_refresh = QPushButton("⟳ Refresh")
+        self._btn_refresh.clicked.connect(self.refresh_from_disk)
+
+        btn_row.addWidget(self._btn_resume)
+        btn_row.addWidget(self._btn_cancel)
+        btn_row.addWidget(self._btn_refresh)
+        btn_row.addStretch(1)
+        hl.addLayout(btn_row)
+
+        layout.addWidget(header_card)
+
+        # Splitter: Task Tree (top) and Task Detail Inspector (bottom)
+        splitter = QSplitter(Qt.Vertical)
+
+        # Task Tree
+        self._tree = QTreeWidget()
+        self._tree.setHeaderLabels(["Status", "ID", "Task Title", "Type", "Prerequisites", "Tools"])
+        self._tree.header().setSectionResizeMode(QHeaderView.Interactive)
+        self._tree.header().resizeSection(0, 120)
+        self._tree.header().resizeSection(1, 90)
+        self._tree.header().resizeSection(2, 220)
+        self._tree.header().resizeSection(3, 80)
+        self._tree.header().resizeSection(4, 110)
+        self._tree.itemSelectionChanged.connect(self._on_task_selected)
+        splitter.addWidget(self._tree)
+
+        # Task Inspector
+        detail_widget = QWidget()
+        dl = QVBoxLayout(detail_widget)
+        dl.setContentsMargins(0, 4, 0, 0)
+        dl.setSpacing(4)
+
+        dl.addWidget(QLabel("Task Details & Acceptance Evidence:"))
+        self._detail_browser = QTextBrowser()
+        self._detail_browser.setOpenExternalLinks(False)
+        self._detail_browser.setStyleSheet(
+            "QTextBrowser { background-color: #0d0b14; border: 1px solid #231c34; border-radius: 4px; padding: 6px; font-family: Consolas, monospace; font-size: 12px; }"
+        )
+        dl.addWidget(self._detail_browser)
+        splitter.addWidget(detail_widget)
+
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        layout.addWidget(splitter, 1)
+
+    def set_plan(self, plan: TaskPlan) -> None:
+        """Sets the active TaskPlan and populates the view."""
+        self._active_plan = plan
+        self._lbl_plan_id.setText(f"Plan: {plan.plan_id}")
+        self._lbl_goal.setText(plan.goal)
+        self._update_status_badge(plan.status)
+        self._populate_task_tree()
+
+    def handle_plan_event(self, event: PlanEvent) -> None:
+        """Handles a live PlanEvent from TaskPlanExecutor."""
+        if not self._active_plan or self._active_plan.plan_id != event.plan_id:
+            # Reload plan if mismatched
+            loaded = TaskPlan.load_by_id(self._workspace, event.plan_id)
+            if loaded:
+                self.set_plan(loaded)
+            return
+
+        if event.status:
+            if event.task_id and event.task_id in self._active_plan.tasks:
+                task = self._active_plan.tasks[event.task_id]
+                task.status = event.status
+                self._update_tree_item(task)
+            else:
+                self._active_plan.status = event.status
+                self._update_status_badge(event.status)
+
+        self._update_progress()
+        self._on_task_selected()
+
+    def _update_status_badge(self, status: str) -> None:
+        color = STATUS_COLORS.get(status, "#9d95b0")
+        self._lbl_status.setText(status)
+        self._lbl_status.setStyleSheet(
+            f"background-color: {color}22; color: {color}; border: 1px solid {color}; padding: 2px 8px; border-radius: 4px; font-weight: bold;"
+        )
+
+    def _populate_task_tree(self) -> None:
+        self._tree.clear()
+        if not self._active_plan:
+            return
+
+        for task in self._active_plan.tasks.values():
+            item = QTreeWidgetItem(self._tree)
+            item.setData(0, Qt.UserRole, task.task_id)
+            self._apply_item_data(item, task)
+
+        self._update_progress()
+        if self._tree.topLevelItemCount() > 0:
+            self._tree.setCurrentItem(self._tree.topLevelItem(0))
+
+    def _update_tree_item(self, task: TaskNode) -> None:
+        for i in range(self._tree.topLevelItemCount()):
+            item = self._tree.topLevelItem(i)
+            if item.data(0, Qt.UserRole) == task.task_id:
+                self._apply_item_data(item, task)
+                break
+
+    def _apply_item_data(self, item: QTreeWidgetItem, task: TaskNode) -> None:
+        color = STATUS_COLORS.get(task.status, "#9d95b0")
+        item.setText(0, f"● {task.status}")
+        item.setForeground(0, QColor(color))
+        item.setText(1, task.task_id)
+        item.setText(2, task.title)
+        item.setText(3, task.task_type)
+        item.setText(4, ", ".join(task.dependency_ids) or "–")
+        item.setText(5, ", ".join(task.permitted_tools) or "–")
+
+    def _update_progress(self) -> None:
+        if not self._active_plan or not self._active_plan.tasks:
+            self._progress.setValue(0)
+            self._progress.setFormat("No tasks")
+            return
+
+        total = len(self._active_plan.tasks)
+        completed = sum(1 for t in self._active_plan.tasks.values() if t.status == "COMPLETED")
+        pct = int((completed / total) * 100)
+        self._progress.setValue(pct)
+        self._progress.setFormat(f"{completed} / {total} tasks ({pct}%)")
+
+    @Slot()
+    def _on_task_selected(self) -> None:
+        items = self._tree.selectedItems()
+        if not items or not self._active_plan:
+            self._detail_browser.setHtml("<span style='color: #675f78;'>Select a task above to view details.</span>")
+            return
+
+        task_id = items[0].data(0, Qt.UserRole)
+        task = self._active_plan.tasks.get(task_id)
+        if not task:
+            return
+
+        color = STATUS_COLORS.get(task.status, "#9d95b0")
+        html = [
+            f"<h3 style='margin: 0; color: #f5f3ff;'>{task.title} <span style='color: {color}; font-size: 12px;'>[{task.status}]</span></h3>",
+            f"<p style='color: #9d95b0; margin: 4px 0;'><b>Objective:</b> {task.objective}</p>",
+            f"<p style='color: #9d95b0; margin: 4px 0;'><b>Expected Result:</b> {task.expected_result}</p>",
+            f"<p style='color: #675f78; margin: 4px 0;'>Type: <code>{task.task_type}</code> | Reversibility: <code>{task.reversibility}</code> | Approval Required: <code>{task.requires_approval}</code></p>",
+            f"<p style='color: #675f78; margin: 4px 0;'>Permitted Tools: <code>{', '.join(task.permitted_tools) or 'None'}</code></p>",
+        ]
+
+        if task.error_message:
+            html.append(f"<div style='background: #ef444422; border: 1px solid #ef4444; color: #ef4444; padding: 6px; border-radius: 4px; margin: 6px 0;'><b>Error/Blocker:</b> {task.error_message}</div>")
+
+        if task.approval_id:
+            html.append(f"<p style='color: #f59e0b; margin: 4px 0;'><b>Pending Approval ID:</b> <code>{task.approval_id}</code></p>")
+
+        # Acceptance Criteria
+        html.append("<h4 style='color: #f5f3ff; margin: 8px 0 4px 0;'>Acceptance Criteria & Evidence:</h4>")
+        if task.acceptance:
+            html.append("<ul style='margin: 0; padding-left: 20px;'>")
+            for pred in task.acceptance:
+                mark = "<span style='color: #00d9a3;'>✔ SATISFIED</span>" if pred.satisfied else "<span style='color: #ef4444;'>✘ UNMET</span>"
+                ev = f"<br/><span style='color: #675f78;'>Evidence: {pred.evidence}</span>" if pred.evidence else ""
+                html.append(f"<li style='color: #f5f3ff; margin-bottom: 4px;'>{mark} <b>{pred.predicate_type}</b>(<code>{pred.target}</code>){ev}</li>")
+            html.append("</ul>")
+        else:
+            html.append("<p style='color: #675f78;'>No explicit machine predicates attached.</p>")
+
+        # Tool Call / Output
+        if task.tool_call:
+            html.append("<h4 style='color: #f5f3ff; margin: 8px 0 4px 0;'>Tool Call:</h4>")
+            html.append(f"<pre style='background: #120f1d; padding: 6px; border-radius: 4px; color: #f5f3ff;'>{json.dumps(task.tool_call, indent=2)}</pre>")
+
+        if task.evidence:
+            html.append("<h4 style='color: #f5f3ff; margin: 8px 0 4px 0;'>Execution Observations:</h4>")
+            for idx, ev in enumerate(task.evidence):
+                html.append(f"<div style='background: #120f1d; padding: 6px; border-radius: 4px; margin-bottom: 4px; color: #f5f3ff;'><b>Attempt {ev.get('attempt')}:</b><pre>{json.dumps(ev.get('output', {}), indent=2, default=str)[:600]}</pre></div>")
+
+        self._detail_browser.setHtml("".join(html))
+
+    @Slot()
+    def _on_run_clicked(self) -> None:
+        if self._active_plan:
+            self.run_requested.emit(self._active_plan)
+
+    @Slot()
+    def _on_cancel_clicked(self) -> None:
+        self.cancel_requested.emit()
+
+    @Slot()
+    def refresh_from_disk(self) -> None:
+        plans = TaskPlan.list_plans(self._workspace)
+        if plans:
+            self.set_plan(plans[0])

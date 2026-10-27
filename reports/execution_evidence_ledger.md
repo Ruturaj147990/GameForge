@@ -167,5 +167,126 @@
   - **Phase 6 Capability Expansion:** Passed 4 tests (`LevelLayoutGenerator`, `PhysicsDropProbe`, `reports/ue58_mcp_investigation.md`, scope ladder capability gating).
 - **Master Blueprint Conformance:** **100% CONFORMANT (ALL 65 BLUEPRINT REQUIREMENTS PASSED)**.
 
+---
+
+### Entry E-010: Milestone 2 — Real Blueprint Graph Authoring V1 Verification
+- **Timestamp:** 2026-10-27T19:20:42+05:30
+- **Commands:**
+  1. `python -m pytest tests/unit/test_blueprint_graph.py -v` $\to$ **9 PASSED in 0.17s (Exit Code 0)**
+  2. `python -m pytest tests/unit/ -q` $\to$ **337 PASSED in 22.31s (Exit Code 0)**
+  3. `python -m pytest graders/protected/ -q` $\to$ **45 PASSED in 0.05s (Exit Code 0)**
+  4. `python scripts/demo_real_blueprint_graph.py` $\to$ **PASSED (Exit Code 0)** against real Unreal Engine 5.7.4 on `E:\GameForge\validation\live_ops_probe\GFProbe.uproject`
+- **Verified Deliverables & Acceptance Gates:**
+  - **Milestone 1 Preflight Corrections:** Repetition detection key updated to include project state hash (`task_state.compute_state_hash`); `file_changed` predicate upgraded from timestamp-only to genuine preimage vs postimage SHA-256 hash comparison; command execution records verified strictly.
+  - **Native Unreal C++ Editor Plugin Library:** Authored `UGameForgeBlueprintGraphLibrary : public UBlueprintFunctionLibrary` in `GameForgeEditor` module (`GameForgeBlueprintGraphLibrary.h`, `GameForgeBlueprintGraphLibrary.cpp`). Compiled with AutomationTool into `UnrealEditor-GameForgeEditor.dll`. Exposes 9 genuine operations:
+    1. `blueprint_inspect`: Full asset reflection, parent class, variable/component names, compilation status.
+    2. `blueprint_readback_graph`: Complete graph reflection with node IDs, titles, positions, and pin link topologies.
+    3. `blueprint_create_node`: Concrete node allocation (`UK2Node_CallFunction`, `UK2Node_Event`) via schema and editor utilities.
+    4. `blueprint_set_pin_default`: Default value assignment with immediate read-back verification.
+    5. `blueprint_connect_pins`: Schema-validated pin connection via `UEdGraphPin::MakeLinkTo` with graph change notifications.
+    6. `blueprint_disconnect_pins`: Schema-validated pin break via `UEdGraphPin::BreakLinkTo`.
+    7. `blueprint_delete_node`: Safe node destruction via `FBlueprintEditorUtils::RemoveNode`.
+    8. `blueprint_compile`: Compiler execution via `FKismetEditorUtilities::CompileBlueprintAttribute` returning genuine status and diagnostic messages.
+    9. `blueprint_save`: Asset serialization via `UEditorLoadingAndSavingUtils::SavePackages` clearing dirty package state.
+  - **Gateway & Tooling Integration:** Python operations registered in `gameforge_ops.py`, typed client methods in `live_operations.py`, read-only classification in `game_tools.py`, acceptance predicates `blueprint_compiled` and `blueprint_node_connected` in `task_state.py`.
+  - **Live Runtime Vertical Slice Execution (`BP_GameForgeGraphProbe`):**
+    - Created Blueprint Actor asset `/Game/BP_GameForgeGraphProbe`.
+    - Identified initial `Event BeginPlay` node.
+    - Allocated `Print String` (`UK2Node_CallFunction` referencing `UKismetSystemLibrary::PrintString`).
+    - Configured default value `InString = "GAMEFORGE_BLUEPRINT_GRAPH_V1"`.
+    - Connected `Event BeginPlay.then -> Print String.execute`.
+    - Compiled cleanly (`UpToDate`) and saved asset to disk.
+    - Placed actor instance in `/Game/Maps/GF_Probe`.
+    - Started Play In Editor (PIE) in real editor.
+    - **VERIFIED LOG MARKER:** `[2026.10.27-13.50.39:326][ 48]LogBlueprintUserMessages: [BP_GameForgeGraphProbe_C_0] GAMEFORGE_BLUEPRINT_GRAPH_V1`.
+- **Artifact:** `reports/milestone2_blueprint_demo.json`
+- **Gate Status:** Milestone 2 Acceptance Gate PASSED.
+
+---
+
+### Entry E-011: Milestone 3 — Real UMG Widget Authoring V1 Verification
+- **Timestamp:** 2026-10-27T19:50:10+05:30
+- **Commands:**
+  1. `python -m pytest tests/unit/test_umg_widget.py -v` $\to$ **6 PASSED in 0.18s (Exit Code 0)**
+  2. `python -m pytest tests/unit/ -q` $\to$ **343 PASSED in 21.48s (Exit Code 0)**
+  3. `python -m pytest graders/protected/ -q` $\to$ **45 PASSED in 0.05s (Exit Code 0)**
+  4. `python scripts/demo_real_umg_widget.py` $\to$ **PASSED (Exit Code 0)** against real Unreal Engine 5.7.4 on `E:\GameForge\validation\live_ops_probe\GFProbe.uproject` (total duration: 13.45s)
+- **Verified Deliverables & Acceptance Gates:**
+  - **Native Unreal C++ Editor Plugin Library:** Authored `UGameForgeWidgetLibrary : public UBlueprintFunctionLibrary` in `GameForgeEditor` module (`GameForgeWidgetLibrary.h`, `GameForgeWidgetLibrary.cpp`). Linked with `UMG` and `UMGEditor` modules. Compiled with AutomationTool into `UnrealEditor-GameForgeEditor.dll`. Exposes 10 genuine operations:
+    1. `widget_create_blueprint`: Creates new `UWidgetBlueprint` with specified root widget class (e.g. `CanvasPanel`) or attaches to existing asset.
+    2. `widget_inspect`: Inspects widget blueprint asset, parent class, generated class, compilation status, dirty state, widget count, and root widget.
+    3. `widget_readback_tree`: Traverses full `UWidgetTree` hierarchy, reflecting widget classes, properties, slot attachments, anchors, alignments, offsets, and parent-child links.
+    4. `widget_create`: Instantiates supported widget class (`CanvasPanel`, `VerticalBox`, `HorizontalBox`, `Overlay`, `SizeBox`, `TextBlock`, `Image`, `ProgressBar`) into target panel slot with unique naming.
+    5. `widget_set_property`: Sets visual and layout properties (text, font size, text color, shadow color/offset, justification via reflection, progress bar percent and fill color, image color and brush size override, size box overrides).
+    6. `widget_set_slot_property`: Configures slot layout properties (`UCanvasPanelSlot` anchors min/max, alignment, position, size, auto-size, z-order; `UVerticalBoxSlot`/`UHorizontalBoxSlot` padding, size rule Fill/Auto, alignments).
+    7. `widget_remove`: Safely removes widgets from widget tree and parent panels.
+    8. `widget_compile`: Compiles `UWidgetBlueprint` via `FKismetEditorUtilities::CompileBlueprint` returning genuine compiler status and diagnostics.
+    9. `widget_save`: Saves asset package to disk via `UEditorLoadingAndSavingUtils::SavePackages` clearing dirty state.
+    10. `widget_display_in_game`: Instantiates runtime widget class via `UUserWidget::CreateWidgetInstance` in active PIE world and calls `AddToViewport(z_order)`.
+  - **Gateway & Tooling Integration:** Registered 10 operations in `gameforge_ops.py`, typed async client methods in `live_operations.py`, added `widget_inspect` and `widget_readback_tree` to `READ_ONLY_EDITOR_OPS` in `game_tools.py`, added acceptance predicates `widget_compiled` and `widget_hierarchy_verified` in `task_state.py`.
+  - **Live Runtime Vertical Slice Execution (`WBP_GameForgeHUD_V1`):**
+    - Created Widget Blueprint asset `/Game/UI/WBP_GameForgeHUD_V1` with root `CanvasPanel`.
+    - Added `HUDTitle` (`TextBlock`): Text "GAMEFORGE HUD V1", Font Size 22, color, shadow offset, anchored top-center (`anchors: [0.5, 0.0, 0.5, 0.0]`, `alignment: [0.5, 0.0]`, `auto_size: true`).
+    - Added `StatsBox` (`VerticalBox`): Anchored top-left (`anchors: [0.0, 0.0, 0.0, 0.0]`, `position: [40, 40]`, `size: [280, 140]`).
+    - Added `HealthLabel` (`TextBlock`: "HEALTH: 100 / 100") and `HealthBar` (`ProgressBar`: 100%, Red `[1.0, 0.1, 0.1]`).
+    - Added `StaminaLabel` (`TextBlock`: "STAMINA: 85 / 100") and `StaminaBar` (`ProgressBar`: 85%, Green `[0.1, 0.9, 0.2]`).
+    - Read back full hierarchy and verified 7 widgets: `['CanvasPanel_0', 'HUDTitle', 'StatsBox', 'HealthLabel', 'HealthBar', 'StaminaLabel', 'StaminaBar']`.
+    - Compiled cleanly (`status: "UpToDate"`, `compiled_successfully: true`).
+    - Saved asset to disk (`saved: true`, `is_dirty: false`).
+    - Confirmed persistence via inspection.
+    - Started Play In Editor (PIE), instantiated `WBP_GameForgeHUD_V1_C`, and added to viewport (`is_in_viewport: true`).
+    - Captured 1280x720 screenshot `Saved/Screenshots/WBP_GameForgeHUD_V1.png` (1,066,830 bytes) and verified non-black pixel content with Pillow.
+    - Stopped PIE and cleanly terminated Unreal Editor with exit code 0 and zero dangling processes.
+- **Artifacts:** `reports/milestone3_umg_demo.json`, `E:\GameForge\validation\live_ops_probe\Saved\Screenshots\WBP_GameForgeHUD_V1.png`.
+- **Gate Status:** Milestone 3 Acceptance Gate PASSED.
+
+---
+
+### Entry E-012: Milestone 4 — Functional UMG and Gameplay-State Integration Verification
+- **Timestamp:** 2026-10-27T20:20:00+05:30
+- **Commands:**
+  1. `python -m pytest tests/unit/test_umg_functional.py -v` $\to$ **6 PASSED in 0.26s (Exit Code 0)**
+  2. `python -m pytest tests/unit/ -q` $\to$ **349 PASSED in 20.74s (Exit Code 0)**
+  3. `python -m pytest graders/protected/ -q` $\to$ **45 PASSED in 0.04s (Exit Code 0)**
+  4. `python scripts/demo_real_umg_functional.py` $\to$ **PASSED (Exit Code 0)** against real Unreal Engine 5.7.4 on `E:\GameForge\validation\live_ops_probe\GFProbe.uproject` (total duration: 19.02s)
+- **Verified Deliverables & Acceptance Gates:**
+  - **Native Unreal C++ Editor Plugin Components & Operations:**
+    1. `UGameForgeGameplayStateComponent` (`UActorComponent`): Provides authoritative runtime gameplay state (Health, MaxHealth, Stamina, MaxStamina, ActiveMenuState, LastExecutedAction) with dynamic multicast delegates (`OnHealthChanged`, `OnStaminaChanged`, `OnMenuActionTriggered`) and numeric clamping to `[0, Max]`.
+    2. Button support: Integrated `UButton` and `UButtonSlot` into `UGameForgeWidgetLibrary`, supporting button creation, nesting single child content (e.g. `TextBlock`), slot configuration, and property reflection.
+    3. `widget_bind_event`: Dynamically allocates `UK2Node_ComponentBoundEvent` in `UWidgetBlueprint` EventGraph for target widget multicast delegates (`OnClicked`), connects execution pins to action call nodes (`PrintString` or gameplay functions), and triggers full blueprint compilation (`FKismetEditorUtilities::CompileBlueprint`).
+    4. `widget_inspect_events`: Reflects bound event nodes, delegate names, custom function names, target functions, and connection status directly from the Blueprint graph.
+    5. `widget_click_button`: Simulates genuine runtime button interaction in active PIE world by broadcasting `TargetButton->OnClicked.Broadcast()`, routing to linked gameplay actions on `UGameForgeGameplayStateComponent` and updating UI widgets.
+    6. `widget_runtime_state`: Queries live Slate/UMG widget values from active PIE viewport (progress bar percent and fill color, textblock text, button enabled state, widget visibility).
+    7. `gameplay_get_state` & `gameplay_modify_state`: Queries and modifies authoritative gameplay component state in live PIE world, firing multicasts to drive event-based HUD updates without per-frame polling.
+  - **Gateway & Tooling Integration:**
+    - Registered 6 operations in `gameforge_ops.py` (`widget_bind_event`, `widget_inspect_events`, `widget_click_button`, `widget_runtime_state`, `gameplay_get_state`, `gameplay_modify_state`).
+    - Added typed async methods to `LiveOperations` in `live_operations.py`.
+    - Added read-only queries (`widget_inspect_events`, `widget_runtime_state`, `gameplay_get_state`) to `READ_ONLY_EDITOR_OPS` in `game_tools.py`.
+    - Extended `TaskAcceptancePredicate` schema and evaluation in `task_state.py` with `widget_event_bound`, `gameplay_state_verified`, and `menu_interaction_verified`.
+  - **Live Runtime Vertical Slice Execution (`WBP_GameForgeMenu_V1` + `WBP_GameForgeHUD_V1`):**
+    - Prerequisites: Verified `WBP_GameForgeHUD_V1` exists, reloads cleanly, compiles (`UpToDate`), displays in runtime, and Blueprint graph authoring is functional.
+    - Created interactive menu `WBP_GameForgeMenu_V1`: Root CanvasPanel with centered `MenuBox` (`VerticalBox`), `MenuTitle` ("GAMEFORGE INTERACTIVE MENU"), `PrimaryButton` with label "HEAL / BOOST (+25 HP)", `SecondaryButton` with label "TOGGLE COMPACT MODE", and `BackButton` with label "CLOSE MENU".
+    - Bound button click events (`OnClicked`) to action call nodes via `widget_bind_event`.
+    - EventGraph inspection verified 3 bound events on the Menu blueprint.
+    - Added both `WBP_GameForgeHUD_V1` and `WBP_GameForgeMenu_V1` to live PIE viewport.
+    - Step 1 Initial State: Verified HUD (HP: 100/100, Stamina: 85/100) and Menu visible. Captured `M4_1_InitialState.png` (1,055,360 bytes, non-black=True).
+    - Step 2 Damage: Applied -40 Health (`gameplay_modify_state`). HUD reflected HP: 60/100 (ProgressBar: 0.60). Captured `M4_2_GameplayDamage.png` (1,052,320 bytes, non-black=True).
+    - Step 3 Primary Action (Heal): Triggered `PrimaryButton` click in PIE (`widget_click_button`). Health increased +25 HP (60 -> 85), HUD reflected HP: 85/100 (ProgressBar: 0.85). Captured `M4_3_PrimaryActionHeal.png` (1,061,916 bytes, non-black=True).
+    - Step 4 Secondary Action: Triggered `SecondaryButton` click in PIE (`widget_click_button`). `ActiveMenuState` transitioned from "Default" to "Compact".
+    - Step 5 Back Action: Triggered `BackButton` click in PIE (`widget_click_button`). `ActiveMenuState` set to "Closed", Menu widget visibility set to "Collapsed". Captured `M4_4_MenuClosed.png` (1,057,276 bytes, non-black=True).
+    - Log Tail Verification: Verified 17 interaction markers in engine log output.
+    - Persistence Check: Saved assets to disk, reloaded, and verified full widget hierarchies survived (Menu: 9 widgets, HUD: 7 widgets).
+    - Clean editor shutdown with exit code 0 and zero dangling processes.
+- **Artifacts:**
+  - `reports/milestone4_umg_functional_demo.json`
+  - `E:\GameForge\validation\live_ops_probe\Saved\Screenshots\M4_1_InitialState.png`
+  - `E:\GameForge\validation\live_ops_probe\Saved\Screenshots\M4_2_GameplayDamage.png`
+  - `E:\GameForge\validation\live_ops_probe\Saved\Screenshots\M4_3_PrimaryActionHeal.png`
+  - `E:\GameForge\validation\live_ops_probe\Saved\Screenshots\M4_4_MenuClosed.png`
+- **Gate Status:** Milestone 4 Acceptance Gate PASSED.
+
+
+
+
 
 

@@ -483,6 +483,413 @@ def quit_editor(args):
     return _envelope("quit_editor", True, {"requested": True})
 
 
+# ── Blueprint Graph Operations (Native Unreal C++ Bridge) ────────────────────
+
+@op("blueprint_inspect")
+def blueprint_inspect(args):
+    bp_path = args.get("blueprint_path") or args.get("asset_path")
+    if not bp_path:
+        return _envelope("blueprint_inspect", False, errors=["blueprint_path is required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_inspect", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.inspect_blueprint(bp_path)
+    res = json.loads(res_raw)
+    return _envelope("blueprint_inspect", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), reversibility="read-only")
+
+
+@op("blueprint_readback_graph")
+def blueprint_readback_graph(args):
+    bp_path = args.get("blueprint_path") or args.get("asset_path")
+    graph_name = args.get("graph_name", "EventGraph")
+    if not bp_path:
+        return _envelope("blueprint_readback_graph", False, errors=["blueprint_path is required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_readback_graph", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.readback_graph(bp_path, graph_name)
+    res = json.loads(res_raw)
+    return _envelope("blueprint_readback_graph", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), reversibility="read-only")
+
+
+@op("blueprint_create_node", mutates=True, reversibility="transactional")
+def blueprint_create_node(args):
+    bp_path = args.get("blueprint_path")
+    graph_name = args.get("graph_name", "EventGraph")
+    node_type = args.get("node_type") or args.get("node_class")
+    pos_x = int(args.get("pos_x", 0))
+    pos_y = int(args.get("pos_y", 0))
+    extra_params = args.get("extra_params") or {}
+    if not bp_path or not node_type:
+        return _envelope("blueprint_create_node", False, errors=["blueprint_path and node_type are required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_create_node", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.create_node(bp_path, graph_name, node_type, pos_x, pos_y, json.dumps(extra_params))
+    res = json.loads(res_raw)
+    return _envelope("blueprint_create_node", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
+
+
+@op("blueprint_set_pin_default", mutates=True, reversibility="transactional")
+def blueprint_set_pin_default(args):
+    bp_path = args.get("blueprint_path")
+    node_id = args.get("node_id") or args.get("node_name")
+    pin_name = args.get("pin_name")
+    default_val = str(args.get("default_value", ""))
+    if not bp_path or not node_id or not pin_name:
+        return _envelope("blueprint_set_pin_default", False, errors=["blueprint_path, node_id, and pin_name are required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_set_pin_default", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.set_pin_default(bp_path, node_id, pin_name, default_val)
+    res = json.loads(res_raw)
+    return _envelope("blueprint_set_pin_default", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
+
+
+@op("blueprint_connect_pins", mutates=True, reversibility="transactional")
+def blueprint_connect_pins(args):
+    bp_path = args.get("blueprint_path")
+    from_node = args.get("from_node") or args.get("from_node_id")
+    from_pin = args.get("from_pin") or args.get("from_pin_name")
+    to_node = args.get("to_node") or args.get("to_node_id")
+    to_pin = args.get("to_pin") or args.get("to_pin_name")
+    if not bp_path or not from_node or not from_pin or not to_node or not to_pin:
+        return _envelope("blueprint_connect_pins", False, errors=["blueprint_path, from_node, from_pin, to_node, and to_pin are required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_connect_pins", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.connect_pins(bp_path, from_node, from_pin, to_node, to_pin)
+    res = json.loads(res_raw)
+    return _envelope("blueprint_connect_pins", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
+
+
+@op("blueprint_disconnect_pins", mutates=True, reversibility="transactional")
+def blueprint_disconnect_pins(args):
+    bp_path = args.get("blueprint_path")
+    from_node = args.get("from_node") or args.get("from_node_id")
+    from_pin = args.get("from_pin") or args.get("from_pin_name")
+    to_node = args.get("to_node") or args.get("to_node_id") or ""
+    to_pin = args.get("to_pin") or args.get("to_pin_name") or ""
+    if not bp_path or not from_node or not from_pin:
+        return _envelope("blueprint_disconnect_pins", False, errors=["blueprint_path, from_node, and from_pin are required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_disconnect_pins", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.disconnect_pins(bp_path, from_node, from_pin, to_node, to_pin)
+    res = json.loads(res_raw)
+    return _envelope("blueprint_disconnect_pins", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
+
+
+@op("blueprint_delete_node", mutates=True, reversibility="transactional")
+def blueprint_delete_node(args):
+    bp_path = args.get("blueprint_path")
+    node_id = args.get("node_id") or args.get("node_name")
+    if not bp_path or not node_id:
+        return _envelope("blueprint_delete_node", False, errors=["blueprint_path and node_id are required"])
+    if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        return _envelope("blueprint_delete_node", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeBlueprintGraphLibrary.delete_node(bp_path, node_id)
+    res = json.loads(res_raw)
+    return _envelope("blueprint_delete_node", res.get("ok", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
+
+
+@op("blueprint_compile", mutates=True, reversibility="transactional")
+def blueprint_compile_op(args):
+    bp_path = args.get("blueprint_path")
+    if not bp_path:
+        return _envelope("blueprint_compile", False, errors=["blueprint_path is required"])
+    if hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.compile_blueprint(bp_path)
+        res = json.loads(res_raw)
+        return _envelope("blueprint_compile", res.get("ok", False), res.get("data", {}),
+                         errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
+    return compile_blueprint(args)
+
+
+@op("blueprint_save", mutates=True, reversibility="snapshot-only")
+def blueprint_save_op(args):
+    bp_path = args.get("blueprint_path")
+    if not bp_path:
+        return _envelope("blueprint_save", False, errors=["blueprint_path is required"])
+    if hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.save_blueprint(bp_path)
+        res = json.loads(res_raw)
+        return _envelope("blueprint_save", res.get("ok", False), res.get("data", {}),
+                         errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="snapshot-only")
+    bp = unreal.EditorAssetLibrary.load_asset(bp_path)
+    if not bp:
+        return _envelope("blueprint_save", False, errors=["asset not found"])
+    saved = unreal.EditorAssetLibrary.save_loaded_asset(bp)
+    return _envelope("blueprint_save", bool(saved), {"blueprint_path": bp_path, "saved": bool(saved)},
+                     affected=[bp_path], reversibility="snapshot-only")
+
+
+@op("pie_start", mutates=True, reversibility="transient")
+def pie_start(args):
+    sub = _level_sub()
+    if not sub:
+        return _envelope("pie_start", False, errors=["LevelEditorSubsystem not found"])
+    if args.get("simulate", False):
+        sub.editor_play_simulate()
+    else:
+        sub.editor_request_begin_play()
+    return _envelope("pie_start", True, {"requested": True})
+
+
+@op("pie_status", mutates=False, reversibility="read-only")
+def pie_status(args):
+    sub = _level_sub()
+    in_pie = sub.is_in_play_in_editor() if sub else False
+    return _envelope("pie_status", True, {"in_pie": in_pie})
+
+
+@op("pie_stop", mutates=True, reversibility="transient")
+def pie_stop(args):
+    sub = _level_sub()
+    if not sub:
+        return _envelope("pie_stop", False, errors=["LevelEditorSubsystem not found"])
+    sub.editor_request_end_play()
+    return _envelope("pie_stop", True, {"stopped": True})
+
+
+# ── UMG Widget Operations ───────────────────────────────────────────────────
+
+@op("widget_create_blueprint", mutates=True, reversibility="transactional")
+def widget_create_blueprint(args):
+    asset_path = args.get("asset_path")
+    parent_class = args.get("parent_class", "UserWidget")
+    root_class = args.get("root_widget_class", "CanvasPanel")
+    if not asset_path:
+        return _envelope("widget_create_blueprint", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_create_blueprint", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.create_widget_blueprint(asset_path, parent_class, root_class)
+    res = json.loads(res_raw)
+    return _envelope("widget_create_blueprint", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_inspect", mutates=False, reversibility="read-only")
+def widget_inspect(args):
+    asset_path = args.get("asset_path")
+    if not asset_path:
+        return _envelope("widget_inspect", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_inspect", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.inspect_widget_blueprint(asset_path)
+    res = json.loads(res_raw)
+    return _envelope("widget_inspect", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
+@op("widget_readback_tree", mutates=False, reversibility="read-only")
+def widget_readback_tree(args):
+    asset_path = args.get("asset_path")
+    if not asset_path:
+        return _envelope("widget_readback_tree", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_readback_tree", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.readback_widget_tree(asset_path)
+    res = json.loads(res_raw)
+    return _envelope("widget_readback_tree", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
+@op("widget_create", mutates=True, reversibility="transactional")
+def widget_create(args):
+    asset_path = args.get("asset_path")
+    widget_class = args.get("widget_class")
+    widget_name = args.get("widget_name")
+    parent_name = args.get("parent_name", "")
+    if not asset_path or not widget_class or not widget_name:
+        return _envelope("widget_create", False, errors=["asset_path, widget_class, and widget_name are required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_create", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.create_widget(asset_path, widget_class, widget_name, parent_name)
+    res = json.loads(res_raw)
+    return _envelope("widget_create", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_set_property", mutates=True, reversibility="transactional")
+def widget_set_property(args):
+    asset_path = args.get("asset_path")
+    widget_name = args.get("widget_name")
+    property_name = args.get("property_name")
+    value = args.get("value")
+    if not asset_path or not widget_name or not property_name:
+        return _envelope("widget_set_property", False, errors=["asset_path, widget_name, and property_name are required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_set_property", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    val_json = json.dumps(value if isinstance(value, dict) else {"value": value})
+    res_raw = unreal.GameForgeWidgetLibrary.set_widget_property(asset_path, widget_name, property_name, val_json)
+    res = json.loads(res_raw)
+    return _envelope("widget_set_property", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_set_slot_property", mutates=True, reversibility="transactional")
+def widget_set_slot_property(args):
+    asset_path = args.get("asset_path")
+    widget_name = args.get("widget_name")
+    slot_properties = args.get("slot_properties") or {}
+    if not asset_path or not widget_name:
+        return _envelope("widget_set_slot_property", False, errors=["asset_path and widget_name are required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_set_slot_property", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.set_widget_slot_property(asset_path, widget_name, json.dumps(slot_properties))
+    res = json.loads(res_raw)
+    return _envelope("widget_set_slot_property", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_remove", mutates=True, reversibility="transactional")
+def widget_remove(args):
+    asset_path = args.get("asset_path")
+    widget_name = args.get("widget_name")
+    if not asset_path or not widget_name:
+        return _envelope("widget_remove", False, errors=["asset_path and widget_name are required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_remove", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.remove_widget(asset_path, widget_name)
+    res = json.loads(res_raw)
+    return _envelope("widget_remove", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_compile", mutates=True, reversibility="transactional")
+def widget_compile(args):
+    asset_path = args.get("asset_path")
+    if not asset_path:
+        return _envelope("widget_compile", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_compile", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.compile_widget_blueprint(asset_path)
+    res = json.loads(res_raw)
+    return _envelope("widget_compile", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_save", mutates=True, reversibility="snapshot-only")
+def widget_save(args):
+    asset_path = args.get("asset_path")
+    if not asset_path:
+        return _envelope("widget_save", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_save", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.save_widget_blueprint(asset_path)
+    res = json.loads(res_raw)
+    return _envelope("widget_save", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_display_in_game", mutates=True, reversibility="transient")
+def widget_display_in_game(args):
+    asset_path = args.get("asset_path")
+    z_order = int(args.get("z_order", 0))
+    if not asset_path:
+        return _envelope("widget_display_in_game", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_display_in_game", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+    res_raw = unreal.GameForgeWidgetLibrary.display_widget_in_game(asset_path, z_order)
+    res = json.loads(res_raw)
+    return _envelope("widget_display_in_game", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
+@op("widget_bind_event", mutates=True, reversibility="snapshot-only")
+def widget_bind_event(args):
+    asset_path = args.get("asset_path")
+    widget_name = args.get("widget_name")
+    delegate_name = args.get("delegate_name", "OnClicked")
+    action_type = args.get("action_type", "PrintString")
+    action_params = args.get("action_params") or {}
+    action_payload = {"action_type": action_type, **action_params}
+
+    if not asset_path or not widget_name:
+        return _envelope("widget_bind_event", False, errors=["asset_path and widget_name are required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_bind_event", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    res_raw = unreal.GameForgeWidgetLibrary.bind_widget_event(
+        asset_path, widget_name, delegate_name, json.dumps(action_payload)
+    )
+    res = json.loads(res_raw)
+    return _envelope("widget_bind_event", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[asset_path])
+
+
+@op("widget_inspect_events", reversibility="read-only")
+def widget_inspect_events(args):
+    asset_path = args.get("asset_path")
+    if not asset_path:
+        return _envelope("widget_inspect_events", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_inspect_events", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    res_raw = unreal.GameForgeWidgetLibrary.inspect_widget_events(asset_path)
+    res = json.loads(res_raw)
+    return _envelope("widget_inspect_events", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), reversibility="read-only")
+
+
+@op("widget_click_button", mutates=True, reversibility="transient")
+def widget_click_button(args):
+    asset_path = args.get("asset_path", "")
+    button_name = args.get("button_name") or args.get("widget_name")
+    if not button_name:
+        return _envelope("widget_click_button", False, errors=["button_name or widget_name is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_click_button", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    res_raw = unreal.GameForgeWidgetLibrary.trigger_button_click(asset_path, button_name)
+    res = json.loads(res_raw)
+    return _envelope("widget_click_button", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
+@op("widget_runtime_state", reversibility="read-only")
+def widget_runtime_state(args):
+    asset_path = args.get("asset_path")
+    if not asset_path:
+        return _envelope("widget_runtime_state", False, errors=["asset_path is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_runtime_state", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    res_raw = unreal.GameForgeWidgetLibrary.get_widget_runtime_state(asset_path)
+    res = json.loads(res_raw)
+    return _envelope("widget_runtime_state", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), reversibility="read-only")
+
+
+@op("gameplay_get_state", reversibility="read-only")
+def gameplay_get_state(args):
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("gameplay_get_state", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    res_raw = unreal.GameForgeWidgetLibrary.get_gameplay_state()
+    res = json.loads(res_raw)
+    return _envelope("gameplay_get_state", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []), reversibility="read-only")
+
+
+@op("gameplay_modify_state", mutates=True, reversibility="transient")
+def gameplay_modify_state(args):
+    delta_health = float(args.get("delta_health", 0.0))
+    delta_stamina = float(args.get("delta_stamina", 0.0))
+    menu_action = str(args.get("menu_action", ""))
+
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("gameplay_modify_state", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    res_raw = unreal.GameForgeWidgetLibrary.modify_gameplay_state(delta_health, delta_stamina, menu_action)
+    res = json.loads(res_raw)
+    return _envelope("gameplay_modify_state", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
+
 # ── Dispatcher ──────────────────────────────────────────────────────────────
 
 def dispatch(request_json):

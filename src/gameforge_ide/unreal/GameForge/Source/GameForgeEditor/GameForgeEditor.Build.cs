@@ -39,7 +39,13 @@ public class GameForgeEditor : ModuleRules
 				"Slate",
 				"SlateCore",
 				"EditorSubsystem",
-				"ToolMenus"
+				"ToolMenus",
+				"BlueprintGraph",
+				"KismetCompiler",
+				"Kismet",
+				"AssetTools",
+				"UMG",
+				"UMGEditor"
 			}
 		);
 	}

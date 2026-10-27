@@ -16,10 +16,14 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 from ..recipes.grid_board_game.recipe import (
-    RECIPE_ID, RECIPE_VERSION, SELFTEST_LOG_PASS, GridBoardParams, generate)
+    RECIPE_ID as GRID_RECIPE_ID, RECIPE_VERSION as GRID_RECIPE_VERSION,
+    SELFTEST_LOG_PASS as GRID_SELFTEST_PASS, GridBoardParams, generate as grid_generate)
+from ..recipes.platformer.recipe import (
+    RECIPE_ID as PLATFORMER_RECIPE_ID, RECIPE_VERSION as PLATFORMER_RECIPE_VERSION,
+    SELFTEST_LOG_PASS as PLATFORMER_SELFTEST_PASS, PlatformerParams, generate as platformer_generate)
 from . import stages as engine_stages
 from ..unreal.toolchain import UnrealToolchain
 
@@ -89,8 +93,14 @@ class GamePipeline:
         except Exception:
             pass
 
-    def run(self, params: GridBoardParams, skip_package: bool = False,
+    def run(self, params: Union[GridBoardParams, PlatformerParams], skip_package: bool = False,
             stop_after: Optional[str] = None) -> PipelineResult:
+        is_platformer = isinstance(params, PlatformerParams)
+        recipe_id = PLATFORMER_RECIPE_ID if is_platformer else GRID_RECIPE_ID
+        recipe_version = PLATFORMER_RECIPE_VERSION if is_platformer else GRID_RECIPE_VERSION
+        selftest_pass = PLATFORMER_SELFTEST_PASS if is_platformer else GRID_SELFTEST_PASS
+        default_gm = f"/Script/{params.project_name}.GFPlatformerGameMode" if is_platformer else f"/Script/{params.project_name}.GFGameMode"
+
         project_dir = self.projects_root / params.project_name
         uproject = project_dir / f"{params.project_name}.uproject"
         evidence_dir = project_dir / "Saved" / "GameForge"
@@ -118,7 +128,7 @@ class GamePipeline:
             report = evidence_dir / "pipeline_report.json"
             res = PipelineResult(failed is None, str(project_dir), stages, str(report), failed)
             payload = res.to_dict()
-            payload.update({"recipe": RECIPE_ID, "recipe_version": RECIPE_VERSION, "params": params.to_dict(),
+            payload.update({"recipe": recipe_id, "recipe_version": recipe_version, "params": params.to_dict(),
                             "engine_version": self.toolchain.engine_version(),
                             "finished": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
             report.write_text(json.dumps(payload, indent=1, default=str), encoding="utf-8")
@@ -139,12 +149,12 @@ class GamePipeline:
             name = params.project_name
             info = self.toolchain.scaffold_cpp_project(
                 project_dir, name, default_map=f"/Game/Maps/{name}Map",
-                game_mode=f"/Script/{name}.GFGameMode", display_title=params.display_title)
+                game_mode=default_gm, display_title=params.display_title)
             return StageRecord("scaffold", uproject.is_file(), 0, info)
 
         # 3 sources
         def s_sources():
-            files = generate(params)
+            files = platformer_generate(params) if is_platformer else grid_generate(params)
             for rel, content in files.items():
                 path = project_dir / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -163,8 +173,13 @@ class GamePipeline:
 
         # 5 assemble level in the live editor
         def s_assemble():
-            ok, data, errors = engine_stages.assemble_level(self.engine_root, uproject, evidence_dir, params.project_name,
-                                                     params.cell_size_cm * params.board_size)
+            if is_platformer:
+                ok, data, errors = engine_stages.assemble_platformer_level(
+                    self.engine_root, uproject, evidence_dir, params.project_name, params.collectible_target)
+            else:
+                ok, data, errors = engine_stages.assemble_level(
+                    self.engine_root, uproject, evidence_dir, params.project_name,
+                    params.cell_size_cm * params.board_size)
             return StageRecord("assemble_level", ok, 0, data, errors)
 
         # 6 automation tests
@@ -181,7 +196,8 @@ class GamePipeline:
 
         # 8 packaged smoke test (self-test inside the shipped build + screenshot)
         def s_smoke():
-            ok, data, errors = engine_stages.packaged_smoke(self.toolchain, Path(ctx["exe"]), evidence_dir, params.project_name)
+            ok, data, errors = engine_stages.packaged_smoke(
+                self.toolchain, Path(ctx["exe"]), evidence_dir, params.project_name, expect_log=selftest_pass)
             return StageRecord("packaged_smoke", ok, 0, data, errors)
 
         plan = [("spec", s_spec), ("scaffold", s_scaffold), ("sources", s_sources), ("build_editor", s_build),
