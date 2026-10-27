@@ -293,3 +293,16 @@ python scripts/run_phase2_targeted_and_holdout_test.py
      - **Midnight Purple Dark:** Black/void dominant (#08070d, #0d0b14), dark purple accents (#7c3aed, #8b5cf6).
   3. **Regression Tests Pass:** All 21 desktop acceptance tests pass (	est_midnight_and_glossy_purple_themes_switching_and_persistence verifies live switching and ide_settings.ini persistence).
   4. **Full Test Suite:** 246 passed, 0 failures (201 unit + 45 protected benchmark oracles). Zero regressions.
+
+- **2026-10-27T13:55:** **Master Documentation Generated & Obsolete Files Purged.** [VERIFIED]
+  1. Generated authoritative comprehensive 2,128-line master project specification document.md covering full architecture, runtime, Unreal Engine 5.7 integration, test evidence, parity analysis, and multimodal roadmap.
+  2. Purged 40 superseded root markdown reports, interim blueprints, and obsolete handoff logs, keeping active specifications (GAMEFORGE_FINAL_MASTER_STRATEGY.md, context.md, document.md, AGENTS.md, README.md, PROJECT_CHARTER.md, EVALUATION_CONTRACT.md, GAMEFORGE_HOSTED_INFERENCE_ARCHITECTURE.md, STEP4_AUDIT_REPORT.md, STEP5_RECONCILIATION_AUDIT.md).
+  3. Purged ephemeral scratch files and transient test run dumps from scratch/.
+  4. Verified full test suite passes with zero regressions: **201 unit tests + 45 protected oracles = 246 passing tests (100% pass rate)**.
+
+- **2026-10-27T13:57:** **Historical Audits, Step Retests & Baseline Reports Purged.** [VERIFIED]
+  1. Purged obsolete evaluation/audit reports across 
+eports/ and docs/ (step5_clean_retest_report.md, step5_clean_retest_results.json, gameforge_v2_data_provenance_audit.*, master_blueprint_implementation_audit.md, step10_multimodal_calibration_report.json, step8_repair_experiment_report.json, step9_game_ir_experiment_report.json, GAMEFORGE_V1_MODEL_DELIVERY_REPORT.md, gameforge_v2_execution_readiness.md, GAMEFORGE_V2_TRAINING_REPORT.md, aseline_evaluation_scorecard.json, gameforge_v1_evaluation_report.json, gameforge_v1_representative_evaluation.json, gameforge_v2_local_training_metrics.json, gameforge_v2_representative_evaluation.json, enchmark_audit.*, dataset_independent_audit.md, ADR-001_USER_AUTHORIZED_PRE_GATE_STEP6.md, and STEP5_RECONCILIATION_AUDIT.md).
+  2. Preserved active production model evaluation lineage (
+eports/gameforge-27b-sft/) and oracle test dependency (STEP4_AUDIT_REPORT.md).
+  3. Verified all test suites pass with zero regressions: **201 unit tests + 45 protected benchmark oracles = 246 passing tests (100% pass rate)**.
