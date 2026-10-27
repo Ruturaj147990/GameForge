@@ -32,7 +32,8 @@ class TerminalPanel(QWidget):
         self._workspace = workspace_root
         self._process: QProcess | None = None
         self._build_ui()
-        self._start_shell()
+        # Lazy start (Blueprint v2 §8.1): no shell process exists until the user runs a command.
+        self._write_info(f"GameForge Terminal — {self._workspace}\nPowerShell starts with your first command.\n")
 
     # ── UI Construction ─────────────────────────────────────────────────────
 
@@ -124,14 +125,14 @@ class TerminalPanel(QWidget):
         self._process.stateChanged.connect(self._on_state_changed)
         # PowerShell with non-interactive output (still interactive via stdin)
         self._process.start("powershell.exe", ["-NoLogo", "-NonInteractive"])
-        self._write_info(f"GameForge Terminal — {self._workspace}\n")
+        self._process.waitForStarted(5000)
 
     def _restart_shell(self) -> None:
         if self._process:
             self._process.kill()
             self._process.waitForFinished(1000)
-        self._output.appendPlainText("\n--- Restarting shell ---\n")
-        self._start_shell()
+            self._process = None
+            self._output.appendPlainText("\n--- Shell stopped; it restarts with your next command ---\n")
 
     def set_workspace(self, new_workspace: Path) -> None:
         """Switch active terminal directory to new workspace."""
@@ -165,6 +166,8 @@ class TerminalPanel(QWidget):
             return
         self._cmd_input.clear()
         self._write_prompt(cmd)
+        if self._process is None or self._process.state() == QProcess.NotRunning:
+            self._start_shell()
         if self._process and self._process.state() == QProcess.Running:
             self._process.write((cmd + "\n").encode("utf-8"))
         else:

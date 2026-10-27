@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from ..models.capability import CapabilityRecord, CapabilityRegistry
 from .base import ModelInfo, ModelProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAICompatibleProvider
+from .hosted import GuardedProvider, build_guarded_providers
 
 
 class ModelRouter:
@@ -35,6 +36,28 @@ class ModelRouter:
         }
         self.default_provider_id = "ollama"
         self.registry = CapabilityRegistry(storage_root=storage_root)
+        self.hosted: Dict[str, GuardedProvider] = {}
+
+    def attach_hosted(self, workspace_root: Path, profiles=None) -> Dict[str, GuardedProvider]:
+        """Register the hosted heavy-model tier for a workspace (each provider stays guarded)."""
+        self.hosted = build_guarded_providers(workspace_root, profiles)
+        for pid, prov in self.hosted.items():
+            self.providers[f"hosted:{pid}"] = prov
+        return self.hosted
+
+    def route_hosted(self, role: str, requires_images: bool = False):
+        """Pick a hosted (provider_id, model_id) for a role, only if enabled, opted-in and credentialed.
+
+        Returns None when no hosted model is usable; the caller then stays on the local tier and
+        says so. There is never a silent switch between tiers in the middle of a task.
+        """
+        for pid, prov in self.hosted.items():
+            if not prov.is_available():
+                continue
+            for m in prov.profile.models:
+                if role in m.roles and (m.supports_images or not requires_images):
+                    return f"hosted:{pid}", m.id
+        return None
 
     def register_provider(self, provider_id: str, provider: ModelProvider) -> None:
         self.providers[provider_id] = provider
@@ -95,6 +118,8 @@ class ModelRouter:
                 "status": "PROVIDER_OFFLINE",
                 "error": f"Provider '{provider_id}' is offline. Self-test cannot run.",
             }
+        if hasattr(provider, "native_tool_self_test"):
+            return provider.native_tool_self_test(model_id)
 
         sample_prompt = (
             "Invoke the list_dir tool to check the workspace root.\n"

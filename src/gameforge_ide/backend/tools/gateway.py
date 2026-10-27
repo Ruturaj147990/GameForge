@@ -11,6 +11,7 @@ from ..security.boundary import BoundaryManager, SecurityViolationError
 from .asset_tools import ProceduralMeshGenerator
 from .edit_tools import EditTools
 from .fs_tools import tool_list_dir, tool_read_file, tool_search_code
+from .game_tools import READ_ONLY_EDITOR_OPS, GameTools
 from .git_tools import GitTools
 from .terminal_tools import TerminalTools
 from .unreal_tools import UnrealEngineTools
@@ -34,6 +35,7 @@ class ToolGateway:
         self.git_tools = GitTools(self.workspace_root)
         self.unreal_tools = UnrealEngineTools(self.workspace_root)
         self.asset_tools = ProceduralMeshGenerator()
+        self.game_tools = GameTools(self.workspace_root)
 
     def get_definitions(self) -> List[ToolDefinition]:
         """Returns schemas for all registered tools."""
@@ -184,6 +186,54 @@ class ToolGateway:
                 requires_approval=True,
             ),
             ToolDefinition(
+                name="plan_game",
+                description="Turn a game request into a Game Spec (recipe, parameters, acceptance tests) without side effects.",
+                parameters={"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]},
+            ),
+            ToolDefinition(
+                name="create_game",
+                description="Create a complete playable Unreal game from a Game Spec: scaffold, build, level, tests, package, self-test.",
+                parameters={"type": "object", "properties": {"params": {"type": "object"},
+                                                             "package": {"type": "boolean", "default": True}},
+                            "required": ["params"]},
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="create_game_freeform",
+                description="Create a game with no matching recipe: a model writes gameplay C++ on the verified host framework; compile, repair, package and self-test gates apply.",
+                parameters={"type": "object", "properties": {"prompt": {"type": "string"}, "title": {"type": "string"}},
+                            "required": ["prompt"]},
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="unreal_editor",
+                description="Run one named operation in the live Unreal Editor for a project (spawn_actor, new_level, create_material, create_blueprint, actors_in_level, ...).",
+                parameters={"type": "object", "properties": {"uproject": {"type": "string"}, "op": {"type": "string"},
+                                                             "args": {"type": "object"}},
+                            "required": ["uproject", "op"]},
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="unreal_run_tests",
+                description="Run Unreal automation tests for a project and return parsed results.",
+                parameters={"type": "object", "properties": {"uproject": {"type": "string"},
+                                                             "test_filter": {"type": "string", "default": "GameForge"}},
+                            "required": ["uproject"]},
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="unreal_package",
+                description="Cook and package an Unreal project for Windows.",
+                parameters={"type": "object", "properties": {"uproject": {"type": "string"}}, "required": ["uproject"]},
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="play_game",
+                description="Launch a packaged game produced by GameForge.",
+                parameters={"type": "object", "properties": {"exe": {"type": "string"}}, "required": ["exe"]},
+                requires_approval=True,
+            ),
+            ToolDefinition(
                 name="generate_3d_mesh",
                 description="Generate a procedural 3D mesh (.obj, .mtl) with Unreal import metadata.",
                 parameters={
@@ -213,7 +263,10 @@ class ToolGateway:
         definition = next((item for item in self.get_definitions() if item.name == name), None)
         if definition is None:
             return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
-        if definition.requires_approval and name != "propose_edit" and not approval_granted:
+        needs_approval = definition.requires_approval and name != "propose_edit"
+        if name == "unreal_editor" and arguments.get("op") in READ_ONLY_EDITOR_OPS:
+            needs_approval = False  # T0 read-back operations
+        if needs_approval and not approval_granted:
             return {
                 "status": "PENDING_APPROVAL",
                 "tool": name,
@@ -247,6 +300,20 @@ class ToolGateway:
                 res = {"status": "SUCCESS", "projects": self.unreal_tools.find_uprojects()}
             elif name == "unreal_build":
                 res = self.unreal_tools.run_staged_build(**arguments)
+            elif name == "plan_game":
+                res = self.game_tools.plan_game(**arguments)
+            elif name == "create_game":
+                res = self.game_tools.create_game(**arguments)
+            elif name == "create_game_freeform":
+                res = self.game_tools.create_game_freeform(**arguments)
+            elif name == "unreal_editor":
+                res = self.game_tools.unreal_editor(**arguments)
+            elif name == "unreal_run_tests":
+                res = self.game_tools.unreal_run_tests(**arguments)
+            elif name == "unreal_package":
+                res = self.game_tools.unreal_package(**arguments)
+            elif name == "play_game":
+                res = self.game_tools.play_game(**arguments)
             elif name == "generate_3d_mesh":
                 res = self.asset_tools.generate_cube(**arguments)
             else:

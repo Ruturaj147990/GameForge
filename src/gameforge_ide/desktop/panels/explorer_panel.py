@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QFont, QIcon
@@ -115,41 +116,77 @@ class ExplorerPanel(QWidget):
         self._populate_children(root_item, self._workspace)
         root_item.setExpanded(True)
 
+    # Large folders (Blueprint v2 §8.1/§9): the first SYNC_BATCH entries appear immediately, the rest
+    # are appended in timer batches so the UI thread never blocks, and at most MAX_ITEMS rows are
+    # materialised per folder to bound memory. os.scandir entries carry cached metadata on Windows,
+    # so no extra stat call is made per file.
+    SYNC_BATCH = 500
+    ASYNC_BATCH = 500
+    MAX_ITEMS = 5000
+    SKIP = {".git", "__pycache__", ".venv", "venv", "node_modules", ".agents"}
+
     def _populate_children(self, parent_item: QTreeWidgetItem, dir_path: Path) -> None:
         """Populate one directory level (called lazily on expand)."""
-        # Remove placeholder
         for i in reversed(range(parent_item.childCount())):
             child = parent_item.child(i)
             if child.data(0, Qt.UserRole + 1) == "placeholder":
                 parent_item.removeChild(child)
-
         try:
-            entries = sorted(dir_path.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
-        except PermissionError:
+            with os.scandir(dir_path) as it:
+                entries = [e for e in it if e.name not in self.SKIP]
+        except OSError:
             return
+        entries.sort(key=lambda e: (not _is_dir(e), e.name.lower()))
+        total = len(entries)
+        shown = entries[: self.MAX_ITEMS]
+        self._add_entries(parent_item, shown[: self.SYNC_BATCH])
+        rest = shown[self.SYNC_BATCH:]
+        if rest:
+            self._schedule_batches(parent_item, rest, total)
+        elif total > self.MAX_ITEMS:
+            self._add_more_marker(parent_item, total)
+        self._status_lbl.setText(f"{total} items in {dir_path.name}/")
 
-        # Skip hidden and virtual env folders at root
-        SKIP = {".git", "__pycache__", ".venv", "venv", "node_modules", ".agents"}
+    def _schedule_batches(self, parent_item: QTreeWidgetItem, remaining: list, total: int) -> None:
+        def step():
+            try:
+                parent_item.text(0)  # raises if the item was deleted (tree cleared)
+            except RuntimeError:
+                return
+            batch, rest = remaining[: self.ASYNC_BATCH], remaining[self.ASYNC_BATCH:]
+            self._add_entries(parent_item, batch)
+            if rest:
+                remaining[:] = rest
+                QTimer.singleShot(0, step)
+            elif total > self.MAX_ITEMS:
+                self._add_more_marker(parent_item, total)
+        QTimer.singleShot(0, step)
+
+    def _add_more_marker(self, parent_item: QTreeWidgetItem, total: int) -> None:
+        more = QTreeWidgetItem([f"… {total - self.MAX_ITEMS} more items (use search or open a subfolder)"])
+        more.setData(0, Qt.UserRole + 1, "more")
+        more.setFlags(Qt.ItemIsEnabled)
+        parent_item.addChild(more)
+
+    def _add_entries(self, parent_item: QTreeWidgetItem, entries: list) -> None:
+        items = []
         for entry in entries:
-            if entry.name in SKIP:
-                continue
             item = QTreeWidgetItem([entry.name])
-            item.setData(0, Qt.UserRole, str(entry))
-            if entry.is_dir():
+            item.setData(0, Qt.UserRole, entry.path)
+            if _is_dir(entry):
                 item.setData(0, Qt.UserRole + 1, "dir")
-                # Placeholder so expand arrow appears
                 placeholder = QTreeWidgetItem(["…"])
                 placeholder.setData(0, Qt.UserRole + 1, "placeholder")
                 item.addChild(placeholder)
             else:
                 item.setData(0, Qt.UserRole + 1, "file")
-                item.setToolTip(0, str(entry))
-                size = entry.stat().st_size if entry.exists() else 0
-                item.setData(0, Qt.StatusTipRole, _human_size(size))
-            parent_item.addChild(item)
-
-        count = parent_item.childCount()
-        self._status_lbl.setText(f"{count} items in {dir_path.name}/")
+                item.setToolTip(0, entry.path)
+                try:
+                    item.setData(0, Qt.StatusTipRole, _human_size(entry.stat().st_size))
+                except OSError:
+                    pass
+            items.append(item)
+        parent_item.addChildren(items)
 
     @Slot(QTreeWidgetItem)
     def _on_expand(self, item: QTreeWidgetItem) -> None:
@@ -183,6 +220,13 @@ class ExplorerPanel(QWidget):
             else:
                 child.setHidden(True)
         return visible_child
+
+
+def _is_dir(entry) -> bool:
+    try:
+        return entry.is_dir()
+    except OSError:
+        return False
 
 
 def _human_size(n: int) -> str:

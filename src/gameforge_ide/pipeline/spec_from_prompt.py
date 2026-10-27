@@ -1,0 +1,245 @@
+"""Natural-language prompt -> Game Spec (recipe + validated parameters).
+
+Two strategies, tried in order:
+  1. Deterministic matcher (always available, no model): recognises recipe intents and
+     extracts parameters such as board size, win length, opponent and title.
+  2. Optional model refinement: a schema-constrained JSON call (Ollama ``format`` or any
+     provider with JSON output) may fill parameters the matcher could not. Its output is
+     validated by the recipe; invalid model output is discarded, never trusted.
+
+A prompt that matches no recipe returns ``matched=False`` with the reason. Free-form game
+authoring without a recipe is the hosted heavy-model tier's job (Master Blueprint v2 §3).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional
+
+from ..recipes.grid_board_game.recipe import GridBoardParams
+
+_CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write)\b", re.I)
+
+
+@dataclass
+class RecipeEntry:
+    recipe_id: str
+    title: str
+    keywords: List[str]
+    description: str
+    defaults: Dict
+
+
+RECIPES: List[RecipeEntry] = [
+    RecipeEntry("grid_board_game", "Tic-Tac-Toe", ["tic tac toe", "tic-tac-toe", "tictactoe", "noughts and crosses",
+                                                   "naughts and crosses", "xs and os", "x and o", "x's and o's"],
+                "3x3 board, three in a row", {"board_size": 3, "win_length": 3, "display_title": "Tic-Tac-Toe",
+                                              "project_name": "TicTacToe"}),
+    RecipeEntry("grid_board_game", "Gomoku", ["gomoku", "five in a row", "5 in a row", "omok", "renju"],
+                "large board, five in a row", {"board_size": 15, "win_length": 5, "display_title": "Gomoku",
+                                               "project_name": "Gomoku"}),
+    RecipeEntry("grid_board_game", "Four in a Row (grid)", ["four in a row", "4 in a row", "connect four", "connect 4"],
+                "7x7 grid, pieces drop down, four in a row", {"board_size": 7, "win_length": 4,
+                                                              "display_title": "Four in a Row",
+                                                              "project_name": "FourInARow", "gravity": True}),
+    RecipeEntry("grid_board_game", "N-in-a-row board game", ["in a row", "grid game", "board game"],
+                "configurable grid and line length", {"board_size": 5, "win_length": 4,
+                                                      "display_title": "Line Up", "project_name": "LineUp"}),
+]
+
+_SIZE = re.compile(r"\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\b", re.I)
+_WIN = re.compile(r"\b(\d{1,2})\s*(?:in a row|in-a-row|to win)\b", re.I)
+_NAME = re.compile(r"\b(?:called|named|titled)\s+[\"']?([A-Za-z][A-Za-z0-9 \-]{0,40}?)[\"']?"
+                   r"(?=\s+(?:against|with|vs|versus|for|that|and|in|on|where|using|which)\b|[.,!;:]|\s*$)", re.I)
+_HOTSEAT = re.compile(r"\b(two[- ]player|2[- ]player|hot[- ]?seat|local multiplayer|pvp|against a friend|vs (?:a )?friend)\b", re.I)
+_AI_EASY = re.compile(r"\b(easy|beginner|random)\b", re.I)
+_AI_MED = re.compile(r"\b(medium|normal|greedy)\b", re.I)
+_COLOR_WORDS = {"red": (1.0, 0.22, 0.2), "blue": (0.1, 0.45, 1.0), "green": (0.15, 0.8, 0.3),
+                "yellow": (1.0, 0.85, 0.1), "purple": (0.55, 0.25, 0.95), "orange": (1.0, 0.55, 0.1),
+                "pink": (1.0, 0.4, 0.7), "white": (0.95, 0.95, 0.95), "black": (0.05, 0.05, 0.06),
+                "cyan": (0.1, 0.85, 0.9)}
+
+
+@dataclass
+class GameSpec:
+    matched: bool
+    recipe_id: Optional[str] = None
+    recipe_title: Optional[str] = None
+    params: Optional[GridBoardParams] = None
+    confidence: float = 0.0
+    reasons: List[str] = field(default_factory=list)
+    acceptance: List[str] = field(default_factory=list)
+
+    def summary(self) -> str:
+        if not self.matched or not self.params:
+            return "No recipe matched: " + "; ".join(self.reasons)
+        p = self.params
+        opp = f"vs computer ({p.ai_level})" if p.vs_ai else "two players, hot-seat"
+        return (f"{p.display_title}: {p.board_size}x{p.board_size} board{', pieces drop down' if p.gravity else ''}, {p.win_length} in a row, {opp}. "
+                f"Unreal project `{p.project_name}`.")
+
+    def to_dict(self) -> Dict:
+        return {"matched": self.matched, "recipe_id": self.recipe_id, "recipe_title": self.recipe_title,
+                "params": self.params.to_dict() if self.params else None, "confidence": self.confidence,
+                "reasons": self.reasons, "acceptance": self.acceptance, "summary": self.summary()}
+
+
+_GAME_WORD = re.compile(r"(?<![\w/\\.])games?(?![\w/\\.])", re.I)
+# the create verb's object ends in "game": "create a (simple 2D platformer) game", "make me a racing game"
+_CREATE_GAME = re.compile(r"\b(?:create|make|build|generate|develop|design|write|give me)\s+(?:me\s+)?"
+                          r"(?:[\w\-']+\s+){0,8}?games?\b(?!\s*(?:mode|state|instance|play|object)\b)", re.I)
+
+
+def is_game_creation_request(prompt: str) -> bool:
+    """A request to create a whole game: a create-verb plus the standalone word 'game' or a recipe name.
+
+    'game' inside identifiers or paths (GameForgeProject, Source/GameMode.cpp) does not count, so ordinary
+    coding requests keep going to the normal agent loop.
+    """
+    text = prompt.lower()
+    if not _CREATE.search(text):
+        return False
+    if any(k in text for r in RECIPES for k in r.keywords):
+        return True
+    if not _GAME_WORD.search(text):
+        return False
+    # "... for my game", "in the game", "to our game": work inside an existing game, not a new one.
+    if re.search(r"\b(?:for|in|into|inside|of|to)\s+(?:my|the|this|our|your)\s+games?\b", text):
+        return False
+    return bool(_CREATE_GAME.search(text))
+
+
+def _pascal(name: str) -> str:
+    parts = re.findall(r"[A-Za-z0-9]+", name)
+    out = "".join(p[:1].upper() + p[1:] for p in parts)
+    if not out or not out[0].isalpha():
+        out = "Game" + out
+    return out[:30]
+
+
+def match_prompt(prompt: str) -> GameSpec:
+    text = " " + prompt.lower().replace("’", "'") + " "
+    best: Optional[RecipeEntry] = None
+    best_kw = ""
+    for entry in RECIPES:
+        for kw in entry.keywords:
+            if kw in text and len(kw) > len(best_kw):
+                best, best_kw = entry, kw
+    if best is None:
+        return GameSpec(False, reasons=["no installed recipe matches this request; installed: "
+                                        + ", ".join(sorted({r.title for r in RECIPES}))])
+    d = dict(best.defaults)
+    reasons = [f"matched recipe '{best.title}' on '{best_kw}'"]
+    m = _SIZE.search(prompt)
+    if m and m.group(1) == m.group(2):
+        d["board_size"] = int(m.group(1))
+        reasons.append(f"board {m.group(1)}x{m.group(2)} from prompt")
+    m = _WIN.search(prompt)
+    if m:
+        d["win_length"] = int(m.group(1))
+        reasons.append(f"win length {m.group(1)} from prompt")
+    d["win_length"] = min(d["win_length"], d["board_size"])
+    vs_ai = not _HOTSEAT.search(prompt)
+    ai_level = "random" if _AI_EASY.search(prompt) else "greedy" if _AI_MED.search(prompt) else "perfect"
+    m = _NAME.search(prompt)
+    if m:
+        title = m.group(1).strip()
+        d["display_title"] = title
+        d["project_name"] = _pascal(title)
+        reasons.append(f"title '{title}' from prompt")
+    colors = [c for c in _COLOR_WORDS if re.search(rf"\b{c}\b", text)]
+    params = GridBoardParams(project_name=d["project_name"], display_title=d["display_title"],
+                             board_size=d["board_size"], win_length=d["win_length"], vs_ai=vs_ai, ai_level=ai_level,
+                             gravity=bool(d.get("gravity", False) or re.search(r"\b(gravity|drop|falling pieces)\b", text)))
+    if len(colors) >= 1:
+        params.player1_color = _COLOR_WORDS[colors[0]]
+    if len(colors) >= 2:
+        params.player2_color = _COLOR_WORDS[colors[1]]
+    try:
+        params.validate()
+    except ValueError as exc:
+        return GameSpec(False, best.recipe_id, best.title, reasons=reasons + [f"invalid parameters: {exc}"])
+    acceptance = [
+        f"build_ok({params.project_name}Editor Win64 Development)",
+        f"automation_pass(GameForge.{params.project_name}.*)",
+        "level_readback(Table, Sun, SkyFill)",
+        f"package_ok(Win64 Development) -> {params.project_name}.exe",
+        "packaged_selftest(GF_SELFTEST PASS: row win, move rejection after end, full game vs AI)",
+        "packaged_screenshot_has_content",
+    ]
+    return GameSpec(True, best.recipe_id, best.title, params, 0.9 if best_kw != "board game" else 0.6,
+                    reasons, acceptance)
+
+
+SPEC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "display_title": {"type": "string"},
+        "board_size": {"type": "integer"},
+        "win_length": {"type": "integer"},
+        "vs_ai": {"type": "boolean"},
+        "ai_level": {"type": "string", "enum": ["random", "greedy", "perfect"]},
+    },
+    "required": ["display_title", "board_size", "win_length", "vs_ai", "ai_level"],
+}
+
+
+def refine_with_model(spec: GameSpec, prompt: str, complete_json: Callable[[str, Dict], Optional[str]]) -> GameSpec:
+    """Let a model adjust parameters through a JSON schema. Invalid output is ignored."""
+    if not spec.matched or not spec.params:
+        return spec
+    instruction = (
+        "Extract game parameters for a grid board game from the request. Respond with JSON only.\n"
+        f"Current defaults: {json.dumps({k: spec.params.to_dict()[k] for k in SPEC_SCHEMA['properties']})}\n"
+        f"Request: {prompt}"
+    )
+    try:
+        raw = complete_json(instruction, SPEC_SCHEMA)
+        data = json.loads(raw or "")
+    except Exception as exc:
+        spec.reasons.append(f"model refinement skipped: {type(exc).__name__}")
+        return spec
+    candidate = GridBoardParams(**{**spec.params.to_dict(), **{k: data[k] for k in SPEC_SCHEMA["properties"] if k in data}})
+    candidate.project_name = _pascal(candidate.display_title) if candidate.display_title != spec.params.display_title \
+        else spec.params.project_name
+    try:
+        candidate.validate()
+    except (ValueError, TypeError) as exc:
+        spec.reasons.append(f"model output rejected: {exc}")
+        return spec
+    spec.params = candidate
+    spec.reasons.append("parameters refined by model (validated)")
+    return spec
+
+
+_FLAG = re.compile(r"--(hotseat|gravity|size|win|ai|title)(?:[=\s]+(\"[^\"]*\"|'[^']*'|[^\s-][^\s]*))?", re.I)
+
+
+def expand_game_flags(text: str) -> str:
+    """Turn `/game` shortcut flags into the phrases match_prompt understands.
+
+    gomoku --size 9 --win 4 --hotseat --ai easy --title "Stone Duel"
+      -> gomoku 9x9 4 in a row two player easy called Stone Duel
+    """
+    phrases = []
+
+    def sub(m):
+        flag, val = m.group(1).lower(), (m.group(2) or "").strip("\"'")
+        if flag == "hotseat":
+            phrases.append("two player")
+        elif flag == "gravity":
+            phrases.append("gravity")
+        elif flag == "size" and val.isdigit():
+            phrases.append(f"{val}x{val}")
+        elif flag == "win" and val.isdigit():
+            phrases.append(f"{val} in a row")
+        elif flag == "ai" and val:
+            phrases.append({"easy": "easy", "random": "easy", "medium": "medium", "greedy": "medium"}.get(val.lower(), ""))
+        elif flag == "title" and val:
+            phrases.append(f"called {val}.")
+        return ""
+
+    base = _FLAG.sub(sub, text).strip()
+    return " ".join([base] + [p for p in phrases if p]).strip()

@@ -21,24 +21,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from .mutation_queue import SerializedMutationQueue
-from .security import UnrealSecurityBoundary
-from .snapshot import SnapshotManager
-
-
-class OperationResult(BaseModel):
-    ok: bool
-    operation: str
-    data: Dict[str, Any] = Field(default_factory=dict)
-    warnings: List[str] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)
-    affected_paths: List[str] = Field(default_factory=list)
-    reversibility: str = "transactional"  # "transactional", "snapshot-only", "read-only"
-    snapshot_id: Optional[str] = None
+from src.gameforge_ide.unreal.op_result import OperationResult
+from src.gameforge_ide.unreal.mutation_queue import SerializedMutationQueue
+from src.gameforge_ide.unreal.security import UnrealSecurityBoundary
+from src.gameforge_ide.unreal.snapshot import SnapshotManager
 
 
 class UnrealOperationsLibrary:
-    """Manages verified Unreal Engine operations and read-backs."""
+    """In-memory SIMULATION of the editor operation library for offline tests.
+
+    It never contacts Unreal. Real operations live in GameForge/Content/Python/gameforge_ops.py
+    and are reached through live_editor.LiveEditorLink.
+    """
 
     VERSION = "1.0.0"
 

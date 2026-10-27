@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .security import EditorSecurityError, UnrealSecurityBoundary
+from src.gameforge_ide.unreal.security import EditorSecurityError, UnrealSecurityBoundary
 
 
 class EditorTransport(ABC):
@@ -48,7 +48,7 @@ class EditorTransport(ABC):
 
 
 class PythonRemoteTransport(EditorTransport):
-    """Loopback Python Remote Execution transport with security token checking."""
+    """SIMULATED loopback transport used by offline tests; see live_editor.LiveEditorLink for the real one."""
 
     def __init__(
         self,
@@ -89,10 +89,11 @@ class PythonRemoteTransport(EditorTransport):
         if not self._connected:
             await self.connect()
 
-        # In production editor execution, payload is passed to the Content/Python operation library.
-        # Here we return a structured envelope conforming to Blueprint §3 specification.
+        # SIMULATION: this class never opens a socket. It exists for offline unit tests.
+        # The real editor link is live_editor.LiveEditorLink (Master Blueprint v2, section 4).
         return {
             "ok": True,
+            "simulated": True,
             "operation": operation_name,
             "transport": "PythonRemoteExecution",
             "data": {

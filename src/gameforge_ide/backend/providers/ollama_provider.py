@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.request
 import urllib.error
 from typing import Any, AsyncIterator, Dict, Iterator, List, Optional
@@ -99,6 +100,78 @@ class OllamaProvider(ModelProvider):
             },
             "think": False,
         }
+
+    def chat_with_tools(
+        self,
+        model_id: str,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        num_ctx: int = 8192,
+        temperature: float = 0.0,
+        max_tokens: int = 1024,
+        keep_alive: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Native tool calling via /api/chat `tools`. Returns {content, tool_calls, usage}.
+
+        `tools` uses the provider-neutral shape {name, description, parameters}. `think` is
+        always False and `num_ctx` is always explicit (Master Blueprint v2 §6).
+        """
+        payload: Dict[str, Any] = {
+            "model": model_id,
+            "messages": messages,
+            "tools": [{"type": "function", "function": t} for t in tools],
+            "stream": False,
+            "think": False,
+            "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": num_ctx},
+        }
+        if keep_alive is not None:
+            payload["keep_alive"] = keep_alive
+        req = urllib.request.Request(
+            f"http://{self.host}/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        msg = data.get("message", {}) or {}
+        calls = []
+        for c in msg.get("tool_calls") or []:
+            fn = c.get("function", {})
+            args = fn.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {"_unparsed": args}
+            calls.append({"name": fn.get("name"), "arguments": args})
+        return {
+            "content": msg.get("content", ""),
+            "tool_calls": calls,
+            "usage": {"prompt_tokens": data.get("prompt_eval_count", 0),
+                      "completion_tokens": data.get("eval_count", 0)},
+            "total_duration_ns": data.get("total_duration", 0),
+        }
+
+    def native_tool_self_test(self, model_id: str, num_ctx: int = 4096) -> Dict[str, Any]:
+        """Startup gate: the model must answer a one-tool request with a structured call."""
+        tool = {"name": "list_dir", "description": "List files in a workspace directory.",
+                "parameters": {"type": "object", "properties": {"subpath": {"type": "string"}},
+                               "required": ["subpath"]}}
+        t0 = time.time()
+        try:
+            res = self.chat_with_tools(
+                model_id,
+                [{"role": "system", "content": "You are a tool-using assistant. Use tools to act."},
+                 {"role": "user", "content": "List the files in the workspace root directory."}],
+                [tool], num_ctx=num_ctx, max_tokens=128)
+        except Exception as exc:
+            return {"ok": False, "model": model_id, "status": "SELF_TEST_ERROR", "error": str(exc)}
+        calls = res["tool_calls"]
+        ok = len(calls) >= 1 and calls[0]["name"] == "list_dir" and isinstance(calls[0]["arguments"], dict)
+        return {"ok": ok, "model": model_id, "status": "SELF_TEST_PASSED" if ok else "TEMPLATE_FAILED",
+                "tool_calls": calls, "content_preview": res["content"][:120],
+                "seconds": round(time.time() - t0, 2)}
 
     @staticmethod
     def build_chat_payload(

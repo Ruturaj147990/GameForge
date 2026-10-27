@@ -18,11 +18,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .mutation_queue import SerializedMutationQueue
-from .operations import UnrealOperationsLibrary
-from .security import UnrealSecurityBoundary
-from .snapshot import SnapshotManager
-from .transport import EditorTransport, PythonRemoteTransport
+from src.gameforge_ide.unreal.mutation_queue import SerializedMutationQueue
+from tests.doubles.operations import UnrealOperationsLibrary
+from src.gameforge_ide.unreal.security import UnrealSecurityBoundary
+from src.gameforge_ide.unreal.snapshot import SnapshotManager
+from tests.doubles.transport import EditorTransport, PythonRemoteTransport
 
 
 class UnrealSupervisor:
@@ -62,6 +62,7 @@ class UnrealSupervisor:
         token = self.get_session_token()
         return {
             "status": "HANDSHAKE_OK",
+            "simulated": True,  # offline handshake; live identity comes from LiveEditorLink.connect()
             "engine_version": "5.7.4",
             "engine_root": str(self.engine_root),
             "workspace": str(self.workspace_root),

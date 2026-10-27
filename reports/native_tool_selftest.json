@@ -1,0 +1,65 @@
+{
+ "ts": "2026-10-27T16:57:46+0530",
+ "results": [
+  {
+   "ok": true,
+   "model": "gameforge-qwen3.5-9b:latest",
+   "status": "SELF_TEST_PASSED",
+   "tool_calls": [
+    {
+     "name": "list_dir",
+     "arguments": {
+      "subpath": "/"
+     }
+    }
+   ],
+   "content_preview": "",
+   "seconds": 5.67
+  },
+  {
+   "ok": true,
+   "model": "gameforge-qwen3.5-4b:latest",
+   "status": "SELF_TEST_PASSED",
+   "tool_calls": [
+    {
+     "name": "list_dir",
+     "arguments": {
+      "subpath": "."
+     }
+    }
+   ],
+   "content_preview": "",
+   "seconds": 4.85
+  },
+  {
+   "ok": true,
+   "model": "gameforge-27b-sft:latest",
+   "status": "SELF_TEST_PASSED",
+   "tool_calls": [
+    {
+     "name": "list_dir",
+     "arguments": {
+      "subpath": ""
+     }
+    }
+   ],
+   "content_preview": "",
+   "seconds": 18.59
+  },
+  {
+   "ok": true,
+   "model": "llama3.1:8b",
+   "status": "SELF_TEST_PASSED",
+   "tool_calls": [
+    {
+     "name": "list_dir",
+     "arguments": {
+      "subpath": ""
+     }
+    }
+   ],
+   "content_preview": "",
+   "seconds": 5.98
+  }
+ ]
+}

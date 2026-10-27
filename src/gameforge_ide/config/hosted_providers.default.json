@@ -1,0 +1,37 @@
+{
+  "_comment": "Hosted heavy-model tier. Every provider ships DISABLED. To use one: set enabled=true in %APPDATA%/GameForge/hosted_providers.json, store the API key in Windows Credential Manager (target GameForge/<provider_id>) or the named env var, fill in current per-million-token prices from the provider's price page, and opt the workspace in via .gameforge/egress.json. Prices are intentionally 0 here: a metered model with unknown prices is refused.",
+  "providers": [
+    {
+      "provider_id": "anthropic",
+      "kind": "anthropic",
+      "base_url": "https://api.anthropic.com/v1",
+      "enabled": false,
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "data_policy": "Prompts, project excerpts and screenshots sent for the task leave this machine.",
+      "per_task_usd_cap": 5.0,
+      "per_day_usd_cap": 20.0,
+      "models": [
+        {"id": "claude-opus-5-5", "display_name": "Claude Opus 5.5", "max_context": 200000, "supports_tools": true, "supports_images": true, "roles": ["planner", "author", "repair", "vision_review"]},
+        {"id": "claude-sonnet-5-5", "display_name": "Claude Sonnet 5.5", "max_context": 200000, "supports_tools": true, "supports_images": true, "roles": ["author", "repair", "vision_review"]}
+      ]
+    },
+    {
+      "provider_id": "openai_compatible",
+      "kind": "openai_compatible",
+      "base_url": "https://api.openai.com/v1",
+      "enabled": false,
+      "api_key_env": "OPENAI_API_KEY",
+      "data_policy": "Prompts, project excerpts and screenshots sent for the task leave this machine.",
+      "models": []
+    },
+    {
+      "provider_id": "gameforge_gateway",
+      "kind": "gameforge_gateway",
+      "base_url": "http://127.0.0.1:8088/v1",
+      "enabled": false,
+      "unmetered": true,
+      "data_policy": "Self-hosted GameForge inference gateway (see GAMEFORGE_HOSTED_INFERENCE_ARCHITECTURE.md).",
+      "models": []
+    }
+  ]
+}

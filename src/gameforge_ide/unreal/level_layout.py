@@ -12,7 +12,6 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
-from .operations import UnrealOperationsLibrary
 
 
 class BoundingBox(BaseModel):
@@ -81,7 +80,8 @@ class LevelLayoutSpec(BaseModel):
 class LevelLayoutGenerator:
     """Validates and instantiates structured level designs."""
 
-    def __init__(self, operations: Optional[UnrealOperationsLibrary] = None):
+    def __init__(self, operations=None):
+        """operations: an editor backend (LiveOperations in production, a test double in tests)."""
         self.operations = operations
 
     def validate_layout(self, spec: LevelLayoutSpec) -> Tuple[bool, List[str]]:

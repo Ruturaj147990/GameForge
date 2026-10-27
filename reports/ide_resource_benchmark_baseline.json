@@ -1,0 +1,23 @@
+{
+ "ts": "2026-10-27T16:53:22+0530",
+ "startup_s": 0.86,
+ "idle_private_mb": 87.2,
+ "idle_working_set_mb": 154.3,
+ "idle_cpu_pct_one_core": 0.1,
+ "threads": 11,
+ "child_processes": 2,
+ "child_names": [
+  "conhost.exe",
+  "powershell.exe"
+ ],
+ "workspace_metadata_mb": 0.0,
+ "budgets": {
+  "startup_s": 2.5,
+  "idle_private_mb": 300.0,
+  "idle_cpu_pct_one_core": 1.0,
+  "child_processes": 0
+ },
+ "violations": [
+  "child_processes"
+ ]
+}

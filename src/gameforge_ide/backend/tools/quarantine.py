@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..models.provenance import AssetProvenanceRecord, LicenseRegistry
-from ...unreal.operations import OperationResult, UnrealOperationsLibrary
+from ...unreal.op_result import OperationResult
 from ...unreal.snapshot import SnapshotManager
 from .asset_tools import AssetSpec, GeometryValidationResult, ProceduralMeshGenerator
 
@@ -30,16 +30,16 @@ class QuarantinePipeline:
     def __init__(
         self,
         workspace_root: Path,
-        operations: Optional[UnrealOperationsLibrary] = None,
+        operations: Any = None,
         snapshot_manager: Optional[SnapshotManager] = None,
         license_registry: Optional[LicenseRegistry] = None,
     ):
         self.workspace_root = workspace_root.resolve()
         self.snapshot_mgr = snapshot_manager or SnapshotManager(self.workspace_root)
-        self.operations = operations or UnrealOperationsLibrary(
-            workspace_root=self.workspace_root,
-            snapshot_mgr=self.snapshot_mgr,
-        )
+        if operations is None:
+            raise ValueError("QuarantinePipeline needs an editor operations backend "
+                             "(unreal.live_operations.LiveOperations in production)")
+        self.operations = operations
         self.license_reg = license_registry or LicenseRegistry()
         self.mesh_generator = ProceduralMeshGenerator(self.workspace_root / "Saved" / "GeneratedAssets")
         self.session_token = self.operations.security.get_session_token()

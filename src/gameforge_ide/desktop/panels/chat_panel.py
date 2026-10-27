@@ -31,7 +31,9 @@ from PySide6.QtWidgets import (
 )
 
 from ...backend.unreal_context import load_unreal_context
+from ..services.action_runner import ActionRunner
 from ..services.agent_service import AgentService
+from .approval_card import ApprovalCard
 from ..styles.dark_theme import theme_color, theme_stylesheet
 
 
@@ -315,6 +317,7 @@ class ChatPanel(QWidget):
 
     # Forwarded diff event for the main window to show the diff panel
     diff_pending = Signal(str, dict)
+    action_finished = Signal(str, dict)
     slash_command_executed = Signal(str, str)
     model_changed = Signal(str)
 
@@ -333,17 +336,28 @@ class ChatPanel(QWidget):
         self._last_prompt = ""
         self._ignore_active_task_events = False
         self._last_unreal_sync = ""
+        self._cards: dict = {}
+        self._runner = ActionRunner(Path(self._workspace or "."), parent=self)
+        self._runner.progress.connect(self._on_action_progress)
+        self._runner.finished.connect(self._on_action_finished)
 
         self._build_ui()
         self._connect_signals()
         self._init_session()
+        QTimer.singleShot(0, self._restore_pending_approvals)
         self._setup_unreal_sync()
 
     def set_workspace(self, agent_service: AgentService, new_workspace: Path) -> None:
         """Switch chat panel to a new workspace and start a fresh session."""
         self._agent = agent_service
         self._workspace = Path(new_workspace).resolve()
+        self._runner.shutdown()
+        self._runner = ActionRunner(self._workspace, parent=self)
+        self._runner.progress.connect(self._on_action_progress)
+        self._runner.finished.connect(self._on_action_finished)
+        self._cards = {}
         self._new_session()
+        QTimer.singleShot(0, self._restore_pending_approvals)
         self._check_unreal_context_sync()
 
     # ── UI Construction ────────────────────────────────────────────────────────
@@ -599,6 +613,28 @@ class ChatPanel(QWidget):
             self._new_session()
             return True
 
+        if cmd == "/game":
+            self._input.clear()
+            from ...pipeline.spec_from_prompt import expand_game_flags
+            idea = expand_game_flags(stripped[len("/game"):].strip())
+            self._add_bubble("user", text)
+            if not idea:
+                self._add_system_message("Usage: `/game <describe the game>` — e.g. `/game gomoku against the computer`.")
+                return True
+            try:
+                from ...backend.tools.game_tools import GameTools
+                rec = GameTools(Path(self._workspace or ".")).propose_create_game(
+                    f"create a {idea}" + ("" if "game" in idea.lower() else " game"), session_id=self._session_id)
+            except Exception as exc:
+                self._add_error_message(f"Game planner failed: {exc}")
+                return True
+            if rec and rec.get("approval_id"):
+                self._add_bubble("assistant", rec["plan_text"])
+                self._add_approval_card(rec)
+            else:
+                self._add_error_message("Could not plan that game.")
+            return True
+
         if cmd == "/ue" or cmd == "/context":
             self._input.clear()
             self._add_bubble("user", text)
@@ -760,6 +796,7 @@ class ChatPanel(QWidget):
                 "- `/diff` — Toggle diff review panel\n"
                 "- `/terminal` — Toggle integrated PowerShell terminal\n"
                 "- `/explorer` — Toggle file explorer dock\n"
+                "- `/game <idea>` — Plan a complete Unreal game and show its approval card\n"
                 "- `/test` — Execute test suite verification\n"
                 "- `@ue`, `@actor`, `@asset` — Context expansion tokens in prompts\n"
             )
@@ -830,10 +867,86 @@ class ChatPanel(QWidget):
         if was_at_bottom:
             self._scroll_to_bottom()
 
+    # ── Approval-gated actions (create_game, editor ops, builds) ───────────────
+    def _add_approval_card(self, approval: dict) -> ApprovalCard:
+        card = ApprovalCard(approval)
+        card.approve_clicked.connect(self._on_approve_action)
+        card.reject_clicked.connect(self._on_reject_action)
+        card.play_clicked.connect(self._on_play_game)
+        card.cancel_clicked.connect(self._runner.cancel)
+        self._msg_layout.insertWidget(self._msg_layout.count() - 1, card)
+        self._cards[approval["approval_id"]] = card
+        self._scroll_to_bottom()
+        return card
+
+    def _restore_pending_approvals(self) -> None:
+        """Pending approvals survive restarts and never execute without a fresh click."""
+        try:
+            from ...backend.tools.game_tools import ApprovalStore
+            pending = ApprovalStore(Path(self._workspace or ".")).list_pending()
+        except Exception:
+            return
+        for rec in pending:
+            if rec["approval_id"] not in self._cards:
+                self._add_system_message("Restored a pending approval from a previous session.")
+                self._add_approval_card(rec)
+
+    @Slot(str)
+    def _on_approve_action(self, approval_id: str) -> None:
+        card = self._cards.get(approval_id)
+        if self._runner.approve(approval_id) and card:
+            card.set_running()
+            self._status_bar.set_busy("BUILDING")
+
+    @Slot(str)
+    def _on_reject_action(self, approval_id: str) -> None:
+        self._runner.reject(approval_id)
+
+    @Slot(str, str, dict)
+    def _on_action_progress(self, approval_id: str, kind: str, data: dict) -> None:
+        card = self._cards.get(approval_id)
+        if card:
+            card.on_progress(kind, data)
+
+    @Slot(dict)
+    def show_approval(self, approval: dict) -> None:
+        """Bring a pending approval (e.g. from Mission Control) into the chat as a card."""
+        card = self._cards.get(approval.get("approval_id"))
+        if card is None:
+            card = self._add_approval_card(approval)
+        self._scroll_area.ensureWidgetVisible(card)
+
+    @Slot(str, dict)
+    def _on_action_finished(self, approval_id: str, result: dict) -> None:
+        self.action_finished.emit(approval_id, result)
+        card = self._cards.get(approval_id)
+        if card:
+            card.on_finished(result)
+        self._status_bar.set_ready()
+        if result.get("status") == "SUCCESS" and result.get("exe"):
+            self._add_bubble("assistant", "✅ **Your game is ready.** Every acceptance check passed in the real engine "
+                                          "(compile, automation tests, packaged play-test with screenshot). "
+                                          "Press **▶ Play game** on the card to play it.")
+
+    @Slot(str)
+    def _on_play_game(self, exe: str) -> None:
+        try:
+            from ...backend.tools.gateway import ToolGateway
+            res = ToolGateway(Path(self._workspace or ".")).execute_tool("play_game", {"exe": exe}, approval_granted=True)
+            if res.get("status") != "SUCCESS":
+                self._add_error_message(res.get("error", "could not launch game"))
+        except Exception as exc:
+            self._add_error_message(f"could not launch game: {exc}")
+
     @Slot(str, dict)
     def _on_status(self, status: str, _meta: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
+        if status == "WAITING_APPROVAL" and isinstance(_meta.get("approval"), dict):
+            if self._active_bubble and self._active_bubble.has_tokens():
+                self._active_bubble.finalise()
+                self._active_bubble = None
+            self._add_approval_card(_meta["approval"])
         omitted = int(_meta.get("omitted_history_messages", 0) or 0)
         if status == "PLANNING" and omitted:
             used = _meta.get("estimated_input_tokens", "?")

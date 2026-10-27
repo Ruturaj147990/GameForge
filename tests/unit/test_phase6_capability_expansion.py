@@ -19,9 +19,9 @@ from src.gameforge_ide.unreal.level_layout import (
     PropPlacementSpec,
     RoomSpec,
 )
-from src.gameforge_ide.unreal.operations import UnrealOperationsLibrary
-from src.gameforge_ide.unreal.physics_probe import PhysicsDropProbe, PhysicsProbeResult
-from src.gameforge_ide.unreal.transport import EpicMcpTransport, PythonRemoteTransport
+from tests.doubles.operations import UnrealOperationsLibrary
+from tests.doubles.physics_probe import PhysicsDropProbe, PhysicsProbeResult
+from tests.doubles.transport import EpicMcpTransport, PythonRemoteTransport
 
 
 @pytest.fixture

@@ -53,3 +53,6 @@ All Codex agents, subagents, and sessions operating on the GameForge project mus
 - Keep `graders/protected/`, model weights, Ollama blobs, datasets, training lineage, legal records, and user changes intact. Never weaken a protected oracle.
 - Agent-issued command execution must remain allowlisted, shell-free, workspace-contained, and approval-gated. The embedded terminal is user-controlled and is not an OS sandbox.
 - Before packaging, obtain approval to install a packager; current host has PySide6 6.12.0 but no PyInstaller. Do not bundle model weights.
+- Active plan: `GameForge — Master Blueprint.md` (v2). Small follow-up tasks and the six verification commands: `ANTIGRAVITY_HANDOFF.md`.
+- Real engine paths only: `unreal/live_editor.py` (editor), `unreal/toolchain.py` (build/test/package), `pipeline/game_pipeline.py` (prompt → game). Classes marked `simulated: True` are test doubles, never evidence.
+- Automation that closes the IDE must set `win.confirm_on_close = False` before `win.close()`, or it blocks on the "Are you sure?" dialog.

@@ -12,7 +12,9 @@ Core Rules:
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -40,6 +42,12 @@ class AgentEvent(BaseModel):
     timestamp: float = Field(default_factory=time.time)
 
 
+async def _no_chunks():
+    """Empty async stream used when the native tool-calling path already produced the reply."""
+    return
+    yield  # pragma: no cover  (makes this an async generator)
+
+
 class AgentRuntime:
     """Orchestrates the bounded agent loop with typed tools, diff approval, and error repair."""
 
@@ -56,12 +64,28 @@ class AgentRuntime:
         self.tool_gateway = ToolGateway(self.workspace_root)
         self.context_manager = ContextManager(self.workspace_root)
         self.max_iterations = max_iterations
+        # Native tool calling is on by default; GAMEFORGE_NATIVE_TOOLS=0 restores text extraction.
+        self.native_tools = os.environ.get("GAMEFORGE_NATIVE_TOOLS", "1") != "0"
         self.tasks_dir = self.workspace_root / ".gameforge" / "tasks"
         try:
             self.tasks_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
             pass
         self._active_tasks: Dict[str, TaskState] = {}
+
+    def _native_tool_schemas(self) -> List[Dict[str, Any]]:
+        """Provider-neutral tool schemas {name, description, parameters} from the gateway."""
+        out = []
+        for d in self.tool_gateway.get_definitions():
+            params = dict(d.parameters or {"type": "object", "properties": {}})
+            props = {}
+            for k, v in (params.get("properties") or {}).items():
+                v = {kk: vv for kk, vv in v.items() if kk not in ("optional",)}
+                props[k] = v
+            params["properties"] = props
+            params.setdefault("type", "object")
+            out.append({"name": d.name, "description": d.description, "parameters": params})
+        return out
 
     def _format_tools_description(self) -> str:
         defs = self.tool_gateway.get_definitions()
@@ -400,6 +424,27 @@ class AgentRuntime:
             metadata={"message": "Analyzing project and goal...", "task_id": task_state.task_id, **budget},
         )
 
+        # Game-production fast path: a request that matches an installed, verified recipe is
+        # planned deterministically and suspended for one scoped approval. The heavy work then
+        # runs from the trusted UI approval path, never from model text (rules 1 and 5).
+        if not is_conversational:
+            try:
+                proposal = self.tool_gateway.game_tools.propose_create_game(user_prompt, session_id=session_id)
+            except Exception as exc:  # planning must never break the normal agent loop
+                proposal = None
+                yield AgentEvent(event_type="status", content="PLANNING",
+                                 metadata={"message": f"Game planner unavailable: {exc}"})
+            if proposal and proposal.get("approval_id"):
+                plan_text = proposal["plan_text"]
+                yield AgentEvent(event_type="token", content=plan_text)
+                self.session_manager.append_message(session_id, "assistant", plan_text)
+                task_state.terminal_reason = f"waiting for approval {proposal['approval_id']}"
+                self._save_task_state(task_state)
+                yield AgentEvent(event_type="status", content="WAITING_APPROVAL",
+                                 metadata={"tool": proposal["tool"], "approval": proposal})
+                yield AgentEvent(event_type="done", content=plan_text)
+                return
+
         # Short-circuit: conversational prompts get a direct reply with no tool dispatch.
         if is_conversational:
             yield AgentEvent(
@@ -465,16 +510,44 @@ class AgentRuntime:
                 metadata={"iteration": iteration, "max_iterations": self.max_iterations},
             )
 
-            # Generate model response stream
+            # Native tool calling first (Blueprint v2 §6): the provider returns structured calls,
+            # so nothing is parsed out of prose. Text extraction remains only as a fallback for
+            # providers without a native tools API.
             full_response = ""
-            async for chunk in provider.stream_chat(
+            native_call = None
+            if self.native_tools and hasattr(provider, "chat_with_tools"):
+                try:
+                    native = await asyncio.to_thread(
+                        provider.chat_with_tools,
+                        session.model_name,
+                        [{"role": "system", "content": system_prompt}] + conversation_history,
+                        self._native_tool_schemas(),
+                        capabilities.max_context,
+                        0.2,
+                        output_tokens,
+                    )
+                except Exception as exc:
+                    task_state.terminal_status = "FAILED"
+                    task_state.terminal_reason = f"provider_error: {exc}"
+                    self._save_task_state(task_state)
+                    yield AgentEvent(event_type="error", content=f"Model call failed: {exc}")
+                    return
+                full_response = native.get("content", "") or ""
+                if full_response:
+                    yield AgentEvent(event_type="token", content=full_response)
+                if native.get("tool_calls"):
+                    native_call = native["tool_calls"][0]
+                    if not full_response:
+                        full_response = json.dumps({"tool": native_call["name"], "args": native_call["arguments"]})
+            used_native = self.native_tools and hasattr(provider, "chat_with_tools")
+            async for chunk in (_no_chunks() if used_native else provider.stream_chat(
                 model_id=session.model_name,
                 messages=conversation_history,
                 system_prompt=system_prompt,
                 temperature=0.2,
                 max_tokens=output_tokens,
                 num_ctx=capabilities.max_context,
-            ):
+            )):
                 if chunk.error:
                     task_state.terminal_status = "FAILED"
                     task_state.terminal_reason = chunk.error
@@ -486,7 +559,7 @@ class AgentRuntime:
                     yield AgentEvent(event_type="token", content=chunk.token)
 
             # Check for tool call in response
-            tool_call = self._extract_tool_call(full_response)
+            tool_call = native_call if used_native else self._extract_tool_call(full_response)
             if not tool_call:
                 task_actionable = self._is_actionable_task(user_prompt, full_response)
 

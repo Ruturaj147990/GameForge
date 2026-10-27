@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 from .panels.chat_panel import ChatPanel
 from .panels.diff_panel import DiffPanel
 from .panels.explorer_panel import ExplorerPanel
+from .panels.mission_panel import MissionPanel
 from .panels.terminal_panel import TerminalPanel
 from .panels.unreal_panel import UnrealPanel
 from .services.agent_service import AgentService
@@ -100,6 +101,9 @@ class MainWindow(QMainWindow):
         if saved_layout:
             self.restoreState(saved_layout)
         apply_theme(QApplication.instance(), self._theme)
+        # Storage hygiene 10 s after start, off the UI thread: only policy-safe actions
+        # (log rotation, items past retention). Cap-based cleanup is user-confirmed in Mission Control.
+        QTimer.singleShot(10_000, self._run_storage_hygiene)
 
         # ── Connect cross-panel signals ──────────────────────────────────
         self._chat_panel.diff_pending.connect(self._on_diff_pending)
@@ -131,6 +135,11 @@ class MainWindow(QMainWindow):
         act_new.setShortcut(QKeySequence("Ctrl+N"))
         act_new.triggered.connect(self._new_session)
         file_menu.addAction(act_new)
+        file_menu.addSeparator()
+        act_hosted = QAction("Hosted Models…", self)
+        act_hosted.setObjectName("file_hosted_models")
+        act_hosted.triggered.connect(self._open_hosted_settings)
+        file_menu.addAction(act_hosted)
         file_menu.addSeparator()
         act_quit = QAction("Quit", self)
         act_quit.setObjectName("file_quit")
@@ -171,6 +180,14 @@ class MainWindow(QMainWindow):
             lambda c: self._dock_terminal.setVisible(c)
         )
         view_menu.addAction(self._act_show_terminal)
+
+        self._act_show_mission = QAction("Mission Control", self, checkable=True, checked=False)
+        self._act_show_mission.setObjectName("view_mission")
+        self._act_show_mission.setShortcut("Ctrl+Shift+M")
+        self._act_show_mission.triggered.connect(
+            lambda c: (self._dock_mission.setVisible(c), c and self._dock_mission.raise_())
+        )
+        view_menu.addAction(self._act_show_mission)
         view_menu.addSeparator()
         self._act_theme = QAction("Toggle Studio Dark/Light Theme", self)
         self._act_theme.setObjectName("view_toggle_theme")
@@ -328,6 +345,15 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self._dock_unreal, self._dock_diff)
         self._dock_diff.hide()  # Hidden until a diff is pending
 
+        # ── Mission Control (right, tabbed with Unreal; samples only while visible) ──
+        self._mission = MissionPanel(self._workspace, parent=self)
+        self._dock_mission = self._make_dock("Mission Control", self._mission, Qt.RightDockWidgetArea)
+        self.tabifyDockWidget(self._dock_unreal, self._dock_mission)
+        self._dock_unreal.raise_()
+        self._mission.play_requested.connect(self._chat_panel._on_play_game)
+        self._mission.open_approval.connect(self._chat_panel.show_approval)
+        self._chat_panel.action_finished.connect(lambda *_: self._mission.refresh_lists())
+
         # ── Terminal (bottom) ─────────────────────────────────────────────
         self._terminal = TerminalPanel(self._workspace, parent=self)
         self._dock_terminal = self._make_dock("Terminal", self._terminal, Qt.BottomDockWidgetArea)
@@ -351,6 +377,9 @@ class MainWindow(QMainWindow):
         )
         self._dock_terminal.visibilityChanged.connect(
             lambda v: (self._act_show_terminal.setChecked(v), self._act_tb_terminal.setChecked(v))
+        )
+        self._dock_mission.visibilityChanged.connect(
+            lambda v: self._act_show_mission.setChecked(v)
         )
 
     def _make_dock(self, title: str, widget: QWidget, area: Qt.DockWidgetArea) -> QDockWidget:
@@ -437,6 +466,7 @@ class MainWindow(QMainWindow):
         self._unreal_panel.set_workspace(self._tools, self._workspace)
         self._chat_panel.set_workspace(self._agent, self._workspace)
         self._terminal.set_workspace(self._workspace)
+        self._mission.set_workspace(self._workspace)
         self._diff_panel.clear()
 
         # Update toolbar and status bar labels
@@ -450,6 +480,22 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Switched workspace to: {self._workspace.name}", 4000)
 
     @Slot()
+    def _run_storage_hygiene(self) -> None:
+        import threading
+        ws = self._workspace
+
+        def work():
+            try:
+                from ..backend import storage_hygiene as sh
+                sh.apply(ws, sh.plan(ws, cap_bytes=1 << 62))  # retention + rotation only
+            except Exception:
+                pass
+        threading.Thread(target=work, name="gf-storage-hygiene", daemon=True).start()
+
+    def _open_hosted_settings(self) -> None:
+        from .dialogs.hosted_settings import HostedSettingsDialog  # lazy: keeps startup fast
+        HostedSettingsDialog(self._workspace, parent=self).exec()
+
     def _new_session(self) -> None:
         self._chat_panel._new_session()
         self.statusBar().showMessage("New session started.", 3000)
@@ -712,11 +758,15 @@ class MainWindow(QMainWindow):
     # ── Window lifecycle ──────────────────────────────────────────────────────
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if getattr(self, "confirm_on_close", True):
+        chat = getattr(self, "_chat_panel", None)
+        building = bool(chat is not None and getattr(getattr(chat, "_runner", None), "_threads", None))
+        busy = building or bool(getattr(self._agent, "is_busy", False))
+        if getattr(self, "confirm_on_close", True) and busy:
             reply = QMessageBox.question(
                 self,
                 "Quit GameForge IDE",
-                "Are you sure you want to exit?",
+                ("A game build is still running and will be stopped. Exit anyway?" if building
+                 else "The agent is still working. Exit anyway?"),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -735,5 +785,8 @@ class MainWindow(QMainWindow):
         self._settings.setValue("window/geometry", self.saveGeometry())
         self._settings.setValue("window/layout", self.saveState())
         self._settings.sync()
+        chat = getattr(self, "_chat_panel", None)
+        if chat is not None and hasattr(chat, "_runner"):
+            chat._runner.shutdown()
         self._agent.shutdown()
         event.accept()

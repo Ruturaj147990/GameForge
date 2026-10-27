@@ -18,11 +18,11 @@ import pytest
 from pathlib import Path
 
 from src.gameforge_ide.unreal.mutation_queue import SerializedMutationQueue
-from src.gameforge_ide.unreal.operations import UnrealOperationsLibrary
+from tests.doubles.operations import UnrealOperationsLibrary
 from src.gameforge_ide.unreal.security import EditorSecurityError, UnrealSecurityBoundary
 from src.gameforge_ide.unreal.snapshot import SnapshotManager
-from src.gameforge_ide.unreal.supervisor import UnrealSupervisor
-from src.gameforge_ide.unreal.transport import PythonRemoteTransport
+from tests.doubles.supervisor import UnrealSupervisor
+from tests.doubles.transport import PythonRemoteTransport
 
 
 @pytest.fixture

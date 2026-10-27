@@ -30,7 +30,7 @@ from src.gameforge_ide.backend.tools.gpu_scheduler import (
     GPUWorkloadType,
 )
 from src.gameforge_ide.backend.tools.quarantine import QuarantinePipeline
-from src.gameforge_ide.unreal.operations import UnrealOperationsLibrary
+from tests.doubles.operations import UnrealOperationsLibrary
 
 
 @pytest.fixture
@@ -198,7 +198,7 @@ def test_gpu_service_contract_idempotency_and_auth():
 
 def test_quarantine_pipeline_waiting_review(temp_workspace):
     """REQ-043 & REQ-045: Staging in quarantine and waiting for human review."""
-    pipeline = QuarantinePipeline(workspace_root=temp_workspace)
+    pipeline = QuarantinePipeline(workspace_root=temp_workspace, operations=UnrealOperationsLibrary(temp_workspace))
     spec = AssetSpec(
         name="SM_MilitaryCrate",
         purpose="Ammunition prop",
@@ -228,7 +228,7 @@ def test_quarantine_pipeline_waiting_review(temp_workspace):
 
 def test_quarantine_pipeline_promotion_on_approval(temp_workspace):
     """REQ-043, REQ-044, REQ-045: Full 8-stage pipeline ending in promotion and verified read-back."""
-    pipeline = QuarantinePipeline(workspace_root=temp_workspace)
+    pipeline = QuarantinePipeline(workspace_root=temp_workspace, operations=UnrealOperationsLibrary(temp_workspace))
     spec = AssetSpec(
         name="SM_PromotedChest",
         purpose="Loot container",
