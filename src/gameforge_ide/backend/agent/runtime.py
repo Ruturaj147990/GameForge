@@ -195,6 +195,47 @@ class AgentRuntime:
         return None
 
     @staticmethod
+    def _is_conversational(user_prompt: str) -> bool:
+        """Return True when the prompt is clearly conversational and should never trigger tools."""
+        p = user_prompt.strip().lower()
+        # Very short messages (≤5 words) that contain no action verbs are conversational
+        words = re.findall(r"\b\w+\b", p)
+        if len(words) <= 5:
+            # Unless they contain an explicit action keyword
+            action_keywords = {
+                "create", "build", "make", "implement", "generate", "inspect",
+                "fix", "refactor", "write", "setup", "develop", "code", "author",
+                "add", "remove", "delete", "update", "edit",
+            }
+            if not set(words).intersection(action_keywords):
+                return True
+
+        # Greetings and filler openers
+        greeting_prefixes = (
+            "hi", "hello", "hey", "sup", "yo", "hiya",
+            "good morning", "good afternoon", "good evening",
+            "how are you", "how r u", "what's up", "whats up",
+            "thanks", "thank you", "thx", "cheers",
+            "ok", "okay", "got it", "noted", "cool", "great", "nice",
+        )
+        for prefix in greeting_prefixes:
+            if p == prefix or p.startswith(prefix + " ") or p.startswith(prefix + ","):
+                return True
+
+        # Pure Q&A / explanation prompts
+        qa_prefixes = (
+            "what is", "what are", "what does", "what's",
+            "who is", "where is", "when is", "why is", "why does",
+            "how does", "how do", "how to",
+            "can you explain", "explain", "describe", "tell me about",
+            "do you know",
+        )
+        if any(p.startswith(pfx) for pfx in qa_prefixes):
+            return True
+
+        return False
+
+    @staticmethod
     def _is_actionable_task(user_prompt: str, model_response: str) -> bool:
         """Determines if the prompt or response indicates an actionable creation/inspection task."""
         p_lower = user_prompt.lower().strip()
@@ -257,7 +298,12 @@ class AgentRuntime:
         system_prompt = self.context_manager.build_system_prompt(tools_desc, active_model=session.model_name)
         provider = self.router.get_provider(session.provider_type)
         capabilities = provider.get_capabilities(session.model_name)
-        output_tokens = min(2048, max(512, capabilities.max_context // 2))
+        # For small-context models (e.g. 4096 tokens), using half the context as output
+        # leaves no room for the system prompt + history. Cap output tokens at 1024
+        # so there's always at least ~2048 tokens for input on a 4096-ctx model,
+        # and scale up for larger context windows.
+        output_tokens = min(1024, max(256, capabilities.max_context // 4))
+
 
         # 2. Record user message and reload the session snapshot. SessionManager
         # operations return independent objects, so the earlier `session`
@@ -283,8 +329,36 @@ class AgentRuntime:
             metadata={"message": "Analyzing project and goal...", **budget},
         )
 
+        # Short-circuit: conversational prompts get a direct reply with no tool dispatch.
+        if self._is_conversational(user_prompt):
+            yield AgentEvent(
+                event_type="status",
+                content="THINKING",
+                metadata={"iteration": 1, "max_iterations": self.max_iterations},
+            )
+            full_response = ""
+            async for chunk in provider.stream_chat(
+                model_id=session.model_name,
+                messages=conversation_history,
+                system_prompt=system_prompt,
+                temperature=0.7,
+                max_tokens=output_tokens,
+                num_ctx=capabilities.max_context,
+            ):
+                if chunk.error:
+                    yield AgentEvent(event_type="error", content=chunk.error)
+                    return
+                if chunk.token:
+                    full_response += chunk.token
+                    yield AgentEvent(event_type="token", content=chunk.token)
+            self.session_manager.append_message(session_id, "assistant", full_response)
+            yield AgentEvent(event_type="done", content="Conversational reply.", metadata={"full_text": full_response})
+            return
+
         iteration = 0
         _tool_call_counts: dict = {}  # Tracks repeated (tool, args) combos for loop detection
+        _edit_proposed = False  # True once propose_edit is successfully dispatched
+        _task_needs_edit = self._is_actionable_task(user_prompt, "")  # User asked to create/build?
         while iteration < self.max_iterations:
             iteration += 1
             yield AgentEvent(
@@ -313,8 +387,30 @@ class AgentRuntime:
             # Check for tool call in response
             tool_call = self._extract_tool_call(full_response)
             if not tool_call:
-                if iteration == 1 and self._is_actionable_task(user_prompt, full_response):
-                    # Autonomous action continuation: model stated intent or user requested an action task
+                # Determine if we should keep going or wrap up
+                task_actionable = self._is_actionable_task(user_prompt, full_response)
+
+                if _task_needs_edit and not _edit_proposed and iteration < self.max_iterations:
+                    # Task required creating/building something but no propose_edit yet — force it
+                    conversation_history.append({"role": "assistant", "content": full_response})
+                    conversation_history.append({
+                        "role": "user",
+                        "content": (
+                            "You have NOT created any files yet. You MUST call `propose_edit` NOW to create the project files. "
+                            "Do not describe the plan — emit the tool call block immediately. Example:\n"
+                            "```json\n"
+                            '{\n  "tool": "propose_edit",\n  "args": {\n    "subpath": "GameName/GameName.uproject",\n    "replacement_content": "{...}"\n  }\n}\n'
+                            "```"
+                        ),
+                    })
+                    yield AgentEvent(
+                        event_type="status",
+                        content="PLANNING",
+                        metadata={"action": "forcing_propose_edit", "iteration": iteration},
+                    )
+                    continue
+                elif iteration == 1 and task_actionable:
+                    # First iteration: model described intent but didn't emit a tool call yet
                     conversation_history.append({"role": "assistant", "content": full_response})
                     conversation_history.append({
                         "role": "user",
@@ -331,13 +427,16 @@ class AgentRuntime:
                     )
                     continue
                 else:
-                    # Direct conversational response, task iteration complete
+                    # Genuine conversational / summary response — task is done
                     self.session_manager.append_message(session_id, "assistant", full_response)
                     yield AgentEvent(event_type="done", content="Task completed.", metadata={"full_text": full_response})
                     return
 
             tool_name = tool_call["name"]
             tool_args = tool_call["arguments"]
+            # Track if a file edit was ever proposed
+            if tool_name == "propose_edit":
+                _edit_proposed = True
             # --- Loop detection: track (tool_name, args_repr) call history ---
             _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
             _tool_call_counts[_tool_key] = _tool_call_counts.get(_tool_key, 0) + 1

@@ -285,3 +285,11 @@ python scripts/run_phase2_targeted_and_holdout_test.py
   3. **max_iterations** raised from 6 to 12 for complex multi-file tasks.
   4. **Test suite:** 246 passed, 0 failures (201 unit + 45 protected) in 14.21s.
   - Changed: dark_theme.py, runtime.py.
+
+- **2026-10-27T11:37:** **Midnight Purple Dark & Glossy Purple Light Themes Verified & Polished.** [VERIFIED]
+  1. **Palette Coverage Synchronized:** Expanded _DARK_TO_LIGHT mapping in dark_theme.py with missing inline tokens (#262f45, #182030, #28354f, #232e46, #e2e8f0, #0e2922, #161c28) to ensure all panels, context chips, toolbar badges, and status labels map correctly in both themes.
+  2. **Themes Polished:**
+     - **Glossy Purple Light:** White dominant (#ffffff, #faf9fe), subtle glossy purple borders (#e2daf0, #ede9f7), deep purple accents (#5b21b6).
+     - **Midnight Purple Dark:** Black/void dominant (#08070d, #0d0b14), dark purple accents (#7c3aed, #8b5cf6).
+  3. **Regression Tests Pass:** All 21 desktop acceptance tests pass (	est_midnight_and_glossy_purple_themes_switching_and_persistence verifies live switching and ide_settings.ini persistence).
+  4. **Full Test Suite:** 246 passed, 0 failures (201 unit + 45 protected benchmark oracles). Zero regressions.

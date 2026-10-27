@@ -542,6 +542,11 @@ _DARK_TO_LIGHT = {
     "#f59e0b": "#a16207", "#f87171": "#a12a22", "#ff9f43": "#9a4d00",
     "#059669": "#065f46", "#10b981": "#0f766e", "#34d399": "#15803d",
     "#dc2626": "#991b1b", "#fbbf24": "#8a5a00",
+
+    # Additional panel & toolbar inline styles
+    "#262f45": "#cbd5e1", "#182030": "#ede8f7", "#28354f": "#d8cee8",
+    "#232e46": "#dfd5f0", "#e2e8f0": "#1f182c", "#0e2922": "#e2f7f0",
+    "#161c28": "#ede8f5",
 }
 _LIGHT_TO_DARK = {light: dark for dark, light in _DARK_TO_LIGHT.items()}
 GAMEFORGE_LIGHT_QSS = GAMEFORGE_DARK_QSS
