@@ -94,10 +94,22 @@ public:
 	static FString InspectWidgetEvents(const FString& AssetPath);
 
 	/**
-	 * Triggers a button click event in the active PIE game world on the specified button widget.
+	 * Triggers a button click in the active PIE game world on the specified button widget
+	 * through real Slate input routing (calculates absolute screen geometry, checks hit-test eligibility,
+	 * routes pointer move, pointer down, and pointer up events).
 	 */
 	UFUNCTION(BlueprintCallable, Category="GameForge|UMG")
 	static FString TriggerButtonClick(const FString& AssetPath, const FString& ButtonName);
+
+	UFUNCTION(BlueprintCallable, Category="GameForge|UMG")
+	static FString TriggerButtonClickRealInput(const FString& AssetPath, const FString& ButtonName);
+
+	/**
+	 * Diagnostic tool: directly invokes target button's OnClicked delegate.
+	 * Explicitly labeled as event-delegate diagnostic only; never proof of real UI hit-testing.
+	 */
+	UFUNCTION(BlueprintCallable, Category="GameForge|UMG")
+	static FString TriggerButtonDelegateDiagnostic(const FString& AssetPath, const FString& ButtonName);
 
 	/**
 	 * Reads real runtime state of a displayed widget instance in the active PIE world.

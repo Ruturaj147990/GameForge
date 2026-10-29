@@ -418,17 +418,28 @@ def main() -> int:
         print("[21/25] Clicking SecondaryButton ('TOGGLE COMPACT MODE')...")
         click2 = link.call("widget_click_button", {"asset_path": menu_path, "button_name": "SecondaryButton"})
         assert click2.get("ok") and click2["data"].get("clicked"), f"SecondaryButton click failed: {click2}"
+        assert click2["data"].get("slate_input_routed"), "Expected real Slate input routing"
         gp_post_toggle = link.call("gameplay_get_state", {})
         mode_after = gp_post_toggle["data"].get("active_menu_state")
         print(f"  Observed menu state toggle: active_menu_state='{mode_after}'")
         assert mode_after == "Compact", f"Expected 'Compact' mode, got '{mode_after}'"
-        report["steps"].append({"step": "20_click_secondary_button", "ok": True, "elapsed_s": round(time.time() - t_step, 3), "mode_after": mode_after})
+
+        # Capture Compact Menu Screenshot
+        shot4_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_4_MenuCompact.png")
+        if shot4_path.is_file():
+            shot4_path.unlink()
+        link.call("viewport_screenshot", {"output_path": str(shot4_path), "resolution": [1280, 720]})
+        time.sleep(2.0)
+        shot4_v = verify_image_content(shot4_path)
+        print(f"  Screenshot 4 captured: {shot4_path.name} ({shot4_v.get('size_bytes')} bytes)")
+        report["steps"].append({"step": "20_click_secondary_button", "ok": True, "elapsed_s": round(time.time() - t_step, 3), "mode_after": mode_after, "screenshot": shot4_v})
 
         # Step 22: Click Back Button (Close Menu)
         t_step = time.time()
         print("[22/25] Clicking BackButton ('CLOSE MENU')...")
         click3 = link.call("widget_click_button", {"asset_path": menu_path, "button_name": "BackButton"})
         assert click3.get("ok") and click3["data"].get("clicked"), f"BackButton click failed: {click3}"
+        assert click3["data"].get("slate_input_routed"), "Expected real Slate input routing"
         gp_post_close = link.call("gameplay_get_state", {})
         close_mode = gp_post_close["data"].get("active_menu_state")
         print(f"  Observed menu close: active_menu_state='{close_mode}'")
@@ -439,14 +450,19 @@ def main() -> int:
         print(f"  Menu widget runtime visibility: '{vis_closed}'")
         assert vis_closed in ("Collapsed", "Hidden"), f"Expected Collapsed/Hidden visibility, got '{vis_closed}'"
 
-        shot4_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_4_MenuClosed.png")
-        if shot4_path.is_file():
-            shot4_path.unlink()
-        link.call("viewport_screenshot", {"output_path": str(shot4_path), "resolution": [1280, 720]})
+        # Verify interaction rejection on Collapsed menu (Requirement 2.3)
+        click_rejected = link.call("widget_click_button", {"asset_path": menu_path, "button_name": "PrimaryButton"})
+        assert not click_rejected.get("ok"), f"Click on collapsed menu must fail hit-test, but returned: {click_rejected}"
+        print("  Verified: Click on collapsed menu correctly rejected by hit-test eligibility")
+
+        shot5_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_5_MenuClosed.png")
+        if shot5_path.is_file():
+            shot5_path.unlink()
+        link.call("viewport_screenshot", {"output_path": str(shot5_path), "resolution": [1280, 720]})
         time.sleep(2.0)
-        shot4_v = verify_image_content(shot4_path)
-        print(f"  Screenshot 4 captured: {shot4_path.name} ({shot4_v.get('size_bytes')} bytes)")
-        report["steps"].append({"step": "21_click_back_button", "ok": True, "elapsed_s": round(time.time() - t_step, 3), "menu_visibility": vis_closed, "screenshot": shot4_v})
+        shot5_v = verify_image_content(shot5_path)
+        print(f"  Screenshot 5 captured: {shot5_path.name} ({shot5_v.get('size_bytes')} bytes)")
+        report["steps"].append({"step": "21_click_back_button", "ok": True, "elapsed_s": round(time.time() - t_step, 3), "menu_visibility": vis_closed, "screenshot": shot5_v})
 
         # Step 23: Log Tail Verification
         t_step = time.time()

@@ -217,6 +217,31 @@ class UnrealToolchain:
             "Config/DefaultGame.ini": (f"[/Script/EngineSettings.GeneralProjectSettings]\nProjectName={name}\n"
                                        f"ProjectDisplayedTitle=NSLOCTEXT(\"[/Script/EngineSettings]\", "
                                        f"\"GameForgeTitle\", \"{title}\")\n"),
+            "Config/DefaultInput.ini": (
+                "[/Script/Engine.InputSettings]\n"
+                "+ActionMappings=(ActionName=\"Jump\",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=SpaceBar)\n"
+                "+ActionMappings=(ActionName=\"Jump\",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=Gamepad_FaceButton_Bottom)\n"
+                "+ActionMappings=(ActionName=\"Restart\",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=R)\n"
+                "+ActionMappings=(ActionName=\"Attack\",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=LeftMouseButton)\n"
+                "+ActionMappings=(ActionName=\"Attack\",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=SpaceBar)\n"
+                "+ActionMappings=(ActionName=\"Attack\",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=Gamepad_FaceButton_Bottom)\n"
+                "+AxisMappings=(AxisName=\"MoveForward\",Scale=1.000000,Key=W)\n"
+                "+AxisMappings=(AxisName=\"MoveForward\",Scale=-1.000000,Key=S)\n"
+                "+AxisMappings=(AxisName=\"MoveForward\",Scale=1.000000,Key=Up)\n"
+                "+AxisMappings=(AxisName=\"MoveForward\",Scale=-1.000000,Key=Down)\n"
+                "+AxisMappings=(AxisName=\"MoveForward\",Scale=1.000000,Key=Gamepad_LeftY)\n"
+                "+AxisMappings=(AxisName=\"MoveRight\",Scale=1.000000,Key=D)\n"
+                "+AxisMappings=(AxisName=\"MoveRight\",Scale=-1.000000,Key=A)\n"
+                "+AxisMappings=(AxisName=\"MoveRight\",Scale=1.000000,Key=Right)\n"
+                "+AxisMappings=(AxisName=\"MoveRight\",Scale=-1.000000,Key=Left)\n"
+                "+AxisMappings=(AxisName=\"MoveRight\",Scale=1.000000,Key=Gamepad_LeftX)\n"
+                "+AxisMappings=(AxisName=\"Turn\",Scale=1.000000,Key=MouseX)\n"
+                "+AxisMappings=(AxisName=\"Turn\",Scale=1.000000,Key=Gamepad_RightX)\n"
+                "+AxisMappings=(AxisName=\"LookUp\",Scale=-1.000000,Key=MouseY)\n"
+                "+AxisMappings=(AxisName=\"LookUp\",Scale=-1.000000,Key=Gamepad_RightY)\n"
+                "bCaptureMouseOnLaunch=True\n"
+                "DefaultViewportMouseCaptureMode=CapturePermanently_IncludingInitialMouseDown\n"
+            ),
         }
         engine_ini = ["[/Script/EngineSettings.GameMapsSettings]"]
         if default_map:

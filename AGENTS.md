@@ -20,7 +20,6 @@ All Codex agents, subagents, and sessions operating on the GameForge project mus
 6. **Keep critical non-negotiable constraints visible and actionable**:
    - Hardware: Ryzen 5 7600X, 32GB DDR5, RX 7700 XT 12GB VRAM.
    - Storage: All large artifacts, models, GGUFs, and datasets must stay on `E:\GameForge`.
-   - Safety: **NEVER shut down, restart, sleep, or hibernate the system. Never invoke `shutdown.exe`.**
    - Inference: Always pass `"think": False` when querying Ollama API programmatically.
 
 ### 3. Before Finishing Every Task

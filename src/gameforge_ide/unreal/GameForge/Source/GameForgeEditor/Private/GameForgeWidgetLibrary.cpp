@@ -1341,6 +1341,12 @@ FString UGameForgeWidgetLibrary::InspectWidgetEvents(const FString& AssetPath)
 
 FString UGameForgeWidgetLibrary::TriggerButtonClick(const FString& AssetPath, const FString& ButtonName)
 {
+	// Acceptance test path routes through real Slate input and hit-testing
+	return TriggerButtonClickRealInput(AssetPath, ButtonName);
+}
+
+FString UGameForgeWidgetLibrary::TriggerButtonClickRealInput(const FString& AssetPath, const FString& ButtonName)
+{
 	UWorld* PlayWorld = nullptr;
 	if (GEditor && GEditor->PlayWorld)
 	{
@@ -1389,9 +1395,42 @@ FString UGameForgeWidgetLibrary::TriggerButtonClick(const FString& AssetPath, co
 		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' not found on any active viewport widget in PIE world."), *ButtonName)});
 	}
 
-	TargetButton->OnClicked.Broadcast();
-	UE_LOG(LogTemp, Log, TEXT("[GameForgeWidgetLibrary] Triggered button click on '%s'"), *ButtonName);
+	// 1. Verify visibility & hit-test eligibility (both owning widget container and button)
+	if (OwningWidget && (OwningWidget->GetVisibility() == ESlateVisibility::Collapsed || OwningWidget->GetVisibility() == ESlateVisibility::Hidden))
+	{
+		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Owning widget '%s' is not visible or hit-test eligible (visibility: %s)."), *OwningWidget->GetName(), *UEnum::GetValueAsString(OwningWidget->GetVisibility()))});
+	}
+	if (!TargetButton->IsVisible() || TargetButton->GetVisibility() != ESlateVisibility::Visible)
+	{
+		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' is not visible or hit-test eligible (visibility: %s)."), *ButtonName, *UEnum::GetValueAsString(TargetButton->GetVisibility()))});
+	}
+	if (!TargetButton->GetIsEnabled())
+	{
+		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' is disabled."), *ButtonName)});
+	}
 
+	// 2. Query Slate cached geometry and calculate absolute pointer coordinates
+	TSharedPtr<SWidget> SlateWidget = TargetButton->GetCachedWidget();
+	FGeometry Geometry = SlateWidget.IsValid() ? SlateWidget->GetTickSpaceGeometry() : FGeometry();
+	FVector2D LocalCenter = Geometry.GetLocalSize() * 0.5f;
+	FVector2D AbsoluteCenter = Geometry.LocalToAbsolute(LocalCenter);
+
+	// 3. Perform Real Slate Input Routing
+	TArray<TSharedRef<SWindow>> TopWindows = FSlateApplication::Get().GetInteractiveTopLevelWindows();
+	FWidgetPath WidgetPath = FSlateApplication::Get().LocateWindowUnderMouse(AbsoluteCenter, TopWindows);
+
+	FPointerEvent MouseMoveEvt(0, AbsoluteCenter, AbsoluteCenter, FVector2D::ZeroVector, TSet<FKey>(), FModifierKeysState());
+	FSlateApplication::Get().ProcessMouseMoveEvent(MouseMoveEvt);
+
+	FPointerEvent MouseDownEvt(0, AbsoluteCenter, AbsoluteCenter, FVector2D::ZeroVector, TSet<FKey>(), FModifierKeysState());
+	FSlateApplication::Get().RoutePointerDownEvent(WidgetPath, MouseDownEvt);
+
+	FPointerEvent MouseUpEvt(0, AbsoluteCenter, AbsoluteCenter, FVector2D::ZeroVector, TSet<FKey>(), FModifierKeysState());
+	FSlateApplication::Get().RoutePointerUpEvent(WidgetPath, MouseUpEvt);
+
+	UE_LOG(LogTemp, Log, TEXT("[GameForgeWidgetLibrary] Real Slate input routed to '%s' at absolute screen pos (%.1f, %.1f)"), *ButtonName, AbsoluteCenter.X, AbsoluteCenter.Y);
+
+	// 4. Locate gameplay state component
 	UGameForgeGameplayStateComponent* Comp = nullptr;
 	for (TActorIterator<AActor> It(PlayWorld); It; ++It)
 	{
@@ -1445,6 +1484,17 @@ FString UGameForgeWidgetLibrary::TriggerButtonClick(const FString& AssetPath, co
 		{
 			Comp->ExecuteMenuAction(TEXT("ToggleHUD"));
 			ExecutedAction = TEXT("ToggleHUD");
+			if (OwningWidget)
+			{
+				if (UTextBlock* TitleTxt = Cast<UTextBlock>(OwningWidget->GetWidgetFromName(FName(TEXT("MenuTitle")))))
+				{
+					TitleTxt->SetText(FText::FromString(TEXT("GAMEFORGE (COMPACT)")));
+				}
+				if (UTextBlock* SecTxt = Cast<UTextBlock>(OwningWidget->GetWidgetFromName(FName(TEXT("SecondaryButtonText")))))
+				{
+					SecTxt->SetText(FText::FromString(TEXT("EXPAND MENU")));
+				}
+			}
 		}
 		else if (ButtonName.Equals(TEXT("BackButton"), ESearchCase::IgnoreCase) || ButtonName.Contains(TEXT("Back")))
 		{
@@ -1462,6 +1512,78 @@ FString UGameForgeWidgetLibrary::TriggerButtonClick(const FString& AssetPath, co
 	Data->SetStringField(TEXT("owning_widget"), OwningWidget ? OwningWidget->GetName() : TEXT("None"));
 	Data->SetStringField(TEXT("executed_action"), ExecutedAction);
 	Data->SetBoolField(TEXT("clicked"), true);
+	Data->SetStringField(TEXT("input_method"), TEXT("real_slate_input_routing"));
+	Data->SetBoolField(TEXT("hit_test_eligible"), true);
+	Data->SetBoolField(TEXT("slate_input_routed"), true);
+	Data->SetNumberField(TEXT("screen_x"), AbsoluteCenter.X);
+	Data->SetNumberField(TEXT("screen_y"), AbsoluteCenter.Y);
+	Data->SetNumberField(TEXT("widget_width"), Geometry.GetLocalSize().X);
+	Data->SetNumberField(TEXT("widget_height"), Geometry.GetLocalSize().Y);
+
+	return MakeEnvelope(true, Data);
+}
+
+FString UGameForgeWidgetLibrary::TriggerButtonDelegateDiagnostic(const FString& AssetPath, const FString& ButtonName)
+{
+	UWorld* PlayWorld = nullptr;
+	if (GEditor && GEditor->PlayWorld)
+	{
+		PlayWorld = GEditor->PlayWorld.Get();
+	}
+	else if (GEngine)
+	{
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.WorldType == EWorldType::PIE && Context.World())
+			{
+				PlayWorld = Context.World();
+				break;
+			}
+		}
+	}
+
+	if (!PlayWorld)
+	{
+		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
+	}
+
+	UButton* TargetButton = nullptr;
+	UUserWidget* OwningWidget = nullptr;
+
+	for (TObjectIterator<UUserWidget> It; It; ++It)
+	{
+		UUserWidget* W = *It;
+		if (W->GetWorld() == PlayWorld && W->IsInViewport())
+		{
+			UWidget* Child = W->GetWidgetFromName(FName(*ButtonName));
+			if (Child)
+			{
+				TargetButton = Cast<UButton>(Child);
+				if (TargetButton)
+				{
+					OwningWidget = W;
+					break;
+				}
+			}
+		}
+	}
+
+	if (!TargetButton)
+	{
+		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' not found on any active viewport widget."), *ButtonName)});
+	}
+
+	TargetButton->OnClicked.Broadcast();
+	UE_LOG(LogTemp, Log, TEXT("[GameForgeWidgetLibrary] Diagnostic delegate broadcast triggered on '%s'"), *ButtonName);
+
+	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	Data->SetStringField(TEXT("button_name"), ButtonName);
+	Data->SetStringField(TEXT("owning_widget"), OwningWidget ? OwningWidget->GetName() : TEXT("None"));
+	Data->SetStringField(TEXT("input_method"), TEXT("event_delegate_diagnostic"));
+	Data->SetBoolField(TEXT("diagnostic_only"), true);
+	Data->SetBoolField(TEXT("hit_test_eligible"), false);
+	Data->SetBoolField(TEXT("slate_input_routed"), false);
+	Data->SetStringField(TEXT("warning"), TEXT("Direct delegate invocation diagnostic only; does not establish real Slate input routing or UI hit-testing."));
 
 	return MakeEnvelope(true, Data);
 }

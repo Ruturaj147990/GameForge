@@ -1,0 +1,387 @@
+[
+  {
+    "game": "GFPlatformer",
+    "exe_path": "E:\\GameForge\\projects\\GFPlatformer\\Packaged\\Windows\\GFPlatformer.exe",
+    "pid": 6868,
+    "actions": [
+      {
+        "timestamp": "2026-10-29T21:15:47+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:48+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:48+0530",
+        "action": "key_tap",
+        "target": "GFPlatformer",
+        "key": "SPACE",
+        "hold_s": 0.1
+      },
+      {
+        "timestamp": "2026-10-29T21:15:49+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:49+0530",
+        "action": "key_down",
+        "target": "GFPlatformer",
+        "key": "W"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:50+0530",
+        "action": "key_up",
+        "target": "GFPlatformer",
+        "key": "W",
+        "held_duration_s": 1.0
+      },
+      {
+        "timestamp": "2026-10-29T21:15:50+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:50+0530",
+        "action": "key_tap",
+        "target": "GFPlatformer",
+        "key": "SPACE",
+        "hold_s": 0.15
+      },
+      {
+        "timestamp": "2026-10-29T21:15:51+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:51+0530",
+        "action": "key_down",
+        "target": "GFPlatformer",
+        "key": "D"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:51+0530",
+        "action": "key_up",
+        "target": "GFPlatformer",
+        "key": "D",
+        "held_duration_s": 0.5
+      },
+      {
+        "timestamp": "2026-10-29T21:15:52+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:52+0530",
+        "action": "key_tap",
+        "target": "GFPlatformer",
+        "key": "R",
+        "hold_s": 0.08
+      },
+      {
+        "timestamp": "2026-10-29T21:15:52+0530",
+        "action": "focus",
+        "target": "GFPlatformer",
+        "ok": true,
+        "hwnd": 1114922,
+        "title": "GFPlatformer"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:52+0530",
+        "action": "key_tap",
+        "target": "GFPlatformer",
+        "key": "ESCAPE",
+        "hold_s": 0.08
+      }
+    ],
+    "ok": true,
+    "screenshot_path": "reports\\packaged_GFPlatformer_real_input.png",
+    "window_geometry": {
+      "left": 86,
+      "top": 109,
+      "right": 1366,
+      "bottom": 589,
+      "width": 1280,
+      "height": 480
+    }
+  },
+  {
+    "game": "GFArenaCombat",
+    "exe_path": "E:\\GameForge\\projects\\GFArenaCombat\\Packaged\\Windows\\GFArenaCombat.exe",
+    "pid": 11444,
+    "actions": [
+      {
+        "timestamp": "2026-10-29T21:15:58+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:59+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:15:59+0530",
+        "action": "key_down",
+        "target": "GFArenaCombat",
+        "key": "W"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:00+0530",
+        "action": "key_up",
+        "target": "GFArenaCombat",
+        "key": "W",
+        "held_duration_s": 0.8
+      },
+      {
+        "timestamp": "2026-10-29T21:16:00+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:00+0530",
+        "action": "key_tap",
+        "target": "GFArenaCombat",
+        "key": "SPACE",
+        "hold_s": 0.1
+      },
+      {
+        "timestamp": "2026-10-29T21:16:01+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:01+0530",
+        "action": "mouse_click",
+        "target": "GFArenaCombat",
+        "screen_x": 804,
+        "screen_y": 427,
+        "rel_x": 0.5,
+        "rel_y": 0.5,
+        "button": "left"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:01+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:01+0530",
+        "action": "key_down",
+        "target": "GFArenaCombat",
+        "key": "S"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:02+0530",
+        "action": "key_up",
+        "target": "GFArenaCombat",
+        "key": "S",
+        "held_duration_s": 0.4
+      },
+      {
+        "timestamp": "2026-10-29T21:16:02+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:02+0530",
+        "action": "key_tap",
+        "target": "GFArenaCombat",
+        "key": "R",
+        "hold_s": 0.08
+      },
+      {
+        "timestamp": "2026-10-29T21:16:03+0530",
+        "action": "focus",
+        "target": "GFArenaCombat",
+        "ok": true,
+        "hwnd": 2098434,
+        "title": "GFArenaCombat"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:03+0530",
+        "action": "key_tap",
+        "target": "GFArenaCombat",
+        "key": "ESCAPE",
+        "hold_s": 0.08
+      }
+    ],
+    "ok": true,
+    "screenshot_path": "reports\\packaged_GFArenaCombat_real_input.png",
+    "window_geometry": {
+      "left": 164,
+      "top": 187,
+      "right": 1444,
+      "bottom": 667,
+      "width": 1280,
+      "height": 480
+    }
+  },
+  {
+    "game": "GFCardBattler",
+    "exe_path": "E:\\GameForge\\projects\\GFCardBattler\\Packaged\\Windows\\GFCardBattler.exe",
+    "pid": 17808,
+    "actions": [
+      {
+        "timestamp": "2026-10-29T21:16:08+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:09+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:09+0530",
+        "action": "mouse_move",
+        "target": "GFCardBattler",
+        "screen_x": 574,
+        "screen_y": 573,
+        "rel_x": 0.3,
+        "rel_y": 0.75
+      },
+      {
+        "timestamp": "2026-10-29T21:16:09+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:09+0530",
+        "action": "mouse_click",
+        "target": "GFCardBattler",
+        "screen_x": 574,
+        "screen_y": 573,
+        "rel_x": 0.3,
+        "rel_y": 0.75,
+        "button": "left"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:10+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:10+0530",
+        "action": "mouse_move",
+        "target": "GFCardBattler",
+        "screen_x": 830,
+        "screen_y": 453,
+        "rel_x": 0.5,
+        "rel_y": 0.5
+      },
+      {
+        "timestamp": "2026-10-29T21:16:10+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:10+0530",
+        "action": "mouse_click",
+        "target": "GFCardBattler",
+        "screen_x": 830,
+        "screen_y": 453,
+        "rel_x": 0.5,
+        "rel_y": 0.5,
+        "button": "left"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:11+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:11+0530",
+        "action": "mouse_click",
+        "target": "GFCardBattler",
+        "screen_x": 1278,
+        "screen_y": 621,
+        "rel_x": 0.85,
+        "rel_y": 0.85,
+        "button": "left"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:11+0530",
+        "action": "focus",
+        "target": "GFCardBattler",
+        "ok": true,
+        "hwnd": 1836122,
+        "title": "GFCardBattler"
+      },
+      {
+        "timestamp": "2026-10-29T21:16:11+0530",
+        "action": "key_tap",
+        "target": "GFCardBattler",
+        "key": "ESCAPE",
+        "hold_s": 0.08
+      }
+    ],
+    "ok": true,
+    "screenshot_path": "reports\\packaged_GFCardBattler_real_input.png",
+    "window_geometry": {
+      "left": 190,
+      "top": 213,
+      "right": 1470,
+      "bottom": 693,
+      "width": 1280,
+      "height": 480
+    }
+  }
+]

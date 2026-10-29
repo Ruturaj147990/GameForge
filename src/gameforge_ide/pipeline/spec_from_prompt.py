@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Union
 
+from ..recipes.arena_combat.recipe import ArenaCombatParams
+from ..recipes.card_battler.recipe import CardBattlerParams
 from ..recipes.grid_board_game.recipe import GridBoardParams
 from ..recipes.platformer.recipe import PlatformerParams
 
@@ -51,11 +53,20 @@ RECIPES: List[RecipeEntry] = [
     RecipeEntry("platformer", "3D Platformer", ["platformer", "3d platformer", "jump and run", "jumping game", "platform game", "parkour"],
                 "3D obstacle course with jumping, collectibles, checkpoints, and goal",
                 {"collectible_target": 5, "difficulty": "normal", "display_title": "3D Platformer", "project_name": "Platformer"}),
+    RecipeEntry("arena_combat", "Arena Combat", ["arena combat", "arena", "gladiator", "wave combat", "brawler", "action arena"],
+                "Top-down / 3D arena combat with player attack, AI navigation enemies, waves, and HUD",
+                {"wave_count": 3, "enemies_per_wave": 4, "difficulty": "normal", "display_title": "Arena Combat", "project_name": "ArenaCombat"}),
+    RecipeEntry("card_battler", "Card Battler", ["card battler", "card game", "deck battler", "deck builder", "card battle", "lane battler", "hearthstone"],
+                "Single-player 3-lane card battler with card definitions, energy, combat, AI opponent, and interactive UMG HUD",
+                {"player_base_health": 30, "opponent_base_health": 30, "difficulty": "normal", "display_title": "Card Battler", "project_name": "CardBattler"}),
 ]
 
 _SIZE = re.compile(r"\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\b", re.I)
 _WIN = re.compile(r"\b(\d{1,2})\s*(?:in a row|in-a-row|to win)\b", re.I)
 _TARGET = re.compile(r"\b(\d{1,2})\s*(?:collectibles?|coins?|gems?|items?|stars?)\b", re.I)
+_WAVES = re.compile(r"\b(\d{1,2})\s*(?:waves?|rounds?)\b", re.I)
+_ENEMIES = re.compile(r"\b(\d{1,2})\s*(?:enemies|enemy|monsters?|targets?)\s*(?:per wave|each wave|a wave)?\b", re.I)
+_HP = re.compile(r"\b(\d{1,3})\s*(?:hp|health|base health)\b", re.I)
 _NAME = re.compile(r"\b(?:called|named|titled)\s+[\"']?([A-Za-z][A-Za-z0-9 \-]{0,40}?)[\"']?"
                    r"(?=\s+(?:against|with|vs|versus|for|that|and|in|on|where|using|which)\b|[.,!;:]|\s*$)", re.I)
 _HOTSEAT = re.compile(r"\b(two[- ]player|2[- ]player|hot[- ]?seat|local multiplayer|pvp|against a friend|vs (?:a )?friend)\b", re.I)
@@ -73,7 +84,7 @@ class GameSpec:
     matched: bool
     recipe_id: Optional[str] = None
     recipe_title: Optional[str] = None
-    params: Optional[Union[GridBoardParams, PlatformerParams]] = None
+    params: Optional[Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams]] = None
     confidence: float = 0.0
     reasons: List[str] = field(default_factory=list)
     acceptance: List[str] = field(default_factory=list)
@@ -84,6 +95,12 @@ class GameSpec:
         p = self.params
         if isinstance(p, PlatformerParams):
             return (f"{p.display_title}: 3D obstacle course, {p.collectible_target} collectibles, "
+                    f"{p.difficulty} difficulty. Unreal project `{p.project_name}`.")
+        if isinstance(p, ArenaCombatParams):
+            return (f"{p.display_title}: {p.wave_count} waves, {p.enemies_per_wave} enemies/wave, "
+                    f"{p.difficulty} difficulty. Unreal project `{p.project_name}`.")
+        if isinstance(p, CardBattlerParams):
+            return (f"{p.display_title}: 3-lane card battler, base health {p.player_base_health}, "
                     f"{p.difficulty} difficulty. Unreal project `{p.project_name}`.")
         opp = f"vs computer ({p.ai_level})" if p.vs_ai else "two players, hot-seat"
         return (f"{p.display_title}: {p.board_size}x{p.board_size} board{', pieces drop down' if p.gravity else ''}, {p.win_length} in a row, {opp}. "
@@ -172,6 +189,84 @@ def match_prompt(prompt: str) -> GameSpec:
             "level_readback(SpawnPoint, Collectible, FinishVolume, DirectionalLight)",
             f"package_ok(Win64 Development) -> {params.project_name}.exe",
             "packaged_selftest(GF_PLATFORMER_SELFTEST PASS: goal reached, collectibles registered)",
+            "packaged_screenshot_has_content",
+        ]
+        return GameSpec(True, best.recipe_id, best.title, params, 0.9, reasons, acceptance)
+
+    if best.recipe_id == "arena_combat":
+        m = _WAVES.search(prompt)
+        if m:
+            d["wave_count"] = int(m.group(1))
+            reasons.append(f"wave count {m.group(1)} from prompt")
+        m = _ENEMIES.search(prompt)
+        if m:
+            d["enemies_per_wave"] = int(m.group(1))
+            reasons.append(f"enemies per wave {m.group(1)} from prompt")
+        m = _DIFF.search(prompt)
+        if m:
+            d["difficulty"] = m.group(1).lower()
+            reasons.append(f"difficulty '{d['difficulty']}' from prompt")
+        m = _NAME.search(prompt)
+        if m:
+            title = m.group(1).strip()
+            d["display_title"] = title
+            d["project_name"] = _pascal(title)
+            reasons.append(f"title '{title}' from prompt")
+        params = ArenaCombatParams(
+            project_name=d["project_name"],
+            display_title=d["display_title"],
+            wave_count=d["wave_count"],
+            enemies_per_wave=d["enemies_per_wave"],
+            difficulty=d["difficulty"],
+        )
+        try:
+            params.validate()
+        except ValueError as exc:
+            return GameSpec(False, best.recipe_id, best.title, reasons=reasons + [f"invalid parameters: {exc}"])
+        acceptance = [
+            f"build_ok({params.project_name}Editor Win64 Development)",
+            f"automation_pass(GameForge.{params.project_name}.*)",
+            "level_readback(Sun, SkyFill, Arena_Floor, Wall_North, Wall_South, Wall_East, Wall_West, NavMeshBounds, PlayerStart)",
+            f"package_ok(Win64 Development) -> {params.project_name}.exe",
+            "packaged_selftest(GF_ARENA_SELFTEST PASS: player spawn, attack, enemy AI controller, enemy damage, wave progression, defeat, reset)",
+            "packaged_screenshot_has_content",
+        ]
+        return GameSpec(True, best.recipe_id, best.title, params, 0.9, reasons, acceptance)
+
+    if best.recipe_id == "card_battler":
+        m = _HP.search(prompt)
+        if m:
+            hp = int(m.group(1))
+            d["player_base_health"] = hp
+            d["opponent_base_health"] = hp
+            reasons.append(f"base health {hp} from prompt")
+        m = _DIFF.search(prompt)
+        if m:
+            d["difficulty"] = m.group(1).lower()
+            reasons.append(f"difficulty '{d['difficulty']}' from prompt")
+        m = _NAME.search(prompt)
+        if m:
+            title = m.group(1).strip()
+            d["display_title"] = title
+            d["project_name"] = _pascal(title)
+            reasons.append(f"title '{title}' from prompt")
+        params = CardBattlerParams(
+            project_name=d["project_name"],
+            display_title=d["display_title"],
+            player_base_health=d["player_base_health"],
+            opponent_base_health=d["opponent_base_health"],
+            difficulty=d["difficulty"],
+        )
+        try:
+            params.validate()
+        except ValueError as exc:
+            return GameSpec(False, best.recipe_id, best.title, reasons=reasons + [f"invalid parameters: {exc}"])
+        acceptance = [
+            f"build_ok({params.project_name}Editor Win64 Development)",
+            f"automation_pass(GameForge.{params.project_name}.*)",
+            "level_readback(Sun, SkyFill, BattleMat, PlayerStart)",
+            f"package_ok(Win64 Development) -> {params.project_name}.exe",
+            "packaged_selftest(GF_CARD_SELFTEST PASS: deck integrity, no duplicate ids, energy spending, illegal play rejection, opponent AI, combat resolution, victory/defeat, reset)",
             "packaged_screenshot_has_content",
         ]
         return GameSpec(True, best.recipe_id, best.title, params, 0.9, reasons, acceptance)

@@ -443,11 +443,14 @@ public:
 CHARACTER_CPP = r'''#include "GFPlatformerCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GFPlatformerConfig.h"
 #include "GFPlatformerGameMode.h"
 #include "Kismet/GameplayStatics.h"
+#include "UObject/ConstructorHelpers.h"
 
 AGFPlatformerCharacter::AGFPlatformerCharacter()
 	: CurrentCheckpointIndex(0)
@@ -455,6 +458,13 @@ AGFPlatformerCharacter::AGFPlatformerCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 
 	GetCapsuleComponent()->InitCapsuleSize(42.0f, 96.0f);
+
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> DefaultMesh(TEXT("/Engine/EngineMeshes/SkeletalCube.SkeletalCube"));
+	if (DefaultMesh.Succeeded() && GetMesh())
+	{
+		GetMesh()->SetSkeletalMesh(DefaultMesh.Object);
+		GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
+	}
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -469,7 +479,8 @@ AGFPlatformerCharacter::AGFPlatformerCharacter()
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->TargetArmLength = 450.0f;
+	CameraBoom->SetRelativeRotation(FRotator(-20.0f, 0.0f, 0.0f));
 	CameraBoom->bUsePawnControlRotation = true;
 	CameraBoom->bDoCollisionTest = true;
 
@@ -481,6 +492,10 @@ AGFPlatformerCharacter::AGFPlatformerCharacter()
 void AGFPlatformerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	if (Controller)
+	{
+		Controller->SetControlRotation(FRotator(-20.0f, 0.0f, 0.0f));
+	}
 	SpawnLocation = GetActorLocation();
 	ActiveCheckpointLocation = SpawnLocation;
 }
@@ -567,6 +582,7 @@ void AGFPlatformerCharacter::RespawnAtCheckpoint()
 {
 	if (GetCharacterMovement())
 	{
+		GetCharacterMovement()->StopMovementImmediately();
 		GetCharacterMovement()->Velocity = FVector::ZeroVector;
 	}
 	SetActorLocation(ActiveCheckpointLocation, false, nullptr, ETeleportType::TeleportPhysics);
@@ -585,21 +601,86 @@ class __API__ AGFPlatformerHUD : public AHUD
 	GENERATED_BODY()
 
 public:
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void DrawHUD() override;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+	TObjectPtr<class UUserWidget> PlatformerHUDWidget;
 };
 '''
 
 HUD_CPP = r'''#include "GFPlatformerHUD.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/TextBlock.h"
 #include "Engine/Canvas.h"
+#include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "GFPlatformerConfig.h"
 #include "GFPlatformerGameMode.h"
 #include "Kismet/GameplayStatics.h"
+
+void AGFPlatformerHUD::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Load and instantiate genuine UMG Widget Blueprint WBP_PlatformerHUD
+	const FString WidgetClassPath = TEXT("/Game/__NAME__/WBP_PlatformerHUD.WBP_PlatformerHUD_C");
+	UClass* WidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, *WidgetClassPath);
+	if (!WidgetClass)
+	{
+		WidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, TEXT("/Game/GFPlatformer/WBP_PlatformerHUD.WBP_PlatformerHUD_C"));
+	}
+	if (WidgetClass && GetWorld())
+	{
+		PlatformerHUDWidget = UUserWidget::CreateWidgetInstance(*GetWorld(), WidgetClass, NAME_None);
+		if (PlatformerHUDWidget)
+		{
+			PlatformerHUDWidget->AddToViewport(0);
+			UE_LOG(LogTemp, Log, TEXT("[GFPlatformerHUD] Instantiated and displayed UMG WBP_PlatformerHUD in viewport"));
+		}
+	}
+}
+
+void AGFPlatformerHUD::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (PlatformerHUDWidget && PlatformerHUDWidget->IsInViewport())
+	{
+		if (AGFPlatformerGameMode* GM = Cast<AGFPlatformerGameMode>(UGameplayStatics::GetGameMode(GetWorld())))
+		{
+			if (UTextBlock* Title = Cast<UTextBlock>(PlatformerHUDWidget->GetWidgetFromName(FName(TEXT("TitleText")))))
+			{
+				Title->SetText(FText::FromString(GFPlatformerConfig::Title()));
+			}
+			if (UTextBlock* Coins = Cast<UTextBlock>(PlatformerHUDWidget->GetWidgetFromName(FName(TEXT("CoinCountText")))))
+			{
+				Coins->SetText(FText::FromString(FString::Printf(TEXT("COINS: %d / %d"), GM->CollectiblesCount, GM->CollectibleTarget)));
+			}
+			if (UTextBlock* CP = Cast<UTextBlock>(PlatformerHUDWidget->GetWidgetFromName(FName(TEXT("CheckpointText")))))
+			{
+				CP->SetText(FText::FromString(GM->ActiveCheckpointIndex > 0 ? FString::Printf(TEXT("CHECKPOINT: ACTIVE (#%d)"), GM->ActiveCheckpointIndex) : TEXT("CHECKPOINT: START")));
+			}
+			if (UTextBlock* Vic = Cast<UTextBlock>(PlatformerHUDWidget->GetWidgetFromName(FName(TEXT("VictoryText")))))
+			{
+				Vic->SetText(GM->bGameCompleted ? FText::FromString(TEXT("*** LEVEL COMPLETED! ***")) : FText::GetEmpty());
+			}
+		}
+	}
+}
 
 void AGFPlatformerHUD::DrawHUD()
 {
 	Super::DrawHUD();
 
-	if (!Canvas)
+	// When the verified UMG widget is displayed, suppress duplicate Canvas rendering
+	if (PlatformerHUDWidget && PlatformerHUDWidget->IsInViewport())
+	{
+		return;
+	}
+
+	if (!Canvas || !GEngine)
 	{
 		return;
 	}
@@ -610,40 +691,14 @@ void AGFPlatformerHUD::DrawHUD()
 		return;
 	}
 
-	// Title
-	FCanvasTextItem TitleItem(FVector2D(40.0f, 30.0f), FText::FromString(GFPlatformerConfig::Title()), GEngine->GetMediumFont(), FLinearColor::White);
-	TitleItem.Scale = FVector2D(1.2f, 1.2f);
-	Canvas->DrawItem(TitleItem);
-
-	// Collectibles: COINS: X / Y
-	const bool bTargetMet = GM->CollectiblesCount >= GM->CollectibleTarget;
-	const FLinearColor CoinColor = bTargetMet ? FLinearColor(0.2f, 1.0f, 0.3f) : FLinearColor(1.0f, 0.85f, 0.1f);
+	// Fallback Canvas drawing if UMG asset is absent
+	DrawRect(FLinearColor(0.02f, 0.04f, 0.08f, 0.75f), 20.0f, 15.0f, 320.0f, 140.0f);
+	DrawRect(FLinearColor(0.1f, 0.5f, 0.9f, 0.9f), 20.0f, 15.0f, 320.0f, 3.0f);
+	UFont* LargeFont = GEngine->GetLargeFont();
+	UFont* MediumFont = GEngine->GetMediumFont();
+	DrawText(GFPlatformerConfig::Title(), FLinearColor::White, 35.0f, 25.0f, LargeFont, 1.4f);
 	FString CoinStr = FString::Printf(TEXT("COINS: %d / %d"), GM->CollectiblesCount, GM->CollectibleTarget);
-	FCanvasTextItem CoinItem(FVector2D(40.0f, 65.0f), FText::FromString(CoinStr), GEngine->GetMediumFont(), CoinColor);
-	Canvas->DrawItem(CoinItem);
-
-	// Checkpoint Indicator
-	FString CheckpointStr = GM->ActiveCheckpointIndex > 0
-		? FString::Printf(TEXT("CHECKPOINT: ACTIVE (#%d)"), GM->ActiveCheckpointIndex)
-		: TEXT("CHECKPOINT: START");
-	FCanvasTextItem CheckpointItem(FVector2D(40.0f, 95.0f), FText::FromString(CheckpointStr), GEngine->GetSmallFont(), FLinearColor(0.4f, 0.9f, 1.0f));
-	Canvas->DrawItem(CheckpointItem);
-
-	// Victory / Completion Banner
-	if (GM->bGameCompleted)
-	{
-		FCanvasTextItem VictoryItem(FVector2D(Canvas->SizeX * 0.5f - 180.0f, 160.0f),
-		                            FText::FromString(TEXT("*** LEVEL COMPLETED! ***")),
-		                            GEngine->GetLargeFont(),
-		                            FLinearColor(0.2f, 1.0f, 0.4f));
-		VictoryItem.Scale = FVector2D(1.5f, 1.5f);
-		Canvas->DrawItem(VictoryItem);
-	}
-
-	// Controls Footer
-	FString ControlsStr = TEXT("WASD: Move   |   Space: Jump   |   Mouse: Look   |   R: Restart Level");
-	FCanvasTextItem ControlsItem(FVector2D(40.0f, Canvas->SizeY - 40.0f), FText::FromString(ControlsStr), GEngine->GetSmallFont(), FLinearColor(0.7f, 0.7f, 0.7f));
-	Canvas->DrawItem(ControlsItem);
+	DrawText(CoinStr, FLinearColor(1.0f, 0.85f, 0.1f), 40.0f, 75.0f, MediumFont, 1.3f);
 }
 '''
 
@@ -701,6 +756,12 @@ public:
 	void ResetPlatformer();
 
 	bool RunSelfTest(FString& OutReport);
+	void CaptureEvidence();
+	void FinishSelfTest();
+
+private:
+	FTimerHandle SelfTestTimer;
+	bool bSelfTestPassed;
 };
 '''
 
@@ -720,6 +781,7 @@ AGFPlatformerGameMode::AGFPlatformerGameMode()
 	, ActiveCheckpointIndex(0)
 	, bGameCompleted(false)
 	, ActiveCheckpointLocation(FVector::ZeroVector)
+	, bSelfTestPassed(false)
 {
 	DefaultPawnClass = AGFPlatformerCharacter::StaticClass();
 	HUDClass = AGFPlatformerHUD::StaticClass();
@@ -732,8 +794,8 @@ void AGFPlatformerGameMode::BeginPlay()
 	if (FParse::Param(FCommandLine::Get(), TEXT("GFSelfTest")))
 	{
 		FString Report;
-		const bool bOk = RunSelfTest(Report);
-		if (bOk)
+		bSelfTestPassed = RunSelfTest(Report);
+		if (bSelfTestPassed)
 		{
 			UE_LOG(LogTemp, Display, TEXT("GF_PLATFORMER_SELFTEST PASS: %s"), *Report);
 		}
@@ -741,7 +803,24 @@ void AGFPlatformerGameMode::BeginPlay()
 		{
 			UE_LOG(LogTemp, Error, TEXT("GF_PLATFORMER_SELFTEST FAIL: %s"), *Report);
 		}
+
+		GetWorldTimerManager().SetTimer(SelfTestTimer, this, &AGFPlatformerGameMode::CaptureEvidence, 4.0f, false);
 	}
+}
+
+void AGFPlatformerGameMode::CaptureEvidence()
+{
+	FString Shot;
+	if (FParse::Value(FCommandLine::Get(), TEXT("GFShot="), Shot))
+	{
+		FScreenshotRequest::RequestScreenshot(Shot, true, false);
+	}
+	GetWorldTimerManager().SetTimer(SelfTestTimer, this, &AGFPlatformerGameMode::FinishSelfTest, 3.0f, false);
+}
+
+void AGFPlatformerGameMode::FinishSelfTest()
+{
+	FPlatformMisc::RequestExitWithStatus(false, bSelfTestPassed ? 0 : 3);
 }
 
 void AGFPlatformerGameMode::OnCollectibleCollected(AGFPlatformerCollectible* Collectible)
@@ -883,10 +962,11 @@ TESTS_CPP = r'''#include "CoreMinimal.h"
 #include "GFPlatformerGameMode.h"
 #include "GFPlatformerConfig.h"
 
-#if WITH_AUTOMATION_TESTS
+#if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerMovementTest, "GameForge.__NAME__.CharacterMovement",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+#define GF_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::ProductFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerMovementTest, "GameForge.__NAME__.CharacterMovement", GF_TEST_FLAGS)
 
 bool FGFPlatformerMovementTest::RunTest(const FString& Parameters)
 {
@@ -897,62 +977,74 @@ bool FGFPlatformerMovementTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerCollectiblesTest, "GameForge.__NAME__.Collectibles",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerCollectiblesTest, "GameForge.__NAME__.Collectibles", GF_TEST_FLAGS)
 
 bool FGFPlatformerCollectiblesTest::RunTest(const FString& Parameters)
 {
 	TestTrue(TEXT("CollectibleTarget positive"), GFPlatformerConfig::CollectibleTarget > 0);
 
-	AGFPlatformerGameMode GM;
-	TestEqual(TEXT("Initial coins 0"), GM.CollectiblesCount, 0);
-	GM.OnCollectibleCollected(nullptr);
-	TestEqual(TEXT("Coins after pickup 1"), GM.CollectiblesCount, 1);
+	AGFPlatformerGameMode* GM = NewObject<AGFPlatformerGameMode>();
+	TestNotNull(TEXT("GameMode instantiated"), GM);
+	if (GM)
+	{
+		TestEqual(TEXT("Initial coins 0"), GM->CollectiblesCount, 0);
+		GM->OnCollectibleCollected(nullptr);
+		TestEqual(TEXT("Coins after pickup 1"), GM->CollectiblesCount, 1);
+	}
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerCheckpointTest, "GameForge.__NAME__.Checkpoint",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerCheckpointTest, "GameForge.__NAME__.Checkpoint", GF_TEST_FLAGS)
 
 bool FGFPlatformerCheckpointTest::RunTest(const FString& Parameters)
 {
-	AGFPlatformerGameMode GM;
-	TestEqual(TEXT("Initial checkpoint 0"), GM.ActiveCheckpointIndex, 0);
-	const FVector CPLoc(1850.0f, 100.0f, 260.0f);
-	GM.OnCheckpointReached(2, CPLoc);
-	TestEqual(TEXT("Checkpoint updated"), GM.ActiveCheckpointIndex, 2);
-	TestEqual(TEXT("Checkpoint location recorded"), GM.ActiveCheckpointLocation, CPLoc);
+	AGFPlatformerGameMode* GM = NewObject<AGFPlatformerGameMode>();
+	TestNotNull(TEXT("GameMode instantiated"), GM);
+	if (GM)
+	{
+		TestEqual(TEXT("Initial checkpoint 0"), GM->ActiveCheckpointIndex, 0);
+		const FVector CPLoc(1850.0f, 100.0f, 260.0f);
+		GM->OnCheckpointReached(2, CPLoc);
+		TestEqual(TEXT("Checkpoint updated"), GM->ActiveCheckpointIndex, 2);
+		TestEqual(TEXT("Checkpoint location recorded"), GM->ActiveCheckpointLocation, CPLoc);
+	}
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerCompletionTest, "GameForge.__NAME__.Completion",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerCompletionTest, "GameForge.__NAME__.Completion", GF_TEST_FLAGS)
 
 bool FGFPlatformerCompletionTest::RunTest(const FString& Parameters)
 {
-	AGFPlatformerGoal Goal;
-	TestFalse(TEXT("Finish rejected when coins below target"), Goal.AttemptFinish(1, 5));
-	TestTrue(TEXT("Finish accepted when coins meet target"), Goal.AttemptFinish(5, 5));
-	TestTrue(TEXT("Finish accepted when coins exceed target"), Goal.AttemptFinish(6, 5));
+	AGFPlatformerGoal* Goal = NewObject<AGFPlatformerGoal>();
+	TestNotNull(TEXT("Goal instantiated"), Goal);
+	if (Goal)
+	{
+		TestFalse(TEXT("Finish rejected when coins below target"), Goal->AttemptFinish(1, 5));
+		TestTrue(TEXT("Finish accepted when coins meet target"), Goal->AttemptFinish(5, 5));
+		TestTrue(TEXT("Finish accepted when coins exceed target"), Goal->AttemptFinish(6, 5));
+	}
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerResetTest, "GameForge.__NAME__.Reset",
-	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGFPlatformerResetTest, "GameForge.__NAME__.Reset", GF_TEST_FLAGS)
 
 bool FGFPlatformerResetTest::RunTest(const FString& Parameters)
 {
-	AGFPlatformerGameMode GM;
-	GM.CollectiblesCount = 4;
-	GM.ActiveCheckpointIndex = 2;
-	GM.bGameCompleted = true;
+	AGFPlatformerGameMode* GM = NewObject<AGFPlatformerGameMode>();
+	TestNotNull(TEXT("GameMode instantiated"), GM);
+	if (GM)
+	{
+		GM->CollectiblesCount = 4;
+		GM->ActiveCheckpointIndex = 2;
+		GM->bGameCompleted = true;
 
-	GM.ResetPlatformer();
-	TestEqual(TEXT("Coins reset to 0"), GM.CollectiblesCount, 0);
-	TestEqual(TEXT("Checkpoint reset to 0"), GM.ActiveCheckpointIndex, 0);
-	TestFalse(TEXT("Completion reset to false"), GM.bGameCompleted);
+		GM->ResetPlatformer();
+		TestEqual(TEXT("Coins reset to 0"), GM->CollectiblesCount, 0);
+		TestEqual(TEXT("Checkpoint reset to 0"), GM->ActiveCheckpointIndex, 0);
+		TestFalse(TEXT("Completion reset to false"), GM->bGameCompleted);
+	}
 	return true;
 }
 
-#endif // WITH_AUTOMATION_TESTS
+#endif // WITH_DEV_AUTOMATION_TESTS
 '''

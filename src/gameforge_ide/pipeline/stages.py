@@ -128,6 +128,34 @@ def assemble_platformer_level(engine_root: Path, uproject: Path, evidence_dir: P
         # PlayerStart on Start Platform
         ("spawn_actor", {"actor_class": "PlayerStart", "label": "PlayerStart",
                          "location": {"x": 0, "y": 0, "z": 60}}),
+        # Real gameplay actors (C++ classes compiled in the project)
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerCollectible", "label": "Coin_1",
+                         "location": {"x": 600, "y": 0, "z": 140}}),
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerCollectible", "label": "Coin_2",
+                         "location": {"x": 1200, "y": 100, "z": 240}}),
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerCollectible", "label": "Coin_3",
+                         "location": {"x": 1850, "y": 100, "z": 340}}),
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerCollectible", "label": "Coin_4",
+                         "location": {"x": 2500, "y": -80, "z": 260}}),
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerCollectible", "label": "Coin_5",
+                         "location": {"x": 3150, "y": 0, "z": 380}}),
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerCheckpoint", "label": "Checkpoint_1",
+                         "location": {"x": 1850, "y": 100, "z": 300}}),
+        ("spawn_actor", {"actor_class": f"/Script/{name}.GFPlatformerGoal", "label": "Goal_1",
+                         "location": {"x": 3800, "y": 0, "z": 420}}),
+        # Functional UMG HUD Blueprint
+        ("widget_create_blueprint", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD",
+                                     "parent_class": "UserWidget", "root_widget_class": "CanvasPanel"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD",
+                           "widget_class": "TextBlock", "widget_name": "TitleText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD",
+                           "widget_class": "TextBlock", "widget_name": "CoinCountText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD",
+                           "widget_class": "TextBlock", "widget_name": "CheckpointText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD",
+                           "widget_class": "TextBlock", "widget_name": "VictoryText", "parent_name": "CanvasPanel_0"}),
+        ("widget_compile", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD"}),
+        ("widget_save", {"asset_path": f"/Game/{name}/WBP_PlatformerHUD"}),
         ("save_all", {}),
         ("actors_in_level", {"limit": 50}),
     ]
@@ -142,11 +170,190 @@ def assemble_platformer_level(engine_root: Path, uproject: Path, evidence_dir: P
                 if op == "create_material" and any("already exists" in e for e in r.get("errors", [])):
                     out[-1]["ok"] = True
                     continue
+                if op in ("widget_create_blueprint", "widget_create") and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
                 errors.append(f"{op}: {r.get('errors')}")
                 break
             if op == "actors_in_level":
                 labels = {a["label"] for a in r["data"]["actors"]}
-                required = {"Sun", "SkyFill", "Platform_Start", "Platform_Checkpoint", "Platform_Goal", "PlayerStart"}
+                required = {"Sun", "SkyFill", "Platform_Start", "Platform_Checkpoint", "Platform_Goal", "PlayerStart",
+                            "Coin_1", "Coin_2", "Coin_3", "Coin_4", "Coin_5", "Checkpoint_1", "Goal_1"}
+                missing = required - labels
+                if missing:
+                    errors.append(f"read-back missing actors: {sorted(missing)}")
+    except Exception as exc:
+        errors.append(f"{type(exc).__name__}: {exc}")
+    finally:
+        code = link.stop()
+    return not errors, {"map": map_path, "calls": out, "editor_exit": code,
+                        "graceful": link.last_stop_graceful}, errors
+
+
+def assemble_arena_level(engine_root: Path, uproject: Path, evidence_dir: Path,
+                         name: str) -> Tuple[bool, Dict, List[str]]:
+    """Create map, arena floor, boundary walls, lights, player start, nav bounds, and UMG HUD."""
+    link = LiveEditorLink(uproject, engine_root)
+    link.prepare_project()
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=evidence_dir / "assemble_editor.log")
+    map_path = f"/Game/Maps/{name}Map"
+    calls = [
+        ("new_level", {"level_path": map_path}),
+        # Materials
+        ("create_material", {"asset_path": f"/Game/{name}/M_ArenaFloor", "base_color": [0.15, 0.16, 0.18], "roughness": 0.8}),
+        ("create_material", {"asset_path": f"/Game/{name}/M_ArenaWall", "base_color": [0.25, 0.35, 0.5], "roughness": 0.4}),
+        # Lighting
+        ("spawn_actor", {"actor_class": "DirectionalLight", "label": "Sun", "mobility": "Movable",
+                         "light_intensity": 10.0, "rotation": {"pitch": -50, "yaw": 45, "roll": 0}}),
+        ("spawn_actor", {"actor_class": "SkyLight", "label": "SkyFill", "mobility": "Movable",
+                         "light_intensity": 1.5}),
+        # Arena Floor (Scale 16x16x0.5 => 1600x1600 cm playfield)
+        ("spawn_actor", {"actor_class": "StaticMeshActor", "label": "Arena_Floor",
+                         "static_mesh": "/Engine/BasicShapes/Cube.Cube", "material": f"/Game/{name}/M_ArenaFloor",
+                         "location": {"x": 0, "y": 0, "z": 0}, "scale": {"x": 16.0, "y": 16.0, "z": 0.5}}),
+        # 4 Boundary Walls (Height 200, Thickness 100)
+        ("spawn_actor", {"actor_class": "StaticMeshActor", "label": "Wall_North",
+                         "static_mesh": "/Engine/BasicShapes/Cube.Cube", "material": f"/Game/{name}/M_ArenaWall",
+                         "location": {"x": 800, "y": 0, "z": 100}, "scale": {"x": 1.0, "y": 17.0, "z": 2.0}}),
+        ("spawn_actor", {"actor_class": "StaticMeshActor", "label": "Wall_South",
+                         "static_mesh": "/Engine/BasicShapes/Cube.Cube", "material": f"/Game/{name}/M_ArenaWall",
+                         "location": {"x": -800, "y": 0, "z": 100}, "scale": {"x": 1.0, "y": 17.0, "z": 2.0}}),
+        ("spawn_actor", {"actor_class": "StaticMeshActor", "label": "Wall_East",
+                         "static_mesh": "/Engine/BasicShapes/Cube.Cube", "material": f"/Game/{name}/M_ArenaWall",
+                         "location": {"x": 0, "y": 800, "z": 100}, "scale": {"x": 17.0, "y": 1.0, "z": 2.0}}),
+        ("spawn_actor", {"actor_class": "StaticMeshActor", "label": "Wall_West",
+                         "static_mesh": "/Engine/BasicShapes/Cube.Cube", "material": f"/Game/{name}/M_ArenaWall",
+                         "location": {"x": 0, "y": -800, "z": 100}, "scale": {"x": 17.0, "y": 1.0, "z": 2.0}}),
+        # NavMeshBoundsVolume to cover the entire arena
+        ("spawn_actor", {"actor_class": "NavMeshBoundsVolume", "label": "NavMeshBounds",
+                         "location": {"x": 0, "y": 0, "z": 100}, "scale": {"x": 18.0, "y": 18.0, "z": 4.0}}),
+        # PlayerStart in center
+        ("spawn_actor", {"actor_class": "PlayerStart", "label": "PlayerStart",
+                         "location": {"x": 0, "y": 0, "z": 50}}),
+        # Functional UMG HUD Blueprint
+        ("widget_create_blueprint", {"asset_path": f"/Game/{name}/WBP_ArenaHUD",
+                                     "parent_class": "UserWidget", "root_widget_class": "CanvasPanel"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ArenaHUD",
+                           "widget_class": "TextBlock", "widget_name": "TitleText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ArenaHUD",
+                           "widget_class": "TextBlock", "widget_name": "HealthText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ArenaHUD",
+                           "widget_class": "TextBlock", "widget_name": "WaveText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ArenaHUD",
+                           "widget_class": "TextBlock", "widget_name": "ScoreText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ArenaHUD",
+                           "widget_class": "TextBlock", "widget_name": "StatusText", "parent_name": "CanvasPanel_0"}),
+        ("widget_compile", {"asset_path": f"/Game/{name}/WBP_ArenaHUD"}),
+        ("widget_save", {"asset_path": f"/Game/{name}/WBP_ArenaHUD"}),
+        ("save_all", {}),
+        ("actors_in_level", {"limit": 50}),
+    ]
+    out: List[Dict] = []
+    errors: List[str] = []
+    try:
+        link.connect(discovery_timeout_s=900)
+        for op, args in calls:
+            r = link.call(op, args, timeout_s=300)
+            out.append({"op": op, "ok": r.get("ok"), "errors": r.get("errors", [])})
+            if not r.get("ok"):
+                if op == "create_material" and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
+                if op in ("widget_create_blueprint", "widget_create") and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
+                errors.append(f"{op}: {r.get('errors')}")
+                break
+            if op == "actors_in_level":
+                labels = {a["label"] for a in r["data"]["actors"]}
+                required = {"Sun", "SkyFill", "Arena_Floor", "Wall_North", "Wall_South", "Wall_East", "Wall_West",
+                            "NavMeshBounds", "PlayerStart"}
+                missing = required - labels
+                if missing:
+                    errors.append(f"read-back missing actors: {sorted(missing)}")
+    except Exception as exc:
+        errors.append(f"{type(exc).__name__}: {exc}")
+    finally:
+        code = link.stop()
+    return not errors, {"map": map_path, "calls": out, "editor_exit": code,
+                        "graceful": link.last_stop_graceful}, errors
+
+
+def assemble_card_level(engine_root: Path, uproject: Path, evidence_dir: Path,
+                        name: str) -> Tuple[bool, Dict, List[str]]:
+    """Create map, card battle table surface, lights, player start, and UMG HUD."""
+    link = LiveEditorLink(uproject, engine_root)
+    link.prepare_project()
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=evidence_dir / "assemble_editor.log")
+    map_path = f"/Game/Maps/{name}Map"
+    calls = [
+        ("new_level", {"level_path": map_path}),
+        # Materials
+        ("create_material", {"asset_path": f"/Game/{name}/M_BattleMat", "base_color": [0.06, 0.08, 0.12], "roughness": 0.85}),
+        # Lighting
+        ("spawn_actor", {"actor_class": "DirectionalLight", "label": "Sun", "mobility": "Movable",
+                         "light_intensity": 10.0, "rotation": {"pitch": -50, "yaw": 45, "roll": 0}}),
+        ("spawn_actor", {"actor_class": "SkyLight", "label": "SkyFill", "mobility": "Movable",
+                         "light_intensity": 1.5}),
+        # Battle Mat / Table surface
+        ("spawn_actor", {"actor_class": "StaticMeshActor", "label": "BattleMat",
+                         "static_mesh": "/Engine/BasicShapes/Cube.Cube", "material": f"/Game/{name}/M_BattleMat",
+                         "location": {"x": 0, "y": 0, "z": 0}, "scale": {"x": 12.0, "y": 12.0, "z": 0.5}}),
+        # PlayerStart in center
+        ("spawn_actor", {"actor_class": "PlayerStart", "label": "PlayerStart",
+                         "location": {"x": 0, "y": 0, "z": 50}}),
+        # Functional UMG HUD Blueprint
+        ("widget_create_blueprint", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                                     "parent_class": "UserWidget", "root_widget_class": "CanvasPanel"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "TitleText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "PlayerHPText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "OpponentHPText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "EnergyText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "TurnText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "StatusText", "parent_name": "CanvasPanel_0"}),
+        # Interactive UI Action Buttons
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "Button", "widget_name": "EndTurnButton", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "EndTurnText", "parent_name": "EndTurnButton"}),
+        ("widget_set_property", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                                "widget_name": "EndTurnText", "property_name": "text", "value": "END TURN"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "Button", "widget_name": "RestartButton", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                           "widget_class": "TextBlock", "widget_name": "RestartText", "parent_name": "RestartButton"}),
+        ("widget_set_property", {"asset_path": f"/Game/{name}/WBP_CardHUD",
+                                "widget_name": "RestartText", "property_name": "text", "value": "RESTART"}),
+        ("widget_compile", {"asset_path": f"/Game/{name}/WBP_CardHUD"}),
+        ("widget_save", {"asset_path": f"/Game/{name}/WBP_CardHUD"}),
+        ("save_all", {}),
+        ("actors_in_level", {"limit": 50}),
+    ]
+    out: List[Dict] = []
+    errors: List[str] = []
+    try:
+        link.connect(discovery_timeout_s=900)
+        for op, args in calls:
+            r = link.call(op, args, timeout_s=300)
+            out.append({"op": op, "ok": r.get("ok"), "errors": r.get("errors", [])})
+            if not r.get("ok"):
+                if op == "create_material" and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
+                if op in ("widget_create_blueprint", "widget_create") and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
+                errors.append(f"{op}: {r.get('errors')}")
+                break
+            if op == "actors_in_level":
+                labels = {a["label"] for a in r["data"]["actors"]}
+                required = {"Sun", "SkyFill", "BattleMat", "PlayerStart"}
                 missing = required - labels
                 if missing:
                     errors.append(f"read-back missing actors: {sorted(missing)}")

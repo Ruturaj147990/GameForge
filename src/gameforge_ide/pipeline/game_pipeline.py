@@ -18,6 +18,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
+from ..recipes.arena_combat.recipe import (
+    RECIPE_ID as ARENA_RECIPE_ID, RECIPE_VERSION as ARENA_RECIPE_VERSION,
+    SELFTEST_LOG_PASS as ARENA_SELFTEST_PASS, ArenaCombatParams, generate as arena_generate)
+from ..recipes.card_battler.recipe import (
+    RECIPE_ID as CARD_RECIPE_ID, RECIPE_VERSION as CARD_RECIPE_VERSION,
+    SELFTEST_LOG_PASS as CARD_SELFTEST_PASS, CardBattlerParams, generate as card_generate)
 from ..recipes.grid_board_game.recipe import (
     RECIPE_ID as GRID_RECIPE_ID, RECIPE_VERSION as GRID_RECIPE_VERSION,
     SELFTEST_LOG_PASS as GRID_SELFTEST_PASS, GridBoardParams, generate as grid_generate)
@@ -93,13 +99,31 @@ class GamePipeline:
         except Exception:
             pass
 
-    def run(self, params: Union[GridBoardParams, PlatformerParams], skip_package: bool = False,
+    def run(self, params: Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams], skip_package: bool = False,
             stop_after: Optional[str] = None) -> PipelineResult:
         is_platformer = isinstance(params, PlatformerParams)
-        recipe_id = PLATFORMER_RECIPE_ID if is_platformer else GRID_RECIPE_ID
-        recipe_version = PLATFORMER_RECIPE_VERSION if is_platformer else GRID_RECIPE_VERSION
-        selftest_pass = PLATFORMER_SELFTEST_PASS if is_platformer else GRID_SELFTEST_PASS
-        default_gm = f"/Script/{params.project_name}.GFPlatformerGameMode" if is_platformer else f"/Script/{params.project_name}.GFGameMode"
+        is_arena = isinstance(params, ArenaCombatParams)
+        is_card = isinstance(params, CardBattlerParams)
+        if is_card:
+            recipe_id = CARD_RECIPE_ID
+            recipe_version = CARD_RECIPE_VERSION
+            selftest_pass = CARD_SELFTEST_PASS
+            default_gm = f"/Script/{params.project_name}.GFCardGameMode"
+        elif is_arena:
+            recipe_id = ARENA_RECIPE_ID
+            recipe_version = ARENA_RECIPE_VERSION
+            selftest_pass = ARENA_SELFTEST_PASS
+            default_gm = f"/Script/{params.project_name}.GFArenaGameMode"
+        elif is_platformer:
+            recipe_id = PLATFORMER_RECIPE_ID
+            recipe_version = PLATFORMER_RECIPE_VERSION
+            selftest_pass = PLATFORMER_SELFTEST_PASS
+            default_gm = f"/Script/{params.project_name}.GFPlatformerGameMode"
+        else:
+            recipe_id = GRID_RECIPE_ID
+            recipe_version = GRID_RECIPE_VERSION
+            selftest_pass = GRID_SELFTEST_PASS
+            default_gm = f"/Script/{params.project_name}.GFGameMode"
 
         project_dir = self.projects_root / params.project_name
         uproject = project_dir / f"{params.project_name}.uproject"
@@ -147,14 +171,29 @@ class GamePipeline:
         # 2 scaffold
         def s_scaffold():
             name = params.project_name
+            if is_card:
+                deps = ["UMG", "Slate", "SlateCore"]
+            elif is_arena:
+                deps = ["AIModule", "NavigationSystem", "UMG", "Slate", "SlateCore"]
+            elif is_platformer:
+                deps = ["UMG", "Slate", "SlateCore"]
+            else:
+                deps = None
             info = self.toolchain.scaffold_cpp_project(
                 project_dir, name, default_map=f"/Game/Maps/{name}Map",
-                game_mode=default_gm, display_title=params.display_title)
+                game_mode=default_gm, module_deps=deps, display_title=params.display_title)
             return StageRecord("scaffold", uproject.is_file(), 0, info)
 
         # 3 sources
         def s_sources():
-            files = platformer_generate(params) if is_platformer else grid_generate(params)
+            if is_card:
+                files = card_generate(params)
+            elif is_arena:
+                files = arena_generate(params)
+            elif is_platformer:
+                files = platformer_generate(params)
+            else:
+                files = grid_generate(params)
             for rel, content in files.items():
                 path = project_dir / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +212,13 @@ class GamePipeline:
 
         # 5 assemble level in the live editor
         def s_assemble():
-            if is_platformer:
+            if is_card:
+                ok, data, errors = engine_stages.assemble_card_level(
+                    self.engine_root, uproject, evidence_dir, params.project_name)
+            elif is_arena:
+                ok, data, errors = engine_stages.assemble_arena_level(
+                    self.engine_root, uproject, evidence_dir, params.project_name)
+            elif is_platformer:
                 ok, data, errors = engine_stages.assemble_platformer_level(
                     self.engine_root, uproject, evidence_dir, params.project_name, params.collectible_target)
             else:

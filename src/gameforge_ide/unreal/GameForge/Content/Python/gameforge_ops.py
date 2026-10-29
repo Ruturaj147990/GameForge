@@ -838,15 +838,39 @@ def widget_inspect_events(args):
 def widget_click_button(args):
     asset_path = args.get("asset_path", "")
     button_name = args.get("button_name") or args.get("widget_name")
+    mode = args.get("mode", "real_input")
     if not button_name:
         return _envelope("widget_click_button", False, errors=["button_name or widget_name is required"])
     if not hasattr(unreal, "GameForgeWidgetLibrary"):
         return _envelope("widget_click_button", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
 
-    res_raw = unreal.GameForgeWidgetLibrary.trigger_button_click(asset_path, button_name)
+    if mode == "delegate_diagnostic":
+        fn = getattr(unreal.GameForgeWidgetLibrary, "trigger_button_delegate_diagnostic", unreal.GameForgeWidgetLibrary.trigger_button_click)
+        res_raw = fn(asset_path, button_name)
+    else:
+        fn = getattr(unreal.GameForgeWidgetLibrary, "trigger_button_click_real_input", unreal.GameForgeWidgetLibrary.trigger_button_click)
+        res_raw = fn(asset_path, button_name)
+
     res = json.loads(res_raw)
     return _envelope("widget_click_button", res.get("success", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
+@op("widget_trigger_delegate_diagnostic", mutates=True, reversibility="transient")
+def widget_trigger_delegate_diagnostic(args):
+    """Diagnostic tool: directly broadcasts OnClicked delegate. Labeled as diagnostic only."""
+    asset_path = args.get("asset_path", "")
+    button_name = args.get("button_name") or args.get("widget_name")
+    if not button_name:
+        return _envelope("widget_trigger_delegate_diagnostic", False, errors=["button_name or widget_name is required"])
+    if not hasattr(unreal, "GameForgeWidgetLibrary"):
+        return _envelope("widget_trigger_delegate_diagnostic", False, errors=["GameForgeWidgetLibrary not loaded in editor"])
+
+    fn = getattr(unreal.GameForgeWidgetLibrary, "trigger_button_delegate_diagnostic", unreal.GameForgeWidgetLibrary.trigger_button_click)
+    res_raw = fn(asset_path, button_name)
+    res = json.loads(res_raw)
+    return _envelope("widget_trigger_delegate_diagnostic", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=["Direct delegate invocation diagnostic; not proof of UI hit-testing."])
 
 
 @op("widget_runtime_state", reversibility="read-only")
