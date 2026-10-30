@@ -3,7 +3,7 @@
 Authoritative implementation conforming to GameForge Master Blueprint:
 - Real execution only: dispatches real tools through ToolGateway and real Unreal mutations through LiveEditorLink.
 - Safe dependency-aware scheduling: topological DAG execution with independent branch progression.
-- Concurrency rules: read-only tasks may run concurrently; writes and Unreal mutations are strictly serialized.
+- Concurrency rules: all tasks are safely sequenced; Unreal mutations and write operations are strictly serialized.
 - Execution state machine: PLANNED, READY, RUNNING, WAITING_APPROVAL, VERIFYING, REPAIRING, COMPLETED, BLOCKED, FAILED, CANCELLED.
 - Only the harness assigns terminal states based on observed acceptance predicates.
 - Repetition control: tool + canonical args + state version; 3rd identical call blocks.

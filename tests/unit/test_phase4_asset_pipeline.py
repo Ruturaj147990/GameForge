@@ -211,7 +211,6 @@ def test_quarantine_pipeline_waiting_review(temp_workspace):
     # Run without human approval
     res = pipeline.execute_pipeline(
         spec=spec,
-        model_name="TRELLIS.2",
         human_approval=False,
     )
 
@@ -241,7 +240,6 @@ def test_quarantine_pipeline_promotion_on_approval(temp_workspace):
     # Run with human approval
     res = pipeline.execute_pipeline(
         spec=spec,
-        model_name="TRELLIS.2",
         human_approval=True,
         target_destination="/Game/Props",
     )
@@ -259,3 +257,18 @@ def test_quarantine_pipeline_promotion_on_approval(temp_workspace):
     # Quarantine path should no longer exist
     quarantine_check = pipeline.operations.asset_exists(f"/Game/Quarantine/{res['asset_id']}/SM_PromotedChest")
     assert quarantine_check["exists"] is False
+
+    row = pipeline.asset_registry.get(res["registry_id"])
+    assert (row["stage"], row["provenance"], row["backend"], row["unreal_path"]) == (
+        "PROMOTE", "procedural", "GameForge-Procedural", "/Game/Props/SM_PromotedChest")
+    assert pipeline.asset_registry.artifact_unchanged(res["registry_id"])
+
+
+def test_quarantine_pipeline_refuses_unwired_neural_model_name(temp_workspace):
+    """Provenance honesty: naming a neural model the pipeline cannot run must fail, not mislabel the mesh."""
+    pipeline = QuarantinePipeline(workspace_root=temp_workspace, operations=UnrealOperationsLibrary(temp_workspace))
+    spec = AssetSpec(name="SM_Crate", purpose="Prop", size_cm=(60.0, 40.0, 40.0), triangle_budget=1000,
+                     collision_type="box", target_territory="GLOBAL")
+    res = pipeline.execute_pipeline(spec=spec, model_name="TRELLIS.2", human_approval=True)
+    assert res["ok"] is False
+    assert "MODEL_NOT_WIRED" in res["error"]

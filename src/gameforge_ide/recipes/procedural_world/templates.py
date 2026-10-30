@@ -490,6 +490,7 @@ public:
 	AGFProceduralGameMode();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Procedural")
 	bool bLandmarkDiscovered;
@@ -531,6 +532,7 @@ AGFProceduralGameMode::AGFProceduralGameMode()
 	: bLandmarkDiscovered(false)
 	, bSelfTestPassed(false)
 {
+	PrimaryActorTick.bCanEverTick = true;
 	DefaultPawnClass = AGFProceduralCharacter::StaticClass();
 	HUDClass = AGFProceduralHUD::StaticClass();
 }
@@ -559,6 +561,23 @@ void AGFProceduralGameMode::BeginPlay()
 		}
 
 		GetWorldTimerManager().SetTimer(SelfTestTimer, this, &AGFProceduralGameMode::CaptureEvidence, 4.0f, false);
+	}
+}
+
+void AGFProceduralGameMode::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (!bLandmarkDiscovered)
+	{
+		if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0))
+		{
+			const FVector Loc = PlayerPawn->GetActorLocation();
+			if (FVector::Dist2D(Loc, FVector(2500.0f, 2000.0f, 450.0f)) < 500.0f)
+			{
+				OnLandmarkReached(TEXT("Ancient Ruins"));
+			}
+		}
 	}
 }
 

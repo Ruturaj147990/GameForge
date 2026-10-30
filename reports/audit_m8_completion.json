@@ -2,7 +2,10 @@
   "checks": {
     "navmesh_path_start_to_landmark": true,
     "character_traversed_by_navmesh": true,
-    "landmark_discovered_on_arrival": false
+    "landmark_discovered_on_arrival": true,
+    "same_seed_same_world": true,
+    "different_seed_different_world": true,
+    "pcg_graph_generated_instances": true
   },
   "steps": {
     "world_inspect": {
@@ -65,178 +68,103 @@
     },
     "pie_trail": [
       [
-        -2076.9,
-        -1649.3,
-        313.8
+        -2074.8,
+        -1647.6,
+        313.9
       ],
       [
-        -1564.9,
-        -1225.1,
+        -1564.0,
+        -1224.3,
         333.4
       ],
       [
-        -1054.5,
-        -802.1,
-        352.8
+        -1052.8,
+        -800.7,
+        352.9
       ],
       [
-        -536.5,
-        -388.8,
-        383.5
+        -533.4,
+        -386.4,
+        383.8
       ],
       [
-        -13.3,
-        22.5,
-        417.6
+        -12.1,
+        23.4,
+        417.7
       ],
       [
-        509.3,
-        433.2,
-        448.9
+        507.7,
+        432.0,
+        448.8
       ],
       [
-        1029.0,
-        841.8,
+        1027.9,
+        840.9,
         479.7
       ],
       [
-        1551.9,
-        1252.8,
-        505.1
+        1547.5,
+        1249.3,
+        504.9
       ],
       [
-        2071.5,
-        1661.2,
-        528.5
+        2067.8,
+        1658.3,
+        528.3
       ],
       [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
-      ],
-      [
-        2431.2,
-        1944.0,
-        544.7
+        2429.7,
+        1942.9,
+        544.6
       ]
-    ]
+    ],
+    "seed_digests": {
+      "A": {
+        "seed": 2026,
+        "landscape_ok": true,
+        "foliage_ok": true,
+        "digest": "e8f26295aaaaf59cbe51acb5c777be01b03827a546716635eac64d7edca832f7",
+        "height_samples": 625,
+        "instances": 40
+      },
+      "B": {
+        "seed": 2026,
+        "landscape_ok": true,
+        "foliage_ok": true,
+        "digest": "e8f26295aaaaf59cbe51acb5c777be01b03827a546716635eac64d7edca832f7",
+        "height_samples": 625,
+        "instances": 40
+      },
+      "C": {
+        "seed": 2027,
+        "landscape_ok": true,
+        "foliage_ok": true,
+        "digest": "3e92a882f1c648954011196aa1886be3e74bde0a4a09391356e3e242d614ca0b",
+        "height_samples": 625,
+        "instances": 40
+      }
+    },
+    "pcg_scatter": {
+      "graph": "/Game/Audit/PCG/PCG_AuditScatter.PCG_AuditScatter",
+      "volume": "GF_PCGScatter",
+      "generation_requested": true,
+      "errors": []
+    },
+    "pcg_inspect": {
+      "instances": 400,
+      "ism_components": 1,
+      "generating": false,
+      "errors": []
+    },
+    "pcg_screenshot": {
+      "requested_path": "E:/GameForge/validation/live_ops_probe/Saved/Screenshots/audit_m8_pcg.png",
+      "async": false,
+      "path": "E:\\GameForge\\validation\\live_ops_probe\\Saved\\Screenshots\\audit_m8_pcg.png",
+      "bytes": 801051
+    }
   },
-  "timestamp": "2026-10-30T21:11:47+0530",
-  "world_editor_exit": 4294967295,
-  "ok": false
+  "timestamp": "2026-10-30T21:55:09+0530",
+  "world_editor_exit": 0,
+  "ok": true,
+  "probe_editor_exit": 0
 }

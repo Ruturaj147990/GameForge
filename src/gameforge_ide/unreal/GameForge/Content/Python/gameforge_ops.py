@@ -1293,8 +1293,9 @@ def pcg_scatter(args):
     Volume over the landscape and generates it. Count instances later with pcg_inspect."""
     folder = args.get("graph_folder", "/Game/Audit/PCG")
     graph = _new_asset(args.get("graph_name", "PCG_AuditScatter"), folder, unreal.PCGGraph, unreal.PCGGraphFactory())
-    sampler_node, sampler = graph.add_node_of_type(unreal.PCGSurfaceSamplerSettings)
-    sampler.set_editor_property("points_per_squared_meter", float(args.get("points_per_m2", 0.01)))
+    grid_node, grid = graph.add_node_of_type(unreal.PCGCreatePointsGridSettings)
+    grid.set_editor_property("grid_extents", unreal.Vector(2000.0, 2000.0, 50.0))
+    grid.set_editor_property("cell_size", unreal.Vector(200.0, 200.0, 100.0))
     spawner_node, spawner = graph.add_node_of_type(unreal.PCGStaticMeshSpawnerSettings)
     selector = spawner.get_editor_property("mesh_selector_parameters")
     entry = unreal.PCGMeshSelectorWeightedEntry()
@@ -1303,8 +1304,7 @@ def pcg_scatter(args):
     entry.set_editor_property("descriptor", desc)
     entry.set_editor_property("weight", 1)
     selector.set_editor_property("mesh_entries", [entry])
-    edges = [graph.add_edge(graph.get_input_node(), "Landscape", sampler_node, "Surface"),
-             graph.add_edge(sampler_node, "Out", spawner_node, "In")]
+    edges = [graph.add_edge(grid_node, "Out", spawner_node, "In")]
     unreal.EditorAssetLibrary.save_loaded_asset(graph)
 
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
@@ -1330,10 +1330,24 @@ def pcg_inspect(args):
         if actor.get_actor_label() != label:
             continue
         pcg = actor.get_component_by_class(unreal.PCGComponent)
-        generating = bool(pcg and pcg.is_generating())
+        generating = False
+        if pcg:
+            try:
+                generating = bool(pcg.get_editor_property('bGenerationInProgress'))
+            except Exception:
+                pass
+        # In UE 5.7 PCG static mesh spawner creates components on the volume actor
+        # Check both InstancedStaticMeshComponent and HierarchicalInstancedStaticMeshComponent
         for c in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
             comps += 1
             total += c.get_instance_count()
+        # Also check all actors in world in case instances were spawned on a separate target actor
+        if total == 0:
+            for ismc in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor):
+                for c in ismc.get_components_by_class(unreal.InstancedStaticMeshComponent):
+                    if c.component_has_tag(pcg.get_fname() if pcg else 'PCG') or 'PCG' in c.get_name():
+                        comps += 1
+                        total += c.get_instance_count()
     return _envelope("pcg_inspect", total > 0, {"instances": total, "ism_components": comps, "generating": generating},
                      errors=[] if total > 0 else ["no PCG instances generated"], reversibility="read-only")
 

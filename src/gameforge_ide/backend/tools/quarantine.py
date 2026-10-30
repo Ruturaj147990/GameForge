@@ -18,10 +18,16 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..assets import AssetRecord, AssetRegistry
 from ..models.provenance import AssetProvenanceRecord, LicenseRegistry
 from ...unreal.op_result import OperationResult
 from ...unreal.snapshot import SnapshotManager
 from .asset_tools import AssetSpec, GeometryValidationResult, ProceduralMeshGenerator
+
+
+# The only generator this pipeline actually runs. Provenance must name it; recording a neural model here
+# (e.g. TRELLIS.2) while ProceduralMeshGenerator produced the mesh would be false provenance.
+PROCEDURAL_GENERATOR = "GameForge-Procedural"
 
 
 class QuarantinePipeline:
@@ -33,6 +39,7 @@ class QuarantinePipeline:
         operations: Any = None,
         snapshot_manager: Optional[SnapshotManager] = None,
         license_registry: Optional[LicenseRegistry] = None,
+        asset_registry: Optional[AssetRegistry] = None,
     ):
         self.workspace_root = workspace_root.resolve()
         self.snapshot_mgr = snapshot_manager or SnapshotManager(self.workspace_root)
@@ -41,6 +48,7 @@ class QuarantinePipeline:
                              "(unreal.live_operations.LiveOperations in production)")
         self.operations = operations
         self.license_reg = license_registry or LicenseRegistry()
+        self.asset_registry = asset_registry or AssetRegistry(self.workspace_root)
         self.mesh_generator = ProceduralMeshGenerator(self.workspace_root / "Saved" / "GeneratedAssets")
         self.session_token = self.operations.security.get_session_token()
 
@@ -82,8 +90,8 @@ class QuarantinePipeline:
     def execute_pipeline(
         self,
         spec: AssetSpec,
-        model_name: str = "TRELLIS.2",
-        model_version: str = "2.0",
+        model_name: str = PROCEDURAL_GENERATOR,
+        model_version: str = "1.0",
         seed: int = 42,
         concept_prompt: Optional[str] = None,
         human_approval: bool = False,
@@ -125,9 +133,24 @@ class QuarantinePipeline:
             "prompt_hash": prompt_hash,
         }
 
+        lic_record = self.license_reg.get_license(model_name)
+        registry_id = self.asset_registry.register(AssetRecord(
+            name=spec.name, asset_type="mesh", purpose=spec.purpose, provenance="procedural",
+            backend=model_name, backend_version=model_version,
+            license=lic_record.license_name if lic_record else "unrecorded",
+            spec={**spec.model_dump(), "seed": seed, "concept_prompt": concept_prompt}))
+        self.asset_registry.advance(registry_id, "SPEC", True, "spec validated")
+
         # ==========================================
         # STAGE 3: GENERATE (LICENSE & TERRITORY CHECK)
         # ==========================================
+        if model_name != PROCEDURAL_GENERATOR:
+            error = (f"MODEL_NOT_WIRED: {model_name} has no generation backend in this pipeline; "
+                     f"only {PROCEDURAL_GENERATOR} runs here")
+            gate_results["stage_3_generate"] = {"passed": False, "error": error, "model": model_name}
+            self.asset_registry.advance(registry_id, "GENERATE", False, error)
+            return {"ok": False, "stage": 3, "error": f"STAGE_3_BLOCKED: {error}", "gate_results": gate_results}
+
         compliant, territory_err = self.license_reg.validate_territory_compliance(
             model_name=model_name, target_territory=spec.target_territory
         )
@@ -156,6 +179,7 @@ class QuarantinePipeline:
             "seed": seed,
             "artifact_sha256": obj_sha,
         }
+        self.asset_registry.advance(registry_id, "GENERATE", True, artifact_path=str(obj_file))
 
         # ==========================================
         # STAGE 4: POST-PROCESS & GEOMETRY VALIDATION
@@ -169,6 +193,7 @@ class QuarantinePipeline:
             "bounding_box_within_spec": geo_result.bounding_box_within_spec,
             "errors": geo_result.errors,
         }
+        self.asset_registry.advance(registry_id, "VALIDATE", geo_result.valid, "; ".join(geo_result.errors))
         if not geo_result.valid:
             return {
                 "ok": False,
@@ -194,6 +219,8 @@ class QuarantinePipeline:
             "quarantine_path": quarantine_asset_path,
             "errors": self._res_errors(import_res),
         }
+        self.asset_registry.advance(registry_id, "QUARANTINE", import_ok, "; ".join(self._res_errors(import_res)),
+                                    unreal_path=quarantine_asset_path if import_ok else None)
         if not import_ok:
             return {
                 "ok": False,
@@ -221,6 +248,7 @@ class QuarantinePipeline:
             "spawn_actor": self._res_data(spawn_res).get("actor_label"),
             "collision_configured": spec.collision_type != "none",
         }
+        self.asset_registry.advance(registry_id, "ENGINE_VERIFY", spawn_ok, "preview actor spawn in test level")
 
         # ==========================================
         # STAGE 7: HUMAN REVIEW GATE
@@ -235,7 +263,6 @@ class QuarantinePipeline:
         }
 
         # Build complete Provenance Record up to review gate
-        lic_record = self.license_reg.get_license(model_name)
         provenance = AssetProvenanceRecord(
             asset_id=asset_id,
             asset_name=spec.name,
@@ -259,6 +286,7 @@ class QuarantinePipeline:
                 "ok": True,
                 "status": "WAITING_REVIEW",
                 "asset_id": asset_id,
+                "registry_id": registry_id,
                 "current_path": quarantine_asset_path,
                 "advisory": advisory_description,
                 "provenance_file": str(prov_file),
@@ -281,6 +309,9 @@ class QuarantinePipeline:
             "promoted_path": final_asset_path,
             "errors": self._res_errors(promote_res),
         }
+        if spawn_ok:
+            self.asset_registry.advance(registry_id, "PROMOTE", promote_ok, "; ".join(self._res_errors(promote_res)),
+                                        unreal_path=final_asset_path if promote_ok else None)
 
         # Update and reseal provenance record
         provenance.gate_results = gate_results
@@ -290,6 +321,7 @@ class QuarantinePipeline:
             "ok": promote_ok,
             "status": "PROMOTED" if promote_ok else "PROMOTION_FAILED",
             "asset_id": asset_id,
+            "registry_id": registry_id,
             "final_path": final_asset_path,
             "provenance_file": str(prov_file),
             "provenance_hash": provenance.provenance_hash,
