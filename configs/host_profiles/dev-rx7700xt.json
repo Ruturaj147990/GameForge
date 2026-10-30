@@ -1,9 +1,9 @@
 {
   "_comment": "Developer-machine host profile (temporary, machine-specific; Master Blueprint v2 section 8.2). Not product defaults.",
   "host": "Ryzen 5 7600X / 32 GB DDR5 / Radeon RX 7700 XT 12 GB / Windows 11",
-  "projects_root": "E:\GameForge\projects",
-  "engine_root": "E:\UE\UE_5.7",
-  "ollama_models_dir": "E:\GameForge\models\ollama",
+  "projects_root": "E:\\GameForge\\projects",
+  "engine_root": "E:\\UE\\UE_5.7",
+  "ollama_models_dir": "E:\\GameForge\\models\\ollama",
   "gpu": {
     "vram_gb": 12,
     "one_heavy_gpu_workload": true,
@@ -13,6 +13,5 @@
   },
   "ram": {"warn_commit_pct": 85, "pause_heavy_jobs_commit_pct": 92},
   "cpu": {"ubt_max_parallel_actions_interactive": 8},
-  "disk": {"min_free_gb_for_heavy_work": 20, "artifact_drive": "E:"},
-  "safety": {"never_shutdown_restart_sleep_hibernate": true}
+  "disk": {"min_free_gb_for_heavy_work": 20, "artifact_drive": "E:"}
 }

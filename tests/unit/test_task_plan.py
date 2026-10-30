@@ -223,3 +223,92 @@ def test_repetition_control_state_version_awareness(temp_workspace: Path):
     key3 = executor._get_repetition_key("list_dir", {"subpath": "."})
     assert key1 != key3
 
+
+
+# --- Audit 2026-10-30 regressions -------------------------------------------------
+
+def _approvals(gateway: ToolGateway):
+    return gateway.game_tools.approvals
+
+
+def test_task_inherits_tool_approval_requirement(temp_workspace: Path):
+    """A plan cannot run an approval-gated tool just by leaving requires_approval False."""
+    gateway = ToolGateway(temp_workspace)
+    executor = TaskPlanExecutor(temp_workspace, tool_gateway=gateway)
+    marker = temp_workspace / "ran.txt"
+    plan = TaskPlan(goal="gated tool")
+    plan.add_task(TaskNode(
+        task_id="cmd", title="Run command", objective="o", expected_result="r", task_type="mutate",
+        tool_call={"name": "run_command", "arguments": {"command": f"python -c \"open(r'{marker}','w').write('x')\""}},
+    ))
+    result = executor.run_plan(plan)
+    assert result.tasks["cmd"].status == "WAITING_APPROVAL"
+    assert result.status == "WAITING_APPROVAL"
+    assert not marker.exists()
+
+
+def test_nonzero_exit_code_fails_task_without_predicates(temp_workspace: Path):
+    """A command that exits non-zero must not be marked COMPLETED just because no predicate was set."""
+    gateway = ToolGateway(temp_workspace)
+    executor = TaskPlanExecutor(temp_workspace, tool_gateway=gateway)
+    plan = TaskPlan(goal="failing command")
+    plan.add_task(TaskNode(
+        task_id="cmd", title="Exit 3", objective="o", expected_result="r", retry_limit=0,
+        tool_call={"name": "run_command", "arguments": {"command": "python -c \"raise SystemExit(3)\""}},
+    ))
+    result = executor.run_plan(plan, auto_approve_all=True)
+    assert result.tasks["cmd"].status == "FAILED"
+    assert result.status == "FAILED"
+
+
+@pytest.mark.parametrize("status", ["TIMEOUT", "NO_RECIPE", "ENGINE_UNAVAILABLE", "PENDING_APPROVAL", "STALE"])
+def test_non_success_statuses_fail_closed(temp_workspace: Path, status: str):
+    from src.gameforge_ide.backend.agent.plan_executor import _step_failure
+    assert _step_failure(None, {"status": status}) is not None
+    assert _step_failure(None, {"status": "SUCCESS", "exit_code": 0}) is None
+
+
+def test_rejected_approval_cancels_task_and_blocks_descendants(temp_workspace: Path):
+    gateway = ToolGateway(temp_workspace)
+    executor = TaskPlanExecutor(temp_workspace, tool_gateway=gateway)
+    plan = TaskPlan(goal="rejected")
+    plan.add_task(TaskNode(task_id="gate", title="Gate", objective="o", expected_result="r", requires_approval=True))
+    plan.add_task(TaskNode(task_id="after", title="After", objective="o", expected_result="r", dependency_ids=["gate"]))
+    first = executor.run_plan(plan)
+    assert first.tasks["gate"].status == "WAITING_APPROVAL"
+    _approvals(gateway).transition(first.tasks["gate"].approval_id, "REJECTED")
+    final = executor.resume_plan(first)
+    assert final.tasks["gate"].status == "CANCELLED"
+    assert final.tasks["after"].status == "BLOCKED"
+    assert final.status in ("FAILED", "BLOCKED")
+
+
+def test_waiting_approval_does_not_stall_independent_branch(temp_workspace: Path):
+    (temp_workspace / "a.txt").write_text("a", encoding="utf-8")
+    gateway = ToolGateway(temp_workspace)
+    executor = TaskPlanExecutor(temp_workspace, tool_gateway=gateway)
+    plan = TaskPlan(goal="parallel branches")
+    plan.add_task(TaskNode(task_id="gate", title="Gate", objective="o", expected_result="r", requires_approval=True))
+    plan.add_task(TaskNode(
+        task_id="free", title="Read", objective="o", expected_result="r",
+        tool_call={"name": "read_file", "arguments": {"subpath": "a.txt"}},
+    ))
+    result = executor.run_plan(plan)
+    assert result.tasks["gate"].status == "WAITING_APPROVAL"
+    assert result.tasks["free"].status == "COMPLETED"
+    assert result.status == "WAITING_APPROVAL"
+
+
+@pytest.mark.parametrize("interrupted", ["READY", "REPAIRING"])
+def test_resume_reconciles_ready_and_repairing_tasks(temp_workspace: Path, interrupted: str):
+    (temp_workspace / "a.txt").write_text("a", encoding="utf-8")
+    gateway = ToolGateway(temp_workspace)
+    executor = TaskPlanExecutor(temp_workspace, tool_gateway=gateway)
+    plan = TaskPlan(goal="resume")
+    plan.add_task(TaskNode(
+        task_id="t", title="Read", objective="o", expected_result="r", status=interrupted,
+        tool_call={"name": "read_file", "arguments": {"subpath": "a.txt"}},
+    ))
+    result = executor.resume_plan(plan, auto_approve_all=True)
+    assert result.tasks["t"].status == "COMPLETED"
+    assert result.status == "COMPLETED"

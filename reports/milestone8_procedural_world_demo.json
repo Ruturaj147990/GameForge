@@ -1,0 +1,348 @@
+{
+  "milestone": "Milestone 8: Procedural Landscapes and World Generation V1",
+  "timestamp": "2026-10-29T22:29:47+0530",
+  "prompt": "create a procedural landscape valley environment with a spline trail, foliage, and ancient ruins called GFProceduralWorld",
+  "spec": {
+    "recipe_id": "procedural_world",
+    "summary": "GFProceduralWorld: Procedural Valley landscape (elevation 1800.0 cm), spline road, 40 foliage instances, Ruins landmark. Unreal project `GFProceduralWorld`.",
+    "params": {
+      "project_name": "GFProceduralWorld",
+      "display_title": "GFProceduralWorld",
+      "seed": 2026,
+      "terrain_type": "Valley",
+      "elevation_scale": 1800.0,
+      "component_count_x": 2,
+      "component_count_y": 2,
+      "quads_per_section": 63,
+      "sections_per_component": 1,
+      "road_width": 350.0,
+      "foliage_density": 40,
+      "landmark_type": "Ruins",
+      "player_speed": 650.0,
+      "starting_level": "Level1"
+    }
+  },
+  "pipeline": {
+    "ok": true,
+    "duration_s": 138.5,
+    "stages": [
+      {
+        "stage": "spec",
+        "ok": true,
+        "duration_s": 0.0,
+        "data": {
+          "params": {
+            "project_name": "GFProceduralWorld",
+            "display_title": "GFProceduralWorld",
+            "seed": 2026,
+            "terrain_type": "Valley",
+            "elevation_scale": 1800.0,
+            "component_count_x": 2,
+            "component_count_y": 2,
+            "quads_per_section": 63,
+            "sections_per_component": 1,
+            "road_width": 350.0,
+            "foliage_density": 40,
+            "landmark_type": "Ruins",
+            "player_speed": 650.0,
+            "starting_level": "Level1"
+          },
+          "engine": "5.7.4"
+        },
+        "errors": []
+      },
+      {
+        "stage": "scaffold",
+        "ok": true,
+        "duration_s": 0.0,
+        "data": {
+          "uproject": "E:\\GameForge\\projects\\GFProceduralWorld\\GFProceduralWorld.uproject",
+          "files": [
+            "GFProceduralWorld.uproject",
+            "Source/GFProceduralWorld.Target.cs",
+            "Source/GFProceduralWorldEditor.Target.cs",
+            "Source/GFProceduralWorld/GFProceduralWorld.Build.cs",
+            "Source/GFProceduralWorld/GFProceduralWorld.h",
+            "Source/GFProceduralWorld/GFProceduralWorld.cpp",
+            "Config/DefaultGame.ini",
+            "Config/DefaultInput.ini",
+            "Config/DefaultEngine.ini"
+          ]
+        },
+        "errors": []
+      },
+      {
+        "stage": "sources",
+        "ok": true,
+        "duration_s": 0.0,
+        "data": {
+          "files": [
+            "Source/GFProceduralWorld/GFProceduralCharacter.cpp",
+            "Source/GFProceduralWorld/GFProceduralCharacter.h",
+            "Source/GFProceduralWorld/GFProceduralConfig.h",
+            "Source/GFProceduralWorld/GFProceduralGameMode.cpp",
+            "Source/GFProceduralWorld/GFProceduralGameMode.h",
+            "Source/GFProceduralWorld/GFProceduralHUD.cpp",
+            "Source/GFProceduralWorld/GFProceduralHUD.h",
+            "Source/GFProceduralWorld/GFProceduralLandmark.cpp",
+            "Source/GFProceduralWorld/GFProceduralLandmark.h",
+            "Source/GFProceduralWorld/GFProceduralTests.cpp"
+          ]
+        },
+        "errors": []
+      },
+      {
+        "stage": "build_editor",
+        "ok": true,
+        "duration_s": 31.5,
+        "data": {
+          "exit_code": 0,
+          "log": "E:\\GameForge\\projects\\GFProceduralWorld\\Saved\\GameForge\\logs\\build_GFProceduralWorldEditor_Development.log",
+          "errors": 0,
+          "warnings": 0,
+          "diagnostics": []
+        },
+        "errors": []
+      },
+      {
+        "stage": "assemble_level",
+        "ok": true,
+        "duration_s": 23.8,
+        "data": {
+          "map": "/Game/Maps/GFProceduralWorldMap",
+          "calls": [
+            {
+              "op": "new_level",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "create_material",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "create_material",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "spawn_actor",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "spawn_actor",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "landscape_create",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "spline_create_road",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "foliage_scatter",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "landmark_spawn",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "spawn_actor",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "spawn_actor",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_create_blueprint",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_create",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_create",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_create",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_create",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_compile",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "widget_save",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "save_all",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "procedural_world_inspect",
+              "ok": true,
+              "errors": []
+            },
+            {
+              "op": "actors_in_level",
+              "ok": true,
+              "errors": []
+            }
+          ],
+          "editor_exit": 0,
+          "graceful": true
+        },
+        "errors": []
+      },
+      {
+        "stage": "automation_tests",
+        "ok": true,
+        "duration_s": 10.8,
+        "data": {
+          "exit_code": 0,
+          "log": "E:\\GameForge\\projects\\GFProceduralWorld\\Saved\\GameForge\\logs\\automation.log",
+          "filter": "GameForge.GFProceduralWorld",
+          "report_dir": "E:\\GameForge\\projects\\GFProceduralWorld\\Saved\\GameForge\\automation",
+          "found": true,
+          "tests": [
+            {
+              "name": "GameForge.GFProceduralWorld.FoliageDensity",
+              "state": "Success",
+              "errors": []
+            },
+            {
+              "name": "GameForge.GFProceduralWorld.LandmarkTrigger",
+              "state": "Success",
+              "errors": []
+            },
+            {
+              "name": "GameForge.GFProceduralWorld.RoadSpline",
+              "state": "Success",
+              "errors": []
+            },
+            {
+              "name": "GameForge.GFProceduralWorld.TraversalAndReset",
+              "state": "Success",
+              "errors": []
+            },
+            {
+              "name": "GameForge.GFProceduralWorld.WorldConfig",
+              "state": "Success",
+              "errors": []
+            }
+          ],
+          "succeeded": 4,
+          "failed": 0,
+          "not_run": 0
+        },
+        "errors": []
+      },
+      {
+        "stage": "package",
+        "ok": true,
+        "duration_s": 57.6,
+        "data": {
+          "exit_code": 0,
+          "log": "E:\\GameForge\\projects\\GFProceduralWorld\\Saved\\GameForge\\logs\\package_Win64_Development.log",
+          "archive_dir": "E:\\GameForge\\projects\\GFProceduralWorld\\Packaged",
+          "exe": "E:\\GameForge\\projects\\GFProceduralWorld\\Packaged\\Windows\\GFProceduralWorld.exe",
+          "exe_exists": true,
+          "archive_bytes": 865595717,
+          "errors": 0,
+          "diagnostics": []
+        },
+        "errors": []
+      },
+      {
+        "stage": "packaged_smoke",
+        "ok": true,
+        "duration_s": 14.8,
+        "data": {
+          "exit_code": 0,
+          "log": "E:\\GameForge\\projects\\GFProceduralWorld\\Saved\\GameForge\\packaged_smoke.log",
+          "expect": "GF_PROCEDURAL_SELFTEST PASS",
+          "matched_lines": [
+            "[2026.10.29-16.48.51:889][  0]LogTemp: Display: GF_PROCEDURAL_SELFTEST PASS: landscape valid, player spawn, road traversal, landmark discovery, reset"
+          ],
+          "exe_sha256": "5e61401f30483d9678b889abfc61775ef7943b0df321d3e91fd6a863a3df5c86",
+          "screenshot": "E:\\GameForge\\projects\\GFProceduralWorld\\Saved\\GameForge\\packaged_gameplay.png",
+          "screenshot_content": {
+            "checked": true,
+            "size": [
+              1280,
+              720
+            ],
+            "lit_fraction": 0.558,
+            "stddev": 83.59,
+            "has_content": true
+          },
+          "selftest_lines": [
+            "[2026.10.29-16.48.51:889][  0]LogTemp: Display: GF_PROCEDURAL_SELFTEST PASS: landscape valid, player spawn, road traversal, landmark discovery, reset"
+          ],
+          "game_errors": []
+        },
+        "errors": []
+      }
+    ]
+  },
+  "packaged_executable": {
+    "path": "E:\\GameForge\\projects\\GFProceduralWorld\\Packaged\\Windows\\GFProceduralWorld\\Binaries\\Win64\\GFProceduralWorld.exe",
+    "size_bytes": 291241472
+  },
+  "real_input_verification": {
+    "window_found": true,
+    "hwnd": "0x4ed0678",
+    "client_rect": [
+      640,
+      336,
+      1920,
+      1056
+    ],
+    "inputs_dispatched": [
+      "W (2.0s)",
+      "SPACE",
+      "D (0.6s)",
+      "MouseMove",
+      "R (Reset)"
+    ],
+    "screenshot_path": "E:\\gameforge_step1\\reports\\packaged_GFProceduralWorld_real_input.png",
+    "screenshot_analysis": {
+      "checked": true,
+      "size": [
+        1280,
+        720
+      ],
+      "lit_fraction": 0.517,
+      "stddev": 86.86,
+      "has_content": true
+    }
+  }
+}

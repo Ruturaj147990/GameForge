@@ -1,387 +1,773 @@
 [
   {
-    "game": "GFPlatformer",
-    "exe_path": "E:\\GameForge\\projects\\GFPlatformer\\Packaged\\Windows\\GFPlatformer.exe",
-    "pid": 6868,
+    "game": "AuditPlatformer",
+    "exe_path": "E:\\GameForge\\projects\\AuditPlatformer\\Packaged\\Windows\\AuditPlatformer\\Binaries\\Win64\\AuditPlatformer.exe",
+    "pid": 10104,
+    "log_path": "E:\\GameForge\\validation\\real_input_logs\\AuditPlatformer_20261030_202653.log",
+    "steps": [
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "SPACE",
+          "hold_s": 0.1,
+          "expect": [
+            "jump"
+          ]
+        },
+        "observed_events": [
+          "jump z=123"
+        ],
+        "expectations": {
+          "jump": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "hold_key",
+          "key": "W",
+          "duration_s": 1.2,
+          "expect": [
+            "moved"
+          ]
+        },
+        "observed_events": [
+          "moved x=100 y=0 z=171",
+          "moved x=200 y=0 z=123",
+          "moved x=302 y=0 z=82",
+          "moved x=402 y=0 z=46"
+        ],
+        "expectations": {
+          "moved": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "R",
+          "expect": [
+            "reset"
+          ]
+        },
+        "observed_events": [
+          "reset",
+          "respawn checkpoint=0",
+          "moved x=0 y=0 z=123"
+        ],
+        "expectations": {
+          "reset": true
+        },
+        "ok": true
+      }
+    ],
+    "ok": true,
+    "window_geometry": {
+      "left": 640,
+      "top": 336,
+      "right": 1920,
+      "bottom": 1056,
+      "width": 1280,
+      "height": 720
+    },
+    "startup_events": [
+      "moved x=0 y=0 z=123"
+    ],
+    "screenshot_path": "E:\\gameforge_step1\\reports\\packaged_AuditPlatformer_real_input.png",
     "actions": [
       {
-        "timestamp": "2026-10-29T21:15:47+0530",
+        "timestamp": "2026-10-30T20:27:07+0530",
         "action": "focus",
-        "target": "GFPlatformer",
+        "target": "AuditPlatformer",
         "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
+        "hwnd": 919334,
+        "title": "AuditPlatformer"
       },
       {
-        "timestamp": "2026-10-29T21:15:48+0530",
+        "timestamp": "2026-10-30T20:27:08+0530",
         "action": "focus",
-        "target": "GFPlatformer",
+        "target": "AuditPlatformer",
         "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
+        "hwnd": 919334,
+        "title": "AuditPlatformer"
       },
       {
-        "timestamp": "2026-10-29T21:15:48+0530",
+        "timestamp": "2026-10-30T20:27:08+0530",
         "action": "key_tap",
-        "target": "GFPlatformer",
+        "target": "AuditPlatformer",
         "key": "SPACE",
         "hold_s": 0.1
       },
       {
-        "timestamp": "2026-10-29T21:15:49+0530",
+        "timestamp": "2026-10-30T20:27:09+0530",
         "action": "focus",
-        "target": "GFPlatformer",
+        "target": "AuditPlatformer",
         "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
+        "hwnd": 919334,
+        "title": "AuditPlatformer"
       },
       {
-        "timestamp": "2026-10-29T21:15:49+0530",
+        "timestamp": "2026-10-30T20:27:09+0530",
         "action": "key_down",
-        "target": "GFPlatformer",
+        "target": "AuditPlatformer",
         "key": "W"
       },
       {
-        "timestamp": "2026-10-29T21:15:50+0530",
+        "timestamp": "2026-10-30T20:27:10+0530",
         "action": "key_up",
-        "target": "GFPlatformer",
+        "target": "AuditPlatformer",
+        "key": "W",
+        "held_duration_s": 1.2
+      },
+      {
+        "timestamp": "2026-10-30T20:27:10+0530",
+        "action": "focus",
+        "target": "AuditPlatformer",
+        "ok": true,
+        "hwnd": 919334,
+        "title": "AuditPlatformer"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:10+0530",
+        "action": "key_tap",
+        "target": "AuditPlatformer",
+        "key": "R",
+        "hold_s": 0.08
+      }
+    ]
+  },
+  {
+    "game": "AuditArena",
+    "exe_path": "E:\\GameForge\\projects\\AuditArena\\Packaged\\Windows\\AuditArena\\Binaries\\Win64\\AuditArena.exe",
+    "pid": 16540,
+    "log_path": "E:\\GameForge\\validation\\real_input_logs\\AuditArena_20261030_202711.log",
+    "steps": [
+      {
+        "action": {
+          "type": "hold_key",
+          "key": "W",
+          "duration_s": 1.0,
+          "expect": [
+            "moved"
+          ]
+        },
+        "observed_events": [
+          "moved x=0 y=0 z=123",
+          "moved x=100 y=0 z=123",
+          "moved x=201 y=0 z=123",
+          "moved x=301 y=0 z=123",
+          "moved x=402 y=0 z=123",
+          "moved x=502 y=0 z=123",
+          "player_damaged health=85"
+        ],
+        "expectations": {
+          "moved": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "click_fraction",
+          "rel_x": 0.5,
+          "rel_y": 0.5,
+          "button": "left",
+          "expect": [
+            "attack"
+          ]
+        },
+        "observed_events": [
+          "enemy_damaged health=15",
+          "attack hit=1"
+        ],
+        "expectations": {
+          "attack": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "SPACE",
+          "hold_s": 0.1,
+          "expect": [
+            "attack"
+          ],
+          "settle_s": 3.0
+        },
+        "observed_events": [
+          "enemy_damaged health=0",
+          "attack hit=1"
+        ],
+        "expectations": {
+          "attack": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "R",
+          "expect": [
+            "reset"
+          ]
+        },
+        "observed_events": [
+          "reset"
+        ],
+        "expectations": {
+          "reset": true
+        },
+        "ok": true
+      }
+    ],
+    "ok": true,
+    "window_geometry": {
+      "left": 640,
+      "top": 336,
+      "right": 1920,
+      "bottom": 1056,
+      "width": 1280,
+      "height": 720
+    },
+    "startup_events": [],
+    "screenshot_path": "E:\\gameforge_step1\\reports\\packaged_AuditArena_real_input.png",
+    "actions": [
+      {
+        "timestamp": "2026-10-30T20:27:25+0530",
+        "action": "focus",
+        "target": "AuditArena",
+        "ok": true,
+        "hwnd": 1311886,
+        "title": "AuditArena"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:26+0530",
+        "action": "focus",
+        "target": "AuditArena",
+        "ok": true,
+        "hwnd": 1311886,
+        "title": "AuditArena"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:26+0530",
+        "action": "key_down",
+        "target": "AuditArena",
+        "key": "W"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:27+0530",
+        "action": "key_up",
+        "target": "AuditArena",
         "key": "W",
         "held_duration_s": 1.0
       },
       {
-        "timestamp": "2026-10-29T21:15:50+0530",
+        "timestamp": "2026-10-30T20:27:28+0530",
         "action": "focus",
-        "target": "GFPlatformer",
+        "target": "AuditArena",
         "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
+        "hwnd": 1311886,
+        "title": "AuditArena"
       },
       {
-        "timestamp": "2026-10-29T21:15:50+0530",
-        "action": "key_tap",
-        "target": "GFPlatformer",
-        "key": "SPACE",
-        "hold_s": 0.15
-      },
-      {
-        "timestamp": "2026-10-29T21:15:51+0530",
-        "action": "focus",
-        "target": "GFPlatformer",
-        "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
-      },
-      {
-        "timestamp": "2026-10-29T21:15:51+0530",
-        "action": "key_down",
-        "target": "GFPlatformer",
-        "key": "D"
-      },
-      {
-        "timestamp": "2026-10-29T21:15:51+0530",
-        "action": "key_up",
-        "target": "GFPlatformer",
-        "key": "D",
-        "held_duration_s": 0.5
-      },
-      {
-        "timestamp": "2026-10-29T21:15:52+0530",
-        "action": "focus",
-        "target": "GFPlatformer",
-        "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
-      },
-      {
-        "timestamp": "2026-10-29T21:15:52+0530",
-        "action": "key_tap",
-        "target": "GFPlatformer",
-        "key": "R",
-        "hold_s": 0.08
-      },
-      {
-        "timestamp": "2026-10-29T21:15:52+0530",
-        "action": "focus",
-        "target": "GFPlatformer",
-        "ok": true,
-        "hwnd": 1114922,
-        "title": "GFPlatformer"
-      },
-      {
-        "timestamp": "2026-10-29T21:15:52+0530",
-        "action": "key_tap",
-        "target": "GFPlatformer",
-        "key": "ESCAPE",
-        "hold_s": 0.08
-      }
-    ],
-    "ok": true,
-    "screenshot_path": "reports\\packaged_GFPlatformer_real_input.png",
-    "window_geometry": {
-      "left": 86,
-      "top": 109,
-      "right": 1366,
-      "bottom": 589,
-      "width": 1280,
-      "height": 480
-    }
-  },
-  {
-    "game": "GFArenaCombat",
-    "exe_path": "E:\\GameForge\\projects\\GFArenaCombat\\Packaged\\Windows\\GFArenaCombat.exe",
-    "pid": 11444,
-    "actions": [
-      {
-        "timestamp": "2026-10-29T21:15:58+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:15:59+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:15:59+0530",
-        "action": "key_down",
-        "target": "GFArenaCombat",
-        "key": "W"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:00+0530",
-        "action": "key_up",
-        "target": "GFArenaCombat",
-        "key": "W",
-        "held_duration_s": 0.8
-      },
-      {
-        "timestamp": "2026-10-29T21:16:00+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:00+0530",
-        "action": "key_tap",
-        "target": "GFArenaCombat",
-        "key": "SPACE",
-        "hold_s": 0.1
-      },
-      {
-        "timestamp": "2026-10-29T21:16:01+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:01+0530",
-        "action": "mouse_click",
-        "target": "GFArenaCombat",
-        "screen_x": 804,
-        "screen_y": 427,
-        "rel_x": 0.5,
-        "rel_y": 0.5,
-        "button": "left"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:01+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:01+0530",
-        "action": "key_down",
-        "target": "GFArenaCombat",
-        "key": "S"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:02+0530",
-        "action": "key_up",
-        "target": "GFArenaCombat",
-        "key": "S",
-        "held_duration_s": 0.4
-      },
-      {
-        "timestamp": "2026-10-29T21:16:02+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:02+0530",
-        "action": "key_tap",
-        "target": "GFArenaCombat",
-        "key": "R",
-        "hold_s": 0.08
-      },
-      {
-        "timestamp": "2026-10-29T21:16:03+0530",
-        "action": "focus",
-        "target": "GFArenaCombat",
-        "ok": true,
-        "hwnd": 2098434,
-        "title": "GFArenaCombat"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:03+0530",
-        "action": "key_tap",
-        "target": "GFArenaCombat",
-        "key": "ESCAPE",
-        "hold_s": 0.08
-      }
-    ],
-    "ok": true,
-    "screenshot_path": "reports\\packaged_GFArenaCombat_real_input.png",
-    "window_geometry": {
-      "left": 164,
-      "top": 187,
-      "right": 1444,
-      "bottom": 667,
-      "width": 1280,
-      "height": 480
-    }
-  },
-  {
-    "game": "GFCardBattler",
-    "exe_path": "E:\\GameForge\\projects\\GFCardBattler\\Packaged\\Windows\\GFCardBattler.exe",
-    "pid": 17808,
-    "actions": [
-      {
-        "timestamp": "2026-10-29T21:16:08+0530",
-        "action": "focus",
-        "target": "GFCardBattler",
-        "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:09+0530",
-        "action": "focus",
-        "target": "GFCardBattler",
-        "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:09+0530",
+        "timestamp": "2026-10-30T20:27:28+0530",
         "action": "mouse_move",
-        "target": "GFCardBattler",
-        "screen_x": 574,
-        "screen_y": 573,
-        "rel_x": 0.3,
-        "rel_y": 0.75
-      },
-      {
-        "timestamp": "2026-10-29T21:16:09+0530",
-        "action": "focus",
-        "target": "GFCardBattler",
-        "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:09+0530",
-        "action": "mouse_click",
-        "target": "GFCardBattler",
-        "screen_x": 574,
-        "screen_y": 573,
-        "rel_x": 0.3,
-        "rel_y": 0.75,
-        "button": "left"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:10+0530",
-        "action": "focus",
-        "target": "GFCardBattler",
-        "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:10+0530",
-        "action": "mouse_move",
-        "target": "GFCardBattler",
-        "screen_x": 830,
-        "screen_y": 453,
+        "target": "AuditArena",
+        "screen_x": 1280,
+        "screen_y": 696,
         "rel_x": 0.5,
         "rel_y": 0.5
       },
       {
-        "timestamp": "2026-10-29T21:16:10+0530",
+        "timestamp": "2026-10-30T20:27:28+0530",
         "action": "focus",
-        "target": "GFCardBattler",
+        "target": "AuditArena",
         "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
+        "hwnd": 1311886,
+        "title": "AuditArena"
       },
       {
-        "timestamp": "2026-10-29T21:16:10+0530",
+        "timestamp": "2026-10-30T20:27:28+0530",
         "action": "mouse_click",
-        "target": "GFCardBattler",
-        "screen_x": 830,
-        "screen_y": 453,
+        "target": "AuditArena",
+        "screen_x": 1280,
+        "screen_y": 696,
         "rel_x": 0.5,
         "rel_y": 0.5,
         "button": "left"
       },
       {
-        "timestamp": "2026-10-29T21:16:11+0530",
+        "timestamp": "2026-10-30T20:27:29+0530",
         "action": "focus",
-        "target": "GFCardBattler",
+        "target": "AuditArena",
         "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
+        "hwnd": 1311886,
+        "title": "AuditArena"
       },
       {
-        "timestamp": "2026-10-29T21:16:11+0530",
-        "action": "mouse_click",
-        "target": "GFCardBattler",
-        "screen_x": 1278,
-        "screen_y": 621,
-        "rel_x": 0.85,
-        "rel_y": 0.85,
-        "button": "left"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:11+0530",
-        "action": "focus",
-        "target": "GFCardBattler",
-        "ok": true,
-        "hwnd": 1836122,
-        "title": "GFCardBattler"
-      },
-      {
-        "timestamp": "2026-10-29T21:16:11+0530",
+        "timestamp": "2026-10-30T20:27:29+0530",
         "action": "key_tap",
-        "target": "GFCardBattler",
-        "key": "ESCAPE",
+        "target": "AuditArena",
+        "key": "SPACE",
+        "hold_s": 0.1
+      },
+      {
+        "timestamp": "2026-10-30T20:27:29+0530",
+        "action": "focus",
+        "target": "AuditArena",
+        "ok": true,
+        "hwnd": 1311886,
+        "title": "AuditArena"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:29+0530",
+        "action": "key_tap",
+        "target": "AuditArena",
+        "key": "R",
         "hold_s": 0.08
+      }
+    ]
+  },
+  {
+    "game": "AuditCards",
+    "exe_path": "E:\\GameForge\\projects\\AuditCards\\Packaged\\Windows\\AuditCards\\Binaries\\Win64\\AuditCards.exe",
+    "pid": 16204,
+    "log_path": "E:\\GameForge\\validation\\real_input_logs\\AuditCards_20261030_202730.log",
+    "steps": [
+      {
+        "action": {
+          "type": "click_fraction",
+          "rel_x": 0.30625,
+          "rel_y": 0.8333333333333334,
+          "expect": [
+            "select_card hand=0"
+          ]
+        },
+        "observed_events": [
+          "select_card hand=0"
+        ],
+        "expectations": {
+          "select_card hand=0": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "click_fraction",
+          "rel_x": 0.5,
+          "rel_y": 0.3888888888888889,
+          "expect": [
+            "card_play ok=1 hand=0 lane=1"
+          ]
+        },
+        "observed_events": [
+          "select_lane lane=1",
+          "card_play ok=1 hand=0 lane=1 energy=0"
+        ],
+        "expectations": {
+          "card_play ok=1 hand=0 lane=1": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "E",
+          "expect": [
+            "turn_end"
+          ]
+        },
+        "observed_events": [
+          "turn_end player_base=30 opponent_base=30"
+        ],
+        "expectations": {
+          "turn_end": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "TAB",
+          "expect": [
+            "select_card"
+          ]
+        },
+        "observed_events": [
+          "select_card hand=1"
+        ],
+        "expectations": {
+          "select_card": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "3",
+          "expect": [
+            "select_lane lane=2"
+          ]
+        },
+        "observed_events": [
+          "select_lane lane=2"
+        ],
+        "expectations": {
+          "select_lane lane=2": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "ENTER",
+          "expect": [
+            "card_play"
+          ]
+        },
+        "observed_events": [
+          "card_play ok=1 hand=1 lane=2 energy=1"
+        ],
+        "expectations": {
+          "card_play": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "R",
+          "expect": [
+            "reset"
+          ]
+        },
+        "observed_events": [
+          "reset"
+        ],
+        "expectations": {
+          "reset": true
+        },
+        "ok": true
       }
     ],
     "ok": true,
-    "screenshot_path": "reports\\packaged_GFCardBattler_real_input.png",
     "window_geometry": {
-      "left": 190,
-      "top": 213,
-      "right": 1470,
-      "bottom": 693,
+      "left": 640,
+      "top": 336,
+      "right": 1920,
+      "bottom": 1056,
       "width": 1280,
-      "height": 480
-    }
+      "height": 720
+    },
+    "startup_events": [],
+    "screenshot_path": "E:\\gameforge_step1\\reports\\packaged_AuditCards_real_input.png",
+    "actions": [
+      {
+        "timestamp": "2026-10-30T20:27:44+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:45+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:45+0530",
+        "action": "mouse_move",
+        "target": "AuditCards",
+        "screen_x": 1032,
+        "screen_y": 936,
+        "rel_x": 0.30625,
+        "rel_y": 0.8333333333333334
+      },
+      {
+        "timestamp": "2026-10-30T20:27:46+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:46+0530",
+        "action": "mouse_click",
+        "target": "AuditCards",
+        "screen_x": 1032,
+        "screen_y": 936,
+        "rel_x": 0.30625,
+        "rel_y": 0.8333333333333334,
+        "button": "left"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:46+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:46+0530",
+        "action": "mouse_move",
+        "target": "AuditCards",
+        "screen_x": 1280,
+        "screen_y": 616,
+        "rel_x": 0.5,
+        "rel_y": 0.3888888888888889
+      },
+      {
+        "timestamp": "2026-10-30T20:27:46+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:46+0530",
+        "action": "mouse_click",
+        "target": "AuditCards",
+        "screen_x": 1280,
+        "screen_y": 616,
+        "rel_x": 0.5,
+        "rel_y": 0.3888888888888889,
+        "button": "left"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:47+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:47+0530",
+        "action": "key_tap",
+        "target": "AuditCards",
+        "key": "E",
+        "hold_s": 0.08
+      },
+      {
+        "timestamp": "2026-10-30T20:27:47+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:47+0530",
+        "action": "key_tap",
+        "target": "AuditCards",
+        "key": "TAB",
+        "hold_s": 0.08
+      },
+      {
+        "timestamp": "2026-10-30T20:27:48+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:48+0530",
+        "action": "key_tap",
+        "target": "AuditCards",
+        "key": "3",
+        "hold_s": 0.08
+      },
+      {
+        "timestamp": "2026-10-30T20:27:48+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:48+0530",
+        "action": "key_tap",
+        "target": "AuditCards",
+        "key": "ENTER",
+        "hold_s": 0.08
+      },
+      {
+        "timestamp": "2026-10-30T20:27:49+0530",
+        "action": "focus",
+        "target": "AuditCards",
+        "ok": true,
+        "hwnd": 1836182,
+        "title": "AuditCards"
+      },
+      {
+        "timestamp": "2026-10-30T20:27:49+0530",
+        "action": "key_tap",
+        "target": "AuditCards",
+        "key": "R",
+        "hold_s": 0.08
+      }
+    ]
+  },
+  {
+    "game": "AuditWorld",
+    "exe_path": "E:\\GameForge\\projects\\AuditWorld\\Packaged\\Windows\\AuditWorld\\Binaries\\Win64\\AuditWorld.exe",
+    "pid": 2604,
+    "log_path": "E:\\GameForge\\validation\\real_input_logs\\AuditWorld_20261030_202749.log",
+    "steps": [
+      {
+        "action": {
+          "type": "wait",
+          "duration_s": 3.0
+        },
+        "observed_events": [],
+        "expectations": {},
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "hold_key",
+          "key": "W",
+          "duration_s": 2.0,
+          "expect": [
+            "moved"
+          ]
+        },
+        "observed_events": [
+          "moved x=-2400 y=-2000 z=300",
+          "moved x=-2299 y=-2000 z=302",
+          "moved x=-2198 y=-2000 z=284",
+          "moved x=-2098 y=-2000 z=263",
+          "moved x=-1997 y=-2000 z=229",
+          "moved x=-1897 y=-2000 z=172",
+          "moved x=-1795 y=-2000 z=90",
+          "moved x=-1694 y=-2000 z=-14",
+          "moved x=-1594 y=-2000 z=-143",
+          "moved x=-1492 y=-2000 z=-178",
+          "moved x=-1392 y=-2000 z=-250",
+          "moved x=-1291 y=-2000 z=-255"
+        ],
+        "expectations": {
+          "moved": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "SPACE",
+          "hold_s": 0.1,
+          "expect": [
+            "jump"
+          ]
+        },
+        "observed_events": [
+          "jump z=-256"
+        ],
+        "expectations": {
+          "jump": true
+        },
+        "ok": true
+      },
+      {
+        "action": {
+          "type": "tap_key",
+          "key": "R",
+          "expect": [
+            "reset"
+          ]
+        },
+        "observed_events": [
+          "reset",
+          "moved x=-2500 y=-2000 z=350"
+        ],
+        "expectations": {
+          "reset": true
+        },
+        "ok": true
+      }
+    ],
+    "ok": true,
+    "window_geometry": {
+      "left": 640,
+      "top": 336,
+      "right": 1920,
+      "bottom": 1056,
+      "width": 1280,
+      "height": 720
+    },
+    "startup_events": [
+      "moved x=-2500 y=-2000 z=349"
+    ],
+    "screenshot_path": "E:\\gameforge_step1\\reports\\packaged_AuditWorld_real_input.png",
+    "actions": [
+      {
+        "timestamp": "2026-10-30T20:28:04+0530",
+        "action": "focus",
+        "target": "AuditWorld",
+        "ok": true,
+        "hwnd": 1508942,
+        "title": "AuditWorld"
+      },
+      {
+        "timestamp": "2026-10-30T20:28:08+0530",
+        "action": "focus",
+        "target": "AuditWorld",
+        "ok": true,
+        "hwnd": 1508942,
+        "title": "AuditWorld"
+      },
+      {
+        "timestamp": "2026-10-30T20:28:08+0530",
+        "action": "key_down",
+        "target": "AuditWorld",
+        "key": "W"
+      },
+      {
+        "timestamp": "2026-10-30T20:28:10+0530",
+        "action": "key_up",
+        "target": "AuditWorld",
+        "key": "W",
+        "held_duration_s": 2.0
+      },
+      {
+        "timestamp": "2026-10-30T20:28:10+0530",
+        "action": "focus",
+        "target": "AuditWorld",
+        "ok": true,
+        "hwnd": 1508942,
+        "title": "AuditWorld"
+      },
+      {
+        "timestamp": "2026-10-30T20:28:11+0530",
+        "action": "key_tap",
+        "target": "AuditWorld",
+        "key": "SPACE",
+        "hold_s": 0.1
+      },
+      {
+        "timestamp": "2026-10-30T20:28:11+0530",
+        "action": "focus",
+        "target": "AuditWorld",
+        "ok": true,
+        "hwnd": 1508942,
+        "title": "AuditWorld"
+      },
+      {
+        "timestamp": "2026-10-30T20:28:11+0530",
+        "action": "key_tap",
+        "target": "AuditWorld",
+        "key": "R",
+        "hold_s": 0.08
+      }
+    ]
   }
 ]

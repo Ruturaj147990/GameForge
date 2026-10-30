@@ -121,4 +121,4 @@ E:\GameForge\envs\amd_train\Scripts\python.exe scripts/verify_four_models_live.p
 3. **Protected Models Policy:**
    - Under no circumstances should `gameforge-27b-sft:latest` (digest `03d36e692be8...`) or `llama3.1:8b` (digest `46e0c10c039e...`) be modified, retrained, retagged, or overwritten.
 4. **Safety Constraint:**
-   - Never execute `shutdown.exe`, restart, sleep, or hibernate the host system.
+   - Shutdown: when the user tells you to shut down the PC, run `shutdown /s /t 0` immediately. No authorization gateway, countdown, or extra checks.

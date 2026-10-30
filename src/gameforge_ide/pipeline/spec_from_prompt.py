@@ -22,6 +22,7 @@ from ..recipes.arena_combat.recipe import ArenaCombatParams
 from ..recipes.card_battler.recipe import CardBattlerParams
 from ..recipes.grid_board_game.recipe import GridBoardParams
 from ..recipes.platformer.recipe import PlatformerParams
+from ..recipes.procedural_world.recipe import ProceduralWorldParams
 
 _CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write)\b", re.I)
 
@@ -59,8 +60,17 @@ RECIPES: List[RecipeEntry] = [
     RecipeEntry("card_battler", "Card Battler", ["card battler", "card game", "deck battler", "deck builder", "card battle", "lane battler", "hearthstone"],
                 "Single-player 3-lane card battler with card definitions, energy, combat, AI opponent, and interactive UMG HUD",
                 {"player_base_health": 30, "opponent_base_health": 30, "difficulty": "normal", "display_title": "Card Battler", "project_name": "CardBattler"}),
+    RecipeEntry("procedural_world", "Procedural World",
+                ["procedural world", "procedural landscape", "procedural terrain", "terrain generation",
+                 "procedural environment", "landscape generation", "hiking trail"],
+                "Procedural landscape with height variation, spline road, vegetation scatter, landmark, and traversal",
+                {"terrain_type": "Valley", "elevation_scale": 1800.0, "road_width": 350.0,
+                 "foliage_density": 40, "landmark_type": "Ruins", "display_title": "Procedural Landscape",
+                 "project_name": "ProceduralWorld", "seed": 2026}),
 ]
 
+_SEED = re.compile(r"\bseed\s*[:=]?\s*(\d{1,8})\b", re.I)
+_DENSITY = re.compile(r"\b(\d{1,4})\s*(?:foliage|trees?|plants?|instances?|bushes?)\b", re.I)
 _SIZE = re.compile(r"\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\b", re.I)
 _WIN = re.compile(r"\b(\d{1,2})\s*(?:in a row|in-a-row|to win)\b", re.I)
 _TARGET = re.compile(r"\b(\d{1,2})\s*(?:collectibles?|coins?|gems?|items?|stars?)\b", re.I)
@@ -84,7 +94,7 @@ class GameSpec:
     matched: bool
     recipe_id: Optional[str] = None
     recipe_title: Optional[str] = None
-    params: Optional[Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams]] = None
+    params: Optional[Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams]] = None
     confidence: float = 0.0
     reasons: List[str] = field(default_factory=list)
     acceptance: List[str] = field(default_factory=list)
@@ -93,6 +103,9 @@ class GameSpec:
         if not self.matched or not self.params:
             return "No recipe matched: " + "; ".join(self.reasons)
         p = self.params
+        if isinstance(p, ProceduralWorldParams):
+            return (f"{p.display_title}: Procedural {p.terrain_type} landscape (elevation {p.elevation_scale} cm), "
+                    f"spline road, {p.foliage_density} foliage instances, {p.landmark_type} landmark. Unreal project `{p.project_name}`.")
         if isinstance(p, PlatformerParams):
             return (f"{p.display_title}: 3D obstacle course, {p.collectible_target} collectibles, "
                     f"{p.difficulty} difficulty. Unreal project `{p.project_name}`.")
@@ -229,6 +242,71 @@ def match_prompt(prompt: str) -> GameSpec:
             "level_readback(Sun, SkyFill, Arena_Floor, Wall_North, Wall_South, Wall_East, Wall_West, NavMeshBounds, PlayerStart)",
             f"package_ok(Win64 Development) -> {params.project_name}.exe",
             "packaged_selftest(GF_ARENA_SELFTEST PASS: player spawn, attack, enemy AI controller, enemy damage, wave progression, defeat, reset)",
+            "packaged_screenshot_has_content",
+        ]
+        return GameSpec(True, best.recipe_id, best.title, params, 0.9, reasons, acceptance)
+
+    if best.recipe_id == "procedural_world":
+        if re.search(r"\b(mountain|mountains|alpine|peaks?)\b", text):
+            d["terrain_type"] = "Mountains"
+            reasons.append("terrain 'Mountains' from prompt")
+        elif re.search(r"\b(plateau|mesa)\b", text):
+            d["terrain_type"] = "Plateau"
+            reasons.append("terrain 'Plateau' from prompt")
+        elif re.search(r"\b(hills?|rolling hills?)\b", text):
+            d["terrain_type"] = "Hills"
+            reasons.append("terrain 'Hills' from prompt")
+        elif re.search(r"\b(valley|canyon)\b", text):
+            d["terrain_type"] = "Valley"
+            reasons.append("terrain 'Valley' from prompt")
+
+        if re.search(r"\b(tower|spire)\b", text):
+            d["landmark_type"] = "Tower"
+            reasons.append("landmark 'Tower' from prompt")
+        elif re.search(r"\b(shrine|temple)\b", text):
+            d["landmark_type"] = "Shrine"
+            reasons.append("landmark 'Shrine' from prompt")
+        elif re.search(r"\b(ruins?|ancient ruins?)\b", text):
+            d["landmark_type"] = "Ruins"
+            reasons.append("landmark 'Ruins' from prompt")
+
+        m = _SEED.search(prompt)
+        if m:
+            d["seed"] = int(m.group(1))
+            reasons.append(f"seed {d['seed']} from prompt")
+
+        m = _DENSITY.search(prompt)
+        if m:
+            d["foliage_density"] = int(m.group(1))
+            reasons.append(f"foliage density {d['foliage_density']} from prompt")
+
+        m = _NAME.search(prompt)
+        if m:
+            title = m.group(1).strip()
+            d["display_title"] = title
+            d["project_name"] = _pascal(title)
+            reasons.append(f"title '{title}' from prompt")
+
+        params = ProceduralWorldParams(
+            project_name=d["project_name"],
+            display_title=d["display_title"],
+            seed=d.get("seed", 2026),
+            terrain_type=d["terrain_type"],
+            elevation_scale=d["elevation_scale"],
+            road_width=d["road_width"],
+            foliage_density=d["foliage_density"],
+            landmark_type=d["landmark_type"],
+        )
+        try:
+            params.validate()
+        except ValueError as exc:
+            return GameSpec(False, best.recipe_id, best.title, reasons=reasons + [f"invalid parameters: {exc}"])
+        acceptance = [
+            f"build_ok({params.project_name}Editor Win64 Development)",
+            f"automation_pass(GameForge.{params.project_name}.*)",
+            "level_readback(Sun, SkyFill, NavMeshBounds, PlayerStart)",
+            f"package_ok(Win64 Development) -> {params.project_name}.exe",
+            "packaged_selftest(GF_PROCEDURAL_SELFTEST PASS: landscape valid, player spawn, road traversal, landmark discovery, reset)",
             "packaged_screenshot_has_content",
         ]
         return GameSpec(True, best.recipe_id, best.title, params, 0.9, reasons, acceptance)

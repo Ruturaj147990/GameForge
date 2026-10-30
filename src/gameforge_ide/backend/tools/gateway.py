@@ -247,6 +247,15 @@ class ToolGateway:
             ),
         ]
 
+    def tool_requires_approval(self, name: str, arguments: Dict[str, Any]) -> bool:
+        """True when dispatching ``name`` with ``arguments`` needs explicit user approval."""
+        definition = next((item for item in self.get_definitions() if item.name == name), None)
+        if definition is None or name == "propose_edit":
+            return False
+        if name == "unreal_editor" and arguments.get("op") in READ_ONLY_EDITOR_OPS:
+            return False  # T0 read-back operations
+        return definition.requires_approval
+
     def execute_tool(
         self,
         name: str,
@@ -263,10 +272,7 @@ class ToolGateway:
         definition = next((item for item in self.get_definitions() if item.name == name), None)
         if definition is None:
             return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
-        needs_approval = definition.requires_approval and name != "propose_edit"
-        if name == "unreal_editor" and arguments.get("op") in READ_ONLY_EDITOR_OPS:
-            needs_approval = False  # T0 read-back operations
-        if needs_approval and not approval_granted:
+        if self.tool_requires_approval(name, arguments) and not approval_granted:
             return {
                 "status": "PENDING_APPROVAL",
                 "tool": name,

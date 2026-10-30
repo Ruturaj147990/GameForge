@@ -17,6 +17,11 @@
 	"Installed": false,
 	"Modules": [
 		{
+			"Name": "GameForgeRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "GameForgeEditor",
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit"

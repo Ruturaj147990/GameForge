@@ -1,11 +1,11 @@
 {
   "milestone": "MILESTONE_2_REAL_BLUEPRINT_GRAPH_V1",
-  "started_at": "2026-10-27T19:20:30+0530",
+  "started_at": "2026-10-30T20:01:59+0530",
   "steps": [
     {
       "step": "0_handshake",
       "ok": true,
-      "elapsed_s": 0.043,
+      "elapsed_s": 0.074,
       "data": {
         "library_version": "2.0.0",
         "engine_version": "5.7.4-51494982+++UE5+Release-5.7",
@@ -13,6 +13,10 @@
         "project_name": "GFProbe",
         "operations": [
           "actors_in_level",
+          "anim_create_locomotion_blueprint",
+          "anim_inspect_blueprint",
+          "anim_inspect_sequence",
+          "anim_retarget_sequence",
           "asset_dependencies",
           "asset_exists",
           "blueprint_compile",
@@ -24,13 +28,21 @@
           "blueprint_readback_graph",
           "blueprint_save",
           "blueprint_set_pin_default",
+          "character_import_skeletal_mesh",
+          "character_inspect_skeletal_mesh",
+          "character_spawn_preview",
           "compile_blueprint",
           "create_blueprint",
           "create_material",
           "delete_actor",
           "delete_asset",
+          "foliage_scatter",
+          "gameplay_get_state",
+          "gameplay_modify_state",
           "handshake",
           "import_asset",
+          "landmark_spawn",
+          "landscape_create",
           "list_assets",
           "load_level",
           "log_tail",
@@ -38,13 +50,30 @@
           "pie_start",
           "pie_status",
           "pie_stop",
+          "procedural_world_inspect",
           "quit_editor",
           "rename_asset",
           "save_all",
           "set_actor_property",
           "set_viewport_camera",
           "spawn_actor",
-          "viewport_screenshot"
+          "spline_create_road",
+          "viewport_screenshot",
+          "widget_bind_event",
+          "widget_click_button",
+          "widget_compile",
+          "widget_create",
+          "widget_create_blueprint",
+          "widget_display_in_game",
+          "widget_inspect",
+          "widget_inspect_events",
+          "widget_readback_tree",
+          "widget_remove",
+          "widget_runtime_state",
+          "widget_save",
+          "widget_set_property",
+          "widget_set_slot_property",
+          "widget_trigger_delegate_diagnostic"
         ],
         "features": {
           "EditorActorSubsystem": true,
@@ -55,7 +84,7 @@
           "AssetImportTask": true,
           "MovieSceneSequence": true,
           "NiagaraSystem": true,
-          "PCGGraph": false,
+          "PCGGraph": true,
           "ControlRigBlueprint": true,
           "MetaSoundBuilderSubsystem": true,
           "WidgetBlueprint": true,
@@ -66,7 +95,7 @@
     {
       "step": "1_create_blueprint",
       "ok": true,
-      "elapsed_s": 0.064,
+      "elapsed_s": 0.066,
       "data": {
         "asset_path": "/Game/BP_GameForgeGraphProbe",
         "parent_class": "Actor",
@@ -76,14 +105,14 @@
     {
       "step": "2_initial_readback",
       "ok": true,
-      "elapsed_s": 0.032,
+      "elapsed_s": 0.022,
       "data": {
         "blueprint_path": "/Game/BP_GameForgeGraphProbe",
         "graph_name": "EventGraph",
         "node_count": 3,
         "nodes": [
           {
-            "node_id": "87EE53EA-4586-0F32-58E9-3AB87B82383A",
+            "node_id": "05DB95DB-424A-6974-A856-248FFBFFB0E7",
             "node_name": "K2Node_Event_0",
             "node_class": "K2Node_Event",
             "title": "Event BeginPlay",
@@ -112,7 +141,7 @@
             ]
           },
           {
-            "node_id": "C57556E3-42F0-54BB-0C7B-C6B996EA8250",
+            "node_id": "DBCF6356-41F7-F38E-1912-F8A376BE131C",
             "node_name": "K2Node_Event_1",
             "node_class": "K2Node_Event",
             "title": "Event ActorBeginOverlap",
@@ -150,7 +179,7 @@
             ]
           },
           {
-            "node_id": "F7B5F890-4004-517F-A785-5A9E08F87314",
+            "node_id": "426B1BE1-4ECF-70E1-06FD-1E94C32CE161",
             "node_name": "K2Node_Event_2",
             "node_class": "K2Node_Event",
             "title": "Event Tick",
@@ -197,7 +226,7 @@
       "data": {
         "blueprint_path": "/Game/BP_GameForgeGraphProbe",
         "graph_name": "EventGraph",
-        "node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+        "node_id": "F8801CC5-417E-5EEB-16F0-278EF7A9DF92",
         "node_name": "K2Node_CallFunction_0",
         "node_class": "K2Node_CallFunction",
         "title": "Print String",
@@ -263,7 +292,7 @@
       "elapsed_s": 0.011,
       "data": {
         "blueprint_path": "/Game/BP_GameForgeGraphProbe",
-        "node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+        "node_id": "F8801CC5-417E-5EEB-16F0-278EF7A9DF92",
         "pin_name": "InString",
         "requested_value": "GAMEFORGE_BLUEPRINT_GRAPH_V1",
         "readback_value": "GAMEFORGE_BLUEPRINT_GRAPH_V1",
@@ -273,7 +302,7 @@
     {
       "step": "5_connect_pins",
       "ok": true,
-      "elapsed_s": 0.011,
+      "elapsed_s": 0.022,
       "data": {
         "blueprint_path": "/Game/BP_GameForgeGraphProbe",
         "from_node": "K2Node_Event_0",
@@ -293,7 +322,7 @@
         "node_count": 4,
         "nodes": [
           {
-            "node_id": "87EE53EA-4586-0F32-58E9-3AB87B82383A",
+            "node_id": "05DB95DB-424A-6974-A856-248FFBFFB0E7",
             "node_name": "K2Node_Event_0",
             "node_class": "K2Node_Event",
             "title": "Event BeginPlay",
@@ -319,7 +348,7 @@
                 "is_linked": true,
                 "linked_to": [
                   {
-                    "target_node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+                    "target_node_id": "F8801CC5-417E-5EEB-16F0-278EF7A9DF92",
                     "target_node_title": "Print String",
                     "target_pin_name": "execute"
                   }
@@ -328,7 +357,7 @@
             ]
           },
           {
-            "node_id": "C57556E3-42F0-54BB-0C7B-C6B996EA8250",
+            "node_id": "DBCF6356-41F7-F38E-1912-F8A376BE131C",
             "node_name": "K2Node_Event_1",
             "node_class": "K2Node_Event",
             "title": "Event ActorBeginOverlap",
@@ -366,7 +395,7 @@
             ]
           },
           {
-            "node_id": "F7B5F890-4004-517F-A785-5A9E08F87314",
+            "node_id": "426B1BE1-4ECF-70E1-06FD-1E94C32CE161",
             "node_name": "K2Node_Event_2",
             "node_class": "K2Node_Event",
             "title": "Event Tick",
@@ -404,7 +433,7 @@
             ]
           },
           {
-            "node_id": "C777D562-4459-2D11-949E-51ACB254ECD2",
+            "node_id": "F8801CC5-417E-5EEB-16F0-278EF7A9DF92",
             "node_name": "K2Node_CallFunction_0",
             "node_class": "K2Node_CallFunction",
             "title": "Print String",
@@ -422,7 +451,7 @@
                 "is_linked": true,
                 "linked_to": [
                   {
-                    "target_node_id": "87EE53EA-4586-0F32-58E9-3AB87B82383A",
+                    "target_node_id": "05DB95DB-424A-6974-A856-248FFBFFB0E7",
                     "target_node_title": "Event BeginPlay",
                     "target_pin_name": "then"
                   }
@@ -517,18 +546,21 @@
     {
       "step": "7_compile_blueprint",
       "ok": true,
-      "elapsed_s": 0.032,
+      "elapsed_s": 0.022,
       "data": {
         "blueprint_path": "/Game/BP_GameForgeGraphProbe",
         "status": "UpToDate",
         "compiled_successfully": true,
-        "generated_class": "/Game/BP_GameForgeGraphProbe.BP_GameForgeGraphProbe_C"
+        "generated_class": "/Game/BP_GameForgeGraphProbe.BP_GameForgeGraphProbe_C",
+        "diagnostics": [],
+        "num_errors": 0,
+        "num_warnings": 0
       }
     },
     {
       "step": "8_save_blueprint",
       "ok": true,
-      "elapsed_s": 0.032,
+      "elapsed_s": 0.033,
       "data": {
         "blueprint_path": "/Game/BP_GameForgeGraphProbe",
         "package_name": "/Game/BP_GameForgeGraphProbe",
@@ -539,7 +571,7 @@
     {
       "step": "9_spawn_actor_instance",
       "ok": true,
-      "elapsed_s": 0.158,
+      "elapsed_s": 0.131,
       "data": {
         "label": "BP_GameForgeGraphProbe_Instance",
         "class": "/Game/BP_GameForgeGraphProbe.BP_GameForgeGraphProbe_C",
@@ -559,11 +591,11 @@
     {
       "step": "10_pie_runtime_verification",
       "ok": true,
-      "elapsed_s": 3.111,
+      "elapsed_s": 3.083,
       "marker_found": true,
-      "matching_log_line": "[2026.10.27-13.50.39:326][ 48]LogBlueprintUserMessages: [BP_GameForgeGraphProbe_C_0] GAMEFORGE_BLUEPRINT_GRAPH_V1"
+      "matching_log_line": "[2026.10.30-14.32.07:759][ 16]LogBlueprintUserMessages: [BP_GameForgeGraphProbe_C_0] GAMEFORGE_BLUEPRINT_GRAPH_V1"
     }
   ],
   "overall_status": "PASSED",
-  "completed_at": "2026-10-27T19:20:42+0530"
+  "completed_at": "2026-10-30T20:02:10+0530"
 }

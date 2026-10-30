@@ -254,3 +254,52 @@ def test_game_flags_expand_to_spec():
     assert (p.board_size, p.win_length, p.vs_ai, p.display_title) == (9, 4, False, "Stone Duel")
     g = match_prompt("create a " + expand_game_flags("four in a row --gravity --ai easy")).params
     assert g.gravity and g.ai_level == "random"
+
+
+def test_procedural_world_prompts_match():
+    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams
+    spec = match_prompt("create a procedural landscape valley environment with a spline trail and ancient ruins called GFProceduralWorld")
+    assert spec.matched and spec.recipe_id == "procedural_world"
+    assert isinstance(spec.params, ProceduralWorldParams)
+    assert spec.params.terrain_type == "Valley"
+    assert spec.params.landmark_type == "Ruins"
+    assert spec.params.project_name == "GFProceduralWorld"
+    assert any("GF_PROCEDURAL_SELFTEST PASS" in a for a in spec.acceptance)
+
+
+def test_procedural_world_params_validation():
+    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams
+    p = ProceduralWorldParams(project_name="ValidWorld", elevation_scale=2500.0, road_width=400.0, foliage_density=50)
+    p.validate()
+
+    bad_elev = ProceduralWorldParams(elevation_scale=50.0)
+    with pytest.raises(ValueError, match="elevation_scale"):
+        bad_elev.validate()
+
+    bad_terrain = ProceduralWorldParams(terrain_type="Swamp")
+    with pytest.raises(ValueError, match="terrain_type"):
+        bad_terrain.validate()
+
+
+def test_procedural_world_sources_render():
+    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams, generate
+    p = ProceduralWorldParams(project_name="GFWorldProbe", terrain_type="Mountains", elevation_scale=2200.0)
+    files = generate(p)
+    expected = [
+        "Source/GFWorldProbe/GFProceduralConfig.h",
+        "Source/GFWorldProbe/GFProceduralLandmark.h",
+        "Source/GFWorldProbe/GFProceduralLandmark.cpp",
+        "Source/GFWorldProbe/GFProceduralCharacter.h",
+        "Source/GFWorldProbe/GFProceduralCharacter.cpp",
+        "Source/GFWorldProbe/GFProceduralHUD.h",
+        "Source/GFWorldProbe/GFProceduralHUD.cpp",
+        "Source/GFWorldProbe/GFProceduralGameMode.h",
+        "Source/GFWorldProbe/GFProceduralGameMode.cpp",
+        "Source/GFWorldProbe/GFProceduralTests.cpp",
+    ]
+    for exp in expected:
+        assert exp in files, f"Missing {exp} in generated sources"
+        assert len(files[exp]) > 100
+    assert "Mountains" in files["Source/GFWorldProbe/GFProceduralConfig.h"]
+    assert "GFWorldProbe" in files["Source/GFWorldProbe/GFProceduralHUD.cpp"]
+

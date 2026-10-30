@@ -365,6 +365,108 @@ def assemble_card_level(engine_root: Path, uproject: Path, evidence_dir: Path,
                         "graceful": link.last_stop_graceful}, errors
 
 
+
+def assemble_procedural_world_level(engine_root: Path, uproject: Path, evidence_dir: Path,
+                                    name: str, seed: int = 2026, terrain_type: str = "Valley",
+                                    elevation_scale: float = 1800.0, road_width: float = 350.0,
+                                    foliage_density: int = 40, landmark_type: str = "Ruins") -> Tuple[bool, Dict, List[str]]:
+    """Create map, landscape, spline road, foliage instances, landmark POI, navmesh, and UMG HUD."""
+    link = LiveEditorLink(uproject, engine_root)
+    link.prepare_project()
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=evidence_dir / "assemble_editor.log")
+    map_path = f"/Game/Maps/{name}Map"
+    calls = [
+        ("new_level", {"level_path": map_path}),
+        # Materials
+        ("create_material", {"asset_path": f"/Game/{name}/M_TerrainGround", "base_color": [0.18, 0.28, 0.15], "roughness": 0.85}),
+        ("create_material", {"asset_path": f"/Game/{name}/M_RoadMat", "base_color": [0.25, 0.22, 0.18], "roughness": 0.9}),
+        # Lighting
+        ("spawn_actor", {"actor_class": "DirectionalLight", "label": "Sun", "mobility": "Movable",
+                         "light_intensity": 10.0, "rotation": {"pitch": -50, "yaw": 45, "roll": 0}}),
+        ("spawn_actor", {"actor_class": "SkyLight", "label": "SkyFill", "mobility": "Movable",
+                         "light_intensity": 1.5}),
+        # Real Landscape Creation
+        ("landscape_create", {
+            "component_count_x": 2, "component_count_y": 2, "quads_per_section": 63, "sections_per_component": 1,
+            "elevation_scale": elevation_scale, "seed": seed, "terrain_type": terrain_type,
+            "material_path": f"/Game/{name}/M_TerrainGround"
+        }),
+        # Spline Road Generation
+        ("spline_create_road", {
+            "road_name": "Road_HighlandPass", "road_width": road_width, "road_material": f"/Game/{name}/M_RoadMat",
+            "points": [
+                {"x": -2500.0, "y": -2000.0, "z": 200.0},
+                {"x": -1000.0, "y": -600.0, "z": 260.0},
+                {"x": 0.0, "y": 0.0, "z": 320.0},
+                {"x": 1200.0, "y": 900.0, "z": 390.0},
+                {"x": 2500.0, "y": 2000.0, "z": 450.0},
+            ]
+        }),
+        # Foliage Scatter
+        ("foliage_scatter", {
+            "cluster_name": "Foliage_PineValley", "instance_count": foliage_density, "seed": seed + 100,
+            "area_radius": 3000.0, "min_elevation": -500.0, "max_elevation": 2000.0,
+            "max_slope_degrees": 35.0, "road_clearance": 400.0
+        }),
+        # Landmark Spawn
+        ("landmark_spawn", {
+            "landmark_name": "Landmark_AncientRuins", "landmark_type": landmark_type,
+            "location": {"x": 2500.0, "y": 2000.0, "z": 450.0}
+        }),
+        # NavMeshBoundsVolume covering the landscape
+        ("spawn_actor", {"actor_class": "NavMeshBoundsVolume", "label": "NavMeshBounds",
+                         "location": {"x": 0, "y": 0, "z": 300}, "scale": {"x": 60.0, "y": 60.0, "z": 20.0}}),
+        # PlayerStart at road entrance
+        ("spawn_actor", {"actor_class": "PlayerStart", "label": "PlayerStart",
+                         "location": {"x": -2500.0, "y": -2000.0, "z": 350.0}}),
+        # Functional UMG HUD Blueprint
+        ("widget_create_blueprint", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD",
+                                     "parent_class": "UserWidget", "root_widget_class": "CanvasPanel"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD",
+                           "widget_class": "TextBlock", "widget_name": "TitleText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD",
+                           "widget_class": "TextBlock", "widget_name": "BiomeText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD",
+                           "widget_class": "TextBlock", "widget_name": "TraversalText", "parent_name": "CanvasPanel_0"}),
+        ("widget_create", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD",
+                           "widget_class": "TextBlock", "widget_name": "StatusText", "parent_name": "CanvasPanel_0"}),
+        ("widget_compile", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD"}),
+        ("widget_save", {"asset_path": f"/Game/{name}/WBP_ProceduralHUD"}),
+        ("save_all", {}),
+        ("procedural_world_inspect", {}),
+        ("actors_in_level", {"limit": 100}),
+    ]
+    out: List[Dict] = []
+    errors: List[str] = []
+    try:
+        link.connect(discovery_timeout_s=900)
+        for op, args in calls:
+            r = link.call(op, args, timeout_s=300)
+            out.append({"op": op, "ok": r.get("ok"), "errors": r.get("errors", [])})
+            if not r.get("ok"):
+                if op == "create_material" and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
+                if op in ("widget_create_blueprint", "widget_create") and any("already exists" in e for e in r.get("errors", [])):
+                    out[-1]["ok"] = True
+                    continue
+                errors.append(f"{op}: {r.get('errors')}")
+                break
+            if op == "actors_in_level":
+                labels = {a["label"] for a in r["data"]["actors"]}
+                required = {"Sun", "SkyFill", "NavMeshBounds", "PlayerStart"}
+                missing = required - labels
+                if missing:
+                    errors.append(f"read-back missing actors: {sorted(missing)}")
+    except Exception as exc:
+        errors.append(f"{type(exc).__name__}: {exc}")
+    finally:
+        code = link.stop()
+    return not errors, {"map": map_path, "calls": out, "editor_exit": code,
+                        "graceful": link.last_stop_graceful}, errors
+
+
+
 def package(toolchain: UnrealToolchain, uproject: Path) -> Tuple[bool, Dict, List[str]]:
     r = toolchain.package(uproject, uproject.parent / "Packaged")
     d = r.to_dict()

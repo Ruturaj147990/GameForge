@@ -32,6 +32,11 @@ class _Worker(QObject):
         if rec is None:
             self.finished.emit({"status": "BLOCKED", "error": "approval is no longer pending (already used or rejected)"})
             return
+        if rec.get("plan_id"):
+            # The plan executor owns this tool call; approving only releases the task.
+            self.finished.emit({"status": "SUCCESS", "approval_id": self._approval_id, "plan_id": rec["plan_id"],
+                                "message": "Approved — resume the plan in Mission Control → Execution Plan."})
+            return
         try:
             if rec["tool"] == "create_game":
                 result = gateway.game_tools.create_game(

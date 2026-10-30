@@ -1,0 +1,175 @@
+{
+  "timestamp": "2026-10-30T20:18:28+0530",
+  "skeleton": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+  "clips": [
+    {
+      "clip": "Anim_Idle",
+      "import": {
+        "ok": true,
+        "op": "anim_import_motion_clip",
+        "data": {
+          "anim_sequence_path": "/Game/Audit/GeneratedMotion/Anim_Idle.Anim_Idle",
+          "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+          "bone_tracks": 20,
+          "keys": 60,
+          "sample_rate_hz": 30,
+          "play_length_s": 1.9666666984558105
+        },
+        "warnings": [],
+        "errors": [],
+        "affected_paths": [
+          "/Game/Audit/GeneratedMotion"
+        ],
+        "reversibility": "snapshot-only",
+        "elapsed_s": 0.123
+      },
+      "bone_tracks": 20,
+      "play_length_s": 1.9666666984558105,
+      "expected_length_s": 2.0,
+      "samples_checked": 12,
+      "rotation_mismatches": [],
+      "ok": true
+    },
+    {
+      "clip": "Anim_Walk",
+      "import": {
+        "ok": true,
+        "op": "anim_import_motion_clip",
+        "data": {
+          "anim_sequence_path": "/Game/Audit/GeneratedMotion/Anim_Walk.Anim_Walk",
+          "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+          "bone_tracks": 20,
+          "keys": 36,
+          "sample_rate_hz": 30,
+          "play_length_s": 1.1666666269302368
+        },
+        "warnings": [],
+        "errors": [],
+        "affected_paths": [
+          "/Game/Audit/GeneratedMotion"
+        ],
+        "reversibility": "snapshot-only",
+        "elapsed_s": 0.059
+      },
+      "bone_tracks": 20,
+      "play_length_s": 1.1666666269302368,
+      "expected_length_s": 1.2,
+      "samples_checked": 12,
+      "rotation_mismatches": [],
+      "ok": true
+    },
+    {
+      "clip": "Anim_Run",
+      "import": {
+        "ok": true,
+        "op": "anim_import_motion_clip",
+        "data": {
+          "anim_sequence_path": "/Game/Audit/GeneratedMotion/Anim_Run.Anim_Run",
+          "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+          "bone_tracks": 20,
+          "keys": 24,
+          "sample_rate_hz": 30,
+          "play_length_s": 0.7666666507720947
+        },
+        "warnings": [],
+        "errors": [],
+        "affected_paths": [
+          "/Game/Audit/GeneratedMotion"
+        ],
+        "reversibility": "snapshot-only",
+        "elapsed_s": 0.128
+      },
+      "bone_tracks": 20,
+      "play_length_s": 0.7666666507720947,
+      "expected_length_s": 0.8,
+      "samples_checked": 12,
+      "rotation_mismatches": [],
+      "ok": true
+    },
+    {
+      "clip": "Anim_Jump",
+      "import": {
+        "ok": true,
+        "op": "anim_import_motion_clip",
+        "data": {
+          "anim_sequence_path": "/Game/Audit/GeneratedMotion/Anim_Jump.Anim_Jump",
+          "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+          "bone_tracks": 20,
+          "keys": 18,
+          "sample_rate_hz": 30,
+          "play_length_s": 0.5666666626930237
+        },
+        "warnings": [],
+        "errors": [],
+        "affected_paths": [
+          "/Game/Audit/GeneratedMotion"
+        ],
+        "reversibility": "snapshot-only",
+        "elapsed_s": 0.085
+      },
+      "bone_tracks": 20,
+      "play_length_s": 0.5666666626930237,
+      "expected_length_s": 0.6,
+      "samples_checked": 12,
+      "rotation_mismatches": [],
+      "ok": true
+    },
+    {
+      "clip": "Anim_Fall",
+      "import": {
+        "ok": true,
+        "op": "anim_import_motion_clip",
+        "data": {
+          "anim_sequence_path": "/Game/Audit/GeneratedMotion/Anim_Fall.Anim_Fall",
+          "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+          "bone_tracks": 20,
+          "keys": 24,
+          "sample_rate_hz": 30,
+          "play_length_s": 0.7666666507720947
+        },
+        "warnings": [],
+        "errors": [],
+        "affected_paths": [
+          "/Game/Audit/GeneratedMotion"
+        ],
+        "reversibility": "snapshot-only",
+        "elapsed_s": 0.052
+      },
+      "bone_tracks": 20,
+      "play_length_s": 0.7666666507720947,
+      "expected_length_s": 0.8,
+      "samples_checked": 12,
+      "rotation_mismatches": [],
+      "ok": true
+    },
+    {
+      "clip": "Anim_Land",
+      "import": {
+        "ok": true,
+        "op": "anim_import_motion_clip",
+        "data": {
+          "anim_sequence_path": "/Game/Audit/GeneratedMotion/Anim_Land.Anim_Land",
+          "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+          "bone_tracks": 20,
+          "keys": 12,
+          "sample_rate_hz": 30,
+          "play_length_s": 0.36666667461395264
+        },
+        "warnings": [],
+        "errors": [],
+        "affected_paths": [
+          "/Game/Audit/GeneratedMotion"
+        ],
+        "reversibility": "snapshot-only",
+        "elapsed_s": 0.071
+      },
+      "bone_tracks": 20,
+      "play_length_s": 0.36666667461395264,
+      "expected_length_s": 0.4,
+      "samples_checked": 12,
+      "rotation_mismatches": [],
+      "ok": true
+    }
+  ],
+  "ok": true
+}

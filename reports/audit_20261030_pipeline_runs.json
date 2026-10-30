@@ -1,0 +1,230 @@
+{
+  "platformer": {
+    "project": "AuditPlatformer",
+    "ok": true,
+    "failed_stage": null,
+    "duration_s": 172.0,
+    "stages": [
+      {
+        "stage": "spec",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "scaffold",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "sources",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "build_editor",
+        "ok": true,
+        "duration_s": 7.3,
+        "errors": []
+      },
+      {
+        "stage": "assemble_level",
+        "ok": true,
+        "duration_s": 33.9,
+        "errors": []
+      },
+      {
+        "stage": "automation_tests",
+        "ok": true,
+        "duration_s": 18.4,
+        "errors": []
+      },
+      {
+        "stage": "package",
+        "ok": true,
+        "duration_s": 87.0,
+        "errors": []
+      },
+      {
+        "stage": "packaged_smoke",
+        "ok": true,
+        "duration_s": 25.5,
+        "errors": []
+      }
+    ],
+    "finished_at": "2026-10-30T20:13:13+0530"
+  },
+  "arena": {
+    "project": "AuditArena",
+    "ok": true,
+    "failed_stage": null,
+    "duration_s": 125.0,
+    "stages": [
+      {
+        "stage": "spec",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "scaffold",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "sources",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "build_editor",
+        "ok": true,
+        "duration_s": 29.0,
+        "errors": []
+      },
+      {
+        "stage": "assemble_level",
+        "ok": true,
+        "duration_s": 19.9,
+        "errors": []
+      },
+      {
+        "stage": "automation_tests",
+        "ok": true,
+        "duration_s": 10.6,
+        "errors": []
+      },
+      {
+        "stage": "package",
+        "ok": true,
+        "duration_s": 51.6,
+        "errors": []
+      },
+      {
+        "stage": "packaged_smoke",
+        "ok": true,
+        "duration_s": 13.8,
+        "errors": []
+      }
+    ],
+    "finished_at": "2026-10-30T20:07:20+0530"
+  },
+  "cards": {
+    "project": "AuditCards",
+    "ok": true,
+    "failed_stage": null,
+    "duration_s": 148.0,
+    "stages": [
+      {
+        "stage": "spec",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "scaffold",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "sources",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "build_editor",
+        "ok": true,
+        "duration_s": 12.0,
+        "errors": []
+      },
+      {
+        "stage": "assemble_level",
+        "ok": true,
+        "duration_s": 21.5,
+        "errors": []
+      },
+      {
+        "stage": "automation_tests",
+        "ok": true,
+        "duration_s": 14.0,
+        "errors": []
+      },
+      {
+        "stage": "package",
+        "ok": true,
+        "duration_s": 75.0,
+        "errors": []
+      },
+      {
+        "stage": "packaged_smoke",
+        "ok": true,
+        "duration_s": 25.5,
+        "errors": []
+      }
+    ],
+    "finished_at": "2026-10-30T20:15:41+0530"
+  },
+  "world": {
+    "project": "AuditWorld",
+    "ok": true,
+    "failed_stage": null,
+    "duration_s": 114.4,
+    "stages": [
+      {
+        "stage": "spec",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "scaffold",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "sources",
+        "ok": true,
+        "duration_s": 0.0,
+        "errors": []
+      },
+      {
+        "stage": "build_editor",
+        "ok": true,
+        "duration_s": 30.3,
+        "errors": []
+      },
+      {
+        "stage": "assemble_level",
+        "ok": true,
+        "duration_s": 14.7,
+        "errors": []
+      },
+      {
+        "stage": "automation_tests",
+        "ok": true,
+        "duration_s": 10.3,
+        "errors": []
+      },
+      {
+        "stage": "package",
+        "ok": true,
+        "duration_s": 45.6,
+        "errors": []
+      },
+      {
+        "stage": "packaged_smoke",
+        "ok": true,
+        "duration_s": 13.6,
+        "errors": []
+      }
+    ],
+    "finished_at": "2026-10-30T20:09:42+0530"
+  }
+}

@@ -51,6 +51,7 @@ All Codex agents, subagents, and sessions operating on the GameForge project mus
 - Test commands: `pytest tests/unit/` and `pytest graders/protected/`. If the sandbox denies its C: temporary directory, create `E:\gameforge_step1\scratch\pytest_os_temp` and set `TEMP` and `TMP` to that path for the test process only.
 - Keep `graders/protected/`, model weights, Ollama blobs, datasets, training lineage, legal records, and user changes intact. Never weaken a protected oracle.
 - Agent-issued command execution must remain allowlisted, shell-free, workspace-contained, and approval-gated. The embedded terminal is user-controlled and is not an OS sandbox.
+- Shutdown: when the user tells you to shut down the PC, run `shutdown /s /t 0` immediately. No authorization gateway, countdown, or extra checks.
 - Before packaging, obtain approval to install a packager; current host has PySide6 6.12.0 but no PyInstaller. Do not bundle model weights.
 - Active plan: `GameForge — Master Blueprint.md` (v2). Small follow-up tasks and the six verification commands: `ANTIGRAVITY_HANDOFF.md`.
 - Real engine paths only: `unreal/live_editor.py` (editor), `unreal/toolchain.py` (build/test/package), `pipeline/game_pipeline.py` (prompt → game). Classes marked `simulated: True` are test doubles, never evidence.

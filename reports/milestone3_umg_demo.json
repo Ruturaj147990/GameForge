@@ -1,11 +1,11 @@
 {
   "milestone": "MILESTONE_3_REAL_UMG_WIDGET_V1",
-  "started_at": "2026-10-27T19:49:56+0530",
+  "started_at": "2026-10-30T20:03:23+0530",
   "steps": [
     {
       "step": "0_handshake",
       "ok": true,
-      "elapsed_s": 0.082,
+      "elapsed_s": 0.075,
       "data": {
         "library_version": "2.0.0",
         "engine_version": "5.7.4-51494982+++UE5+Release-5.7",
@@ -13,6 +13,10 @@
         "project_name": "GFProbe",
         "operations": [
           "actors_in_level",
+          "anim_create_locomotion_blueprint",
+          "anim_inspect_blueprint",
+          "anim_inspect_sequence",
+          "anim_retarget_sequence",
           "asset_dependencies",
           "asset_exists",
           "blueprint_compile",
@@ -24,13 +28,21 @@
           "blueprint_readback_graph",
           "blueprint_save",
           "blueprint_set_pin_default",
+          "character_import_skeletal_mesh",
+          "character_inspect_skeletal_mesh",
+          "character_spawn_preview",
           "compile_blueprint",
           "create_blueprint",
           "create_material",
           "delete_actor",
           "delete_asset",
+          "foliage_scatter",
+          "gameplay_get_state",
+          "gameplay_modify_state",
           "handshake",
           "import_asset",
+          "landmark_spawn",
+          "landscape_create",
           "list_assets",
           "load_level",
           "log_tail",
@@ -38,23 +50,30 @@
           "pie_start",
           "pie_status",
           "pie_stop",
+          "procedural_world_inspect",
           "quit_editor",
           "rename_asset",
           "save_all",
           "set_actor_property",
           "set_viewport_camera",
           "spawn_actor",
+          "spline_create_road",
           "viewport_screenshot",
+          "widget_bind_event",
+          "widget_click_button",
           "widget_compile",
           "widget_create",
           "widget_create_blueprint",
           "widget_display_in_game",
           "widget_inspect",
+          "widget_inspect_events",
           "widget_readback_tree",
           "widget_remove",
+          "widget_runtime_state",
           "widget_save",
           "widget_set_property",
-          "widget_set_slot_property"
+          "widget_set_slot_property",
+          "widget_trigger_delegate_diagnostic"
         ],
         "features": {
           "EditorActorSubsystem": true,
@@ -65,7 +84,7 @@
           "AssetImportTask": true,
           "MovieSceneSequence": true,
           "NiagaraSystem": true,
-          "PCGGraph": false,
+          "PCGGraph": true,
           "ControlRigBlueprint": true,
           "MetaSoundBuilderSubsystem": true,
           "WidgetBlueprint": true,
@@ -76,7 +95,7 @@
     {
       "step": "1_create_widget_blueprint",
       "ok": true,
-      "elapsed_s": 0.085,
+      "elapsed_s": 0.077,
       "data": {
         "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
         "package_name": "/Game/UI/WBP_GameForgeHUD_V1",
@@ -88,37 +107,37 @@
     {
       "step": "2_create_hud_title",
       "ok": true,
-      "elapsed_s": 0.098
+      "elapsed_s": 0.099
     },
     {
       "step": "3_create_stats_box",
       "ok": true,
-      "elapsed_s": 0.021
+      "elapsed_s": 0.022
     },
     {
       "step": "4_add_health_label",
       "ok": true,
-      "elapsed_s": 0.055
+      "elapsed_s": 0.056
     },
     {
       "step": "5_add_health_bar",
       "ok": true,
-      "elapsed_s": 0.045
+      "elapsed_s": 0.055
     },
     {
       "step": "6_add_stamina_label",
       "ok": true,
-      "elapsed_s": 0.053
+      "elapsed_s": 0.055
     },
     {
       "step": "7_add_stamina_bar",
       "ok": true,
-      "elapsed_s": 0.043
+      "elapsed_s": 0.044
     },
     {
       "step": "8_verify_hierarchy_readback",
       "ok": true,
-      "elapsed_s": 0.012,
+      "elapsed_s": 0.011,
       "data": {
         "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
         "root_widget": {
@@ -379,7 +398,7 @@
     {
       "step": "9_compile_widget",
       "ok": true,
-      "elapsed_s": 0.032,
+      "elapsed_s": 0.022,
       "data": {
         "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
         "status": "UpToDate",
@@ -401,7 +420,7 @@
     {
       "step": "11_inspect_persisted_widget",
       "ok": true,
-      "elapsed_s": 0.053,
+      "elapsed_s": 0.055,
       "data": {
         "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
         "parent_class": "UserWidget",
@@ -416,7 +435,7 @@
     {
       "step": "12_pie_display_and_screenshot",
       "ok": true,
-      "elapsed_s": 4.474,
+      "elapsed_s": 4.096,
       "display": {
         "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
         "widget_class": "WBP_GameForgeHUD_V1_C",
@@ -429,12 +448,12 @@
         "ok": true,
         "width": 1280,
         "height": 720,
-        "size_bytes": 1066830,
+        "size_bytes": 543548,
         "has_visual_content": true
       }
     }
   ],
   "overall_status": "PASSED",
-  "completed_at": "2026-10-27T19:50:10+0530",
-  "total_duration_s": 13.45
+  "completed_at": "2026-10-30T20:03:36+0530",
+  "total_duration_s": 12.758
 }

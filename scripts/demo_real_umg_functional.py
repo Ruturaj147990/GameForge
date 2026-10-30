@@ -223,8 +223,8 @@ def main() -> int:
             "asset_path": menu_path,
             "widget_name": "PrimaryButton",
             "delegate_name": "OnClicked",
-            "action_type": "PrintString",
-            "action_params": {"message": "MENU_ACTION_HEAL_BOOST"},
+            "action_type": "GameplayAction",
+            "action_params": {"action": "HealBoost"},
         })
         assert bind1.get("ok"), f"Failed to bind PrimaryButton: {bind1}"
 
@@ -232,8 +232,8 @@ def main() -> int:
             "asset_path": menu_path,
             "widget_name": "SecondaryButton",
             "delegate_name": "OnClicked",
-            "action_type": "PrintString",
-            "action_params": {"message": "MENU_ACTION_TOGGLE_HUD"},
+            "action_type": "GameplayAction",
+            "action_params": {"action": "ToggleHUD"},
         })
         assert bind2.get("ok"), f"Failed to bind SecondaryButton: {bind2}"
 
@@ -241,12 +241,22 @@ def main() -> int:
             "asset_path": menu_path,
             "widget_name": "BackButton",
             "delegate_name": "OnClicked",
-            "action_type": "PrintString",
-            "action_params": {"message": "MENU_ACTION_CLOSE_MENU"},
+            "action_type": "GameplayAction",
+            "action_params": {"action": "CloseMenu"},
         })
         assert bind3.get("ok"), f"Failed to bind BackButton: {bind3}"
 
-        print("  Authored 3 UK2Node_ComponentBoundEvent nodes and PrintString connections")
+        # Re-binding must replace the action chain, not stack a second exec link (double fire).
+        rebind = link.call("widget_bind_event", {
+            "asset_path": menu_path,
+            "widget_name": "PrimaryButton",
+            "delegate_name": "OnClicked",
+            "action_type": "GameplayAction",
+            "action_params": {"action": "HealBoost"},
+        })
+        assert rebind.get("ok") and rebind["data"].get("replaced_nodes") == 1, f"Rebind did not replace: {rebind}"
+
+        print("  Authored 3 UK2Node_ComponentBoundEvent nodes wired to ExecuteMenuActionInWorld (rebind replaced 1 node)")
         report["steps"].append({
             "step": "7_bind_widget_events",
             "ok": True,
@@ -340,7 +350,7 @@ def main() -> int:
         shot1_path.parent.mkdir(parents=True, exist_ok=True)
         if shot1_path.is_file():
             shot1_path.unlink()
-        link.call("viewport_screenshot", {"output_path": str(shot1_path), "resolution": [1280, 720]})
+        link.call("viewport_screenshot", {"output_path": str(shot1_path), "resolution": [1280, 720], "show_ui": True})
         time.sleep(2.0)
         shot1_v = verify_image_content(shot1_path)
         print(f"  Screenshot 1 captured: {shot1_path.name} ({shot1_v.get('size_bytes')} bytes, non_black={shot1_v.get('has_visual_content')})")
@@ -368,7 +378,7 @@ def main() -> int:
         shot2_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_2_GameplayDamage.png")
         if shot2_path.is_file():
             shot2_path.unlink()
-        link.call("viewport_screenshot", {"output_path": str(shot2_path), "resolution": [1280, 720]})
+        link.call("viewport_screenshot", {"output_path": str(shot2_path), "resolution": [1280, 720], "show_ui": True})
         time.sleep(2.0)
         shot2_v = verify_image_content(shot2_path)
         print(f"  Screenshot 2 captured: {shot2_path.name} ({shot2_v.get('size_bytes')} bytes)")
@@ -390,8 +400,9 @@ def main() -> int:
         t_step = time.time()
         print("[20/25] Clicking PrimaryButton ('HEAL / BOOST (+25 HP)')...")
         click1 = link.call("widget_click_button", {"asset_path": menu_path, "button_name": "PrimaryButton"})
-        assert click1.get("ok") and click1["data"].get("clicked"), f"PrimaryButton click failed: {click1}"
-        print(f"  Clicked PrimaryButton: action={click1['data'].get('executed_action')}")
+        assert click1.get("ok") and click1["data"].get("on_clicked_count") == 1, f"PrimaryButton click failed: {click1}"
+        print(f"  Clicked PrimaryButton: OnClicked fired {click1['data'].get('on_clicked_count')}x, last_action={click1['data'].get('last_executed_action')}")
+        assert click1["data"].get("last_executed_action") == "HealBoost", "State change must come from the bound event graph"
 
         gp_post_heal = link.call("gameplay_get_state", {})
         h_after_heal = gp_post_heal["data"].get("health")
@@ -407,7 +418,7 @@ def main() -> int:
         shot3_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_3_PrimaryActionHeal.png")
         if shot3_path.is_file():
             shot3_path.unlink()
-        link.call("viewport_screenshot", {"output_path": str(shot3_path), "resolution": [1280, 720]})
+        link.call("viewport_screenshot", {"output_path": str(shot3_path), "resolution": [1280, 720], "show_ui": True})
         time.sleep(2.0)
         shot3_v = verify_image_content(shot3_path)
         print(f"  Screenshot 3 captured: {shot3_path.name} ({shot3_v.get('size_bytes')} bytes)")
@@ -418,7 +429,7 @@ def main() -> int:
         print("[21/25] Clicking SecondaryButton ('TOGGLE COMPACT MODE')...")
         click2 = link.call("widget_click_button", {"asset_path": menu_path, "button_name": "SecondaryButton"})
         assert click2.get("ok") and click2["data"].get("clicked"), f"SecondaryButton click failed: {click2}"
-        assert click2["data"].get("slate_input_routed"), "Expected real Slate input routing"
+        assert click2["data"].get("on_clicked_count") == 1, "Expected exactly one real OnClicked"
         gp_post_toggle = link.call("gameplay_get_state", {})
         mode_after = gp_post_toggle["data"].get("active_menu_state")
         print(f"  Observed menu state toggle: active_menu_state='{mode_after}'")
@@ -428,7 +439,7 @@ def main() -> int:
         shot4_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_4_MenuCompact.png")
         if shot4_path.is_file():
             shot4_path.unlink()
-        link.call("viewport_screenshot", {"output_path": str(shot4_path), "resolution": [1280, 720]})
+        link.call("viewport_screenshot", {"output_path": str(shot4_path), "resolution": [1280, 720], "show_ui": True})
         time.sleep(2.0)
         shot4_v = verify_image_content(shot4_path)
         print(f"  Screenshot 4 captured: {shot4_path.name} ({shot4_v.get('size_bytes')} bytes)")
@@ -439,7 +450,7 @@ def main() -> int:
         print("[22/25] Clicking BackButton ('CLOSE MENU')...")
         click3 = link.call("widget_click_button", {"asset_path": menu_path, "button_name": "BackButton"})
         assert click3.get("ok") and click3["data"].get("clicked"), f"BackButton click failed: {click3}"
-        assert click3["data"].get("slate_input_routed"), "Expected real Slate input routing"
+        assert click3["data"].get("on_clicked_count") == 1, "Expected exactly one real OnClicked"
         gp_post_close = link.call("gameplay_get_state", {})
         close_mode = gp_post_close["data"].get("active_menu_state")
         print(f"  Observed menu close: active_menu_state='{close_mode}'")
@@ -458,7 +469,7 @@ def main() -> int:
         shot5_path = Path("E:/GameForge/validation/live_ops_probe/Saved/Screenshots/M4_5_MenuClosed.png")
         if shot5_path.is_file():
             shot5_path.unlink()
-        link.call("viewport_screenshot", {"output_path": str(shot5_path), "resolution": [1280, 720]})
+        link.call("viewport_screenshot", {"output_path": str(shot5_path), "resolution": [1280, 720], "show_ui": True})
         time.sleep(2.0)
         shot5_v = verify_image_content(shot5_path)
         print(f"  Screenshot 5 captured: {shot5_path.name} ({shot5_v.get('size_bytes')} bytes)")

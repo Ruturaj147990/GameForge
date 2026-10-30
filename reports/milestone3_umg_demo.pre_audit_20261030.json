@@ -1,0 +1,440 @@
+{
+  "milestone": "MILESTONE_3_REAL_UMG_WIDGET_V1",
+  "started_at": "2026-10-27T19:49:56+0530",
+  "steps": [
+    {
+      "step": "0_handshake",
+      "ok": true,
+      "elapsed_s": 0.082,
+      "data": {
+        "library_version": "2.0.0",
+        "engine_version": "5.7.4-51494982+++UE5+Release-5.7",
+        "project_file": "E:/GameForge/validation/live_ops_probe/GFProbe.uproject",
+        "project_name": "GFProbe",
+        "operations": [
+          "actors_in_level",
+          "asset_dependencies",
+          "asset_exists",
+          "blueprint_compile",
+          "blueprint_connect_pins",
+          "blueprint_create_node",
+          "blueprint_delete_node",
+          "blueprint_disconnect_pins",
+          "blueprint_inspect",
+          "blueprint_readback_graph",
+          "blueprint_save",
+          "blueprint_set_pin_default",
+          "compile_blueprint",
+          "create_blueprint",
+          "create_material",
+          "delete_actor",
+          "delete_asset",
+          "handshake",
+          "import_asset",
+          "list_assets",
+          "load_level",
+          "log_tail",
+          "new_level",
+          "pie_start",
+          "pie_status",
+          "pie_stop",
+          "quit_editor",
+          "rename_asset",
+          "save_all",
+          "set_actor_property",
+          "set_viewport_camera",
+          "spawn_actor",
+          "viewport_screenshot",
+          "widget_compile",
+          "widget_create",
+          "widget_create_blueprint",
+          "widget_display_in_game",
+          "widget_inspect",
+          "widget_readback_tree",
+          "widget_remove",
+          "widget_save",
+          "widget_set_property",
+          "widget_set_slot_property"
+        ],
+        "features": {
+          "EditorActorSubsystem": true,
+          "LevelEditorSubsystem": true,
+          "MaterialEditingLibrary": true,
+          "BlueprintEditorLibrary": true,
+          "InterchangeManager": true,
+          "AssetImportTask": true,
+          "MovieSceneSequence": true,
+          "NiagaraSystem": true,
+          "PCGGraph": false,
+          "ControlRigBlueprint": true,
+          "MetaSoundBuilderSubsystem": true,
+          "WidgetBlueprint": true,
+          "GeometryScript": false
+        }
+      }
+    },
+    {
+      "step": "1_create_widget_blueprint",
+      "ok": true,
+      "elapsed_s": 0.085,
+      "data": {
+        "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
+        "package_name": "/Game/UI/WBP_GameForgeHUD_V1",
+        "asset_name": "WBP_GameForgeHUD_V1",
+        "parent_class": "UserWidget",
+        "has_root_widget": true
+      }
+    },
+    {
+      "step": "2_create_hud_title",
+      "ok": true,
+      "elapsed_s": 0.098
+    },
+    {
+      "step": "3_create_stats_box",
+      "ok": true,
+      "elapsed_s": 0.021
+    },
+    {
+      "step": "4_add_health_label",
+      "ok": true,
+      "elapsed_s": 0.055
+    },
+    {
+      "step": "5_add_health_bar",
+      "ok": true,
+      "elapsed_s": 0.045
+    },
+    {
+      "step": "6_add_stamina_label",
+      "ok": true,
+      "elapsed_s": 0.053
+    },
+    {
+      "step": "7_add_stamina_bar",
+      "ok": true,
+      "elapsed_s": 0.043
+    },
+    {
+      "step": "8_verify_hierarchy_readback",
+      "ok": true,
+      "elapsed_s": 0.012,
+      "data": {
+        "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
+        "root_widget": {
+          "name": "CanvasPanel_0",
+          "class": "CanvasPanel",
+          "is_variable": true,
+          "visibility": "SelfHitTestInvisible",
+          "properties": {},
+          "children": [
+            {
+              "name": "HUDTitle",
+              "class": "TextBlock",
+              "is_variable": true,
+              "visibility": "Visible",
+              "properties": {
+                "text": "GAMEFORGE HUD V1",
+                "font_size": 22,
+                "color": {
+                  "r": 0.949999988079071,
+                  "g": 0.949999988079071,
+                  "b": 1,
+                  "a": 1
+                },
+                "justification": 0
+              },
+              "slot": {
+                "slot_class": "CanvasPanelSlot",
+                "position": {
+                  "x": 0,
+                  "y": 25
+                },
+                "size": {
+                  "x": 320,
+                  "y": 40
+                },
+                "anchors": {
+                  "min_x": 0.5,
+                  "min_y": 0,
+                  "max_x": 0.5,
+                  "max_y": 0
+                },
+                "alignment": {
+                  "x": 0.5,
+                  "y": 0
+                },
+                "auto_size": true,
+                "z_order": 1
+              },
+              "children": []
+            },
+            {
+              "name": "StatsBox",
+              "class": "VerticalBox",
+              "is_variable": true,
+              "visibility": "SelfHitTestInvisible",
+              "properties": {},
+              "slot": {
+                "slot_class": "CanvasPanelSlot",
+                "position": {
+                  "x": 40,
+                  "y": 40
+                },
+                "size": {
+                  "x": 280,
+                  "y": 140
+                },
+                "anchors": {
+                  "min_x": 0,
+                  "min_y": 0,
+                  "max_x": 0,
+                  "max_y": 0
+                },
+                "alignment": {
+                  "x": 0,
+                  "y": 0
+                },
+                "auto_size": false,
+                "z_order": 2
+              },
+              "children": [
+                {
+                  "name": "HealthLabel",
+                  "class": "TextBlock",
+                  "is_variable": true,
+                  "visibility": "Visible",
+                  "properties": {
+                    "text": "HEALTH: 100 / 100",
+                    "font_size": 13,
+                    "color": {
+                      "r": 1,
+                      "g": 0.3499999940395355,
+                      "b": 0.3499999940395355,
+                      "a": 1
+                    },
+                    "justification": 0
+                  },
+                  "slot": {
+                    "slot_class": "VerticalBoxSlot",
+                    "padding": {
+                      "left": 0,
+                      "top": 2,
+                      "right": 0,
+                      "bottom": 2
+                    },
+                    "size_rule": "Auto",
+                    "size_value": 1,
+                    "horizontal_alignment": 0,
+                    "vertical_alignment": 0
+                  },
+                  "children": []
+                },
+                {
+                  "name": "HealthBar",
+                  "class": "ProgressBar",
+                  "is_variable": true,
+                  "visibility": "Visible",
+                  "properties": {
+                    "percent": 1,
+                    "fill_color": {
+                      "r": 0.8999999761581421,
+                      "g": 0.15000000596046448,
+                      "b": 0.15000000596046448,
+                      "a": 1
+                    }
+                  },
+                  "slot": {
+                    "slot_class": "VerticalBoxSlot",
+                    "padding": {
+                      "left": 0,
+                      "top": 2,
+                      "right": 0,
+                      "bottom": 8
+                    },
+                    "size_rule": "Auto",
+                    "size_value": 1,
+                    "horizontal_alignment": 0,
+                    "vertical_alignment": 0
+                  },
+                  "children": []
+                },
+                {
+                  "name": "StaminaLabel",
+                  "class": "TextBlock",
+                  "is_variable": true,
+                  "visibility": "Visible",
+                  "properties": {
+                    "text": "STAMINA: 85 / 100",
+                    "font_size": 13,
+                    "color": {
+                      "r": 0.3499999940395355,
+                      "g": 0.949999988079071,
+                      "b": 0.44999998807907104,
+                      "a": 1
+                    },
+                    "justification": 0
+                  },
+                  "slot": {
+                    "slot_class": "VerticalBoxSlot",
+                    "padding": {
+                      "left": 0,
+                      "top": 2,
+                      "right": 0,
+                      "bottom": 2
+                    },
+                    "size_rule": "Auto",
+                    "size_value": 1,
+                    "horizontal_alignment": 0,
+                    "vertical_alignment": 0
+                  },
+                  "children": []
+                },
+                {
+                  "name": "StaminaBar",
+                  "class": "ProgressBar",
+                  "is_variable": true,
+                  "visibility": "Visible",
+                  "properties": {
+                    "percent": 0.8500000238418579,
+                    "fill_color": {
+                      "r": 0.20000000298023224,
+                      "g": 0.8500000238418579,
+                      "b": 0.30000001192092896,
+                      "a": 1
+                    }
+                  },
+                  "slot": {
+                    "slot_class": "VerticalBoxSlot",
+                    "padding": {
+                      "left": 0,
+                      "top": 2,
+                      "right": 0,
+                      "bottom": 4
+                    },
+                    "size_rule": "Auto",
+                    "size_value": 1,
+                    "horizontal_alignment": 0,
+                    "vertical_alignment": 0
+                  },
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        "widgets": [
+          {
+            "name": "CanvasPanel_0",
+            "class": "CanvasPanel",
+            "parent_name": "",
+            "is_variable": true
+          },
+          {
+            "name": "HUDTitle",
+            "class": "TextBlock",
+            "parent_name": "CanvasPanel_0",
+            "is_variable": true,
+            "slot_class": "CanvasPanelSlot"
+          },
+          {
+            "name": "StatsBox",
+            "class": "VerticalBox",
+            "parent_name": "CanvasPanel_0",
+            "is_variable": true,
+            "slot_class": "CanvasPanelSlot"
+          },
+          {
+            "name": "HealthLabel",
+            "class": "TextBlock",
+            "parent_name": "StatsBox",
+            "is_variable": true,
+            "slot_class": "VerticalBoxSlot"
+          },
+          {
+            "name": "HealthBar",
+            "class": "ProgressBar",
+            "parent_name": "StatsBox",
+            "is_variable": true,
+            "slot_class": "VerticalBoxSlot"
+          },
+          {
+            "name": "StaminaLabel",
+            "class": "TextBlock",
+            "parent_name": "StatsBox",
+            "is_variable": true,
+            "slot_class": "VerticalBoxSlot"
+          },
+          {
+            "name": "StaminaBar",
+            "class": "ProgressBar",
+            "parent_name": "StatsBox",
+            "is_variable": true,
+            "slot_class": "VerticalBoxSlot"
+          }
+        ],
+        "widget_count": 7
+      }
+    },
+    {
+      "step": "9_compile_widget",
+      "ok": true,
+      "elapsed_s": 0.032,
+      "data": {
+        "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
+        "status": "UpToDate",
+        "compiled_successfully": true,
+        "generated_class": "/Game/UI/WBP_GameForgeHUD_V1.WBP_GameForgeHUD_V1_C"
+      }
+    },
+    {
+      "step": "10_save_widget",
+      "ok": true,
+      "elapsed_s": 0.032,
+      "data": {
+        "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
+        "package_name": "/Game/UI/WBP_GameForgeHUD_V1",
+        "saved": true,
+        "is_dirty": false
+      }
+    },
+    {
+      "step": "11_inspect_persisted_widget",
+      "ok": true,
+      "elapsed_s": 0.053,
+      "data": {
+        "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
+        "parent_class": "UserWidget",
+        "generated_class": "/Game/UI/WBP_GameForgeHUD_V1.WBP_GameForgeHUD_V1_C",
+        "status": "UpToDate",
+        "is_dirty": false,
+        "widget_count": 7,
+        "root_widget_name": "CanvasPanel_0",
+        "root_widget_class": "CanvasPanel"
+      }
+    },
+    {
+      "step": "12_pie_display_and_screenshot",
+      "ok": true,
+      "elapsed_s": 4.474,
+      "display": {
+        "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
+        "widget_class": "WBP_GameForgeHUD_V1_C",
+        "instance_name": "WBP_GameForgeHUD_V1_C_0",
+        "viewport_zorder": 0,
+        "is_in_viewport": true
+      },
+      "screenshot": "E:\\GameForge\\validation\\live_ops_probe\\Saved\\Screenshots\\WBP_GameForgeHUD_V1.png",
+      "image_verification": {
+        "ok": true,
+        "width": 1280,
+        "height": 720,
+        "size_bytes": 1066830,
+        "has_visual_content": true
+      }
+    }
+  ],
+  "overall_status": "PASSED",
+  "completed_at": "2026-10-27T19:50:10+0530",
+  "total_duration_s": 13.45
+}

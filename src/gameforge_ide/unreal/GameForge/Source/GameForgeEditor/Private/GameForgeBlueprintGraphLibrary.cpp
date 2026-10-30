@@ -12,6 +12,8 @@
 #include "K2Node_VariableSet.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Kismet2/CompilerResultsLog.h"
+#include "Logging/TokenizedMessage.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "Engine/SCS_Node.h"
@@ -656,20 +658,17 @@ FString UGameForgeBlueprintGraphLibrary::ConnectPins(const FString& BlueprintPat
 	ToNode->Modify();
 
 	const UEdGraphSchema_K2* Schema = GetDefault<UEdGraphSchema_K2>();
-	bool bConnected = Schema->TryCreateConnection(FromPin, ToPin);
-
-	if (!bConnected)
-	{
-		// Attempt reverse if direction was backwards
-		bConnected = Schema->TryCreateConnection(ToPin, FromPin);
-	}
+	// Ask the schema first so a rejection carries its reason (type mismatch, exec vs data, ...).
+	const FPinConnectionResponse Response = Schema->CanCreateConnection(FromPin, ToPin);
+	bool bConnected = Response.Response != CONNECT_RESPONSE_DISALLOW && Schema->TryCreateConnection(FromPin, ToPin);
 
 	if (!bConnected)
 	{
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_connect_pins"), nullptr,
-			{FString::Printf(TEXT("Schema rejected connection between '%s.%s' (%s) and '%s.%s' (%s)"),
+			{FString::Printf(TEXT("Schema rejected connection between '%s.%s' (%s) and '%s.%s' (%s): %s"),
 				*FromNode->GetName(), *FromPinName, *FromPin->PinType.PinCategory.ToString(),
-				*ToNode->GetName(), *ToPinName, *ToPin->PinType.PinCategory.ToString())});
+				*ToNode->GetName(), *ToPinName, *ToPin->PinType.PinCategory.ToString(),
+				*Response.Message.ToString())});
 	}
 
 	Graph->NotifyGraphChanged();
@@ -810,9 +809,11 @@ FString UGameForgeBlueprintGraphLibrary::CompileBlueprint(const FString& Bluepri
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_compile"), nullptr, {Err});
 	}
 
-	FKismetEditorUtilities::CompileBlueprint(BP);
+	FCompilerResultsLog Results;
+	Results.bSilentMode = true;
+	FKismetEditorUtilities::CompileBlueprint(BP, EBlueprintCompileOptions::None, &Results);
 
-	bool bSuccess = (BP->Status == BS_UpToDate || BP->Status == BS_UpToDateWithWarnings);
+	bool bSuccess = (BP->Status == BS_UpToDate || BP->Status == BS_UpToDateWithWarnings) && Results.NumErrors == 0;
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("blueprint_path"), BlueprintPath);
@@ -831,10 +832,30 @@ FString UGameForgeBlueprintGraphLibrary::CompileBlueprint(const FString& Bluepri
 	Data->SetBoolField(TEXT("compiled_successfully"), bSuccess);
 	Data->SetStringField(TEXT("generated_class"), BP->GeneratedClass ? BP->GeneratedClass->GetPathName() : TEXT("None"));
 
+	// Real compiler diagnostics, so the repair ladder can act on them.
 	TArray<FString> CompileErrors;
-	if (BP->Status == BS_Error)
+	TArray<TSharedPtr<FJsonValue>> Messages;
+	for (const TSharedRef<FTokenizedMessage>& Msg : Results.Messages)
 	{
-		CompileErrors.Add(TEXT("Blueprint compilation failed with error state BS_Error"));
+		const EMessageSeverity::Type Sev = Msg->GetSeverity();
+		const TCHAR* SevStr = Sev == EMessageSeverity::Error ? TEXT("error")
+			: (Sev == EMessageSeverity::Warning || Sev == EMessageSeverity::PerformanceWarning) ? TEXT("warning") : TEXT("info");
+		const FString Text = Msg->ToText().ToString();
+		TSharedPtr<FJsonObject> M = MakeShared<FJsonObject>();
+		M->SetStringField(TEXT("severity"), SevStr);
+		M->SetStringField(TEXT("message"), Text);
+		Messages.Add(MakeShared<FJsonValueObject>(M));
+		if (Sev == EMessageSeverity::Error)
+		{
+			CompileErrors.Add(Text);
+		}
+	}
+	Data->SetArrayField(TEXT("diagnostics"), Messages);
+	Data->SetNumberField(TEXT("num_errors"), Results.NumErrors);
+	Data->SetNumberField(TEXT("num_warnings"), Results.NumWarnings);
+	if (!bSuccess && CompileErrors.Num() == 0)
+	{
+		CompileErrors.Add(FString::Printf(TEXT("Blueprint compilation failed (status %s)"), *StatusStr));
 	}
 
 	return GameForgeJsonHelpers::MakeEnvelope(bSuccess, TEXT("blueprint_compile"), Data, CompileErrors);

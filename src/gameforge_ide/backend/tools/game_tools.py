@@ -41,11 +41,14 @@ class ApprovalStore:
         self.root = Path(workspace_root) / ".gameforge" / "approvals"
 
     def create(self, tool: str, args: Dict[str, Any], summary: str, consequence: str,
-               session_id: Optional[str] = None) -> Dict[str, Any]:
+               session_id: Optional[str] = None, plan_id: Optional[str] = None) -> Dict[str, Any]:
+        """``plan_id`` marks a plan-task approval: approving it unblocks the plan, which runs the tool."""
         self.root.mkdir(parents=True, exist_ok=True)
         rec = {"approval_id": "apr_" + secrets.token_hex(6), "tool": tool, "args": args, "summary": summary,
                "consequence": consequence, "session_id": session_id, "status": "PENDING",
                "created": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+        if plan_id:
+            rec["plan_id"] = plan_id
         self._write(rec)
         return rec
 

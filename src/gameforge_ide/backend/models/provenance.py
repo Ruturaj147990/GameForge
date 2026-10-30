@@ -116,6 +116,24 @@ class LicenseRegistry:
             attribution_required=False,
             source_url="local://gameforge/procedural",
         ),
+        "GameForge-ProceduralRig-V1": LicenseRecord(
+            model_name="GameForge-ProceduralRig-V1",
+            version="1.0.0",
+            license_name="CC-BY-4.0",
+            commercial_use_allowed=True,
+            excluded_territories=[],
+            attribution_required=True,
+            source_url="local://gameforge/character_rig",
+        ),
+        "EpicGames-Engine-Content": LicenseRecord(
+            model_name="EpicGames-Engine-Content",
+            version="5.7.4",
+            license_name="Unreal-Engine-EULA",
+            commercial_use_allowed=True,
+            excluded_territories=[],
+            attribution_required=True,
+            source_url="https://unrealengine.com/eula",
+        ),
     }
 
     def __init__(self, custom_records: Optional[Dict[str, LicenseRecord]] = None):

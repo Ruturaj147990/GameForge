@@ -393,7 +393,7 @@ def test_edit_tools_reject_stale_apply_and_rollback(temp_workspace):
 
 def test_terminal_tools_blocks_forbidden_commands(temp_workspace):
     tt = TerminalTools(temp_workspace)
-    res = tt.run_command("shutdown.exe /s /t 0")
+    res = tt.run_command("diskpart /s wipe.txt")
     assert res["status"] == "BLOCKED"
     assert "Security boundary violation" in res["error"]
 
@@ -468,6 +468,10 @@ def test_unreal_plugin_manifest():
     assert manifest["FileVersion"] == 3
     assert manifest["FriendlyName"] == "GameForge Unreal Bridge"
     assert manifest["EngineVersion"] == "5.7.0"
-    assert len(manifest["Modules"]) == 1
-    assert manifest["Modules"][0]["Name"] == "GameForgeEditor"
-    assert manifest["Modules"][0]["Type"] == "Editor"
+    # Audit 2026-10-30: gameplay types live in a Runtime module so game Blueprints and packaged
+    # builds can use them; editor tooling stays Editor-only.
+    modules = {m["Name"]: m for m in manifest["Modules"]}
+    assert set(modules) == {"GameForgeRuntime", "GameForgeEditor"}
+    assert modules["GameForgeRuntime"]["Type"] == "Runtime"
+    assert modules["GameForgeEditor"]["Type"] == "Editor"
+    assert [m["Name"] for m in manifest["Modules"]].index("GameForgeRuntime") == 0

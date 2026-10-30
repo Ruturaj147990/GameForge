@@ -19,7 +19,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field
 
 from ..tools.game_tools import READ_ONLY_EDITOR_OPS
@@ -28,6 +28,28 @@ from .task_plan import PlanValidationError, TaskNode, TaskNodeStatus, TaskPlan
 from .task_state import TaskAcceptancePredicate
 
 logger = logging.getLogger(__name__)
+
+# Tool result statuses that mean the requested action did not happen. Anything here
+# fails the step instead of falling through to (possibly empty) acceptance predicates.
+FAILURE_STATUSES = frozenset({
+    "ERROR", "BLOCKED", "FAILED", "TIMEOUT", "CANCELLED", "REJECTED", "STALE",
+    "NO_RECIPE", "ENGINE_UNAVAILABLE", "PENDING_APPROVAL",
+})
+
+
+def _step_failure(step_error: Optional[str], step_output: Any) -> Optional[str]:
+    """Returns why a dispatched step failed, or None when it genuinely succeeded."""
+    if step_error:
+        return step_error
+    if not isinstance(step_output, dict):
+        return None
+    status = step_output.get("status")
+    if status in FAILURE_STATUSES:
+        return str(step_output.get("error") or f"Tool returned status {status}")
+    exit_code = step_output.get("exit_code")
+    if isinstance(exit_code, int) and exit_code != 0:
+        return str(step_output.get("error") or f"Tool exited with code {exit_code}")
+    return None
 
 
 class PlanEvent(BaseModel):
@@ -164,11 +186,8 @@ class TaskPlanExecutor:
                 outcome = self._execute_task_node(plan, task, auto_approve_all=auto_approve_all, cumulative_history=cumulative_history)
                 progress_made = True
 
-                if outcome == "WAITING_APPROVAL":
-                    plan.status = "WAITING_APPROVAL"
-                    plan.save(self.workspace_root)
-                    return plan
-
+                # A task awaiting approval does not stop independent branches; the plan
+                # suspends once nothing else is ready (handled at the top of the loop).
                 plan.save(self.workspace_root)
 
             if not progress_made and not self.is_cancelled():
@@ -192,8 +211,11 @@ class TaskPlanExecutor:
         task.started_at = time.time()
         self._emit("task_started", plan.plan_id, task.task_id, status="RUNNING", message=f"Starting task '{task.title}'")
 
-        # Approval check
-        if task.requires_approval and not auto_approve_all:
+        # Approval check: a task inherits the approval requirement of the tool it dispatches,
+        # so a plan cannot run an approval-gated tool merely by omitting requires_approval.
+        tool_needs_approval = bool(task.tool_call) and self.tool_gateway.tool_requires_approval(
+            task.tool_call.get("name", ""), task.tool_call.get("arguments", {}))
+        if (task.requires_approval or tool_needs_approval) and not auto_approve_all:
             # Check if already approved via ApprovalStore
             if not task.approval_id:
                 app_store = self.tool_gateway.game_tools.approvals
@@ -203,11 +225,20 @@ class TaskPlanExecutor:
                     summary=task.title,
                     consequence=f"Execution of task '{task.objective}'",
                     session_id=plan.session_id,
+                    plan_id=plan.plan_id,
                 )
                 task.approval_id = rec["approval_id"]
 
             # Check status of approval
             rec = self.tool_gateway.game_tools.approvals.get(task.approval_id)
+            if rec and rec.get("status") == "REJECTED":
+                task.status = "CANCELLED"
+                task.error_message = f"Approval {task.approval_id} rejected by user"
+                task.completed_at = time.time()
+                plan.block_descendants(task.task_id, task.error_message)
+                self._emit("task_failed", plan.plan_id, task.task_id, status="CANCELLED",
+                           message=task.error_message)
+                return "CANCELLED"
             if not rec or rec.get("status") != "APPROVED":
                 task.status = "WAITING_APPROVAL"
                 self._emit("task_waiting_approval", plan.plan_id, task.task_id, status="WAITING_APPROVAL",
@@ -250,13 +281,11 @@ class TaskPlanExecutor:
                 if is_unreal:
                     with self._unreal_lock:
                         step_output = self._dispatch_tool_call(task)
-                        if not step_error:
-                            self._state_version += 1
+                        self._state_version += 1
                 elif is_write:
                     with self._write_lock:
                         step_output = self._dispatch_tool_call(task)
-                        if not step_error:
-                            self._state_version += 1
+                        self._state_version += 1
                 else:
                     step_output = self._dispatch_tool_call(task)
             except Exception as exc:
@@ -284,10 +313,10 @@ class TaskPlanExecutor:
                 if cumulative_history is not None:
                     cumulative_history.append(hist_entry)
 
-            # Check for immediate tool-level error
-            if step_error or (isinstance(step_output, dict) and step_output.get("status") in ("ERROR", "BLOCKED", "FAILED")):
-                err_detail = step_error or (step_output.get("error") if isinstance(step_output, dict) else "Tool error")
-                task.error_message = str(err_detail)
+            # Check for immediate tool-level error (fail closed on any non-success status)
+            err_detail = _step_failure(step_error, step_output)
+            if err_detail:
+                task.error_message = err_detail
 
                 # Attempt repair if within limit
                 if task.retry_count < task.retry_limit and task.recovery_behavior in ("retry", "repair"):
@@ -433,7 +462,7 @@ class TaskPlanExecutor:
 
         # 1. State reconciliation for in-flight tasks
         for task in plan.tasks.values():
-            if task.status in ("RUNNING", "VERIFYING"):
+            if task.status in ("READY", "RUNNING", "VERIFYING", "REPAIRING"):
                 # Check if task acceptance predicates are ALREADY satisfied on disk/engine
                 if task.acceptance:
                     sat, _ = self._evaluate_predicates(task.acceptance, [])
@@ -452,7 +481,8 @@ class TaskPlanExecutor:
                 # Check base hash of any approval
                 if task.approval_id:
                     app = self.tool_gateway.game_tools.approvals.get(task.approval_id)
-                    if app and app.get("status") == "APPROVED":
+                    # Re-queue decided approvals; _execute_task_node runs APPROVED and cancels REJECTED.
+                    if app and app.get("status") in ("APPROVED", "REJECTED"):
                         task.status = "PLANNED"
 
         plan.save(self.workspace_root)

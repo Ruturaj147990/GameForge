@@ -1,6 +1,7 @@
 """Packaged Build Real-Input Acceptance Verification.
-Exercises GFPlatformer.exe, GFArenaCombat.exe, and GFCardBattler.exe using genuine
-OS-level Win32 keyboard and mouse input events delivered to the live focused window.
+Drives packaged games with genuine OS-level Win32 keyboard and mouse input delivered to the
+live focused window. A step passes only when the game's own log shows the gameplay transition
+that input must cause (GF_EVENT markers), so dispatching input alone never counts as a pass.
 
 Zero Mocks. Zero Simulators. Zero Fake Connectors.
 """
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.gameforge_ide.unreal.real_input import (
     RealInputSession,
+    find_game_window_for_pid,
     find_windows_for_pid,
     find_window_by_title_contains,
     focus_window,
@@ -50,8 +52,8 @@ def capture_window_bmp(hwnd: int, output_png: Path) -> bool:
         hbm = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
         gdi32.SelectObject(hdc_mem, hbm)
 
-        # PrintWindow with PW_CLIENTONLY (1)
-        user32.PrintWindow(hwnd, hdc_mem, 1)
+        # PrintWindow with PW_RENDERFULLCONTENT (2) for D3D12/DirectComposition content
+        user32.PrintWindow(hwnd, hdc_mem, 2)
 
         # Save bitmap via PIL if available, or write raw BMP header
         try:
@@ -103,112 +105,103 @@ def capture_window_bmp(hwnd: int, output_png: Path) -> bool:
         return False
 
 
+class GameLog:
+    """Reads GF_EVENT markers the packaged game writes at real gameplay transitions."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.offset = 0
+
+    def new_events(self) -> List[str]:
+        if not self.path.is_file():
+            return []
+        with open(self.path, "r", encoding="utf-8", errors="replace") as f:
+            f.seek(self.offset)
+            chunk = f.read()
+            self.offset = f.tell()
+        return [line.split("GF_EVENT ", 1)[1].strip() for line in chunk.splitlines() if "GF_EVENT " in line]
+
+
+def _expectation_met(expect: str, events: List[str]) -> bool:
+    """``expect`` is an event name, optionally with required key=value tokens (e.g. 'card_play ok=1')."""
+    name, *tokens = expect.split()
+    return any(ev.split()[0] == name and all(tok in ev.split() for tok in tokens) for ev in events)
+
+
 def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Drives the packaged game with real Win32 input; passes only if every action's expected
+    gameplay transition appears in the game's own log after that action."""
     logger.info("=" * 60)
     logger.info("TESTING PACKAGED GAME: %s (%s)", game_name, exe_path)
     logger.info("=" * 60)
 
     if not exe_path.is_file():
-        return {
-            "game": game_name,
-            "exe_path": str(exe_path),
-            "ok": False,
-            "error": f"Executable not found at {exe_path}",
-        }
+        return {"game": game_name, "exe_path": str(exe_path), "ok": False,
+                "error": f"Executable not found at {exe_path}"}
 
-    cmd = [
-        str(exe_path),
-        "-windowed",
-        "-ResX=1280",
-        "-ResY=720",
-        "-log",
-        "-NoSound",
-    ]
-
+    log_path = LOG_DIR / f"{game_name}_{time.strftime('%Y%m%d_%H%M%S')}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [str(exe_path), "-windowed", "-ResX=1280", "-ResY=720", f"-abslog={log_path}", "-forcelogflush", "-NoSound"]
     logger.info("Launching: %s", " ".join(cmd))
     proc = subprocess.Popen(cmd)
+    game_log = GameLog(log_path)
 
-    hwnd = None
-    title = ""
     session = None
-    report: Dict[str, Any] = {
-        "game": game_name,
-        "exe_path": str(exe_path),
-        "pid": proc.pid,
-        "actions": [],
-        "ok": False,
-    }
-
+    report: Dict[str, Any] = {"game": game_name, "exe_path": str(exe_path), "pid": proc.pid,
+                              "log_path": str(log_path), "steps": [], "ok": False}
     try:
-        # Await game window appearance
-        deadline = time.time() + 25.0
-        while time.time() < deadline:
+        hwnd = None
+        deadline = time.time() + 40.0
+        while time.time() < deadline and not hwnd:
             if proc.poll() is not None:
                 raise RuntimeError(f"Process exited prematurely with code {proc.returncode}")
-
-            hwnds = find_windows_for_pid(proc.pid)
-            if hwnds:
-                hwnd = hwnds[0]
-                break
-
-            # Fallback by title
-            hwnd = find_window_by_title_contains(game_name)
-            if hwnd:
-                break
-
-            time.sleep(1.0)
-
+            hwnd = find_game_window_for_pid(proc.pid)  # the UnrealWindow viewport, not a console
+            if not hwnd:
+                time.sleep(1.0)
         if not hwnd:
-            raise TimeoutError(f"Game window for PID {proc.pid} ({game_name}) did not appear within 25s")
-
+            raise TimeoutError(f"Game window for PID {proc.pid} ({game_name}) did not appear within 40s")
         logger.info("Found game window: HWND 0x%X", hwnd)
-        time.sleep(3.0)  # Wait for first frame render
+        time.sleep(8.0)  # first frames (PSO warm-up), HUD BeginPlay
 
         session = RealInputSession(hwnd, target_name=game_name)
-        assert session.focus(), f"Failed to focus window HWND 0x%X"
-        logger.info("Successfully focused window")
+        if not session.focus():
+            raise RuntimeError(f"Failed to focus window HWND 0x{hwnd:X}")
         time.sleep(1.0)
+        report["window_geometry"] = session.get_client_geometry()
+        report["startup_events"] = game_log.new_events()
 
-        geom = session.get_client_geometry()
-        logger.info("Window client geometry: %s", geom)
-
-        # Execute test actions
         for act in test_actions:
-            act_type = act.get("type")
-            if act_type == "tap_key":
-                key = act["key"]
-                hold_s = act.get("hold_s", 0.08)
-                logger.info("Action: Tap key '%s' (hold %.2fs)", key, hold_s)
-                session.tap_key(key, hold_s=hold_s)
-                time.sleep(0.3)
-            elif act_type == "hold_key":
-                key = act["key"]
-                dur_s = act["duration_s"]
-                logger.info("Action: Hold key '%s' for %.2fs", key, dur_s)
-                session.hold_key(key, duration_s=dur_s)
-                time.sleep(0.3)
-            elif act_type == "click_fraction":
-                rx = act["rel_x"]
-                ry = act["rel_y"]
-                btn = act.get("button", "left")
-                logger.info("Action: Click mouse '%s' at fraction (%.2f, %.2f)", btn, rx, ry)
-                session.click_fraction(rx, ry, button=btn)
-                time.sleep(0.3)
-            elif act_type == "move_mouse":
-                rx = act["rel_x"]
-                ry = act["rel_y"]
-                session.move_mouse_fraction(rx, ry)
-                time.sleep(0.1)
+            kind = act["type"]
+            if kind == "tap_key":
+                session.tap_key(act["key"], hold_s=act.get("hold_s", 0.08))
+            elif kind == "hold_key":
+                session.hold_key(act["key"], duration_s=act["duration_s"])
+            elif kind == "click_fraction":
+                session.move_mouse_fraction(act["rel_x"], act["rel_y"])
+                time.sleep(0.15)
+                session.click_fraction(act["rel_x"], act["rel_y"], button=act.get("button", "left"))
+            elif kind == "move_mouse":
+                session.move_mouse_fraction(act["rel_x"], act["rel_y"])
+            elif kind == "wait":
+                time.sleep(act["duration_s"])
+            expect = act.get("expect", [])
+            observed: List[str] = []
+            settle = time.time() + act.get("settle_s", 2.5)
+            while time.time() < settle:
+                time.sleep(0.25)
+                observed += game_log.new_events()
+                if all(_expectation_met(e, observed) for e in expect):
+                    break
+            met = {e: _expectation_met(e, observed) for e in expect}
+            step = {"action": act, "observed_events": observed[:20], "expectations": met, "ok": all(met.values())}
+            report["steps"].append(step)
+            logger.info("Action %s -> %s %s", {k: v for k, v in act.items() if k != "expect"},
+                        "OK" if step["ok"] else "MISSING", met)
 
-        # Capture evidence screenshot
-        shot_path = Path(f"reports/packaged_{game_name}_real_input.png")
-        shot_ok = capture_window_bmp(hwnd, shot_path)
-        logger.info("Evidence screenshot captured: %s (ok=%s)", shot_path, shot_ok)
-
-        report["ok"] = True
-        report["screenshot_path"] = str(shot_path) if shot_ok else None
+        shot_path = ROOT / "reports" / f"packaged_{game_name}_real_input.png"
+        report["screenshot_path"] = str(shot_path) if capture_window_bmp(hwnd, shot_path) else None
         report["actions"] = session.actions_log
-        report["window_geometry"] = geom
+        report["ok"] = bool(report["steps"]) and all(s["ok"] for s in report["steps"])
 
     except Exception as exc:
         logger.error("Test failed for %s: %s", game_name, exc)
@@ -216,69 +209,67 @@ def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]
         report["error"] = str(exc)
 
     finally:
-        # Graceful shutdown
-        logger.info("Terminating packaged process PID %d...", proc.pid)
+        # Kill the whole tree so no game instance outlives the test.
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
         try:
-            if session:
-                session.tap_key("ESCAPE")
-            time.sleep(1.0)
-        except Exception:
-            pass
-
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5.0)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-        logger.info("Packaged process cleanly stopped")
+            proc.wait(timeout=10.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        logger.info("Packaged process tree stopped")
 
     return report
 
 
-def main():
+ROOT = Path(__file__).resolve().parent.parent
+LOG_DIR = Path(r"E:\GameForge\validation\real_input_logs")
+PROJECTS = Path(r"E:\GameForge\projects")
+
+# Click targets are the HUD's own hitbox rectangles at 1280x720 (card_battler AGFCardHUD::DrawHUD):
+# 4-card hand -> card 0 centre (392, 600); player half of lane index 1 -> centre (640, 280).
+GAME_TESTS: Dict[str, List[Dict[str, Any]]] = {
+    "Platformer": [
+        {"type": "tap_key", "key": "SPACE", "hold_s": 0.1, "expect": ["jump"]},
+        {"type": "hold_key", "key": "W", "duration_s": 1.2, "expect": ["moved"]},
+        {"type": "tap_key", "key": "R", "expect": ["reset"]},
+    ],
+    "Arena": [
+        {"type": "hold_key", "key": "W", "duration_s": 1.0, "expect": ["moved"]},
+        {"type": "click_fraction", "rel_x": 0.5, "rel_y": 0.5, "button": "left", "expect": ["attack"]},
+        {"type": "tap_key", "key": "SPACE", "hold_s": 0.1, "expect": ["attack"], "settle_s": 3.0},
+        {"type": "tap_key", "key": "R", "expect": ["reset"]},
+    ],
+    "Cards": [
+        {"type": "click_fraction", "rel_x": 392 / 1280, "rel_y": 600 / 720, "expect": ["select_card hand=0"]},
+        {"type": "click_fraction", "rel_x": 640 / 1280, "rel_y": 280 / 720, "expect": ["card_play ok=1 hand=0 lane=1"]},
+        {"type": "tap_key", "key": "E", "expect": ["turn_end"]},
+        {"type": "tap_key", "key": "TAB", "expect": ["select_card"]},
+        {"type": "tap_key", "key": "3", "expect": ["select_lane lane=2"]},
+        {"type": "tap_key", "key": "ENTER", "expect": ["card_play"]},
+        {"type": "tap_key", "key": "R", "expect": ["reset"]},
+    ],
+    "World": [
+        # The world character spawns ~3.5 m above the terrain; let it land before walking.
+        {"type": "wait", "duration_s": 3.0},
+        {"type": "hold_key", "key": "W", "duration_s": 2.0, "expect": ["moved"]},
+        {"type": "tap_key", "key": "SPACE", "hold_s": 0.1, "expect": ["jump"]},
+        {"type": "tap_key", "key": "R", "expect": ["reset"]},
+    ],
+}
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    games = [a for a in argv if not a.startswith("--")] or list(GAME_TESTS)
     reports = []
-    output_dir = Path("reports")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    for g in games:
+        name = "Audit" + g
+        packaged = PROJECTS / name / "Packaged" / "Windows"
+        exe = packaged / name / "Binaries" / "Win64" / f"{name}.exe"
+        if not exe.is_file():
+            exe = packaged / f"{name}.exe"
+        reports.append(test_game(exe, name, GAME_TESTS[g]))
 
-    # 1. Platformer Real-Input Packaged Test
-    platformer_exe = Path(r"E:\GameForge\projects\GFPlatformer\Packaged\Windows\GFPlatformer.exe")
-    platformer_actions = [
-        {"type": "tap_key", "key": "SPACE", "hold_s": 0.1},    # Jump
-        {"type": "hold_key", "key": "W", "duration_s": 1.0},   # Walk forward
-        {"type": "tap_key", "key": "SPACE", "hold_s": 0.15},   # Jump across platform
-        {"type": "hold_key", "key": "D", "duration_s": 0.5},   # Strafe right
-        {"type": "tap_key", "key": "R", "hold_s": 0.08},       # Restart / Respawn
-    ]
-    rep_platformer = test_game(platformer_exe, "GFPlatformer", platformer_actions)
-    reports.append(rep_platformer)
-
-    # 2. Arena Combat Real-Input Packaged Test
-    arena_exe = Path(r"E:\GameForge\projects\GFArenaCombat\Packaged\Windows\GFArenaCombat.exe")
-    arena_actions = [
-        {"type": "hold_key", "key": "W", "duration_s": 0.8},   # Advance toward arena center
-        {"type": "tap_key", "key": "SPACE", "hold_s": 0.1},    # Attack swing
-        {"type": "click_fraction", "rel_x": 0.5, "rel_y": 0.5, "button": "left"}, # Left-click attack
-        {"type": "hold_key", "key": "S", "duration_s": 0.4},   # Back step
-        {"type": "tap_key", "key": "R", "hold_s": 0.08},       # Restart match
-    ]
-    rep_arena = test_game(arena_exe, "GFArenaCombat", arena_actions)
-    reports.append(rep_arena)
-
-    # 3. Card Battler Real-Input Packaged Test
-    card_exe = Path(r"E:\GameForge\projects\GFCardBattler\Packaged\Windows\GFCardBattler.exe")
-    card_actions = [
-        {"type": "move_mouse", "rel_x": 0.3, "rel_y": 0.75},   # Hover card 0
-        {"type": "click_fraction", "rel_x": 0.3, "rel_y": 0.75, "button": "left"}, # Select Card 0
-        {"type": "move_mouse", "rel_x": 0.5, "rel_y": 0.5},    # Hover Lane 1
-        {"type": "click_fraction", "rel_x": 0.5, "rel_y": 0.5, "button": "left"}, # Place in Lane 1
-        {"type": "click_fraction", "rel_x": 0.85, "rel_y": 0.85, "button": "left"}, # Click End Turn button
-    ]
-    rep_card = test_game(card_exe, "GFCardBattler", card_actions)
-    reports.append(rep_card)
-
-    summary_path = output_dir / "packaged_real_input_summary.json"
+    summary_path = ROOT / "reports" / "packaged_real_input_summary.json"
     summary_path.write_text(json.dumps(reports, indent=2), encoding="utf-8")
     logger.info("Summary saved to %s", summary_path)
 
@@ -286,8 +277,10 @@ def main():
     print("\n" + "=" * 60)
     print(f"PACKAGED REAL-INPUT ACCEPTANCE: {'ALL PASSED' if all_ok else 'SOME FAILED'}")
     for r in reports:
-        status = "PASS" if r.get("ok") else "FAIL"
-        print(f"  [{status}] {r.get('game')}: {len(r.get('actions', []))} actions dispatched")
+        steps = r.get("steps", [])
+        print(f"  [{'PASS' if r.get('ok') else 'FAIL'}] {r.get('game')}: "
+              f"{sum(s['ok'] for s in steps)}/{len(steps)} actions produced their gameplay transition"
+              + (f" ({r['error']})" if r.get("error") else ""))
     print("=" * 60)
     return 0 if all_ok else 1
 

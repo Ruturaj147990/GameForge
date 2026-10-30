@@ -81,6 +81,9 @@ namespace GFArenaConfig
 	inline const TCHAR* Title() { return TEXT("__TITLE__"); }
 	inline const TCHAR* Difficulty() { return TEXT("__DIFFICULTY__"); }
 }
+
+/** Gameplay transition marker for external verification of real input (read from the game log). */
+#define GF_EVENT(Format, ...) UE_LOG(LogTemp, Display, TEXT("GF_EVENT " Format), ##__VA_ARGS__)
 '''
 
 CHARACTER_H = r'''#pragma once
@@ -146,6 +149,11 @@ public:
 	void PerformAttack();
 	void ResetAttackCooldown();
 	void RestartGame();
+
+	/** Last location written as a GF_EVENT moved marker. */
+	FVector GFLastReportedLocation = FVector::ZeroVector;
+	bool bGFLocationReported = false;
+	void GFReportMovement();
 
 	bool AttemptAttackTargets();
 
@@ -235,6 +243,7 @@ void AGFArenaCharacter::MoveForward(float Value)
 	if (!bIsDead && Controller && Value != 0.0f)
 	{
 		AddMovementInput(FVector::ForwardVector, Value);
+		GFReportMovement();
 	}
 }
 
@@ -243,8 +252,21 @@ void AGFArenaCharacter::MoveRight(float Value)
 	if (!bIsDead && Controller && Value != 0.0f)
 	{
 		AddMovementInput(FVector::RightVector, Value);
+		GFReportMovement();
 	}
 }
+
+void AGFArenaCharacter::GFReportMovement()
+{
+	const FVector L = GetActorLocation();
+	if (!bGFLocationReported || FVector::Dist2D(L, GFLastReportedLocation) > 100.0f)
+	{
+		GF_EVENT("moved x=%.0f y=%.0f z=%.0f", L.X, L.Y, L.Z);
+		GFLastReportedLocation = L;
+		bGFLocationReported = true;
+	}
+}
+
 
 void AGFArenaCharacter::PerformAttack()
 {
@@ -254,7 +276,8 @@ void AGFArenaCharacter::PerformAttack()
 	}
 
 	bIsAttacking = true;
-	AttemptAttackTargets();
+	const bool bHitAny = AttemptAttackTargets();
+	GF_EVENT("attack hit=%d", bHitAny ? 1 : 0);
 
 	if (UWorld* World = GetWorld())
 	{
@@ -313,6 +336,7 @@ float AGFArenaCharacter::TakeDamage(float DamageAmount, struct FDamageEvent cons
 
 	const float ActualDamage = FMath::Min(Health, DamageAmount);
 	Health -= ActualDamage;
+	GF_EVENT("player_damaged health=%.0f", Health);
 	OnHealthChanged.Broadcast(Health, MaxHealth);
 
 	if (Health <= 0.0f)
@@ -337,6 +361,7 @@ float AGFArenaCharacter::TakeDamage(float DamageAmount, struct FDamageEvent cons
 
 void AGFArenaCharacter::RestartGame()
 {
+	GF_EVENT("reset");
 	if (UWorld* World = GetWorld())
 	{
 		if (AGFArenaGameMode* GM = Cast<AGFArenaGameMode>(UGameplayStatics::GetGameMode(World)))
@@ -585,6 +610,7 @@ float AGFArenaEnemy::TakeDamage(float DamageAmount, struct FDamageEvent const& D
 
 	const float ActualDamage = FMath::Min(Health, DamageAmount);
 	Health -= ActualDamage;
+	GF_EVENT("enemy_damaged health=%.0f", Health);
 
 	if (Health <= 0.0f)
 	{

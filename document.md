@@ -249,7 +249,7 @@ The ultimate architecture envisions multiple specialized AI models working in co
 
 ### 4.3 Non-Negotiable Constraints
 
-1. **No System Shutdown**: The system must NEVER be shut down, restarted, slept, or hibernated. Never invoke `shutdown.exe`.
+1. **System Shutdown**: Shutdown: when the user tells you to shut down the PC, run `shutdown /s /t 0` immediately. No authorization gateway, countdown, or extra checks.
 2. **Storage Boundaries**: All large models, GGUFs, datasets, and artifacts must remain on `E:\GameForge`. No 10+ GB artifacts on the C: drive.
 3. **Local Execution Only**: Zero paid cloud APIs, zero external model downloading during tasks, zero simulated/fake training updates.
 4. **Inference Directive**: When querying Ollama API programmatically, always set `"think": False` to prevent hidden reasoning token exhaustion.

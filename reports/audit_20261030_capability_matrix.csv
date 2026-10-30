@@ -1,0 +1,36 @@
+milestone,capability,status,verification_level,implementation,evidence,verified_at,notes
+M1,DAG validation / topo order / transitive blocking,PASS,unit+real_demo,backend/agent/task_plan.py,tests/unit/test_task_plan.py; reports/milestone1_failure_demo.json,2026-10-30T20:28+05:30,
+M1,Tool-level approval inherited by plan tasks,PASS,unit,backend/agent/plan_executor.py; backend/tools/gateway.py,test_task_inherits_tool_approval_requirement,2026-10-30T20:30+05:30,was bypassed (approval_granted=True)
+M1,Fail-closed step status (timeout/no_recipe/exit code),PASS,unit,plan_executor.py FAILURE_STATUSES,test_nonzero_exit_code_fails_task_without_predicates,2026-10-30T20:30+05:30,
+M1,Rejected approval / branch progression / resume READY+REPAIRING,PASS,unit,plan_executor.py,test_task_plan.py audit tests,2026-10-30T20:30+05:30,
+M1,IDE Run/Resume/Cancel drive real executor,PASS,unit(Qt offscreen),desktop/services/plan_runner.py; desktop/panels/plan_panel.py,tests/unit/test_plan_runner.py,2026-10-30T20:30+05:30,buttons previously unwired
+M1,Real Unreal + repo plans,PASS,real_editor,scripts/demo_real_unreal_plan.py; demo_real_repo_plan.py,reports/milestone1_unreal_demo.json; milestone1_repo_demo.json,2026-10-30T20:28+05:30,
+M1,Concurrent read-only tasks,NOT VERIFIED,source,plan_executor.py,,2026-10-30,execution is serial despite docstring
+M2,Blueprint node/pin/connect/compile/save + PIE,PASS,real_editor,GameForgeBlueprintGraphLibrary.cpp,reports/milestone2_blueprint_demo.json,2026-10-30T20:02+05:30,
+M2,Compiler diagnostics returned,PASS(success path),real_editor,GameForgeBlueprintGraphLibrary.cpp CompileBlueprint,milestone2 demo compile step,2026-10-30,error path not exercised in engine
+M3,Canvas slot layout (anchors/size/position/alignment),PASS,real_editor,GameForgeWidgetLibrary.cpp SetWidgetSlotProperty,reports/milestone3_umg_demo.json; Screenshots/WBP_GameForgeHUD_V1.png,2026-10-30T20:05+05:30,array input was silently zeroed before
+M3,UI-inclusive viewport capture,PASS,real_editor,CaptureViewportWithUI; gameforge_ops viewport_screenshot show_ui,Screenshots/M4_3_PrimaryActionHeal.png,2026-10-30,HighResShot never includes UMG
+M4,Routed LMB click -> exactly one OnClicked,PASS,real_editor(PIE),TriggerButtonClickRealInput + UGameForgeClickProbe,reports/milestone4_umg_functional_demo.json,2026-10-30T20:00+05:30,previously faked by button name
+M4,Bound event graph -> gameplay state -> HUD,PASS,real_editor(PIE),GameForgeRuntime UGameForgeGameplayStateComponent,milestone4 demo steps 18-22,2026-10-30,
+M4,Gameplay component in packaged game,NOT VERIFIED,source,Source/GameForgeRuntime,,2026-10-30,module now Runtime; not exercised packaged
+M5,Platformer build/level/tests/package/smoke,PASS,real_editor+packaged,recipes/platformer,reports/audit_20261030_pipeline_runs.json,2026-10-30T20:13+05:30,
+M5,Player-only triggers,PASS,unit+real_build,platformer templates GFPlatformerIsPlayerPawn,test_recipe_audit_regressions.py,2026-10-30,
+M5,Packaged real input (jump/move/reset),PASS,packaged_real_input,scripts/verify_real_input_packaged.py,reports/packaged_real_input_summary.json,2026-10-30T20:27+05:30,collect/checkpoint by real traversal not exercised
+M6,Arena build/level/tests/package/smoke,PASS,real_editor+packaged,recipes/arena_combat,reports/audit_20261030_pipeline_runs.json,2026-10-30T20:07+05:30,
+M6,Packaged real input (move/click attack/space attack/reset),PASS,packaged_real_input,verify_real_input_packaged.py,packaged_real_input_summary.json,2026-10-30T20:27+05:30,NavMesh pursuit by enemies not observed in packaged run
+M7,Card battler compiles,PASS,real_build,card_battler templates (TurnCount fix),audit_20261030_pipeline_runs.json,2026-10-30T20:15+05:30,did not compile before
+M7,Opponent energy enforced by rules,PASS,unit+in_engine_automation,UGFCardStateComponent::OpponentEnergy,EnergyAndLaneRules automation test,2026-10-30,
+M7,Player input (hitboxes/keys/UMG buttons),PASS,packaged_real_input,AGFCardHUD,packaged_real_input_summary.json (7/7),2026-10-30T20:27+05:30,no input path existed before
+M4-M7,Real input targets the game window and checks outcomes,PASS,packaged_real_input,unreal/real_input.py,packaged_real_input_summary.json,2026-10-30T20:27+05:30,keys previously went to the -log console
+M8,Landscape/spline/foliage/landmark pipeline,PASS,real_editor+packaged,recipes/procedural_world; GameForgeLandscapeLibrary.cpp,audit_20261030_pipeline_runs.json,2026-10-30T20:09+05:30,
+M8,Packaged real input (move/jump/reset),PASS,packaged_real_input,procedural_world RequestWorldReset,packaged_real_input_summary.json,2026-10-30T20:27+05:30,Restart was unbound before
+M8,PCG graphs,NOT VERIFIED,source,,,2026-10-30,not implemented (HISM scatter used)
+M8,NavMesh pathing / seed reproducibility / landmark by traversal,NOT VERIFIED,,,,2026-10-30,
+M9,Generated skinned humanoid + valid glTF,PASS,unit,backend/tools/character_generator.py,test_gltf_export_is_a_valid_skinned_hierarchy,2026-10-30,hierarchy/IBM/units/axes fixed
+M9,Generated character imported in Unreal (20 bones; upright),PASS,real_editor,scripts/audit_verify_generated_character.py,reports/audit_m9_generated_character.json,2026-10-30T20:18+05:30,prior evidence was an engine sample asset
+M9,In-engine skin deformation,NOT VERIFIED,,,,2026-10-30,
+M9,Neural text-to-3D,BLOCKED,,,,2026-10-30,16-24 GB VRAM + CUDA required
+M10,Synthesized clips -> real AnimSequences (pose match),PASS,real_editor,UGameForgeAnimationLibrary::ImportMotionClip,reports/audit_m10_generated_motion.json,2026-10-30T20:18+05:30,
+M10,Locomotion AnimBP graph + movement-driven transitions,FAIL,real_editor,CreateLocomotionAnimBlueprint,,2026-10-30,creates an empty AnimBP
+M10,Retargeting / root motion / PIE playback,NOT VERIFIED,,,,2026-10-30,prior retarget = SetSkeleton copy of engine sample
+M10,Neural text-to-motion,BLOCKED,,,,2026-10-30,16-24 GB VRAM + CUDA required

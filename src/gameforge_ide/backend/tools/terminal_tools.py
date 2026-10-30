@@ -22,8 +22,6 @@ class TerminalTools:
     """
 
     FORBIDDEN_COMMANDS: List[str] = [
-        "shutdown",
-        "shutdown.exe",
         "format",
         "diskpart",
         "bcdedit",

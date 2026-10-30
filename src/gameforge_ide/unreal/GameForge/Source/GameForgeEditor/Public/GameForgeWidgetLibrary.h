@@ -6,6 +6,19 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GameForgeWidgetLibrary.generated.h"
 
+/** Counts real UButton::OnClicked broadcasts while a routed click is verified. */
+UCLASS(Transient)
+class GAMEFORGEEDITOR_API UGameForgeClickProbe : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	int32 ClickCount = 0;
+
+	UFUNCTION()
+	void HandleClicked() { ++ClickCount; }
+};
+
 /**
  * Native C++ editor library providing genuine Unreal Engine 5.7.4 UMG Widget Blueprint authoring.
  * Manipulates real UWidgetBlueprint, UWidgetTree, UWidget, and UPanelSlot objects.
@@ -98,6 +111,14 @@ public:
 	 * through real Slate input routing (calculates absolute screen geometry, checks hit-test eligibility,
 	 * routes pointer move, pointer down, and pointer up events).
 	 */
+	/**
+	 * Requests a capture of the active game viewport INCLUDING UMG/Slate UI (what the player sees).
+	 * HighResShot / take_high_res_screenshot renders the camera only and never shows widgets.
+	 * The file is written on the next rendered frame.
+	 */
+	UFUNCTION(BlueprintCallable, Category="GameForge|UMG")
+	static FString CaptureViewportWithUI(const FString& OutputPath);
+
 	UFUNCTION(BlueprintCallable, Category="GameForge|UMG")
 	static FString TriggerButtonClick(const FString& AssetPath, const FString& ButtonName);
 

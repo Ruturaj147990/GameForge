@@ -43,6 +43,8 @@ VK_CODES = {
     "S": 0x53,
     "D": 0x44,
     "R": 0x52,
+    "E": 0x45,
+    "TAB": 0x09,
     "SPACE": 0x20,
     "RETURN": 0x0D,
     "ENTER": 0x0D,
@@ -122,6 +124,20 @@ def find_windows_for_pid(pid: int) -> List[int]:
     return hwnds
 
 
+def get_window_class(hwnd: int) -> str:
+    buf = ctypes.create_unicode_buffer(256)
+    user32.GetClassNameW(hwnd, buf, 256)
+    return buf.value
+
+
+def find_game_window_for_pid(pid: int) -> Optional[int]:
+    """The process's Unreal game viewport window (class 'UnrealWindow'), never its log console."""
+    for hwnd in find_windows_for_pid(pid):
+        if get_window_class(hwnd) == "UnrealWindow":
+            return hwnd
+    return None
+
+
 def find_window_by_title_contains(substring: str) -> Optional[int]:
     """Finds the first visible window whose title contains the substring."""
     result = None
@@ -196,7 +212,21 @@ def focus_window(hwnd: int) -> bool:
     user32.SetActiveWindow(hwnd)
     user32.SetFocus(hwnd)
     time.sleep(0.15)
-    return True
+    # Windows may refuse the foreground change; report what actually happened.
+    return is_foreground(hwnd)
+
+
+def is_foreground(hwnd: int) -> bool:
+    """True only when hwnd itself is the foreground window, i.e. would receive SendInput.
+
+    A same-process match is not enough: a Development game started with -log owns a console
+    window too, and input sent while that console is foreground never reaches the game.
+    """
+    return bool(hwnd) and user32.GetForegroundWindow() == hwnd
+
+
+class NotForegroundError(RuntimeError):
+    """Raised instead of sending input: SendInput goes to the foreground window, which is not the target."""
 
 
 def send_mouse_move(screen_x: int, screen_y: int):
@@ -293,6 +323,12 @@ class RealInputSession:
         self._record("focus", {"ok": ok, "hwnd": self.hwnd, "title": self.target_name})
         return ok
 
+    def _require_foreground(self) -> None:
+        """Never inject input unless the target window will receive it (it would land in another app)."""
+        if not self.focus():
+            self._record("input_refused", {"reason": "target window is not foreground"})
+            raise NotForegroundError(f"'{self.target_name}' (HWND 0x{self.hwnd:X}) is not the foreground window; input not sent")
+
     def get_client_geometry(self) -> Dict[str, int]:
         l, t, r, b = get_client_rect(self.hwnd)
         return {"left": l, "top": t, "right": r, "bottom": b, "width": r - l, "height": b - t}
@@ -304,19 +340,19 @@ class RealInputSession:
         return px, py
 
     def click_fraction(self, rel_x_fraction: float, rel_y_fraction: float, button: str = "left", hold_s: float = 0.06):
-        self.focus()
+        self._require_foreground()
         sx, sy = self.client_to_screen(rel_x_fraction, rel_y_fraction)
         send_mouse_click(sx, sy, button=button, hold_duration_s=hold_s)
         self._record("mouse_click", {"screen_x": sx, "screen_y": sy, "rel_x": rel_x_fraction, "rel_y": rel_y_fraction, "button": button})
 
     def move_mouse_fraction(self, rel_x_fraction: float, rel_y_fraction: float):
-        self.focus()
+        self._require_foreground()
         sx, sy = self.client_to_screen(rel_x_fraction, rel_y_fraction)
         send_mouse_move(sx, sy)
         self._record("mouse_move", {"screen_x": sx, "screen_y": sy, "rel_x": rel_x_fraction, "rel_y": rel_y_fraction})
 
     def hold_key(self, key: str, duration_s: float):
-        self.focus()
+        self._require_foreground()
         send_key_down(key)
         self._record("key_down", {"key": key})
         time.sleep(duration_s)
@@ -324,7 +360,7 @@ class RealInputSession:
         self._record("key_up", {"key": key, "held_duration_s": duration_s})
 
     def tap_key(self, key: str, hold_s: float = 0.08):
-        self.focus()
+        self._require_foreground()
         send_key_tap(key, hold_duration_s=hold_s)
         self._record("key_tap", {"key": key, "hold_s": hold_s})
 

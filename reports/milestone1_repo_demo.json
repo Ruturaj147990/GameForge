@@ -1,7 +1,7 @@
 {
   "demonstration": "Demonstration B: Real Repository Task",
   "target_file": "src/gameforge_ide/backend/agent/task_plan.py",
-  "elapsed_seconds": 1.76,
+  "elapsed_seconds": 1.85,
   "status": "COMPLETED",
   "all_tasks_completed": true,
   "tasks": {
@@ -11,13 +11,13 @@
       "error": null,
       "acceptance": [
         {
-          "predicate_id": "ba019376",
+          "predicate_id": "ae350fd0",
           "predicate_type": "file_exists",
           "target": "src/gameforge_ide/backend/agent/task_plan.py",
           "expected": null,
           "satisfied": true,
           "evidence": "File exists at src/gameforge_ide/backend/agent/task_plan.py (10324 bytes)",
-          "evaluated_at": 1793107238.959684
+          "evaluated_at": 1793372304.1991754
         }
       ],
       "evidence_count": 1
@@ -28,22 +28,22 @@
       "error": null,
       "acceptance": [
         {
-          "predicate_id": "076531c1",
+          "predicate_id": "7aa3d98d",
           "predicate_type": "file_changed",
           "target": "src/gameforge_ide/backend/agent/task_plan.py",
           "expected": null,
           "satisfied": true,
           "evidence": "File src/gameforge_ide/backend/agent/task_plan.py verified modified on disk: Verified edit applied via tool 'propose_edit'",
-          "evaluated_at": 1793107238.965009
+          "evaluated_at": 1793372304.2029228
         },
         {
-          "predicate_id": "ba8a4397",
+          "predicate_id": "d5c11980",
           "predicate_type": "file_content_contains",
           "target": "src/gameforge_ide/backend/agent/task_plan.py",
-          "expected": "# [GameForge Milestone 1 Verified - 1793107238]",
+          "expected": "# [GameForge Milestone 1 Verified - 1793372304]",
           "satisfied": true,
           "evidence": "File src/gameforge_ide/backend/agent/task_plan.py contains expected content '# [GameForge Milestone 1 Verified - 1793...'",
-          "evaluated_at": 1793107238.965009
+          "evaluated_at": 1793372304.2029228
         }
       ],
       "evidence_count": 1
@@ -54,13 +54,13 @@
       "error": null,
       "acceptance": [
         {
-          "predicate_id": "d3ca7cce",
+          "predicate_id": "5afee5b3",
           "predicate_type": "command_exit_code",
           "target": "python -m pytest tests/unit/test_task_plan.py -q",
           "expected": 0,
           "satisfied": true,
           "evidence": "Command 'python -m pytest tests/unit/test_task_pl' exited with expected code 0",
-          "evaluated_at": 1793107240.7131455
+          "evaluated_at": 1793372306.0437517
         }
       ],
       "evidence_count": 1
@@ -69,129 +69,129 @@
   "events": [
     {
       "event_type": "plan_started",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": null,
       "status": "RUNNING",
       "message": "Executing plan 'Apply non-destructive verification marker, run test suite, and verify acceptance'",
       "data": {},
-      "timestamp": 1793107238.9589622
+      "timestamp": 1793372304.1984866
     },
     {
       "event_type": "task_ready",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t1_inspect",
       "status": "READY",
       "message": "Task 'Inspect src/gameforge_ide/backend/agent/task_plan.py' is ready",
       "data": {},
-      "timestamp": 1793107238.9590166
+      "timestamp": 1793372304.19853
     },
     {
       "event_type": "task_started",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t1_inspect",
       "status": "RUNNING",
       "message": "Starting task 'Inspect src/gameforge_ide/backend/agent/task_plan.py'",
       "data": {},
-      "timestamp": 1793107238.9590335
+      "timestamp": 1793372304.1985445
     },
     {
       "event_type": "task_verifying",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t1_inspect",
       "status": "VERIFYING",
       "message": "Verifying acceptance predicates for task 'Inspect src/gameforge_ide/backend/agent/task_plan.py'",
       "data": {},
-      "timestamp": 1793107238.959646
+      "timestamp": 1793372304.199149
     },
     {
       "event_type": "task_completed",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t1_inspect",
       "status": "COMPLETED",
       "message": "Task 'Inspect src/gameforge_ide/backend/agent/task_plan.py' COMPLETED with verified acceptance",
       "data": {},
-      "timestamp": 1793107238.9598386
+      "timestamp": 1793372304.1993136
     },
     {
       "event_type": "task_ready",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t2_apply_change",
       "status": "READY",
       "message": "Task 'Add verified milestone marker to src/gameforge_ide/backend/agent/task_plan.py' is ready",
       "data": {},
-      "timestamp": 1793107238.9604404
+      "timestamp": 1793372304.1997883
     },
     {
       "event_type": "task_started",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t2_apply_change",
       "status": "RUNNING",
       "message": "Starting task 'Add verified milestone marker to src/gameforge_ide/backend/agent/task_plan.py'",
       "data": {},
-      "timestamp": 1793107238.9604585
+      "timestamp": 1793372304.199803
     },
     {
       "event_type": "task_verifying",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t2_apply_change",
       "status": "VERIFYING",
       "message": "Verifying acceptance predicates for task 'Add verified milestone marker to src/gameforge_ide/backend/agent/task_plan.py'",
       "data": {},
-      "timestamp": 1793107238.9649682
+      "timestamp": 1793372304.2028906
     },
     {
       "event_type": "task_completed",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t2_apply_change",
       "status": "COMPLETED",
       "message": "Task 'Add verified milestone marker to src/gameforge_ide/backend/agent/task_plan.py' COMPLETED with verified acceptance",
       "data": {},
-      "timestamp": 1793107238.9726655
+      "timestamp": 1793372304.209481
     },
     {
       "event_type": "task_ready",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t3_run_tests",
       "status": "READY",
       "message": "Task 'Execute test suite on modified codebase' is ready",
       "data": {},
-      "timestamp": 1793107238.973254
+      "timestamp": 1793372304.2100818
     },
     {
       "event_type": "task_started",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t3_run_tests",
       "status": "RUNNING",
       "message": "Starting task 'Execute test suite on modified codebase'",
       "data": {},
-      "timestamp": 1793107238.9732723
+      "timestamp": 1793372304.2101007
     },
     {
       "event_type": "task_verifying",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t3_run_tests",
       "status": "VERIFYING",
       "message": "Verifying acceptance predicates for task 'Execute test suite on modified codebase'",
       "data": {},
-      "timestamp": 1793107240.7130804
+      "timestamp": 1793372306.043677
     },
     {
       "event_type": "task_completed",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": "t3_run_tests",
       "status": "COMPLETED",
       "message": "Task 'Execute test suite on modified codebase' COMPLETED with verified acceptance",
       "data": {},
-      "timestamp": 1793107240.71316
+      "timestamp": 1793372306.0437722
     },
     {
       "event_type": "plan_completed",
-      "plan_id": "plan_0247e54fd22a",
+      "plan_id": "plan_958c4b501d3d",
       "task_id": null,
       "status": "COMPLETED",
       "message": "Plan successfully COMPLETED",
       "data": {},
-      "timestamp": 1793107240.714117
+      "timestamp": 1793372306.0449736
     }
   ]
 }

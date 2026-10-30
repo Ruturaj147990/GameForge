@@ -1,0 +1,417 @@
+{
+  "timestamp": "2026-10-30T21:00:31+0530",
+  "checks": {
+    "quarantine_skeleton_matches_generator": true,
+    "unreal_skin_deformation": true,
+    "promoted_from_quarantine": true,
+    "promoted_mesh_valid": true,
+    "six_clips_imported": true,
+    "anim_blueprint_compiled_with_clips": true,
+    "movement_driven_transitions_in_order": true,
+    "clips_pose_the_mesh": true,
+    "retargeted_onto_different_skeleton": true,
+    "retargeted_legs_animate": true
+  },
+  "steps": {
+    "python_validator_max_displacement_cm": {
+      "calf_l": 16.828,
+      "lowerarm_l": 8.808,
+      "spine_01": 3.354
+    },
+    "quarantine_import": {
+      "imported": [
+        "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_PhysicsAsset.GFAdventurerHero_PhysicsAsset",
+        "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton",
+        "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero.GFAdventurerHero"
+      ],
+      "skeletal_mesh_path": "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero",
+      "skeleton_path": "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+      "destination_path": "/Game/Quarantine/Characters/GFAdventurerHero"
+    },
+    "unreal_skin_deformation": {
+      "calf_l": {
+        "ok": true,
+        "bone": "calf_l",
+        "axis": "X",
+        "angle_degrees": 45,
+        "vertices": 989,
+        "vertices_moved": 356,
+        "max_displacement_cm": 35.204653105893776,
+        "subtree_vertices": 368,
+        "subtree_mean_displacement_cm": 11.043576297367236,
+        "outside_vertices": 621,
+        "outside_max_displacement_cm": 7.951012810012629e-17,
+        "invalid_vertices": 0,
+        "errors": []
+      },
+      "lowerarm_l": {
+        "ok": true,
+        "bone": "lowerarm_l",
+        "axis": "Z",
+        "angle_degrees": 45,
+        "vertices": 989,
+        "vertices_moved": 118,
+        "max_displacement_cm": 25.91049845670537,
+        "subtree_vertices": 118,
+        "subtree_mean_displacement_cm": 14.553333409379999,
+        "outside_vertices": 871,
+        "outside_max_displacement_cm": 7.951012810012629e-17,
+        "invalid_vertices": 0,
+        "errors": []
+      },
+      "spine_01": {
+        "ok": true,
+        "bone": "spine_01",
+        "axis": "Z",
+        "angle_degrees": 30,
+        "vertices": 989,
+        "vertices_moved": 569,
+        "max_displacement_cm": 40.89340912619829,
+        "subtree_vertices": 597,
+        "subtree_mean_displacement_cm": 15.970331428853886,
+        "outside_vertices": 392,
+        "outside_max_displacement_cm": 0,
+        "invalid_vertices": 0,
+        "errors": []
+      }
+    },
+    "promotion": [
+      {
+        "old_path": "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_PhysicsAsset",
+        "new_path": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_PhysicsAsset",
+        "moved": true
+      },
+      {
+        "old_path": "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+        "new_path": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+        "moved": true
+      },
+      {
+        "old_path": "/Game/Quarantine/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero",
+        "new_path": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero",
+        "moved": true
+      }
+    ],
+    "posed_screenshot": {
+      "requested_path": "E:/GameForge/validation/live_ops_probe/Saved/Screenshots/audit_m9_posed_vs_bind.png",
+      "async": false,
+      "path": "E:\\GameForge\\validation\\live_ops_probe\\Saved\\Screenshots\\audit_m9_posed_vs_bind.png",
+      "bytes": 1040374
+    },
+    "clips": {
+      "Idle": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle",
+      "Walk": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk",
+      "Run": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run",
+      "Jump": "/Game/Characters/GFAdventurerHero/Animations/Anim_Jump",
+      "Fall": "/Game/Characters/GFAdventurerHero/Animations/Anim_Fall",
+      "Land": "/Game/Characters/GFAdventurerHero/Animations/Anim_Land"
+    },
+    "anim_blueprint": {
+      "blueprint_path": "/Game/Characters/GFAdventurerHero/ABP_CharacterLocomotion",
+      "blueprint_name": "ABP_CharacterLocomotion",
+      "skeleton_path": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+      "compiled": true,
+      "parent_class": "GameForgeLocomotionAnimInstance",
+      "generated_class": "/Game/Characters/GFAdventurerHero/ABP_CharacterLocomotion.ABP_CharacterLocomotion_C",
+      "assigned_clips": {
+        "Idle": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle.Anim_Idle",
+        "Walk": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk.Anim_Walk",
+        "Run": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run.Anim_Run",
+        "Jump": "/Game/Characters/GFAdventurerHero/Animations/Anim_Jump.Anim_Jump",
+        "Fall": "/Game/Characters/GFAdventurerHero/Animations/Anim_Fall.Anim_Fall",
+        "Land": "/Game/Characters/GFAdventurerHero/Animations/Anim_Land.Anim_Land",
+        "persisted_after_recompile": 6
+      },
+      "errors": []
+    },
+    "pie_start_test": {
+      "character": "Character_0",
+      "controller": "AIController",
+      "anim_instance": "ABP_CharacterLocomotion_C",
+      "driver": "GameForgeLocomotionDriver_0",
+      "errors": []
+    },
+    "pie_diagnostics": {
+      "characters": [
+        {
+          "name": "Character_0",
+          "location": [
+            -714.4,
+            900.0,
+            92.2
+          ],
+          "velocity": [
+            210.0,
+            0.0,
+            0.0
+          ],
+          "acceleration": [
+            716.8,
+            0.0,
+            0.0
+          ],
+          "movement_mode": "<MovementMode.MOVE_WALKING: 1>",
+          "max_walk_speed": 600.0,
+          "controller": "AIController",
+          "anim_instance": "ABP_CharacterLocomotion_C",
+          "idle_clip": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle.Anim_Idle",
+          "walk_clip": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk.Anim_Walk",
+          "run_clip": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run.Anim_Run"
+        }
+      ]
+    },
+    "pie_transitions": [
+      "Idle->Fall t=4.04 speed=0 vz=-11",
+      "Fall->Land t=4.38 speed=0 vz=0",
+      "Land->Idle t=4.75 speed=0 vz=0",
+      "Idle->Walk t=5.54 speed=12 vz=0",
+      "Walk->Run t=8.10 speed=364 vz=0",
+      "Run->Jump t=10.54 speed=600 vz=512",
+      "Jump->Fall t=11.07 speed=600 vz=-6",
+      "Fall->Land t=11.60 speed=543 vz=0",
+      "Land->Idle t=11.97 speed=0 vz=0"
+    ],
+    "pie_phases": [
+      "stand@0.01",
+      "walk@1.50",
+      "run@4.00",
+      "jump@6.51",
+      "stand_after_jump@6.52"
+    ],
+    "pie_samples": [
+      {
+        "elapsed_s": 0.02179349958896637,
+        "current_state": "Fall",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 1.1404448272631065
+      },
+      {
+        "elapsed_s": 0.43759989738464355,
+        "current_state": "Land",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 13.553307063667939
+      },
+      {
+        "elapsed_s": 0.8492751121520996,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0.8619744575737436
+      },
+      {
+        "elapsed_s": 1.265735387802124,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      },
+      {
+        "elapsed_s": 1.686208963394165,
+        "current_state": "Walk",
+        "ground_speed": 131.4158172607422,
+        "thigh_l_deviation_deg": 19.15266422364741
+      },
+      {
+        "elapsed_s": 2.107577085494995,
+        "current_state": "Walk",
+        "ground_speed": 210,
+        "thigh_l_deviation_deg": 1.5579737374558777
+      },
+      {
+        "elapsed_s": 2.5186398029327393,
+        "current_state": "Walk",
+        "ground_speed": 210,
+        "thigh_l_deviation_deg": 21.70307663074355
+      },
+      {
+        "elapsed_s": 2.948392868041992,
+        "current_state": "Walk",
+        "ground_speed": 210,
+        "thigh_l_deviation_deg": 24.4702087299026
+      },
+      {
+        "elapsed_s": 4.4045305252075195,
+        "current_state": "Run",
+        "ground_speed": 600,
+        "thigh_l_deviation_deg": 22.0674668543445
+      },
+      {
+        "elapsed_s": 4.8220534324646,
+        "current_state": "Run",
+        "ground_speed": 600,
+        "thigh_l_deviation_deg": 14.491337068794106
+      },
+      {
+        "elapsed_s": 5.243148326873779,
+        "current_state": "Run",
+        "ground_speed": 600,
+        "thigh_l_deviation_deg": 0.9473671378822252
+      },
+      {
+        "elapsed_s": 6.673336505889893,
+        "current_state": "Jump",
+        "ground_speed": 600,
+        "thigh_l_deviation_deg": 14.617037047837751
+      },
+      {
+        "elapsed_s": 7.084629535675049,
+        "current_state": "Fall",
+        "ground_speed": 600,
+        "thigh_l_deviation_deg": 4.46609350981017
+      },
+      {
+        "elapsed_s": 7.510451793670654,
+        "current_state": "Fall",
+        "ground_speed": 600,
+        "thigh_l_deviation_deg": 15.806863314541495
+      },
+      {
+        "elapsed_s": 7.926065921783447,
+        "current_state": "Land",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 7.5837898059100155
+      },
+      {
+        "elapsed_s": 8.334410667419434,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      },
+      {
+        "elapsed_s": 8.745491027832031,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      },
+      {
+        "elapsed_s": 9.160226821899414,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      },
+      {
+        "elapsed_s": 9.570625305175781,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      },
+      {
+        "elapsed_s": 9.987371444702148,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      },
+      {
+        "elapsed_s": 10.004114151000977,
+        "current_state": "Idle",
+        "ground_speed": 0,
+        "thigh_l_deviation_deg": 0
+      }
+    ],
+    "ik_retarget": {
+      "retargeter": "/Game/Audit/Retarget/RTG_Audit.RTG_Audit",
+      "created": [
+        "/Game/RTG_Anim_Walk"
+      ],
+      "on_target_skeleton": [
+        "/Game/RTG_Anim_Walk"
+      ],
+      "errors": []
+    },
+    "retarget_samples": {
+      "samples": [
+        {
+          "bone": "HipLeft",
+          "time": 0.0,
+          "rotation_quat": [
+            0.013089595571344441,
+            0.0,
+            0.0,
+            0.9999143275740072
+          ],
+          "location": [
+            10.0,
+            -86.00343322753906,
+            1.7775590419769287
+          ]
+        },
+        {
+          "bone": "HipLeft",
+          "time": 0.3,
+          "rotation_quat": [
+            -0.005665732875111967,
+            -0.02555645539101221,
+            0.21636520079783253,
+            0.975961508945178
+          ],
+          "location": [
+            9.986295700073242,
+            -86.00000762939453,
+            0.5233596563339233
+          ]
+        },
+        {
+          "bone": "HipLeft",
+          "time": 0.6,
+          "rotation_quat": [
+            -0.01308959557134444,
+            4.2294762063598364e-29,
+            -3.2308972678505634e-27,
+            0.9999143275740071
+          ],
+          "location": [
+            10.0,
+            -86.00343322753906,
+            -1.7775590419769287
+          ]
+        },
+        {
+          "bone": "KneeLeft",
+          "time": 0.0,
+          "rotation_quat": [
+            0.0,
+            -0.0,
+            0.0,
+            -1.0
+          ],
+          "location": [
+            0.0,
+            40.0,
+            -1.2434497875801753e-14
+          ]
+        },
+        {
+          "bone": "KneeLeft",
+          "time": 0.3,
+          "rotation_quat": [
+            0.0,
+            -0.0,
+            0.23871410883200164,
+            0.9710898898889554
+          ],
+          "location": [
+            0.0,
+            40.0,
+            -1.4210854715202004e-14
+          ]
+        },
+        {
+          "bone": "KneeLeft",
+          "time": 0.6,
+          "rotation_quat": [
+            0.0,
+            -0.0,
+            0.13121278274952752,
+            0.9913542281360006
+          ],
+          "location": [
+            0.0,
+            40.0,
+            -1.4210854715202004e-14
+          ]
+        }
+      ],
+      "play_length_s": 1.1666666269302368
+    }
+  },
+  "editor_exit_code": 0,
+  "ok": true
+}

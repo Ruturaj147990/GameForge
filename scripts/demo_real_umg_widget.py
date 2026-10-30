@@ -340,7 +340,7 @@ def main():
 
         screenshot_path = uproject.parent / "Saved" / "Screenshots" / "WBP_GameForgeHUD_V1.png"
         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-        shot_res = link.capture_screenshot(screenshot_path, resolution=(1280, 720), wait_s=25.0)
+        shot_res = link.capture_screenshot(screenshot_path, resolution=(1280, 720), wait_s=25.0, show_ui=True)
         print(f"  Screenshot captured: {shot_res}")
         assert shot_res.get("ok"), f"Screenshot capture failed: {shot_res}"
 

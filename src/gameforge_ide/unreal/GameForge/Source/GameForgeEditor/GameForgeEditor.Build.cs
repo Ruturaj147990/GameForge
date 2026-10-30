@@ -28,7 +28,8 @@ public class GameForgeEditor : ModuleRules
 				"Engine",
 				"HTTP",
 				"Json",
-				"JsonUtilities"
+				"JsonUtilities",
+				"GameForgeRuntime"
 			}
 		);
 
@@ -38,6 +39,7 @@ public class GameForgeEditor : ModuleRules
 				"UnrealEd",
 				"Slate",
 				"SlateCore",
+				"InputCore",
 				"EditorSubsystem",
 				"ToolMenus",
 				"BlueprintGraph",
@@ -45,7 +47,11 @@ public class GameForgeEditor : ModuleRules
 				"Kismet",
 				"AssetTools",
 				"UMG",
-				"UMGEditor"
+				"UMGEditor",
+				"Landscape",
+				"Foliage",
+				"NavigationSystem",
+				"AIModule"
 			}
 		);
 	}

@@ -1,0 +1,157 @@
+{
+  "timestamp": "2026-10-30T20:18:14+0530",
+  "source_file": "E:\\GameForge\\assets\\generated\\characters\\audit_20261030\\GFAdventurerHero.gltf",
+  "generated": {
+    "bones": [
+      "root",
+      "pelvis",
+      "spine_01",
+      "spine_02",
+      "neck",
+      "head",
+      "clavicle_l",
+      "upperarm_l",
+      "lowerarm_l",
+      "hand_l",
+      "clavicle_r",
+      "upperarm_r",
+      "lowerarm_r",
+      "hand_r",
+      "thigh_l",
+      "calf_l",
+      "foot_l",
+      "thigh_r",
+      "calf_r",
+      "foot_r"
+    ],
+    "bone_count": 20,
+    "vertices": 754,
+    "triangles": 1224
+  },
+  "checks": {
+    "imported_generated_file": true,
+    "bone_names_match_generator": true,
+    "root_is_generated_root": true,
+    "upright_and_real_scale": true
+  },
+  "ok": true,
+  "import": {
+    "ok": true,
+    "op": "character_import_skeletal_mesh",
+    "data": {
+      "imported": [
+        "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_PhysicsAsset.GFAdventurerHero_PhysicsAsset",
+        "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton",
+        "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero.GFAdventurerHero"
+      ],
+      "skeletal_mesh_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero",
+      "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+      "destination_path": "/Game/Audit/GeneratedCharacter"
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [
+      "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_PhysicsAsset.GFAdventurerHero_PhysicsAsset",
+      "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton",
+      "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero.GFAdventurerHero"
+    ],
+    "reversibility": "snapshot-only",
+    "elapsed_s": 0.584
+  },
+  "inspect": {
+    "ok": true,
+    "op": "character_inspect_skeletal_mesh",
+    "data": {
+      "mesh_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero",
+      "asset_name": "GFAdventurerHero",
+      "skeleton_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton",
+      "has_skeleton": true,
+      "bone_count": 20,
+      "bone_names": [
+        "root",
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "neck",
+        "head",
+        "clavicle_l",
+        "upperarm_l",
+        "lowerarm_l",
+        "hand_l",
+        "clavicle_r",
+        "upperarm_r",
+        "lowerarm_r",
+        "hand_r",
+        "thigh_l",
+        "calf_l",
+        "foot_l",
+        "thigh_r",
+        "calf_r",
+        "foot_r"
+      ],
+      "parent_indices": [
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        3,
+        6,
+        7,
+        8,
+        3,
+        10,
+        11,
+        12,
+        1,
+        14,
+        15,
+        1,
+        17,
+        18
+      ],
+      "root_bone_name": "root",
+      "bounds": {
+        "box_extent_x": 79,
+        "box_extent_y": 20,
+        "box_extent_z": 91,
+        "sphere_radius": 122.15563842901399
+      },
+      "materials": [
+        "/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"
+      ],
+      "material_count": 1,
+      "lod_count": 1
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [],
+    "reversibility": "read-only",
+    "elapsed_s": 0.452
+  },
+  "spawn": {
+    "ok": true,
+    "op": "character_spawn_preview",
+    "data": {
+      "actor_name": "Actor_UAID_D843AE63835D2E1003_2109441823",
+      "actor_label": "Audit_GeneratedCharacter",
+      "mesh_path": "/Game/Audit/GeneratedCharacter/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero",
+      "location_x": 0,
+      "location_y": 0,
+      "location_z": 0
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [],
+    "reversibility": "transactional",
+    "elapsed_s": 0.081
+  },
+  "screenshot": {
+    "requested_path": "E:/GameForge/validation/live_ops_probe/Saved/Screenshots/audit_m9_generated_character.png",
+    "async": false,
+    "path": "E:\\GameForge\\validation\\live_ops_probe\\Saved\\Screenshots\\audit_m9_generated_character.png",
+    "bytes": 1072414
+  },
+  "editor_exit_code": 0
+}

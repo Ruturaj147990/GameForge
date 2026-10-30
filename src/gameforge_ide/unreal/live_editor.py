@@ -218,17 +218,22 @@ class LiveEditorLink:
                 pass
         self._rx = None
 
-    def capture_screenshot(self, output_path: Path, resolution=(1280, 720), wait_s: float = 30.0) -> Dict[str, Any]:
+    def capture_screenshot(self, output_path: Path, resolution=(1280, 720), wait_s: float = 30.0,
+                           show_ui: bool = False) -> Dict[str, Any]:
         """Request a viewport capture and block until the file is written.
 
         The engine renders the capture on a later frame, so no further mutation may be
         sent until the file exists, or the image would show a later scene state.
+        ``show_ui`` captures the game viewport including UMG; the default camera-only
+        capture never shows widgets, so UI evidence must pass ``show_ui=True``.
         """
         output_path = Path(output_path)
         if output_path.exists():
             output_path.unlink()
-        res = self.call("viewport_screenshot", {"output_path": output_path.as_posix(),
-                                                "resolution": list(resolution)})
+        args = {"output_path": output_path.as_posix(), "resolution": list(resolution)}
+        if show_ui:
+            args["show_ui"] = True
+        res = self.call("viewport_screenshot", args)
         if not res.get("ok"):
             return res
         deadline = time.monotonic() + wait_s

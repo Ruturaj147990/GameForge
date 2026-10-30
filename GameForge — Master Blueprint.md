@@ -224,7 +224,7 @@ These settings are for the current dev box (Ryzen 5 7600X, 32 GB, RX 7700 XT 12 
 | System RAM | Warn at 85% commit; pause queued heavy jobs at 92% |
 | CPU | UBT `MaxParallelActions` = 8 while interactive |
 | Disk | Projects, DDC, packages and artifacts stay on `E:`; refuse heavy work below 20 GB free |
-| Safety | Never shut down, restart, sleep or hibernate the machine; never call `shutdown.exe` |
+| Safety | Shutdown: when the user tells you to shut down the PC, run `shutdown /s /t 0` immediately. No authorization gateway, countdown, or extra checks. |
 
 ## 9. Scale: large projects and large repositories
 

@@ -1,0 +1,88 @@
+{
+  "asset_id": "char_adventurer_hero_01",
+  "asset_name": "GFAdventurerHero",
+  "model_name": "GameForge-ProceduralRig-V1",
+  "model_version": "1.0.0",
+  "license_name": "CC-BY-4.0",
+  "territory_flags": [],
+  "target_territory": "GLOBAL",
+  "input_hashes": {
+    "spec_sha256": "f3cfb76c0549dd4372157b79a1f832f09035f173f119156020df37259d3fb86f"
+  },
+  "parameters": {
+    "character_id": "char_adventurer_hero_01",
+    "name": "GFAdventurerHero",
+    "purpose": "Playable Humanoid Hero Avatar",
+    "category": "humanoid",
+    "height_cm": 180.0,
+    "triangle_budget": 25000,
+    "lod_count": 1,
+    "collision_radius_cm": 42.0,
+    "collision_half_height_cm": 96.0,
+    "proportions": {
+      "head_ratio": 1.0,
+      "arm_span_ratio": 1.0,
+      "torso_leg_ratio": 1.0,
+      "shoulder_width_cm": 45.0,
+      "hip_width_cm": 32.0
+    },
+    "body_coverage": {
+      "has_head": true,
+      "has_torso": true,
+      "has_arms": true,
+      "has_legs": true,
+      "has_hands": true,
+      "has_feet": true,
+      "facial_features": false,
+      "clothing_style": "adventurer_tunic"
+    },
+    "materials": {
+      "material_name": "M_Character_Default",
+      "base_color_rgba": [
+        0.75,
+        0.65,
+        0.55,
+        1.0
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "texture_slots": [
+        "BaseColor",
+        "Normal",
+        "Roughness"
+      ]
+    },
+    "rig": {
+      "target_skeleton": "UE5_Humanoid_17",
+      "root_bone_name": "root",
+      "min_bones": 10,
+      "max_bones": 128,
+      "max_influences_per_vertex": 4,
+      "bind_pose_type": "T-Pose",
+      "enforce_unit_weight_sum": true
+    },
+    "output_format": "FBX",
+    "quarantine_path": "/Game/Quarantine/Characters/GFAdventurerHero",
+    "target_destination_path": "/Game/Characters/GFAdventurerHero",
+    "target_territory": "GLOBAL"
+  },
+  "seed": 42,
+  "tool_versions": {},
+  "output_hashes": {
+    "gltf_file": "E:\\gameforge_step1\\scratch\\character_gen\\GFAdventurerHero.gltf",
+    "promoted_skeletal_mesh": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero"
+  },
+  "gate_results": {
+    "spec_valid": true,
+    "procedural_mesh_generated": true,
+    "rig_hierarchy_passed": true,
+    "weights_passed": true,
+    "fk_deformation_passed": true,
+    "unreal_import_passed": true,
+    "unreal_skeleton_passed": true,
+    "promotion_passed": true,
+    "broken_asset_rejected": true
+  },
+  "created_at": 1793294427.6895342,
+  "provenance_hash": "32dad363918145a7a182dbf09f8c8f841b4e183fd14e97a63b63eae3501bdee5"
+}

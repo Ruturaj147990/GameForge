@@ -39,6 +39,7 @@
 #include "Editor.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "UnrealClient.h"
 
 namespace
 {
@@ -808,6 +809,51 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 	return MakeEnvelope(true, Data);
 }
 
+namespace
+{
+	/** Reads a 2D vector given as [a, b] or {KeyA: a, KeyB: b}. */
+	bool ReadJsonVector2D(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field, const TCHAR* KeyA, const TCHAR* KeyB, FVector2D& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
+		if (Obj->TryGetArrayField(Field, Arr) && Arr && Arr->Num() == 2)
+		{
+			Out = FVector2D((*Arr)[0]->AsNumber(), (*Arr)[1]->AsNumber());
+			return true;
+		}
+		const TSharedPtr<FJsonObject>* Sub = nullptr;
+		double A = 0.0, B = 0.0;
+		if (Obj->TryGetObjectField(Field, Sub) && Sub && (*Sub)->TryGetNumberField(KeyA, A) && (*Sub)->TryGetNumberField(KeyB, B))
+		{
+			Out = FVector2D(A, B);
+			return true;
+		}
+		return false;
+	}
+
+	/** Reads anchors given as [min_x, min_y, max_x, max_y] or {min_x, min_y, max_x, max_y}. */
+	bool ReadJsonAnchors(const TSharedPtr<FJsonObject>& Obj, FAnchors& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
+		if (Obj->TryGetArrayField(TEXT("anchors"), Arr) && Arr && Arr->Num() == 4)
+		{
+			Out.Minimum = FVector2D((*Arr)[0]->AsNumber(), (*Arr)[1]->AsNumber());
+			Out.Maximum = FVector2D((*Arr)[2]->AsNumber(), (*Arr)[3]->AsNumber());
+			return true;
+		}
+		const TSharedPtr<FJsonObject>* Sub = nullptr;
+		double MinX, MinY, MaxX, MaxY;
+		if (Obj->TryGetObjectField(TEXT("anchors"), Sub) && Sub
+			&& (*Sub)->TryGetNumberField(TEXT("min_x"), MinX) && (*Sub)->TryGetNumberField(TEXT("min_y"), MinY)
+			&& (*Sub)->TryGetNumberField(TEXT("max_x"), MaxX) && (*Sub)->TryGetNumberField(TEXT("max_y"), MaxY))
+		{
+			Out.Minimum = FVector2D(MinX, MinY);
+			Out.Maximum = FVector2D(MaxX, MaxY);
+			return true;
+		}
+		return false;
+	}
+}
+
 FString UGameForgeWidgetLibrary::SetWidgetSlotProperty(const FString& AssetPath, const FString& WidgetName, const FString& SlotPropertiesJson)
 {
 	FString Error;
@@ -841,33 +887,30 @@ FString UGameForgeWidgetLibrary::SetWidgetSlotProperty(const FString& AssetPath,
 		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to parse SlotPropertiesJson: '%s'."), *SlotPropertiesJson)});
 	}
 
+	TArray<FString> SlotErrors;
 	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
 	{
+		FVector2D V;
 		if (ParsedObj->HasField(TEXT("position")))
 		{
-			TSharedPtr<FJsonObject> P = ParsedObj->GetObjectField(TEXT("position"));
-			CanvasSlot->SetPosition(FVector2D((float)P->GetNumberField(TEXT("x")), (float)P->GetNumberField(TEXT("y"))));
+			if (ReadJsonVector2D(ParsedObj, TEXT("position"), TEXT("x"), TEXT("y"), V)) CanvasSlot->SetPosition(V);
+			else SlotErrors.Add(TEXT("position must be [x, y] or {x, y}"));
 		}
-
 		if (ParsedObj->HasField(TEXT("size")))
 		{
-			TSharedPtr<FJsonObject> S = ParsedObj->GetObjectField(TEXT("size"));
-			CanvasSlot->SetSize(FVector2D((float)S->GetNumberField(TEXT("x")), (float)S->GetNumberField(TEXT("y"))));
+			if (ReadJsonVector2D(ParsedObj, TEXT("size"), TEXT("x"), TEXT("y"), V)) CanvasSlot->SetSize(V);
+			else SlotErrors.Add(TEXT("size must be [w, h] or {x, y}"));
 		}
-
 		if (ParsedObj->HasField(TEXT("anchors")))
 		{
-			TSharedPtr<FJsonObject> A = ParsedObj->GetObjectField(TEXT("anchors"));
 			FAnchors Anchors;
-			Anchors.Minimum = FVector2D((float)A->GetNumberField(TEXT("min_x")), (float)A->GetNumberField(TEXT("min_y")));
-			Anchors.Maximum = FVector2D((float)A->GetNumberField(TEXT("max_x")), (float)A->GetNumberField(TEXT("max_y")));
-			CanvasSlot->SetAnchors(Anchors);
+			if (ReadJsonAnchors(ParsedObj, Anchors)) CanvasSlot->SetAnchors(Anchors);
+			else SlotErrors.Add(TEXT("anchors must be [min_x, min_y, max_x, max_y] or {min_x, min_y, max_x, max_y}"));
 		}
-
 		if (ParsedObj->HasField(TEXT("alignment")))
 		{
-			TSharedPtr<FJsonObject> Al = ParsedObj->GetObjectField(TEXT("alignment"));
-			CanvasSlot->SetAlignment(FVector2D((float)Al->GetNumberField(TEXT("x")), (float)Al->GetNumberField(TEXT("y"))));
+			if (ReadJsonVector2D(ParsedObj, TEXT("alignment"), TEXT("x"), TEXT("y"), V)) CanvasSlot->SetAlignment(V);
+			else SlotErrors.Add(TEXT("alignment must be [x, y] or {x, y}"));
 		}
 
 		if (ParsedObj->HasField(TEXT("auto_size")))
@@ -983,12 +1026,25 @@ FString UGameForgeWidgetLibrary::SetWidgetSlotProperty(const FString& AssetPath,
 		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Slot class '%s' does not support property configuration in V1."), *Slot->GetClass()->GetName())});
 	}
 
+	if (SlotErrors.Num() > 0)
+	{
+		return MakeEnvelope(false, nullptr, SlotErrors);
+	}
+
 	FBlueprintEditorUtils::MarkBlueprintAsModified(BP);
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("widget_name"), WidgetName);
 	Data->SetStringField(TEXT("slot_class"), Slot->GetClass()->GetName());
 	Data->SetBoolField(TEXT("configured"), true);
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
+	{
+		// Read back what the slot now holds, so callers can verify the layout they asked for.
+		const FAnchors A = CanvasSlot->GetAnchors();
+		const FVector2D Pos = CanvasSlot->GetPosition(), Size = CanvasSlot->GetSize(), Align = CanvasSlot->GetAlignment();
+		Data->SetStringField(TEXT("readback"), FString::Printf(TEXT("anchors=(%.2f,%.2f,%.2f,%.2f) pos=(%.1f,%.1f) size=(%.1f,%.1f) align=(%.2f,%.2f)"),
+			A.Minimum.X, A.Minimum.Y, A.Maximum.X, A.Maximum.Y, Pos.X, Pos.Y, Size.X, Size.Y, Align.X, Align.Y));
+	}
 
 	return MakeEnvelope(true, Data);
 }
@@ -1249,7 +1305,52 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 	FString ActionType = ActionObj->GetStringField(TEXT("action_type"));
 	FString ConnectedTarget = TEXT("None");
 
-	if (ActionType.Equals(TEXT("PrintString"), ESearchCase::IgnoreCase))
+	// Re-binding replaces the previous action chain instead of stacking a second exec link
+	// (which would fire the action twice per click).
+	int32 ReplacedNodes = 0;
+	if (UEdGraphPin* OldThen = BoundEvent->FindPin(UEdGraphSchema_K2::PN_Then))
+	{
+		TArray<UEdGraphNode*> OldTargets;
+		for (UEdGraphPin* Linked : OldThen->LinkedTo)
+		{
+			if (Linked && Linked->GetOwningNode())
+			{
+				OldTargets.AddUnique(Linked->GetOwningNode());
+			}
+		}
+		OldThen->BreakAllPinLinks();
+		for (UEdGraphNode* Old : OldTargets)
+		{
+			FBlueprintEditorUtils::RemoveNode(BP, Old, true);
+			++ReplacedNodes;
+		}
+	}
+
+	UK2Node_CallFunction* ActionNode = nullptr;
+	if (ActionType.Equals(TEXT("GameplayAction"), ESearchCase::IgnoreCase))
+	{
+		// OnClicked -> UGameForgeGameplayStateComponent::ExecuteMenuActionInWorld(self, Action)
+		const FString Action = ActionObj->GetStringField(TEXT("action"));
+		if (Action.IsEmpty())
+		{
+			return MakeEnvelope(false, nullptr, {TEXT("GameplayAction binding requires action_params.action (e.g. HealBoost, ToggleHUD, CloseMenu).")});
+		}
+		ActionNode = NewObject<UK2Node_CallFunction>(EventGraph);
+		ActionNode->FunctionReference.SetExternalMember(GET_FUNCTION_NAME_CHECKED(UGameForgeGameplayStateComponent, ExecuteMenuActionInWorld),
+			UGameForgeGameplayStateComponent::StaticClass());
+		ActionNode->NodePosX = BoundEvent->NodePosX + 320;
+		ActionNode->NodePosY = BoundEvent->NodePosY;
+		ActionNode->CreateNewGuid();
+		ActionNode->PostPlacedNewNode();
+		ActionNode->AllocateDefaultPins();
+		EventGraph->AddNode(ActionNode, true, true);
+		if (UEdGraphPin* Pin = ActionNode->FindPin(TEXT("ActionName")))
+		{
+			Pin->DefaultValue = Action;
+		}
+		ConnectedTarget = FString::Printf(TEXT("GameplayAction:%s"), *Action);
+	}
+	else if (ActionType.Equals(TEXT("PrintString"), ESearchCase::IgnoreCase))
 	{
 		UK2Node_CallFunction* CallNode = NewObject<UK2Node_CallFunction>(EventGraph);
 		CallNode->FunctionReference.SetExternalMember(FName(TEXT("PrintString")), UKismetSystemLibrary::StaticClass());
@@ -1267,13 +1368,22 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 			Pin->DefaultValue = Msg;
 		}
 
-		UEdGraphPin* ThenPin = BoundEvent->FindPin(UEdGraphSchema_K2::PN_Then);
-		UEdGraphPin* ExecPin = CallNode->FindPin(UEdGraphSchema_K2::PN_Execute);
-		if (ThenPin && ExecPin)
-		{
-			ThenPin->MakeLinkTo(ExecPin);
-		}
+		ActionNode = CallNode;
 		ConnectedTarget = TEXT("PrintString");
+	}
+	else if (!ActionType.IsEmpty())
+	{
+		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Unsupported action_type '%s' (use GameplayAction or PrintString)."), *ActionType)});
+	}
+
+	if (ActionNode)
+	{
+		UEdGraphPin* ThenPin = BoundEvent->FindPin(UEdGraphSchema_K2::PN_Then);
+		UEdGraphPin* ExecPin = ActionNode->FindPin(UEdGraphSchema_K2::PN_Execute);
+		if (!ThenPin || !ExecPin || !GetDefault<UEdGraphSchema_K2>()->TryCreateConnection(ThenPin, ExecPin))
+		{
+			return MakeEnvelope(false, nullptr, {TEXT("Failed to connect bound event to its action node.")});
+		}
 	}
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(BP);
@@ -1286,9 +1396,12 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 	Data->SetStringField(TEXT("custom_function_name"), BoundEvent->CustomFunctionName.ToString());
 	Data->SetStringField(TEXT("node_id"), BoundEvent->NodeGuid.ToString());
 	Data->SetStringField(TEXT("connected_target"), ConnectedTarget);
-	Data->SetStringField(TEXT("compile_status"), BP->Status == BS_UpToDate ? TEXT("UpToDate") : TEXT("Dirty"));
+	Data->SetNumberField(TEXT("replaced_nodes"), ReplacedNodes);
+	const bool bCompiled = BP->Status == BS_UpToDate || BP->Status == BS_UpToDateWithWarnings;
+	Data->SetStringField(TEXT("compile_status"), BP->Status == BS_UpToDate ? TEXT("UpToDate")
+		: BP->Status == BS_UpToDateWithWarnings ? TEXT("UpToDateWithWarnings") : BP->Status == BS_Error ? TEXT("Error") : TEXT("Dirty"));
 
-	return MakeEnvelope(true, Data);
+	return bCompiled ? MakeEnvelope(true, Data) : MakeEnvelope(false, Data, {TEXT("Widget Blueprint failed to compile after binding.")});
 }
 
 FString UGameForgeWidgetLibrary::InspectWidgetEvents(const FString& AssetPath)
@@ -1411,115 +1524,100 @@ FString UGameForgeWidgetLibrary::TriggerButtonClickRealInput(const FString& Asse
 
 	// 2. Query Slate cached geometry and calculate absolute pointer coordinates
 	TSharedPtr<SWidget> SlateWidget = TargetButton->GetCachedWidget();
-	FGeometry Geometry = SlateWidget.IsValid() ? SlateWidget->GetTickSpaceGeometry() : FGeometry();
+	if (!SlateWidget.IsValid())
+	{
+		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' has no live Slate widget (not yet painted)."), *ButtonName)});
+	}
+	FGeometry Geometry = SlateWidget->GetTickSpaceGeometry();
 	FVector2D LocalCenter = Geometry.GetLocalSize() * 0.5f;
 	FVector2D AbsoluteCenter = Geometry.LocalToAbsolute(LocalCenter);
 
-	// 3. Perform Real Slate Input Routing
-	TArray<TSharedRef<SWindow>> TopWindows = FSlateApplication::Get().GetInteractiveTopLevelWindows();
-	FWidgetPath WidgetPath = FSlateApplication::Get().LocateWindowUnderMouse(AbsoluteCenter, TopWindows);
-
-	FPointerEvent MouseMoveEvt(0, AbsoluteCenter, AbsoluteCenter, FVector2D::ZeroVector, TSet<FKey>(), FModifierKeysState());
-	FSlateApplication::Get().ProcessMouseMoveEvent(MouseMoveEvt);
-
-	FPointerEvent MouseDownEvt(0, AbsoluteCenter, AbsoluteCenter, FVector2D::ZeroVector, TSet<FKey>(), FModifierKeysState());
-	FSlateApplication::Get().RoutePointerDownEvent(WidgetPath, MouseDownEvt);
-
-	FPointerEvent MouseUpEvt(0, AbsoluteCenter, AbsoluteCenter, FVector2D::ZeroVector, TSet<FKey>(), FModifierKeysState());
-	FSlateApplication::Get().RoutePointerUpEvent(WidgetPath, MouseUpEvt);
-
-	UE_LOG(LogTemp, Log, TEXT("[GameForgeWidgetLibrary] Real Slate input routed to '%s' at absolute screen pos (%.1f, %.1f)"), *ButtonName, AbsoluteCenter.X, AbsoluteCenter.Y);
-
-	// 4. Locate gameplay state component
-	UGameForgeGameplayStateComponent* Comp = nullptr;
-	for (TActorIterator<AActor> It(PlayWorld); It; ++It)
+	// 3. Hit-test: the topmost widget path under the pointer must contain this button.
+	//    Query the hit-test grid of the window that actually hosts the button (the structure Slate
+	//    uses for OS clicks). Under -RenderOffscreen the window's desktop rectangle is not reliable,
+	//    so the window-rect gate in LocateWindowUnderMouse is reported but not required.
+	FSlateApplication& Slate = FSlateApplication::Get();
+	const int32 HitUserIndex = Slate.GetUserIndexForMouse();
+	FWidgetPath PathToButton;
+	Slate.GeneratePathToWidgetUnchecked(SlateWidget.ToSharedRef(), PathToButton);
+	TSharedPtr<SWindow> HostWindow = PathToButton.IsValid() ? PathToButton.GetWindow() : TSharedPtr<SWindow>();
+	FWidgetPath WidgetPath;
+	bool bWindowRectContainsPoint = false;
+	if (HostWindow.IsValid())
 	{
-		if (AActor* Act = *It)
-		{
-			if (UGameForgeGameplayStateComponent* C = Act->FindComponentByClass<UGameForgeGameplayStateComponent>())
-			{
-				Comp = C;
-				break;
-			}
-		}
+		bWindowRectContainsPoint = HostWindow->IsScreenspaceMouseWithin(AbsoluteCenter);
+		TArray<FWidgetAndPointer> Bubble = HostWindow->GetHittestGrid().GetBubblePath(AbsoluteCenter, 0.0f, false, HitUserIndex);
+		WidgetPath = FWidgetPath(MoveTemp(Bubble));
 	}
-	if (!Comp)
-	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Name = FName(TEXT("GF_GameplayProbeActor"));
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AActor* ProbeActor = PlayWorld->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-		if (ProbeActor)
-		{
-			Comp = NewObject<UGameForgeGameplayStateComponent>(ProbeActor, TEXT("GFGameplayStateComponent"));
-			Comp->RegisterComponent();
-			ProbeActor->AddInstanceComponent(Comp);
-		}
-	}
+	const bool bHitPathContainsButton = WidgetPath.IsValid() && WidgetPath.ContainsWidget(SlateWidget.Get());
 
-	FString ExecutedAction = TEXT("None");
-	if (Comp)
+	TSharedPtr<FJsonObject> HitDiag = MakeShared<FJsonObject>();
+	HitDiag->SetNumberField(TEXT("screen_x"), AbsoluteCenter.X);
+	HitDiag->SetNumberField(TEXT("screen_y"), AbsoluteCenter.Y);
+	HitDiag->SetNumberField(TEXT("widget_width"), Geometry.GetLocalSize().X);
+	HitDiag->SetNumberField(TEXT("widget_height"), Geometry.GetLocalSize().Y);
+	HitDiag->SetBoolField(TEXT("host_window_found"), HostWindow.IsValid());
+	HitDiag->SetBoolField(TEXT("window_rect_contains_point"), bWindowRectContainsPoint);
+	if (HostWindow.IsValid())
 	{
-		if (ButtonName.Equals(TEXT("PrimaryButton"), ESearchCase::IgnoreCase) || ButtonName.Contains(TEXT("Primary")))
-		{
-			Comp->ExecuteMenuAction(TEXT("HealBoost"));
-			ExecutedAction = TEXT("HealBoost");
-			for (TObjectIterator<UUserWidget> It; It; ++It)
-			{
-				UUserWidget* W = *It;
-				if (W->GetWorld() == PlayWorld && W->IsInViewport())
-				{
-					if (UProgressBar* HBar = Cast<UProgressBar>(W->GetWidgetFromName(FName(TEXT("HealthBar")))))
-					{
-						HBar->SetPercent(Comp->Health / Comp->MaxHealth);
-					}
-					if (UTextBlock* HLabel = Cast<UTextBlock>(W->GetWidgetFromName(FName(TEXT("HealthLabel")))))
-					{
-						HLabel->SetText(FText::FromString(FString::Printf(TEXT("HEALTH: %d / %d"), (int32)Comp->Health, (int32)Comp->MaxHealth)));
-					}
-				}
-			}
-		}
-		else if (ButtonName.Equals(TEXT("SecondaryButton"), ESearchCase::IgnoreCase) || ButtonName.Contains(TEXT("Secondary")))
-		{
-			Comp->ExecuteMenuAction(TEXT("ToggleHUD"));
-			ExecutedAction = TEXT("ToggleHUD");
-			if (OwningWidget)
-			{
-				if (UTextBlock* TitleTxt = Cast<UTextBlock>(OwningWidget->GetWidgetFromName(FName(TEXT("MenuTitle")))))
-				{
-					TitleTxt->SetText(FText::FromString(TEXT("GAMEFORGE (COMPACT)")));
-				}
-				if (UTextBlock* SecTxt = Cast<UTextBlock>(OwningWidget->GetWidgetFromName(FName(TEXT("SecondaryButtonText")))))
-				{
-					SecTxt->SetText(FText::FromString(TEXT("EXPAND MENU")));
-				}
-			}
-		}
-		else if (ButtonName.Equals(TEXT("BackButton"), ESearchCase::IgnoreCase) || ButtonName.Contains(TEXT("Back")))
-		{
-			Comp->ExecuteMenuAction(TEXT("CloseMenu"));
-			ExecutedAction = TEXT("CloseMenu");
-			if (OwningWidget)
-			{
-				OwningWidget->SetVisibility(ESlateVisibility::Collapsed);
-			}
-		}
+		const FVector2D WinPos = HostWindow->GetPositionInScreen();
+		const FVector2D WinSize = HostWindow->GetSizeInScreen();
+		HitDiag->SetStringField(TEXT("window_title"), HostWindow->GetTitle().ToString());
+		HitDiag->SetStringField(TEXT("window_rect"), FString::Printf(TEXT("%.0f,%.0f %.0fx%.0f"), WinPos.X, WinPos.Y, WinSize.X, WinSize.Y));
+	}
+	HitDiag->SetStringField(TEXT("topmost_hit_widget"), WidgetPath.IsValid() ? WidgetPath.GetLastWidget()->GetTypeAsString() : TEXT("None"));
+	HitDiag->SetBoolField(TEXT("hit_path_contains_button"), bHitPathContainsButton);
+
+	if (!bHitPathContainsButton)
+	{
+		return MakeEnvelope(false, HitDiag, {FString::Printf(TEXT("Hit-test at (%.1f, %.1f) does not reach button '%s' (topmost: %s)."),
+			AbsoluteCenter.X, AbsoluteCenter.Y, *ButtonName, *HitDiag->GetStringField(TEXT("topmost_hit_widget")))});
 	}
 
-	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	// 4. Route a genuine left-button press/release through Slate's own input pipeline and
+	//    observe the button's real OnClicked broadcast. Nothing here touches gameplay state:
+	//    any state change must come from the widget's bound event graph.
+	UGameForgeClickProbe* Probe = NewObject<UGameForgeClickProbe>();
+	Probe->AddToRoot();
+	TargetButton->OnClicked.AddDynamic(Probe, &UGameForgeClickProbe::HandleClicked);
+
+	const uint32 UserIndex = HitUserIndex;
+	const uint32 PointerIndex = FSlateApplication::CursorPointerIndex;
+	const TSet<FKey> NoButtons;
+	const TSet<FKey> LeftDown = {EKeys::LeftMouseButton};
+	Slate.ProcessMouseMoveEvent(FPointerEvent(UserIndex, PointerIndex, AbsoluteCenter, AbsoluteCenter, NoButtons,
+		EKeys::Invalid, 0.0f, FModifierKeysState()));
+	Slate.RoutePointerDownEvent(WidgetPath, FPointerEvent(UserIndex, PointerIndex, AbsoluteCenter, AbsoluteCenter, LeftDown,
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState()));
+	Slate.RoutePointerUpEvent(WidgetPath, FPointerEvent(UserIndex, PointerIndex, AbsoluteCenter, AbsoluteCenter, NoButtons,
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState()));
+
+	TargetButton->OnClicked.RemoveDynamic(Probe, &UGameForgeClickProbe::HandleClicked);
+	const int32 OnClickedCount = Probe->ClickCount;
+	Probe->RemoveFromRoot();
+
+	UE_LOG(LogTemp, Log, TEXT("[GameForgeWidgetLibrary] Slate click on '%s' at (%.1f, %.1f): OnClicked fired %d time(s)"),
+		*ButtonName, AbsoluteCenter.X, AbsoluteCenter.Y, OnClickedCount);
+
+	TSharedPtr<FJsonObject> Data = HitDiag;
 	Data->SetStringField(TEXT("button_name"), ButtonName);
 	Data->SetStringField(TEXT("owning_widget"), OwningWidget ? OwningWidget->GetName() : TEXT("None"));
-	Data->SetStringField(TEXT("executed_action"), ExecutedAction);
-	Data->SetBoolField(TEXT("clicked"), true);
-	Data->SetStringField(TEXT("input_method"), TEXT("real_slate_input_routing"));
-	Data->SetBoolField(TEXT("hit_test_eligible"), true);
-	Data->SetBoolField(TEXT("slate_input_routed"), true);
-	Data->SetNumberField(TEXT("screen_x"), AbsoluteCenter.X);
-	Data->SetNumberField(TEXT("screen_y"), AbsoluteCenter.Y);
-	Data->SetNumberField(TEXT("widget_width"), Geometry.GetLocalSize().X);
-	Data->SetNumberField(TEXT("widget_height"), Geometry.GetLocalSize().Y);
+	Data->SetStringField(TEXT("input_method"), TEXT("slate_hittest_grid_route_pointer_lmb"));
+	Data->SetBoolField(TEXT("hit_test_eligible"), bHitPathContainsButton);
+	Data->SetNumberField(TEXT("on_clicked_count"), OnClickedCount);
+	Data->SetBoolField(TEXT("clicked"), OnClickedCount == 1);
+	if (UGameForgeGameplayStateComponent* Comp = UGameForgeGameplayStateComponent::FindOrCreateInWorld(PlayWorld))
+	{
+		Data->SetNumberField(TEXT("health_after"), Comp->Health);
+		Data->SetStringField(TEXT("menu_state_after"), Comp->ActiveMenuState);
+		Data->SetStringField(TEXT("last_executed_action"), Comp->LastExecutedAction);
+	}
 
+	if (OnClickedCount != 1)
+	{
+		return MakeEnvelope(false, Data, {FString::Printf(TEXT("Routed click reached '%s' but OnClicked fired %d times (expected exactly 1)."),
+			*ButtonName, OnClickedCount)});
+	}
 	return MakeEnvelope(true, Data);
 }
 
@@ -1701,32 +1799,7 @@ FString UGameForgeWidgetLibrary::GetGameplayState()
 		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
-	UGameForgeGameplayStateComponent* Comp = nullptr;
-	for (TActorIterator<AActor> It(PlayWorld); It; ++It)
-	{
-		if (AActor* Act = *It)
-		{
-			if (UGameForgeGameplayStateComponent* C = Act->FindComponentByClass<UGameForgeGameplayStateComponent>())
-			{
-				Comp = C;
-				break;
-			}
-		}
-	}
-
-	if (!Comp)
-	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Name = FName(TEXT("GF_GameplayProbeActor"));
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AActor* ProbeActor = PlayWorld->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-		if (ProbeActor)
-		{
-			Comp = NewObject<UGameForgeGameplayStateComponent>(ProbeActor, TEXT("GFGameplayStateComponent"));
-			Comp->RegisterComponent();
-			ProbeActor->AddInstanceComponent(Comp);
-		}
-	}
+	UGameForgeGameplayStateComponent* Comp = UGameForgeGameplayStateComponent::FindOrCreateInWorld(PlayWorld);
 
 	if (!Comp)
 	{
@@ -1768,32 +1841,7 @@ FString UGameForgeWidgetLibrary::ModifyGameplayState(float DeltaHealth, float De
 		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
-	UGameForgeGameplayStateComponent* Comp = nullptr;
-	for (TActorIterator<AActor> It(PlayWorld); It; ++It)
-	{
-		if (AActor* Act = *It)
-		{
-			if (UGameForgeGameplayStateComponent* C = Act->FindComponentByClass<UGameForgeGameplayStateComponent>())
-			{
-				Comp = C;
-				break;
-			}
-		}
-	}
-
-	if (!Comp)
-	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Name = FName(TEXT("GF_GameplayProbeActor"));
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AActor* ProbeActor = PlayWorld->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-		if (ProbeActor)
-		{
-			Comp = NewObject<UGameForgeGameplayStateComponent>(ProbeActor, TEXT("GFGameplayStateComponent"));
-			Comp->RegisterComponent();
-			ProbeActor->AddInstanceComponent(Comp);
-		}
-	}
+	UGameForgeGameplayStateComponent* Comp = UGameForgeGameplayStateComponent::FindOrCreateInWorld(PlayWorld);
 
 	if (!Comp)
 	{
@@ -1817,39 +1865,8 @@ FString UGameForgeWidgetLibrary::ModifyGameplayState(float DeltaHealth, float De
 		Comp->ExecuteMenuAction(MenuAction);
 	}
 
-	int32 UpdatedWidgets = 0;
-	for (TObjectIterator<UUserWidget> It; It; ++It)
-	{
-		UUserWidget* W = *It;
-		if (W->GetWorld() == PlayWorld && W->IsInViewport())
-		{
-			if (UProgressBar* HBar = Cast<UProgressBar>(W->GetWidgetFromName(FName(TEXT("HealthBar")))))
-			{
-				HBar->SetPercent(Comp->Health / Comp->MaxHealth);
-				UpdatedWidgets++;
-			}
-			if (UTextBlock* HLabel = Cast<UTextBlock>(W->GetWidgetFromName(FName(TEXT("HealthLabel")))))
-			{
-				HLabel->SetText(FText::FromString(FString::Printf(TEXT("HEALTH: %d / %d"), (int32)Comp->Health, (int32)Comp->MaxHealth)));
-				UpdatedWidgets++;
-			}
-			if (UProgressBar* SBar = Cast<UProgressBar>(W->GetWidgetFromName(FName(TEXT("StaminaBar")))))
-			{
-				SBar->SetPercent(Comp->Stamina / Comp->MaxStamina);
-				UpdatedWidgets++;
-			}
-			if (UTextBlock* SLabel = Cast<UTextBlock>(W->GetWidgetFromName(FName(TEXT("StaminaLabel")))))
-			{
-				SLabel->SetText(FText::FromString(FString::Printf(TEXT("STAMINA: %d / %d"), (int32)Comp->Stamina, (int32)Comp->MaxStamina)));
-				UpdatedWidgets++;
-			}
-
-			if (Comp->ActiveMenuState.Equals(TEXT("Closed"), ESearchCase::IgnoreCase) && W->GetName().Contains(TEXT("Menu")))
-			{
-				W->SetVisibility(ESlateVisibility::Collapsed);
-			}
-		}
-	}
+	// The HUD follows from the component's own change events (RefreshViewportHUD), not from this op.
+	const int32 UpdatedWidgets = Comp->RefreshViewportHUD();
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetNumberField(TEXT("before_health"), BeforeH);
@@ -1866,3 +1883,17 @@ FString UGameForgeWidgetLibrary::ModifyGameplayState(float DeltaHealth, float De
 	return MakeEnvelope(true, Data);
 }
 
+
+FString UGameForgeWidgetLibrary::CaptureViewportWithUI(const FString& OutputPath)
+{
+	if (OutputPath.IsEmpty())
+	{
+		return MakeEnvelope(false, nullptr, {TEXT("OutputPath is required.")});
+	}
+	FScreenshotRequest::RequestScreenshot(OutputPath, /*bShowUI=*/true, /*bAddFilenameSuffix=*/false);
+	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	Data->SetStringField(TEXT("requested_path"), OutputPath);
+	Data->SetBoolField(TEXT("show_ui"), true);
+	Data->SetBoolField(TEXT("async"), true);
+	return MakeEnvelope(true, Data);
+}

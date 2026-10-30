@@ -1,0 +1,173 @@
+{
+  "asset_id": "char_adventurer_hero_01_locomotion",
+  "asset_name": "ABP_CharacterLocomotion",
+  "model_name": "GameForge-KinematicSynthesis-V1",
+  "model_version": "1.0.0",
+  "license_name": "CC-BY-4.0",
+  "territory_flags": [],
+  "target_territory": "GLOBAL",
+  "input_hashes": {
+    "spec_sha256": "a5e43078635e75644481d88ed43df13f89312284aacd18716fb0e6868c12c235"
+  },
+  "parameters": {
+    "bundle_id": "char_adventurer_hero_01_locomotion",
+    "character_id": "char_adventurer_hero_01",
+    "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+    "anim_blueprint_name": "ABP_CharacterLocomotion",
+    "destination_path": "/Game/Animations",
+    "clips": [
+      {
+        "spec_id": "char_adventurer_hero_01_idle",
+        "name": "Anim_Idle",
+        "action": "idle",
+        "target_character_id": "char_adventurer_hero_01",
+        "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+        "movement_style": "standard_biped",
+        "duration_seconds": 2.0,
+        "sample_rate_hz": 30,
+        "is_looping": true,
+        "is_root_motion": false,
+        "speed_threshold_cm_s": 0.0,
+        "coordinate_convention": "Z-Up_X-Forward",
+        "quarantine_path": "/Game/Quarantine/Animations",
+        "destination_path": "/Game/Animations",
+        "quality_criteria": {
+          "max_rotation_jitter_deg": 25.0,
+          "max_loop_discontinuity_deg": 5.0,
+          "enforce_unit_quaternions": true,
+          "enforce_finite_values": true
+        }
+      },
+      {
+        "spec_id": "char_adventurer_hero_01_walk",
+        "name": "Anim_Walk",
+        "action": "walk",
+        "target_character_id": "char_adventurer_hero_01",
+        "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+        "movement_style": "standard_biped",
+        "duration_seconds": 1.2,
+        "sample_rate_hz": 30,
+        "is_looping": true,
+        "is_root_motion": false,
+        "speed_threshold_cm_s": 15.0,
+        "coordinate_convention": "Z-Up_X-Forward",
+        "quarantine_path": "/Game/Quarantine/Animations",
+        "destination_path": "/Game/Animations",
+        "quality_criteria": {
+          "max_rotation_jitter_deg": 25.0,
+          "max_loop_discontinuity_deg": 5.0,
+          "enforce_unit_quaternions": true,
+          "enforce_finite_values": true
+        }
+      },
+      {
+        "spec_id": "char_adventurer_hero_01_run",
+        "name": "Anim_Run",
+        "action": "run",
+        "target_character_id": "char_adventurer_hero_01",
+        "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+        "movement_style": "standard_biped",
+        "duration_seconds": 0.8,
+        "sample_rate_hz": 30,
+        "is_looping": true,
+        "is_root_motion": false,
+        "speed_threshold_cm_s": 300.0,
+        "coordinate_convention": "Z-Up_X-Forward",
+        "quarantine_path": "/Game/Quarantine/Animations",
+        "destination_path": "/Game/Animations",
+        "quality_criteria": {
+          "max_rotation_jitter_deg": 25.0,
+          "max_loop_discontinuity_deg": 5.0,
+          "enforce_unit_quaternions": true,
+          "enforce_finite_values": true
+        }
+      },
+      {
+        "spec_id": "char_adventurer_hero_01_jump",
+        "name": "Anim_Jump",
+        "action": "jump",
+        "target_character_id": "char_adventurer_hero_01",
+        "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+        "movement_style": "standard_biped",
+        "duration_seconds": 0.6,
+        "sample_rate_hz": 30,
+        "is_looping": false,
+        "is_root_motion": false,
+        "speed_threshold_cm_s": 0.0,
+        "coordinate_convention": "Z-Up_X-Forward",
+        "quarantine_path": "/Game/Quarantine/Animations",
+        "destination_path": "/Game/Animations",
+        "quality_criteria": {
+          "max_rotation_jitter_deg": 25.0,
+          "max_loop_discontinuity_deg": 5.0,
+          "enforce_unit_quaternions": true,
+          "enforce_finite_values": true
+        }
+      },
+      {
+        "spec_id": "char_adventurer_hero_01_fall",
+        "name": "Anim_Fall",
+        "action": "fall",
+        "target_character_id": "char_adventurer_hero_01",
+        "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+        "movement_style": "standard_biped",
+        "duration_seconds": 0.8,
+        "sample_rate_hz": 30,
+        "is_looping": true,
+        "is_root_motion": false,
+        "speed_threshold_cm_s": 0.0,
+        "coordinate_convention": "Z-Up_X-Forward",
+        "quarantine_path": "/Game/Quarantine/Animations",
+        "destination_path": "/Game/Animations",
+        "quality_criteria": {
+          "max_rotation_jitter_deg": 25.0,
+          "max_loop_discontinuity_deg": 5.0,
+          "enforce_unit_quaternions": true,
+          "enforce_finite_values": true
+        }
+      },
+      {
+        "spec_id": "char_adventurer_hero_01_land",
+        "name": "Anim_Land",
+        "action": "land",
+        "target_character_id": "char_adventurer_hero_01",
+        "target_skeleton_path": "/Game/Characters/GFAdventurerHero/SK_GFAdventurerHero_Skeleton",
+        "movement_style": "standard_biped",
+        "duration_seconds": 0.4,
+        "sample_rate_hz": 30,
+        "is_looping": false,
+        "is_root_motion": false,
+        "speed_threshold_cm_s": 0.0,
+        "coordinate_convention": "Z-Up_X-Forward",
+        "quarantine_path": "/Game/Quarantine/Animations",
+        "destination_path": "/Game/Animations",
+        "quality_criteria": {
+          "max_rotation_jitter_deg": 25.0,
+          "max_loop_discontinuity_deg": 5.0,
+          "enforce_unit_quaternions": true,
+          "enforce_finite_values": true
+        }
+      }
+    ]
+  },
+  "seed": 42,
+  "tool_versions": {},
+  "output_hashes": {
+    "screenshot": "ab44a41a209e6539061ae06dbd29fa5f285ad99e1ac6dd567371ae3846609877",
+    "target_anim_bp": "/Game/Animations/ABP_CharacterLocomotion",
+    "retargeted_anim": "/Game/Animations/Anim_LocomotionGait"
+  },
+  "gate_results": {
+    "spec_valid": true,
+    "motion_synthesis_passed": true,
+    "validation_passed": true,
+    "broken_clip_rejected": true,
+    "unreal_skeleton_verified": true,
+    "unreal_retarget_verified": true,
+    "unreal_blueprint_created": true,
+    "unreal_blueprint_compiled": true,
+    "preview_actor_spawned": true
+  },
+  "created_at": 1793295805.3030403,
+  "provenance_hash": "9a5c55b6e340c824b122cbe44b6cedc5260a68909e0e055314b2ebd33e812bc2"
+}

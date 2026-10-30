@@ -57,6 +57,7 @@ class PlanPanel(QWidget):
         super().__init__(parent)
         self._workspace = Path(workspace_root).resolve()
         self._active_plan: Optional[TaskPlan] = None
+        self._runner = None  # PlanRunner, created on first Run/Resume
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -283,11 +284,27 @@ class PlanPanel(QWidget):
 
     @Slot()
     def _on_run_clicked(self) -> None:
-        if self._active_plan:
-            self.run_requested.emit(self._active_plan)
+        if not self._active_plan:
+            return
+        if self._runner is None or self._runner.workspace_root != self._workspace:
+            from ..services.plan_runner import PlanRunner
+            self._runner = PlanRunner(self._workspace, self)
+            self._runner.event.connect(self.handle_plan_event)
+            self._runner.finished.connect(self._on_plan_finished)
+        # The worker mutates its own deep copy; the panel's copy follows via PlanEvents.
+        if self._runner.run(self._active_plan.model_copy(deep=True)):
+            self._btn_resume.setEnabled(False)
+        self.run_requested.emit(self._active_plan)
+
+    @Slot(object)
+    def _on_plan_finished(self, plan: TaskPlan) -> None:
+        self._btn_resume.setEnabled(True)
+        self.set_plan(plan)
 
     @Slot()
     def _on_cancel_clicked(self) -> None:
+        if self._runner is not None:
+            self._runner.cancel()
         self.cancel_requested.emit()
 
     @Slot()

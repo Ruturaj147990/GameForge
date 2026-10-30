@@ -30,6 +30,9 @@ from ..recipes.grid_board_game.recipe import (
 from ..recipes.platformer.recipe import (
     RECIPE_ID as PLATFORMER_RECIPE_ID, RECIPE_VERSION as PLATFORMER_RECIPE_VERSION,
     SELFTEST_LOG_PASS as PLATFORMER_SELFTEST_PASS, PlatformerParams, generate as platformer_generate)
+from ..recipes.procedural_world.recipe import (
+    RECIPE_ID as PROCEDURAL_RECIPE_ID, RECIPE_VERSION as PROCEDURAL_RECIPE_VERSION,
+    SELFTEST_LOG_PASS as PROCEDURAL_SELFTEST_PASS, ProceduralWorldParams, generate as procedural_generate)
 from . import stages as engine_stages
 from ..unreal.toolchain import UnrealToolchain
 
@@ -99,12 +102,18 @@ class GamePipeline:
         except Exception:
             pass
 
-    def run(self, params: Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams], skip_package: bool = False,
+    def run(self, params: Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams], skip_package: bool = False,
             stop_after: Optional[str] = None) -> PipelineResult:
+        is_procedural = isinstance(params, ProceduralWorldParams)
         is_platformer = isinstance(params, PlatformerParams)
         is_arena = isinstance(params, ArenaCombatParams)
         is_card = isinstance(params, CardBattlerParams)
-        if is_card:
+        if is_procedural:
+            recipe_id = PROCEDURAL_RECIPE_ID
+            recipe_version = PROCEDURAL_RECIPE_VERSION
+            selftest_pass = PROCEDURAL_SELFTEST_PASS
+            default_gm = f"/Script/{params.project_name}.GFProceduralGameMode"
+        elif is_card:
             recipe_id = CARD_RECIPE_ID
             recipe_version = CARD_RECIPE_VERSION
             selftest_pass = CARD_SELFTEST_PASS
@@ -171,7 +180,9 @@ class GamePipeline:
         # 2 scaffold
         def s_scaffold():
             name = params.project_name
-            if is_card:
+            if is_procedural:
+                deps = ["Landscape", "Foliage", "NavigationSystem", "UMG", "Slate", "SlateCore"]
+            elif is_card:
                 deps = ["UMG", "Slate", "SlateCore"]
             elif is_arena:
                 deps = ["AIModule", "NavigationSystem", "UMG", "Slate", "SlateCore"]
@@ -186,7 +197,9 @@ class GamePipeline:
 
         # 3 sources
         def s_sources():
-            if is_card:
+            if is_procedural:
+                files = procedural_generate(params)
+            elif is_card:
                 files = card_generate(params)
             elif is_arena:
                 files = arena_generate(params)
@@ -212,7 +225,13 @@ class GamePipeline:
 
         # 5 assemble level in the live editor
         def s_assemble():
-            if is_card:
+            if is_procedural:
+                ok, data, errors = engine_stages.assemble_procedural_world_level(
+                    self.engine_root, uproject, evidence_dir, params.project_name,
+                    seed=params.seed, terrain_type=params.terrain_type,
+                    elevation_scale=params.elevation_scale, road_width=params.road_width,
+                    foliage_density=params.foliage_density, landmark_type=params.landmark_type)
+            elif is_card:
                 ok, data, errors = engine_stages.assemble_card_level(
                     self.engine_root, uproject, evidence_dir, params.project_name)
             elif is_arena:

@@ -15,7 +15,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGFMenuActionTriggered, const FStr
  * Implements bounded values, dynamic multicasts, and event-driven updates.
  */
 UCLASS(ClassGroup=(GameForge), meta=(BlueprintSpawnableComponent))
-class GAMEFORGEEDITOR_API UGameForgeGameplayStateComponent : public UActorComponent
+class GAMEFORGERUNTIME_API UGameForgeGameplayStateComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
@@ -66,4 +66,22 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Gameplay")
 	void ResetStats();
+
+	/**
+	 * Entry point for widget event graphs (e.g. a button's OnClicked): runs ActionName on the
+	 * world's gameplay-state component. When called from a UUserWidget, menu actions also act
+	 * on that widget (CloseMenu collapses it, ToggleHUD retitles it).
+	 */
+	UFUNCTION(BlueprintCallable, Category="Gameplay", meta=(WorldContext="WorldContextObject"))
+	static void ExecuteMenuActionInWorld(UObject* WorldContextObject, const FString& ActionName);
+
+	/** Returns the world's gameplay-state component, spawning a holder actor if none exists. */
+	static UGameForgeGameplayStateComponent* FindOrCreateInWorld(UWorld* World);
+
+	/**
+	 * Pushes current state into viewport widgets that follow the HUD naming convention
+	 * (HealthBar, HealthLabel, StaminaBar, StaminaLabel). Called on every state change.
+	 * Returns the number of widgets updated.
+	 */
+	int32 RefreshViewportHUD() const;
 };

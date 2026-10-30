@@ -173,3 +173,123 @@ class LiveOperations:
         args = {"delta_health": delta_health, "delta_stamina": delta_stamina, "menu_action": menu_action}
         return await self._call("gameplay_modify_state", args, "transient")
 
+    # ── Landscape & Procedural World Operations ─────────────────────────────
+
+    async def landscape_create(self, component_count_x: int = 2, component_count_y: int = 2,
+                               quads_per_section: int = 63, sections_per_component: int = 1,
+                               elevation_scale: float = 1800.0, seed: int = 2026,
+                               terrain_type: str = "Valley", material_path: str = "") -> OperationResult:
+        args = {
+            "component_count_x": component_count_x,
+            "component_count_y": component_count_y,
+            "quads_per_section": quads_per_section,
+            "sections_per_component": sections_per_component,
+            "elevation_scale": elevation_scale,
+            "seed": seed,
+            "terrain_type": terrain_type,
+            "material_path": material_path,
+        }
+        return await self._call("landscape_create", args, "transactional")
+
+    async def spline_create_road(self, road_name: str = "Road_HighlandPass", road_width: float = 350.0,
+                                 points: Optional[List[Dict[str, float]]] = None,
+                                 road_material: str = "") -> OperationResult:
+        args = {
+            "road_name": road_name,
+            "road_width": road_width,
+            "points": points or [],
+            "road_material": road_material,
+        }
+        return await self._call("spline_create_road", args, "transactional")
+
+    async def foliage_scatter(self, cluster_name: str = "Foliage_Cluster", instance_count: int = 40,
+                              seed: int = 888, area_radius: float = 3000.0,
+                              min_elevation: float = -500.0, max_elevation: float = 2000.0,
+                              max_slope_degrees: float = 35.0, road_clearance: float = 400.0,
+                              static_mesh: str = "") -> OperationResult:
+        args = {
+            "cluster_name": cluster_name,
+            "instance_count": instance_count,
+            "seed": seed,
+            "area_radius": area_radius,
+            "min_elevation": min_elevation,
+            "max_elevation": max_elevation,
+            "max_slope_degrees": max_slope_degrees,
+            "road_clearance": road_clearance,
+            "static_mesh": static_mesh,
+        }
+        return await self._call("foliage_scatter", args, "transactional")
+
+    async def landmark_spawn(self, landmark_name: str = "Landmark_AncientRuins",
+                             landmark_type: str = "Ruins",
+                             location: Optional[Dict[str, float]] = None) -> OperationResult:
+        args = {
+            "landmark_name": landmark_name,
+            "landmark_type": landmark_type,
+            "location": location or {"x": 2500.0, "y": 2000.0, "z": 450.0},
+        }
+        return await self._call("landmark_spawn", args, "transactional")
+
+    async def procedural_world_inspect(self) -> OperationResult:
+        return await self._call("procedural_world_inspect", {}, "read-only")
+
+    async def character_import_skeletal_mesh(self, source_file: str,
+                                             destination_path: str = "/Game/Quarantine/Characters",
+                                             destination_name: str = "",
+                                             replace_existing: bool = True,
+                                             scale: float = 1.0) -> OperationResult:
+        args = {
+            "source_file": source_file,
+            "destination_path": destination_path,
+            "destination_name": destination_name,
+            "replace_existing": replace_existing,
+            "scale": scale,
+        }
+        return await self._call("character_import_skeletal_mesh", args, "snapshot-only")
+
+    async def character_inspect_skeletal_mesh(self, skeletal_mesh_path: str) -> OperationResult:
+        args = {"skeletal_mesh_path": skeletal_mesh_path}
+        return await self._call("character_inspect_skeletal_mesh", args, "read-only")
+
+    async def character_spawn_preview(self, skeletal_mesh_path: str,
+                                      location: Optional[List[float]] = None,
+                                      rotation: Optional[List[float]] = None,
+                                      actor_label: str = "GF_CharacterPreview") -> OperationResult:
+        args = {
+            "skeletal_mesh_path": skeletal_mesh_path,
+            "location": location or [0.0, 0.0, 0.0],
+            "rotation": rotation or [0.0, 0.0, 0.0],
+            "actor_label": actor_label,
+        }
+        return await self._call("character_spawn_preview", args, "transactional")
+
+    async def anim_inspect_sequence(self, anim_sequence_path: str) -> OperationResult:
+        args = {"anim_sequence_path": anim_sequence_path}
+        return await self._call("anim_inspect_sequence", args, "read-only")
+
+    async def anim_inspect_blueprint(self, anim_blueprint_path: str) -> OperationResult:
+        args = {"anim_blueprint_path": anim_blueprint_path}
+        return await self._call("anim_inspect_blueprint", args, "read-only")
+
+    async def anim_create_locomotion_blueprint(self, blueprint_name: str,
+                                               destination_path: str,
+                                               skeleton_path: str) -> OperationResult:
+        args = {
+            "blueprint_name": blueprint_name,
+            "destination_path": destination_path,
+            "skeleton_path": skeleton_path,
+        }
+        return await self._call("anim_create_locomotion_blueprint", args, "snapshot-only")
+
+    async def anim_retarget_sequence(self, source_sequence_path: str,
+                                     target_skeleton_path: str,
+                                     destination_path: str,
+                                     destination_name: str) -> OperationResult:
+        args = {
+            "source_sequence_path": source_sequence_path,
+            "target_skeleton_path": target_skeleton_path,
+            "destination_path": destination_path,
+            "destination_name": destination_name,
+        }
+        return await self._call("anim_retarget_sequence", args, "snapshot-only")
+

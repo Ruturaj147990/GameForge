@@ -1,11 +1,11 @@
 {
   "milestone": "MILESTONE_4_FUNCTIONAL_UMG_GAMEPLAY_STATE",
-  "started_at": "2026-10-29T21:10:16+0530",
+  "started_at": "2026-10-30T20:01:13+0530",
   "steps": [
     {
       "step": "0_handshake",
       "ok": true,
-      "elapsed_s": 0.042,
+      "elapsed_s": 0.088,
       "engine_version": "5.7.4-51494982+++UE5+Release-5.7"
     },
     {
@@ -16,40 +16,41 @@
     {
       "step": "2_create_menu_box",
       "ok": true,
-      "elapsed_s": 0.044
+      "elapsed_s": 0.107
     },
     {
       "step": "3_add_menu_title",
       "ok": true,
-      "elapsed_s": 0.055
+      "elapsed_s": 0.075
     },
     {
       "step": "4_add_primary_button",
       "ok": true,
-      "elapsed_s": 0.067
+      "elapsed_s": 0.066
     },
     {
       "step": "5_add_secondary_button",
       "ok": true,
-      "elapsed_s": 0.068
+      "elapsed_s": 0.066
     },
     {
       "step": "6_add_back_button",
       "ok": true,
-      "elapsed_s": 0.068
+      "elapsed_s": 0.066
     },
     {
       "step": "7_bind_widget_events",
       "ok": true,
-      "elapsed_s": 0.908,
+      "elapsed_s": 0.973,
       "bindings": [
         {
           "asset_path": "/Game/UI/WBP_GameForgeMenu_V1",
           "widget_name": "PrimaryButton",
           "delegate_name": "OnClicked",
           "custom_function_name": "BndEvt__WBP_GameForgeMenu_V1_PrimaryButton_OnClicked",
-          "node_id": "32535D204BF9DA48E4E4ED9AA1246AE0",
-          "connected_target": "PrintString",
+          "node_id": "89116CD444E9199F7BC570A6C3426FFD",
+          "connected_target": "GameplayAction:HealBoost",
+          "replaced_nodes": 0,
           "compile_status": "UpToDate"
         },
         {
@@ -57,8 +58,9 @@
           "widget_name": "SecondaryButton",
           "delegate_name": "OnClicked",
           "custom_function_name": "BndEvt__WBP_GameForgeMenu_V1_SecondaryButton_OnClicked",
-          "node_id": "9BFE763F40046E5B3618379AE8CAE165",
-          "connected_target": "PrintString",
+          "node_id": "48A25EC94C95B5D66C3611868B7E6D1E",
+          "connected_target": "GameplayAction:ToggleHUD",
+          "replaced_nodes": 0,
           "compile_status": "UpToDate"
         },
         {
@@ -66,8 +68,9 @@
           "widget_name": "BackButton",
           "delegate_name": "OnClicked",
           "custom_function_name": "BndEvt__WBP_GameForgeMenu_V1_BackButton_OnClicked",
-          "node_id": "94BBF2B4471ACE5051AA2FAE3D89C646",
-          "connected_target": "PrintString",
+          "node_id": "7E1314DA467CC5038452889E14E3C2D5",
+          "connected_target": "GameplayAction:CloseMenu",
+          "replaced_nodes": 0,
           "compile_status": "UpToDate"
         }
       ]
@@ -83,7 +86,7 @@
             "widget_name": "PrimaryButton",
             "delegate_name": "OnClicked",
             "custom_function_name": "BndEvt__WBP_GameForgeMenu_V1_PrimaryButton_OnClicked",
-            "node_id": "32535D204BF9DA48E4E4ED9AA1246AE0",
+            "node_id": "89116CD444E9199F7BC570A6C3426FFD",
             "connected_nodes": [
               "K2Node_CallFunction"
             ]
@@ -92,7 +95,7 @@
             "widget_name": "SecondaryButton",
             "delegate_name": "OnClicked",
             "custom_function_name": "BndEvt__WBP_GameForgeMenu_V1_SecondaryButton_OnClicked",
-            "node_id": "9BFE763F40046E5B3618379AE8CAE165",
+            "node_id": "48A25EC94C95B5D66C3611868B7E6D1E",
             "connected_nodes": [
               "K2Node_CallFunction"
             ]
@@ -101,7 +104,7 @@
             "widget_name": "BackButton",
             "delegate_name": "OnClicked",
             "custom_function_name": "BndEvt__WBP_GameForgeMenu_V1_BackButton_OnClicked",
-            "node_id": "94BBF2B4471ACE5051AA2FAE3D89C646",
+            "node_id": "7E1314DA467CC5038452889E14E3C2D5",
             "connected_nodes": [
               "K2Node_CallFunction"
             ]
@@ -113,7 +116,7 @@
     {
       "step": "9_compile_menu",
       "ok": true,
-      "elapsed_s": 0.031,
+      "elapsed_s": 0.033,
       "data": {
         "asset_path": "/Game/UI/WBP_GameForgeMenu_V1",
         "status": "UpToDate",
@@ -124,23 +127,23 @@
     {
       "step": "10_save_menu",
       "ok": true,
-      "elapsed_s": 0.042
+      "elapsed_s": 0.044
     },
     {
       "step": "11_verify_menu_persistence",
       "ok": true,
-      "elapsed_s": 0.073,
+      "elapsed_s": 0.055,
       "widget_count": 9
     },
     {
       "step": "12_pie_start",
       "ok": true,
-      "elapsed_s": 0.011
+      "elapsed_s": 0.022
     },
     {
       "step": "13_display_hud",
       "ok": true,
-      "elapsed_s": 0.285,
+      "elapsed_s": 0.207,
       "data": {
         "asset_path": "/Game/UI/WBP_GameForgeHUD_V1",
         "widget_class": "WBP_GameForgeHUD_V1_C",
@@ -224,19 +227,19 @@
     {
       "step": "16_initial_screenshot",
       "ok": true,
-      "elapsed_s": 2.459,
+      "elapsed_s": 2.061,
       "verification": {
         "ok": true,
         "width": 1280,
         "height": 720,
-        "size_bytes": 1055215,
+        "size_bytes": 537723,
         "has_visual_content": true
       }
     },
     {
       "step": "17_gameplay_damage_and_hud_update",
       "ok": true,
-      "elapsed_s": 2.065,
+      "elapsed_s": 2.054,
       "data": {
         "before_health": 100,
         "after_health": 65,
@@ -300,79 +303,79 @@
         "ok": true,
         "width": 1280,
         "height": 720,
-        "size_bytes": 1056670,
+        "size_bytes": 541662,
         "has_visual_content": true
       }
     },
     {
       "step": "18_verify_bounds_clamping",
       "ok": true,
-      "elapsed_s": 0.037
+      "elapsed_s": 0.027
     },
     {
       "step": "19_click_primary_button",
       "ok": true,
-      "elapsed_s": 2.074,
+      "elapsed_s": 2.056,
       "health_after": 90,
       "screenshot": {
         "ok": true,
         "width": 1280,
         "height": 720,
-        "size_bytes": 1061857,
+        "size_bytes": 543148,
         "has_visual_content": true
       }
     },
     {
       "step": "20_click_secondary_button",
       "ok": true,
-      "elapsed_s": 2.065,
+      "elapsed_s": 2.044,
       "mode_after": "Compact",
       "screenshot": {
         "ok": true,
         "width": 1280,
         "height": 720,
-        "size_bytes": 1050402,
+        "size_bytes": 542137,
         "has_visual_content": true
       }
     },
     {
       "step": "21_click_back_button",
       "ok": true,
-      "elapsed_s": 2.08,
+      "elapsed_s": 2.068,
       "menu_visibility": "Collapsed",
       "screenshot": {
         "ok": true,
         "width": 1280,
         "height": 720,
-        "size_bytes": 1051778,
+        "size_bytes": 544853,
         "has_visual_content": true
       }
     },
     {
       "step": "22_log_tail_verification",
       "ok": true,
-      "elapsed_s": 0.025,
-      "marker_count": 14,
+      "elapsed_s": 0.022,
+      "marker_count": 17,
       "sample_markers": [
-        "[2026.10.29-15.40.29:403][295]LogTemp: [GameForgeGameplayState] ModifyHealth: 100.0 -> 65.0 (delta: -35.0)",
-        "[2026.10.29-15.40.29:403][295]LogTemp: [GameForgeGameplayState] ModifyStamina: 85.0 -> 60.0 (delta: -25.0)",
-        "[2026.10.29-15.40.31:470][508]LogTemp: [GameForgeGameplayState] ModifyHealth: 65.0 -> 0.0 (delta: -200.0)",
-        "[2026.10.29-15.40.31:483][509]LogTemp: [GameForgeGameplayState] ModifyHealth: 0.0 -> 100.0 (delta: 500.0)",
-        "[2026.10.29-15.40.31:494][510]LogTemp: [GameForgeGameplayState] ModifyHealth: 100.0 -> 65.0 (delta: -35.0)"
+        "[2026.10.30-14.31.24:567][254]LogTemp: [GameForgeGameplayState] ModifyHealth: 100.0 -> 65.0 (delta: -35.0)",
+        "[2026.10.30-14.31.24:567][254]LogTemp: [GameForgeGameplayState] ModifyStamina: 85.0 -> 60.0 (delta: -25.0)",
+        "[2026.10.30-14.31.26:614][492]LogTemp: [GameForgeGameplayState] ModifyHealth: 65.0 -> 0.0 (delta: -200.0)",
+        "[2026.10.30-14.31.26:623][493]LogTemp: [GameForgeGameplayState] ModifyHealth: 0.0 -> 100.0 (delta: 500.0)",
+        "[2026.10.30-14.31.26:632][494]LogTemp: [GameForgeGameplayState] ModifyHealth: 100.0 -> 65.0 (delta: -35.0)"
       ]
     },
     {
       "step": "23_pie_stop",
       "ok": true,
-      "elapsed_s": 0.02
+      "elapsed_s": 0.023
     },
     {
       "step": "24_verify_post_pie_persistence",
       "ok": true,
-      "elapsed_s": 0.085
+      "elapsed_s": 0.066
     }
   ],
   "overall_status": "PASSED",
-  "completed_at": "2026-10-29T21:10:37+0530",
-  "total_duration_s": 20.97
+  "completed_at": "2026-10-30T20:01:32+0530",
+  "total_duration_s": 19.69
 }

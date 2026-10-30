@@ -70,6 +70,9 @@ namespace GFCardConfig
 	inline const TCHAR* Title() { return TEXT("__TITLE__"); }
 	inline const TCHAR* Difficulty() { return TEXT("__DIFFICULTY__"); }
 }
+
+/** Gameplay transition marker for external verification of real input (read from the game log). */
+#define GF_EVENT(Format, ...) UE_LOG(LogTemp, Display, TEXT("GF_EVENT " Format), ##__VA_ARGS__)
 '''
 
 TYPES_H = r'''#pragma once
@@ -166,6 +169,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gameplay")
 	int32 MaxEnergy;
 
+	/** Energy the opponent has left this turn; enforced by CanPlayCard like the player's. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gameplay")
+	int32 OpponentEnergy;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Gameplay")
 	ECardMatchState MatchState;
 
@@ -237,6 +244,7 @@ UGFCardStateComponent::UGFCardStateComponent()
 	, OpponentBaseHealth(GFCardConfig::OpponentBaseHealth)
 	, CurrentEnergy(GFCardConfig::BaseEnergyPerTurn)
 	, MaxEnergy(GFCardConfig::BaseEnergyPerTurn)
+	, OpponentEnergy(GFCardConfig::BaseEnergyPerTurn)
 	, MatchState(ECardMatchState::PlayerTurn)
 	, CurrentTurnNumber(1)
 	, NextInstanceId(1)
@@ -437,7 +445,7 @@ bool UGFCardStateComponent::CanPlayCard(int32 HandIndex, int32 LaneIndex, bool b
 	}
 
 	const FGFCardInstance& Card = Hand[HandIndex];
-	const int32 EnergyAvailable = bForPlayer ? CurrentEnergy : GFCardConfig::BaseEnergyPerTurn;
+	const int32 EnergyAvailable = bForPlayer ? CurrentEnergy : OpponentEnergy;
 	if (Card.Def.EnergyCost > EnergyAvailable)
 	{
 		OutReason = TEXT("Insufficient energy");
@@ -466,6 +474,10 @@ bool UGFCardStateComponent::PlayCard(int32 HandIndex, int32 LaneIndex, bool bFor
 		CurrentEnergy -= Card.Def.EnergyCost;
 		OnEnergyChanged.Broadcast(CurrentEnergy, MaxEnergy);
 	}
+	else
+	{
+		OpponentEnergy -= Card.Def.EnergyCost;
+	}
 
 	Card.CurrentAttack = Card.Def.Attack;
 	Card.CurrentHealth = Card.Def.Health;
@@ -488,6 +500,7 @@ void UGFCardStateComponent::StartPlayerTurn()
 void UGFCardStateComponent::StartOpponentTurn()
 {
 	MatchState = ECardMatchState::OpponentTurn;
+	OpponentEnergy = GFCardConfig::BaseEnergyPerTurn;
 	DrawCard(false);
 	OnMatchStateChanged.Broadcast(MatchState);
 }
@@ -570,6 +583,7 @@ void UGFCardStateComponent::ResetMatch()
 	OpponentBaseHealth = GFCardConfig::OpponentBaseHealth;
 	CurrentEnergy = GFCardConfig::BaseEnergyPerTurn;
 	MaxEnergy = GFCardConfig::BaseEnergyPerTurn;
+	OpponentEnergy = GFCardConfig::BaseEnergyPerTurn;
 	CurrentTurnNumber = 1;
 	NextInstanceId = 1;
 
@@ -614,14 +628,12 @@ bool UGFCardOpponentAI::ExecuteTurn(UGFCardStateComponent* State)
 		return false;
 	}
 
-	int32 OpponentEnergy = GFCardConfig::BaseEnergyPerTurn;
-
 	// Strategic heuristic:
 	// 1. Prioritize lanes where the player has a unit but opponent has none (defend)
 	// 2. Otherwise open lanes to deal direct damage (attack)
 	// 3. Play highest attack affordable card
 	bool bPlayedAny = true;
-	while (bPlayedAny && OpponentEnergy > 0)
+	while (bPlayedAny && State->OpponentEnergy > 0)
 	{
 		bPlayedAny = false;
 		int32 BestHandIndex = -1;
@@ -641,7 +653,7 @@ bool UGFCardOpponentAI::ExecuteTurn(UGFCardStateComponent* State)
 			for (int32 H = 0; H < State->OpponentHand.Num(); ++H)
 			{
 				const FGFCardInstance& Card = State->OpponentHand[H];
-				if (Card.Def.EnergyCost <= OpponentEnergy)
+				if (Card.Def.EnergyCost <= State->OpponentEnergy)
 				{
 					const int32 CardScore = LaneWeight + (Card.Def.Attack * 2) + Card.Def.Health;
 					if (CardScore > BestScore)
@@ -656,12 +668,8 @@ bool UGFCardOpponentAI::ExecuteTurn(UGFCardStateComponent* State)
 
 		if (BestHandIndex != -1 && BestLaneIndex != -1)
 		{
-			const int32 Cost = State->OpponentHand[BestHandIndex].Def.EnergyCost;
-			if (State->PlayCard(BestHandIndex, BestLaneIndex, false))
-			{
-				OpponentEnergy -= Cost;
-				bPlayedAny = true;
-			}
+			// PlayCard spends State->OpponentEnergy; the rules, not the AI, enforce the budget.
+			bPlayedAny = State->PlayCard(BestHandIndex, BestLaneIndex, false);
 		}
 	}
 
@@ -760,7 +768,9 @@ bool AGFCardGameMode::PlayPlayerCard(int32 HandIndex, int32 LaneIndex)
 	{
 		return false;
 	}
-	return CardState->PlayCard(HandIndex, LaneIndex, true);
+	const bool bPlayed = CardState->PlayCard(HandIndex, LaneIndex, true);
+	GF_EVENT("card_play ok=%d hand=%d lane=%d energy=%d", bPlayed ? 1 : 0, HandIndex, LaneIndex, CardState->CurrentEnergy);
+	return bPlayed;
 }
 
 void AGFCardGameMode::EndPlayerTurn()
@@ -777,6 +787,7 @@ void AGFCardGameMode::EndPlayerTurn()
 
 	// Resolve combat across lanes
 	CardState->ResolveLaneCombat();
+	GF_EVENT("turn_end player_base=%d opponent_base=%d", CardState->PlayerBaseHealth, CardState->OpponentBaseHealth);
 }
 
 void AGFCardGameMode::RestartMatch()
@@ -784,6 +795,7 @@ void AGFCardGameMode::RestartMatch()
 	if (CardState)
 	{
 		CardState->ResetMatch();
+		GF_EVENT("reset");
 	}
 }
 
@@ -913,18 +925,37 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void DrawHUD() override;
 	virtual void ShowHUD() override;
+	virtual void NotifyHitBoxClick(FName BoxName) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	TObjectPtr<class UUserWidget> CardHUDWidget;
 
 	int32 SelectedHandIndex = 0;
 	int32 SelectedLaneIndex = 0;
+
+	// Player input: every path ends in AGFCardGameMode::PlayPlayerCard / EndPlayerTurn / RestartMatch.
+	void SelectLane(int32 LaneIndex);
+	void SelectLane0() { SelectLane(0); }
+	void SelectLane1() { SelectLane(1); }
+	void SelectLane2() { SelectLane(2); }
+	void SelectNextCard();
+	void PlaySelectedCard();
+	void EndTurn();
+	void RestartMatch();
+
+	UFUNCTION()
+	void HandleEndTurnClicked();
+
+	UFUNCTION()
+	void HandleRestartClicked();
 };
 '''
 
 HUD_CPP = r'''#include "GFCardHUD.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/InputComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -949,8 +980,102 @@ void AGFCardHUD::BeginPlay()
 		if (CardHUDWidget)
 		{
 			CardHUDWidget->AddToViewport(0);
+			// The UMG overlay must not swallow clicks meant for the Canvas hitboxes; its buttons stay clickable.
+			CardHUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			if (UButton* EndTurnBtn = Cast<UButton>(CardHUDWidget->GetWidgetFromName(TEXT("EndTurnButton"))))
+			{
+				EndTurnBtn->OnClicked.AddDynamic(this, &AGFCardHUD::HandleEndTurnClicked);
+			}
+			if (UButton* RestartBtn = Cast<UButton>(CardHUDWidget->GetWidgetFromName(TEXT("RestartButton"))))
+			{
+				RestartBtn->OnClicked.AddDynamic(this, &AGFCardHUD::HandleRestartClicked);
+			}
 			UE_LOG(LogTemp, Log, TEXT("[GFCardHUD] Instantiated and displayed UMG WBP_CardHUD in viewport"));
 		}
+	}
+
+	if (APlayerController* PC = GetOwningPlayerController())
+	{
+		EnableInput(PC);
+		if (InputComponent)
+		{
+			InputComponent->BindKey(EKeys::One, IE_Pressed, this, &AGFCardHUD::SelectLane0);
+			InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &AGFCardHUD::SelectLane1);
+			InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AGFCardHUD::SelectLane2);
+			InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AGFCardHUD::SelectNextCard);
+			InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &AGFCardHUD::PlaySelectedCard);
+			InputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &AGFCardHUD::PlaySelectedCard);
+			InputComponent->BindKey(EKeys::E, IE_Pressed, this, &AGFCardHUD::EndTurn);
+			InputComponent->BindKey(EKeys::R, IE_Pressed, this, &AGFCardHUD::RestartMatch);
+		}
+	}
+}
+
+void AGFCardHUD::SelectLane(int32 LaneIndex)
+{
+	SelectedLaneIndex = FMath::Clamp(LaneIndex, 0, GFCardConfig::LaneCount - 1);
+	GF_EVENT("select_lane lane=%d", SelectedLaneIndex);
+}
+
+void AGFCardHUD::SelectNextCard()
+{
+	AGFCardGameMode* GM = Cast<AGFCardGameMode>(UGameplayStatics::GetGameMode(GetWorld()));
+	const int32 HandCount = (GM && GM->CardState) ? GM->CardState->PlayerHand.Num() : 0;
+	SelectedHandIndex = HandCount > 0 ? (SelectedHandIndex + 1) % HandCount : 0;
+	GF_EVENT("select_card hand=%d", SelectedHandIndex);
+}
+
+void AGFCardHUD::PlaySelectedCard()
+{
+	if (AGFCardGameMode* GM = Cast<AGFCardGameMode>(UGameplayStatics::GetGameMode(GetWorld())))
+	{
+		GM->PlayPlayerCard(SelectedHandIndex, SelectedLaneIndex);
+		if (GM->CardState)
+		{
+			SelectedHandIndex = FMath::Clamp(SelectedHandIndex, 0, FMath::Max(0, GM->CardState->PlayerHand.Num() - 1));
+		}
+	}
+}
+
+void AGFCardHUD::EndTurn()
+{
+	if (AGFCardGameMode* GM = Cast<AGFCardGameMode>(UGameplayStatics::GetGameMode(GetWorld())))
+	{
+		GM->EndPlayerTurn();
+	}
+}
+
+void AGFCardHUD::RestartMatch()
+{
+	if (AGFCardGameMode* GM = Cast<AGFCardGameMode>(UGameplayStatics::GetGameMode(GetWorld())))
+	{
+		GM->RestartMatch();
+		SelectedHandIndex = 0;
+		SelectedLaneIndex = 0;
+	}
+}
+
+void AGFCardHUD::HandleEndTurnClicked() { EndTurn(); }
+void AGFCardHUD::HandleRestartClicked() { RestartMatch(); }
+
+void AGFCardHUD::NotifyHitBoxClick(FName BoxName)
+{
+	Super::NotifyHitBoxClick(BoxName);
+	const FString Box = BoxName.ToString();
+	if (Box.StartsWith(TEXT("Hand_")))
+	{
+		SelectedHandIndex = FCString::Atoi(*Box.RightChop(5));
+		GF_EVENT("select_card hand=%d", SelectedHandIndex);
+	}
+	else if (Box.StartsWith(TEXT("Lane_")))
+	{
+		// Clicking a lane plays the selected card into it.
+		SelectLane(FCString::Atoi(*Box.RightChop(5)));
+		PlaySelectedCard();
+	}
+	else if (Box == TEXT("EndTurn"))
+	{
+		EndTurn();
 	}
 }
 
@@ -982,7 +1107,7 @@ void AGFCardHUD::Tick(float DeltaSeconds)
 				}
 				if (UTextBlock* Turn = Cast<UTextBlock>(CardHUDWidget->GetWidgetFromName(FName(TEXT("TurnText")))))
 				{
-					Turn->SetText(FText::FromString(FString::Printf(TEXT("TURN: %d"), State->TurnCount)));
+					Turn->SetText(FText::FromString(FString::Printf(TEXT("TURN: %d"), State->CurrentTurnNumber)));
 				}
 				if (UTextBlock* Status = Cast<UTextBlock>(CardHUDWidget->GetWidgetFromName(FName(TEXT("StatusText")))))
 				{
@@ -1091,6 +1216,8 @@ void AGFCardHUD::DrawHUD()
 		// Divider
 		DrawRect(FLinearColor(0.25f, 0.3f, 0.4f, 0.5f), LX + 10.0f, LanesY + 130.0f, LaneW - 20.0f, 1.0f);
 
+		AddHitBox(FVector2D(LX + 15.0f, LanesY + 145.0f), FVector2D(LaneW - 30.0f, 90.0f), FName(*FString::Printf(TEXT("Lane_%d"), I)), true, 1);
+
 		// Player Unit in Lane
 		const FGFCardInstance& PUnit = State->PlayerLanes[I];
 		if (PUnit.bIsAlive)
@@ -1139,6 +1266,7 @@ void AGFCardHUD::DrawHUD()
 		const bool bSelected = (H == SelectedHandIndex);
 		DrawRect(bSelected ? FLinearColor(0.25f, 0.35f, 0.55f, 1.0f) : FLinearColor(0.14f, 0.17f, 0.24f, 0.95f),
 		         CX, HandY, CardW, CardH);
+		AddHitBox(FVector2D(CX, HandY), FVector2D(CardW, CardH), FName(*FString::Printf(TEXT("Hand_%d"), H)), true, 1);
 		DrawRect(Card.Def.CardColor, CX, HandY, CardW, 4.0f);
 
 		// Card Cost Circle
@@ -1167,9 +1295,15 @@ void AGFCardHUD::DrawHUD()
 		         ScreenW * 0.5f - 210.0f, 205.0f, LargeFont, 1.8f);
 	}
 
+	// End Turn box (clickable)
+	const float EndTurnX = ScreenW - 190.0f, EndTurnY = ScreenH - 300.0f;
+	DrawRect(FLinearColor(0.55f, 0.35f, 0.08f, 0.95f), EndTurnX, EndTurnY, 160.0f, 40.0f);
+	DrawText(TEXT("END TURN"), FLinearColor::White, EndTurnX + 38.0f, EndTurnY + 10.0f, MediumFont, 1.1f);
+	AddHitBox(FVector2D(EndTurnX, EndTurnY), FVector2D(160.0f, 40.0f), TEXT("EndTurn"), true, 2);
+
 	// Footer Action Legend
 	DrawRect(FLinearColor(0.03f, 0.04f, 0.06f, 0.85f), 0.0f, ScreenH - 30.0f, ScreenW, 30.0f);
-	DrawText(TEXT("1/2/3: Target Lane   |   Enter/Space: Play Card   |   E: End Turn   |   R: Restart Match"),
+	DrawText(TEXT("Click card, then lane   |   1/2/3: Lane  Tab: Next Card  Enter/Space: Play   |   E: End Turn   |   R: Restart"),
 	         FLinearColor(0.75f, 0.8f, 0.9f), 30.0f, ScreenH - 24.0f, SmallFont, 1.0f);
 }
 '''
@@ -1241,6 +1375,17 @@ bool FGFCardEnergyAndLaneRulesTest::RunTest(const FString& Parameters)
 		// Insufficient energy
 		State->CurrentEnergy = 0;
 		TestFalse(TEXT("Cannot play card with 0 energy"), State->CanPlayCard(0, 1, true, Reason));
+
+		// The opponent is held to the same energy rule by the state component itself.
+		State->StartOpponentTurn();
+		TestEqual(TEXT("Opponent energy refilled at turn start"), State->OpponentEnergy, GFCardConfig::BaseEnergyPerTurn);
+		State->OpponentEnergy = 0;
+		bool bAnyOpponentPlay = false;
+		for (int32 H = 0; H < State->OpponentHand.Num(); ++H)
+		{
+			bAnyOpponentPlay |= State->CanPlayCard(H, 1, false, Reason) && State->OpponentHand[H].Def.EnergyCost > 0;
+		}
+		TestFalse(TEXT("Opponent cannot play a costed card with 0 energy"), bAnyOpponentPlay);
 	}
 	return true;
 }
