@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-10-31T13:25Z (UTC from the system clock). Updated by Antigravity upon P2 Forge Executor completion.
+**Last updated:** 2026-10-31T14:10Z (UTC from the system clock). Updated by Antigravity upon P3 Scenario QA completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -23,31 +23,29 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
-## 3. CURRENT STATE (2026-10-31T13:25Z) [VERIFIED unless marked]
+## 3. CURRENT STATE (2026-10-31T14:10Z) [VERIFIED unless marked]
 
-- **P2 Forge Executor, Checkpoints, and Jobs complete:** All 8 work items (WI-2.1 through WI-2.8) are DONE.
-  - WI-2.1: `src/gameforge_ide/forge/model.py` (DAG model, Kahn cycle check, stable `topo_order`, `canonical_hash`) + `test_forge_model.py` (9 passed).
-  - WI-2.2: `src/gameforge_ide/forge/store.py` (atomic persistence with retry, `events.jsonl`, `latest_for_project`, `runs_index.json`) + `test_forge_store.py` (6 passed).
-  - WI-2.3: `src/gameforge_ide/forge/checkpoints.py` (`ProjectRepo`, git checkpoints, `UE_GITIGNORE`, `reset_to` rollback, `editor_running` guard) + `test_checkpoints.py` (5 passed).
-  - WI-2.4: `src/gameforge_ide/core/jobs.py` (Windows Job Object with `KILL_ON_JOB_CLOSE`, `adopt(proc)`, `spawn(argv)`, `ENGINE_LOCK`, `JobManager`) + `test_jobs.py` (5 passed).
-  - WI-2.5: `src/gameforge_ide/forge/executor.py` (`ForgeExecutor`, step-by-step DAG execution, persistence, resume/skip unchanged work via `eff_hash`, approvals suspension, repair hooks) + `test_forge_executor.py` (9 passed).
-  - WI-2.6: Migrated legacy pipeline to Forge (`forge/handlers/legacy_stages.py`, `forge/legacy_adapter.py`, `pipeline/game_pipeline.py`, `run_game_pipeline.py --resume`). Tests: `test_forge_legacy_adapter.py` (3 passed), `test_game_pipeline.py` (39 passed). Engine gate 1: full pipeline pass for Platformer & TicTacToe. Engine gate 2: kill & resume verified (`reports/P2/resume_kill_test.json`). Engine gate 3: rollback check verified (`reports/P2/rollback_check.json`).
-  - WI-2.7: Migrated agent plans to Forge (`forge/handlers/tool_call.py`, `forge/plan_adapter.py`, `desktop/services/plan_runner.py`). Repetition control (blocks 3rd identical call), tool permissions, acceptance criteria evaluation. Tests: `test_forge_plan_adapter.py` (5 passed), `test_plan_runner.py` (2 passed). Engine gate: 3 plan demos on Forge verified (`reports/P2/plan_demos_forge.json`).
-  - WI-2.8: UI wiring and schema enforcement: `ForgeService` Qt bridge (`test_forge_service.py` 1 passed), `action_runner.py` on `JobManager`, `ApprovalCard` scope lines (`paths`, `engine`, `packaging`, `minutes`), strict op schema validation (`strict=True` in `GameTools.unreal_editor`, 126 schemas, `test_op_schemas.py` 10 passed), hosted `oneOf` definition format. Job object leak test PASS (`reports/P2/job_object_leak_test.json`).
+- **P3 Deterministic Scenario QA Harness complete:** All 7 work items (WI-3.0 through WI-3.6) are DONE.
+  - WI-3.0: Spike: Enhanced Input simulation in standalone / packaged builds. Runtime input injection works in cooked Shipping with `DefaultPlayerInputClass` & `DefaultInputComponentClass` in `DefaultInput.ini`. Distance traveled: Dev 1112.34 cm, Ship 1111.86 cm (`reports/P3/spike_inject.json`).
+  - WI-3.1: Event bus: `GameForgeEventNames.h` (parity with 42 catalogue events), `UGameForgeEventBus` game instance subsystem writing JSONL sessions in all configurations, `UGameForgeEventLibrary::EmitGameForgeEvent`, retrofitted kit actors (`AGameForgePickup`, `AGameForgeGuard`, `AGameForgeQuestGiver` with `EntityId`). Parity test `test_event_names_parity.py` PASS.
+  - WI-3.2: Minimal kit player: `AGameForgeCharacter` (camera boom, camera modes, emits `PlayerSpawned`), `AGameForgePlayerController` (runtime IA/IMC, offscreen projection + hit-test in `SelectAtScreenPosition`), `AGameForgeGameModeBase`.
+  - WI-3.3: Autopilot component: `UGameForgeAutopilotComponent` (physically honest movement via injected `IA_Move`, NavMesh walking, teleport detection `Step > MaxSpeed * DeltaTime * 1.5 + 50`, stuck detection).
+  - WI-3.4: Scenario subsystem: `UGameForgeScenarioSubsystem` (tickable, headless replay via `-GFScenario=` and `-GFScenarioOut=`, steps state machine, expectation evaluation, screenshots on events, UTF-8 JSON result writer).
+  - WI-3.5: Host side: `scenario.py` (schemas, `extra="forbid"`), `manifest.py` (level manifest), `generate.py` (GDS -> scenarios), `runner.py` (`run_packaged`, `run_editor_game`), `forge/handlers/scenario.py` Forge step handler. 6 unit tests PASS.
+  - WI-3.6: Kit testbed project: `GFKitTest` scaffolded, level built via ops, packaged Dev & Shipping. 5 dev scenarios (collect_3, quest_complete, spotted_by_guard PASS; controls teleport_cheat & impossible FAIL), 3 ship scenarios PASS (`reports/P3/kit_testbed_scenarios.json`). Traversal claims M8, M13, M15 re-verified with autopilot (`reports/P3/reverify_traversal.json`).
 - **Tests & Verification:**
-  - `powershell -File scripts\verify_all.ps1` (full 7 gates): **ALL 7 PASS** (`reports/P2/verify_all.txt`).
-  - Unit tests: **617 passed** in 31.14s (exit 0).
+  - `powershell -File scripts\verify_all.ps1` (full 7 gates): **ALL 7 PASS** (`reports/P3/verify_all.txt`).
+  - Unit tests: **624 passed** in 32.92s (exit 0).
   - Protected oracles: **45 passed** in 0.03s (exit 0).
   - Op catalog & schemas: 126 ops current, all schemas valid.
-  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS. IDE benchmark: 0 violations, idle CPU 0.21%.
+  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS. IDE benchmark: 0 violations, idle CPU 0.31%.
 - **Git:** All work committed directly on `master`.
 
-## 4. NEXT ACTION (2026-10-31T13:25Z)
+## 4. NEXT ACTION (2026-10-31T14:10Z)
 
-**Phase 2 COMPLETE.** All exit gates satisfied.
-Start **Phase 3 (Scenario playtests: injected input, assertions, Shipping-safe)** in `docs/handovers/P03_scenario_playtests.md`:
-1. **WI-3.0**: Spike: Enhanced Input simulation in standalone / packaged builds.
-2. Continue through Phase 3 items in exact handover order.
+**Phase 3 COMPLETE.** All exit gates satisfied.
+Start **Phase 4 (Studio UX: Chat, Forge DAG, Inspections, and Layout)** in `docs/handovers/P04_studio_ux.md`:
+1. Read `docs/handovers/P04_studio_ux.md` and start WI-4.1.
 Work on `master` only (no branches), one commit per work item.
 
 ## 5. Key facts and paths
@@ -66,7 +64,7 @@ Work on `master` only (no branches), one commit per work item.
 
 ## 6. Open risks (tracked in `docs/04_ROADMAP.md` §5)
 
-- Runtime-created Enhanced Input actions in Shipping builds: unproven. The P3 WI-3.0 spike gates P3.
+- Runtime-created Enhanced Input actions in Shipping builds: RESOLVED in P3 (verified in WI-3.0 and WI-3.6).
 - The local 9B's prompt→GDS validity is unmeasured. Measured in P1 WI-1.9. The hosted tier (P9) is the fallback.
 - Native C++ UMG trees in Shipping: unproven. P5 K3 has a documented fallback.
 - Unknown provenance of the installed plugin binaries (see §5).
@@ -78,3 +76,4 @@ Work on `master` only (no branches), one commit per work item.
 - 2026-10-31T11:15Z — Antigravity: completed P0 hardening (WI-0.7 undo spot check verified in 5.7.4, WI-0.8 30 high-use op schemas hand-reviewed with strict validation, WI-0.9 editor GameForge.SyncContext verified on port 47815). Full verify_all 7/7 PASS (unit 520, protected 45). Ready for P1 WI-1.1.
 - 2026-10-31T12:35Z — Antigravity: completed Phase 1 (Game Design Spec gds/1, WI-1.1-1.10). Prompt->GDS 9B eval 100% valid; wired into pipeline/tools/IDE; engine gate 2/2 packaged games PASS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json). Full verify_all 7/7 PASS (unit 573, protected 45). Ready for P2 WI-2.1.
 - 2026-10-31T13:25Z — Antigravity: completed Phase 2 (Forge Executor, Checkpoints, and Jobs, WI-2.1-2.8). Forge DAG executor, persistence, ProjectRepo git checkpoints, Windows Job Objects (KILL_ON_JOB_CLOSE), legacy pipeline on Forge, agent plans on Forge, ForgeService, approval scopes, op-schema strict=True enforcement. All engine gates PASS (resume kill test, rollback check, 3 plan demos, job object leak test). Full verify_all 7/7 PASS (unit 617, protected 45). Ready for P3 WI-3.0.
+- 2026-10-31T14:10Z — Antigravity: completed Phase 3 (Deterministic Scenario QA Harness, WI-3.0-3.6). Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, autopilot with teleport detection, kit testbed scenarios 8/8 gates PASS (dev + controls + shipping), M8/M13/M15 traversal claims re-verified. Full verify_all 7/7 PASS (unit 624, protected 45). Ready for P4 WI-4.1.
