@@ -1,7 +1,7 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-10-31T10:20Z (UTC from the system clock; earlier entries in the history log mix local time
-with a `Z` suffix). Updated by Claude (Opus 5.5) at the end of the audit and planning session.
+**Last updated:** 2026-10-31T11:15Z (UTC from the system clock; earlier entries in the history log mix local time
+with a `Z` suffix). Updated by Antigravity upon P0 foundation completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -24,51 +24,28 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
-## 3. CURRENT STATE (2026-10-31T10:20Z) [VERIFIED unless marked]
+## 3. CURRENT STATE (2026-10-31T11:15Z) [VERIFIED unless marked]
 
-- **Audit complete:** `docs/02_AUDIT_2026-10-31.md` (findings F-01…F-21). The headline: the engine layer is strong
-  (126 read-back-catalogued ops, a 7.4k-line C++ plugin, toolchain, 5 recipe genres reaching packaged games), but the
-  M8–M16 capabilities are **not reachable from a prompt** (F-01). There is no reviewable game spec (F-02). The planner
-  can complete without evidence (F-03). There are 23 hard-coded host paths (F-05), and the default model is the 27B
-  with 4K context (F-06).
-- **Plan adopted (D-064):** `docs/04_ROADMAP.md`, phases **P0–P11**, with executable handovers in `docs/handovers/`
-  (protocol: `HANDOVER_PROTOCOL.md`). Architecture decisions AD-1…AD-20 are in `docs/01_ARCHITECTURE.md` §9.
-- **Code in the handovers checked in this session:** the P1 GDS schema (`gds.py`, `events_catalog.py`, `draft.py`)
-  and the P2 Forge model/executor/jobs code were extracted from the handover Markdown and executed in the scratchpad.
-  The GDS round-trips and every cross-reference validator fires (GDS JSON schema 22 KB, DesignDraft 3 KB). The executor
-  handles happy path, resume, dependency-aware input-hash skipping, failure blocking, exceptions, timeout, approval
-  suspend/resume, repair retries, cycle rejection, mid-run cancel and the Windows job object correctly. The 16
-  Studio icon SVGs render in QtSvg. The P3/P5 C++ is **not compiled yet**: it is specified with API checks for the
-  implementer.
-- **Documentation consolidated (D-065):** the knowledge base index is `docs/README.md`. Superseded plans were deleted
-  after their content was merged. History moved to `docs/history/`. `README.md`, `ANTIGRAVITY_HANDOFF.md` and this file
-  were rewritten, and the `AGENTS.md` pointers updated. **No product code was changed in this session**, except one
-  config string (`src/gameforge_ide/config/hosted_providers.default.json` `data_policy` path).
-- **Tests:** `python -m pytest tests/unit/ -q -p no:cacheprovider` → **494 passed**;
-  `python -m pytest graders/protected/ -q -p no:cacheprovider` → **45 passed** (both exit 0, 2026-10-31, before the
-  doc moves, and again after them: 494 / 45 passed).
-- **Git:** this session's changes (docs plus the one config string) are committed on `master` (fast-forward from
-  `c092b4c`). Not pushed.
-- **Research highlights** (`docs/03_RESEARCH_2026-10-31.md`): UE 5.8 ships an experimental Unreal MCP with no auth on
-  `127.0.0.1:8000` (it collides with our bridge port, so we move to 47815). MetaHuman 5.7 is scriptable
-  (`UMetaHumanCharacterEditorSubsystem`, 28 BlueprintCallable functions present on disk). Enhanced Input injection APIs
-  are present (`EnhancedInputSubsystemInterface.h:148,195`). The ROCm 7.2 HIP SDK for Windows lists gfx1101 (the
-  neural verdict changes to BLOCKED pending approval). Spec2Game shows +18 points from a detailed spec, with rules and
-  termination as the weak areas. Epic template Mannequins and LevelPrototyping content is on disk under
-  `E:\UE\UE_5.7\Templates\TemplateResources\High\`.
+- **P0 Foundation Hardening complete:** All 12 work items (WI-0.1 through WI-0.12) are DONE.
+  - WI-0.7: Engine undo spot check verified in offscreen UE 5.7.4 editor (`reports/P0/undo_spotcheck.json` PASS). Property mutations run inside `ScopedEditorTransaction` and revert cleanly under `TRANSACTION UNDO`.
+  - WI-0.8: Argument models for all 30 high-use ops hand-reviewed and registered in `REVIEWED` with `extra="forbid"` (`op_schemas.py`). Unit suite verifies schema coverage and reject/round-trip behavior (`test_op_schemas.py` 9 passed).
+  - WI-0.9: Loopback bridge on port 47815 verified. Editor-originated `GameForge.SyncContext` console command successfully transmits context with bearer authentication to `--serve` backend (`reports/P0/bridge_47815.json` PASS).
+  - Plugin build `GameForgePlugin_p0` installed in repo and `live_ops_probe` (Editor DLL `f3ac7f193f437efbe281d5ce849a6e8c3239c60386f245f26c6c52f308a7f75a`, Runtime DLL `ba9bd0d58683bce2589ea6250b950331ca79b04ef3ee8b38d6c64bfa593be73d`).
+- **Tests & Verification:**
+  - `powershell -File scripts\verify_all.ps1` (full 7 gates): **ALL 7 PASS** (`reports/P0/verify_all.txt`).
+  - Unit tests: **520 passed** (exit 0).
+  - Protected oracles: **45 passed** (exit 0).
+  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS. IDE benchmark: 0 violations, idle CPU 0.21%.
+- **Documentation consolidated (D-065):** `docs/README.md` index, `docs/handovers/` P00–P11, `docs/00_STATUS.md` capability matrix updated.
+- **Git:** All work committed directly on `master`.
 
-## 4. NEXT ACTION (2026-10-31T10:50Z)
+## 4. NEXT ACTION (2026-10-31T11:15Z)
 
-**P0 implemented by Claude on `master`** (commits `55ffc5f`..`4475aca`, plus this doc update). Unit tests 518 pass, protected 45.
-Done: WI-0.1-0.6, 0.10-0.12. PARTIAL (finish first):
-1. **WI-0.7**: run the engine undo spot check (`reports/P0/undo_spotcheck.json`): spawn_actor + set_actor_property, then
-   `TRANSACTION UNDO`, then read back.
-2. **WI-0.8**: hand-review argument models for the remaining 24 ops listed in the P0 handover (add them to `REVIEWED` in
-   `src/gameforge_ide/unreal/op_schemas.py`).
-3. **WI-0.9**: exercise the editor-originated `GameForge.SyncContext` request against `--serve` on 47815
-   (`--serve` needs `GAMEFORGE_BRIDGE_TOKEN`).
-4. Full gate `reports/P0/verify_all.txt`: all 7 gates PASS (unit, protected, op-catalog, op-schemas, contract, demo-quest, ide-bench). After items 1–3, start
-   **P1 WI-1.1** (`docs/handovers/P01_game_design_spec.md`).
+**Phase 0 COMPLETE.** All exit gates satisfied.
+Start **Phase 1 (Game Design Spec `gds/1`)** in `docs/handovers/P01_game_design_spec.md`:
+1. **WI-1.1**: Implement `src/gameforge_ide/design/events_catalog.py` and `tests/unit/test_events_catalog.py`.
+2. **WI-1.2**: Implement GDS schema `src/gameforge_ide/design/gds.py` and `tests/unit/test_gds_schema.py`.
+3. Continue through Phase 1 items in exact handover order.
 Work on `master` only (no branches), one commit per work item.
 
 ## 5. Key facts and paths
@@ -96,3 +73,4 @@ Work on `master` only (no branches), one commit per work item.
 
 - 2026-10-31T10:20Z — Claude: full audit + research + P0–P11 roadmap and handovers + documentation consolidation (D-064, D-065). Tests 494/45 PASS before and again after the doc moves (unit 62.3 s); all internal doc links resolve. No product code changed. Committed on `master` as `a2a0eac` (not pushed).
 - 2026-10-31T10:50Z — Claude: implemented P0 (WI-0.1-0.12; 0.7/0.8/0.9 PARTIAL), plugin p0 built and installed, contract 16/16, gameplay feedback 10/10, IDE budgets OK. Stopped at 95% of the 5-hour usage window.
+- 2026-10-31T11:15Z — Antigravity: completed P0 hardening (WI-0.7 undo spot check verified in 5.7.4, WI-0.8 30 high-use op schemas hand-reviewed with strict validation, WI-0.9 editor GameForge.SyncContext verified on port 47815). Full verify_all 7/7 PASS (unit 520, protected 45). Ready for P1 WI-1.1.

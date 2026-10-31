@@ -40,8 +40,8 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 |---|---|---|---|
 | Live editor link (token, loopback, crash classes) | PASS | contract 16/16 | — |
 | Op catalogue with read-back enforcement (126 ops) | PASS | `unreal/op_catalog.py` + tests | — |
-| Op argument schemas | PARTIAL | all 126 drafted, 6 hand-reviewed; gateway validates (P0 WI-0.8) | P2 strict |
-| Undo coverage for mutating ops | PARTIAL | audited: 11 transactional, 46 checkpoint-only, 14 runtime; link reports true reversibility (P0 WI-0.7) | P2 checkpoints |
+| Op argument schemas | PASS | all 126 drafted, 30 high-use hand-reviewed in `REVIEWED` (`op_schemas.py`) with strict validation (P0 WI-0.8) | P2 strict |
+| Undo coverage for mutating ops | PASS | audited: 11 transactional, 46 checkpoint-only, 14 runtime; engine spot check PASS (P0 WI-0.7, `reports/P0/undo_spotcheck.json`) | P2 checkpoints |
 | Build / test / package Win64 (Development) | PASS | ~860 MB per game | — |
 | Shipping packages, size ≤ 400 MB | PLANNED | F-13 | P10 |
 | Blueprint graph authoring (9 ops) | PASS | `reports/milestone2_blueprint_demo.json` | — |
