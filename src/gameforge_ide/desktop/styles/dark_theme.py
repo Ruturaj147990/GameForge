@@ -830,6 +830,11 @@ def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
                     cursor.setPosition(position + length, QTextCursor.KeepAnchor)
                     cursor.setCharFormat(char_format)
         widget.setProperty("gameforgeTheme", theme)
+    try:
+        from ..icons import clear_icon_cache
+        clear_icon_cache()
+    except Exception:
+        pass
     return theme
 
 

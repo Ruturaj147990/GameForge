@@ -266,7 +266,7 @@ new ones, and list each changed test in the commit message.
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 4.1 | TODO | | | |
+| 4.1 | DONE | 2026-10-31T14:15Z | 2026-10-31T14:20Z | 16 SVGs in assets/icons/, desktop/icons.py with theme support, test_icons.py (4 passed) |
 | 4.2 | TODO | | | |
 | 4.3 | TODO | | | |
 | 4.4 | TODO | | | |
