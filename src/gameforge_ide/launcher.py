@@ -12,6 +12,8 @@ import os
 import sys
 import threading
 from pathlib import Path
+from typing import Optional
+
 from .core.settings import get_settings
 
 
@@ -50,13 +52,13 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
 
 
 
-def _launch_server(host: str = "127.0.0.1", port: int = 8000) -> None:
+def _launch_server(host: str = "127.0.0.1", port: Optional[int] = None) -> None:
     """Start the FastAPI backend (fallback/headless mode)."""
     if not _is_loopback_host(host):
         raise ValueError("The Unreal bridge server may bind only to a loopback address.")
     import uvicorn
     from .backend.app import app
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(app, host=host, port=port or get_settings().bridge_port, log_level="info")
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -85,7 +87,8 @@ def main() -> None:
         help="Start the FastAPI backend server instead of the native desktop UI.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Host (only used with --serve)")
-    parser.add_argument("--port", type=int, default=8000, help="Port (only used with --serve)")
+    parser.add_argument("--port", type=int, default=None,
+                        help="Port (only used with --serve; default: settings bridge_port, 47815)")
     args = parser.parse_args()
 
     if args.serve:

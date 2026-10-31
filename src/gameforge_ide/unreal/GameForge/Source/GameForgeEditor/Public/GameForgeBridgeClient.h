@@ -18,7 +18,7 @@ struct FGameForgeEditorContext
 class FGameForgeBridgeClient : public TSharedFromThis<FGameForgeBridgeClient>
 {
 public:
-	FGameForgeBridgeClient(const FString& InIDEServerUrl = TEXT("http://127.0.0.1:8000"));
+	FGameForgeBridgeClient(const FString& InIDEServerUrl = TEXT("http://127.0.0.1:47815"));  // 8000 is UE 5.8 Unreal MCP
 	~FGameForgeBridgeClient();
 
 	/** Extracts active editor selection, open assets, and engine context */

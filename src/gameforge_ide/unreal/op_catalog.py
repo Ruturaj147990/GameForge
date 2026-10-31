@@ -24,6 +24,19 @@ def op_sources(root: Path = OPS_SOURCE) -> list[Path]:
 EFFECTS = ("read", "artifact", "view", "lifecycle", "runtime", "project")
 STATUSES = ("PASS", "PARTIAL", "EXPERIMENTAL", "DIAGNOSTIC", "LEGACY")
 
+# Undo classes (P0 WI-0.7, audit F-04). "transaction": the edit runs inside an editor undo transaction (Python
+# ScopedEditorTransaction, or FScopedTransaction in the native library for NATIVE_TRANSACTION ops);
+# "checkpoint": no in-editor undo, recovery relies on project git checkpoints (AD-13);
+# "runtime": PIE/session state that ends with the session; "none": read, view, artifact and lifecycle ops.
+UNDO_CLASSES = ("transaction", "checkpoint", "runtime", "none")
+NATIVE_TRANSACTION = frozenset({"blueprint_create_node", "blueprint_set_pin_default", "blueprint_connect_pins",
+                                "blueprint_disconnect_pins", "blueprint_delete_node"})
+PYTHON_TRANSACTION = frozenset({"scene_set_manual_exposure", "spawn_actor", "delete_actor", "set_actor_property",
+                                "world_clear_generated", "audio_place_ambient"})
+# What callers are told, per undo class (the editor envelope's own field is not trusted; see true_reversibility).
+REVERSIBILITY = {"transaction": "transactional", "checkpoint": "irreversible", "runtime": "transient",
+                 "none": "read-only"}
+
 
 @dataclass(frozen=True)
 class OpSpec:
@@ -37,6 +50,14 @@ class OpSpec:
     @property
     def mutates(self) -> bool:
         return self.effect in ("runtime", "project")
+
+    @property
+    def undo(self) -> str:
+        if self.effect == "runtime":
+            return "runtime"
+        if self.effect != "project":
+            return "none"
+        return "transaction" if self.name in NATIVE_TRANSACTION | PYTHON_TRANSACTION else "checkpoint"
 
 
 def _ops(domain: str, effect: str, names: str, readback: str | None = None, status: str = "PASS",
@@ -192,3 +213,9 @@ def render_markdown() -> str:
         lines.append(f"| `{spec.name}` | {spec.domain} | {spec.effect} | {spec.readback_op or ''} | "
                      f"{spec.status} | {spec.note} |")
     return "\n".join(lines)
+
+
+def true_reversibility(op_name: str) -> str | None:
+    """Reversibility derived from the audited undo class; None for unknown ops."""
+    spec = CATALOG.get(op_name)
+    return REVERSIBILITY[spec.undo] if spec else None

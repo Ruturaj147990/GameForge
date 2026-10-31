@@ -105,3 +105,36 @@ def test_ops_package_is_importable_offline():
         for k in [k for k in sys.modules if k == "unreal" or k.startswith("gameforge_ops")]:
             del sys.modules[k]
         sys.modules.update(saved)
+
+
+def test_undo_class_matches_source():
+    """P0 WI-0.7 (audit F-04): the catalogue's undo class agrees with what the op source actually does."""
+    import ast
+
+    bodies = {}
+    for src in op_catalog.op_sources():
+        text = src.read_text(encoding="utf-8")
+        for node in ast.parse(text).body:
+            if isinstance(node, ast.FunctionDef):
+                for d in node.decorator_list:
+                    if isinstance(d, ast.Call) and getattr(d.func, "id", "") == "op":
+                        bodies[d.args[0].value] = ast.get_source_segment(text, node)
+    wrong = []
+    for name, spec in op_catalog.CATALOG.items():
+        has_tx = "ScopedEditorTransaction(" in bodies[name]
+        if spec.mutates and spec.undo == "none":
+            wrong.append((name, "mutating op with undo=none"))
+        if spec.undo == "transaction" and name not in op_catalog.NATIVE_TRANSACTION and not has_tx:
+            wrong.append((name, "claims transaction but source has none"))
+        if has_tx and spec.undo != "transaction":
+            wrong.append((name, "source uses a transaction but catalogue says " + spec.undo))
+    assert wrong == []
+
+
+def test_link_reports_audited_reversibility():
+    from gameforge_ide.unreal.op_catalog import true_reversibility
+    assert true_reversibility("landscape_create") == "irreversible"
+    assert true_reversibility("spawn_actor") == "transactional"
+    assert true_reversibility("blueprint_connect_pins") == "transactional"
+    assert true_reversibility("pie_start") == "transient"
+    assert true_reversibility("actors_in_level") == "read-only"

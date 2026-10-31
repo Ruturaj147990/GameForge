@@ -3,13 +3,23 @@
 #include "GameForgeEditorModule.h"
 #include "GameForgeBridgeClient.h"
 #include "HAL/IConsoleManager.h"
+#include "CoreGlobals.h"
+#include "Misc/ConfigCacheIni.h"
 #include "ToolMenus.h"
 
 #define LOCTEXT_NAMESPACE "FGameForgeEditorModule"
 
 void FGameForgeEditorModule::StartupModule()
 {
-	BridgeClient = MakeShared<FGameForgeBridgeClient>();
+	FString BridgeUrl;  // optional override: [GameForge.Bridge] Url= in DefaultEditor.ini (still loopback-only)
+	if (GConfig && GConfig->GetString(TEXT("GameForge.Bridge"), TEXT("Url"), BridgeUrl, GEditorIni) && !BridgeUrl.IsEmpty())
+	{
+		BridgeClient = MakeShared<FGameForgeBridgeClient>(BridgeUrl);
+	}
+	else
+	{
+		BridgeClient = MakeShared<FGameForgeBridgeClient>();
+	}
 	SyncContextCommand = IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("GameForge.SyncContext"),
 		TEXT("Send the current Unreal editor context to the authenticated GameForge loopback bridge."),

@@ -21,8 +21,8 @@ FGameForgeBridgeClient::FGameForgeBridgeClient(const FString& InIDEServerUrl)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GameForge Bridge URL must be a local loopback address. Defaulting to http://127.0.0.1:8000"));
-		IDEServerUrl = TEXT("http://127.0.0.1:8000");
+		UE_LOG(LogTemp, Warning, TEXT("GameForge Bridge URL must be a local loopback address. Defaulting to http://127.0.0.1:47815"));
+		IDEServerUrl = TEXT("http://127.0.0.1:47815");
 	}
 }
 

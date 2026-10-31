@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from ..core.settings import engine_root_or_missing
+from . import op_catalog
 
 RESULT_SENTINEL = "@@GAMEFORGE_RESULT@@"
 OPS_LIBRARY_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops"  # package (2.1+)
@@ -296,6 +297,12 @@ class LiveEditorLink:
                     "errors": ["EDITOR_CRASHED" if crashed else "EDITOR_LINK_LOST", box["error"]],
                     "elapsed_s": elapsed}
         envelope = parse_result(box["result"])
+        truth = op_catalog.true_reversibility(op_name)
+        if truth is not None and isinstance(envelope, dict) and envelope.get("reversibility") != truth:
+            # Several editor envelopes over-claim (e.g. landscape ops say "transactional" but have no undo):
+            # report the audited value and keep the declared one for diagnostics (P0 WI-0.7).
+            envelope["reversibility_declared"] = envelope.get("reversibility")
+            envelope["reversibility"] = truth
         envelope.setdefault("op", op_name)
         envelope["elapsed_s"] = elapsed
         return envelope

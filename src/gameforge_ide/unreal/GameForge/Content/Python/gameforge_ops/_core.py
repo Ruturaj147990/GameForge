@@ -6,7 +6,9 @@ Blueprint envelope: ok, op, data, warnings, errors, affected_paths, reversibilit
 Rules enforced here (Master Blueprint v2, section 4):
   * Calls must carry the session token written by the GameForge supervisor to
     <Project>/Saved/GameForge/session.token. No token, no call (fail closed).
-  * Mutations run inside ScopedEditorTransaction where the editor supports undo.
+  * Level and property mutations run inside ScopedEditorTransaction (Blueprint graph edits use FScopedTransaction
+    natively); asset-level mutations have no in-editor undo and rely on project checkpoints. The host reports
+    the audited value per op (op_catalog.OpSpec.undo); envelopes' own reversibility fields may over-claim.
   * Every mutation returns read-back data queried from the editor after the write.
   * Assets are moved/created only through AssetTools / EditorAssetLibrary.
 
