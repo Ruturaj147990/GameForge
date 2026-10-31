@@ -256,6 +256,97 @@ def preset_procedural_world(title: Optional[str] = None, **overrides) -> GameDes
     return gds
 
 
+def preset_relic_hunt(title: Optional[str] = None, **overrides) -> GameDesignSpec:
+    t = title or "Relic Hunt"
+    draft = DesignDraft(
+        title=t,
+        genre=Genre.ACTION_ADVENTURE,
+        camera=CameraKind.THIRD_PERSON,
+        pitch="A third-person forest adventure: collect 5 relics while avoiding 3 guards and return them to the old hermit",
+        win=[DraftWin(type="reach_goal")],
+    )
+    gds = expand_draft(draft)
+    lvl = gds.scene.levels[0]
+    lvl.layout = "open_world"
+    lvl.lighting = "day"
+
+    gds.entities = [
+        EntitySpec(
+            entity_id="player",
+            kind=EntityKind.PLAYER,
+            module="kit.player_character",
+            level_id=lvl.level_id,
+            count=1,
+            props={"move_speed": 600.0, "max_health": 100.0},
+        ),
+        EntitySpec(
+            entity_id="giver",
+            kind=EntityKind.NPC,
+            module="kit.quest_giver",
+            level_id=lvl.level_id,
+            count=1,
+            props={"objective_id": "relics", "objective_title": "Recover 5 relics", "objective_target": 5},
+        ),
+        EntitySpec(
+            entity_id="relics",
+            kind=EntityKind.PICKUP,
+            module="kit.pickup",
+            level_id=lvl.level_id,
+            count=5,
+            props={"objective_id": "relics", "value": 1.0},
+        ),
+        EntitySpec(
+            entity_id="guard",
+            kind=EntityKind.GUARD,
+            module="kit.guard",
+            level_id=lvl.level_id,
+            count=3,
+            props={"aggro_radius": 1200.0, "patrol_radius": 800.0, "move_speed": 400.0},
+        ),
+        EntitySpec(
+            entity_id="goal",
+            kind=EntityKind.GOAL,
+            module="kit.goal",
+            level_id=lvl.level_id,
+            count=1,
+            props={"required_stat": "entity.relics.collected", "required_value": 5.0},
+        ),
+    ]
+    return gds
+
+
+def preset_top_down_shooter(title: Optional[str] = None, **overrides) -> GameDesignSpec:
+    t = title or "Top-Down Arena Shooter"
+    waves = int(overrides.get("wave_count", 3))
+    enemies = int(overrides.get("enemies_per_wave", 4))
+    draft = DesignDraft(
+        title=t,
+        genre=Genre.TOP_DOWN_SHOOTER,
+        camera=CameraKind.TOP_DOWN,
+        pitch="Top-down arena shooter: survive 3 waves of enemies",
+        win=[DraftWin(type="defeat_all", target=waves)],
+        lose=[DraftLose(type="health_zero")],
+    )
+    gds = expand_draft(draft)
+    lvl = gds.scene.levels[0]
+    lvl.layout = "arena"
+
+    player = _find_entity(gds, EntityKind.PLAYER)
+    if player:
+        player.props["attack_mode"] = "projectile"
+        player.props["move_speed"] = 650.0
+
+    spawner = _find_entity(gds, EntityKind.SPAWNER)
+    if spawner:
+        spawner.props = {
+            "wave_count": waves,
+            "enemies_per_wave": enemies,
+            "seconds_between_waves": 3.0,
+            "spawn_radius": 500.0,
+        }
+    return gds
+
+
 PRESETS: Dict[str, Callable[..., GameDesignSpec]] = {
     "tic_tac_toe": preset_tic_tac_toe,
     "connect_four": preset_connect_four,
@@ -264,6 +355,8 @@ PRESETS: Dict[str, Callable[..., GameDesignSpec]] = {
     "arena_combat": preset_arena_combat,
     "card_battler": preset_card_battler,
     "procedural_world": preset_procedural_world,
+    "relic_hunt": preset_relic_hunt,
+    "top_down_shooter": preset_top_down_shooter,
 }
 
 PRESET_KEYWORDS: Dict[str, List[str]] = {

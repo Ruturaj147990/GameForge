@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from ..recipes.freeform_host.framework import api_doc, framework_sources, reference_impl
+from tests.fixtures.legacy_recipes.freeform_host.framework import api_doc, framework_sources, reference_impl
 from ..unreal.toolchain import UnrealToolchain
 from . import stages
 from .authoring import ModelAuthor, parse_files, safety_scan

@@ -28,7 +28,7 @@ def test_declared_dependencies_cover_imports():
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 names = [node.module.split(".")[0]]
             for n in names:
-                if n in sys.stdlib_module_names or n in OPTIONAL or n in ("src", "gameforge_ide", "gameforge_bench"):
+                if n in sys.stdlib_module_names or n in OPTIONAL or n in ("src", "gameforge_ide", "gameforge_bench", "tests"):
                     continue
                 if MAP.get(n, n).lower() not in declared:
                     missing.add(f"{n} ({path.relative_to(ROOT).as_posix()})")

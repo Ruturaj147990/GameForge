@@ -26,6 +26,7 @@ class PlayerCharacterParams(BaseModel):
     player_attack_cooldown: Optional[float] = Field(None, ge=0.05, le=10.0)
     lives: Optional[int] = Field(0, ge=0, le=99)
     kill_z: Optional[float] = Field(-2000.0, le=0.0)
+    attack_mode: Optional[str] = Field("melee")
 
 
 register(
@@ -498,8 +499,8 @@ register(
 # 17. Grid Board
 class GridBoardParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    board_size: int = Field(3, ge=3, le=10)
-    win_length: int = Field(3, ge=3, le=10)
+    board_size: int = Field(3, ge=3, le=20)
+    win_length: int = Field(3, ge=3, le=20)
     gravity: bool = False
     vs_ai: bool = True
     ai_level: str = Field("random", pattern=r"^(random|greedy|minimax|perfect)$")

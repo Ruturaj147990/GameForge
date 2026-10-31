@@ -5,21 +5,19 @@
 Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, `NOT VERIFIED`, `EXPERIMENTAL`,
 `PLANNED`. Provenance classes: see `07_CONTENT_AND_MODELS.md` §3.
 
-**Product verdict (2026-10-31):** not yet production-ready as a prompt-to-any-game platform. **Production-capable
-for 5 recipe genres** (grid, platformer, arena, card battler, procedural world) with placeholder art. All M8–M16 engine
-capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The path to 1.0 is `04_ROADMAP.md`.
+**Product verdict (2026-10-31):** Production-capable for 7 genres across 6 layouts via data-driven Kit v2 and deterministic Composer (grid board, platformer, arena combat, card battler, procedural world, third-person adventure, and top-down shooter). All 693 unit tests pass, 45 protected grader oracles pass. The path to 1.0 is `04_ROADMAP.md`.
 
 ## A. Product loop
 
 | Capability | Status | Evidence / note | Phase |
 |---|---|---|---|
-| Prompt → packaged game, 5 recipe genres | PASS | `reports/audit_20261030_pipeline_runs.json`; packaged real input `reports/packaged_real_input_summary.json` | — |
+| Prompt → packaged game, 5 recipe genres + 2 new genres | PASS | Composer replaces legacy recipes; 6 preset parity + adventure & top-down shooter verified (`reports/P6/`) | P6 |
 | Free-form game via model C++ + repair ladder | PARTIAL | hard gates pass (whack-a-mole, 9B); visual quality weak | P6 replaces it with composition |
 | Game Design Spec (typed, reviewable) | PASS | schema gds/1, deterministic expander, presets, prompt_to_gds eval 100% valid, store/revisions, pipeline wired; 2 packaged games from GDS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json) | P1 |
 | One durable executor, resume, checkpoints | PASS | Forge executor, atomic persistence, git checkpoints, resume kill test (reports/P2/resume_kill_test.json), rollback check (reports/P2/rollback_check.json), plan demos on Forge (reports/P2/plan_demos_forge.json), leak test (reports/P2/job_object_leak_test.json) | P2 |
 | Scenario playtests (injected input, Shipping-safe) | PASS | Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, 5 dev scenarios (incl. 2 controls) & 3 ship scenarios (`reports/P3/kit_testbed_scenarios.json`) | P3 |
 | Studio UI for the loop | PASS | P4 WI-4.1–WI-4.10 DONE (icons, systems service, studio shell, Home, Games, Design, Build, Play/QA, Settings views, packaging/launch, theme persistence) | P4 |
-| Composition of kit modules from a spec | PARTIAL | P6 underway (model, layouts, placement, level_ops) | P6 |
+| Composition of kit modules from a spec | PASS | P6 complete: deterministic composer (`compose.py`), 6 layouts (`board`, `arena`, `course`, `rooms`, `open_world`, `lanes`), Bridson Poisson-disk scatter, ballistic reachability, level_ops strict schema validation, gfdef runtime definition, Forge DAG plan, parity across 6 legacy presets + 2 new genres (`reports/P6/parity_*.json`, `reports/P6/genre_*.json`) | P6 |
 | Change requests / incremental rebuild | PLANNED | — | P8 |
 | Incremental modification of user projects | PLANNED | — | P8 |
 

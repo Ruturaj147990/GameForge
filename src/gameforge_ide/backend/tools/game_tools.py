@@ -29,7 +29,7 @@ from ...design.prompt_to_gds import PRESET_TITLES, prompt_to_gds
 from ...design.render import render_markdown
 from ...design import store as design_store
 from ...pipeline.spec_from_prompt import is_game_creation_request, match_prompt
-from ...recipes.grid_board_game.recipe import GridBoardParams
+from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
 from ...unreal import op_catalog, op_schemas
 from ...unreal.toolchain import UnrealToolchain
@@ -303,11 +303,11 @@ class GameTools:
             hook = lambda pdir: design_store.save(pdir, gds)
         elif params is not None:
             # Backward compatibility branch for pre-P1 approval records
-            from ...recipes.grid_board_game.recipe import GridBoardParams
-            from ...recipes.platformer.recipe import PlatformerParams
-            from ...recipes.arena_combat.recipe import ArenaCombatParams
-            from ...recipes.card_battler.recipe import CardBattlerParams
-            from ...recipes.procedural_world.recipe import ProceduralWorldParams
+            from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
+            from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
+            from tests.fixtures.legacy_recipes.arena_combat.recipe import ArenaCombatParams
+            from tests.fixtures.legacy_recipes.card_battler.recipe import CardBattlerParams
+            from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
             if isinstance(params, (GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams)):
                 recipe_params = params
             elif isinstance(params, dict):

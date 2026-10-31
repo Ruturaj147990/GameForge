@@ -5,7 +5,7 @@ from src.gameforge_ide.forge.handlers import HANDLERS
 from src.gameforge_ide.forge.legacy_adapter import plan_legacy, run_state_to_pipeline_result
 from src.gameforge_ide.forge.model import StepKind, StepStatus
 from src.gameforge_ide.pipeline.game_pipeline import GamePipeline
-from src.gameforge_ide.recipes.grid_board_game.recipe import GridBoardParams
+from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
 
 
 def test_plan_legacy_steps_and_dag(tmp_path: Path):

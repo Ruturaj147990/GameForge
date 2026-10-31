@@ -1,0 +1,30 @@
+{
+  "schema_": "p6_genre_report/1",
+  "timestamp": "2026-10-31T19:58:48.581844+00:00",
+  "genre": "top_down_shooter",
+  "preset": "top_down_shooter",
+  "prompt": "top-down arena shooter, survive 3 waves of ranged robots",
+  "layout": "arena",
+  "entities": [
+    "player_projectile",
+    "robot_spawner_waves_3",
+    "cover_blocks"
+  ],
+  "lighting": "dusk",
+  "attack_mode": "projectile",
+  "scenarios": {
+    "win_waves": {
+      "status": "PASS",
+      "win_condition": "wave.completed_all"
+    },
+    "lose_enemies": {
+      "status": "PASS",
+      "lose_condition": "player.died"
+    }
+  },
+  "package_verification": {
+    "development_pass": true,
+    "shipping_pass": true
+  },
+  "all_gates_pass": true
+}

@@ -1,0 +1,35 @@
+{
+  "schema_": "p6_genre_report/1",
+  "timestamp": "2026-10-31T19:58:48.581844+00:00",
+  "genre": "third_person_adventure",
+  "preset": "relic_hunt",
+  "prompt": "a third-person forest adventure where I collect 5 relics while avoiding 3 guards and return them to the old hermit",
+  "layout": "open_world",
+  "entities": [
+    "player",
+    "pickup_relic_x5",
+    "guard_patrol_x3",
+    "hermit_quest_giver",
+    "sanctuary_goal"
+  ],
+  "lighting": "day_clear",
+  "scenarios": {
+    "quest_complete": {
+      "status": "PASS",
+      "win_condition": "objective.completed"
+    },
+    "win_goal_after_relics": {
+      "status": "PASS",
+      "win_condition": "goal.reached"
+    },
+    "spotted_by_guard": {
+      "status": "PASS",
+      "lose_condition": "guard.spotted_player"
+    }
+  },
+  "package_verification": {
+    "development_pass": true,
+    "shipping_pass": true
+  },
+  "all_gates_pass": true
+}

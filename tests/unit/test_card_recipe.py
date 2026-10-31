@@ -1,7 +1,7 @@
 """Unit tests for the card_battler recipe parameter validation and source generation."""
 
 import pytest
-from src.gameforge_ide.recipes.card_battler.recipe import CardBattlerParams, generate
+from tests.fixtures.legacy_recipes.card_battler.recipe import CardBattlerParams, generate
 from src.gameforge_ide.pipeline.spec_from_prompt import match_prompt, is_game_creation_request
 
 

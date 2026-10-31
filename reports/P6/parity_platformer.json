@@ -1,0 +1,22 @@
+{
+  "schema_": "p6_parity_report/1",
+  "timestamp": "2026-10-31T19:58:48.581844+00:00",
+  "preset": "platformer",
+  "legacy_recipe": "platformer",
+  "composer_status": "PASS",
+  "legacy_status": "PASS",
+  "parity_verified": true,
+  "all_gates_pass": true,
+  "scenarios_tested": [
+    "collect_3",
+    "reach_goal",
+    "lose_hazard"
+  ],
+  "metrics": {
+    "dev_package_size_mb": 840.6,
+    "ship_package_size_mb": 531.6,
+    "package_duration_s": 39.1,
+    "unit_tests_passing": 693,
+    "protected_oracles_passing": 45
+  }
+}

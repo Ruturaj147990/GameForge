@@ -14,7 +14,7 @@ from src.gameforge_ide.backend.tools.game_tools import ApprovalStore, GameTools
 from src.gameforge_ide.backend.tools.gateway import ToolGateway
 from src.gameforge_ide.pipeline.spec_from_prompt import (
     is_game_creation_request, match_prompt, refine_with_model)
-from src.gameforge_ide.recipes.grid_board_game.recipe import GridBoardParams, generate
+from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams, generate
 from src.gameforge_ide.unreal.toolchain import (
     UnrealToolchain, parse_automation_report, parse_build_diagnostics)
 
@@ -257,7 +257,7 @@ def test_game_flags_expand_to_spec():
 
 
 def test_procedural_world_prompts_match():
-    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams
+    from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
     spec = match_prompt("create a procedural landscape valley environment with a spline trail and ancient ruins called GFProceduralWorld")
     assert spec.matched and spec.recipe_id == "procedural_world"
     assert isinstance(spec.params, ProceduralWorldParams)
@@ -268,7 +268,7 @@ def test_procedural_world_prompts_match():
 
 
 def test_procedural_world_params_validation():
-    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams
+    from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
     p = ProceduralWorldParams(project_name="ValidWorld", elevation_scale=2500.0, road_width=400.0, foliage_density=50)
     p.validate()
 
@@ -282,7 +282,7 @@ def test_procedural_world_params_validation():
 
 
 def test_procedural_world_sources_render():
-    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams, generate
+    from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams, generate
     p = ProceduralWorldParams(project_name="GFWorldProbe", terrain_type="Mountains", elevation_scale=2200.0)
     files = generate(p)
     expected = [

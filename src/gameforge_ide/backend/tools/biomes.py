@@ -88,6 +88,23 @@ LIGHTING: dict[str, list[dict]] = {
         {"actor_class": "ExponentialHeightFog", "label": "GF_Fog"},
         {"actor_class": "VolumetricCloud", "label": "GF_Clouds"},
     ],
+    # P6 Composer presets (WI-6.4)
+    "dusk": [
+        {"actor_class": "DirectionalLight", "label": "GF_Sun", "light_intensity": 2.5,
+         "rotation": {"pitch": -8, "yaw": 250, "roll": 0}},
+        {"actor_class": "SkyLight", "label": "GF_SkyLight"},
+        {"actor_class": "SkyAtmosphere", "label": "GF_SkyAtmosphere"},
+        {"actor_class": "ExponentialHeightFog", "label": "GF_Fog"},
+    ],
+    "night": [
+        {"actor_class": "DirectionalLight", "label": "GF_Moon", "light_intensity": 0.6,
+         "rotation": {"pitch": -35, "yaw": 20, "roll": 0}},
+        {"actor_class": "SkyLight", "label": "GF_SkyLight", "light_intensity": 0.4},
+        {"actor_class": "ExponentialHeightFog", "label": "GF_Fog"},
+    ],
+    "indoor": [
+        {"actor_class": "SkyLight", "label": "GF_SkyLight", "light_intensity": 1.0},
+    ],
 }
 
 

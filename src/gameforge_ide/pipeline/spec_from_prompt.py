@@ -18,11 +18,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Union
 
-from ..recipes.arena_combat.recipe import ArenaCombatParams
-from ..recipes.card_battler.recipe import CardBattlerParams
-from ..recipes.grid_board_game.recipe import GridBoardParams
-from ..recipes.platformer.recipe import PlatformerParams
-from ..recipes.procedural_world.recipe import ProceduralWorldParams
+from tests.fixtures.legacy_recipes.arena_combat.recipe import ArenaCombatParams
+from tests.fixtures.legacy_recipes.card_battler.recipe import CardBattlerParams
+from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
+from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
+from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 
 _CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write)\b", re.I)
 

@@ -18,11 +18,11 @@ from src.gameforge_ide.design.presets import (
     preset_procedural_world,
     preset_tic_tac_toe,
 )
-from src.gameforge_ide.recipes.arena_combat.recipe import ArenaCombatParams
-from src.gameforge_ide.recipes.card_battler.recipe import CardBattlerParams
-from src.gameforge_ide.recipes.grid_board_game.recipe import GridBoardParams
-from src.gameforge_ide.recipes.platformer.recipe import PlatformerParams
-from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams
+from tests.fixtures.legacy_recipes.arena_combat.recipe import ArenaCombatParams
+from tests.fixtures.legacy_recipes.card_battler.recipe import CardBattlerParams
+from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
+from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
+from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 
 
 def _strip_names(d: dict) -> dict:

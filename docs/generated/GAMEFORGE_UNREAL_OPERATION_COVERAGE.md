@@ -83,9 +83,12 @@ Data Layers, project/plugin settings, Enhanced Input assets, redirector fix-up, 
 | `sequence_inspect` | cinematics | read |  | PASS |  |
 | `sequence_render` | cinematics | artifact |  | PASS | Lit/unlit MRQ PNG frames; cuts verified in reports/m16_sequence_demo.json. Demo lights must face the cameras. |
 | `sequence_render_status` | cinematics | read |  | PASS |  |
+| `gamedef_inspect` | gameplay | read |  | PASS |  |
+| `gamedef_write` | gameplay | project | gamedef_inspect | PASS |  |
 | `gameplay_get_state` | gameplay | read |  | PASS |  |
 | `gameplay_modify_state` | gameplay | runtime | gameplay_get_state | PASS |  |
 | `gameplay_objectives` | gameplay | read |  | PASS |  |
+| `actor_set_tags` | level | project | actors_in_level | PASS |  |
 | `actors_in_level` | level | read |  | PASS |  |
 | `delete_actor` | level | project | actors_in_level | PASS |  |
 | `load_level` | level | project | actors_in_level | PASS |  |

@@ -1,7 +1,7 @@
 """Unit tests for the arena_combat recipe parameter validation and source generation."""
 
 import pytest
-from src.gameforge_ide.recipes.arena_combat.recipe import ArenaCombatParams, generate
+from tests.fixtures.legacy_recipes.arena_combat.recipe import ArenaCombatParams, generate
 from src.gameforge_ide.pipeline.spec_from_prompt import match_prompt, is_game_creation_request
 
 

@@ -7,7 +7,7 @@ import pytest
 from src.gameforge_ide.backend.tools.game_tools import GameTools
 from src.gameforge_ide.pipeline.authoring import parse_files, safety_scan
 from src.gameforge_ide.pipeline.freeform import FREEFORM_STAGES, FreeformGamePipeline, derive_title, pascal
-from src.gameforge_ide.recipes.freeform_host.framework import api_doc, framework_sources, reference_impl
+from tests.fixtures.legacy_recipes.freeform_host.framework import api_doc, framework_sources, reference_impl
 
 GOOD_H = '#pragma once\n#include "CoreMinimal.h"\n#include "GFGameBase.h"\n#include "GFGameImpl.generated.h"\nUCLASS()\nclass X_API AGFGameImpl : public AGFGameBase { GENERATED_BODY() public: virtual bool RunSelfTest(FString& R) override; };\n'
 GOOD_CPP = '#include "GFGameImpl.h"\nbool AGFGameImpl::RunSelfTest(FString& R) { return true; }\n'

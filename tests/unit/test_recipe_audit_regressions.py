@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.gameforge_ide.recipes.card_battler.recipe import CardBattlerParams, generate as gen_cards
-from src.gameforge_ide.recipes.platformer.recipe import PlatformerParams, generate as gen_platformer
+from tests.fixtures.legacy_recipes.card_battler.recipe import CardBattlerParams, generate as gen_cards
+from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams, generate as gen_platformer
 
 
 def _joined(files):
@@ -30,8 +30,8 @@ def test_platformer_triggers_require_player_pawn():
 
 def test_gameplay_event_markers_present_in_all_playable_recipes():
     """Packaged games log GF_EVENT markers at real transitions so real-input tests can check outcomes."""
-    from src.gameforge_ide.recipes.arena_combat.recipe import ArenaCombatParams, generate as gen_arena
-    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams, generate as gen_world
+    from tests.fixtures.legacy_recipes.arena_combat.recipe import ArenaCombatParams, generate as gen_arena
+    from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams, generate as gen_world
     expected = {
         "platformer": (_joined(gen_platformer(PlatformerParams())), ["moved", "jump", "collect", "checkpoint", "respawn", "reset"]),
         "arena": (_joined(gen_arena(ArenaCombatParams())), ["moved", "attack", "player_damaged", "enemy_damaged", "reset"]),
@@ -45,7 +45,7 @@ def test_gameplay_event_markers_present_in_all_playable_recipes():
 
 
 def test_procedural_world_binds_restart():
-    from src.gameforge_ide.recipes.procedural_world.recipe import ProceduralWorldParams, generate as gen_world
+    from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams, generate as gen_world
     src = _joined(gen_world(ProceduralWorldParams()))
     assert 'BindAction(TEXT("Restart"), IE_Pressed, this, &AGFProceduralCharacter::RequestWorldReset)' in src
 
