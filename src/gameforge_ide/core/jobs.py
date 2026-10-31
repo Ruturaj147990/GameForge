@@ -119,8 +119,17 @@ class JobHandle:
     def result(self, timeout: Optional[float] = None) -> Any:
         return self._future.result(timeout=timeout)
 
+    def add_done_callback(self, fn: Callable[[JobHandle], None]) -> None:
+        def _wrapper(fut: concurrent.futures.Future) -> None:
+            fn(self)
+        self._future.add_done_callback(_wrapper)
+
 
 class JobManager:
+    @classmethod
+    def instance(cls) -> JobManager:
+        return default_job_manager()
+
     def __init__(self, max_workers: int = 2):
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers,

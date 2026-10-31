@@ -99,13 +99,20 @@ class ApprovalStore:
 
 
 class GameTools:
+    _links: Dict[str, LiveEditorLink] = {}
+    _instances: List[Any] = []
+
+    @classmethod
+    def all_links(cls) -> Dict[str, LiveEditorLink]:
+        return dict(cls._links)
     def __init__(self, workspace_root: Path, projects_root: Optional[Path] = None,
                  engine_root: Optional[Path] = None):
         self.workspace_root = Path(workspace_root).resolve()
         self.projects_root = Path(projects_root or self._configured_projects_root())
         self.engine_root = Path(engine_root or engine_root_or_missing())
         self.approvals = ApprovalStore(self.workspace_root)
-        self._links: Dict[str, LiveEditorLink] = {}
+        self._links = GameTools._links
+        GameTools._instances.append(self)
         self._last_used: Dict[str, float] = {}
         self._lock = threading.Lock()
         self.editor_idle_timeout_s = 600.0
