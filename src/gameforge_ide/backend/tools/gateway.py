@@ -38,8 +38,36 @@ class ToolGateway:
         self.asset_tools = ProceduralMeshGenerator()
         self.game_tools = GameTools(self.workspace_root)
 
-    def get_definitions(self) -> List[ToolDefinition]:
+    def get_definitions(self, for_hosted: bool = False) -> List[ToolDefinition]:
         """Returns schemas for all registered tools."""
+        from ...unreal import op_schemas
+
+        if for_hosted:
+            one_of = []
+            for op_name in sorted(op_catalog.agent_ops()):
+                model = op_schemas.SCHEMAS.get(op_name)
+                args_schema = model.model_json_schema() if model else {"type": "object"}
+                one_of.append({
+                    "type": "object",
+                    "properties": {
+                        "uproject": {"type": "string"},
+                        "op": {"const": op_name},
+                        "args": args_schema,
+                    },
+                    "required": ["uproject", "op"],
+                })
+            unreal_editor_params: Dict[str, Any] = {"oneOf": one_of}
+        else:
+            unreal_editor_params = {
+                "type": "object",
+                "properties": {
+                    "uproject": {"type": "string"},
+                    "op": {"type": "string", "enum": op_catalog.agent_ops()},
+                    "args": {"type": "object"},
+                },
+                "required": ["uproject", "op"],
+            }
+
         return [
             ToolDefinition(
                 name="list_dir",
@@ -210,10 +238,7 @@ class ToolGateway:
                 name="unreal_editor",
                 description=("Run one named operation in the live Unreal Editor for a project. Read-only ops run "
                              "without approval. Ops by domain: " + op_catalog.describe_for_agent()),
-                parameters={"type": "object", "properties": {"uproject": {"type": "string"},
-                                                             "op": {"type": "string", "enum": op_catalog.agent_ops()},
-                                                             "args": {"type": "object"}},
-                            "required": ["uproject", "op"]},
+                parameters=unreal_editor_params,
                 requires_approval=True,
             ),
             ToolDefinition(

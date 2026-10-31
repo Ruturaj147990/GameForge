@@ -379,7 +379,7 @@ class GameTools:
             # Fail closed before touching the editor: unknown (e.g. model-invented), diagnostic or legacy op.
             return {"status": "ERROR", "error": f"unknown or non-agent editor op: {op!r}",
                     "hint": "valid ops: " + op_catalog.describe_for_agent()}
-        clean, errs = op_schemas.validate_args(op, args or {})
+        clean, errs = op_schemas.validate_args(op, args or {}, strict=True)
         if errs:  # fail before touching the editor (AD-14)
             return {"status": "ERROR", "error": "invalid args for op", "op": op, "details": errs}
         res = self._link(uproject).call(op, clean)

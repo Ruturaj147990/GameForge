@@ -84,3 +84,16 @@ def test_generated_drafts_are_current():
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "126 ops" in r.stdout
+
+
+def test_agent_ops_have_schemas_and_hosted_oneof(tmp_path):
+    from src.gameforge_ide.backend.tools.gateway import ToolGateway
+    gw = ToolGateway(tmp_path)
+    hosted_defs = gw.get_definitions(for_hosted=True)
+    unreal_def = next(d for d in hosted_defs if d.name == "unreal_editor")
+    assert "oneOf" in unreal_def.parameters
+    assert len(unreal_def.parameters["oneOf"]) == len(op_catalog.agent_ops())
+
+    local_defs = gw.get_definitions(for_hosted=False)
+    unreal_local = next(d for d in local_defs if d.name == "unreal_editor")
+    assert "enum" in unreal_local.parameters["properties"]["op"]

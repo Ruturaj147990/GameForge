@@ -16,7 +16,7 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | Prompt → packaged game, 5 recipe genres | PASS | `reports/audit_20261030_pipeline_runs.json`; packaged real input `reports/packaged_real_input_summary.json` | — |
 | Free-form game via model C++ + repair ladder | PARTIAL | hard gates pass (whack-a-mole, 9B); visual quality weak | P6 replaces it with composition |
 | Game Design Spec (typed, reviewable) | PASS | schema gds/1, deterministic expander, presets, prompt_to_gds eval 100% valid, store/revisions, pipeline wired; 2 packaged games from GDS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json) | P1 |
-| One durable executor, resume, checkpoints | PLANNED | executor code-checked (`handovers/P02`) | P2 |
+| One durable executor, resume, checkpoints | PASS | Forge executor, atomic persistence, git checkpoints, resume kill test (reports/P2/resume_kill_test.json), rollback check (reports/P2/rollback_check.json), plan demos on Forge (reports/P2/plan_demos_forge.json), leak test (reports/P2/job_object_leak_test.json) | P2 |
 | Scenario playtests (injected input, Shipping-safe) | PLANNED | — | P3 |
 | Studio UI for the loop | PLANNED | UX polish done 2026-10-31 (`reports/ide_ui_20261031.png`) | P4 |
 | Composition of kit modules from a spec | PLANNED | — | P6 |

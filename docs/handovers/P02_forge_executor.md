@@ -712,7 +712,7 @@ Record this in `reports/P2/rollback_check.json`. Then re-run to completion.
 | 2.5 | DONE | 2026-10-31T12:50Z | 2026-10-31T12:52Z | test_forge_executor (9 passed); persistence, resume, dependency invalidation, approvals, repair hooks, timeout, cancellation |
 | 2.6 | DONE | 2026-10-31T12:55Z | 2026-10-31T13:00Z | legacy pipeline on Forge; test_game_pipeline (39 passed), test_forge_legacy_adapter (3 passed); engine gate PASS: TicTacToe & Platformer, resume_kill_test.json, rollback_check.json |
 | 2.7 | DONE | 2026-10-31T13:00Z | 2026-10-31T13:12Z | agent plans on Forge executor; tool_call handler, plan_adapter, test_forge_plan_adapter (5 passed), test_plan_runner (2 passed); demos on --forge PASS (plan_demos_forge.json) |
-| 2.8 | TODO | | | |
+| 2.8 | DONE | 2026-10-31T13:12Z | 2026-10-31T13:20Z | approval scopes on cards, ForgeService (test_forge_service 1 passed), action_runner on JobManager, op-schema strict=True enforcement; leak test PASS (job_object_leak_test.json) |
 
 ## Review log (Claude)
 _empty_

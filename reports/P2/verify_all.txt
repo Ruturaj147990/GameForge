@@ -1,0 +1,8 @@
+GameForge P2 Verification Gate Results:
+unit         PASS (617 passed)
+protected    PASS (45 passed)
+op-catalog   PASS (126 ops current)
+op-schemas   PASS (126 ops with argument models, strict=True enforced)
+contract     PASS (16/16 editor ops verified in UE 5.7.4)
+demo-quest   PASS (8/8 quest state assertions verified)
+ide-bench    PASS (0 violations, idle CPU 0.21%, memory 103.3 MB)

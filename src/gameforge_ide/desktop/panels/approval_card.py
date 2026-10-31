@@ -67,6 +67,23 @@ class ApprovalCard(QFrame):
         lay.addWidget(consequence)
         self._consequence = consequence
 
+        scope = approval.get("args", {}).get("scope") or approval.get("scope")
+        if isinstance(scope, dict):
+            scope_lines = []
+            if "paths" in scope:
+                scope_lines.append(f"<b>Paths:</b> <code>{scope['paths']}</code>")
+            if "engine" in scope:
+                scope_lines.append(f"<b>Engine:</b> {scope['engine']}")
+            if "packaging" in scope:
+                scope_lines.append(f"<b>Packaging:</b> {'Yes' if scope['packaging'] else 'No'}")
+            if "estimated_minutes" in scope:
+                scope_lines.append(f"<b>Estimated time:</b> ~{scope['estimated_minutes']} min")
+            if scope_lines:
+                scope_lbl = QLabel("<br>".join(scope_lines))
+                scope_lbl.setTextFormat(Qt.RichText)
+                scope_lbl.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+                lay.addWidget(scope_lbl)
+
         summary_md = approval.get("summary_md", "")
         if summary_md:
             self._spec_toggle = QPushButton("▶  Show Game Design Spec")

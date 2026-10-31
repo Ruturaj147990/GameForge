@@ -2,111 +2,153 @@
 
 This is the trusted approval path from the Master Blueprint: only a UI event bound to an
 approval ID can move a pending action to APPROVED and execute it. Model text cannot.
+Moved onto JobManager + Forge in P2 WI-2.8.
 """
-
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, Signal
 
 from ...backend.tools.gateway import ToolGateway
-
-
-class _Worker(QObject):
-    progress = Signal(str, dict)   # (event kind, data)
-    finished = Signal(dict)        # final result
-
-    def __init__(self, workspace_root: Path, approval_id: str) -> None:
-        super().__init__()
-        self._workspace_root = workspace_root
-        self._approval_id = approval_id
-        import threading
-        self.cancel_event = threading.Event()
-
-    def run(self) -> None:
-        gateway = ToolGateway(self._workspace_root)
-        store = gateway.game_tools.approvals
-        rec = store.transition(self._approval_id, "APPROVED")
-        if rec is None:
-            self.finished.emit({"status": "BLOCKED", "error": "approval is no longer pending (already used or rejected)"})
-            return
-        if rec.get("plan_id"):
-            # The plan executor owns this tool call; approving only releases the task.
-            self.finished.emit({"status": "SUCCESS", "approval_id": self._approval_id, "plan_id": rec["plan_id"],
-                                "message": "Approved — resume the plan in Mission Control → Execution Plan."})
-            return
-        try:
-            if rec["tool"] == "create_game":
-                result = gateway.game_tools.create_game(
-                    rec["args"]["params"], package=rec["args"].get("package", True),
-                    on_event=lambda kind, data: self.progress.emit(kind, data), cancel_event=self.cancel_event)
-            elif rec["tool"] == "create_game_freeform":
-                result = gateway.game_tools.create_game_freeform(
-                    rec["args"]["prompt"], rec["args"].get("title"),
-                    on_event=lambda kind, data: self.progress.emit(kind, data), cancel_event=self.cancel_event)
-            else:
-                result = gateway.execute_tool(rec["tool"], rec["args"], approval_granted=True)
-        except Exception as exc:  # report, never crash the UI
-            result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
-        ok = result.get("status") == "SUCCESS"
-        store.transition(self._approval_id, "DONE" if ok else "FAILED",
-                         {k: result.get(k) for k in ("status", "report_path", "failed_stage", "exe", "error")})
-        result["approval_id"] = self._approval_id
-        self.finished.emit(result)
+from ...core.jobs import JobHandle, JobManager, default_job_manager
 
 
 class ActionRunner(QObject):
-    """Owns one worker thread per approved action."""
+    """Owns execution of approved actions using JobManager and Forge."""
 
     progress = Signal(str, str, dict)  # (approval_id, kind, data)
     finished = Signal(str, dict)       # (approval_id, result)
 
-    def __init__(self, workspace_root: Path, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        workspace_root: Path,
+        job_manager: Optional[JobManager] = None,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
-        self._workspace_root = Path(workspace_root)
-        self._threads: Dict[str, QThread] = {}
-        self._workers: Dict[str, _Worker] = {}
+        self._workspace_root = Path(workspace_root).resolve()
+        self.job_manager = job_manager or default_job_manager()
+        self._handles: Dict[str, JobHandle] = {}
+        self._cancel_events: Dict[str, threading.Event] = {}
 
     def is_running(self, approval_id: str) -> bool:
-        return approval_id in self._threads
+        handle = self._handles.get(approval_id)
+        return handle is not None and not handle.done()
 
     def approve(self, approval_id: str) -> bool:
-        if approval_id in self._threads:
+        if self.is_running(approval_id):
             return False
-        thread = QThread(self)
-        worker = _Worker(self._workspace_root, approval_id)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.progress.connect(lambda kind, data, aid=approval_id: self.progress.emit(aid, kind, data))
-        worker.finished.connect(lambda res, aid=approval_id: self._on_finished(aid, res))
-        self._threads[approval_id] = thread
-        self._workers[approval_id] = worker
-        thread.start()
+
+        cancel_ev = threading.Event()
+        self._cancel_events[approval_id] = cancel_ev
+
+        def _worker_fn() -> None:
+            gateway = ToolGateway(self._workspace_root)
+            store = gateway.game_tools.approvals
+            rec = store.transition(approval_id, "APPROVED")
+            if rec is None:
+                self.finished.emit(
+                    approval_id,
+                    {"status": "BLOCKED", "error": "approval is no longer pending (already used or rejected)"},
+                )
+                return
+
+            if rec.get("plan_id"):
+                self.finished.emit(
+                    approval_id,
+                    {
+                        "status": "SUCCESS",
+                        "approval_id": approval_id,
+                        "plan_id": rec["plan_id"],
+                        "message": "Approved — resume the plan in Mission Control → Execution Plan.",
+                    },
+                )
+                return
+
+            try:
+                tool = rec.get("tool")
+                args = rec.get("args", {})
+                if tool == "forge_run":
+                    from ...forge.store import RunStore
+                    from ...forge.executor import ForgeExecutor
+                    from ...forge.handlers import HANDLERS
+                    from ...core.events import default_bus
+
+                    pdir = Path(args["project_dir"]) if args.get("project_dir") else None
+                    rstore = RunStore(project_dir=pdir, workspace_dir=self._workspace_root)
+                    state = rstore.load(args["run_id"])
+                    if state is None:
+                        result = {"status": "ERROR", "error": f"run {args['run_id']} not found"}
+                    else:
+                        state.approvals["run"] = approval_id
+                        bus = default_bus()
+
+                        def _on_forge(topic: str, ev: Dict[str, Any]) -> None:
+                            self.progress.emit(approval_id, ev.get("kind", "forge"), ev)
+
+                        unsub = bus.subscribe("forge", _on_forge)
+                        try:
+                            executor = ForgeExecutor(HANDLERS, bus=bus)
+                            state = executor.run(state, rstore)
+                        finally:
+                            unsub()
+                        ok = state.status == "DONE"
+                        result = {"status": "SUCCESS" if ok else state.status, "run_id": state.run.run_id}
+
+                elif tool == "create_game":
+                    result = gateway.game_tools.create_game(
+                        args["params"],
+                        package=args.get("package", True),
+                        on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
+                        cancel_event=cancel_ev,
+                    )
+                elif tool == "create_game_freeform":
+                    result = gateway.game_tools.create_game_freeform(
+                        args["prompt"],
+                        args.get("title"),
+                        on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
+                        cancel_event=cancel_ev,
+                    )
+                else:
+                    result = gateway.execute_tool(tool, args, approval_granted=True)
+            except Exception as exc:
+                result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
+
+            ok = result.get("status") == "SUCCESS"
+            store.transition(
+                approval_id,
+                "DONE" if ok else "FAILED",
+                {k: result.get(k) for k in ("status", "report_path", "failed_stage", "exe", "error")},
+            )
+            result["approval_id"] = approval_id
+            self.finished.emit(approval_id, result)
+
+        handle = self.job_manager.submit(
+            _worker_fn,
+            name=f"action_{approval_id}",
+            cancel_event=cancel_ev,
+        )
+        self._handles[approval_id] = handle
         return True
 
     def cancel(self, approval_id: str) -> bool:
-        worker = self._workers.get(approval_id)
-        if worker is None:
-            return False
-        worker.cancel_event.set()  # the toolchain kills the running process tree
-        return True
+        ev = self._cancel_events.get(approval_id)
+        if ev is not None:
+            ev.set()
+        handle = self._handles.get(approval_id)
+        if handle is not None:
+            handle.cancel()
+            return True
+        return False
 
     def reject(self, approval_id: str) -> Optional[Dict[str, Any]]:
         return ToolGateway(self._workspace_root).game_tools.approvals.transition(approval_id, "REJECTED")
 
-    def _on_finished(self, approval_id: str, result: Dict[str, Any]) -> None:
-        thread = self._threads.pop(approval_id, None)
-        self._workers.pop(approval_id, None)
-        if thread is not None:
-            thread.quit()
-            thread.wait(5000)
-        self.finished.emit(approval_id, result)
-
     def shutdown(self) -> None:
-        for worker in list(self._workers.values()):
-            worker.cancel_event.set()
-        for thread in list(self._threads.values()):
-            thread.quit()
-            thread.wait(2000)
+        for ev in self._cancel_events.values():
+            ev.set()
+        for h in self._handles.values():
+            h.cancel()

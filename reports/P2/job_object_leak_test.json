@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "parent_pid": 16352,
+  "child_pid": 15024,
+  "child_terminated_on_parent_kill": true,
+  "surviving_children": [],
+  "timestamp": 1793452643.0902567,
+  "platform": "win32"
+}
