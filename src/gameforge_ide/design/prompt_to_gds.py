@@ -44,6 +44,7 @@ class PromptToGdsResult:
     status: Literal["OK", "NEEDS_INPUT", "UNSUPPORTED", "ERROR"]
     gds: Optional[GameDesignSpec] = None
     questions: List[str] = field(default_factory=list)
+    suggested_patches: List[Dict[str, Any]] = field(default_factory=list)
     path: Literal["preset", "model", "none"] = "none"
     model: Optional[str] = None
     attempts: int = 0

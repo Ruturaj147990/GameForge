@@ -63,6 +63,16 @@ def load(project_dir: Path) -> Optional[GameDesignSpec]:
         return None
 
 
+def load_revision(project_dir: Path, rev: int) -> Optional[GameDesignSpec]:
+    rev_file = Path(project_dir) / DESIGN_DIR / "history" / f"r{rev:04d}.gds.json"
+    if not rev_file.is_file():
+        return None
+    try:
+        return GameDesignSpec.model_validate_json(rev_file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def history(project_dir: Path) -> List[int]:
     """Return sorted list of revision numbers preserved in the history directory."""
     history_dir = Path(project_dir) / DESIGN_DIR / "history"

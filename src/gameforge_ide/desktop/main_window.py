@@ -1146,9 +1146,16 @@ class MainWindow(QMainWindow):
 
         self._view_host.register("home", create_home_view)
         self._view_host.register("games", create_games_view)
+        def create_design_view() -> DesignView:
+            view = DesignView(parent=self)
+            view.buildRequested.connect(self._on_games_build_requested)
+            if self._current_project:
+                view.load_project(self._current_project)
+            return view
+
         self._view_host.register(
             "design",
-            lambda: DesignView(parent=self),
+            create_design_view,
             enabled_when=lambda: (bool(self._current_project), "Select a game first")
         )
         self._view_host.register("build", lambda: BuildView(parent=self))
@@ -1259,6 +1266,9 @@ class MainWindow(QMainWindow):
             current = self._view_host.current_view_id
             if current and not self._view_host.is_enabled(current)[0]:
                 self._switch_studio_view("home")
+            dv = self._view_host.get_view_widget("design")
+            if dv and hasattr(dv, "load_project"):
+                dv.load_project(project_name)
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
