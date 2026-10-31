@@ -48,6 +48,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Guard")
 	float SearchTime = 3.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FName EntityId;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Guard|State")
 	EGameForgeGuardState CurrentState = EGameForgeGuardState::Patrol;
 

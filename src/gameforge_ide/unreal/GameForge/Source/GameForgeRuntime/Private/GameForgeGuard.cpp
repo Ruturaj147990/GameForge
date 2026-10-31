@@ -1,6 +1,8 @@
 // Copyright 2026 GameForge Systems. All Rights Reserved.
 
 #include "GameForgeGuard.h"
+#include "GameForgeEventNames.h"
+#include "GameForgeEvents.h"
 
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -41,6 +43,18 @@ void AGameForgeGuard::EnterState(EGameForgeGuardState NewState, const AActor* Ta
 		*GuardStateName(NewState), World ? World->GetTimeSeconds() : 0.0, Target ? *Target->GetName() : TEXT("None"));
 	StateLog.Add(Entry);
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT guard_state guard=%s %s"), *GetName(), *Entry);
+	const FString PrevStateName = GuardStateName(CurrentState);
+	const FString NextStateName = GuardStateName(NewState);
+	const FString StateDataJson = FString::Printf(TEXT("{\"state\":\"%s\",\"prev\":\"%s\"}"), *NextStateName, *PrevStateName);
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GuardState, GetName(), StateDataJson, EntityId);
+	if (NewState == EGameForgeGuardState::Chase)
+	{
+		UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GuardSpottedPlayer, GetName(), StateDataJson, EntityId);
+	}
+	else if (NewState == EGameForgeGuardState::Search)
+	{
+		UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GuardLostPlayer, GetName(), StateDataJson, EntityId);
+	}
 	CurrentState = NewState;
 	CurrentStateName = GuardStateName(NewState);
 	TargetName = Target ? Target->GetName() : FString();

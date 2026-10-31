@@ -682,7 +682,7 @@ returns ok only if all pass. Artifacts are the result files.
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
 | 3.0 | DONE | 2026-10-31T13:25Z | 2026-10-31T13:32Z | reports/P3/spike_inject.json (PASS: dev 1112.34cm, ship 1111.86cm >= 1000cm) |
-| 3.1 | TODO | | | |
+| 3.1 | DONE | 2026-10-31T13:35Z | 2026-10-31T13:42Z | GameForgeEvents bus, GameForgeEventNames.h, retrofitted kit actors (EntityId), test_event_names_parity (1 passed), C++ build PASS |
 | 3.2 | TODO | | | |
 | 3.3 | TODO | | | |
 | 3.4 | TODO | | | |

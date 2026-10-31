@@ -134,6 +134,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
 	FString TurnInLine;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FName EntityId;
+
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Quest|State")
 	TArray<FString> SpokenLines;
 

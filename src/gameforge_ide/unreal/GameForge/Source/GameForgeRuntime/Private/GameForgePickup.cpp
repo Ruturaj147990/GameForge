@@ -2,6 +2,8 @@
 
 #include "GameForgePickup.h"
 
+#include "GameForgeEventNames.h"
+#include "GameForgeEvents.h"
 #include "Engine/GameInstance.h"
 #include "GameForgeObjectives.h"
 #include "Components/AudioComponent.h"
@@ -81,5 +83,9 @@ void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, A
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT pickup actor=%s collected_by=%s vfx=%s spawned=%d sound=%s sound_playing=%d"),
 		*GetName(), *CollectedBy, CollectVFX ? *CollectVFX->GetName() : TEXT("None"), SpawnedVFX ? 1 : 0,
 		CollectSound ? *CollectSound->GetName() : TEXT("None"), SpawnedSound && SpawnedSound->IsPlaying() ? 1 : 0);
+	const FString DataJson = FString::Printf(TEXT("{\"objective\":\"%s\",\"by\":\"%s\"}"),
+		*ObjectiveId.ToString().ReplaceCharWithEscapedChar(),
+		*CollectedBy.ReplaceCharWithEscapedChar());
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PickupCollected, GetName(), DataJson, EntityId);
 	OnCollected.Broadcast(Pawn);
 }

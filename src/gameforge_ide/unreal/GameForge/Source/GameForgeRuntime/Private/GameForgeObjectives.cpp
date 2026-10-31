@@ -1,6 +1,8 @@
 // Copyright 2026 GameForge Systems. All Rights Reserved.
 
 #include "GameForgeObjectives.h"
+#include "GameForgeEventNames.h"
+#include "GameForgeEvents.h"
 
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -37,6 +39,8 @@ void UGameForgeObjectiveSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 			SaveCount = Save->SaveCount;
 			bLoadedFromSlot = true;
 			UE_LOG(LogTemp, Display, TEXT("GF_EVENT objective_load slot=%s objectives=%d saves=%d"), *SlotName, Objectives.Num(), SaveCount);
+			UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::SaveLoaded, SlotName,
+				FString::Printf(TEXT("{\"objectives\":%d}"), Objectives.Num()), NAME_None);
 		}
 	}
 }
@@ -70,6 +74,8 @@ bool UGameForgeObjectiveSubsystem::StartObjective(FName Id, const FString& Title
 	O->Progress = 0;
 	O->State = EGameForgeObjectiveState::Active;
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT objective_start id=%s target=%d"), *Id.ToString(), O->Target);
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::ObjectiveStarted, Id.ToString(),
+		FString::Printf(TEXT("{\"target\":%d}"), O->Target), NAME_None);
 	SaveNow();
 	return true;
 }
@@ -83,10 +89,13 @@ bool UGameForgeObjectiveSubsystem::AddProgress(FName Id, int32 Amount)
 	}
 	O->Progress = FMath::Min(O->Target, O->Progress + Amount);
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT objective_progress id=%s progress=%d/%d"), *Id.ToString(), O->Progress, O->Target);
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::ObjectiveUpdated, Id.ToString(),
+		FString::Printf(TEXT("{\"progress\":%d,\"target\":%d}"), O->Progress, O->Target), NAME_None);
 	if (O->Progress >= O->Target)
 	{
 		O->State = EGameForgeObjectiveState::Completed;
 		UE_LOG(LogTemp, Display, TEXT("GF_EVENT objective_complete id=%s"), *Id.ToString());
+		UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::ObjectiveCompleted, Id.ToString(), TEXT("{}"), NAME_None);
 	}
 	SaveNow();
 	return true;
@@ -105,6 +114,8 @@ bool UGameForgeObjectiveSubsystem::SaveNow()
 	Save->SaveCount = ++SaveCount;
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName, 0);
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT objective_save slot=%s ok=%d count=%d"), *SlotName, bOk ? 1 : 0, SaveCount);
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::SaveWritten, SlotName,
+		FString::Printf(TEXT("{\"ok\":%s}"), bOk ? TEXT("true") : TEXT("false")), NAME_None);
 	return bOk;
 }
 
@@ -154,6 +165,8 @@ void AGameForgeQuestGiver::Say(const FString& Line)
 {
 	SpokenLines.Add(Line);
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT dialogue speaker=%s line=\"%s\""), *GetName(), *Line);
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::DialogueLine, GetName(),
+		FString::Printf(TEXT("{\"line\":\"%s\"}"), *Line.ReplaceCharWithEscapedChar()), EntityId);
 }
 
 void AGameForgeQuestGiver::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

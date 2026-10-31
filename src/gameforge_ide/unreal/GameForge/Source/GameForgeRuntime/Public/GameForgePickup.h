@@ -53,6 +53,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
 	FName ObjectiveId;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FName EntityId;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup|State")
 	bool bCollected = false;
 
