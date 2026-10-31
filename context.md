@@ -67,7 +67,7 @@ Done: WI-0.1-0.6, 0.10-0.12. PARTIAL (finish first):
    `src/gameforge_ide/unreal/op_schemas.py`).
 3. **WI-0.9**: exercise the editor-originated `GameForge.SyncContext` request against `--serve` on 47815
    (`--serve` needs `GAMEFORGE_BRIDGE_TOKEN`).
-4. Check `reports/P0/verify_all.txt` (full gate started 10:45Z; result not yet read). If all PASS, P0 is complete, so start
+4. Full gate `reports/P0/verify_all.txt`: all 7 gates PASS (unit, protected, op-catalog, op-schemas, contract, demo-quest, ide-bench). After items 1–3, start
    **P1 WI-1.1** (`docs/handovers/P01_game_design_spec.md`).
 Work on `master` only (no branches), one commit per work item.
 
