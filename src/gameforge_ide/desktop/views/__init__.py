@@ -31,9 +31,7 @@ class BaseStudioView(QWidget):
 from .home_view import HomeView
 
 
-class GamesView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("games", "Games", parent)
+from .games_view import GamesView
 
 
 class DesignView(BaseStudioView):

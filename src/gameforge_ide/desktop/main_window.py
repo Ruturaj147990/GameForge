@@ -1129,8 +1129,23 @@ class MainWindow(QMainWindow):
             self._current_project = projects[0]
             self._top_bar.set_projects(projects, self._current_project)
 
-        self._view_host.register("home", lambda: HomeView(parent=self))
-        self._view_host.register("games", lambda: GamesView(parent=self))
+        def create_home_view() -> HomeView:
+            view = HomeView(parent=self)
+            if hasattr(self, "_systems_service"):
+                view.attach_systems_service(self._systems_service)
+            view.projectSelected.connect(self._on_project_selected)
+            view.designReady.connect(self._on_home_design_ready)
+            return view
+
+        def create_games_view() -> GamesView:
+            view = GamesView(parent=self)
+            view.openGameRequested.connect(self._on_games_open_requested)
+            view.playGameRequested.connect(self._on_games_play_requested)
+            view.buildGameRequested.connect(self._on_games_build_requested)
+            return view
+
+        self._view_host.register("home", create_home_view)
+        self._view_host.register("games", create_games_view)
         self._view_host.register(
             "design",
             lambda: DesignView(parent=self),
@@ -1244,6 +1259,26 @@ class MainWindow(QMainWindow):
             current = self._view_host.current_view_id
             if current and not self._view_host.is_enabled(current)[0]:
                 self._switch_studio_view("home")
+
+    def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
+        if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
+            self._on_project_selected(gds.meta.project_name)
+        self._switch_studio_view("design")
+        design_view = self._view_host.get_view_widget("design")
+        if design_view and hasattr(design_view, "open_draft"):
+            design_view.open_draft(gds, questions)
+
+    def _on_games_open_requested(self, project_name: str) -> None:
+        self._on_project_selected(project_name)
+        self._switch_studio_view("design")
+
+    def _on_games_play_requested(self, project_name: str) -> None:
+        self._on_project_selected(project_name)
+        self._switch_studio_view("play")
+
+    def _on_games_build_requested(self, project_name: str) -> None:
+        self._on_project_selected(project_name)
+        self._switch_studio_view("build")
 
     def _current_project_has_package(self) -> bool:
         if not getattr(self, "_current_project", None):
