@@ -18,7 +18,7 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | Game Design Spec (typed, reviewable) | PASS | schema gds/1, deterministic expander, presets, prompt_to_gds eval 100% valid, store/revisions, pipeline wired; 2 packaged games from GDS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json) | P1 |
 | One durable executor, resume, checkpoints | PASS | Forge executor, atomic persistence, git checkpoints, resume kill test (reports/P2/resume_kill_test.json), rollback check (reports/P2/rollback_check.json), plan demos on Forge (reports/P2/plan_demos_forge.json), leak test (reports/P2/job_object_leak_test.json) | P2 |
 | Scenario playtests (injected input, Shipping-safe) | PASS | Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, 5 dev scenarios (incl. 2 controls) & 3 ship scenarios (`reports/P3/kit_testbed_scenarios.json`) | P3 |
-| Studio UI for the loop | PLANNED | UX polish done 2026-10-31 (`reports/ide_ui_20261031.png`) | P4 |
+| Studio UI for the loop | PARTIAL | P4 WI-4.1–WI-4.7 DONE (icons, systems service, studio shell, Home, Games, Design, Build views) | P4 |
 | Composition of kit modules from a spec | PLANNED | — | P6 |
 | Change requests / incremental rebuild | PLANNED | — | P8 |
 | Incremental modification of user projects | PLANNED | — | P8 |

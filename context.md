@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-10-31T14:50Z (UTC from the system clock). Updated by Antigravity upon P3 Scenario QA completion & P4 progression.
+**Last updated:** 2026-10-31T16:00Z (UTC from the system clock). Updated by Antigravity upon P4 WI-4.5, WI-4.6, WI-4.7 completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -23,7 +23,7 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
-## 3. CURRENT STATE (2026-10-31T14:50Z) [VERIFIED unless marked]
+## 3. CURRENT STATE (2026-10-31T16:00Z) [VERIFIED unless marked]
 
 - **P3 Deterministic Scenario QA Harness complete:** All 7 work items (WI-3.0 through WI-3.6) are DONE.
   - WI-3.0: Spike: Enhanced Input simulation in standalone / packaged builds. Runtime input injection works in cooked Shipping with `DefaultPlayerInputClass` & `DefaultInputComponentClass` in `DefaultInput.ini`. Distance traveled: Dev 1112.34 cm, Ship 1111.86 cm (`reports/P3/spike_inject.json`).
@@ -33,24 +33,27 @@ makes games, not a game. Product definition, design contract and security rules:
   - WI-3.4: Scenario subsystem: `UGameForgeScenarioSubsystem` (tickable, headless replay via `-GFScenario=` and `-GFScenarioOut=`, steps state machine, expectation evaluation, screenshots on events, UTF-8 JSON result writer).
   - WI-3.5: Host side: `scenario.py` (schemas, `extra="forbid"`), `manifest.py` (level manifest), `generate.py` (GDS -> scenarios), `runner.py` (`run_packaged`, `run_editor_game`), `forge/handlers/scenario.py` Forge step handler. 6 unit tests PASS.
   - WI-3.6: Kit testbed project: `GFKitTest` scaffolded, level built via ops, packaged Dev & Shipping. 5 dev scenarios (collect_3, quest_complete, spotted_by_guard PASS; controls teleport_cheat & impossible FAIL), 3 ship scenarios PASS (`reports/P3/kit_testbed_scenarios.json`). Traversal claims M8, M13, M15 re-verified with autopilot (`reports/P3/reverify_traversal.json`).
-- **P4 Studio UX v2 in progress:**
+- **P4 Studio UX v2 in progress (WI-4.1–WI-4.7 DONE):**
   - WI-4.1: Vector icon system in `src/gameforge_ide/desktop/icons.py` and `assets/icons/` with theme palette caching (4 passed).
   - WI-4.2: Systems service (`core/systems.py`, `desktop/services/systems_service.py`) probing Ollama, engine, editor link, RAM, disk, hosted models (3 passed).
   - WI-4.3: Studio shell package (`rail.py`, `top_bar.py`, `view_host.py`, `assistant_panel.py`, `toasts.py`, `palette.py`), `main_window._build_studio_shell()`, shortcuts Ctrl+1..8, Ctrl+J, Ctrl+K, legacy shell preserved under `GAMEFORGE_LEGACY_SHELL=1` (5 passed).
   - WI-4.4: Home view (`desktop/views/home_view.py`) with prompt input (Enter=newline, Ctrl+Enter=design), preset chips from `PRESETS`, "Design it →" running `prompt_to_gds` on JobManager, recent games grid joining GDS & runs index, readiness card fed by systems service (`desktop/services/projects_service.py`, `test_home_view.py` 7 passed). Zero hardcoded hex colours.
+  - WI-4.5: Games view (`desktop/views/games_view.py`) with grid/list mode toggle, search/genre filtering, sort order, project card delegate, and safe project deletion with link checking (`test_games_view.py` 5 passed).
+  - WI-4.6: Design view (`desktop/views/design_view.py`) with GDS pydantic form (`widgets/gds_form.py`), structured rules editor (`widgets/rule_editor.py`), debounced 300ms validation, history diff (`DiffDialog`), raw JSON dialog, and build game trigger (`test_design_view.py` 7 passed).
+  - WI-4.7: Build view (`desktop/views/build_view.py`) with timeline `StepRowDelegate` (`widgets/step_row.py`), batched read-only `LogView` (`widgets/log_view.py`), `ProblemsTable` (`widgets/problems_table.py`), artifacts inspector, cancel confirmation, resume, and rollback with checkpoint preview and active editor session guard (`test_build_view.py` 6 passed).
 - **Tests & Verification:**
-  - `powershell -File scripts\verify_all.ps1` (full 7 gates): **ALL 7 PASS**.
-  - Unit tests: **643 passed** in 41.77s (exit 0).
-  - Protected oracles: **45 passed** in 0.03s (exit 0).
+  - Unit tests: **661 passed** in 55.22s (exit 0).
+  - Protected oracles: **45 passed** in 0.04s (exit 0).
   - Op catalog & schemas: 126 ops current, all schemas valid.
-  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS. IDE benchmark: 0 violations, idle CPU 0.21%.
-- **Git:** All work committed directly on `master`.
+  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS.
+  - IDE benchmark: 0 violations, idle CPU 0.21%, memory 109.6 MB private / 186.5 MB working set, startup 0.94s.
+  - **Git:** All work committed directly on `master`.
 
-## 4. NEXT ACTION (2026-10-31T14:50Z)
+## 4. NEXT ACTION (2026-10-31T16:00Z)
 
 Continue **Phase 4 (Studio UX: Chat, Forge DAG, Inspections, and Layout)** in `docs/handovers/P04_studio_ux.md`:
-1. Implement WI-4.5 (Games view: grid/list toggle of game cards with thumbnails, GDS joins, runs index, delete confirm).
-2. Follow with WI-4.6 (Design view: GDS form, rules editor, validation, build game trigger).
+1. Implement WI-4.8 (Play view: scenario results table reading `ScenarioResult` from latest run's scenario step artifacts, launch game action).
+2. Follow with WI-4.9 (Evidence view: gallery list of artifacts across runs with image viewer, Markdown viewer, and JSON viewer).
 Work on `master` only (no branches), one commit per work item.
 
 ## 5. Key facts and paths
@@ -83,3 +86,4 @@ Work on `master` only (no branches), one commit per work item.
 - 2026-10-31T13:25Z — Antigravity: completed Phase 2 (Forge Executor, Checkpoints, and Jobs, WI-2.1-2.8). Forge DAG executor, persistence, ProjectRepo git checkpoints, Windows Job Objects (KILL_ON_JOB_CLOSE), legacy pipeline on Forge, agent plans on Forge, ForgeService, approval scopes, op-schema strict=True enforcement. All engine gates PASS (resume kill test, rollback check, 3 plan demos, job object leak test). Full verify_all 7/7 PASS (unit 617, protected 45). Ready for P3 WI-3.0.
 - 2026-10-31T14:10Z — Antigravity: completed Phase 3 (Deterministic Scenario QA Harness, WI-3.0-3.6). Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, autopilot with teleport detection, kit testbed scenarios 8/8 gates PASS (dev + controls + shipping), M8/M13/M15 traversal claims re-verified. Full verify_all 7/7 PASS (unit 624, protected 45). Ready for P4 WI-4.1.
 - 2026-10-31T14:50Z — Antigravity: re-verified Phase 3 exit gates (full verify_all 7/7 PASS: unit 643, protected 45, contract 16/16, demo-quest 8/8, ide-bench idle CPU 0.21%); advanced Phase 4 Studio UX (WI-4.1-4.4 DONE: icons, systems service, studio shell, Home view). master clean.
+- 2026-10-31T16:00Z — Antigravity: completed Phase 4 WI-4.5 (Games view), WI-4.6 (Design view + GDS form + rule editor + diff), and WI-4.7 (Build view + timeline delegate + batched log + problems table + rollback). Unit 661/661 PASS, protected 45/45 PASS, IDE bench 0 violations (0.21% CPU, 109.6 MB RAM, 0.94s startup). Ready for WI-4.8.
