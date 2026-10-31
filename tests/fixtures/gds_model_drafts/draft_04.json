@@ -1,0 +1,21 @@
+{
+  "title": "Block Switch Puzzle",
+  "genre": "puzzle",
+  "camera": "fixed_board",
+  "pitch": "Push blocks onto switches to solve puzzle",
+  "entities": [
+    {
+      "kind": "switch",
+      "count": 2
+    },
+    {
+      "kind": "goal",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "reach_goal"
+    }
+  ]
+}

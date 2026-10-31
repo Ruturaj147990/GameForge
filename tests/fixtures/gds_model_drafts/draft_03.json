@@ -1,0 +1,31 @@
+{
+  "title": "Dungeon Key Quest",
+  "genre": "dungeon_crawler",
+  "camera": "third_person",
+  "pitch": "Traverse 3 rooms to unlock key door",
+  "biome": "dungeon",
+  "entities": [
+    {
+      "kind": "door",
+      "count": 1
+    },
+    {
+      "kind": "pickup",
+      "count": 1
+    },
+    {
+      "kind": "enemy",
+      "count": 3
+    }
+  ],
+  "win": [
+    {
+      "type": "reach_goal"
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

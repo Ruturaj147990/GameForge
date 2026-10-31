@@ -1,0 +1,23 @@
+{
+  "title": "Cyber City Waves",
+  "genre": "top_down_shooter",
+  "camera": "top_down",
+  "pitch": "Fight endless waves in cyber city",
+  "entities": [
+    {
+      "kind": "spawner",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "score_at_least",
+      "target": 500
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

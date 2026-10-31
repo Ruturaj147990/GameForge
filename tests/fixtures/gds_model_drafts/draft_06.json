@@ -1,0 +1,27 @@
+{
+  "title": "Facility Escape",
+  "genre": "action_adventure",
+  "camera": "third_person",
+  "pitch": "Escape burning facility before 90 seconds elapse",
+  "entities": [
+    {
+      "kind": "goal",
+      "count": 1
+    },
+    {
+      "kind": "hazard",
+      "count": 6
+    }
+  ],
+  "win": [
+    {
+      "type": "reach_goal"
+    }
+  ],
+  "lose": [
+    {
+      "type": "timer_runs_out",
+      "seconds": 90
+    }
+  ]
+}

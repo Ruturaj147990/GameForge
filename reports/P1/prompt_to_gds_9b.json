@@ -1,0 +1,390 @@
+{
+  "timestamp": "2026-10-31T17:11:55Z",
+  "model": "gameforge-qwen3.5-9b",
+  "ollama_version": "0.40.6",
+  "sample_size": 15,
+  "first_try_valid_rate": 1.0,
+  "valid_after_repair_rate": 1.0,
+  "failed_closed_rate": 1.0,
+  "mean_latency_s": 2.16,
+  "fidelity_rate": 0.2667,
+  "gate_pass": true,
+  "status": "PASS",
+  "results": [
+    {
+      "prompt": "create a third-person forest adventure game collecting 5 relics while avoiding 3 guards",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.03,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "relics",
+          "expected_kind": "pickup",
+          "matched": true
+        },
+        {
+          "noun": "guards",
+          "expected_kind": "guard",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Forest Relics",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "make a top-down shooter game survive 2 minutes",
+      "status": "OK",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 1.84,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "survive",
+          "expected_kind": null,
+          "matched": true
+        }
+      ],
+      "fidelity_ok": true,
+      "errors": [],
+      "title": "Two Minute Survival",
+      "genre": "top_down_shooter"
+    },
+    {
+      "prompt": "build a dungeon crawler game with 3 rooms and a key door",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.09,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "door",
+          "expected_kind": "door",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Three Room Dungeon",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "design a puzzle game where you push blocks onto goal switches",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.39,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "switches",
+          "expected_kind": "switch",
+          "matched": false
+        },
+        {
+          "noun": "goal",
+          "expected_kind": "goal",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Block Switch",
+      "genre": "puzzle"
+    },
+    {
+      "prompt": "create an action adventure game exploring an ancient temple to reach the altar",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.1,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "altar",
+          "expected_kind": "goal",
+          "matched": true
+        },
+        {
+          "noun": "goal",
+          "expected_kind": "goal",
+          "matched": true
+        }
+      ],
+      "fidelity_ok": true,
+      "errors": [],
+      "title": "Temple of Echoes",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "make a survival game where player escapes a burning facility in 90 seconds",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.37,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "escape",
+          "expected_kind": "goal",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Burning Escape",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "build a top-down shooter game defending the base from 10 robot invaders",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.22,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "invaders",
+          "expected_kind": "enemy",
+          "matched": false
+        },
+        {
+          "noun": "enemies",
+          "expected_kind": "enemy",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Base Defender",
+      "genre": "top_down_shooter"
+    },
+    {
+      "prompt": "create a stealth infiltration game where you hack 4 terminals without getting caught",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.02,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "terminals",
+          "expected_kind": "pickup",
+          "matched": true
+        },
+        {
+          "noun": "guards",
+          "expected_kind": "guard",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Terminal Breach",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "design a dungeon crawler game defeating the skeleton king boss",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.32,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "boss",
+          "expected_kind": "enemy",
+          "matched": true
+        },
+        {
+          "noun": "skeleton",
+          "expected_kind": "enemy",
+          "matched": true
+        }
+      ],
+      "fidelity_ok": true,
+      "errors": [],
+      "title": "Skeleton King's Keep",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "make an exploration game wandering an arctic desert looking for 3 research stations",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.09,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "stations",
+          "expected_kind": "checkpoint",
+          "matched": false
+        },
+        {
+          "noun": "checkpoints",
+          "expected_kind": "checkpoint",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Frozen Outpost",
+      "genre": "exploration"
+    },
+    {
+      "prompt": "create a puzzle game matching crystal colors to unlock the portal",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.18,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "portal",
+          "expected_kind": "goal",
+          "matched": false
+        },
+        {
+          "noun": "crystals",
+          "expected_kind": "pickup",
+          "matched": true
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Crystal Portal",
+      "genre": "puzzle"
+    },
+    {
+      "prompt": "build an action adventure game rescuing 4 villagers from goblin cages",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.01,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "villagers",
+          "expected_kind": "npc",
+          "matched": false
+        },
+        {
+          "noun": "npcs",
+          "expected_kind": "npc",
+          "matched": false
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Goblin Cage Breakout",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "make a top-down shooter game fighting endless waves in a cyber city",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.45,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "waves",
+          "expected_kind": "spawner",
+          "matched": true
+        },
+        {
+          "noun": "spawner",
+          "expected_kind": "spawner",
+          "matched": true
+        }
+      ],
+      "fidelity_ok": true,
+      "errors": [],
+      "title": "Neon Wave Runner",
+      "genre": "top_down_shooter"
+    },
+    {
+      "prompt": "create a dungeon crawl game avoiding spike traps to collect the golden chalice",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.13,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "hazards",
+          "expected_kind": "hazard",
+          "matched": false
+        },
+        {
+          "noun": "chalice",
+          "expected_kind": "pickup",
+          "matched": true
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Chalice of Spikes",
+      "genre": "action_adventure"
+    },
+    {
+      "prompt": "design an exploration game sailing between 3 tropical islands to find pirate treasure",
+      "status": "NEEDS_INPUT",
+      "path": "model",
+      "attempts": 1,
+      "latency_s": 2.13,
+      "first_try_valid": true,
+      "valid": true,
+      "failed_closed": false,
+      "fidelity": [
+        {
+          "noun": "islands",
+          "expected_kind": "landmark",
+          "matched": false
+        },
+        {
+          "noun": "treasure",
+          "expected_kind": "pickup",
+          "matched": true
+        }
+      ],
+      "fidelity_ok": false,
+      "errors": [],
+      "title": "Island Hopper",
+      "genre": "exploration"
+    }
+  ]
+}

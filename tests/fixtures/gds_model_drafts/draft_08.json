@@ -1,0 +1,27 @@
+{
+  "title": "Stealth Terminal Hack",
+  "genre": "exploration",
+  "camera": "third_person",
+  "pitch": "Hack 4 terminals without alerting the 2 guards",
+  "entities": [
+    {
+      "kind": "pickup",
+      "count": 4
+    },
+    {
+      "kind": "guard",
+      "count": 2
+    }
+  ],
+  "win": [
+    {
+      "type": "collect_all",
+      "target": 4
+    }
+  ],
+  "lose": [
+    {
+      "type": "caught_by_guard"
+    }
+  ]
+}

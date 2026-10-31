@@ -1,0 +1,40 @@
+{"prompt": "create a tic tac toe game", "expect": "preset:tic_tac_toe", "checks": {"board_size": 3, "win_length": 3}}
+{"prompt": "make a 5x5 tic tac toe with 4 in a row vs a friend", "expect": "preset:tic_tac_toe", "checks": {"board_size": 5, "win_length": 4, "vs_ai": false}}
+{"prompt": "build a connect four game", "expect": "preset:connect_four", "checks": {"board_size": 7, "win_length": 4, "gravity": true}}
+{"prompt": "create a gomoku game", "expect": "preset:gomoku", "checks": {"board_size": 15, "win_length": 5}}
+{"prompt": "make a 3d platformer with 8 coins called Sky Hop", "expect": "preset:platformer", "checks": {"title": "Sky Hop", "collectible_target": 8}}
+{"prompt": "create a platform game with 12 gems on hard difficulty", "expect": "preset:platformer", "checks": {"collectible_target": 12, "difficulty": "hard"}}
+{"prompt": "build a jump and run game called Cloud Runner", "expect": "preset:platformer", "checks": {"title": "Cloud Runner"}}
+{"prompt": "make a 3d platformer with 20 coins", "expect": "preset:platformer", "checks": {"collectible_target": 20}}
+{"prompt": "create an arena combat game with 5 waves", "expect": "preset:arena_combat", "checks": {"wave_count": 5}}
+{"prompt": "make an action arena game with 4 waves and 6 enemies per wave", "expect": "preset:arena_combat", "checks": {"wave_count": 4, "enemies_per_wave": 6}}
+{"prompt": "build an arena game called Gladiator Pit on easy difficulty", "expect": "preset:arena_combat", "checks": {"title": "Gladiator Pit", "difficulty": "easy"}}
+{"prompt": "create a wave combat game with 8 enemies per wave", "expect": "preset:arena_combat", "checks": {"enemies_per_wave": 8}}
+{"prompt": "create a card battler game", "expect": "preset:card_battler", "checks": {"player_base_health": 30}}
+{"prompt": "make a card battle game with 50 hp on hard", "expect": "preset:card_battler", "checks": {"player_base_health": 50, "difficulty": "hard"}}
+{"prompt": "build a deck battler game called Rune Clash", "expect": "preset:card_battler", "checks": {"title": "Rune Clash"}}
+{"prompt": "design a 3-lane card battler with 40 hp", "expect": "preset:card_battler", "checks": {"player_base_health": 40}}
+{"prompt": "create a procedural world with mountains landscape", "expect": "preset:procedural_world", "checks": {"terrain_type": "Mountains"}}
+{"prompt": "generate a procedural terrain with 80 foliage seed 42", "expect": "preset:procedural_world", "checks": {"foliage_density": 80.0, "seed": 42}}
+{"prompt": "build a procedural environment with plateau and ruins", "expect": "preset:procedural_world", "checks": {"terrain_type": "Plateau"}}
+{"prompt": "create a procedural landscape with hills", "expect": "preset:procedural_world", "checks": {"terrain_type": "Hills"}}
+{"prompt": "create a third-person forest adventure game collecting 5 relics while avoiding 3 guards", "expect": "model", "checks": {"genre": "exploration", "nouns": ["relics", "guards"]}}
+{"prompt": "make a top-down shooter game survive 2 minutes", "expect": "model", "checks": {"genre": "top_down_shooter", "nouns": ["survive"]}}
+{"prompt": "build a dungeon crawler game with 3 rooms and a key door", "expect": "model", "checks": {"genre": "dungeon_crawler", "nouns": ["door"]}}
+{"prompt": "design a puzzle game where you push blocks onto goal switches", "expect": "model", "checks": {"genre": "puzzle", "nouns": ["switches", "goal"]}}
+{"prompt": "create an action adventure game exploring an ancient temple to reach the altar", "expect": "model", "checks": {"genre": "action_adventure", "nouns": ["altar", "goal"]}}
+{"prompt": "make a survival game where player escapes a burning facility in 90 seconds", "expect": "model", "checks": {"genre": "action_adventure", "nouns": ["escape"]}}
+{"prompt": "build a top-down shooter game defending the base from 10 robot invaders", "expect": "model", "checks": {"genre": "top_down_shooter", "nouns": ["invaders", "enemies"]}}
+{"prompt": "create a stealth infiltration game where you hack 4 terminals without getting caught", "expect": "model", "checks": {"genre": "exploration", "nouns": ["terminals", "guards"]}}
+{"prompt": "design a dungeon crawler game defeating the skeleton king boss", "expect": "model", "checks": {"genre": "dungeon_crawler", "nouns": ["boss", "skeleton"]}}
+{"prompt": "make an exploration game wandering an arctic desert looking for 3 research stations", "expect": "model", "checks": {"genre": "exploration", "nouns": ["stations", "checkpoints"]}}
+{"prompt": "create a puzzle game matching crystal colors to unlock the portal", "expect": "model", "checks": {"genre": "puzzle", "nouns": ["portal", "crystals"]}}
+{"prompt": "build an action adventure game rescuing 4 villagers from goblin cages", "expect": "model", "checks": {"genre": "action_adventure", "nouns": ["villagers", "npcs"]}}
+{"prompt": "make a top-down shooter game fighting endless waves in a cyber city", "expect": "model", "checks": {"genre": "top_down_shooter", "nouns": ["waves", "spawner"]}}
+{"prompt": "create a dungeon crawl game avoiding spike traps to collect the golden chalice", "expect": "model", "checks": {"genre": "dungeon_crawler", "nouns": ["hazards", "chalice"]}}
+{"prompt": "design an exploration game sailing between 3 tropical islands to find pirate treasure", "expect": "model", "checks": {"genre": "exploration", "nouns": ["islands", "treasure"]}}
+{"prompt": "fix the build error in Foo.cpp", "expect": "unsupported", "checks": {}}
+{"prompt": "explain how AttributeSets work in Unreal GAS", "expect": "unsupported", "checks": {}}
+{"prompt": "refactor the player character movement component in C++", "expect": "unsupported", "checks": {}}
+{"prompt": "write a python script to parse log files", "expect": "unsupported", "checks": {}}
+{"prompt": "what is the difference between collision layers and masks in Godot", "expect": "unsupported", "checks": {}}

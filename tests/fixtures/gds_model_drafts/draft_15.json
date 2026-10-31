@@ -1,0 +1,23 @@
+{
+  "title": "Pirate Island Voyage",
+  "genre": "exploration",
+  "camera": "third_person",
+  "pitch": "Sail between 3 islands to find pirate treasure",
+  "biome": "island",
+  "entities": [
+    {
+      "kind": "pickup",
+      "count": 1
+    },
+    {
+      "kind": "landmark",
+      "count": 3
+    }
+  ],
+  "win": [
+    {
+      "type": "collect_all",
+      "target": 1
+    }
+  ]
+}

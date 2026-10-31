@@ -1,0 +1,28 @@
+{
+  "title": "Forest Relic Hunt",
+  "genre": "exploration",
+  "camera": "third_person",
+  "pitch": "Explore forest, collect 5 relics while avoiding 3 guards",
+  "biome": "forest",
+  "entities": [
+    {
+      "kind": "guard",
+      "count": 3
+    },
+    {
+      "kind": "pickup",
+      "count": 5
+    }
+  ],
+  "win": [
+    {
+      "type": "collect_all",
+      "target": 5
+    }
+  ],
+  "lose": [
+    {
+      "type": "caught_by_guard"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "title": "Skeleton King Dungeon",
+  "genre": "dungeon_crawler",
+  "camera": "third_person",
+  "pitch": "Defeat the skeleton king in the dungeon",
+  "biome": "dungeon",
+  "entities": [
+    {
+      "kind": "enemy",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "defeat_all"
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

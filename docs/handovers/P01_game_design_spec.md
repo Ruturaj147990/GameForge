@@ -916,7 +916,7 @@ with 6 coins"` both go prompt → GDS → legacy params → packaged game, with 
 | 1.6 | DONE | 2026-10-31T11:55Z | 2026-10-31T12:01Z | prompt_to_gds (9 passed); preset and model draft path with 1 repair attempt |
 | 1.7 | DONE | 2026-10-31T12:02Z | 2026-10-31T12:08Z | test_gds_render (4 passed); markdown renderer and full EVENT_PHRASES mapping verified |
 | 1.8 | DONE | 2026-10-31T12:09Z | 2026-10-31T12:15Z | test_gds_store (4 passed), test_gds_legacy (2 passed); atomic store and lossless recipe adapter verified |
-| 1.9 | TODO | | | |
+| 1.9 | DONE | 2026-10-31T12:16Z | 2026-10-31T12:22Z | test_gds_fixtures (4 passed, 500 property drafts PASS); reports/P1/prompt_to_gds_9b.json PASS (100% valid, mean latency 2.16s) |
 | 1.10 | TODO | | | |
 
 ## Review log (Claude)

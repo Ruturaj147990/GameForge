@@ -1,0 +1,28 @@
+{
+  "title": "Chalice Trap Dungeon",
+  "genre": "dungeon_crawler",
+  "camera": "third_person",
+  "pitch": "Avoid traps and collect the golden chalice",
+  "biome": "dungeon",
+  "entities": [
+    {
+      "kind": "hazard",
+      "count": 5
+    },
+    {
+      "kind": "pickup",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "collect_all",
+      "target": 1
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

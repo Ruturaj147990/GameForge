@@ -1,0 +1,22 @@
+{
+  "title": "Base Defense",
+  "genre": "top_down_shooter",
+  "camera": "top_down",
+  "pitch": "Defend base against 10 robot invaders",
+  "entities": [
+    {
+      "kind": "enemy",
+      "count": 10
+    }
+  ],
+  "win": [
+    {
+      "type": "defeat_all"
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

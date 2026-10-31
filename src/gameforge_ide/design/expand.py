@@ -231,12 +231,15 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
             slot_or_strat = "landmark"
         raw_entities.append((de.kind, de.count, slot_or_strat))
 
-    # Check Win conditions to see if additional entities must be injected
+    # Check Win & Lose conditions to see if additional entities must be injected
     has_spawner = any(k == EntityKind.SPAWNER for k, _, _ in raw_entities)
     has_enemy = any(k in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY) for k, _, _ in raw_entities)
     has_pickup = any(k == EntityKind.PICKUP for k, _, _ in raw_entities)
     has_goal = any(k == EntityKind.GOAL for k, _, _ in raw_entities)
     has_guard = any(k == EntityKind.GUARD for k, _, _ in raw_entities)
+    has_board = any(k == EntityKind.BOARD for k, _, _ in raw_entities)
+    has_card = any(k == EntityKind.CARD_TABLE for k, _, _ in raw_entities)
+    has_player = any(k == EntityKind.PLAYER for k, _, _ in raw_entities)
 
     for w in draft.win:
         if w.type == "collect_all" and not has_pickup:
@@ -248,11 +251,26 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
         elif w.type == "defeat_all" and not has_enemy and not has_spawner:
             raw_entities.append((EntityKind.ENEMY, w.target or 5, "scatter"))
             has_enemy = True
+        elif w.type == "board_win" and not has_board:
+            raw_entities.append((EntityKind.BOARD, 1, "board"))
+            has_board = True
+        elif w.type == "match_win" and not has_card:
+            raw_entities.append((EntityKind.CARD_TABLE, 1, "board"))
+            has_card = True
 
     for l in draft.lose:
         if l.type == "caught_by_guard" and not has_guard:
             raw_entities.append((EntityKind.GUARD, 1, "scatter"))
             has_guard = True
+        elif l.type == "board_loss" and not has_board:
+            raw_entities.append((EntityKind.BOARD, 1, "board"))
+            has_board = True
+        elif l.type == "match_loss" and not has_card:
+            raw_entities.append((EntityKind.CARD_TABLE, 1, "board"))
+            has_card = True
+        elif l.type in ("fall_off", "health_zero") and not has_player:
+            raw_entities.append((EntityKind.PLAYER, 1, "player_start"))
+            has_player = True
 
     # Build EntitySpec instances with deduplicated entity_ids
     entities: List[EntitySpec] = []
@@ -475,20 +493,26 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     )
     progression = Progression(difficulty=draft.difficulty)
 
-    spec = GameDesignSpec(
-        meta=meta,
-        overview=overview,
-        scene=scene,
-        entities=entities,
-        input=input_spec,
-        rules=rules,
-        progression=progression,
-        goals=goals,
-        feedback=feedback,
-        ui=ui_spec,
-        art=art,
-        audio=audio,
-        tech=tech,
-        acceptance=acceptance,
-    )
-    return spec
+    try:
+        spec = GameDesignSpec(
+            meta=meta,
+            overview=overview,
+            scene=scene,
+            entities=entities,
+            input=input_spec,
+            rules=rules,
+            progression=progression,
+            goals=goals,
+            feedback=feedback,
+            ui=ui_spec,
+            art=art,
+            audio=audio,
+            tech=tech,
+            acceptance=acceptance,
+        )
+        return spec
+    except Exception as exc:
+        raise ExpandError(
+            f"Draft expansion failed cross-validation: {exc}",
+            question="Could not expand draft into a valid game specification. Please clarify the game rules.",
+        ) from exc

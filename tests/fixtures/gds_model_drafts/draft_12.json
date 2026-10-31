@@ -1,0 +1,26 @@
+{
+  "title": "Goblin Cage Rescue",
+  "genre": "action_adventure",
+  "camera": "third_person",
+  "pitch": "Rescue 4 villagers by defeating goblin guards",
+  "entities": [
+    {
+      "kind": "npc",
+      "count": 4
+    },
+    {
+      "kind": "enemy",
+      "count": 6
+    }
+  ],
+  "win": [
+    {
+      "type": "defeat_all"
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "title": "Crystal Portal",
+  "genre": "puzzle",
+  "camera": "fixed_board",
+  "pitch": "Match crystals to open the portal",
+  "entities": [
+    {
+      "kind": "pickup",
+      "count": 3
+    },
+    {
+      "kind": "goal",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "collect_all",
+      "target": 3
+    }
+  ]
+}

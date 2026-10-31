@@ -1,0 +1,26 @@
+{
+  "title": "Temple Altar Quest",
+  "genre": "action_adventure",
+  "camera": "third_person",
+  "pitch": "Explore ancient temple and reach the altar",
+  "entities": [
+    {
+      "kind": "goal",
+      "count": 1
+    },
+    {
+      "kind": "hazard",
+      "count": 4
+    }
+  ],
+  "win": [
+    {
+      "type": "reach_goal"
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

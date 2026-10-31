@@ -1,0 +1,23 @@
+{
+  "title": "Two Minute Shooter",
+  "genre": "top_down_shooter",
+  "camera": "top_down",
+  "pitch": "Survive 2 minutes in top down arena",
+  "entities": [
+    {
+      "kind": "spawner",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "survive_seconds",
+      "target": 120
+    }
+  ],
+  "lose": [
+    {
+      "type": "health_zero"
+    }
+  ]
+}

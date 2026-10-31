@@ -1,0 +1,22 @@
+{
+  "title": "Arctic Expedition",
+  "genre": "exploration",
+  "camera": "third_person",
+  "pitch": "Wander arctic desert and find 3 research stations",
+  "biome": "desert",
+  "entities": [
+    {
+      "kind": "checkpoint",
+      "count": 3
+    },
+    {
+      "kind": "goal",
+      "count": 1
+    }
+  ],
+  "win": [
+    {
+      "type": "reach_goal"
+    }
+  ]
+}
