@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         self._chat_panel.diff_pending.connect(self._on_diff_pending)
         self._chat_panel.slash_command_executed.connect(self._on_slash_command)
         self._chat_panel.model_changed.connect(self._on_chat_model_changed)
+        self._chat_panel.open_project_requested.connect(self._open_folder)
         self._chat_panel.unreal_status_changed.connect(self._apply_unreal_status)
 
         # ── Deferred startup health-check ────────────────────────────────
@@ -796,6 +797,9 @@ class MainWindow(QMainWindow):
     @Slot(str, str)
     def _on_slash_command(self, cmd: str, full_cmd: str) -> None:
         """Handle slash command actions triggered from ChatPanel."""
+        if cmd in ("/mission", "mission"):
+            self._on_rail_action_clicked(1)
+            return
         if cmd == "/build":
             self._dock_unreal.show()
             self._dock_unreal.raise_()

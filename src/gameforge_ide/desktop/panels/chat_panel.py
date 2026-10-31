@@ -313,6 +313,162 @@ class _StatusBar(QWidget):
             self._ue_label.setStyleSheet(theme_stylesheet("color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #161c28;"))
 
 
+
+# ── Start Screen Widget ────────────────────────────────────────────────────────
+
+class _StartScreen(QWidget):
+    """Empty-session start screen with three prominent action cards."""
+
+    make_game_clicked = Signal()
+    open_project_clicked = Signal()
+    play_game_clicked = Signal(str)
+
+    def __init__(self, workspace_root: Optional[Path], parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("start_screen")
+        self._raw_text = ""
+        self._workspace = Path(workspace_root) if workspace_root else None
+
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(16, 20, 16, 20)
+        root_layout.setSpacing(16)
+        root_layout.setAlignment(Qt.AlignCenter)
+
+        # Hero header
+        hero_box = QVBoxLayout()
+        hero_box.setSpacing(4)
+        hero_box.setAlignment(Qt.AlignCenter)
+        lbl_title = QLabel("🎮 GameForge")
+        lbl_title.setObjectName("start_hero_title")
+        lbl_title.setAlignment(Qt.AlignCenter)
+        hero_box.addWidget(lbl_title)
+
+        lbl_sub = QLabel("Create and modify Unreal Engine 5 games directly from prompts.")
+        lbl_sub.setObjectName("start_hero_subtitle")
+        lbl_sub.setAlignment(Qt.AlignCenter)
+        hero_box.addWidget(lbl_sub)
+        root_layout.addLayout(hero_box)
+
+        # 3 Large Action Cards Row
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(14)
+
+        # Card 1: Make a game from a prompt
+        card1 = QFrame()
+        card1.setObjectName("start_action_card")
+        card1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        c1_lay = QVBoxLayout(card1)
+        c1_lay.setContentsMargins(12, 12, 12, 12)
+        c1_lay.setSpacing(8)
+
+        c1_title = QLabel("✨ Make a game")
+        c1_title.setObjectName("start_card_title")
+        c1_lay.addWidget(c1_title)
+
+        c1_desc = QLabel("Describe a game in plain text. GameForge synthesizes C++, Blueprints, and assets.")
+        c1_desc.setObjectName("start_card_desc")
+        c1_desc.setWordWrap(True)
+        c1_lay.addWidget(c1_desc, 1)
+
+        btn_c1 = QPushButton("New Prompt")
+        btn_c1.setObjectName("start_card_btn")
+        btn_c1.clicked.connect(self.make_game_clicked.emit)
+        c1_lay.addWidget(btn_c1)
+        cards_layout.addWidget(card1, 1)
+
+        # Card 2: Open a project
+        card2 = QFrame()
+        card2.setObjectName("start_action_card")
+        card2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        c2_lay = QVBoxLayout(card2)
+        c2_lay.setContentsMargins(12, 12, 12, 12)
+        c2_lay.setSpacing(8)
+
+        c2_title = QLabel("📂 Open a project")
+        c2_title.setObjectName("start_card_title")
+        c2_lay.addWidget(c2_title)
+
+        c2_desc = QLabel("Open an existing Unreal project folder to inspect assets or run builds.")
+        c2_desc.setObjectName("start_card_desc")
+        c2_desc.setWordWrap(True)
+        c2_lay.addWidget(c2_desc, 1)
+
+        btn_c2 = QPushButton("Open Folder…")
+        btn_c2.setObjectName("start_card_btn")
+        btn_c2.clicked.connect(self.open_project_clicked.emit)
+        c2_lay.addWidget(btn_c2)
+        cards_layout.addWidget(card2, 1)
+
+        # Card 3: Recent games
+        card3 = QFrame()
+        card3.setObjectName("start_action_card")
+        card3.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        c3_lay = QVBoxLayout(card3)
+        c3_lay.setContentsMargins(12, 12, 12, 12)
+        c3_lay.setSpacing(8)
+
+        c3_title = QLabel("🕹 Recent games")
+        c3_title.setObjectName("start_card_title")
+        c3_lay.addWidget(c3_title)
+
+        recent = self._find_recent_games()
+        if recent:
+            for name, proj_path, shot_path in recent[:2]:
+                grow = QHBoxLayout()
+                gicon = QLabel()
+                if shot_path and Path(shot_path).is_file():
+                    from PySide6.QtGui import QPixmap
+                    pm = QPixmap(str(shot_path))
+                    if not pm.isNull():
+                        gicon.setPixmap(pm.scaled(36, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                if not gicon.pixmap():
+                    gicon.setText("🎮")
+                grow.addWidget(gicon)
+                gname = QLabel(name[:16])
+                gname.setStyleSheet("font-weight: 600; font-size: 11px;")
+                grow.addWidget(gname, 1)
+                gplay = QPushButton("▶")
+                gplay.setStyleSheet("padding: 2px 6px; font-size: 11px;")
+                gplay.clicked.connect(lambda _, p=proj_path: self.play_game_clicked.emit(str(p)))
+                grow.addWidget(gplay)
+                c3_lay.addLayout(grow)
+            c3_lay.addStretch(1)
+        else:
+            c3_desc = QLabel("No games built yet.\nClick 'Make a game' to generate your first game.")
+            c3_desc.setObjectName("start_card_desc")
+            c3_desc.setWordWrap(True)
+            c3_lay.addWidget(c3_desc, 1)
+
+        btn_c3 = QPushButton("Mission Control")
+        btn_c3.setObjectName("start_card_btn")
+        btn_c3.clicked.connect(lambda: self.play_game_clicked.emit("__view_mission__"))
+        c3_lay.addWidget(btn_c3)
+        cards_layout.addWidget(card3, 1)
+
+        root_layout.addLayout(cards_layout)
+
+    def _find_recent_games(self) -> list[tuple[str, Path, Optional[Path]]]:
+        if not self._workspace or not Path(self._workspace).exists():
+            return []
+        ws = Path(self._workspace)
+        results = []
+        try:
+            for d in (ws / "Games", ws):
+                if not d.is_dir():
+                    continue
+                for item in d.iterdir():
+                    if item.is_dir() and item.name not in (".gameforge", "Saved", "Source", "Intermediate", "Binaries", "scratch"):
+                        report = item / "Saved" / "GameForge" / "pipeline_report.json"
+                        shot = item / "Saved" / "GameForge" / "packaged_gameplay.png"
+                        if report.is_file():
+                            results.append((item.name, item, shot if shot.is_file() else None))
+                        elif (item / f"{item.name}.uproject").is_file():
+                            results.append((item.name, item, None))
+        except Exception:
+            pass
+        return results
+
+
 # ── Chat panel ─────────────────────────────────────────────────────────────────
 
 class ChatPanel(QWidget):
@@ -328,6 +484,7 @@ class ChatPanel(QWidget):
     slash_command_executed = Signal(str, str)
     model_changed = Signal(str)
     unreal_status_changed = Signal(bool, str, str)
+    open_project_requested = Signal()
 
     def __init__(
         self,
@@ -340,6 +497,7 @@ class ChatPanel(QWidget):
         self._workspace = workspace_root or getattr(agent_service, "workspace_root", None)
         self._session_id: Optional[str] = None
         self._active_bubble: Optional[_MessageBubble] = None
+        self._start_screen: Optional[_StartScreen] = None
         self._current_model = "gameforge-27b-sft:latest"
         self._last_prompt = ""
         self._ignore_active_task_events = False
@@ -546,14 +704,7 @@ class ChatPanel(QWidget):
                 model_name="gameforge-27b-sft:latest",
                 provider_type="ollama",
             )
-            self._add_system_message(
-                # Real Markdown list items: "•" lines are plain text, and setMarkdown joined them into one paragraph.
-                "🎮 **Welcome to GameForge: describe a game, and GameForge builds it in Unreal Engine 5.7.**\n\n"
-                "- **Make a game:** `/game a top-down arena where waves of enemies chase the player`\n"
-                "- **Change a project:** \"add a quest giver who asks for two relics\" or \"make the village forest denser\"\n"
-                "- **Context:** use `@ue`, `@actor`, `@asset` to point at what is open in the editor\n"
-                "- **Model:** `gameforge-27b-sft:latest` (local, via Ollama). The toolbar shows whether it is reachable."
-            )
+            self._show_start_screen()
             self._status_bar.set_ready()
             QTimer.singleShot(500, self._load_models)
         except Exception as exc:
@@ -854,6 +1005,33 @@ class ChatPanel(QWidget):
 
     # ── Slots ─────────────────────────────────────────────────────────────────
 
+
+    def _show_start_screen(self) -> None:
+        if self._start_screen is None:
+            self._start_screen = _StartScreen(self._workspace, parent=self)
+            self._start_screen.make_game_clicked.connect(self._on_start_make_game)
+            self._start_screen.open_project_clicked.connect(self.open_project_requested.emit)
+            self._start_screen.play_game_clicked.connect(self._on_start_play_game)
+            self._msg_layout.insertWidget(0, self._start_screen)
+        self._start_screen.show()
+
+    def _hide_start_screen(self) -> None:
+        if self._start_screen is not None:
+            self._start_screen.hide()
+
+    def _on_start_make_game(self) -> None:
+        self._input.setText("/game ")
+        self._input.setFocus()
+        cursor = self._input.textCursor()
+        cursor.movePosition(cursor.End)
+        self._input.setTextCursor(cursor)
+
+    def _on_start_play_game(self, game_id: str) -> None:
+        if game_id == "__view_mission__":
+            self.slash_command_executed.emit("mission", "")
+        else:
+            self._on_play_game(game_id)
+
     @Slot()
     def _on_send(self) -> None:
         # Preserve the exact composer payload; whitespace-only detection must
@@ -873,6 +1051,7 @@ class ChatPanel(QWidget):
             )
             return
 
+        self._hide_start_screen()
         self._last_prompt = prompt
         self._input.clear()
         self._add_bubble("user", prompt)
@@ -1130,8 +1309,10 @@ class ChatPanel(QWidget):
         for i in reversed(range(self._msg_layout.count() - 1)):
             item = self._msg_layout.itemAt(i)
             if item and item.widget():
+                if item.widget() is getattr(self, "_start_screen", None):
+                    continue
                 item.widget().deleteLater()
-        self._add_system_message("Chat view cleared.")
+        self._show_start_screen()
 
     def _new_session(self) -> None:
         try:
@@ -1147,10 +1328,7 @@ class ChatPanel(QWidget):
             self._clear_chat()
             self._btn_send.setEnabled(not self._agent.is_busy)
             self._btn_stop.setEnabled(self._agent.is_busy)
-            self._add_system_message(
-                f"**New Session Initialised.**\n"
-                f"Active model: `{self._current_model}`"
-            )
+            self._show_start_screen()
         except Exception as exc:
             self._add_error_message(f"Failed to create session: {exc}")
 

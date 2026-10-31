@@ -545,6 +545,61 @@ QTabBar#sidebar_tabbar::tab:hover {
     background-color: #141022;
 }
 
+/* ── Start Screen ── */
+QWidget#start_screen {
+    background-color: #08070d;
+}
+
+QFrame#start_action_card {
+    background-color: #120f1d;
+    border: 1px solid #231c34;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+QFrame#start_action_card:hover {
+    background-color: #1a1528;
+    border-color: #7c3aed;
+}
+
+QLabel#start_hero_title {
+    color: #f5f3ff;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+QLabel#start_hero_subtitle {
+    color: #9d95b0;
+    font-size: 13px;
+}
+
+QLabel#start_card_title {
+    color: #f5f3ff;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QLabel#start_card_desc {
+    color: #9d95b0;
+    font-size: 12px;
+}
+
+QPushButton#start_card_btn {
+    background-color: #231c34;
+    border: 1px solid #3d2f59;
+    border-radius: 6px;
+    padding: 8px 16px;
+    color: #f5f3ff;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+QPushButton#start_card_btn:hover {
+    background-color: #7c3aed;
+    border-color: #8b5cf6;
+    color: #ffffff;
+}
+
 /* ── Progress bar ── */
 QProgressBar {
     background-color: #120f1d;

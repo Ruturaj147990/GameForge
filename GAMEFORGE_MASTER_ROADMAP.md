@@ -314,7 +314,7 @@ non-blocking Ollama probe (`reports/ide_ui_20261031.png`). Planned, in order (ea
    one status indicator for Ollama and Unreal.
 2. ~~**Information hierarchy**~~ **DONE 2026-10-31**: a single top bar (workspace, model, status pills); a left activity rail (Explorer,
    Games, Plans, Assets) instead of separate floating docks; dock title bars collapsed into tabs.
-3. **Start screen** for an empty session: three large actions ("Make a game from a prompt", "Open a project",
+3. ~~**Start screen**~~ **DONE 2026-10-31**: for an empty session: three large actions ("Make a game from a prompt", "Open a project",
    "Recent games" with thumbnails from Mission Control), not a system message.
 4. **Consistent design tokens:** one spacing scale (4/8/12/16), one radius, two font sizes per level, and the
    accent colour from `styles/` only. Today many panels set inline stylesheets with ad-hoc colours.
