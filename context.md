@@ -1,7 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-10-31T11:15Z (UTC from the system clock; earlier entries in the history log mix local time
-with a `Z` suffix). Updated by Antigravity upon P0 foundation completion.
+**Last updated:** 2026-10-31T12:35Z (UTC from the system clock). Updated by Antigravity upon P1 Game Design Spec completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -24,28 +23,34 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
-## 3. CURRENT STATE (2026-10-31T11:15Z) [VERIFIED unless marked]
+## 3. CURRENT STATE (2026-10-31T12:35Z) [VERIFIED unless marked]
 
-- **P0 Foundation Hardening complete:** All 12 work items (WI-0.1 through WI-0.12) are DONE.
-  - WI-0.7: Engine undo spot check verified in offscreen UE 5.7.4 editor (`reports/P0/undo_spotcheck.json` PASS). Property mutations run inside `ScopedEditorTransaction` and revert cleanly under `TRANSACTION UNDO`.
-  - WI-0.8: Argument models for all 30 high-use ops hand-reviewed and registered in `REVIEWED` with `extra="forbid"` (`op_schemas.py`). Unit suite verifies schema coverage and reject/round-trip behavior (`test_op_schemas.py` 9 passed).
-  - WI-0.9: Loopback bridge on port 47815 verified. Editor-originated `GameForge.SyncContext` console command successfully transmits context with bearer authentication to `--serve` backend (`reports/P0/bridge_47815.json` PASS).
-  - Plugin build `GameForgePlugin_p0` installed in repo and `live_ops_probe` (Editor DLL `f3ac7f193f437efbe281d5ce849a6e8c3239c60386f245f26c6c52f308a7f75a`, Runtime DLL `ba9bd0d58683bce2589ea6250b950331ca79b04ef3ee8b38d6c64bfa593be73d`).
+- **P1 Game Design Spec (`gds/1`) complete:** All 10 work items (WI-1.1 through WI-1.10) are DONE.
+  - WI-1.1: `events_catalog.py` (42 catalog events across 12 modules) + `test_events_catalog.py` (5 passed).
+  - WI-1.2: Canonical GDS schema `src/gameforge_ide/design/gds.py` (JSON Schema 22 KB) + `test_gds_schema.py` (10 passed).
+  - WI-1.3: `DesignDraft` model-facing schema `src/gameforge_ide/design/draft.py` (JSON Schema 3.2 KB <= 6 KB) + `test_draft_schema.py` (4 passed).
+  - WI-1.4: Deterministic expander `src/gameforge_ide/design/expand.py` + `test_gds_expand.py` (5 passed).
+  - WI-1.5: 7 legacy presets matching recipes losslessly `src/gameforge_ide/design/presets.py` + `test_gds_presets.py` (6 passed).
+  - WI-1.6: `prompt_to_gds.py` with 1 repair attempt + `OllamaProvider.complete_json` + `test_prompt_to_gds.py` (9 passed).
+  - WI-1.7: Markdown renderer `src/gameforge_ide/design/render.py` (`EVENT_PHRASES` with 42 entries) + `test_gds_render.py` (4 passed).
+  - WI-1.8: Atomic store/revisions `src/gameforge_ide/design/store.py` + lossless legacy recipe adapter `src/gameforge_ide/design/legacy.py` + tests (6 passed).
+  - WI-1.9: Prompt fixture set (40 prompts in `tests/fixtures/gds_prompts.jsonl`, 15 model drafts) + `test_gds_fixtures.py` (4 passed, 500 property drafts PASS) + live 9B evaluation `scripts/pipeline/eval_prompt_to_gds.py` (`reports/P1/prompt_to_gds_9b.json` PASS, 15/15 valid, 100% fail closed, 2.16s latency).
+  - WI-1.10: Wired into `GameTools` (`plan_game`, `propose_create_game`, `create_game`), `GamePipeline` (`on_project_dir_ready`), `ApprovalCard`, `DesignPanel` (Markdown + JSON tabs on activity rail), `run_game_pipeline.py` (`--prompt`), and launcher startup improvements. Engine gate 2/2 PASS: two packaged games from GDS (`reports/P1/legacy_from_gds_tictactoe.json` and `reports/P1/legacy_from_gds_platformer.json`).
 - **Tests & Verification:**
-  - `powershell -File scripts\verify_all.ps1` (full 7 gates): **ALL 7 PASS** (`reports/P0/verify_all.txt`).
-  - Unit tests: **520 passed** (exit 0).
+  - `powershell -File scripts\verify_all.ps1` (full 7 gates): **ALL 7 PASS** (`reports/P1/verify_all.txt`).
+  - Unit tests: **573 passed** (exit 0).
   - Protected oracles: **45 passed** (exit 0).
-  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS. IDE benchmark: 0 violations, idle CPU 0.21%.
+  - Contract: 16/16 PASS. Demo-quest: 8/8 PASS. IDE benchmark: 0 violations, idle CPU 0.05%.
 - **Documentation consolidated (D-065):** `docs/README.md` index, `docs/handovers/` P00–P11, `docs/00_STATUS.md` capability matrix updated.
 - **Git:** All work committed directly on `master`.
 
-## 4. NEXT ACTION (2026-10-31T11:15Z)
+## 4. NEXT ACTION (2026-10-31T12:35Z)
 
-**Phase 0 COMPLETE.** All exit gates satisfied.
-Start **Phase 1 (Game Design Spec `gds/1`)** in `docs/handovers/P01_game_design_spec.md`:
-1. **WI-1.1**: Implement `src/gameforge_ide/design/events_catalog.py` and `tests/unit/test_events_catalog.py`.
-2. **WI-1.2**: Implement GDS schema `src/gameforge_ide/design/gds.py` and `tests/unit/test_gds_schema.py`.
-3. Continue through Phase 1 items in exact handover order.
+**Phase 1 COMPLETE.** All exit gates satisfied.
+Start **Phase 2 (Forge Executor, Checkpoints and Jobs)** in `docs/handovers/P02_forge_executor.md`:
+1. **WI-2.1**: Implement `src/gameforge_ide/forge/model.py` and `tests/unit/test_forge_model.py`.
+2. **WI-2.2**: Implement `src/gameforge_ide/core/jobs.py` (Windows job objects, JobManager) and `tests/unit/test_jobs.py`.
+3. Continue through Phase 2 items in exact handover order.
 Work on `master` only (no branches), one commit per work item.
 
 ## 5. Key facts and paths
@@ -74,3 +79,4 @@ Work on `master` only (no branches), one commit per work item.
 - 2026-10-31T10:20Z — Claude: full audit + research + P0–P11 roadmap and handovers + documentation consolidation (D-064, D-065). Tests 494/45 PASS before and again after the doc moves (unit 62.3 s); all internal doc links resolve. No product code changed. Committed on `master` as `a2a0eac` (not pushed).
 - 2026-10-31T10:50Z — Claude: implemented P0 (WI-0.1-0.12; 0.7/0.8/0.9 PARTIAL), plugin p0 built and installed, contract 16/16, gameplay feedback 10/10, IDE budgets OK. Stopped at 95% of the 5-hour usage window.
 - 2026-10-31T11:15Z — Antigravity: completed P0 hardening (WI-0.7 undo spot check verified in 5.7.4, WI-0.8 30 high-use op schemas hand-reviewed with strict validation, WI-0.9 editor GameForge.SyncContext verified on port 47815). Full verify_all 7/7 PASS (unit 520, protected 45). Ready for P1 WI-1.1.
+- 2026-10-31T12:35Z — Antigravity: completed Phase 1 (Game Design Spec gds/1, WI-1.1-1.10). Prompt->GDS 9B eval 100% valid; wired into pipeline/tools/IDE; engine gate 2/2 packaged games PASS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json). Full verify_all 7/7 PASS (unit 573, protected 45). Ready for P2 WI-2.1.
