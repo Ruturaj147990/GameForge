@@ -1,0 +1,257 @@
+{
+ "ts": "2026-10-31T16:31:31+0530",
+ "uproject": "E:\\GameForge\\validation\\undo_spotcheck_20261031\\GFProbe.uproject",
+ "steps": [
+  {
+   "step": "handshake",
+   "result": {
+    "ok": true,
+    "op": "handshake",
+    "data": {
+     "library_version": "2.1.0",
+     "engine_version": "5.7.4-51494982+++UE5+Release-5.7",
+     "project_file": "E:/GameForge/validation/undo_spotcheck_20261031/GFProbe.uproject",
+     "project_name": "GFProbe",
+     "operations": [
+      "actor_get_materials",
+      "actors_in_level",
+      "anim_create_blendspace_1d",
+      "anim_create_locomotion_blueprint",
+      "anim_ik_retarget",
+      "anim_import_motion_clip",
+      "anim_inspect_blendspace",
+      "anim_inspect_blueprint",
+      "anim_inspect_sequence",
+      "anim_locomotion_test_result",
+      "anim_retarget_sequence",
+      "anim_sample_bone_pose",
+      "anim_sample_world_pose",
+      "anim_start_locomotion_test",
+      "api_introspect",
+      "asset_dependencies",
+      "asset_exists",
+      "audio_create_attenuation",
+      "audio_diagnose_spawn",
+      "audio_import",
+      "audio_inspect",
+      "audio_inspect_attenuation",
+      "audio_place_ambient",
+      "audio_play_actor",
+      "audio_play_at",
+      "audio_status",
+      "blueprint_compile",
+      "blueprint_connect_pins",
+      "blueprint_create_node",
+      "blueprint_delete_node",
+      "blueprint_disconnect_pins",
+      "blueprint_inspect",
+      "blueprint_readback_graph",
+      "blueprint_save",
+      "blueprint_set_pin_default",
+      "character_import_skeletal_mesh",
+      "character_inspect_skeletal_mesh",
+      "character_measure_deformation",
+      "character_spawn_preview",
+      "compile_blueprint",
+      "create_blueprint",
+      "create_material",
+      "datalayer_add_actors",
+      "datalayer_ensure",
+      "datalayer_list_actors",
+      "delete_actor",
+      "delete_asset",
+      "foliage_scatter",
+      "gameplay_get_state",
+      "gameplay_modify_state",
+      "gameplay_objectives",
+      "handshake",
+      "import_asset",
+      "landmark_spawn",
+      "landscape_create",
+      "landscape_height_at",
+      "landscape_inspect_layers",
+      "list_assets",
+      "load_level",
+      "log_tail",
+      "material_build_graph",
+      "material_function_build",
+      "material_function_inspect",
+      "material_instance_create",
+      "material_instance_inspect",
+      "material_readback_graph",
+      "mesh_generate_prop",
+      "metasound_build_source",
+      "metasound_inspect",
+      "nav_find_path",
+      "nav_rebuild",
+      "new_level",
+      "pcg_build_graph",
+      "pcg_inspect",
+      "pcg_scatter",
+      "pcg_verify_authenticity",
+      "perf_console",
+      "perf_list_csv",
+      "pie_actor_state",
+      "pie_character_diagnostics",
+      "pie_move_player_to",
+      "pie_start",
+      "pie_status",
+      "pie_stop",
+      "pie_view_from",
+      "procedural_world_inspect",
+      "quit_editor",
+      "rename_asset",
+      "save_all",
+      "scene_get_exposure",
+      "scene_set_manual_exposure",
+      "sequence_build",
+      "sequence_evaluate",
+      "sequence_inspect",
+      "sequence_render",
+      "sequence_render_status",
+      "set_actor_property",
+      "set_viewport_camera",
+      "spawn_actor",
+      "spline_create_road",
+      "static_mesh_configure",
+      "static_mesh_inspect",
+      "texture_import",
+      "texture_inspect",
+      "vfx_create_system",
+      "vfx_inspect_system",
+      "vfx_particle_counts",
+      "vfx_spawn",
+      "viewport_screenshot",
+      "widget_bind_event",
+      "widget_click_button",
+      "widget_compile",
+      "widget_create",
+      "widget_create_blueprint",
+      "widget_display_in_game",
+      "widget_inspect",
+      "widget_inspect_events",
+      "widget_readback_tree",
+      "widget_remove",
+      "widget_runtime_state",
+      "widget_save",
+      "widget_set_property",
+      "widget_set_slot_property",
+      "widget_trigger_delegate_diagnostic",
+      "world_clear_generated",
+      "world_generation_digest"
+     ],
+     "features": {
+      "EditorActorSubsystem": true,
+      "LevelEditorSubsystem": true,
+      "MaterialEditingLibrary": true,
+      "BlueprintEditorLibrary": true,
+      "InterchangeManager": true,
+      "AssetImportTask": true,
+      "MovieSceneSequence": true,
+      "NiagaraSystem": true,
+      "PCGGraph": true,
+      "ControlRigBlueprint": true,
+      "MetaSoundBuilderSubsystem": true,
+      "WidgetBlueprint": true,
+      "GeometryScript": false
+     }
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [],
+    "reversibility": "read-only",
+    "elapsed_s": 0.113
+   }
+  },
+  {
+   "step": "new_level",
+   "result": {
+    "ok": true,
+    "op": "new_level",
+    "data": {
+     "level_path": "/Game/Maps/GF_UndoLevel",
+     "exists": true,
+     "partitioned": false
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [
+     "/Game/Maps/GF_UndoLevel"
+    ],
+    "reversibility": "irreversible",
+    "reversibility_declared": "snapshot-only",
+    "elapsed_s": 0.186
+   }
+  },
+  {
+   "step": "spawn_actor",
+   "result": {
+    "ok": true,
+    "op": "spawn_actor",
+    "data": {
+     "label": "GF_UndoCube",
+     "class": "/Script/Engine.StaticMeshActor",
+     "path": "/Game/Maps/GF_UndoLevel.GF_UndoLevel:PersistentLevel.StaticMeshActor_0",
+     "location": {
+      "x": 100.0,
+      "y": 200.0,
+      "z": 50.0
+     },
+     "rotation": {
+      "pitch": 0.0,
+      "yaw": 0.0,
+      "roll": 0.0
+     }
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [],
+    "reversibility": "transactional",
+    "elapsed_s": 0.044
+   }
+  },
+  {
+   "step": "set_actor_property",
+   "result": {
+    "ok": true,
+    "op": "set_actor_property",
+    "data": {
+     "label": "GF_UndoCube",
+     "property": "tags",
+     "value": "[\"UndoTestTag\"]"
+    },
+    "warnings": [],
+    "errors": [],
+    "affected_paths": [],
+    "reversibility": "transactional",
+    "elapsed_s": 0.011
+   }
+  },
+  {
+   "step": "property_before_undo",
+   "tags": [
+    "UndoTestTag"
+   ]
+  },
+  {
+   "step": "execute_undo",
+   "raw_output": [
+    {
+     "type": "Info",
+     "output": "@@UNDO@@DONE\r\n"
+    }
+   ]
+  },
+  {
+   "step": "property_after_undo",
+   "tags": [],
+   "reverted": true
+  },
+  {
+   "step": "actors_in_level_after_undo",
+   "actor_present": true
+  }
+ ],
+ "verdict": "PASS",
+ "finished": "2026-10-31T16:31:33+0530"
+}
