@@ -408,6 +408,11 @@ class ChatPanel(QWidget):
         btn_new.clicked.connect(self._new_session)
         tbar_layout.addWidget(btn_new)
 
+        # UX plan step 1: the main toolbar already has Model / Clear Chat / New Session (calling the same handlers),
+        # so the duplicates here are hidden. The combo stays as the panel's internal model state.
+        for w in (model_lbl, self._model_combo, btn_clear, btn_new):
+            w.setVisible(False)
+
         root.addWidget(toolbar)
 
         # Message scroll area
