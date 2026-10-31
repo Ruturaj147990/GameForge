@@ -1,0 +1,12 @@
+{
+  "schema": "model_routing/1",
+  "source": "Blueprint v2 routing table (2026-10-27). Replaced by the P9 eval-generated table.",
+  "roles": {
+    "chat": "gameforge-qwen3.5-9b:latest",
+    "design": "gameforge-qwen3.5-9b:latest",
+    "codegen": "gameforge-qwen3.5-9b:latest",
+    "fast": "gameforge-qwen3.5-4b:latest",
+    "vision": "gameforge-qwen3.5-4b:latest",
+    "heavy_local": "gameforge-27b-sft:latest"
+  }
+}

@@ -11,7 +11,21 @@
     "max_resident_llm_beside_editor": "gameforge-qwen3.5-4b:latest",
     "max_ctx_beside_editor": 16384
   },
-  "ram": {"warn_commit_pct": 85, "pause_heavy_jobs_commit_pct": 92},
-  "cpu": {"ubt_max_parallel_actions_interactive": 8},
-  "disk": {"min_free_gb_for_heavy_work": 20, "artifact_drive": "E:"}
+  "ram": {
+    "warn_commit_pct": 85,
+    "pause_heavy_jobs_commit_pct": 92
+  },
+  "cpu": {
+    "ubt_max_parallel_actions_interactive": 8
+  },
+  "disk": {
+    "min_free_gb_for_heavy_work": 20,
+    "artifact_drive": "E:"
+  },
+  "default_workspace": "E:\\gameforge_step1",
+  "artifacts_root": "E:\\GameForge",
+  "validation_root": "E:\\GameForge\\validation",
+  "probe_project": "E:\\GameForge\\validation\\live_ops_probe\\GFProbe.uproject",
+  "plugin_build": "E:\\GameForge\\validation\\GameForgePlugin_neutral",
+  "bridge_port": 47815
 }
