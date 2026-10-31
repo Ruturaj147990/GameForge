@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ...core.settings import get_settings
 from ..unreal_context import load_unreal_context
 
 
@@ -94,8 +95,9 @@ class ContextManager:
             summary = summary[:max_chars].rstrip() + "\n[Canonical context summary truncated at configured character limit.]"
         return summary
 
-    def build_system_prompt(self, tools_description: str, active_model: str = "gameforge-27b-sft") -> str:
+    def build_system_prompt(self, tools_description: str, active_model: Optional[str] = None) -> str:
         """Assembles a compact system prompt that stays well within the model's input budget."""
+        active_model = active_model or get_settings().model_for("chat")
         # Ultra-compact workspace identity (avoids embedding the full context.md)
         workspace_name = self.workspace_root.name
         context_snippet = ""

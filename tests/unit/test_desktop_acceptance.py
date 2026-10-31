@@ -25,6 +25,7 @@ from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import QApplication, QDialog, QLineEdit, QListWidget
 
 
+from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.desktop.main_window import MainWindow
 from src.gameforge_ide.desktop.panels.chat_panel import ChatPanel
 from src.gameforge_ide.desktop.panels.diff_panel import DiffPanel
@@ -887,7 +888,7 @@ def test_model_selection_updates_session_and_runtime(qapp, disposable_workspace)
     sm = win._agent.session_manager
     session = sm.get_session(session_id)
     assert session is not None
-    assert session.model_name == "gameforge-27b-sft:latest"
+    assert session.model_name == get_settings().model_for("chat")
 
     # 1. Switch model via top toolbar combobox
     test_model_1 = "qwen2.5-coder:14b"

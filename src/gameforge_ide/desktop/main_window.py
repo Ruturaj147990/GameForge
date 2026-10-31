@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..core.settings import get_settings
 from .panels.chat_panel import ChatPanel
 from .panels.diff_panel import DiffPanel
 from .panels.explorer_panel import ExplorerPanel
@@ -343,7 +344,7 @@ class MainWindow(QMainWindow):
             "QComboBox:hover { border-color: #6366f1; } "
             "QComboBox::drop-down { border: none; width: 18px; }"
         )
-        self._tb_model_combo.addItem("gameforge-27b-sft:latest")
+        self._tb_model_combo.addItem(get_settings().model_for("chat"))
         self._tb_model_combo.currentTextChanged.connect(self._on_top_model_changed)
         tb.addWidget(self._tb_model_combo)
 
@@ -563,7 +564,7 @@ class MainWindow(QMainWindow):
         sb.addWidget(self._status_lbl)
 
         # (no separator before the first permanent widget: it rendered as an orphan "|" on the right)
-        self._model_status = QLabel("Model: gameforge-27b-sft:latest")
+        self._model_status = QLabel("Model: " + get_settings().model_for("chat"))
         self._model_status.setObjectName("status_model")
         self._model_status.setStyleSheet("color: #7c3aed;")
         sb.addPermanentWidget(self._model_status)
@@ -863,7 +864,8 @@ class MainWindow(QMainWindow):
             "About GameForge IDE",
             "<h3>GameForge IDE v1.0.0</h3>"
             "<p>Agentic game-development environment powered by<br>"
-            "<b>gameforge-27b-sft:latest</b> (local Ollama, Q4_K_M GGUF).</p>"
+            "local Ollama models (gameforge-qwen3.5-9b, gameforge-qwen3.5-4b, gameforge-27b-sft, llama3.1:8b) "
+            "or an opt-in hosted provider.</p>"
             "<p>Supports Unreal Engine 5.7, Unity 6, Godot 4.3.</p>"
             "<p>© 2026 GameForge Project — Windows 11 Native PySide6 Desktop</p>",
         )

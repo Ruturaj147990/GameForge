@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .agent.runtime import AgentRuntime
 from .providers.router import ModelRouter
@@ -43,7 +43,7 @@ latest_unreal_context: Dict[str, Any] = {
 
 class CreateSessionRequest(BaseModel):
     name: str = "New Session"
-    model_name: str = "gameforge-27b-sft"
+    model_name: str = Field(default_factory=lambda: get_settings().model_for("chat"))
     provider_type: str = "ollama"
 
 

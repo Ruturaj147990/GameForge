@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+from ..core.settings import get_settings
+
 
 class ChatMessage(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -51,7 +53,7 @@ class Session(BaseModel):
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = "New GameForge Session"
     workspace_path: str
-    model_name: str = "gameforge-27b-sft"
+    model_name: str = Field(default_factory=lambda: get_settings().model_for("chat"))
     provider_type: str = "ollama"
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
@@ -69,11 +71,11 @@ class SessionManager:
         self.storage_dir = self.workspace_path / ".gameforge" / "sessions"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-    def create_session(self, name: str = "New Session", model_name: str = "gameforge-27b-sft", provider_type: str = "ollama") -> Session:
+    def create_session(self, name: str = "New Session", model_name: Optional[str] = None, provider_type: str = "ollama") -> Session:
         session = Session(
             name=name,
             workspace_path=str(self.workspace_path),
-            model_name=model_name,
+            model_name=model_name or get_settings().model_for("chat"),
             provider_type=provider_type,
         )
         self.save_session(session)

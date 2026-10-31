@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core.settings import get_settings
 from ...backend.unreal_context import UnrealEditorContext, load_unreal_context
 from ..services.action_runner import ActionRunner
 from ..services.agent_service import AgentService
@@ -498,7 +499,7 @@ class ChatPanel(QWidget):
         self._session_id: Optional[str] = None
         self._active_bubble: Optional[_MessageBubble] = None
         self._start_screen: Optional[_StartScreen] = None
-        self._current_model = "gameforge-27b-sft:latest"
+        self._current_model = get_settings().model_for("chat")
         self._last_prompt = ""
         self._ignore_active_task_events = False
         self._last_unreal_sync = ""
@@ -554,7 +555,7 @@ class ChatPanel(QWidget):
         self._model_combo = QComboBox()
         self._model_combo.setObjectName("model_combo")
         self._model_combo.setMinimumWidth(230)
-        self._model_combo.addItem("gameforge-27b-sft:latest")
+        self._model_combo.addItem(get_settings().model_for("chat"))
         tbar_layout.addWidget(self._model_combo)
 
         btn_clear = QPushButton("Clear")
@@ -702,7 +703,7 @@ class ChatPanel(QWidget):
         try:
             self._session_id = self._agent.create_session(
                 name="Default Session",
-                model_name="gameforge-27b-sft:latest",
+                model_name=get_settings().model_for("chat"),
                 provider_type="ollama",
             )
             self._show_start_screen()
