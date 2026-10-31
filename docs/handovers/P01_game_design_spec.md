@@ -908,7 +908,7 @@ with 6 coins"` both go prompt → GDS → legacy params → packaged game, with 
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 1.1 | TODO | | | |
+| 1.1 | DONE | 2026-10-31T11:20Z | 2026-10-31T11:25Z | `test_events_catalog` (5 passed); MODULE_EVENTS and DEFAULT_MODULE verified |
 | 1.2 | TODO | | | |
 | 1.3 | TODO | | | |
 | 1.4 | TODO | | | |
