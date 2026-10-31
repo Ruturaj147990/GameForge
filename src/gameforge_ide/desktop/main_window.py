@@ -132,6 +132,18 @@ class MainWindow(QMainWindow):
         self._health_timer.timeout.connect(self._check_ollama_status)
         self._health_timer.start(800)
 
+        # ── Logical Tab focus order ───────────────────────────────────────
+        if hasattr(self, "_tb_workspace_btn") and hasattr(self, "_tb_model_combo"):
+            self.setTabOrder(self._tb_workspace_btn, self._tb_model_combo)
+        if hasattr(self, "_tb_model_combo") and hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer"):
+            self.setTabOrder(self._tb_model_combo, self._chat_panel._composer)
+        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer") and hasattr(self._chat_panel, "_btn_send"):
+            self.setTabOrder(self._chat_panel._composer, self._chat_panel._btn_send)
+        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_btn_send") and hasattr(self, "_terminal") and hasattr(self._terminal, "_cmd_input"):
+            self.setTabOrder(self._chat_panel._btn_send, self._terminal._cmd_input)
+        if hasattr(self, "_terminal") and hasattr(self._terminal, "_cmd_input") and hasattr(self, "_unreal_panel") and hasattr(self._unreal_panel, "_btn_build"):
+            self.setTabOrder(self._terminal._cmd_input, self._unreal_panel._btn_build)
+
     # ── Menu bar ─────────────────────────────────────────────────────────────
 
     def _unelide_dock_tabs(self) -> None:
@@ -242,6 +254,7 @@ class MainWindow(QMainWindow):
         self._act_command_palette = QAction("Command Palette…", self)
         self._act_command_palette.setObjectName("command_palette")
         self._act_command_palette.setShortcut(QKeySequence("Ctrl+K"))
+        self._act_command_palette.setShortcuts([QKeySequence("Ctrl+K"), QKeySequence("Ctrl+Shift+P")])
         self._act_command_palette.setShortcutContext(Qt.WindowShortcut)
         self._act_command_palette.triggered.connect(self._open_command_palette)
         help_menu.addAction(self._act_command_palette)
@@ -868,6 +881,12 @@ class MainWindow(QMainWindow):
             ("Toggle Unreal Panel", lambda: self._dock_unreal.setVisible(not self._dock_unreal.isVisible())),
             ("Toggle Diff Review", lambda: self._dock_diff.setVisible(not self._dock_diff.isVisible())),
             ("Toggle Terminal", lambda: self._dock_terminal.setVisible(not self._dock_terminal.isVisible())),
+            ("View: Explorer", lambda: self._on_rail_action_clicked(0)),
+            ("View: Games & Mission Control", lambda: self._on_rail_action_clicked(1)),
+            ("View: Execution Plans", lambda: self._on_rail_action_clicked(2)),
+            ("View: Asset Registry", lambda: self._on_rail_action_clicked(3)),
+            ("Unreal: Run Staged Build", self._unreal_panel._on_build),
+            ("Unreal: Refresh Engine Status", self._unreal_panel._refresh),
             ("About GameForge IDE", self._show_about),
         ]
 

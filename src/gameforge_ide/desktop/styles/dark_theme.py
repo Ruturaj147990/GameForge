@@ -633,6 +633,78 @@ QProgressBar::chunk {
     border-radius: 4px;
 }
 
+
+/* ── Visible Focus Rings ── */
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus {
+    border: 1px solid #8b5cf6;
+    background-color: #120f1d;
+}
+
+QPushButton:focus,
+QToolButton:focus {
+    border: 1px solid #8b5cf6;
+}
+
+QComboBox:focus {
+    border: 1px solid #8b5cf6;
+}
+
+QTreeView:focus,
+QListView:focus,
+QListWidget:focus,
+QTableWidget:focus {
+    border: 1px solid #8b5cf6;
+}
+
+/* ── Command Palette Modal ── */
+QDialog#command_palette_dialog {
+    background-color: #0d0b14;
+    border: 1px solid #7c3aed;
+    border-radius: 6px;
+}
+
+QLineEdit#command_palette_search {
+    background-color: #120f1d;
+    border: 1px solid #231c34;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #f5f3ff;
+    font-size: 13px;
+}
+
+QLineEdit#command_palette_search:focus {
+    border: 1px solid #8b5cf6;
+    background-color: #1a1528;
+}
+
+QListWidget#command_palette_commands {
+    background-color: #0d0b14;
+    border: 1px solid #231c34;
+    border-radius: 6px;
+    padding: 4px;
+    color: #f5f3ff;
+    font-size: 13px;
+}
+
+QListWidget#command_palette_commands::item {
+    padding: 7px 12px;
+    border-radius: 6px;
+    color: #f5f3ff;
+}
+
+QListWidget#command_palette_commands::item:hover {
+    background-color: #120f1d;
+    color: #f5f3ff;
+}
+
+QListWidget#command_palette_commands::item:selected {
+    background-color: #251d38;
+    color: #a78bfa;
+    border-left: 3px solid #7c3aed;
+}
+
 /* ── Tooltip ── */
 QToolTip {
     background-color: #120f1d;
