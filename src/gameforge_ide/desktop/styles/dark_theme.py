@@ -121,14 +121,14 @@ QSplitter::handle:vertical {
 QMenuBar {
     background-color: #08070d;
     border-bottom: 1px solid #231c34;
-    padding: 2px 6px;
-    font-size: 12px;
+    padding: 4px 8px;
+    font-size: 13px;
 }
 
 QMenuBar::item {
     background: transparent;
-    padding: 5px 10px;
-    border-radius: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
     color: #f5f3ff;
 }
 
@@ -145,10 +145,10 @@ QMenu {
 }
 
 QMenu::item {
-    padding: 6px 26px 6px 12px;
-    border-radius: 4px;
+    padding: 6px 24px 6px 12px;
+    border-radius: 6px;
     color: #f5f3ff;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 QMenu::item:selected {
@@ -167,8 +167,8 @@ QStatusBar {
     background-color: #08070d;
     border-top: 1px solid #231c34;
     color: #9d95b0;
-    font-size: 12px;
-    padding: 2px 8px;
+    font-size: 11px;
+    padding: 4px 8px;
 }
 
 QStatusBar::item {
@@ -193,10 +193,10 @@ QToolBar::separator {
 QToolButton {
     background: transparent;
     border: 1px solid transparent;
-    padding: 5px 10px;
-    border-radius: 5px;
+    padding: 4px 8px;
+    border-radius: 6px;
     color: #f5f3ff;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
 }
 
@@ -255,7 +255,7 @@ QPushButton {
     border-radius: 6px;
     padding: 6px 14px;
     color: #f5f3ff;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
 }
 
@@ -372,10 +372,10 @@ QComboBox {
     background-color: #120f1d;
     border: 1px solid #231c34;
     border-radius: 6px;
-    padding: 5px 28px 5px 10px;
+    padding: 4px 28px 4px 12px;
     color: #f5f3ff;
     min-width: 140px;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 QComboBox:hover {
@@ -497,11 +497,11 @@ QTabWidget::pane {
 QTabBar::tab {
     background-color: #08070d;
     border: 1px solid #231c34;
-    padding: 7px 18px;
+    padding: 6px 16px;
     margin-right: 2px;
     color: #9d95b0;
     border-radius: 6px 6px 0 0;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -529,7 +529,7 @@ QTabBar#sidebar_tabbar::tab {
     padding: 6px 12px;
     margin-right: 2px;
     color: #9d95b0;
-    border-radius: 4px 4px 0 0;
+    border-radius: 6px 6px 0 0;
     font-size: 11px;
     font-weight: 600;
 }
@@ -553,7 +553,7 @@ QWidget#start_screen {
 QFrame#start_action_card {
     background-color: #120f1d;
     border: 1px solid #231c34;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 16px;
 }
 
@@ -564,7 +564,7 @@ QFrame#start_action_card:hover {
 
 QLabel#start_hero_title {
     color: #f5f3ff;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 800;
 }
 
@@ -581,7 +581,7 @@ QLabel#start_card_title {
 
 QLabel#start_card_desc {
     color: #9d95b0;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 QPushButton#start_card_btn {
@@ -591,13 +591,30 @@ QPushButton#start_card_btn {
     padding: 8px 16px;
     color: #f5f3ff;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 QPushButton#start_card_btn:hover {
     background-color: #7c3aed;
     border-color: #8b5cf6;
     color: #ffffff;
+}
+
+
+/* ── Panel Common Sections & Utility Tokens ── */
+QWidget#panel_header {
+    background-color: #0d0b14;
+    border-bottom: 1px solid #231c34;
+}
+
+QWidget#panel_section {
+    background-color: #120f1d;
+    border-bottom: 1px solid #231c34;
+}
+
+QWidget#panel_action_bar {
+    background-color: #0d0b14;
+    border-top: 1px solid #231c34;
 }
 
 /* ── Progress bar ── */
@@ -621,16 +638,16 @@ QToolTip {
     background-color: #120f1d;
     color: #f5f3ff;
     border: 1px solid #7c3aed;
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
 }
 """
 
 
 _DARK_TO_LIGHT = {
     # Midnight Purple Dark -> Glossy Purple Light (Dominant Crisp White, subtle glossy purple borders/accents)
-    "#08070d": "#faf9fe", "#0d0b14": "#ffffff", "#120f1d": "#f5f3fa",
+    "#08070d": "#faf9fe", "#7c3aed": "#5b21b6", "#8b5cf6": "#6d28d9", "#6d28d9": "#4c1d95", "#141022": "#ede8f7", "#0d0b14": "#ffffff", "#120f1d": "#f5f3fa",
     "#1a1528": "#ede9f7", "#251d38": "#e4dcf4", "#231c34": "#e2daf0",
     "#090810": "#f8f6fc", "#0f0c1a": "#ffffff", "#181326": "#e0d7ee",
     "#2a223d": "#dcd0f0", "#17111c": "#f5f0f8", "#33243a": "#e3d2ea",

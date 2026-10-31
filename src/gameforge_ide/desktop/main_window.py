@@ -259,7 +259,8 @@ class MainWindow(QMainWindow):
 
         # Logo / brand label
         brand = QLabel("  🎮 GameForge IDE ")
-        brand.setStyleSheet("color: #6c63ff; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
+        brand.setObjectName("brand_label")
+        brand.setStyleSheet("color: #7c3aed; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
         tb.addWidget(brand)
 
         # Workspace badge / switch button (like VS Code / Antigravity)
@@ -317,7 +318,7 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         lbl_model = QLabel("Model: ")
-        lbl_model.setStyleSheet("color: #9ca3af; font-size: 11px; font-weight: 600; margin-left: 4px;")
+        lbl_model.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 600; margin-left: 4px;")
         tb.addWidget(lbl_model)
 
         self._tb_model_combo = QComboBox()
@@ -550,14 +551,14 @@ class MainWindow(QMainWindow):
         # (no separator before the first permanent widget: it rendered as an orphan "|" on the right)
         self._model_status = QLabel("Model: gameforge-27b-sft:latest")
         self._model_status.setObjectName("status_model")
-        self._model_status.setStyleSheet("color: #6c63ff;")
+        self._model_status.setStyleSheet("color: #7c3aed;")
         sb.addPermanentWidget(self._model_status)
 
         sb.addPermanentWidget(QLabel("|"))
 
         self._version_lbl = QLabel("GameForge IDE v1.0.0")
         self._version_lbl.setObjectName("status_version")
-        self._version_lbl.setStyleSheet("color: #8891aa;")
+        self._version_lbl.setStyleSheet("color: #675f78; font-size: 11px;")
         sb.addPermanentWidget(self._version_lbl)
 
     # ── Slots ─────────────────────────────────────────────────────────────────

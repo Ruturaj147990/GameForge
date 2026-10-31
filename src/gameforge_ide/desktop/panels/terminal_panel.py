@@ -44,12 +44,13 @@ class TerminalPanel(QWidget):
 
         # Header
         header = QWidget()
-        header.setStyleSheet("background: #0d0f14; border-bottom: 1px solid #2a2f45;")
+        header.setObjectName("panel_header")
+        header.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
         header.setFixedHeight(36)
         hdr_layout = QHBoxLayout(header)
         hdr_layout.setContentsMargins(8, 4, 8, 4)
         title = QLabel("⬛  Terminal — PowerShell")
-        title.setStyleSheet("color: #8891aa; font-size: 11px; font-weight: 600; letter-spacing: 0.6px;")
+        title.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 600; letter-spacing: 0.6px;")
         hdr_layout.addWidget(title)
         hdr_layout.addStretch()
         btn_clear = QPushButton("Clear")
@@ -62,7 +63,7 @@ class TerminalPanel(QWidget):
         btn_restart.setObjectName("btn_term_restart")
         btn_restart.setToolTip("Restart shell")
         btn_restart.setFixedSize(30, 26)
-        btn_restart.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
+        btn_restart.setStyleSheet("padding: 0px; font-size: 14px; border-radius: 6px;")
         btn_restart.clicked.connect(self._restart_shell)
         hdr_layout.addWidget(btn_restart)
         layout.addWidget(header)
@@ -77,29 +78,30 @@ class TerminalPanel(QWidget):
         font.setPointSize(11)
         self._output.setFont(font)
         self._output.setStyleSheet(
-            "background: #080a0f; color: #c8d0e8; border: none;"
-            " selection-background-color: #6c63ff;"
+            "background: #08070d; color: #f5f3ff; border: none;"
+            " selection-background-color: #7c3aed;"
         )
         layout.addWidget(self._output, 1)
 
         # Input row
         input_row = QWidget()
-        input_row.setStyleSheet("background: #131720; border-top: 1px solid #2a2f45;")
+        input_row.setObjectName("panel_action_bar")
+        input_row.setStyleSheet("background: #0d0b14; border-top: 1px solid #231c34;")
         input_row.setFixedHeight(36)
         input_layout = QHBoxLayout(input_row)
         input_layout.setContentsMargins(8, 4, 8, 4)
         input_layout.setSpacing(6)
 
         prompt_lbl = QLabel("PS❯")
-        prompt_lbl.setStyleSheet("color: #6c63ff; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px;")
+        prompt_lbl.setStyleSheet("color: #7c3aed; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 11px;")
         input_layout.addWidget(prompt_lbl)
 
         self._cmd_input = QLineEdit()
         self._cmd_input.setObjectName("terminal_input")
         self._cmd_input.setPlaceholderText("Enter PowerShell command…")
         self._cmd_input.setStyleSheet(
-            "background: transparent; border: none; color: #e8eaf6;"
-            " font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px;"
+            "background: transparent; border: none; color: #f5f3ff;"
+            " font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 13px;"
         )
         self._cmd_input.returnPressed.connect(self._on_send_command)
         input_layout.addWidget(self._cmd_input, 1)
@@ -107,7 +109,7 @@ class TerminalPanel(QWidget):
         btn_run = QPushButton("▶")
         btn_run.setObjectName("btn_term_run")
         btn_run.setFixedSize(28, 28)
-        btn_run.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
+        btn_run.setStyleSheet("padding: 0px; font-size: 14px; border-radius: 6px;")
         btn_run.setToolTip("Run command (Enter)")
         btn_run.clicked.connect(self._on_send_command)
         input_layout.addWidget(btn_run)

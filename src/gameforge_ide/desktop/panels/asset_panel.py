@@ -48,7 +48,7 @@ class AssetPanel(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         lbl_title = QLabel("📦 Asset Registry")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 13px; color: #f5f3ff;")
+        lbl_title.setStyleSheet("font-weight: 700; font-size: 14px; color: #f5f3ff;")
         header.addWidget(lbl_title)
         header.addStretch()
 

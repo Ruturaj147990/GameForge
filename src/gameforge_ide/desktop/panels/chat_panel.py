@@ -265,7 +265,7 @@ class _StatusBar(QWidget):
 
         # Unreal connection badge
         self._ue_label = QLabel("Unreal: Disconnected")
-        self._ue_label.setStyleSheet(theme_stylesheet("color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #161c28;"))
+        self._ue_label.setStyleSheet(theme_stylesheet("color: #9d95b0; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: #120f1d;"))
         self._ue_label.setVisible(False)
         layout.addWidget(self._ue_label)
 
@@ -310,7 +310,7 @@ class _StatusBar(QWidget):
             self._ue_label.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #0e2922; border: 1px solid #00d9a3;"))
         else:
             self._ue_label.setText("Unreal: Disconnected")
-            self._ue_label.setStyleSheet(theme_stylesheet("color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #161c28;"))
+            self._ue_label.setStyleSheet(theme_stylesheet("color: #9d95b0; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: #120f1d;"))
 
 
 
@@ -652,7 +652,8 @@ class ChatPanel(QWidget):
 
         # Input row
         input_widget = QWidget()
-        input_widget.setStyleSheet("background: #121622; border-top: 1px solid #26304a;")
+        input_widget.setObjectName("panel_action_bar")
+        input_widget.setStyleSheet("background: #0d0b14; border-top: 1px solid #231c34;")
         input_layout = QHBoxLayout(input_widget)
         input_layout.setContentsMargins(12, 10, 12, 10)
         input_layout.setSpacing(10)

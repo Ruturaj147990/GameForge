@@ -34,10 +34,10 @@ class _InfoRow(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
         lbl_key = QLabel(f"{key}:")
-        lbl_key.setStyleSheet("color: #8891aa; font-size: 11px; min-width: 140px;")
+        lbl_key.setStyleSheet("color: #9d95b0; font-size: 11px; min-width: 140px;")
         layout.addWidget(lbl_key)
         self._val = QLabel(value)
-        self._val.setStyleSheet("color: #e8eaf6; font-size: 11px; font-weight: 600;")
+        self._val.setStyleSheet("color: #f5f3ff; font-size: 11px; font-weight: 600;")
         self._val.setWordWrap(True)
         layout.addWidget(self._val, 1)
 
@@ -80,7 +80,8 @@ class UnrealPanel(QWidget):
 
         # Header
         header = QWidget()
-        header.setStyleSheet("background: #0d0f14; border-bottom: 1px solid #2a2f45;")
+        header.setObjectName("panel_header")
+        header.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
         header.setFixedHeight(44)
         hdr_layout = QHBoxLayout(header)
         hdr_layout.setContentsMargins(10, 4, 10, 4)
@@ -97,14 +98,15 @@ class UnrealPanel(QWidget):
 
         # Engine info section
         info_section = QFrame()
-        info_section.setStyleSheet("background: #131720; border-bottom: 1px solid #2a2f45;")
+        info_section.setObjectName("panel_section")
+        info_section.setStyleSheet("background: #120f1d; border-bottom: 1px solid #231c34;")
         info_layout = QVBoxLayout(info_section)
         info_layout.setContentsMargins(0, 6, 0, 6)
         info_layout.setSpacing(2)
 
         sec_lbl = QLabel("ENGINE INSTALLATION")
         sec_lbl.setStyleSheet(
-            "color: #8891aa; font-size: 10px; font-weight: 700; letter-spacing: 0.8px;"
+            "color: #9d95b0; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;"
             " padding: 4px 10px;"
         )
         info_layout.addWidget(sec_lbl)
@@ -119,30 +121,32 @@ class UnrealPanel(QWidget):
 
         # Projects section header
         proj_hdr = QWidget()
-        proj_hdr.setStyleSheet("background: #0d0f14; border-bottom: 1px solid #2a2f45;")
+        proj_hdr.setObjectName("panel_header")
+        proj_hdr.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
         proj_hdr.setFixedHeight(30)
         proj_hdr_layout = QHBoxLayout(proj_hdr)
         proj_hdr_layout.setContentsMargins(10, 2, 10, 2)
         proj_lbl = QLabel("UPROJECTS IN WORKSPACE")
-        proj_lbl.setStyleSheet("color: #8891aa; font-size: 10px; font-weight: 700; letter-spacing: 0.8px;")
+        proj_lbl.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;")
         proj_hdr_layout.addWidget(proj_lbl)
         layout.addWidget(proj_hdr)
 
         # Project list
         self._project_list = QListWidget()
         self._project_list.setObjectName("ue_project_list")
-        self._project_list.setStyleSheet("background: #131720; border: none;")
+        self._project_list.setStyleSheet("background: #0d0b14; border: none;")
         self._project_list.setFixedHeight(150)
         layout.addWidget(self._project_list)
 
         # Build output section
         build_hdr = QWidget()
-        build_hdr.setStyleSheet("background: #0d0f14; border-bottom: 1px solid #2a2f45;")
+        build_hdr.setObjectName("panel_header")
+        build_hdr.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
         build_hdr.setFixedHeight(40)
         build_hdr_layout = QHBoxLayout(build_hdr)
         build_hdr_layout.setContentsMargins(10, 4, 10, 4)
         build_lbl = QLabel("BUILD OUTPUT")
-        build_lbl.setStyleSheet("color: #8891aa; font-size: 10px; font-weight: 700; letter-spacing: 0.8px;")
+        build_lbl.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;")
         build_hdr_layout.addWidget(build_lbl)
         build_hdr_layout.addStretch()
         self._btn_build = QPushButton("⚙  Staged Build")
@@ -157,7 +161,7 @@ class UnrealPanel(QWidget):
         self._build_output.setObjectName("ue_build_output")
         self._build_output.setReadOnly(True)
         self._build_output.setStyleSheet(
-            "background: #0a0c10; color: #8891aa; border: none;"
+            "background: #08070d; color: #9d95b0; border: none;"
             " font-family: 'Consolas', monospace; font-size: 11px;"
         )
         self._build_output.setPlaceholderText("Select a project and press 'Staged Build' to compile…")

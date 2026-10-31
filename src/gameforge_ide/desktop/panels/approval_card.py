@@ -49,7 +49,7 @@ class ApprovalCard(QFrame):
         self.setObjectName("approvalCard")
         accent = theme_color("#7c3aed")
         self.setStyleSheet(
-            f"#approvalCard {{ border: 1px solid {accent}; border-radius: 10px; "
+            f"#approvalCard {{ border: 1px solid {accent}; border-radius: 6px; "
             f"background: {theme_color('#120f1d')}; }} QLabel {{ background: transparent; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 12, 14, 12)

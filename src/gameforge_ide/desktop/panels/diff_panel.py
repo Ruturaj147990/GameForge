@@ -88,25 +88,26 @@ class DiffPanel(QWidget):
 
         # Header bar
         header = QWidget()
-        header.setStyleSheet("background: #0d0f14; border-bottom: 1px solid #2a2f45;")
+        header.setObjectName("panel_header")
+        header.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
         header.setFixedHeight(44)
         hdr_layout = QHBoxLayout(header)
         hdr_layout.setContentsMargins(10, 4, 10, 4)
         title = QLabel("📝  Diff Review")
-        title.setStyleSheet("color: #ff9f43; font-weight: 700; font-size: 14px;")
+        title.setStyleSheet("color: #f59e0b; font-weight: 700; font-size: 14px;")
         hdr_layout.addWidget(title)
         hdr_layout.addStretch()
 
         self._diff_id_lbl = QLabel("No pending diff")
-        self._diff_id_lbl.setStyleSheet("color: #8891aa; font-size: 11px;")
+        self._diff_id_lbl.setStyleSheet("color: #9d95b0; font-size: 11px;")
         hdr_layout.addWidget(self._diff_id_lbl)
         layout.addWidget(header)
 
         # File path bar
         self._file_bar = QLabel("")
         self._file_bar.setStyleSheet(
-            "background: #131720; color: #6c63ff; font-size: 12px;"
-            " padding: 4px 12px; border-bottom: 1px solid #2a2f45;"
+            "background: #120f1d; color: #7c3aed; font-size: 11px;"
+            " padding: 4px 12px; border-bottom: 1px solid #231c34;"
         )
         layout.addWidget(self._file_bar)
 
@@ -116,7 +117,8 @@ class DiffPanel(QWidget):
 
         # Action bar
         action_bar = QWidget()
-        action_bar.setStyleSheet("background: #131720; border-top: 1px solid #2a2f45;")
+        action_bar.setObjectName("panel_action_bar")
+        action_bar.setStyleSheet("background: #0d0b14; border-top: 1px solid #231c34;")
         action_bar.setFixedHeight(52)
         abar_layout = QHBoxLayout(action_bar)
         abar_layout.setContentsMargins(10, 8, 10, 8)

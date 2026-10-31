@@ -55,19 +55,20 @@ class ExplorerPanel(QWidget):
 
         # Header
         header = QWidget()
-        header.setStyleSheet("background: #0d0f14; border-bottom: 1px solid #2a2f45;")
+        header.setObjectName("panel_header")
+        header.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
         header.setFixedHeight(36)
         hdr_layout = QHBoxLayout(header)
         hdr_layout.setContentsMargins(8, 4, 8, 4)
         lbl = QLabel("📁  Explorer")
-        lbl.setStyleSheet("color: #8891aa; font-size: 11px; font-weight: 600; letter-spacing: 0.6px;")
+        lbl.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 600; letter-spacing: 0.6px;")
         hdr_layout.addWidget(lbl)
         hdr_layout.addStretch()
 
         btn_open = QPushButton("📂")
         btn_open.setObjectName("btn_explorer_open")
         btn_open.setFixedSize(24, 24)
-        btn_open.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
+        btn_open.setStyleSheet("padding: 0px; font-size: 14px; border-radius: 6px;")
         btn_open.setToolTip("Open Folder / Switch Workspace…")
         btn_open.clicked.connect(self.open_folder_requested.emit)
         hdr_layout.addWidget(btn_open)
@@ -75,7 +76,7 @@ class ExplorerPanel(QWidget):
         btn_refresh = QPushButton("↻")
         btn_refresh.setObjectName("btn_explorer_refresh")
         btn_refresh.setFixedSize(24, 24)
-        btn_refresh.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
+        btn_refresh.setStyleSheet("padding: 0px; font-size: 14px; border-radius: 6px;")
         btn_refresh.setToolTip("Refresh workspace tree")
         btn_refresh.clicked.connect(self._populate_root)
         hdr_layout.addWidget(btn_refresh)
@@ -103,7 +104,7 @@ class ExplorerPanel(QWidget):
 
         # Bottom status
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet("color: #8891aa; font-size: 10px; padding: 2px 8px;")
+        self._status_lbl.setStyleSheet("color: #9d95b0; font-size: 11px; padding: 2px 8px;")
         layout.addWidget(self._status_lbl)
 
     # ── Tree Population ─────────────────────────────────────────────────────

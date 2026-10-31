@@ -316,8 +316,7 @@ non-blocking Ollama probe (`reports/ide_ui_20261031.png`). Planned, in order (ea
    Games, Plans, Assets) instead of separate floating docks; dock title bars collapsed into tabs.
 3. ~~**Start screen**~~ **DONE 2026-10-31**: for an empty session: three large actions ("Make a game from a prompt", "Open a project",
    "Recent games" with thumbnails from Mission Control), not a system message.
-4. **Consistent design tokens:** one spacing scale (4/8/12/16), one radius, two font sizes per level, and the
-   accent colour from `styles/` only. Today many panels set inline stylesheets with ad-hoc colours.
+4. ~~**Consistent design tokens**~~ **DONE 2026-10-31**: one spacing scale (4/8/12/16), one radius (6px), two font sizes per level (11/13px body, 14/18px headings), and accent colors (`#7c3aed`, `#8b5cf6`, `#00d9a3`, `#f59e0b`, `#ef4444`) from `styles/` tokens only (`src/gameforge_ide/desktop/styles/tokens.py`). Ad-hoc inline colors across main window and panels replaced.
 5. **Empty states** for the Unreal panel ("No .uproject in this workspace. Create one with /game") and Build output.
 6. **Keyboard:** a command palette (Ctrl+Shift+P) over existing actions, focus order, and visible focus rings.
 7. **Accessibility:** contrast ≥ 4.5:1 for secondary text (#64748b on #161c28 is below that), scalable fonts at 125–150% DPI.
