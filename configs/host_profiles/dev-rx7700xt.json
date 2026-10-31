@@ -26,6 +26,6 @@
   "artifacts_root": "E:\\GameForge",
   "validation_root": "E:\\GameForge\\validation",
   "probe_project": "E:\\GameForge\\validation\\live_ops_probe\\GFProbe.uproject",
-  "plugin_build": "E:\\GameForge\\validation\\GameForgePlugin_neutral",
+  "plugin_build": "E:\\GameForge\\validation\\GameForgePlugin_p0",
   "bridge_port": 47815
 }

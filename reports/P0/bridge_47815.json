@@ -1,0 +1,9 @@
+﻿{
+    "checked":  "2026-10-31T16:16:37.1204248+05:30",
+    "health_status":  200,
+    "health_body":  "{\"status\":\"ok\",\"version\":\"1.0.0\",\"workspace\":\"E:\\\\gameforge_step1\",\"local_ollama_online\":true,\"unreal_engine_5_7_detected\":true}",
+    "listening_47815":  true,
+    "listen_address":  "127.0.0.1",
+    "listening_8000":  false,
+    "note":  "--serve needs GAMEFORGE_BRIDGE_TOKEN (unchanged). Editor-originated SyncContext request not exercised; C++ default URL 47815 is compiled into GameForgePlugin_p0."
+}
