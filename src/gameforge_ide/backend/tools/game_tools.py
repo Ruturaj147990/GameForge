@@ -26,7 +26,7 @@ from ...pipeline.game_pipeline import GamePipeline
 from ...pipeline.spec_from_prompt import is_game_creation_request, match_prompt
 from ...recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
-from ...unreal import op_catalog
+from ...unreal import op_catalog, op_schemas
 from ...unreal.toolchain import UnrealToolchain
 from ...core.settings import engine_root_or_missing
 
@@ -276,7 +276,10 @@ class GameTools:
             # Fail closed before touching the editor: unknown (e.g. model-invented), diagnostic or legacy op.
             return {"status": "ERROR", "error": f"unknown or non-agent editor op: {op!r}",
                     "hint": "valid ops: " + op_catalog.describe_for_agent()}
-        res = self._link(uproject).call(op, args or {})
+        clean, errs = op_schemas.validate_args(op, args or {})
+        if errs:  # fail before touching the editor (AD-14)
+            return {"status": "ERROR", "error": "invalid args for op", "op": op, "details": errs}
+        res = self._link(uproject).call(op, clean)
         return {"status": "SUCCESS" if res.get("ok") else "ERROR", "result": res}
 
     def close_editors(self) -> List[Optional[int]]:
