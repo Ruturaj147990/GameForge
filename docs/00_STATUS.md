@@ -17,7 +17,7 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | Free-form game via model C++ + repair ladder | PARTIAL | hard gates pass (whack-a-mole, 9B); visual quality weak | P6 replaces it with composition |
 | Game Design Spec (typed, reviewable) | PASS | schema gds/1, deterministic expander, presets, prompt_to_gds eval 100% valid, store/revisions, pipeline wired; 2 packaged games from GDS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json) | P1 |
 | One durable executor, resume, checkpoints | PASS | Forge executor, atomic persistence, git checkpoints, resume kill test (reports/P2/resume_kill_test.json), rollback check (reports/P2/rollback_check.json), plan demos on Forge (reports/P2/plan_demos_forge.json), leak test (reports/P2/job_object_leak_test.json) | P2 |
-| Scenario playtests (injected input, Shipping-safe) | PLANNED | — | P3 |
+| Scenario playtests (injected input, Shipping-safe) | PASS | Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, 5 dev scenarios (incl. 2 controls) & 3 ship scenarios (`reports/P3/kit_testbed_scenarios.json`) | P3 |
 | Studio UI for the loop | PLANNED | UX polish done 2026-10-31 (`reports/ide_ui_20261031.png`) | P4 |
 | Composition of kit modules from a spec | PLANNED | — | P6 |
 | Change requests / incremental rebuild | PLANNED | — | P8 |
@@ -57,7 +57,7 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | World Partition + Data Layer ownership | PASS | `reports/m8v2_datalayers_demo.json` (9/9) | — |
 | Landscape inside WP, streaming, packaged traversal | PLANNED | — | P10 |
 | NavMesh pathing | PASS | `reports/audit_m8_completion.json` | — |
-| PIE traversal claims (M8/M13/M15 via `pie_move_player_to`) | NOT VERIFIED | DefaultPawn may teleport (F-09) | P3 re-verification |
+| PIE traversal claims (M8/M13/M15 via `pie_move_player_to`) | PASS | Re-verified with physically honest autopilot input on AGameForgeCharacter in GFKitTest (`reports/P3/reverify_traversal.json`) | P3 |
 | Materials: graph authoring, MIs, functions, landscape layers | PASS | `reports/m11_material_demo.json`, `m11_landscape_demo.json` | — |
 | Procedural PBR textures | PASS | `pbr_texture_generator.py` + M11 demo | — |
 | Geometry Script props, LOD, collision, modular kit | PASS | `reports/m12_asset_demo.json`, `m12_kit_demo.json` | — |

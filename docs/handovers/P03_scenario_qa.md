@@ -687,7 +687,7 @@ returns ok only if all pass. Artifacts are the result files.
 | 3.3 | DONE | 2026-10-31T13:44Z | 2026-10-31T13:46Z | Autopilot component: physically honest movement, NavMesh navigation, teleport/stuck detection, C++ build PASS |
 | 3.4 | DONE | 2026-10-31T13:46Z | 2026-10-31T13:48Z | Scenario subsystem: UGameForgeScenarioSubsystem, steps state machine, expect assertions, result writer, C++ build PASS |
 | 3.5 | DONE | 2026-10-31T13:48Z | 2026-10-31T13:52Z | Host side: scenario/manifest schemas, generate, runner, forge scenario handler, 6 passed |
-| 3.6 | TODO | | | |
+| 3.6 | DONE | 2026-10-31T13:52Z | 2026-10-31T14:06Z | Kit testbed project (GFKitTest), 5 dev scenarios (collect_3, quest_complete, spotted_by_guard PASS; controls teleport_cheat & impossible FAIL), 3 ship scenarios PASS, reports/P3/kit_testbed_scenarios.json, reports/P3/reverify_traversal.json |
 
 ## Review log (Claude)
 _empty_
