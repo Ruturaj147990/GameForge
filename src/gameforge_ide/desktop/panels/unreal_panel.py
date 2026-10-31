@@ -13,6 +13,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QFrame,
+    QStackedWidget,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -49,6 +50,7 @@ class UnrealPanel(QWidget):
     """Unreal Engine 5 integration status and staged-build trigger."""
 
     build_requested = Signal(str)   # uproject relative path
+    create_game_requested = Signal()
 
     def __init__(self, tool_service: ToolService, workspace_root: Path, parent=None) -> None:
         super().__init__(parent)
@@ -131,12 +133,44 @@ class UnrealPanel(QWidget):
         proj_hdr_layout.addWidget(proj_lbl)
         layout.addWidget(proj_hdr)
 
+        # Projects section container / stacked widget
+        self._projects_stack = QStackedWidget()
+        self._projects_stack.setFixedHeight(150)
+
+        # Empty state for projects
+        self._empty_projects_card = QFrame()
+        self._empty_projects_card.setObjectName("panel_section")
+        self._empty_projects_card.setStyleSheet(
+            "background: #0d0b14; border: 1px dashed #231c34; border-radius: 6px; padding: 10px;"
+        )
+        ep_layout = QVBoxLayout(self._empty_projects_card)
+        ep_layout.setContentsMargins(10, 12, 10, 12)
+        ep_layout.setSpacing(6)
+        ep_layout.setAlignment(Qt.AlignCenter)
+
+        lbl_ep_msg = QLabel("No .uproject in this workspace.\nCreate one with /game")
+        lbl_ep_msg.setAlignment(Qt.AlignCenter)
+        lbl_ep_msg.setStyleSheet("color: #9d95b0; font-size: 13px; font-weight: 600; background: transparent;")
+        ep_layout.addWidget(lbl_ep_msg)
+
+        btn_create_game = QPushButton("✨  Create with /game")
+        btn_create_game.setObjectName("btn_create_game_hint")
+        btn_create_game.setFixedHeight(28)
+        btn_create_game.setStyleSheet(
+            "QPushButton { background: #120f1d; border: 1px solid #7c3aed; color: #a78bfa; border-radius: 6px; font-weight: 600; padding: 4px 12px; } "
+            "QPushButton:hover { background: #7c3aed; color: #ffffff; }"
+        )
+        btn_create_game.clicked.connect(self.create_game_requested.emit)
+        ep_layout.addWidget(btn_create_game, 0, Qt.AlignCenter)
+
         # Project list
         self._project_list = QListWidget()
         self._project_list.setObjectName("ue_project_list")
         self._project_list.setStyleSheet("background: #0d0b14; border: none;")
-        self._project_list.setFixedHeight(150)
-        layout.addWidget(self._project_list)
+
+        self._projects_stack.addWidget(self._empty_projects_card)  # Index 0
+        self._projects_stack.addWidget(self._project_list)          # Index 1
+        layout.addWidget(self._projects_stack)
 
         # Build output section
         build_hdr = QWidget()
@@ -157,6 +191,41 @@ class UnrealPanel(QWidget):
         build_hdr_layout.addWidget(self._btn_build)
         layout.addWidget(build_hdr)
 
+        # Build output stacked container (empty state vs output text)
+        self._build_stack = QStackedWidget()
+
+        self._empty_build_card = QFrame()
+        self._empty_build_card.setObjectName("panel_section")
+        self._empty_build_card.setStyleSheet(
+            "background: #08070d; border: 1px dashed #231c34; border-radius: 6px; padding: 16px;"
+        )
+        eb_layout = QVBoxLayout(self._empty_build_card)
+        eb_layout.setContentsMargins(16, 24, 16, 24)
+        eb_layout.setSpacing(6)
+        eb_layout.setAlignment(Qt.AlignCenter)
+
+        lbl_eb_icon = QLabel("⚙")
+        lbl_eb_icon.setAlignment(Qt.AlignCenter)
+        lbl_eb_icon.setStyleSheet("font-size: 24px; color: #7c3aed; background: transparent;")
+        eb_layout.addWidget(lbl_eb_icon)
+
+        lbl_eb_title = QLabel("No build output yet")
+        lbl_eb_title.setAlignment(Qt.AlignCenter)
+        lbl_eb_title.setStyleSheet("color: #f5f3ff; font-size: 13px; font-weight: 700; background: transparent;")
+        eb_layout.addWidget(lbl_eb_title)
+
+        lbl_eb_desc = QLabel("Select a project above and click 'Staged Build' to compile.")
+        lbl_eb_desc.setAlignment(Qt.AlignCenter)
+        lbl_eb_desc.setWordWrap(True)
+        lbl_eb_desc.setStyleSheet("color: #9d95b0; font-size: 11px; background: transparent;")
+        eb_layout.addWidget(lbl_eb_desc)
+
+        lbl_eb_sub = QLabel("Build logs, compiler warnings, and cook diagnostics will stream here.")
+        lbl_eb_sub.setAlignment(Qt.AlignCenter)
+        lbl_eb_sub.setWordWrap(True)
+        lbl_eb_sub.setStyleSheet("color: #675f78; font-size: 11px; background: transparent;")
+        eb_layout.addWidget(lbl_eb_sub)
+
         self._build_output = QTextEdit()
         self._build_output.setObjectName("ue_build_output")
         self._build_output.setReadOnly(True)
@@ -165,7 +234,10 @@ class UnrealPanel(QWidget):
             " font-family: 'Consolas', monospace; font-size: 11px;"
         )
         self._build_output.setPlaceholderText("Select a project and press 'Staged Build' to compile…")
-        layout.addWidget(self._build_output, 1)
+
+        self._build_stack.addWidget(self._empty_build_card)  # Index 0
+        self._build_stack.addWidget(self._build_output)      # Index 1
+        layout.addWidget(self._build_stack, 1)
 
     # ── Refresh ─────────────────────────────────────────────────────────────
 
@@ -201,9 +273,14 @@ class UnrealPanel(QWidget):
             if projects:
                 self._btn_build.setEnabled(True)
                 self._project_list.setCurrentRow(0)
+                self._projects_stack.setCurrentWidget(self._project_list)
+            else:
+                self._btn_build.setEnabled(False)
+                self._projects_stack.setCurrentWidget(self._empty_projects_card)
 
     @Slot()
     def _on_build(self) -> None:
+        self._build_stack.setCurrentWidget(self._build_output)
         item = self._project_list.currentItem()
         if not item:
             if self._project_list.count() > 0:

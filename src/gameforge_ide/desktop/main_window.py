@@ -481,6 +481,7 @@ class MainWindow(QMainWindow):
 
         # ── Unreal Engine (right) ─────────────────────────────────────────
         self._unreal_panel = UnrealPanel(self._tools, self._workspace, parent=self)
+        self._unreal_panel.create_game_requested.connect(self._on_create_game_from_unreal)
         self._dock_unreal = self._make_dock("Unreal Engine 5", self._unreal_panel, Qt.RightDockWidgetArea)
         self._dock_unreal.setMinimumWidth(300)
         self._dock_unreal.setMaximumWidth(460)
@@ -794,6 +795,11 @@ class MainWindow(QMainWindow):
         session_id = getattr(self._chat_panel, "_session_id", None)
         if session_id and hasattr(self, "_agent"):
             self._agent.resume_after_diff(session_id, diff_id, approved=False)
+
+    def _on_create_game_from_unreal(self) -> None:
+        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer"):
+            self._chat_panel._composer.setText("/game ")
+            self._chat_panel._composer.setFocus()
 
     @Slot(str, str)
     def _on_slash_command(self, cmd: str, full_cmd: str) -> None:
