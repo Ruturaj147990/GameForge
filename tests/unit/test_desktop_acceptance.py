@@ -46,6 +46,11 @@ def qapp():
     return app
 
 
+@pytest.fixture(autouse=True)
+def _legacy_shell_fixture(monkeypatch):
+    monkeypatch.setenv("GAMEFORGE_LEGACY_SHELL", "1")
+
+
 @pytest.fixture
 def disposable_workspace(tmp_path):
     """Creates a realistic disposable game project directory for testing."""

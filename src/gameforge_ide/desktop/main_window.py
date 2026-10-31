@@ -13,6 +13,7 @@ from typing import Optional
 
 from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QSize, Signal, Slot
 from PySide6.QtGui import (
+    QShortcut,
     QAction,
     QCloseEvent,
     QFont,
@@ -57,6 +58,27 @@ from .panels.unreal_panel import UnrealPanel
 from .services.agent_service import AgentService
 from .services.tool_service import ToolService
 from .styles.dark_theme import apply_theme, theme_stylesheet
+from .shell import (
+    AssistantPanel,
+    CommandPalette,
+    Rail,
+    ToastOverlay,
+    TopBar,
+    ViewHost,
+)
+from .views import (
+    AssetsView,
+    BuildView,
+    DesignView,
+    EvidenceView,
+    GamesView,
+    HomeView,
+    PlayView,
+    SettingsView,
+)
+from .views.code_view import CodeView
+from .services.systems_service import SystemsService
+from .services.forge_service import ForgeService
 
 
 class MainWindow(QMainWindow):
@@ -100,19 +122,27 @@ class MainWindow(QMainWindow):
         self.resize(1600, 960)
 
         # ── Build UI ─────────────────────────────────────────────────────
-        self._build_menu()
-        self._build_toolbar()
-        self._build_activity_rail()
-        self._build_central()
-        self._build_docks()
-        self._build_status_bar()
-        self._default_layout = self.saveState()
-        saved_geometry = self._settings.value("window/geometry")
-        saved_layout = self._settings.value("window/layout")
-        if saved_geometry:
-            self.restoreGeometry(saved_geometry)
-        if saved_layout:
-            self.restoreState(saved_layout)
+        import os
+        self._is_legacy_shell = os.environ.get("GAMEFORGE_LEGACY_SHELL") == "1"
+        if self._is_legacy_shell:
+            self._build_menu()
+            self._build_toolbar()
+            self._build_activity_rail()
+            self._build_central()
+            self._build_docks()
+            self._build_status_bar()
+            self._default_layout = self.saveState()
+            saved_geometry = self._settings.value("window/geometry")
+            saved_layout = self._settings.value("window/layout")
+            if saved_geometry:
+                self.restoreGeometry(saved_geometry)
+            if saved_layout:
+                self.restoreState(saved_layout)
+        else:
+            self._build_studio_shell()
+            saved_geometry = self._settings.value("window/geometry")
+            if saved_geometry:
+                self.restoreGeometry(saved_geometry)
         apply_theme(QApplication.instance(), self._theme)
         # Storage hygiene 10 s after start, off the UI thread: only policy-safe actions
         # (log rotation, items past retention). Cap-based cleanup is user-confirmed in Mission Control.
@@ -693,7 +723,7 @@ class MainWindow(QMainWindow):
     def _check_ollama_status(self) -> None:
         """Probe Ollama off the UI thread: is_available() is an HTTP call with a 3 s timeout, which used to freeze the
         window at startup and on every "Check Ollama" click when the host did not answer."""
-        if self._ollama_check_running:
+        if self._ollama_check_running or getattr(self, "_ollama_indicator", None) is None:
             return
         self._ollama_check_running = True
         self._ollama_indicator.setText("● Ollama: checking…")
@@ -906,11 +936,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_command_palette(self) -> None:
+        palette = CommandPalette(self._command_palette_commands(), self)
+        palette.exec()
+        return
         dialog = QDialog(self)
-        dialog.setObjectName("command_palette_dialog")
-        dialog.setWindowTitle("GameForge Commands")
-        dialog.setModal(True)
-        dialog.resize(560, 360)
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -990,6 +1019,273 @@ class MainWindow(QMainWindow):
 
     # ── Window lifecycle ──────────────────────────────────────────────────────
 
+
+    # ── Studio UX Shell (WI-4.3) ─────────────────────────────────────────────
+
+    def _build_studio_shell(self) -> None:
+        self.setObjectName("studioMainWindow")
+
+        # In Studio shell, menu bar is hidden (accessible via Palette Ctrl+K and shortcuts)
+        self.menuBar().setVisible(False)
+
+        # Services
+        self._systems_service = SystemsService(workspace_root=self._workspace, parent=self)
+        self._forge_service = ForgeService(workspace_root=self._workspace, parent=self)
+
+        # Pre-instantiate CodeView so all dock attributes and panels are available
+        self._get_or_create_code_view()
+
+        # Top bar
+        self._top_bar = TopBar(self)
+        self._top_bar.homeRequested.connect(lambda: self._switch_studio_view("home"))
+        self._top_bar.buildViewRequested.connect(lambda: self._switch_studio_view("build"))
+        self._top_bar.assistantToggled.connect(self._toggle_assistant)
+        self._top_bar.paletteRequested.connect(self._open_command_palette)
+        self._top_bar.projectSelected.connect(self._on_project_selected)
+        self._top_bar.openFolderRequested.connect(self._open_folder)
+        self._systems_service.snapshotChanged.connect(self._top_bar.update_systems)
+
+        # Activity rail (56px)
+        self._rail = Rail(self)
+        self._rail.viewRequested.connect(self._switch_studio_view)
+
+        # View host (lazily created views)
+        self._view_host = ViewHost(self)
+        self._register_studio_views()
+        self._view_host.viewChanged.connect(self._on_studio_view_changed)
+
+        # Assistant panel (collapsible right drawer)
+        self._chat_panel = ChatPanel(self._agent, workspace_root=self._workspace, parent=self)
+        self._assistant_panel = AssistantPanel(self._chat_panel, self)
+        self._assistant_panel.closeRequested.connect(lambda: self._set_assistant_visible(False))
+        self._assistant_panel.modelChanged.connect(self._on_chat_model_changed)
+        models = [get_settings().model_for("chat")]
+        self._assistant_panel.set_models(models, models[0])
+
+        # Center splitter: ViewHost + AssistantPanel
+        self._center_splitter = QSplitter(Qt.Horizontal, self)
+        self._center_splitter.setObjectName("studioCenterSplitter")
+        self._center_splitter.addWidget(self._view_host)
+        self._center_splitter.addWidget(self._assistant_panel)
+        self._center_splitter.setCollapsible(0, False)
+        self._center_splitter.setCollapsible(1, True)
+
+        saved_assistant_w = int(self._settings.value("studio/assistant_width", 380))
+        self._center_splitter.setSizes([1600 - saved_assistant_w - 56, saved_assistant_w])
+
+        # Main central widget assembly
+        central = QWidget(self)
+        central.setObjectName("studioCentralWidget")
+        vbox = QVBoxLayout(central)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        vbox.addWidget(self._top_bar)
+
+        body = QWidget(central)
+        hbox = QHBoxLayout(body)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.setSpacing(0)
+        hbox.addWidget(self._rail)
+        hbox.addWidget(self._center_splitter, 1)
+        vbox.addWidget(body, 1)
+
+        self.setCentralWidget(central)
+
+        # Status bar
+        self._build_status_bar()
+
+        # Toasts overlay
+        self._toasts = ToastOverlay(self)
+
+        # Switch to initial view
+        last_view = str(self._settings.value("studio/last_view", "home"))
+        if not self._switch_studio_view(last_view):
+            self._switch_studio_view("home")
+
+        # Shortcuts
+        self._register_studio_shortcuts()
+
+    def _get_or_create_code_view(self) -> CodeView:
+        if not hasattr(self, "_code_view") or self._code_view is None:
+            self._code_view = CodeView(self._workspace, self._tools, parent=self)
+            self._dock_explorer = self._code_view._dock_explorer
+            self._dock_unreal = self._code_view._dock_unreal
+            self._dock_diff = self._code_view._dock_diff
+            self._dock_terminal = self._code_view._dock_terminal
+            self._explorer = self._code_view._explorer
+            self._unreal_panel = self._code_view._unreal_panel
+            self._diff_panel = self._code_view._diff_panel
+            self._terminal = self._code_view._terminal
+            self._mission = self._code_view._mission
+            self._plan_panel = self._code_view._plan_panel
+            self._asset_panel = self._code_view._asset_panel
+            self._design_panel = self._code_view._design_panel
+        return self._code_view
+
+    def _register_studio_views(self) -> None:
+        self._current_project: Optional[str] = None
+        projects = self._list_projects()
+        if projects:
+            self._current_project = projects[0]
+            self._top_bar.set_projects(projects, self._current_project)
+
+        self._view_host.register("home", lambda: HomeView(parent=self))
+        self._view_host.register("games", lambda: GamesView(parent=self))
+        self._view_host.register(
+            "design",
+            lambda: DesignView(parent=self),
+            enabled_when=lambda: (bool(self._current_project), "Select a game first")
+        )
+        self._view_host.register("build", lambda: BuildView(parent=self))
+        self._view_host.register(
+            "play",
+            lambda: PlayView(parent=self),
+            enabled_when=lambda: (self._current_project_has_package(), "No packaged build found")
+        )
+        self._view_host.register(
+            "evidence",
+            lambda: EvidenceView(parent=self),
+            enabled_when=lambda: (bool(self._current_project), "Select a game first")
+        )
+        self._view_host.register("assets", lambda: AssetsView(parent=self))
+        self._view_host.register("code", lambda: self._get_or_create_code_view())
+        self._view_host.register("settings", lambda: SettingsView(parent=self))
+
+    def _register_studio_shortcuts(self) -> None:
+        view_shortcuts = [
+            ("Ctrl+1", "home"),
+            ("Ctrl+2", "games"),
+            ("Ctrl+3", "design"),
+            ("Ctrl+4", "build"),
+            ("Ctrl+5", "play"),
+            ("Ctrl+6", "evidence"),
+            ("Ctrl+7", "assets"),
+            ("Ctrl+8", "code"),
+            ("Ctrl+,", "settings"),
+        ]
+        self._studio_shortcuts = []
+        for key, vid in view_shortcuts:
+            sc = QShortcut(QKeySequence(key), self)
+            sc.setContext(Qt.WindowShortcut)
+            sc.activated.connect(lambda v=vid: self._switch_studio_view(v))
+            self._studio_shortcuts.append(sc)
+
+        sc_j = QShortcut(QKeySequence("Ctrl+J"), self)
+        sc_j.setContext(Qt.WindowShortcut)
+        sc_j.activated.connect(self._toggle_assistant)
+        self._studio_shortcuts.append(sc_j)
+
+        for key in ("Ctrl+K", "Ctrl+Shift+P"):
+            sc_pal = QShortcut(QKeySequence(key), self)
+            sc_pal.setContext(Qt.WindowShortcut)
+            sc_pal.activated.connect(self._open_command_palette)
+            self._studio_shortcuts.append(sc_pal)
+
+        sc_t = QShortcut(QKeySequence("Ctrl+T"), self)
+        sc_t.setContext(Qt.WindowShortcut)
+        sc_t.activated.connect(self._toggle_theme)
+        self._studio_shortcuts.append(sc_t)
+
+        sc_dot = QShortcut(QKeySequence("Ctrl+."), self)
+        sc_dot.setContext(Qt.WindowShortcut)
+        sc_dot.activated.connect(self._cancel_active_run)
+        self._studio_shortcuts.append(sc_dot)
+
+    def _switch_studio_view(self, view_id: str) -> bool:
+        if not hasattr(self, "_view_host"):
+            return False
+        if self._view_host.show_view(view_id):
+            self._rail.set_active_view(view_id)
+            title = view_id.capitalize()
+            self._top_bar.set_breadcrumb(f"› {title}")
+            self._settings.setValue("studio/last_view", view_id)
+            return True
+        return False
+
+    def _on_studio_view_changed(self, view_id: str) -> None:
+        if hasattr(self, "_rail"):
+            self._rail.set_active_view(view_id)
+            self._rail.update_enabled_states(self._view_host.is_enabled)
+        if hasattr(self, "_top_bar"):
+            self._top_bar.set_breadcrumb(f"› {view_id.capitalize()}")
+
+    def _toggle_assistant(self) -> None:
+        if hasattr(self, "_assistant_panel"):
+            vis = not self._assistant_panel.isHidden()
+            self._set_assistant_visible(not vis)
+
+    def _set_assistant_visible(self, visible: bool) -> None:
+        if not hasattr(self, "_assistant_panel") or not hasattr(self, "_center_splitter"):
+            return
+        self._assistant_panel.setVisible(visible)
+        if visible:
+            w = int(self._settings.value("studio/assistant_width", 380))
+            sizes = self._center_splitter.sizes()
+            total = sum(sizes)
+            self._center_splitter.setSizes([max(400, total - w), w])
+
+    def _list_projects(self) -> List[str]:
+        p_root = get_settings().projects_root
+        if not p_root or not Path(p_root).is_dir():
+            return []
+        projects = []
+        try:
+            for d in sorted(Path(p_root).iterdir()):
+                if d.is_dir() and (d / f"{d.name}.uproject").is_file():
+                    projects.append(d.name)
+        except Exception:
+            pass
+        return projects
+
+    def _on_project_selected(self, project_name: str) -> None:
+        self._current_project = project_name
+        if hasattr(self, "_rail") and hasattr(self, "_view_host"):
+            self._rail.update_enabled_states(self._view_host.is_enabled)
+            current = self._view_host.current_view_id
+            if current and not self._view_host.is_enabled(current)[0]:
+                self._switch_studio_view("home")
+
+    def _current_project_has_package(self) -> bool:
+        if not getattr(self, "_current_project", None):
+            return False
+        p_root = get_settings().projects_root
+        if not p_root:
+            return False
+        p_dir = Path(p_root) / self._current_project
+        if not p_dir.is_dir():
+            return False
+        for exe_candidate in (
+            p_dir / "Binaries" / "Win64" / f"{self._current_project}.exe",
+            p_dir / "package_dev" / "Windows" / f"{self._current_project}.exe",
+            p_dir / "package_ship" / "Windows" / f"{self._current_project}.exe",
+        ):
+            if exe_candidate.is_file():
+                return True
+        return False
+
+    def _cancel_active_run(self) -> None:
+        if not hasattr(self, "_forge_service"):
+            return
+        active = self._forge_service.active_runs()
+        if not active:
+            if hasattr(self, "_toasts"):
+                self._toasts.info("No Active Run", "There is no run currently in progress.")
+            return
+        run = active[0]
+        run_id = run.get("run_id", "active_run")
+        if getattr(self, "confirm_on_close", True):
+            reply = QMessageBox.question(
+                self,
+                "Cancel Run",
+                f"Are you sure you want to cancel active run '{run_id}'?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+        if hasattr(self, "_toasts"):
+            self._toasts.warning("Run Cancelled", f"Cancelled run {run_id}")
+
     def closeEvent(self, event: QCloseEvent) -> None:
         chat = getattr(self, "_chat_panel", None)
         building = bool(chat is not None and getattr(getattr(chat, "_runner", None), "_threads", None))
@@ -1022,4 +1318,12 @@ class MainWindow(QMainWindow):
         if chat is not None and hasattr(chat, "_runner"):
             chat._runner.shutdown()
         self._agent.shutdown()
+        if hasattr(self, "_center_splitter"):
+            sizes = self._center_splitter.sizes()
+            if len(sizes) >= 2 and sizes[1] > 0:
+                self._settings.setValue("studio/assistant_width", sizes[1])
+        if hasattr(self, "_view_host") and self._view_host.current_view_id:
+            self._settings.setValue("studio/last_view", self._view_host.current_view_id)
+        if hasattr(self, "_systems_service"):
+            self._systems_service.stop()
         event.accept()
