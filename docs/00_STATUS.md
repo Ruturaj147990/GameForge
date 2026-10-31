@@ -27,12 +27,12 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 
 | Capability | Status | Evidence / note | Phase |
 |---|---|---|---|
-| DAG planner, approvals, recovery | PARTIAL | M1 demos pass; **F-03:** `custom` predicates trusted, default plan pre-satisfied | P0 fixes, P2 replaces |
+| DAG planner, approvals, recovery | PASS | F-03 fixed in P0 WI-0.1 (evaluator-backed custom predicates, NO_EVIDENCE); M1 demos re-run | P2 replaces |
 | Native tool calling (4 local models) | PASS | `reports/native_tool_selftest.json` | — |
 | Hosted tier | NOT VERIFIED | mock-tested only | P9 |
 | IDE resource budgets | PASS | `reports/ide_resource_benchmark.json` | — |
-| Settings / host independence | FAIL | F-05: 23 hard-coded host paths | P0 |
-| Default model | FAIL | F-06: defaults to the 27B (4K context) | P0 |
+| Settings / host independence | PASS | `core/settings.py`; `test_no_host_paths` (P0 WI-0.2/0.3) | — |
+| Default model | PASS | 9B from `config/model_routing.json` (P0 WI-0.4) | P9 regenerates |
 
 ## C. Engine layer
 
@@ -40,8 +40,8 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 |---|---|---|---|
 | Live editor link (token, loopback, crash classes) | PASS | contract 16/16 | — |
 | Op catalogue with read-back enforcement (126 ops) | PASS | `unreal/op_catalog.py` + tests | — |
-| Op argument schemas | PLANNED | F-10 | P0/P2 |
-| Undo coverage for mutating ops | PARTIAL | F-04: 8 of 73 transactional | P0 + P2 checkpoints |
+| Op argument schemas | PARTIAL | all 126 drafted, 6 hand-reviewed; gateway validates (P0 WI-0.8) | P2 strict |
+| Undo coverage for mutating ops | PARTIAL | audited: 11 transactional, 46 checkpoint-only, 14 runtime; link reports true reversibility (P0 WI-0.7) | P2 checkpoints |
 | Build / test / package Win64 (Development) | PASS | ~860 MB per game | — |
 | Shipping packages, size ≤ 400 MB | PLANNED | F-13 | P10 |
 | Blueprint graph authoring (9 ops) | PASS | `reports/milestone2_blueprint_demo.json` | — |

@@ -57,13 +57,19 @@ makes games, not a game. Product definition, design contract and security rules:
   termination as the weak areas. Epic template Mannequins and LevelPrototyping content is on disk under
   `E:\UE\UE_5.7\Templates\TemplateResources\High\`.
 
-## 4. NEXT ACTION
+## 4. NEXT ACTION (2026-10-31T10:50Z)
 
-1. Docs are on `master` (commit `a2a0eac`); nothing pushed. Branch-free workflow: work directly on `master` (user direction 2026-10-31).
-2. **Start P0** (`docs/handovers/P00_foundation.md`) on `master`, beginning with **WI-0.1**
-   (planner: completion only on evidence). P0 needs no approvals except the plugin rebuild in WI-0.9 (a local build;
-   no install).
-3. After each work item, follow `HANDOVER_PROTOCOL.md` §5 (progress table, this file, status matrix).
+**P0 implemented by Claude on `master`** (commits `55ffc5f`..`4475aca`, plus this doc update). Unit tests 518 pass, protected 45.
+Done: WI-0.1-0.6, 0.10-0.12. PARTIAL (finish first):
+1. **WI-0.7**: run the engine undo spot check (`reports/P0/undo_spotcheck.json`): spawn_actor + set_actor_property, then
+   `TRANSACTION UNDO`, then read back.
+2. **WI-0.8**: hand-review argument models for the remaining 24 ops listed in the P0 handover (add them to `REVIEWED` in
+   `src/gameforge_ide/unreal/op_schemas.py`).
+3. **WI-0.9**: exercise the editor-originated `GameForge.SyncContext` request against `--serve` on 47815
+   (`--serve` needs `GAMEFORGE_BRIDGE_TOKEN`).
+4. Check `reports/P0/verify_all.txt` (full gate started 10:45Z; result not yet read). If all PASS, P0 is complete, so start
+   **P1 WI-1.1** (`docs/handovers/P01_game_design_spec.md`).
+Work on `master` only (no branches), one commit per work item.
 
 ## 5. Key facts and paths
 
@@ -73,10 +79,10 @@ makes games, not a game. Product definition, design contract and security rules:
 | Engine | `E:\UE\UE_5.7`, 5.7.4 CL 51494982 (Epic Launcher install) |
 | Projects / validation | `E:\GameForge\projects`, `E:\GameForge\validation` (probe: `live_ops_probe\GFProbe.uproject`) |
 | Host profile | `configs/host_profiles/dev-rx7700xt.json` (read by code from P0 WI-0.2) |
-| Plugin binaries installed in the repo | Editor `db062c3e594bcae20926a6362e3482eb3668aa3bed4d817a440419d706d82dfa`, Runtime `5cf12c9a7f98d44dd782b88cac38ba74e6d8f57af659f645e77b3a58cf5d4cb4` [VERIFIED hashes; **provenance UNVERIFIED**, they differ from the `GameForgePlugin_neutral` package (Editor `7d005442…4c03`, Runtime `ecc83a30…4384`). P0 WI-0.9 establishes `GameForgePlugin_p0` as the single documented build] |
-| Op library | `src/gameforge_ide/unreal/GameForge/Content/Python/gameforge_ops.py` (126 ops, 173 KB; split into a package in P0 WI-0.6) |
+| Plugin binaries (superseded 2026-10-31: now `GameForgePlugin_p0`, Editor `f3ac7f193f437efbe281d5ce849a6e8c3239c60386f245f26c6c52f308a7f75a`, Runtime `ba9bd0d58683bce2589ea6250b950331ca79b04ef3ee8b38d6c64bfa593be73d`; installed in repo + live_ops_probe) — previous | Editor `db062c3e594bcae20926a6362e3482eb3668aa3bed4d817a440419d706d82dfa`, Runtime `5cf12c9a7f98d44dd782b88cac38ba74e6d8f57af659f645e77b3a58cf5d4cb4` [VERIFIED hashes; **provenance UNVERIFIED**, they differ from the `GameForgePlugin_neutral` package (Editor `7d005442…4c03`, Runtime `ecc83a30…4384`). P0 WI-0.9 establishes `GameForgePlugin_p0` as the single documented build] |
+| Op library | package `src/gameforge_ide/unreal/GameForge/Content/Python/gameforge_ops/` (126 ops, library 2.1.0) |
 | Models | `gameforge-qwen3.5-9b` (278e024c31f7), `gameforge-qwen3.5-4b` (91b2043beeee), `gameforge-27b-sft` (03d36e692be8), `llama3.1:8b` (46e0c10c039e). Details: `docs/07_CONTENT_AND_MODELS.md` |
-| Bridge port | 8000 today → 47815 in P0 WI-0.9 |
+| Bridge port | 47815 (P0 WI-0.9) |
 | IDE launch | `python -m src.gameforge_ide.launcher` (automation must set `win.confirm_on_close = False` before closing) |
 
 ## 6. Open risks (tracked in `docs/04_ROADMAP.md` §5)
@@ -89,3 +95,4 @@ makes games, not a game. Product definition, design contract and security rules:
 ## 7. Session log (one line per session, newest last)
 
 - 2026-10-31T10:20Z — Claude: full audit + research + P0–P11 roadmap and handovers + documentation consolidation (D-064, D-065). Tests 494/45 PASS before and again after the doc moves (unit 62.3 s); all internal doc links resolve. No product code changed. Committed on `master` as `a2a0eac` (not pushed).
+- 2026-10-31T10:50Z — Claude: implemented P0 (WI-0.1-0.12; 0.7/0.8/0.9 PARTIAL), plugin p0 built and installed, contract 16/16, gameplay feedback 10/10, IDE budgets OK. Stopped at 95% of the 5-hour usage window.

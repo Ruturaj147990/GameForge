@@ -920,18 +920,18 @@ path argument, keeping the path argument as an alternative.
 
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 0.1 | TODO | | | |
-| 0.2 | TODO | | | |
-| 0.3 | TODO | | | |
-| 0.4 | TODO | | | |
-| 0.5 | TODO | | | |
-| 0.6 | TODO | | | |
-| 0.7 | TODO | | | |
-| 0.8 | TODO | | | |
-| 0.9 | TODO | | | |
-| 0.10 | TODO | | | |
-| 0.11 | TODO | | | |
-| 0.12 | TODO | | | |
+| 0.1 | DONE | 2026-10-31 | 2026-10-31 | `55ffc5f`; test_planner_evidence (5); repo/failure plan demos re-run as expected |
+| 0.2 | DONE | 2026-10-31 | 2026-10-31 | `66c01d2`; test_settings (6); engine 5.7.4 found via host profile/launcher |
+| 0.3 | DONE | 2026-10-31 | 2026-10-31 | `4c88b81`; test_no_host_paths green (0 literals in src/) |
+| 0.4 | DONE | 2026-10-31 | 2026-10-31 | `a5a239e`; offscreen IDE shows gameforge-qwen3.5-9b in toolbar, chat and status |
+| 0.5 | DONE | 2026-10-31 | 2026-10-31 | `4c88b81`; test_no_epic_reference_asset_in_diagnostics |
+| 0.6 | DONE | 2026-10-31 | 2026-10-31 | `6c2b0d1`; 19 domain modules, 126 ops; contract 16/16 + gameplay feedback 10/10 (`reports/P0/`) |
+| 0.7 | PARTIAL | 2026-10-31 | 2026-10-31 | `7f72750`..`4475aca`; OpSpec.undo + true_reversibility + test; engine undo spot check NOT RUN; no new transactions added (needs engine verification per op) |
+| 0.8 | PARTIAL | 2026-10-31 | 2026-10-31 | `7f72750`; drafts for all 126 ops + gateway validation; hand-reviewed models for 6 core level ops (handover asked 30) |
+| 0.9 | PARTIAL | 2026-10-31 | 2026-10-31 | `4475aca`; plugin p0 built (0 warnings) + installed; contract 16/16 with p0; bridge health 200 on 47815. Editor-originated SyncContext request not exercised |
+| 0.10 | DONE | 2026-10-31 | 2026-10-31 | `1d7b6ee`; test_declared_dependencies (fails if numpy removed) |
+| 0.11 | DONE | 2026-10-31 | 2026-10-31 | `035d90c`; 80 scripts moved; `_harness.py`; demos default to host-profile probe/plugin; coverage table in docs/generated |
+| 0.12 | DONE | 2026-10-31 | 2026-10-31 | `035d90c`; `scripts/verify_all.ps1` (Quick: 4/4 PASS); full run: `reports/P0/verify_all.txt` |
 
 ## Review log (Claude)
 
