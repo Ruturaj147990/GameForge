@@ -911,7 +911,7 @@ with 6 coins"` both go prompt → GDS → legacy params → packaged game, with 
 | 1.1 | DONE | 2026-10-31T11:20Z | 2026-10-31T11:25Z | `test_events_catalog` (5 passed); MODULE_EVENTS and DEFAULT_MODULE verified |
 | 1.2 | DONE | 2026-10-31T11:25Z | 2026-10-31T11:30Z | `test_gds_schema` (10 passed); JSON schema 22 KB; cross-ref validation verified |
 | 1.3 | DONE | 2026-10-31T11:32Z | 2026-10-31T11:35Z | `test_draft_schema` (4 passed); DesignDraft JSON schema 3.2 KB <= 6 KB |
-| 1.4 | TODO | | | |
+| 1.4 | DONE | 2026-10-31T11:38Z | 2026-10-31T11:42Z | `test_gds_expand` (5 passed); deterministic draft -> GDS across genres verified |
 | 1.5 | TODO | | | |
 | 1.6 | TODO | | | |
 | 1.7 | TODO | | | |
