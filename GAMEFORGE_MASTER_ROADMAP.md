@@ -305,6 +305,23 @@ spatial SFX (M14), intro cinematic (M16), HUD/menus (M3/M4), QA scenarios (M19),
 
 ---
 
+## 4b. Desktop UX overhaul (user request 2026-10-31: "professional, smooth, easy to navigate, straightforward")
+
+Done 2026-10-31: idle-CPU fix, blank icon buttons, model box, truncated tabs, status bar, honest welcome/offline notice,
+non-blocking Ollama probe (`reports/ide_ui_20261031.png`). Planned, in order (each: change → render with
+`python scratch/ide_snapshot.py` (GF_SNAP_WAIT=7) → compare → `ide_resource_benchmark.py` stays in budget → tests):
+1. **Remove duplication:** the toolbar and chat header both have Model/Clear/New Session; keep one set (toolbar) and
+   one status indicator for Ollama and Unreal.
+2. **Information hierarchy:** a single top bar (workspace, model, status pills); a left activity rail (Explorer,
+   Games, Plans, Assets) instead of separate floating docks; dock title bars collapsed into tabs.
+3. **Start screen** for an empty session: three large actions ("Make a game from a prompt", "Open a project",
+   "Recent games" with thumbnails from Mission Control), not a system message.
+4. **Consistent design tokens:** one spacing scale (4/8/12/16), one radius, two font sizes per level, and the
+   accent colour from `styles/` only. Today many panels set inline stylesheets with ad-hoc colours.
+5. **Empty states** for the Unreal panel ("No .uproject in this workspace. Create one with /game") and Build output.
+6. **Keyboard:** a command palette (Ctrl+Shift+P) over existing actions, focus order, and visible focus rings.
+7. **Accessibility:** contrast ≥ 4.5:1 for secondary text (#64748b on #161c28 is below that), scalable fonts at 125–150% DPI.
+
 ## 5. Next action (always keep current)
 
 **Status at 2026-10-31T10:00Z (Claude, interactive session).** Tests: 491 unit + 45 protected pass. Nothing committed.

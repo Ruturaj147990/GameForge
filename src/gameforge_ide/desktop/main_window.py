@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QSize, Slot
+from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QSize, Signal, Slot
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -71,9 +71,14 @@ class MainWindow(QMainWindow):
         └─────────────────────────────────────────────────────┘
     """
 
+    # Ollama health result from the background check: (reachable, error text). Queued onto the UI thread.
+    _ollama_status_ready = Signal(bool, str)
+
     def __init__(self, workspace_root: Path) -> None:
         super().__init__()
         self._workspace = workspace_root
+        self._ollama_check_running = False
+        self._ollama_status_ready.connect(self._apply_ollama_status)
         settings_path = workspace_root / ".gameforge" / "ide_settings.ini"
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         self._settings = QSettings(str(settings_path), QSettings.IniFormat)
@@ -527,10 +532,34 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _check_ollama_status(self) -> None:
+        """Probe Ollama off the UI thread: is_available() is an HTTP call with a 3 s timeout, which used to freeze the
+        window at startup and on every "Check Ollama" click when the host did not answer."""
+        if self._ollama_check_running:
+            return
+        self._ollama_check_running = True
+        self._ollama_indicator.setText("● Ollama: checking…")
+
+        def work() -> None:
+            try:
+                from ..backend.providers.ollama_provider import OllamaProvider
+                ok, err = bool(OllamaProvider().is_available()), ""
+            except Exception as exc:  # noqa: BLE001 - reported in the indicator
+                ok, err = False, str(exc)
+            try:
+                self._ollama_status_ready.emit(ok, err)
+            except RuntimeError:
+                pass  # the window was closed while the probe was waiting
+
+        import threading
+        threading.Thread(target=work, name="gf-ollama-health", daemon=True).start()
+
+    @Slot(bool, str)
+    def _apply_ollama_status(self, ok: bool, error: str) -> None:
+        self._ollama_check_running = False
+        self._chat_panel.set_model_server_available(ok)
         try:
-            from ..backend.providers.ollama_provider import OllamaProvider
-            provider = OllamaProvider()
-            ok = provider.is_available()
+            if error:
+                raise RuntimeError(error)
             if ok:
                 self._ollama_indicator.setText("● Ollama: online")
                 self._ollama_indicator.setStyleSheet(theme_stylesheet(
@@ -552,8 +581,11 @@ class MainWindow(QMainWindow):
         """Populate the top toolbar model combo with available models."""
         try:
             models = self._agent.list_models()
-            current = self._tb_model_combo.currentText() or self._chat_panel._current_model
-            self._tb_model_combo.blockSignals(True)
+        except Exception:
+            return
+        current = self._tb_model_combo.currentText() or self._chat_panel._current_model
+        self._tb_model_combo.blockSignals(True)
+        try:  # always unblock: an exception here used to leave the toolbar combo's signals blocked
             self._tb_model_combo.clear()
             for m in models:
                 self._tb_model_combo.addItem(m.get("id", m.get("name", "unknown")))
@@ -562,9 +594,8 @@ class MainWindow(QMainWindow):
                 self._tb_model_combo.setCurrentIndex(idx)
             elif self._tb_model_combo.count() > 0:
                 self._tb_model_combo.setCurrentIndex(0)
+        finally:
             self._tb_model_combo.blockSignals(False)
-        except Exception:
-            pass
 
     @Slot(str)
     def _on_top_model_changed(self, model_name: str) -> None:

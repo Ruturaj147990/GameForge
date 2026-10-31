@@ -539,10 +539,12 @@ class ChatPanel(QWidget):
                 provider_type="ollama",
             )
             self._add_system_message(
-                "🎮 **GameForge IDE is ready.**\n\n"
-                "• **Model:** `gameforge-27b-sft:latest` (Ollama local inference)\n"
-                "• **Capabilities:** C++, Blueprints, Python, shaders, diagnostics, staged builds\n"
-                "• Ask a question or describe an Unreal Engine 5.7 task to begin."
+                # Real Markdown list items: "•" lines are plain text, and setMarkdown joined them into one paragraph.
+                "🎮 **Welcome to GameForge: describe a game, and GameForge builds it in Unreal Engine 5.7.**\n\n"
+                "- **Make a game:** `/game a top-down arena where waves of enemies chase the player`\n"
+                "- **Change a project:** \"add a quest giver who asks for two relics\" or \"make the village forest denser\"\n"
+                "- **Context:** use `@ue`, `@actor`, `@asset` to point at what is open in the editor\n"
+                "- **Model:** `gameforge-27b-sft:latest` (local, via Ollama). The toolbar shows whether it is reachable."
             )
             self._status_bar.set_ready()
             QTimer.singleShot(500, self._load_models)
@@ -573,6 +575,18 @@ class ChatPanel(QWidget):
         finally:
             self._model_combo.blockSignals(False)
         self.model_changed.emit(self._current_model)
+
+    def set_model_server_available(self, available: bool) -> None:
+        """Called with the main window's real Ollama health check. (list_models() returns the configured roster
+        even when the server is down, so it cannot tell.) Posts one notice per outage and one on recovery."""
+        if not available and not getattr(self, "_offline_notice_shown", False):
+            self._offline_notice_shown = True
+            self._add_system_message(
+                "⚠️ **Ollama is not reachable**, so chat and game generation are paused.\n\n"
+                "Start it with `ollama serve` (or the Ollama app), then press **Check Ollama** in the toolbar.")
+        elif available and getattr(self, "_offline_notice_shown", False):
+            self._offline_notice_shown = False
+            self._add_system_message("✅ **Ollama is reachable again.** You can continue.")
 
     def _setup_unreal_sync(self) -> None:
         """Poll unreal_context.json periodically to update UI badges and chips."""
