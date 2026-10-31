@@ -80,7 +80,9 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | Perception guard (patrol/chase/search/return) | PASS (PIE), packaged | `reports/m15_guard_demo.json`, `kit_packaged_selftest.json` | — |
 | Quest giver + objectives + save/load | PASS (PIE + packaged) | `reports/m15_quest_demo.json`, `kit_packaged_selftest.json` | — |
 | Packaged kit self-test (Character walker) | PASS 6/6 | `reports/kit_packaged_selftest.json` | — |
-| Event bus, rules engine, GAS health, enemies, spawner, HUD, menus | PLANNED | — | P3/P5 |
+| Event bus (C++ UGameForgeEventBus subsystem + JSONL session logs) | PASS | P3 WI-3.1 (GameForgeEventNames.h, parity test PASS) | P3 |
+| Scenario QA Harness (headless Dev/Ship replay, autopilot, injected input) | PASS | P3 WI-3.0-3.6 (reports/P3/kit_testbed_scenarios.json, 8/8 gates PASS) | P3 |
+| Rules engine, GAS health, enemies, spawner, HUD, menus | PLANNED | — | P5 |
 | Board / card logic as kit modules | PLANNED | logic lives in recipe templates today | P5 |
 
 ## F. Models and specialists
