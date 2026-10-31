@@ -1,6 +1,6 @@
 # P6 — Composer: GDS → playable packaged game (handover)
 
-**Branch:** `phase/P6-composer`. **Depends on:** P5 accepted. **Decision:** AD-10. **Resolves:** F-01, F-12.
+**Branch:** `master` (no feature branches). **Depends on:** P5 accepted. **Decision:** AD-10. **Resolves:** F-01, F-12.
 **Estimate:** 4–6 weeks. **Read first:** `../01_ARCHITECTURE.md` §3, §4.1; `P05_gameplay_kit.md` (the gfdef contract).
 
 ## Objective

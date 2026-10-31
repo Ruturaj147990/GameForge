@@ -1,6 +1,6 @@
 # P7 — Content and Art Direction (handover)
 
-**Branch:** `phase/P7-content`. **Depends on:** P6 accepted. **Decisions:** AD-17, AD-5. **Resolves:** F-20.
+**Branch:** `master` (no feature branches). **Depends on:** P6 accepted. **Decisions:** AD-17, AD-5. **Resolves:** F-20.
 **Estimate:** 4–6 weeks. **Read first:** `../07_CONTENT_AND_MODELS.md`, `../03_RESEARCH_2026-10-31.md` R3, R4, R11.
 
 ## Objective

@@ -1,6 +1,6 @@
 # P4 — Studio UX v2 (handover)
 
-**Branch:** `phase/P4-studio`. **Depends on:** P1–P3 accepted. **Decision:** AD-18. **Spec:** `../05_UX_SPEC.md` (normative:
+**Branch:** `master` (no feature branches). **Depends on:** P1–P3 accepted. **Decision:** AD-18. **Spec:** `../05_UX_SPEC.md` (normative:
 read it fully). **Estimate:** 2–3 weeks. **Resolves:** F-14.
 
 ## Objective

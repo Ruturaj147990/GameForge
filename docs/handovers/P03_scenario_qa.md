@@ -1,6 +1,6 @@
 # P3 — Deterministic Scenario QA Harness (handover)
 
-**Branch:** `phase/P3-scenarios`. **Depends on:** P2 accepted. **Decisions:** AD-12, AD-19. **Resolves:** F-09.
+**Branch:** `master` (no feature branches). **Depends on:** P2 accepted. **Decisions:** AD-12, AD-19. **Resolves:** F-09.
 **Estimate:** 2–3 weeks. **Read first:** `../01_ARCHITECTURE.md` §3.2, §3.5; `../03_RESEARCH_2026-10-31.md` R6, R11;
 `../06_ENGINE_NOTES_UE57.md`.
 

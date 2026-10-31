@@ -1,6 +1,6 @@
 # P9 — Model Intelligence (handover)
 
-**Branch:** `phase/P9-models`. **Track:** runs in parallel from P1. WI-9.1 can start after P1 and the codegen evals
+**Branch:** `master` (no feature branches). **Track:** runs in parallel from P1. WI-9.1 can start after P1 and the codegen evals
 after P6. **Decisions:** AD-20, AD-5. **Resolves:** F-18, F-19, F-21. **Estimate:** 3–4 weeks.
 **Read first:** `../07_CONTENT_AND_MODELS.md`, `../03_RESEARCH_2026-10-31.md` R13–R15.
 

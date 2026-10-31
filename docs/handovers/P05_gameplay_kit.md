@@ -1,6 +1,6 @@
 # P5 — Gameplay Kit v2: a data-driven runtime (handover)
 
-**Branch:** `phase/P5-kit`. **Depends on:** P3 accepted (event bus, scenario runner, kit player). **Decision:** AD-10.
+**Branch:** `master` (no feature branches). **Depends on:** P3 accepted (event bus, scenario runner, kit player). **Decision:** AD-10.
 **Estimate:** 5–7 weeks, in four increments (K1–K4). Each increment ends with a plugin build, the kit testbed and
 scenarios. **Read first:** `../01_ARCHITECTURE.md` §3.2–3.3, §3.6; `P03_scenario_qa.md`; `../06_ENGINE_NOTES_UE57.md`.
 

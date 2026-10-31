@@ -1,6 +1,6 @@
 # P2 — Forge Executor, Checkpoints and Jobs (handover)
 
-**Branch:** `phase/P2-forge`. **Depends on:** P1 accepted. **Decisions:** AD-11, AD-13, AD-14 (enforcement).
+**Branch:** `master` (no feature branches). **Depends on:** P1 accepted. **Decisions:** AD-11, AD-13, AD-14 (enforcement).
 **Estimate:** 2 weeks. **Read first:** `../01_ARCHITECTURE.md` §3.4, §4, §7.2.
 
 ## Objective

@@ -199,8 +199,8 @@ it in `QUESTIONS.md`.
 
 ## 4. Cross-cutting rules for every phase
 
-1. **Branch per phase:** `phase/P<n>-<slug>`, one commit per work item (`P<n> WI-<n>.<k>: <summary>`). Merge to
-   `master` only after Claude's review verdict is `ACCEPT` in the handover's review log.
+1. **Master only (user direction 2026-10-31):** no feature branches. One commit per work item on `master`
+   (`P<n> WI-<n>.<k>: <summary>`). Claude reviews these commits on resume; a rejected item is fixed by a follow-up commit.
 2. **Run the gates** after every work item: `powershell -File scripts\verify_all.ps1 -Quick` (unit + protected + op
    catalogue + docs links). Engine gates run at the end of each work item that touches engine code.
 3. **Evidence** goes in `reports/<phase>/<name>.json` with `checks` and `steps`. A check must be able to fail, so add a

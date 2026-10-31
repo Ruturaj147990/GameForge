@@ -1,6 +1,6 @@
 # P1 — Game Design Spec `gds/1` (handover)
 
-**Branch:** `phase/P1-gds`. **Depends on:** P0 accepted. **Resolves:** audit F-02. **Decision:** AD-9.
+**Branch:** `master` (no feature branches). **Depends on:** P0 accepted. **Resolves:** audit F-02. **Decision:** AD-9.
 **Estimate:** 1.5–2 weeks. **Read first:** `../01_ARCHITECTURE.md` §3.1–3.2, `../03_RESEARCH_2026-10-31.md` R10–R11.
 
 ## Objective

@@ -47,8 +47,8 @@ makes games, not a game. Product definition, design contract and security rules:
 - **Tests:** `python -m pytest tests/unit/ -q -p no:cacheprovider` → **494 passed**;
   `python -m pytest graders/protected/ -q -p no:cacheprovider` → **45 passed** (both exit 0, 2026-10-31, before the
   doc moves, and again after them: 494 / 45 passed).
-- **Git:** this session's changes (docs plus the one config string) are committed on branch `docs/plan-2026-10-31`, based on
-  `master` @ `c092b4c`. Not merged into `master`, not pushed.
+- **Git:** this session's changes (docs plus the one config string) are committed on `master` (fast-forward from
+  `c092b4c`). Not pushed.
 - **Research highlights** (`docs/03_RESEARCH_2026-10-31.md`): UE 5.8 ships an experimental Unreal MCP with no auth on
   `127.0.0.1:8000` (it collides with our bridge port, so we move to 47815). MetaHuman 5.7 is scriptable
   (`UMetaHumanCharacterEditorSubsystem`, 28 BlueprintCallable functions present on disk). Enhanced Input injection APIs
@@ -59,9 +59,8 @@ makes games, not a game. Product definition, design contract and security rules:
 
 ## 4. NEXT ACTION
 
-1. **The user decides whether to merge** branch `docs/plan-2026-10-31` into `master` (its single commit holds the plan and
-   the doc clean-up). Nothing has been pushed. Branch `phase/P0-foundation` from whichever branch holds the docs.
-2. **Start P0** (`docs/handovers/P00_foundation.md`) on branch `phase/P0-foundation`, beginning with **WI-0.1**
+1. Docs are on `master` (commit `a2a0eac`); nothing pushed. Branch-free workflow: work directly on `master` (user direction 2026-10-31).
+2. **Start P0** (`docs/handovers/P00_foundation.md`) on `master`, beginning with **WI-0.1**
    (planner: completion only on evidence). P0 needs no approvals except the plugin rebuild in WI-0.9 (a local build;
    no install).
 3. After each work item, follow `HANDOVER_PROTOCOL.md` §5 (progress table, this file, status matrix).
@@ -89,4 +88,4 @@ makes games, not a game. Product definition, design contract and security rules:
 
 ## 7. Session log (one line per session, newest last)
 
-- 2026-10-31T10:20Z — Claude: full audit + research + P0–P11 roadmap and handovers + documentation consolidation (D-064, D-065). Tests 494/45 PASS before and again after the doc moves (unit 62.3 s); all internal doc links resolve. No product code changed. Committed on branch `docs/plan-2026-10-31` (not merged, not pushed).
+- 2026-10-31T10:20Z — Claude: full audit + research + P0–P11 roadmap and handovers + documentation consolidation (D-064, D-065). Tests 494/45 PASS before and again after the doc moves (unit 62.3 s); all internal doc links resolve. No product code changed. Committed on `master` as `a2a0eac` (not pushed).

@@ -1,6 +1,6 @@
 # P8 — Living Projects: change requests, incremental rebuilds, index, import (handover)
 
-**Branch:** `phase/P8-living`. **Depends on:** P6 accepted (P7 for content regeneration). **Decision:** AD-7.
+**Branch:** `master` (no feature branches). **Depends on:** P6 accepted (P7 for content regeneration). **Decision:** AD-7.
 **Estimate:** 4–5 weeks.
 
 ## Objective

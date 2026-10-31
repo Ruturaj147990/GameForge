@@ -1,6 +1,6 @@
 # P11 — Release 1.0 (handover)
 
-**Branch:** `phase/P11-release`. **Depends on:** all phases accepted (P9 at least through WI-9.3). **Estimate:** 2–3 weeks.
+**Branch:** `master` (no feature branches). **Depends on:** all phases accepted (P9 at least through WI-9.3). **Estimate:** 2–3 weeks.
 
 ## Objective
 

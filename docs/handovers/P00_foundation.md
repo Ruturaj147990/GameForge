@@ -1,6 +1,6 @@
 # P0 — Foundation Hardening (handover)
 
-**Phase owner:** Claude (architect). **Implementer:** Antigravity. **Branch:** `phase/P0-foundation`.
+**Phase owner:** Claude (architect). **Implementer:** Antigravity. **Branch:** `master` (no feature branches).
 **Resolves audit findings:** F-03, F-04, F-05, F-06, F-07, F-08, F-10 (scaffold), F-11, F-15, F-16.
 **Estimate:** 4–6 working days. **Prerequisite reading:** `HANDOVER_PROTOCOL.md`, `../02_AUDIT_2026-10-31.md`, `../01_ARCHITECTURE.md` §1, §3.7, §5.
 

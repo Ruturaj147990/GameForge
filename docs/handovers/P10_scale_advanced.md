@@ -1,6 +1,6 @@
 # P10 — Scale and Advanced Systems (handover)
 
-**Branch:** `phase/P10-scale`. **Depends on:** P6–P8 accepted. **Decisions:** AD-16, AD-19. **Resolves:** F-13.
+**Branch:** `master` (no feature branches). **Depends on:** P6–P8 accepted. **Decisions:** AD-16, AD-19. **Resolves:** F-13.
 **Estimate:** 5–7 weeks. The sub-areas are independent and may run in any order. Do them one work item at a time.
 
 ---

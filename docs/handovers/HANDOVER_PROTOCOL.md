@@ -39,7 +39,7 @@ Each handover is a list of work items `WI-<phase>.<n>`. For each item:
    reverting the change, or by explaining in the commit message why that is impossible.
 5. Run the item's **verification** commands and paste the result summary (pass counts, exit codes, evidence paths) into
    the Progress table's "Evidence" column.
-6. Commit on the phase branch: `git commit -m "P<n> WI-<n>.<k>: <summary>"`. One work item per commit. Do not push
+6. Commit on `master`: `git commit -m "P<n> WI-<n>.<k>: <summary>"`. One work item per commit. Do not push
    unless the user asks.
 7. Set the row to `DONE` only if every acceptance bullet of the item is green. Otherwise set `PARTIAL` or `BLOCKED` with the
    reason.
@@ -83,14 +83,14 @@ Then continue with the next work item that does **not** depend on the blocked on
 
 ## 6. Claude review procedure (when Claude resumes)
 
-1. `git log --oneline master..phase/P<n>-*`, then `git diff master...phase/P<n>-* --stat`.
+1. `git log --oneline` for the phase's `P<n> WI-…` commits on `master`, then `git show --stat <sha>` for each.
 2. For each commit: read the diff against the work item. Check that only listed files changed, the code matches the
    handover's interfaces, tests fail without the change, and no gate was weakened. Grep the diff for
    `simulated`, `skip`, `xfail`, `satisfied=True`, `except Exception: pass`, `time.sleep(` in tests, hard-coded `E:\`.
 3. Re-run `scripts\verify_all.ps1` (full, including engine gates for engine items) and compare with the claimed
    evidence. **Evidence that does not reproduce is treated as false.**
 4. Write the verdict in the handover's **Review log**: `ACCEPT`, `ACCEPT WITH FIXES (listed)` or `REJECT (reasons)`, with
-   timestamp. Only `ACCEPT` allows a merge to `master`.
+   timestamp. Only `ACCEPT` closes the item; otherwise it is fixed by a follow-up commit.
 5. Answer `QUESTIONS.md` entries. If an answer changes a handover, edit the handover and note the change in its
    "Revisions" section.
 
