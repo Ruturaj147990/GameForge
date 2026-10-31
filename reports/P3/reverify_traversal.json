@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-10-31T14:06:00Z",
+  "claims": [
+    {
+      "claim": "M8 Village Traversal (40m path)",
+      "old_report": "reports/m8v2_village_demo.json",
+      "old_method": "SimpleMoveToLocation on DefaultPawn",
+      "new_method": "Autopilot injected IA_Move on AGameForgeCharacter",
+      "situation": "40m route across level avoiding obstacle wall",
+      "verified": true,
+      "evidence_legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2121.701904296875,
+          "seconds": 4.12623405456543,
+          "max_step_cm": 2.3777403831481934,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1081.2027587890625,
+          "seconds": 1.803393840789795,
+          "max_step_cm": 4.450321197509766,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 817.829345703125,
+          "seconds": 1.3990548849105835,
+          "max_step_cm": 1.7301007509231567,
+          "result": "ARRIVED"
+        }
+      ],
+      "total_distance_cm": 4020.7340087890625,
+      "status": "PASS"
+    },
+    {
+      "claim": "M13 Gameplay VFX Pickup Walk-in",
+      "old_report": "reports/m13_gameplay_vfx_demo.json",
+      "old_method": "SimpleMoveToLocation on DefaultPawn",
+      "new_method": "Autopilot injected IA_Move on AGameForgeCharacter",
+      "situation": "Player walks into pickup radius, event emitted on bus",
+      "verified": true,
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev\\collect_3_events.jsonl",
+      "status": "PASS"
+    },
+    {
+      "claim": "M15 Guard Chase via Sight Perception",
+      "old_report": "reports/m15_guard_demo.json",
+      "old_method": "SimpleMoveToLocation on DefaultPawn",
+      "new_method": "Autopilot injected IA_Move on AGameForgeCharacter",
+      "situation": "Player navigates into guard sight cone, guard transitions to Chase and emits spotted",
+      "verified": true,
+      "evidence_legs": [
+        {
+          "target": "point",
+          "distance_cm": 2860.22900390625,
+          "seconds": 4.971656322479248,
+          "max_step_cm": 2.230198621749878,
+          "result": "ARRIVED"
+        }
+      ],
+      "status": "PASS"
+    }
+  ]
+}

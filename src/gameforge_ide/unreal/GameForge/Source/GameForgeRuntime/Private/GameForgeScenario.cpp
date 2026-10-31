@@ -26,6 +26,35 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "UnrealClient.h"
+#include "EngineUtils.h"
+
+static AActor* FindActorByTagOrName(UWorld* World, const FString& Identifier)
+{
+	if (!World)
+	{
+		return nullptr;
+	}
+	TArray<AActor*> FoundActors;
+	UGameplayStatics::GetAllActorsWithTag(World, FName(*Identifier), FoundActors);
+	if (FoundActors.Num() > 0 && FoundActors[0])
+	{
+		return FoundActors[0];
+	}
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+#if WITH_EDITOR
+		if (It->GetActorLabel() == Identifier)
+		{
+			return *It;
+		}
+#endif
+		if (It->GetName() == Identifier || It->GetName().StartsWith(Identifier) || It->Tags.Contains(FName(*Identifier)))
+		{
+			return *It;
+		}
+	}
+	return nullptr;
+}
 
 void UGameForgeScenarioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -217,9 +246,8 @@ void UGameForgeScenarioSubsystem::StartCurrentStep()
 		const float StepTimeout = CurrentStepObj->HasField(TEXT("timeout_s")) ?
 			static_cast<float>(CurrentStepObj->GetNumberField(TEXT("timeout_s"))) : 60.f;
 
-		TArray<AActor*> FoundActors;
-		UGameplayStatics::GetAllActorsWithTag(World, FName(*Tag), FoundActors);
-		if (FoundActors.Num() == 0)
+		AActor* TargetActor = FindActorByTagOrName(World, Tag);
+		if (!TargetActor)
 		{
 			FailCurrentStep(TEXT("NO_TARGET"));
 			return;
@@ -232,7 +260,7 @@ void UGameForgeScenarioSubsystem::StartCurrentStep()
 			Autopilot->RegisterComponent();
 		}
 
-		if (!Autopilot->MoveTo(FoundActors[0]->GetActorLocation(), Tag, AcceptRadius, StepTimeout))
+		if (!Autopilot->MoveTo(TargetActor->GetActorLocation(), Tag, AcceptRadius, StepTimeout))
 		{
 			FailCurrentStep(Autopilot->Legs().Num() > 0 ? Autopilot->Legs().Last().Result : TEXT("NO_PATH"));
 		}
@@ -316,15 +344,13 @@ void UGameForgeScenarioSubsystem::StartCurrentStep()
 	else if (CurrentStepKind == TEXT("select_actor"))
 	{
 		const FString Tag = CurrentStepObj->GetStringField(TEXT("tag"));
-		TArray<AActor*> FoundActors;
-		UGameplayStatics::GetAllActorsWithTag(World, FName(*Tag), FoundActors);
-		if (FoundActors.Num() == 0)
+		AActor* Target = FindActorByTagOrName(World, Tag);
+		if (!Target)
 		{
 			FailCurrentStep(TEXT("NO_TARGET"));
 			return;
 		}
 
-		AActor* Target = FoundActors[0];
 		FVector Origin, Extent;
 		Target->GetActorBounds(false, Origin, Extent);
 		FVector2D ScreenPos;
@@ -345,15 +371,14 @@ void UGameForgeScenarioSubsystem::StartCurrentStep()
 	else if (CurrentStepKind == TEXT("look_at"))
 	{
 		const FString Tag = CurrentStepObj->GetStringField(TEXT("tag"));
-		TArray<AActor*> FoundActors;
-		UGameplayStatics::GetAllActorsWithTag(World, FName(*Tag), FoundActors);
-		if (FoundActors.Num() == 0)
+		AActor* Target = FindActorByTagOrName(World, Tag);
+		if (!Target)
 		{
 			FailCurrentStep(TEXT("NO_TARGET"));
 			return;
 		}
 
-		const FVector Dir = (FoundActors[0]->GetActorLocation() - Pawn->GetActorLocation()).GetSafeNormal2D();
+		const FVector Dir = (Target->GetActorLocation() - Pawn->GetActorLocation()).GetSafeNormal2D();
 		PC->SetControlRotation(FRotator(0.f, Dir.Rotation().Yaw, 0.f));
 		CompleteCurrentStep();
 	}

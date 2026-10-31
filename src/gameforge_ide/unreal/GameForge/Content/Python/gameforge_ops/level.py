@@ -79,7 +79,10 @@ def set_actor_property(args):
         if value is None:
             return _envelope("set_actor_property", False, errors=["asset not found: %s" % args["value"]])
     elif isinstance(value, list):
-        value = [_vec(v) if isinstance(v, dict) and set(v) == {"x", "y", "z"} else v for v in value]
+        if name.lower() == "tags":
+            value = [unreal.Name(v) if isinstance(v, str) else v for v in value]
+        else:
+            value = [_vec(v) if isinstance(v, dict) and set(v) == {"x", "y", "z"} else v for v in value]
     elif isinstance(value, dict) and set(value) == {"x", "y", "z"}:
         value = _vec(value)
     with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
