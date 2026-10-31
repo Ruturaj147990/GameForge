@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Dict
 from ..executor import Handler
 from . import legacy_stages
+from . import tool_call
 
 HANDLERS: Dict[str, Handler] = {
     # Named stages
@@ -30,6 +31,7 @@ HANDLERS: Dict[str, Handler] = {
     "assemble": legacy_stages.legacy_assemble,
     "automation": legacy_stages.legacy_tests,
     "scenario": legacy_stages.legacy_smoke,
+    "tool_call": tool_call.tool_call_handler,
 }
 
 

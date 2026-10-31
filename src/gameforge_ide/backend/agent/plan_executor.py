@@ -67,7 +67,11 @@ class PlanEvent(BaseModel):
 
 
 class TaskPlanExecutor:
-    """Executes a validated TaskPlan DAG using real tools, serialized mutations, and predicate gating."""
+    """Executes a validated TaskPlan DAG using real tools, serialized mutations, and predicate gating.
+
+    .. deprecated:: 2.0
+       TaskPlanExecutor is deprecated; use forge.plan_adapter and ForgeExecutor instead.
+    """
 
     def __init__(
         self,

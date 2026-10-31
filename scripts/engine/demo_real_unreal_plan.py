@@ -31,8 +31,12 @@ from src.gameforge_ide.backend.tools.gateway import ToolGateway
 
 
 def main() -> int:
-    default_up = Path(r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
-    uproject = Path(sys.argv[1]) if len(sys.argv) > 1 else default_up
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("uproject", nargs="?", default=r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
+    ap.add_argument("--forge", action="store_true", help="Run with Forge executor")
+    args = ap.parse_args()
+    uproject = Path(args.uproject)
 
     if not uproject.is_file():
         print(f"[DEMO A] BLOCKED: Unreal project not found at {uproject}")
@@ -47,6 +51,8 @@ def main() -> int:
         events_log.append(ev.model_dump())
 
     gateway = ToolGateway(ROOT)
+    from src.gameforge_ide.forge.handlers.tool_call import _GATEWAY_CACHE
+    _GATEWAY_CACHE[ROOT.resolve()] = gateway
     generator = PlanGenerator(ROOT, tool_gateway=gateway)
     executor = TaskPlanExecutor(ROOT, tool_gateway=gateway, on_event=log_event)
 
@@ -72,7 +78,11 @@ def main() -> int:
     t0 = time.time()
     try:
         # Run plan with approval granted for this demo run
-        result_plan = executor.run_plan(plan, auto_approve_all=True)
+        if args.forge:
+            from src.gameforge_ide.forge.plan_adapter import run_plan_on_forge
+            result_plan = run_plan_on_forge(plan, ROOT, auto_approve_all=True, on_event=log_event)
+        else:
+            result_plan = executor.run_plan(plan, auto_approve_all=True)
     finally:
         # Cleanly stop editors to avoid lingering background processes
         gateway.game_tools.close_editors()

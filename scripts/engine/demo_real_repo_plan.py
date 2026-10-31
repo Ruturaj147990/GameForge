@@ -30,6 +30,10 @@ from src.gameforge_ide.backend.tools.gateway import ToolGateway
 
 
 def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--forge", action="store_true", help="Run with Forge executor")
+    args = ap.parse_args()
     target_rel = "src/gameforge_ide/backend/agent/task_plan.py"
     target_abs = ROOT / target_rel
 
@@ -135,7 +139,11 @@ def main() -> int:
     t0 = time.time()
     try:
         # Run plan
-        result_plan = executor.run_plan(plan, auto_approve_all=True)
+        if args.forge:
+            from src.gameforge_ide.forge.plan_adapter import run_plan_on_forge
+            result_plan = run_plan_on_forge(plan, ROOT, auto_approve_all=True, on_event=log_event)
+        else:
+            result_plan = executor.run_plan(plan, auto_approve_all=True)
     finally:
         # Always restore original content to preserve clean working tree
         target_abs.write_text(original_text, encoding="utf-8")

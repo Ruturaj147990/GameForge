@@ -12,8 +12,9 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from ...backend.agent.plan_executor import PlanEvent, TaskPlanExecutor
+from ...backend.agent.plan_executor import PlanEvent
 from ...backend.agent.task_plan import TaskPlan
+from ...forge.plan_adapter import run_plan_on_forge
 
 
 class _Worker(QObject):
@@ -22,18 +23,26 @@ class _Worker(QObject):
 
     def __init__(self, workspace_root: Path, plan: TaskPlan) -> None:
         super().__init__()
+        self.workspace_root = workspace_root
         self._plan = plan
-        self.executor = TaskPlanExecutor(workspace_root, on_event=self.event.emit)
+        self._cancelled = threading.Event()
 
     def run(self) -> None:
         try:
-            # resume_plan reconciles interrupted / approved tasks, then runs the DAG.
-            result = self.executor.resume_plan(self._plan)
+            result = run_plan_on_forge(
+                self._plan,
+                self.workspace_root,
+                auto_approve_all=False,
+                on_event=self.event.emit,
+            )
         except Exception as exc:  # report, never crash the UI
             self._plan.status = "FAILED"
             self._plan.metadata["runner_error"] = f"{type(exc).__name__}: {exc}"
             result = self._plan
         self.finished.emit(result)
+
+    def cancel(self) -> None:
+        self._cancelled.set()
 
 
 class PlanRunner(QObject):
