@@ -1,0 +1,114 @@
+"""StepRow delegate for Build view timeline (spec §4.4, WI-4.7)."""
+from __future__ import annotations
+
+import time
+from typing import Any, Dict, Optional
+
+from PySide6.QtCore import QAbstractListModel, QModelIndex, QObject, QRect, QSize, Qt
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
+
+from ..styles import tokens
+from src.gameforge_ide.forge.model import StepRecord
+
+STEP_ROLE = Qt.UserRole + 1
+
+
+def format_step_duration(started_at: Optional[float], finished_at: Optional[float]) -> str:
+    """Format duration in seconds or mm:ss."""
+    if not started_at:
+        return ""
+    end = finished_at or time.time()
+    dur = max(0.0, end - started_at)
+    if dur < 60:
+        return f"{dur:.1f} s"
+    mins = int(dur // 60)
+    secs = int(dur % 60)
+    return f"{mins:02d}:{secs:02d}"
+
+
+class StepRowDelegate(QStyledItemDelegate):
+    """Paints timeline step items with status icon, duration, and checkpoint badge."""
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        return QSize(option.rect.width(), 36)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        step: Optional[StepRecord] = index.data(STEP_ROLE)
+        if not step:
+            super().paint(painter, option, index)
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        r = option.rect.adjusted(4, 2, -4, -2)
+        is_hover = bool(option.state & QStyle.State_MouseOver)
+        is_selected = bool(option.state & QStyle.State_Selected)
+
+        # Background
+        bg_col = QColor(tokens.BG_HOVER) if is_hover else (QColor(tokens.BG_ACTIVE) if is_selected else QColor(tokens.BG_SURFACE))
+        border_col = QColor(tokens.ACCENT_PRIMARY) if is_selected else QColor(tokens.BORDER)
+
+        painter.setBrush(QBrush(bg_col))
+        painter.setPen(QPen(border_col, 1.0))
+        painter.drawRoundedRect(r, tokens.RADIUS, tokens.RADIUS)
+
+        # Status icon
+        st = step.status
+        icon_symbol, icon_color = self._get_status_icon(st)
+        painter.setPen(QColor(icon_color))
+        font = painter.font()
+        font.setPointSize(tokens.FONT_BODY)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(QRect(r.x() + 8, r.y(), 20, r.height()), Qt.AlignCenter, icon_symbol)
+
+        # Step ID / Title
+        font.setBold(False)
+        painter.setFont(font)
+        text_color = tokens.TEXT_PRIMARY if st in ("DONE", "RUNNING") else tokens.TEXT_MUTED
+        painter.setPen(QColor(text_color))
+        title_text = step.step_id.replace("_", " ").capitalize()
+        painter.drawText(QRect(r.x() + 32, r.y(), r.width() - 120, r.height()), Qt.AlignLeft | Qt.AlignVCenter, title_text)
+
+        # Duration & Checkpoint Badge
+        right_x = r.right() - 8
+        dur_str = format_step_duration(step.started_at, step.finished_at)
+
+        painter.setPen(QColor(tokens.TEXT_MUTED))
+        font.setPointSize(tokens.FONT_BODY_SM)
+        painter.setFont(font)
+
+        if step.checkpoint:
+            ckpt_w = 48
+            ckpt_rect = QRect(right_x - ckpt_w, r.y() + (r.height() - 18) // 2, ckpt_w, 18)
+            painter.setBrush(QBrush(QColor(tokens.BG_PANEL)))
+            painter.setPen(QPen(QColor(tokens.ACCENT_HOVER), 0.75))
+            painter.drawRoundedRect(ckpt_rect, 3, 3)
+            painter.setPen(QColor(tokens.ACCENT_HOVER))
+            painter.drawText(ckpt_rect, Qt.AlignCenter, "⎘ ckpt")
+            right_x -= (ckpt_w + 6)
+
+        if dur_str:
+            painter.setPen(QColor(tokens.TEXT_MUTED))
+            painter.drawText(QRect(right_x - 60, r.y(), 60, r.height()), Qt.AlignRight | Qt.AlignVCenter, dur_str)
+
+        painter.restore()
+
+    def _get_status_icon(self, status: str) -> tuple[str, str]:
+        if status == "DONE":
+            return "✓", tokens.ACCENT_SUCCESS
+        elif status == "RUNNING":
+            return "◉", tokens.ACCENT_WARNING
+        elif status == "PENDING":
+            return "○", tokens.TEXT_MUTED
+        elif status in ("FAILED", "FAIL"):
+            return "✕", tokens.ACCENT_ERROR
+        elif status == "WAITING_APPROVAL":
+            return "⏸", tokens.ACCENT_WARNING
+        elif status == "BLOCKED":
+            return "⊘", tokens.TEXT_MUTED
+        elif status == "SKIPPED":
+            return "↷", tokens.TEXT_MUTED
+        return "○", tokens.TEXT_MUTED

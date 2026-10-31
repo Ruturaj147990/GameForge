@@ -1158,7 +1158,20 @@ class MainWindow(QMainWindow):
             create_design_view,
             enabled_when=lambda: (bool(self._current_project), "Select a game first")
         )
-        self._view_host.register("build", lambda: BuildView(parent=self))
+
+        def create_build_view() -> BuildView:
+            view = BuildView(
+                forge_service=getattr(self, "_forge_service", None),
+                workspace_root=self._workspace,
+                parent=self,
+            )
+            view.playRequested.connect(self._on_games_play_requested)
+            view.openCodeRequested.connect(lambda f, l: self._switch_studio_view("code"))
+            if self._current_project:
+                view.set_project(self._current_project)
+            return view
+
+        self._view_host.register("build", create_build_view)
         self._view_host.register(
             "play",
             lambda: PlayView(parent=self),
@@ -1269,6 +1282,9 @@ class MainWindow(QMainWindow):
             dv = self._view_host.get_view_widget("design")
             if dv and hasattr(dv, "load_project"):
                 dv.load_project(project_name)
+            bv = self._view_host.get_view_widget("build")
+            if bv and hasattr(bv, "set_project"):
+                bv.set_project(project_name)
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):

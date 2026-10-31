@@ -272,7 +272,7 @@ new ones, and list each changed test in the commit message.
 | 4.4 | DONE | 2026-10-31T14:45Z | 2026-10-31T15:00Z | desktop/views/home_view.py, services/projects_service.py, test_home_view.py (7 passed), benchmark idle CPU 0.21% |
 | 4.5 | DONE | 2026-10-31T15:00Z | 2026-10-31T15:15Z | desktop/views/games_view.py, GamesListModel, GameCardDelegate, DeleteGameDialog, test_games_view.py (5 passed) |
 | 4.6 | DONE | 2026-10-31T15:15Z | 2026-10-31T15:35Z | desktop/views/design_view.py, widgets/gds_form.py, widgets/rule_editor.py, design/store load_revision, test_design_view.py (7 passed) |
-| 4.7 | TODO | | | |
+| 4.7 | DONE | 2026-10-31T15:35Z | 2026-10-31T15:55Z | desktop/views/build_view.py, widgets/step_row.py, widgets/log_view.py, widgets/problems_table.py, test_build_view.py (6 passed) |
 | 4.8–4.9 | TODO | | | |
 | 4.10 | TODO | | | |
 | 4.11 | TODO | | | |
