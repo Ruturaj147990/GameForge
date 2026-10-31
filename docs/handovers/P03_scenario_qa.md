@@ -685,7 +685,7 @@ returns ok only if all pass. Artifacts are the result files.
 | 3.1 | DONE | 2026-10-31T13:35Z | 2026-10-31T13:42Z | GameForgeEvents bus, GameForgeEventNames.h, retrofitted kit actors (EntityId), test_event_names_parity (1 passed), C++ build PASS |
 | 3.2 | DONE | 2026-10-31T13:42Z | 2026-10-31T13:44Z | Minimal kit player: AGameForgeCharacter, AGameForgePlayerController, AGameForgeGameModeBase, EnhancedInput dependency, C++ build PASS |
 | 3.3 | DONE | 2026-10-31T13:44Z | 2026-10-31T13:46Z | Autopilot component: physically honest movement, NavMesh navigation, teleport/stuck detection, C++ build PASS |
-| 3.4 | TODO | | | |
+| 3.4 | DONE | 2026-10-31T13:46Z | 2026-10-31T13:48Z | Scenario subsystem: UGameForgeScenarioSubsystem, steps state machine, expect assertions, result writer, C++ build PASS |
 | 3.5 | TODO | | | |
 | 3.6 | TODO | | | |
 
