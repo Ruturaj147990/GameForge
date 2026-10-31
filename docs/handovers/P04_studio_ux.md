@@ -269,7 +269,7 @@ new ones, and list each changed test in the commit message.
 | 4.1 | DONE | 2026-10-31T14:15Z | 2026-10-31T14:20Z | 16 SVGs in assets/icons/, desktop/icons.py with theme support, test_icons.py (4 passed) |
 | 4.2 | DONE | 2026-10-31T14:20Z | 2026-10-31T14:30Z | core/systems.py (SystemRow, SystemsSnapshot, probe_all), desktop/services/systems_service.py (SystemsService), test_systems_service.py (3 passed), unit 631 passed |
 | 4.3 | DONE | 2026-10-31T14:30Z | 2026-10-31T14:45Z | shell package (view_host, rail, top_bar, assistant_panel, toasts, palette), main_window._build_studio_shell, test_studio_shell.py (5 passed) |
-| 4.4 | TODO | | | |
+| 4.4 | DONE | 2026-10-31T14:45Z | 2026-10-31T15:00Z | desktop/views/home_view.py, services/projects_service.py, test_home_view.py (7 passed), benchmark idle CPU 0.21% |
 | 4.5 | TODO | | | |
 | 4.6 | TODO | | | |
 | 4.7 | TODO | | | |

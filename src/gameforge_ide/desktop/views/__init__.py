@@ -28,9 +28,7 @@ class BaseStudioView(QWidget):
         layout.addStretch(1)
 
 
-class HomeView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("home", "Home", parent)
+from .home_view import HomeView
 
 
 class GamesView(BaseStudioView):

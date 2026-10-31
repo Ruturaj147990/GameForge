@@ -119,6 +119,22 @@ class JobHandle:
     def result(self, timeout: Optional[float] = None) -> Any:
         return self._future.result(timeout=timeout)
 
+    @property
+    def status(self) -> str:
+        if self._future.cancelled():
+            return "CANCELLED"
+        if not self._future.done():
+            return "RUNNING"
+        if self._future.exception() is not None:
+            return "FAILED"
+        return "DONE"
+
+    @property
+    def error(self) -> Optional[BaseException]:
+        if self._future.done() and not self._future.cancelled():
+            return self._future.exception()
+        return None
+
     def add_done_callback(self, fn: Callable[[JobHandle], None]) -> None:
         def _wrapper(fut: concurrent.futures.Future) -> None:
             fn(self)
