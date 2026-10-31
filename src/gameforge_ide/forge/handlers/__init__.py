@@ -13,6 +13,7 @@ from typing import Dict
 from ..executor import Handler
 from . import legacy_stages
 from . import tool_call
+from . import scenario
 
 HANDLERS: Dict[str, Handler] = {
     # Named stages
@@ -30,7 +31,7 @@ HANDLERS: Dict[str, Handler] = {
     "build": legacy_stages.legacy_build,
     "assemble": legacy_stages.legacy_assemble,
     "automation": legacy_stages.legacy_tests,
-    "scenario": legacy_stages.legacy_smoke,
+    "scenario": scenario.scenario_handler,
     "tool_call": tool_call.tool_call_handler,
 }
 

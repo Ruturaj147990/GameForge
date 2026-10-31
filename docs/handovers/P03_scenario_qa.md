@@ -686,7 +686,7 @@ returns ok only if all pass. Artifacts are the result files.
 | 3.2 | DONE | 2026-10-31T13:42Z | 2026-10-31T13:44Z | Minimal kit player: AGameForgeCharacter, AGameForgePlayerController, AGameForgeGameModeBase, EnhancedInput dependency, C++ build PASS |
 | 3.3 | DONE | 2026-10-31T13:44Z | 2026-10-31T13:46Z | Autopilot component: physically honest movement, NavMesh navigation, teleport/stuck detection, C++ build PASS |
 | 3.4 | DONE | 2026-10-31T13:46Z | 2026-10-31T13:48Z | Scenario subsystem: UGameForgeScenarioSubsystem, steps state machine, expect assertions, result writer, C++ build PASS |
-| 3.5 | TODO | | | |
+| 3.5 | DONE | 2026-10-31T13:48Z | 2026-10-31T13:52Z | Host side: scenario/manifest schemas, generate, runner, forge scenario handler, 6 passed |
 | 3.6 | TODO | | | |
 
 ## Review log (Claude)
