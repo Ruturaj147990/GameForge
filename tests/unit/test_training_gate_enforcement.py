@@ -20,7 +20,7 @@ from typing import Any, Dict
 
 import pytest
 
-from scripts.train_gameforge_v2_qlora import (
+from scripts.models.train_gameforge_v2_qlora import (
     audit_hardware_and_environment,
     validate_dataset_provenance,
     run_training_pipeline,

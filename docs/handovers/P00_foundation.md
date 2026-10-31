@@ -132,8 +132,8 @@ Do **not** change `_evaluate_predicates([])`. A task *with* a successful tool ca
 - `test_inspection_complete_satisfied_by_successful_list_dir`: history `[{"tool_name": "list_dir", "status": "SUCCESS", "output": {}}]` → satisfied.
 - `test_task_without_tool_and_predicates_fails`: a plan with one `TaskNode` that has no `tool_call` and no `acceptance`, run through `TaskPlanExecutor(...).run_plan(plan, auto_approve_all=True)` → task status `FAILED`, and `"NO_EVIDENCE"` in `error_message`.
 
-**Acceptance:** the four new tests pass and the full unit suite is green. `scripts/demo_real_failure_plan.py` and
-`scripts/demo_real_repo_plan.py` still pass. They need no engine: run them and paste the verdict lines.
+**Acceptance:** the four new tests pass and the full unit suite is green. `scripts/engine/demo_real_failure_plan.py` and
+`scripts/engine/demo_real_repo_plan.py` still pass. They need no engine: run them and paste the verdict lines.
 
 ---
 
@@ -641,8 +641,8 @@ helper_names` check.)
 **Engine verification (mandatory):**
 ```powershell
 # fresh disposable copy of the probe with the CURRENT plugin build (harness from WI-0.11, or by hand before it exists)
-python scripts\live_editor_contract_test.py <disposable>\GFProbe.uproject   # expect 16/16, graceful stop
-python scripts\demo_gameplay_feedback.py                                    # expect 10/10
+python scripts\engine\live_editor_contract_test.py <disposable>\GFProbe.uproject   # expect 16/16, graceful stop
+python scripts\engine\demo_gameplay_feedback.py                                    # expect 10/10
 ```
 Save both outputs under `reports/P0/` (`contract_after_split.json`, `gameplay_feedback_after_split.json`).
 
@@ -799,7 +799,7 @@ FAIL and ask before continuing.
 **Goal:** one harness instead of the `make_disposable`/`PLUGIN_BUILD` copies spread through 14 demo scripts, plus a
 readable `scripts/` tree.
 
-1. New `scripts/engine/_harness.py`, moved and generalised from `scripts/demo_m11_landscape.py`:
+1. New `scripts/engine/_harness.py`, moved and generalised from `scripts/engine/demo_m11_landscape.py`:
    ```python
    """Shared engine-demo harness: disposable probe copies, editor start, report writing."""
    from __future__ import annotations

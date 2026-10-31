@@ -31,7 +31,7 @@ here **as you learn them**: one line, with the evidence report.
 1. Back up the current binaries (`E:\GameForge\validation\plugin_binaries_backup_pre_<date>_<tag>`).
 2. Copy `<package>\Binaries\Win64\*` to `src\gameforge_ide\unreal\GameForge\Binaries\Win64\` (gitignored) and to the
    probe project's `Plugins\GameForge\Binaries\Win64\`.
-3. Set `plugin_build` in the host profile (P0 WI-0.2; previously `PLUGIN_BUILD` in `scripts/demo_m11_landscape.py`).
+3. Set `plugin_build` in the host profile (P0 WI-0.2; previously `PLUGIN_BUILD` in `scripts/engine/demo_m11_landscape.py`).
 4. Record both DLL SHA-256 values in `context.md`.
 
 **Current state (2026-10-31, [VERIFIED] hashes, provenance [UNVERIFIED]):**

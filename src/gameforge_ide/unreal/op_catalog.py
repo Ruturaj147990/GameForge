@@ -2,7 +2,7 @@
 
 Every ``@op`` in the editor dispatcher must have an entry here. Ops that change project or runtime state must
 name a read-only ``readback_op`` that can confirm the change; ``tests/unit/test_op_catalog.py`` enforces both
-rules, and ``scripts/gen_op_coverage.py`` renders the catalogue as Markdown.
+rules, and ``scripts/tools/gen_op_coverage.py`` renders the catalogue as Markdown.
 """
 
 from __future__ import annotations

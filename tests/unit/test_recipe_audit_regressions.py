@@ -54,7 +54,7 @@ def test_real_input_verifier_requires_observed_gameplay_events():
     """Dispatching input is not a pass: the expected GF_EVENT (with key=value tokens) must be observed."""
     import importlib.util, pathlib
     spec = importlib.util.spec_from_file_location(
-        "verify_real_input_packaged", pathlib.Path(__file__).resolve().parents[2] / "scripts" / "verify_real_input_packaged.py")
+        "verify_real_input_packaged", pathlib.Path(__file__).resolve().parents[2] / "scripts" / "engine" / "verify_real_input_packaged.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     events = ["moved x=10 y=0 z=90", "card_play ok=0 hand=0 lane=1 energy=3"]
