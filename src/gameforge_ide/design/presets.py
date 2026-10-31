@@ -128,7 +128,7 @@ def preset_gomoku(title: Optional[str] = None, **overrides) -> GameDesignSpec:
 
 
 def preset_platformer(title: Optional[str] = None, **overrides) -> GameDesignSpec:
-    t = title or "3D Platformer"
+    t = title or "Platformer"
     count = int(overrides.get("collectible_target", 5))
     draft = DesignDraft(
         title=t,

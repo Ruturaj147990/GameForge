@@ -18,6 +18,7 @@ from src.gameforge_ide.recipes.grid_board_game.recipe import GridBoardParams  # 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--prompt", default=None, help="Natural language prompt -> GDS -> game")
+    ap.add_argument("--resume", default=None, help="Resume previous Forge run for a project directory")
     ap.add_argument("--name", default="TicTacToe")
     ap.add_argument("--title", default="Tic-Tac-Toe")
     ap.add_argument("--size", type=int, default=3)
@@ -29,6 +30,16 @@ def main() -> int:
     ap.add_argument("--stop-after", default=None)
     ap.add_argument("--projects-root", default=r"E:\GameForge\projects")
     a = ap.parse_args()
+
+    if a.resume:
+        print(f"Resuming pipeline run for: {a.resume}")
+        res = GamePipeline.resume(
+            Path(a.resume),
+            projects_root=Path(a.projects_root),
+            on_event=lambda k, d: print(k, json.dumps(d, default=str)[:300], flush=True),
+        )
+        print("REPORT", res.report_path, "OK" if res.ok else f"FAILED at {res.failed_stage}")
+        return 0 if res.ok else 1
 
     if a.prompt:
         from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds
@@ -42,11 +53,17 @@ def main() -> int:
             return 1
         gds = gds_res.gds
         params = to_legacy_params(gds)
+        def save_gds_hook(pdir: Path):
+            stored = design_store.load(pdir)
+            if stored is not None and gds.meta.revision <= stored.meta.revision:
+                gds.meta.revision = stored.meta.revision + 1
+            design_store.save(pdir, gds)
+
         pipe = GamePipeline(
             Path(a.projects_root),
             max_parallel_actions=8,
             on_event=lambda k, d: print(k, json.dumps(d, default=str)[:300], flush=True),
-            on_project_dir_ready=lambda pdir: design_store.save(pdir, gds),
+            on_project_dir_ready=save_gds_hook,
         )
     else:
         params = GridBoardParams(

@@ -7,6 +7,7 @@ public class GameForgeEditor : ModuleRules
 	public GameForgeEditor(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		bUseUnity = false;
 
 		PublicIncludePaths.AddRange(
 			new string[] {

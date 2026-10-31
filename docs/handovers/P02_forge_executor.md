@@ -710,7 +710,7 @@ Record this in `reports/P2/rollback_check.json`. Then re-run to completion.
 | 2.3 | DONE | 2026-10-31T12:46Z | 2026-10-31T12:47Z | test_forge_checkpoints (5 passed); ensure, commit, rollback/reset_to, editor guard, MAX_COMMIT_MB guard |
 | 2.4 | DONE | 2026-10-31T12:47Z | 2026-10-31T12:50Z | test_jobs (5 passed); Windows Job Object KILL_ON_JOB_CLOSE leak test, ENGINE_LOCK, JobManager |
 | 2.5 | DONE | 2026-10-31T12:50Z | 2026-10-31T12:52Z | test_forge_executor (9 passed); persistence, resume, dependency invalidation, approvals, repair hooks, timeout, cancellation |
-| 2.6 | TODO | | | |
+| 2.6 | DONE | 2026-10-31T12:55Z | 2026-10-31T13:00Z | legacy pipeline on Forge; test_game_pipeline (39 passed), test_forge_legacy_adapter (3 passed); engine gate PASS: TicTacToe & Platformer, resume_kill_test.json, rollback_check.json |
 | 2.7 | TODO | | | |
 | 2.8 | TODO | | | |
 

@@ -362,6 +362,7 @@ public class {cls} : TargetRules
 		Type = TargetType.{type};
 		DefaultBuildSettings = BuildSettingsVersion.Latest;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
+		bUseAdaptiveUnityBuild = false;
 		ExtraModuleNames.Add("{name}");{extra}
 	}}
 }}

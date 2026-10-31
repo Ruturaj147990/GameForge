@@ -12,6 +12,7 @@ Intermediate/
 Saved/
 DerivedDataCache/
 Packaged/
+Plugins/
 .vs/
 *.sln
 *.VC.db

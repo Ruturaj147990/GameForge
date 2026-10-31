@@ -1,0 +1,78 @@
+{
+  "ok": true,
+  "run1_killed": true,
+  "run1_events": [
+    "Generating GDS from prompt: 'make a platformer with 6 coins'",
+    "stage_started {\"stage\": \"spec\"}",
+    "stage_finished {\"stage\": \"spec\", \"ok\": true, \"duration_s\": 0.0, \"errors\": []}",
+    "stage_started {\"stage\": \"scaffold\"}",
+    "stage_finished {\"stage\": \"scaffold\", \"ok\": true, \"duration_s\": 0.2, \"errors\": []}",
+    "stage_started {\"stage\": \"sources\"}",
+    "stage_finished {\"stage\": \"sources\", \"ok\": true, \"duration_s\": 0.0, \"errors\": []}",
+    "stage_started {\"stage\": \"build_editor\"}"
+  ],
+  "run2_events": [
+    "Resuming pipeline run for: E:\\GameForge\\projects\\Platformer",
+    "stage_started {\"stage\": \"build_editor\"}",
+    "stage_finished {\"stage\": \"build_editor\", \"ok\": true, \"duration_s\": 28.3, \"errors\": []}",
+    "stage_started {\"stage\": \"assemble_level\"}",
+    "stage_finished {\"stage\": \"assemble_level\", \"ok\": true, \"duration_s\": 15.8, \"errors\": []}",
+    "stage_started {\"stage\": \"automation_tests\"}",
+    "stage_finished {\"stage\": \"automation_tests\", \"ok\": true, \"duration_s\": 10.3, \"errors\": []}",
+    "stage_started {\"stage\": \"package\"}",
+    "stage_finished {\"stage\": \"package\", \"ok\": true, \"duration_s\": 48.1, \"errors\": []}",
+    "stage_started {\"stage\": \"packaged_smoke\"}",
+    "stage_finished {\"stage\": \"packaged_smoke\", \"ok\": true, \"duration_s\": 14.1, \"errors\": []}",
+    "pipeline_finished {\"ok\": true, \"report\": \"E:\\\\GameForge\\\\projects\\\\Platformer\\\\Saved\\\\GameForge\\\\pipeline_report.json\", \"failed_stage\": null}",
+    "REPORT E:\\GameForge\\projects\\Platformer\\Saved\\GameForge\\pipeline_report.json OK"
+  ],
+  "skipped_steps": [
+    "spec",
+    "scaffold",
+    "sources"
+  ],
+  "final_status": "DONE",
+  "records": {
+    "spec": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 0.0
+    },
+    "scaffold": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 0.2
+    },
+    "sources": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 0.0
+    },
+    "build_editor": {
+      "status": "DONE",
+      "attempts": 2,
+      "duration_s": 28.3
+    },
+    "assemble_level": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 15.8
+    },
+    "automation_tests": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 10.3
+    },
+    "package": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 48.1
+    },
+    "packaged_smoke": {
+      "status": "DONE",
+      "attempts": 1,
+      "duration_s": 14.1
+    }
+  },
+  "finished_at": 1793451238.995308
+}

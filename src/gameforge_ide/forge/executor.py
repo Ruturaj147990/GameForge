@@ -96,16 +96,16 @@ class ForgeExecutor:
             # A FAILED step needs no special handling: its dependants become BLOCKED by the dependency check above.
         final = (
             "DONE"
-            if all(r.status == StepStatus.DONE for r in state.records.values())
+            if all(r.status in (StepStatus.DONE, StepStatus.SKIPPED) for r in state.records.values())
             else ("CANCELLED" if self._run_cancel.is_set() else "FAILED")
         )
         return self._finish(state, store, final)
 
     # -- internals ----------------------------------------------------------------------------
     def _run_step(self, state: RunState, store: RunStore, step: StepSpec, rec: StepRecord, repo: Optional[ProjectRepo], editor_running: Callable[[], bool], eff_hash: str) -> None:
-        handler = self.handlers.get(step.kind.value)
+        handler = self.handlers.get(step.step_id) or self.handlers.get(step.kind.value)
         if handler is None:
-            rec.status, rec.errors = StepStatus.BLOCKED, [f"no handler for step kind {step.kind.value}"]
+            rec.status, rec.errors = StepStatus.BLOCKED, [f"no handler for step {step.step_id} (kind {step.kind.value})"]
             self._persist(state, store, {"kind": "step_blocked", "step_id": step.step_id})
             return
         shared = {sid: r.data for sid, r in state.records.items() if r.status == StepStatus.DONE}

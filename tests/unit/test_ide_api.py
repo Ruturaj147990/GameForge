@@ -24,6 +24,8 @@ def test_bridge_server_host_is_loopback_only():
 
 @pytest.fixture
 def client():
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    backend_app.tool_gateway = backend_app.ToolGateway(repo_root)
     return TestClient(app)
 
 

@@ -11,8 +11,26 @@ from __future__ import annotations
 
 from typing import Dict
 from ..executor import Handler
+from . import legacy_stages
 
-HANDLERS: Dict[str, Handler] = {}
+HANDLERS: Dict[str, Handler] = {
+    # Named stages
+    "spec": legacy_stages.legacy_spec,
+    "scaffold": legacy_stages.legacy_scaffold,
+    "sources": legacy_stages.legacy_sources,
+    "build_editor": legacy_stages.legacy_build,
+    "assemble_level": legacy_stages.legacy_assemble,
+    "automation_tests": legacy_stages.legacy_tests,
+    "package": legacy_stages.legacy_package,
+    "packaged_smoke": legacy_stages.legacy_smoke,
+    # StepKind enums
+    "design": legacy_stages.legacy_spec,
+    "codegen": legacy_stages.legacy_sources,
+    "build": legacy_stages.legacy_build,
+    "assemble": legacy_stages.legacy_assemble,
+    "automation": legacy_stages.legacy_tests,
+    "scenario": legacy_stages.legacy_smoke,
+}
 
 
 def register_handler(kind: str, handler: Handler) -> None:

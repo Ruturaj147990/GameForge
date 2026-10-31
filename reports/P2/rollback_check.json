@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "scaffold_sha": "f9f70f54dca811c7f198dc78f6e146c7e6ba7ee0",
+  "git_status_porcelain": "",
+  "files_before": [
+    "GFPlatformerCharacter.cpp",
+    "GFPlatformerCheckpoint.cpp",
+    "GFPlatformerCollectible.cpp",
+    "GFPlatformerGameMode.cpp",
+    "GFPlatformerGoal.cpp",
+    "GFPlatformerHUD.cpp",
+    "GFPlatformerTests.cpp",
+    "Platformer.cpp"
+  ],
+  "files_after": [
+    "Platformer.cpp"
+  ],
+  "gameplay_sources_removed": true,
+  "timestamp": 1793451298.1485536
+}
