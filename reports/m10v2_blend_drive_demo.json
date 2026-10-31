@@ -1,0 +1,438 @@
+{
+  "timestamp": "2026-10-31T10:09:34+0530",
+  "checks": {
+    "blendspace_created": true,
+    "abp_holds_blend_space_after_recompile": true,
+    "live_instance_uses_blend_space": true,
+    "idle_weight_at_rest": true,
+    "walk_dominant_while_walking": true,
+    "run_dominant_while_running": true,
+    "weights_blend_two_samples": true,
+    "weights_sum_to_one": true,
+    "movement_driven_transitions_in_order": true,
+    "mesh_posed": true
+  },
+  "steps": {
+    "anim_blueprint": {
+      "blueprint_path": "/Game/Characters/GFAdventurerHero/ABP_LocomotionBlend",
+      "blueprint_name": "ABP_LocomotionBlend",
+      "skeleton_path": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton",
+      "compiled": true,
+      "parent_class": "GameForgeLocomotionAnimInstance",
+      "generated_class": "/Game/Characters/GFAdventurerHero/ABP_LocomotionBlend.ABP_LocomotionBlend_C",
+      "assigned_clips": {
+        "Idle": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle.Anim_Idle",
+        "Walk": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk.Anim_Walk",
+        "Run": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run.Anim_Run",
+        "Jump": "/Game/Characters/GFAdventurerHero/Animations/Anim_Jump.Anim_Jump",
+        "Fall": "/Game/Characters/GFAdventurerHero/Animations/Anim_Fall.Anim_Fall",
+        "Land": "/Game/Characters/GFAdventurerHero/Animations/Anim_Land.Anim_Land",
+        "BlendSpace": "/Game/Characters/GFAdventurerHero/Animations/BS_GFLocomotion.BS_GFLocomotion",
+        "persisted_after_recompile": 6,
+        "blend_space_after_recompile": "/Game/Characters/GFAdventurerHero/Animations/BS_GFLocomotion.BS_GFLocomotion"
+      },
+      "errors": []
+    },
+    "pie_start_test": {
+      "character": "Character_0",
+      "controller": "AIController",
+      "anim_instance": "ABP_LocomotionBlend_C",
+      "driver": "GameForgeLocomotionDriver_0",
+      "errors": []
+    },
+    "pie_samples": [
+      {
+        "t": 0.012390099465847015,
+        "state": "Fall",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 0.27351415157318115,
+        "state": "Fall",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 15.806863314541495
+      },
+      {
+        "t": 0.539151132106781,
+        "state": "Land",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 19.697248023440345
+      },
+      {
+        "t": 0.797882616519928,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 2.5865847127466854
+      },
+      {
+        "t": 1.061261773109436,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 1.3250716924667358,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 1.5860226154327393,
+        "state": "Walk",
+        "speed": 59.7,
+        "weights": {
+          "Idle": 0.602,
+          "Walk": 0.398
+        },
+        "thigh_dev": 8.672462846565155
+      },
+      {
+        "t": 1.8464514017105103,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 3.386031862015749
+      },
+      {
+        "t": 2.1113717555999756,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 27.905943583900633
+      },
+      {
+        "t": 2.373558282852173,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 1.9122232503118228
+      },
+      {
+        "t": 2.6344823837280273,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 27.483214023465848
+      },
+      {
+        "t": 2.898153305053711,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 4.028262229796219
+      },
+      {
+        "t": 3.1629669666290283,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 27.541214467950784
+      },
+      {
+        "t": 3.423867702484131,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 7.499131193888155
+      },
+      {
+        "t": 3.6863033771514893,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 25.983397613543143
+      },
+      {
+        "t": 3.9489309787750244,
+        "state": "Walk",
+        "speed": 210,
+        "weights": {
+          "Walk": 0.8,
+          "Run": 0.2
+        },
+        "thigh_dev": 12.742740768685408
+      },
+      {
+        "t": 4.213945388793945,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 39.7222918435029
+      },
+      {
+        "t": 4.475933074951172,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 16.676881090262665
+      },
+      {
+        "t": 4.738999843597412,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 23.745651619331998
+      },
+      {
+        "t": 5.003866672515869,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 39.32784270146685
+      },
+      {
+        "t": 5.264970302581787,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 22.703848562501
+      },
+      {
+        "t": 5.5286970138549805,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 15.236635888545209
+      },
+      {
+        "t": 5.791239261627197,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 38.17964034489842
+      },
+      {
+        "t": 6.0557732582092285,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 28.605589443175393
+      },
+      {
+        "t": 6.317352771759033,
+        "state": "Run",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 2.0282780704686476
+      },
+      {
+        "t": 6.581122398376465,
+        "state": "Jump",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 16.029245047114543
+      },
+      {
+        "t": 6.842342853546143,
+        "state": "Jump",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 7.1289357558661495
+      },
+      {
+        "t": 7.107271671295166,
+        "state": "Fall",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 7.085242400417283
+      },
+      {
+        "t": 7.3716535568237305,
+        "state": "Fall",
+        "speed": 600,
+        "weights": {
+          "Run": 1.0
+        },
+        "thigh_dev": 15.806863314541495
+      },
+      {
+        "t": 7.633290767669678,
+        "state": "Land",
+        "speed": 120.8,
+        "weights": {
+          "Walk": 0.805,
+          "Idle": 0.195
+        },
+        "thigh_dev": 12.948406995079479
+      },
+      {
+        "t": 7.8938164710998535,
+        "state": "Land",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 11.795747960315454
+      },
+      {
+        "t": 8.156962394714355,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 8.415536880493164,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 8.681325912475586,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 8.943225860595703,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 9.206917762756348,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 9.471562385559082,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 9.732568740844727,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 9.995525360107422,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      },
+      {
+        "t": 10.008633613586426,
+        "state": "Idle",
+        "speed": 0.0,
+        "weights": {
+          "Idle": 1.0
+        },
+        "thigh_dev": 0
+      }
+    ],
+    "pie_transitions": [
+      "Idle->Fall t=4.03 speed=0 vz=-12",
+      "Fall->Land t=4.37 speed=0 vz=0",
+      "Land->Idle t=4.74 speed=0 vz=0",
+      "Idle->Walk t=5.53 speed=12 vz=0",
+      "Walk->Run t=8.09 speed=364 vz=0",
+      "Run->Jump t=10.53 speed=600 vz=512",
+      "Jump->Fall t=11.05 speed=600 vz=-4",
+      "Fall->Land t=11.59 speed=549 vz=0",
+      "Land->Idle t=11.96 speed=0 vz=0"
+    ],
+    "pie_phases": [
+      "stand@0.01",
+      "walk@1.50",
+      "run@4.01",
+      "jump@6.51",
+      "stand_after_jump@6.51"
+    ]
+  },
+  "project": "E:\\GameForge\\validation\\m10v2_blenddrive_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

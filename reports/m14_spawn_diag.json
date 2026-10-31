@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-10-31T10:19:38+0530",
+  "results": {
+    "Wind": {
+      "ok": true,
+      "data": {
+        "world": "Diag",
+        "sound": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "pawn": "DefaultPawn_0",
+        "listeners_within_100m": true,
+        "at_location_world_ctx": {
+          "component": true,
+          "playing": true
+        },
+        "at_location_pawn_ctx": {
+          "component": true,
+          "playing": true
+        },
+        "sound_2d_world_ctx": {
+          "component": true,
+          "playing": true
+        },
+        "attached_to_pawn": {
+          "component": true,
+          "playing": true
+        }
+      },
+      "errors": []
+    },
+    "Pickup": {
+      "ok": true,
+      "data": {
+        "world": "Diag",
+        "sound": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "pawn": "DefaultPawn_0",
+        "listeners_within_100m": true,
+        "at_location_world_ctx": {
+          "component": true,
+          "playing": true
+        },
+        "at_location_pawn_ctx": {
+          "component": true,
+          "playing": true
+        },
+        "sound_2d_world_ctx": {
+          "component": true,
+          "playing": true
+        },
+        "attached_to_pawn": {
+          "component": true,
+          "playing": true
+        }
+      },
+      "errors": []
+    }
+  },
+  "editor_exit_code": 0
+}

@@ -1,0 +1,94 @@
+{
+  "timestamp": "2026-10-31T11:17:28+0530",
+  "checks": {
+    "quest_actors_placed": true,
+    "s1_starts_without_save": true,
+    "talking_starts_objective_with_dialogue": true,
+    "relics_advance_and_complete_objective": true,
+    "turn_in_dialogue_after_completion": true,
+    "save_slot_written_to_disk": true,
+    "s2_restores_completed_objective_from_slot": true,
+    "s2_giver_uses_restored_state": true
+  },
+  "steps": {
+    "s1_start": {
+      "loaded_from_slot": false,
+      "save_count": 0,
+      "objectives": []
+    },
+    "s1_after_talk": {
+      "objective": {
+        "id": "collect_relics",
+        "title": "Recover the relics",
+        "state": "Active",
+        "progress": 0,
+        "target": 2
+      },
+      "spoken": [
+        "Traveller! Thieves scattered our relics.",
+        "Bring two of them back, please."
+      ]
+    },
+    "s1_after_relic1": {
+      "id": "collect_relics",
+      "title": "Recover the relics",
+      "state": "Active",
+      "progress": 1,
+      "target": 2
+    },
+    "s1_after_relic2": {
+      "id": "collect_relics",
+      "title": "Recover the relics",
+      "state": "Completed",
+      "progress": 2,
+      "target": 2
+    },
+    "s1_turn_in": [
+      "Traveller! Thieves scattered our relics.",
+      "Bring two of them back, please.",
+      "You found them all. Thank you!"
+    ],
+    "save_file": {
+      "exists": true,
+      "bytes": 2378
+    },
+    "s2_start": {
+      "loaded_from_slot": true,
+      "save_count": 3,
+      "objectives": [
+        {
+          "id": "collect_relics",
+          "title": "Recover the relics",
+          "state": "Completed",
+          "progress": 2,
+          "target": 2
+        }
+      ]
+    },
+    "s2_spoken": [
+      "You found them all. Thank you!"
+    ],
+    "gf_events": [
+      "GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"Traveller! Thieves scattered our relics.\"",
+      "GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"Bring two of them back, please.\"",
+      "GF_EVENT objective_start id=collect_relics target=2",
+      "GF_EVENT objective_save slot=GF_Objectives ok=1 count=1",
+      "GF_EVENT objective_progress id=collect_relics progress=1/2",
+      "GF_EVENT objective_save slot=GF_Objectives ok=1 count=2",
+      "GF_EVENT objective_progress id=collect_relics progress=2/2",
+      "GF_EVENT objective_complete id=collect_relics",
+      "GF_EVENT objective_save slot=GF_Objectives ok=1 count=3",
+      "GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"You found them all. Thank you!\"",
+      "GF_EVENT objective_load slot=GF_Objectives objectives=1 saves=3",
+      "GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"You found them all. Thank you!\""
+    ]
+  },
+  "not_covered": [
+    "dialogue UI (lines are logged/read back, not shown on screen)",
+    "branching dialogue",
+    "packaged build"
+  ],
+  "project": "E:\\GameForge\\validation\\m15_quest_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

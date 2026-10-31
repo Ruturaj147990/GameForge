@@ -1,0 +1,102 @@
+{
+  "timestamp": "2026-10-31T01:21:11+0530",
+  "checks": {
+    "blendspace_created": true,
+    "axis_read_back": true,
+    "samples_read_back": true,
+    "identical_after_restart": true
+  },
+  "steps": {
+    "create": {
+      "path": "/Game/Characters/GFAdventurerHero/Animations/BS_GFLocomotion.BS_GFLocomotion",
+      "class": "BlendSpace1D",
+      "axes": [
+        {
+          "name": "Speed",
+          "min": 0.0,
+          "max": 600.0,
+          "grid": 4
+        }
+      ],
+      "samples": [
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle.Anim_Idle",
+          "value": 0.0
+        },
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk.Anim_Walk",
+          "value": 150.0
+        },
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run.Anim_Run",
+          "value": 450.0
+        }
+      ],
+      "skeleton": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton",
+      "ok": true,
+      "errors": []
+    },
+    "before_restart": {
+      "path": "/Game/Characters/GFAdventurerHero/Animations/BS_GFLocomotion.BS_GFLocomotion",
+      "class": "BlendSpace1D",
+      "axes": [
+        {
+          "name": "Speed",
+          "min": 0.0,
+          "max": 600.0,
+          "grid": 4
+        }
+      ],
+      "samples": [
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle.Anim_Idle",
+          "value": 0.0
+        },
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk.Anim_Walk",
+          "value": 150.0
+        },
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run.Anim_Run",
+          "value": 450.0
+        }
+      ],
+      "skeleton": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton"
+    },
+    "after_restart": {
+      "path": "/Game/Characters/GFAdventurerHero/Animations/BS_GFLocomotion.BS_GFLocomotion",
+      "class": "BlendSpace1D",
+      "axes": [
+        {
+          "name": "Speed",
+          "min": 0.0,
+          "max": 600.0,
+          "grid": 4
+        }
+      ],
+      "samples": [
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Idle.Anim_Idle",
+          "value": 0.0
+        },
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk.Anim_Walk",
+          "value": 150.0
+        },
+        {
+          "animation": "/Game/Characters/GFAdventurerHero/Animations/Anim_Run.Anim_Run",
+          "value": 450.0
+        }
+      ],
+      "skeleton": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton"
+    }
+  },
+  "not_covered": [
+    "AnimInstance driving the BlendSpace",
+    "start/stop + turn-in-place clips"
+  ],
+  "project": "E:\\GameForge\\validation\\m10v2_blendspace_20261031",
+  "editor_exit_code_a": 0,
+  "editor_exit_code_b": 0,
+  "ok": true
+}

@@ -54,4 +54,11 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Landscape")
 	static FString InspectProceduralWorld();
+
+	/**
+	 * Reads back every paint layer of the first landscape in the editor world: layer name, layer info asset,
+	 * mean weight (0-255) and the fraction of vertices where the layer dominates (weight > 127).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Landscape")
+	static FString InspectLandscapeLayers();
 };

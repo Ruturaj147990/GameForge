@@ -286,11 +286,59 @@ def set_actor_property(args):
     if actor is None:
         return _envelope("set_actor_property", False, errors=["actor not found: %s" % args["label"]])
     name, value = args["property"], args["value"]
+    if args.get("asset"):
+        # Object reference properties (e.g. a NiagaraSystem) take the loaded asset, not its path string.
+        value = unreal.EditorAssetLibrary.load_asset(value)
+        if value is None:
+            return _envelope("set_actor_property", False, errors=["asset not found: %s" % args["value"]])
+    elif isinstance(value, list):
+        value = [_vec(v) if isinstance(v, dict) and set(v) == {"x", "y", "z"} else v for v in value]
+    elif isinstance(value, dict) and set(value) == {"x", "y", "z"}:
+        value = _vec(value)
     with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
         actor.set_editor_property(name, value)
     actual = actor.get_editor_property(name)
     return _envelope("set_actor_property", True, {"label": args["label"], "property": name, "value": str(actual)},
                      reversibility="transactional")
+
+
+def _exposure_record(vol):
+    st = vol.get_editor_property("settings")
+    return {"label": vol.get_actor_label(), "unbound": bool(vol.get_editor_property("unbound")),
+            "method": _enum_name(st.get_editor_property("auto_exposure_method")),
+            "bias": round(st.get_editor_property("auto_exposure_bias"), 3),
+            "override_method": bool(st.get_editor_property("override_auto_exposure_method")),
+            "override_bias": bool(st.get_editor_property("override_auto_exposure_bias"))}
+
+
+@op("scene_set_manual_exposure", mutates=True, reversibility="transactional")
+def scene_set_manual_exposure(args):
+    """Unbound PostProcessVolume with manual exposure, so captures do not depend on eye adaptation."""
+    label = args.get("label", "GF_Exposure")
+    with unreal.ScopedEditorTransaction("GameForge scene_set_manual_exposure"):
+        vol = _find_actor(label)
+        if vol is None:
+            vol = _actor_sub().spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0))
+            vol.set_actor_label(label)
+        vol.set_editor_property("unbound", True)
+        st = vol.get_editor_property("settings")
+        st.set_editor_property("override_auto_exposure_method", True)
+        st.set_editor_property("auto_exposure_method", unreal.AutoExposureMethod.AEM_MANUAL)
+        st.set_editor_property("override_auto_exposure_bias", True)
+        st.set_editor_property("auto_exposure_bias", float(args.get("exposure_bias", 10.0)))
+        vol.set_editor_property("settings", st)
+    rec = _exposure_record(vol)
+    ok = rec["method"] == "AEM_MANUAL" and rec["unbound"]
+    return _envelope("scene_set_manual_exposure", ok, rec, reversibility="transactional",
+                     errors=[] if ok else ["read-back does not show manual exposure"])
+
+
+@op("scene_get_exposure", reversibility="read-only")
+def scene_get_exposure(args):
+    vol = _find_actor(args.get("label", "GF_Exposure"))
+    if not isinstance(vol, unreal.PostProcessVolume):
+        return _envelope("scene_get_exposure", False, errors=["no PostProcessVolume with that label"])
+    return _envelope("scene_get_exposure", True, _exposure_record(vol))
 
 
 @op("new_level", mutates=True, reversibility="snapshot-only")
@@ -304,9 +352,13 @@ def new_level(args):
         return _envelope("new_level", bool(ok), {"level_path": path, "exists": True, "loaded_existing": True},
                          warnings=["level existed; loaded instead of created"], affected=[path],
                          reversibility="snapshot-only", errors=[] if ok else ["load_level failed"])
-    ok = _level_sub().new_level(path)
+    partitioned = bool(args.get("partitioned", False))
+    ok = _level_sub().new_level(path, partitioned) if partitioned else _level_sub().new_level(path)
     exists = unreal.EditorAssetLibrary.does_asset_exist(path)
-    return _envelope("new_level", bool(ok) and exists, {"level_path": path, "exists": exists},
+    is_partitioned = _world_is_partitioned()
+    if partitioned and not is_partitioned:
+        ok = False
+    return _envelope("new_level", bool(ok) and exists, {"level_path": path, "exists": exists, "partitioned": is_partitioned},
                      affected=[path], reversibility="snapshot-only",
                      errors=[] if (ok and exists) else ["new_level failed or level not on disk"])
 
@@ -430,6 +482,1221 @@ def import_asset(args):
     return _envelope("import_asset", ok, {"imported": imported, "verified": verified},
                      affected=imported, reversibility="snapshot-only",
                      errors=[] if ok else ["import produced no verifiable assets"])
+
+
+# ── M11 materials and textures ──────────────────────────────────────────────
+
+_TEXTURE_ROLES = {  # role -> (sRGB, compression setting)
+    "color": (True, "TC_DEFAULT"), "normal": (False, "TC_NORMALMAP"), "masks": (False, "TC_MASKS"),
+    "grayscale": (False, "TC_GRAYSCALE"), "linear": (False, "TC_DEFAULT"),
+}
+_SAMPLERS = {"color": "SAMPLERTYPE_COLOR", "normal": "SAMPLERTYPE_NORMAL", "masks": "SAMPLERTYPE_MASKS",
+             "grayscale": "SAMPLERTYPE_GRAYSCALE", "linear": "SAMPLERTYPE_LINEAR_COLOR"}
+
+
+def _enum_name(value):
+    name = getattr(value, "name", None)
+    return name if isinstance(name, str) else str(value).split(".")[-1].split(":")[0].strip("<> ")
+
+
+def _texture_record(tex):
+    return {"path": tex.get_path_name(), "srgb": bool(tex.get_editor_property("srgb")),
+            "compression": _enum_name(tex.get_editor_property("compression_settings")),
+            "size": [tex.blueprint_get_size_x(), tex.blueprint_get_size_y()]}
+
+
+@op("texture_import", mutates=True, reversibility="snapshot-only")
+def texture_import(args):
+    """Imports an image as a Texture2D and sets sRGB and compression from its channel role."""
+    role = args.get("role", "color")
+    if role not in _TEXTURE_ROLES:
+        return _envelope("texture_import", False, errors=[f"unknown role {role}; use one of {sorted(_TEXTURE_ROLES)}"])
+    src = args["source_file"]
+    if not os.path.isfile(src):
+        return _envelope("texture_import", False, errors=["source file not found: " + src])
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", src)
+    task.set_editor_property("destination_path", args.get("destination_path", "/Game/Quarantine/Textures"))
+    if args.get("destination_name"):
+        task.set_editor_property("destination_name", args["destination_name"])
+    task.set_editor_property("automated", True)
+    task.set_editor_property("save", False)
+    task.set_editor_property("replace_existing", True)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    paths = [str(x) for x in task.get_editor_property("imported_object_paths")]
+    tex = unreal.EditorAssetLibrary.load_asset(paths[0]) if paths else None
+    if not isinstance(tex, unreal.Texture2D):
+        return _envelope("texture_import", False, {"imported": paths}, errors=["import produced no Texture2D"])
+    srgb, compression = _TEXTURE_ROLES[role]
+    tex.set_editor_property("srgb", srgb)
+    tex.set_editor_property("compression_settings", getattr(unreal.TextureCompressionSettings, compression))
+    unreal.EditorAssetLibrary.save_loaded_asset(tex)
+    rec = _texture_record(tex)
+    ok = rec["srgb"] == srgb and rec["compression"] == compression
+    return _envelope("texture_import", ok, rec | {"role": role}, affected=[rec["path"]], reversibility="snapshot-only",
+                     errors=[] if ok else [f"read-back mismatch: wanted sRGB={srgb} {compression}, got {rec}"])
+
+
+@op("texture_inspect", reversibility="read-only")
+def texture_inspect(args):
+    tex = unreal.EditorAssetLibrary.load_asset(args["texture_path"])
+    if not isinstance(tex, unreal.Texture2D):
+        return _envelope("texture_inspect", False, errors=["not a Texture2D: " + args["texture_path"]])
+    return _envelope("texture_inspect", True, _texture_record(tex))
+
+
+def _expr_props(node, props):
+    for key, value in (props or {}).items():
+        if key in ("texture", "material_function"):
+            value = unreal.EditorAssetLibrary.load_asset(value)
+        elif key == "sampler_type":
+            value = getattr(unreal.MaterialSamplerType, _SAMPLERS.get(value, value))
+        elif key in ("constant", "default_value") and isinstance(value, (list, tuple)):
+            value = unreal.LinearColor(*(list(value) + [1.0] * (4 - len(value))))
+        elif key == "layers":  # LandscapeLayerBlend: [{"name", "blend": "LB_WEIGHT_BLEND"}]
+            inputs = []
+            for layer in value:
+                entry = unreal.LayerBlendInput()
+                entry.set_editor_property("layer_name", layer["name"])
+                entry.set_editor_property("blend_type", getattr(unreal.LandscapeLayerBlendType,
+                                                                layer.get("blend", "LB_WEIGHT_BLEND")))
+                inputs.append(entry)
+            value = inputs
+        node.set_editor_property(key, value)
+
+
+@op("material_build_graph", mutates=True, reversibility="snapshot-only")
+def material_build_graph(args):
+    """Creates a Material from a declarative graph: nodes [{id, class, x, y, props}], edges
+    [{from, output, to, input}] and outputs [{from, output, property}] (property like MP_BASE_COLOR)."""
+    path = args["asset_path"]
+    mel = unreal.MaterialEditingLibrary
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        if not args.get("replace_existing"):
+            return _envelope("material_build_graph", False, errors=["asset already exists: " + path])
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    mat = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.Material,
+                                                                  unreal.MaterialFactoryNew())
+    if mat is None:
+        return _envelope("material_build_graph", False, errors=["create_asset returned None"])
+    errors, nodes = [], {}
+    for spec in args.get("nodes", []):
+        cls = getattr(unreal, spec["class"], None)
+        if cls is None:
+            errors.append(f"unknown expression class {spec['class']}")
+            continue
+        node = mel.create_material_expression(mat, cls, int(spec.get("x", -600)), int(spec.get("y", 0)))
+        try:
+            _expr_props(node, spec.get("props"))
+        except Exception as exc:
+            errors.append(f"{spec['id']}: {exc}")
+        nodes[spec["id"]] = node
+    for e in args.get("edges", []):
+        if not mel.connect_material_expressions(nodes.get(e["from"]), e.get("output", ""), nodes.get(e["to"]),
+                                                e.get("input", "")):
+            errors.append(f"edge failed: {e}")
+    for o in args.get("outputs", []):
+        if not mel.connect_material_property(nodes.get(o["from"]), o.get("output", ""),
+                                             getattr(unreal.MaterialProperty, o["property"])):
+            errors.append(f"output failed: {o}")
+    for flag in args.get("usage_flags", []):  # e.g. MATUSAGE_INSTANCED_STATIC_MESHES
+        mel.set_material_usage(mat, getattr(unreal.MaterialUsage, flag))
+    mel.recompile_material(mat)
+    unreal.EditorAssetLibrary.save_loaded_asset(mat)
+    return _envelope("material_build_graph", not errors, {"asset_path": mat.get_path_name(),
+                                                          "expressions": mel.get_num_material_expressions(mat)},
+                     errors=errors, affected=[path], reversibility="snapshot-only")
+
+
+_READBACK_PROPERTIES = ("MP_BASE_COLOR", "MP_METALLIC", "MP_SPECULAR", "MP_ROUGHNESS", "MP_NORMAL",
+                        "MP_AMBIENT_OCCLUSION", "MP_EMISSIVE_COLOR", "MP_OPACITY", "MP_OPACITY_MASK")
+
+
+def _expr_summary(node):
+    out = {"class": node.get_class().get_name()}
+    for key in ("parameter_name", "sampler_type", "texture", "material_function", "input_name", "output_name",
+                "default_value", "constant", "r",
+                "coordinate_index", "u_tiling", "v_tiling"):
+        try:
+            value = node.get_editor_property(key)
+        except Exception:
+            continue
+        if isinstance(value, unreal.Object):
+            value = value.get_path_name()
+        elif isinstance(value, unreal.LinearColor):
+            value = [round(value.r, 4), round(value.g, 4), round(value.b, 4), round(value.a, 4)]
+        elif isinstance(value, float):
+            value = round(value, 4)
+        else:
+            value = _enum_name(value) if not isinstance(value, (int, str, bool)) else value
+        out[key] = value
+    return out
+
+
+@op("material_readback_graph", reversibility="read-only")
+def material_readback_graph(args):
+    """Walks the graph backwards from every connected material output, using the engine's own links."""
+    mat = unreal.EditorAssetLibrary.load_asset(args["material_path"])
+    if not isinstance(mat, unreal.Material):
+        return _envelope("material_readback_graph", False, errors=["not a Material: " + args["material_path"]])
+    mel = unreal.MaterialEditingLibrary
+    ids, nodes, edges, outputs = {}, [], [], []
+
+    def visit(node):
+        key = node.get_name()
+        if key in ids:
+            return key
+        ids[key] = node
+        nodes.append({"name": key, **_expr_summary(node)})
+        inputs = mel.get_inputs_for_material_expression(mat, node)
+        try:
+            names = list(mel.get_input_names_for_material_expression(mat, node))
+        except Exception:
+            names = [str(i) for i in range(len(inputs))]
+        for idx, upstream in enumerate(inputs):
+            if upstream:
+                edges.append({"from": visit(upstream), "to": key, "input": names[idx] if idx < len(names) else idx})
+        return key
+
+    for prop in _READBACK_PROPERTIES:
+        node = mel.get_material_property_input_node(mat, getattr(unreal.MaterialProperty, prop))
+        if node:
+            try:
+                out_name = mel.get_material_property_input_node_output_name(mat, getattr(unreal.MaterialProperty, prop))
+            except Exception:
+                out_name = ""
+            outputs.append({"property": prop, "from": visit(node), "output": str(out_name)})
+    stats = mel.get_statistics(mat)
+    data = {"material": mat.get_path_name(), "expression_count": mel.get_num_material_expressions(mat),
+            "nodes": sorted(nodes, key=lambda n: n["name"]), "edges": sorted(edges, key=lambda e: (e["to"], str(e["input"]))),
+            "outputs": outputs,
+            "used_textures": sorted(t.get_path_name() for t in mel.get_used_textures(mat)),
+            "statistics": {"pixel_shader_instructions": stats.num_pixel_shader_instructions,
+                           "vertex_shader_instructions": stats.num_vertex_shader_instructions,
+                           "samplers": stats.num_samplers}}
+    return _envelope("material_readback_graph", True, data)
+
+
+@op("material_function_build", mutates=True, reversibility="snapshot-only")
+def material_function_build(args):
+    """Creates a MaterialFunction from nodes/edges (same format as material_build_graph). Use
+    MaterialExpressionFunctionInput (props input_name, input_type) and MaterialExpressionFunctionOutput
+    (props output_name) as the function's pins; call it from a material with MaterialExpressionMaterialFunctionCall
+    (props material_function)."""
+    path = args["asset_path"]
+    mel = unreal.MaterialEditingLibrary
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    func = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.MaterialFunction,
+                                                                   unreal.MaterialFunctionFactoryNew())
+    if func is None:
+        return _envelope("material_function_build", False, errors=["create_asset returned None"])
+    if args.get("description"):
+        func.set_editor_property("description", args["description"])
+    errors, nodes = [], {}
+    for spec in args.get("nodes", []):
+        cls = getattr(unreal, spec["class"], None)
+        if cls is None:
+            errors.append(f"unknown expression class {spec['class']}")
+            continue
+        node = mel.create_material_expression_in_function(func, cls, int(spec.get("x", -600)), int(spec.get("y", 0)))
+        try:
+            props = dict(spec.get("props") or {})
+            if "input_type" in props:
+                props["input_type"] = getattr(unreal.FunctionInputType, props["input_type"])
+            _expr_props(node, props)
+        except Exception as exc:
+            errors.append(f"{spec['id']}: {exc}")
+        nodes[spec["id"]] = node
+    for e in args.get("edges", []):
+        if not mel.connect_material_expressions(nodes.get(e["from"]), e.get("output", ""), nodes.get(e["to"]),
+                                                e.get("input", "")):
+            errors.append(f"edge failed: {e}")
+    mel.update_material_function(func, None)
+    unreal.EditorAssetLibrary.save_loaded_asset(func)
+    count = mel.get_num_material_expressions_in_function(func)
+    ok = not errors and count == len(nodes)
+    return _envelope("material_function_build", ok, {"asset_path": func.get_path_name(), "expressions": count},
+                     errors=errors, affected=[path], reversibility="snapshot-only")
+
+
+@op("material_function_inspect", reversibility="read-only")
+def material_function_inspect(args):
+    func = unreal.EditorAssetLibrary.load_asset(args["function_path"])
+    if not isinstance(func, unreal.MaterialFunction):
+        return _envelope("material_function_inspect", False, errors=["not a MaterialFunction"])
+    return _envelope("material_function_inspect", True, {
+        "path": func.get_path_name(), "description": str(func.get_editor_property("description")),
+        "expressions": unreal.MaterialEditingLibrary.get_num_material_expressions_in_function(func)})
+
+
+@op("material_instance_create", mutates=True, reversibility="snapshot-only")
+def material_instance_create(args):
+    """Creates a MaterialInstanceConstant and sets scalar / vector / texture parameter overrides."""
+    path = args["asset_path"]
+    parent = unreal.EditorAssetLibrary.load_asset(args["parent"])
+    if not isinstance(parent, unreal.MaterialInterface):
+        return _envelope("material_instance_create", False, errors=["parent is not a material: " + args["parent"]])
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    # The factory's InitialParent is not exposed to Python in 5.7, so the parent is set after creation.
+    mi = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.MaterialInstanceConstant,
+                                                                 unreal.MaterialInstanceConstantFactoryNew())
+    if mi is None:
+        return _envelope("material_instance_create", False, errors=["create_asset returned None"])
+    mel, errors = unreal.MaterialEditingLibrary, []
+    mel.set_material_instance_parent(mi, parent)
+    # The setters' return values are unreliable across engine versions, so every override is confirmed by
+    # reading it back from the instance.
+    for key, value in (args.get("scalars") or {}).items():
+        mel.set_material_instance_scalar_parameter_value(mi, key, float(value))
+        if abs(mel.get_material_instance_scalar_parameter_value(mi, key) - float(value)) > 1e-4:
+            errors.append(f"scalar parameter not applied: {key}")
+    for key, value in (args.get("vectors") or {}).items():
+        color = unreal.LinearColor(*(list(value) + [1.0] * (4 - len(value))))
+        mel.set_material_instance_vector_parameter_value(mi, key, color)
+        got = mel.get_material_instance_vector_parameter_value(mi, key)
+        if max(abs(got.r - color.r), abs(got.g - color.g), abs(got.b - color.b), abs(got.a - color.a)) > 1e-4:
+            errors.append(f"vector parameter not applied: {key}")
+    for key, value in (args.get("textures") or {}).items():
+        tex = unreal.EditorAssetLibrary.load_asset(value)
+        mel.set_material_instance_texture_parameter_value(mi, key, tex)
+        got = mel.get_material_instance_texture_parameter_value(mi, key)
+        if not tex or not got or got.get_path_name() != tex.get_path_name():
+            errors.append(f"texture parameter not applied: {key}")
+    mel.update_material_instance(mi)
+    unreal.EditorAssetLibrary.save_loaded_asset(mi)
+    return _envelope("material_instance_create", not errors, {"asset_path": mi.get_path_name()}, errors=errors,
+                     affected=[path], reversibility="snapshot-only")
+
+
+@op("material_instance_inspect", reversibility="read-only")
+def material_instance_inspect(args):
+    mi = unreal.EditorAssetLibrary.load_asset(args["instance_path"])
+    if not isinstance(mi, unreal.MaterialInstanceConstant):
+        return _envelope("material_instance_inspect", False, errors=["not a MaterialInstanceConstant"])
+    mel = unreal.MaterialEditingLibrary
+    vectors = {}
+    for key in args.get("vectors", []):
+        c = mel.get_material_instance_vector_parameter_value(mi, key)
+        vectors[key] = [round(c.r, 4), round(c.g, 4), round(c.b, 4), round(c.a, 4)]
+    textures = {}
+    for key in args.get("textures", []):
+        t = mel.get_material_instance_texture_parameter_value(mi, key)
+        textures[key] = t.get_path_name() if t else None
+    return _envelope("material_instance_inspect", True, {
+        "parent": mi.get_editor_property("parent").get_path_name(),
+        "scalars": {k: round(mel.get_material_instance_scalar_parameter_value(mi, k), 4) for k in args.get("scalars", [])},
+        "vectors": vectors, "textures": textures})
+
+
+@op("actor_get_materials", reversibility="read-only")
+def actor_get_materials(args):
+    actor = _find_actor(args["label"])
+    if actor is None:
+        return _envelope("actor_get_materials", False, errors=["actor not found: " + args["label"]])
+    slots = []
+    for comp in actor.get_components_by_class(unreal.MeshComponent):
+        for i in range(comp.get_num_materials()):
+            m = comp.get_material(i)
+            slots.append({"component": comp.get_name(), "slot": i, "material": m.get_path_name() if m else None})
+    return _envelope("actor_get_materials", True, {"label": args["label"], "slots": slots})
+
+
+# ── M12 static-mesh production (Geometry Script) ────────────────────────────
+
+@op("api_introspect", reversibility="read-only")
+def api_introspect(args):
+    """Lists public attribute names of `unreal` classes (development aid for engine-version API drift)."""
+    out = {}
+    for name in args.get("classes", []):
+        cls = getattr(unreal, name, None)
+        out[name] = None if cls is None else sorted(a for a in dir(cls) if not a.startswith("_")
+                                                    and args.get("filter", "") in a)
+    return _envelope("api_introspect", True, {"classes": out})
+
+
+def _gs(name):
+    lib = getattr(unreal, name, None)
+    if lib is None:
+        raise RuntimeError(f"unreal.{name} missing (is the GeometryScripting plugin enabled?)")
+    return lib
+
+
+def _gs_transform(part):
+    return unreal.Transform(_vec(part.get("location")), _rot(part.get("rotation")), _vec(part.get("scale"), (1, 1, 1)))
+
+
+def _append_part(mesh, part):
+    prim = _gs("GeometryScript_Primitives")
+    opts = unreal.GeometryScriptPrimitiveOptions()
+    opts.set_editor_property("material_id", int(part.get("material_id", 0)))
+    xf = _gs_transform(part)
+    shape, size = part["shape"], part.get("size", [100, 100, 100])
+    origin = unreal.GeometryScriptPrimitiveOriginMode.BASE
+    if shape == "box":
+        prim.append_box(mesh, opts, xf, float(size[0]), float(size[1]), float(size[2]),
+                        int(part.get("steps", 0)), int(part.get("steps", 0)), int(part.get("steps", 0)), origin)
+    elif shape == "cylinder":
+        prim.append_cylinder(mesh, opts, xf, float(part.get("radius", 50)), float(part.get("height", 100)),
+                             int(part.get("radial_steps", 16)), int(part.get("height_steps", 0)), True, origin)
+    elif shape == "sphere":
+        prim.append_sphere_lat_long(mesh, opts, xf, float(part.get("radius", 50)),
+                                    int(part.get("steps_phi", 12)), int(part.get("steps_theta", 16)),
+                                    unreal.GeometryScriptPrimitiveOriginMode.CENTER)
+    elif shape == "cone":
+        prim.append_cone(mesh, opts, xf, float(part.get("radius", 50)), float(part.get("top_radius", 0)),
+                         float(part.get("height", 100)), int(part.get("radial_steps", 16)),
+                         int(part.get("height_steps", 0)), True, origin)
+    else:
+        raise ValueError(f"unknown shape {shape}")
+
+
+def _triangles(mesh):
+    queries = _gs("GeometryScript_MeshQueries")
+    # Python binding names mangle the "IDs" suffix (GetNumTriangleIDs -> get_num_triangle_i_ds).
+    for name in ("get_num_triangle_i_ds", "get_num_triangle_ids", "get_triangle_count"):
+        if hasattr(queries, name):
+            return int(getattr(queries, name)(mesh))
+    raise RuntimeError("no triangle-count query on GeometryScript_MeshQueries")
+
+
+@op("mesh_generate_prop", mutates=True, reversibility="snapshot-only")
+def mesh_generate_prop(args):
+    """Builds a static mesh in-engine from parts [{shape, size|radius/height, location, rotation, material_id,
+    op: union|subtract}] with Geometry Script, auto-unwraps UVs, recomputes normals, simplifies to the triangle
+    budget and saves it as a new StaticMesh asset."""
+    path = args["asset_path"]
+    errors, steps = [], []
+    try:
+        mesh = unreal.DynamicMesh()
+        for i, part in enumerate(args.get("parts", [])):
+            if part.get("op", "union") == "union":
+                _append_part(mesh, part)
+            else:
+                tool = unreal.DynamicMesh()
+                _append_part(tool, part)
+                bopts = unreal.GeometryScriptMeshBooleanOptions()
+                _gs("GeometryScript_MeshBooleans").apply_mesh_boolean(
+                    mesh, unreal.Transform(), tool, unreal.Transform(),
+                    unreal.GeometryScriptBooleanOperation.SUBTRACT, bopts)
+            steps.append({"part": i, "triangles": _triangles(mesh)})
+        uvs = _gs("GeometryScript_UVs")
+        if hasattr(uvs, "auto_generate_x_atlas_mesh_u_vs"):
+            uvs.auto_generate_x_atlas_mesh_u_vs(mesh, 0, unreal.GeometryScriptXAtlasOptions())
+            steps.append({"uv": "xatlas"})
+        else:
+            uvs.auto_generate_patch_builder_mesh_u_vs(mesh, 0, unreal.GeometryScriptPatchBuilderOptions())
+            steps.append({"uv": "patch_builder"})
+        _gs("GeometryScript_Normals").compute_split_normals(mesh, unreal.GeometryScriptSplitNormalsOptions(),
+                                                            unreal.GeometryScriptCalculateNormalsOptions())
+        budget = int(args.get("triangle_budget", 0))
+        if budget and _triangles(mesh) > budget:
+            _gs("GeometryScript_MeshSimplification").apply_simplify_to_triangle_count(
+                mesh, budget, unreal.GeometryScriptSimplifyMeshOptions())
+            steps.append({"simplified_to": _triangles(mesh)})
+        if unreal.EditorAssetLibrary.does_asset_exist(path):
+            unreal.EditorAssetLibrary.delete_asset(path)
+        sm_opts = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
+        result = _gs("GeometryScript_NewAssetUtils").create_new_static_mesh_asset_from_mesh(mesh, path, sm_opts)
+        static_mesh = result[0] if isinstance(result, (tuple, list)) else result
+        if not isinstance(static_mesh, unreal.StaticMesh):
+            raise RuntimeError(f"create_new_static_mesh_asset_from_mesh returned {result!r}")
+        unreal.EditorAssetLibrary.save_loaded_asset(static_mesh)
+        tris = _triangles(mesh)
+    except Exception as exc:
+        errors.append(f"{type(exc).__name__}: {exc}")
+        return _envelope("mesh_generate_prop", False, {"steps": steps}, errors=errors)
+    ok = unreal.EditorAssetLibrary.does_asset_exist(path)
+    return _envelope("mesh_generate_prop", ok, {"asset_path": static_mesh.get_path_name(), "triangles": tris,
+                                                "steps": steps}, affected=[path], reversibility="snapshot-only",
+                     errors=[] if ok else ["asset not on disk after save"])
+
+
+def _sm_sub():
+    return unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+
+
+def _lod_triangles_via_geometry_script(sm, lod):
+    opts = unreal.GeometryScriptCopyMeshFromAssetOptions()
+    req = unreal.GeometryScriptMeshReadLOD()
+    req.set_editor_property("lod_index", int(lod))
+    res = _gs("GeometryScript_AssetUtils").copy_mesh_from_static_mesh(sm, unreal.DynamicMesh(), opts, req)
+    mesh = res[0] if isinstance(res, (tuple, list)) else res
+    return _triangles(mesh)
+
+
+def _lod_triangles(sm, lod):
+    for getter in (lambda: sm.get_num_triangles(lod), lambda: _lod_triangles_via_geometry_script(sm, lod)):
+        try:
+            return int(getter())
+        except Exception:
+            continue
+    return None
+
+
+def _static_mesh_record(sm):
+    sub = _sm_sub()
+    lods = sub.get_lod_count(sm)
+    bounds = sm.get_bounding_box()
+    nanite = None
+    try:
+        nanite = bool(sm.get_editor_property("nanite_settings").get_editor_property("enabled"))
+    except Exception:
+        pass
+    return {"path": sm.get_path_name(), "lod_count": lods,
+            "lod_triangles": [_lod_triangles(sm, i) for i in range(lods)],
+            "lod_vertices": [sub.get_number_verts(sm, i) for i in range(lods)],
+            "simple_collision_count": sub.get_simple_collision_count(sm),
+            "collision_complexity": _enum_name(sm.get_editor_property("body_setup").get_editor_property(
+                "collision_trace_flag")) if sm.get_editor_property("body_setup") else None,
+            "nanite": nanite,
+            "bounds_cm": [round(bounds.max.x - bounds.min.x, 2), round(bounds.max.y - bounds.min.y, 2),
+                          round(bounds.max.z - bounds.min.z, 2)],
+            "materials": [(m.get_editor_property("material_interface").get_path_name()
+                           if m.get_editor_property("material_interface") else None)
+                          for m in sm.get_editor_property("static_materials")]}
+
+
+@op("static_mesh_inspect", reversibility="read-only")
+def static_mesh_inspect(args):
+    sm = unreal.EditorAssetLibrary.load_asset(args["static_mesh_path"])
+    if not isinstance(sm, unreal.StaticMesh):
+        return _envelope("static_mesh_inspect", False, errors=["not a StaticMesh: " + args["static_mesh_path"]])
+    try:
+        return _envelope("static_mesh_inspect", True, _static_mesh_record(sm))
+    except Exception as exc:
+        return _envelope("static_mesh_inspect", False, errors=[f"{type(exc).__name__}: {exc}"])
+
+
+_COLLISION_SHAPES = {"box": "BOX", "sphere": "SPHERE", "capsule": "CAPSULE", "convex": "NDOP26"}
+
+
+@op("static_mesh_configure", mutates=True, reversibility="snapshot-only")
+def static_mesh_configure(args):
+    """LODs from reduction fractions, simple/complex collision, Nanite flag and material slots; then saves."""
+    sm = unreal.EditorAssetLibrary.load_asset(args["static_mesh_path"])
+    if not isinstance(sm, unreal.StaticMesh):
+        return _envelope("static_mesh_configure", False, errors=["not a StaticMesh: " + args["static_mesh_path"]])
+    sub, errors = _sm_sub(), []
+    try:
+        reduction = args.get("lod_reduction")
+        if reduction is not None:
+            opts = unreal.StaticMeshReductionOptions()
+            settings = []
+            for frac in [1.0] + list(reduction):
+                s = unreal.StaticMeshReductionSettings()
+                s.set_editor_property("percent_triangles", float(frac))
+                s.set_editor_property("screen_size", float(frac))
+                settings.append(s)
+            opts.set_editor_property("reduction_settings", settings)
+            sub.set_lods(sm, opts)
+        collision = args.get("collision")
+        if collision:
+            sub.remove_collisions(sm)
+            body = sm.get_editor_property("body_setup")
+            if collision == "complex_as_simple":
+                body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+            elif collision != "none":
+                sub.add_simple_collisions(sm, getattr(unreal.ScriptCollisionShapeType, _COLLISION_SHAPES[collision]))
+        if "nanite" in args:
+            ns = sm.get_editor_property("nanite_settings")
+            ns.set_editor_property("enabled", bool(args["nanite"]))
+            sm.set_editor_property("nanite_settings", ns)
+        for i, mat_path in enumerate(args.get("materials", [])):
+            mat = unreal.EditorAssetLibrary.load_asset(mat_path)
+            if mat:
+                sm.set_material(i, mat)
+            else:
+                errors.append(f"material not found: {mat_path}")
+        unreal.EditorAssetLibrary.save_loaded_asset(sm)
+        rec = _static_mesh_record(sm)
+    except Exception as exc:
+        return _envelope("static_mesh_configure", False, errors=errors + [f"{type(exc).__name__}: {exc}"])
+    return _envelope("static_mesh_configure", not errors, rec, errors=errors, affected=[rec["path"]],
+                     reversibility="snapshot-only")
+
+
+# ── M13 Niagara VFX ─────────────────────────────────────────────────────────
+
+_NIAGARA_TEMPLATES = "/Niagara/DefaultAssets/Templates"
+
+
+@op("vfx_create_system", mutates=True, reversibility="snapshot-only")
+def vfx_create_system(args):
+    """Creates a NiagaraSystem asset either by duplicating an engine template system ("template_system", e.g.
+    "SimpleExplosion") or from engine template emitters ("template_emitters", e.g. ["Fountain"])."""
+    path = args["asset_path"]
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    errors = []
+    if args.get("template_system"):
+        src = f"{_NIAGARA_TEMPLATES}/Systems/{args['template_system']}"
+        system = unreal.EditorAssetLibrary.duplicate_asset(src, path)
+    else:
+        emitters = []
+        for e in args.get("template_emitters", []):
+            emitter = unreal.EditorAssetLibrary.load_asset(f"{_NIAGARA_TEMPLATES}/Emitters/{e}")
+            if emitter is None:
+                errors.append(f"template emitter not found: {e}")
+            else:
+                emitters.append(emitter)
+        factory = unreal.NiagaraSystemFactoryNew()
+        try:
+            factory.set_editor_property("emitters_to_add_to_new_system", emitters)
+        except Exception as exc:
+            errors.append(f"factory does not take emitters in Python: {exc}")
+        system = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.NiagaraSystem, factory)
+    if not isinstance(system, unreal.NiagaraSystem):
+        return _envelope("vfx_create_system", False, errors=errors + ["no NiagaraSystem created"])
+    unreal.EditorAssetLibrary.save_loaded_asset(system)
+    return _envelope("vfx_create_system", not errors, {"asset_path": system.get_path_name()}, errors=errors,
+                     affected=[path], reversibility="snapshot-only")
+
+
+@op("vfx_inspect_system", reversibility="read-only")
+def vfx_inspect_system(args):
+    system = unreal.EditorAssetLibrary.load_asset(args["system_path"])
+    if not isinstance(system, unreal.NiagaraSystem):
+        return _envelope("vfx_inspect_system", False, errors=["not a NiagaraSystem: " + args["system_path"]])
+    data = {"path": system.get_path_name()}
+    for key in ("warmup_time", "fixed_bounds"):
+        try:
+            value = system.get_editor_property(key)
+            data[key] = value if isinstance(value, (int, float, bool, str)) else str(value)
+        except Exception:
+            pass
+    return _envelope("vfx_inspect_system", True, data)
+
+
+def _vfx_lib():
+    if not hasattr(unreal, "GameForgeVFXLibrary"):
+        raise RuntimeError("GameForgeVFXLibrary not loaded (rebuild/install the plugin)")
+    return unreal.GameForgeVFXLibrary
+
+
+@op("vfx_spawn", mutates=True, reversibility="transient")
+def vfx_spawn(args):
+    """Spawns a Niagara system in the editor or PIE world (world: "editor" | "pie"); read back with
+    vfx_particle_counts."""
+    try:
+        res = json.loads(_vfx_lib().spawn_system(json.dumps(args)))
+    except RuntimeError as exc:
+        return _envelope("vfx_spawn", False, errors=[str(exc)])
+    return _envelope("vfx_spawn", res.get("success", False), res.get("data", {}), errors=res.get("errors", []),
+                     reversibility="transient")
+
+
+@op("vfx_particle_counts", reversibility="read-only")
+def vfx_particle_counts(args):
+    try:
+        res = json.loads(_vfx_lib().inspect_particles(json.dumps(args)))
+    except RuntimeError as exc:
+        return _envelope("vfx_particle_counts", False, errors=[str(exc)])
+    return _envelope("vfx_particle_counts", res.get("success", False), res.get("data", {}), errors=res.get("errors", []))
+
+
+# ── M14 audio ───────────────────────────────────────────────────────────────
+
+def _sound_record(sound):
+    rec = {"path": sound.get_path_name(), "class": sound.get_class().get_name()}
+    for key in ("duration", "num_channels", "looping", "volume", "pitch"):
+        try:
+            value = sound.get_editor_property(key)
+            rec[key] = round(value, 4) if isinstance(value, float) else value
+        except Exception:
+            pass
+    try:
+        rec["sample_rate"] = sound.get_sample_rate_for_current_platform()
+    except Exception:
+        pass
+    att = sound.get_editor_property("attenuation_settings")
+    rec["attenuation"] = att.get_path_name() if att else None
+    return rec
+
+
+@op("audio_import", mutates=True, reversibility="snapshot-only")
+def audio_import(args):
+    """Imports a WAV as USoundWave; optional looping flag and attenuation asset. Read back with audio_inspect."""
+    src = args["source_file"]
+    if not os.path.isfile(src):
+        return _envelope("audio_import", False, errors=["source file not found: " + src])
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", src)
+    task.set_editor_property("destination_path", args.get("destination_path", "/Game/Quarantine/Audio"))
+    if args.get("destination_name"):
+        task.set_editor_property("destination_name", args["destination_name"])
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", False)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    paths = [str(x) for x in task.get_editor_property("imported_object_paths")]
+    sound = unreal.EditorAssetLibrary.load_asset(paths[0]) if paths else None
+    if not isinstance(sound, unreal.SoundWave):
+        return _envelope("audio_import", False, {"imported": paths}, errors=["import produced no SoundWave"])
+    if "looping" in args:
+        sound.set_editor_property("looping", bool(args["looping"]))
+    if args.get("attenuation_path"):
+        sound.set_editor_property("attenuation_settings", unreal.EditorAssetLibrary.load_asset(args["attenuation_path"]))
+    unreal.EditorAssetLibrary.save_loaded_asset(sound)
+    return _envelope("audio_import", True, _sound_record(sound), affected=[sound.get_path_name()],
+                     reversibility="snapshot-only")
+
+
+@op("audio_inspect", reversibility="read-only")
+def audio_inspect(args):
+    sound = unreal.EditorAssetLibrary.load_asset(args["sound_path"])
+    if not isinstance(sound, unreal.SoundBase):
+        return _envelope("audio_inspect", False, errors=["not a sound: " + args["sound_path"]])
+    return _envelope("audio_inspect", True, _sound_record(sound))
+
+
+def _attenuation_record(att):
+    st = att.get_editor_property("attenuation")
+    ext = st.get_editor_property("attenuation_shape_extents")
+    return {"path": att.get_path_name(), "spatialize": bool(st.get_editor_property("spatialize")),
+            "attenuate": bool(st.get_editor_property("attenuate")),
+            "inner_radius": round(ext.x, 2), "falloff_distance": round(st.get_editor_property("falloff_distance"), 2),
+            "function": _enum_name(st.get_editor_property("distance_algorithm"))}
+
+
+@op("audio_create_attenuation", mutates=True, reversibility="snapshot-only")
+def audio_create_attenuation(args):
+    path = args["asset_path"]
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    att = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.SoundAttenuation,
+                                                                  unreal.SoundAttenuationFactory())
+    if att is None:
+        return _envelope("audio_create_attenuation", False, errors=["create_asset returned None"])
+    st = att.get_editor_property("attenuation")
+    st.set_editor_property("attenuate", True)
+    st.set_editor_property("spatialize", True)
+    st.set_editor_property("attenuation_shape_extents", unreal.Vector(float(args.get("inner_radius", 200.0)), 0, 0))
+    st.set_editor_property("falloff_distance", float(args.get("falloff_distance", 2000.0)))
+    st.set_editor_property("distance_algorithm", getattr(unreal.AttenuationDistanceModel,
+                                                         args.get("function", "LINEAR")))
+    att.set_editor_property("attenuation", st)
+    unreal.EditorAssetLibrary.save_loaded_asset(att)
+    return _envelope("audio_create_attenuation", True, _attenuation_record(att), affected=[path],
+                     reversibility="snapshot-only")
+
+
+@op("audio_inspect_attenuation", reversibility="read-only")
+def audio_inspect_attenuation(args):
+    att = unreal.EditorAssetLibrary.load_asset(args["attenuation_path"])
+    if not isinstance(att, unreal.SoundAttenuation):
+        return _envelope("audio_inspect_attenuation", False, errors=["not a SoundAttenuation"])
+    return _envelope("audio_inspect_attenuation", True, _attenuation_record(att))
+
+
+_AUDIO_COMPONENTS = {}
+
+
+def _pie_world():
+    return unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world()
+
+
+def _load_asset_pie_safe(path):
+    """EditorAssetLibrary.load_asset returns None while PIE runs ("The Editor is currently in a play mode");
+    unreal.load_asset works in both modes. Use this in any op that can run during PIE."""
+    obj = unreal.load_asset(path)
+    if obj is None and "." not in path.rsplit("/", 1)[-1]:
+        obj = unreal.load_asset(f"{path}.{path.rsplit('/', 1)[-1]}")
+    return obj
+
+
+@op("audio_play_at", mutates=True, reversibility="transient")
+def audio_play_at(args):
+    """Plays a sound at a location in the running PIE world (GameplayStatics.spawn_sound_at_location)."""
+    world = _pie_world()
+    if world is None:
+        return _envelope("audio_play_at", False, errors=["PIE is not running"])
+    sound = _load_asset_pie_safe(args["sound_path"])
+    if not isinstance(sound, unreal.SoundBase):
+        return _envelope("audio_play_at", False, errors=["not a sound: " + args["sound_path"]])
+    label = args.get("label", "GF_Sound")
+    comp = unreal.GameplayStatics.spawn_sound_at_location(world, sound, _vec(args.get("location")))
+    if comp is None:
+        return _envelope("audio_play_at", False,
+                         errors=["spawn_sound_at_location returned None (sound disabled, or a short one-shot culled as inaudible)"])
+    _AUDIO_COMPONENTS[label] = comp
+    unreal.log(f"GF_EVENT audio_play {label} {sound.get_path_name()}")
+    return _envelope("audio_play_at", True, {"label": label, "playing": comp.is_playing()},
+                     reversibility="transient")
+
+
+def _state_value(value):
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple, unreal.Array)):
+        return [_state_value(v) for v in value]
+    if isinstance(value, unreal.Vector):
+        return [round(value.x, 1), round(value.y, 1), round(value.z, 1)]
+    if isinstance(value, unreal.AudioComponent):
+        return {"component": value.get_name(), "playing": bool(value.is_playing()),
+                "sound": value.sound.get_path_name() if value.sound else None}
+    if isinstance(value, unreal.ActorComponent):
+        return {"component": value.get_name(), "active": bool(value.is_active())}
+    if isinstance(value, unreal.Object):
+        return value.get_path_name()
+    return str(value)
+
+
+@op("gameplay_objectives", reversibility="read-only")
+def gameplay_objectives(args):
+    """Objective/quest state of the running PIE game (GameForgeObjectiveSubsystem on the game instance)."""
+    world = _pie_world()
+    if world is None:
+        return _envelope("gameplay_objectives", False, errors=["PIE is not running"])
+    sub = unreal.GameForgeObjectiveSubsystem.get_for_world(world)
+    if sub is None:
+        return _envelope("gameplay_objectives", False, errors=["GameForgeObjectiveSubsystem not found (plugin build older than m15b?)"])
+    return _envelope("gameplay_objectives", True, json.loads(sub.get_objectives_json()))
+
+
+@op("pie_actor_state", reversibility="read-only")
+def pie_actor_state(args):
+    """Reads properties of every live PIE actor of a class (e.g. a kit pickup's bCollected / SpawnedSound)."""
+    world = _pie_world()
+    if world is None:
+        return _envelope("pie_actor_state", False, errors=["PIE is not running"])
+    cls = _load_class(args["actor_class"])
+    if cls is None:
+        return _envelope("pie_actor_state", False, errors=["actor class not found: " + args["actor_class"]])
+    actors = []
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, cls):
+        rec = {"name": actor.get_name()}
+        for prop in args.get("properties", []):
+            try:
+                rec[prop] = _state_value(actor.get_editor_property(prop))
+            except Exception as exc:
+                rec[prop] = {"error": f"{type(exc).__name__}: {exc}"}
+        actors.append(rec)
+    return _envelope("pie_actor_state", True, {"world": world.get_name(), "actors": actors})
+
+
+# ── M14 MetaSound authoring (MetaSoundBuilderSubsystem + MetaSoundEditorSubsystem) ──────────────────────
+
+def _ms_ok(result):
+    return result is not None and _enum_name(result).upper().endswith("SUCCEEDED")
+
+
+def _ms_class(spec):
+    ns, name, variant = (list(spec) + ["", "", ""])[:3]
+    cls = unreal.MetasoundFrontendClassName()
+    cls.set_editor_property("namespace", ns)
+    cls.set_editor_property("name", name)
+    cls.set_editor_property("variant", variant)
+    return cls
+
+
+def _ms_graph_spec_check(builder, nodes, spec):
+    """Read-back on any builder: every declared node exists, every declared edge/default input is connected."""
+    out = {"nodes": {}, "edges": [], "on_play": [], "on_finished": None}
+    for node_id, handle in nodes.items():
+        out["nodes"][node_id] = bool(builder.contains_node(handle))
+    for edge in spec.get("edges", []):
+        (dst, dst_in) = edge["to"]
+        handle, res = builder.find_node_input_by_name(nodes[dst], dst_in)
+        out["edges"].append({"to": edge["to"], "connected": _ms_ok(res) and bool(builder.node_input_is_connected(handle))})
+    for dst, dst_in in spec.get("on_play", []):
+        handle, res = builder.find_node_input_by_name(nodes[dst], dst_in)
+        out["on_play"].append({"to": [dst, dst_in], "connected": _ms_ok(res) and bool(builder.node_input_is_connected(handle))})
+    return out
+
+
+@op("metasound_build_source", mutates=True, reversibility="snapshot-only")
+def metasound_build_source(args):
+    """Builds a MetaSound Source asset from a node graph spec:
+    nodes [{id, class: [namespace, name, variant], defaults: {input: float}}], edges [{from: [id, output],
+    to: [id, input]}], on_play [[id, input]] (fed by the source's OnPlay trigger), on_finished [id, output]
+    (drives the source's OnFinished), audio_out [id, output] (to the mono output), one_shot."""
+    path = args["asset_path"]
+    package_path, name = path.rsplit("/", 1)
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    sub = unreal.get_engine_subsystem(unreal.MetaSoundBuilderSubsystem)
+    steps, errors, nodes = [], [], {}
+    builder, on_play, on_finished, audio_outs, res = sub.create_source_builder(
+        name, output_format=unreal.MetaSoundOutputAudioFormat.MONO, is_one_shot=bool(args.get("one_shot", True)))
+    if not _ms_ok(res):
+        return _envelope("metasound_build_source", False, errors=[f"create_source_builder: {_enum_name(res)}"])
+    for spec in args.get("nodes", []):
+        handle, res = builder.add_node_by_class_name(_ms_class(spec["class"]))
+        steps.append({"add_node": spec["id"], "result": _enum_name(res)})
+        if not _ms_ok(res):
+            errors.append(f"add node {spec['id']} {spec['class']}: {_enum_name(res)}")
+            continue
+        nodes[spec["id"]] = handle
+        for input_name, value in (spec.get("defaults") or {}).items():
+            in_handle, r1 = builder.find_node_input_by_name(handle, input_name)
+            literal, _type = sub.create_float_meta_sound_literal(float(value))
+            r2 = builder.set_node_input_default(in_handle, literal) if _ms_ok(r1) else r1
+            if not (_ms_ok(r1) and _ms_ok(r2)):
+                errors.append(f"default {spec['id']}.{input_name}: {_enum_name(r1)}/{_enum_name(r2)}")
+
+    def connect(src, src_out_handle, dst, dst_in):
+        if dst not in nodes:
+            errors.append(f"connect to unknown node {dst}")
+            return
+        in_handle, r1 = builder.find_node_input_by_name(nodes[dst], dst_in)
+        r2 = builder.connect_nodes(src_out_handle, in_handle) if _ms_ok(r1) else r1
+        steps.append({"connect": [src, dst, dst_in], "result": _enum_name(r2)})
+        if not (_ms_ok(r1) and _ms_ok(r2)):
+            errors.append(f"connect {src} -> {dst}.{dst_in}: {_enum_name(r1)}/{_enum_name(r2)}")
+
+    for edge in args.get("edges", []):
+        (src, src_out), (dst, dst_in) = edge["from"], edge["to"]
+        if src not in nodes:
+            errors.append(f"edge from unknown node {src}")
+            continue
+        out_handle, r = builder.find_node_output_by_name(nodes[src], src_out)
+        if not _ms_ok(r):
+            errors.append(f"output {src}.{src_out}: {_enum_name(r)}")
+            continue
+        connect(src, out_handle, dst, dst_in)
+    for dst, dst_in in args.get("on_play", []):
+        connect("OnPlay", on_play, dst, dst_in)
+    for key, target in (("on_finished", on_finished), ("audio_out", audio_outs[0] if audio_outs else None)):
+        if args.get(key) and target is not None:
+            src, src_out = args[key]
+            out_handle, r = builder.find_node_output_by_name(nodes.get(src), src_out) if src in nodes else (None, None)
+            r2 = builder.connect_nodes(out_handle, target) if _ms_ok(r) else r
+            steps.append({key: [src, src_out], "result": _enum_name(r2)})
+            if not _ms_ok(r2):
+                errors.append(f"{key} {src}.{src_out}: {_enum_name(r)}/{_enum_name(r2)}")
+    asset, res = unreal.get_editor_subsystem(unreal.MetaSoundEditorSubsystem).build_to_asset(
+        builder, "GameForge", name, package_path)
+    if not _ms_ok(res):
+        errors.append(f"build_to_asset: {_enum_name(res)}")
+    unreal.EditorAssetLibrary.save_asset(path)
+    _MS_NODE_HANDLES[path] = nodes
+    return _envelope("metasound_build_source", not errors,
+                     {"asset_path": path, "nodes": list(nodes), "steps": steps}, errors=errors, affected=[path],
+                     reversibility="snapshot-only")
+
+
+_MS_NODE_HANDLES = {}
+
+
+@op("metasound_inspect", reversibility="read-only")
+def metasound_inspect(args):
+    """Re-opens a built MetaSound asset with a fresh builder and checks the declared graph (nodes, edges, OnPlay
+    inputs) against what the saved document holds. Needs the same spec that built it."""
+    path = args["asset_path"]
+    asset = unreal.EditorAssetLibrary.load_asset(path)
+    if asset is None:
+        return _envelope("metasound_inspect", False, errors=["asset not found: " + path])
+    builder, res = unreal.get_editor_subsystem(unreal.MetaSoundEditorSubsystem).find_or_begin_building(asset)
+    if not _ms_ok(res):
+        return _envelope("metasound_inspect", False, errors=[f"find_or_begin_building: {_enum_name(res)}"])
+    nodes = _MS_NODE_HANDLES.get(path, {})
+    rec = _ms_graph_spec_check(builder, nodes, args.get("spec", {}))
+    rec |= {"asset_class": asset.get_class().get_name(), "duration": round(asset.get_editor_property("duration"), 3)
+            if hasattr(asset, "get_editor_property") else None}
+    ok = bool(nodes) and all(rec["nodes"].values()) and all(e["connected"] for e in rec["edges"] + rec["on_play"])
+    return _envelope("metasound_inspect", ok, rec, errors=[] if ok else ["graph read-back mismatch"])
+
+
+@op("audio_diagnose_spawn", mutates=True, reversibility="transient")
+def audio_diagnose_spawn(args):
+    """Diagnostic only: tries GameplayStatics sound-spawn variants in PIE with different context objects and
+    reports which return a component (spawned sounds are stopped again). Never acceptance evidence."""
+    world = _pie_world()
+    if world is None:
+        return _envelope("audio_diagnose_spawn", False, errors=["PIE is not running"])
+    sound = _load_asset_pie_safe(args["sound_path"])
+    loc = _vec(args.get("location"))
+    gs = unreal.GameplayStatics
+    pawn = gs.get_player_pawn(world, 0)
+    rec = {"world": world.get_name(), "sound": sound.get_path_name() if sound else None,
+           "pawn": pawn.get_name() if pawn else None}
+    try:
+        rec["listeners_within_100m"] = bool(gs.are_any_listeners_within_range(world, loc, 10000.0))
+    except Exception as exc:
+        rec["listeners_within_100m"] = f"{type(exc).__name__}: {exc}"
+    attempts = {
+        "at_location_world_ctx": lambda: gs.spawn_sound_at_location(world, sound, loc),
+        "at_location_pawn_ctx": lambda: gs.spawn_sound_at_location(pawn, sound, loc),
+        "sound_2d_world_ctx": lambda: gs.spawn_sound2d(world, sound),
+        "attached_to_pawn": lambda: gs.spawn_sound_attached(sound, pawn.get_editor_property("root_component")),
+    }
+    for name, fn in attempts.items():
+        try:
+            comp = fn()
+            rec[name] = {"component": comp is not None, "playing": bool(comp and comp.is_playing())}
+            if comp:
+                comp.stop()
+        except Exception as exc:
+            rec[name] = {"error": f"{type(exc).__name__}: {exc}"}
+    return _envelope("audio_diagnose_spawn", True, rec, reversibility="transient")
+
+
+@op("audio_place_ambient", mutates=True, reversibility="transactional")
+def audio_place_ambient(args):
+    """Places an AmbientSound actor in the editor level (sound, auto-activate); PIE copies it into the game world."""
+    sound = unreal.EditorAssetLibrary.load_asset(args["sound_path"])
+    if not isinstance(sound, unreal.SoundBase):
+        return _envelope("audio_place_ambient", False, errors=["not a sound: " + args["sound_path"]])
+    with unreal.ScopedEditorTransaction("GameForge audio_place_ambient"):
+        actor = _actor_sub().spawn_actor_from_class(unreal.AmbientSound, _vec(args.get("location")))
+        actor.set_actor_label(args.get("label", "GF_Ambient"))
+        comp = actor.get_editor_property("audio_component")
+        comp.set_sound(sound)
+        comp.set_editor_property("auto_activate", bool(args.get("auto_activate", False)))
+    comp = _find_actor(actor.get_actor_label()).get_editor_property("audio_component")
+    return _envelope("audio_place_ambient", comp.sound == sound,
+                     {"label": actor.get_actor_label(), "sound": comp.sound.get_path_name() if comp.sound else None,
+                      "auto_activate": bool(comp.get_editor_property("auto_activate"))}, reversibility="transactional")
+
+
+@op("audio_play_actor", mutates=True, reversibility="transient")
+def audio_play_actor(args):
+    """Plays the AudioComponent of an AmbientSound actor in the running PIE world (by label)."""
+    world = _pie_world()
+    if world is None:
+        return _envelope("audio_play_actor", False, errors=["PIE is not running"])
+    label = args["label"]
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.AmbientSound):
+        if actor.get_actor_label() == label:
+            comp = actor.get_editor_property("audio_component")
+            comp.play(0.0)
+            _AUDIO_COMPONENTS[label] = comp
+            unreal.log(f"GF_EVENT audio_play {label} {comp.sound.get_path_name() if comp.sound else None}")
+            return _envelope("audio_play_actor", True, {"label": label, "playing": comp.is_playing()},
+                             reversibility="transient")
+    return _envelope("audio_play_actor", False, errors=[f"no AmbientSound labelled {label} in PIE"])
+
+
+@op("audio_status", reversibility="read-only")
+def audio_status(args):
+    """Playing state of sounds started by audio_play_at, and their distance to the PIE player pawn."""
+    world = _pie_world()
+    if world is None:
+        return _envelope("audio_status", False, errors=["PIE is not running"])
+    listener = None
+    pc = unreal.GameplayStatics.get_player_controller(world, 0)
+    if pc and pc.get_controlled_pawn():
+        listener = pc.get_controlled_pawn().get_actor_location()
+    out = []
+    for label, comp in list(_AUDIO_COMPONENTS.items()):
+        try:
+            loc = comp.get_world_location()
+            out.append({"label": label, "playing": comp.is_playing(),
+                        "sound": comp.sound.get_path_name() if comp.sound else None,
+                        "distance_to_listener": round((loc - listener).length(), 1) if listener else None})
+        except Exception as exc:  # component destroyed with the PIE world
+            out.append({"label": label, "error": f"{type(exc).__name__}: {exc}"})
+    return _envelope("audio_status", bool(out), {"components": out}, errors=[] if out else ["no sounds started"])
+
+
+# ── M16 cinematics (Sequencer + Movie Render Queue) ────────────────────────
+
+def _binding_id(seq, binding):
+    for getter in (lambda: seq.get_portable_binding_id(seq, binding), lambda: seq.get_binding_id(binding),
+                   lambda: unreal.MovieSceneSequenceExtensions.get_binding_id(seq, binding)):
+        try:
+            return getter()
+        except Exception:
+            continue
+    raise RuntimeError("no binding-id accessor on this engine version")
+
+
+@op("sequence_build", mutates=True, reversibility="snapshot-only")
+def sequence_build(args):
+    """Builds a LevelSequence: shots [{camera_label, start, end, location, rotation}] become CineCameraActors with a
+    camera-cut section each; bindings [{actor_label, keys: [{frame, location}]}] get transform keys; audio
+    [{sound_path, start}] gets audio sections. Frames are at `fps`."""
+    path = args["asset_path"]
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    seq = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.LevelSequence,
+                                                                  unreal.LevelSequenceFactoryNew())
+    if seq is None:
+        return _envelope("sequence_build", False, errors=["create_asset returned None"])
+    errors = []
+    fps = int(args.get("fps", 24))
+    end = int(args.get("end_frame", 72))
+    seq.set_display_rate(unreal.FrameRate(fps, 1))
+    seq.set_playback_start(0)
+    seq.set_playback_end(end)
+    cut_track = seq.add_track(unreal.MovieSceneCameraCutTrack)
+    for shot in args.get("shots", []):
+        cam = _actor_sub().spawn_actor_from_class(unreal.CineCameraActor, _vec(shot["location"]), _rot(shot["rotation"]))
+        cam.set_actor_label(shot["camera_label"])
+        binding = seq.add_possessable(cam)
+        section = cut_track.add_section()
+        section.set_range(int(shot["start"]), int(shot["end"]))
+        try:
+            section.set_camera_binding_id(_binding_id(seq, binding))
+        except Exception as exc:
+            errors.append(f"camera cut {shot['camera_label']}: {exc}")
+    for spec in args.get("bindings", []):
+        actor = _find_actor(spec["actor_label"])
+        if actor is None:
+            errors.append(f"actor not found: {spec['actor_label']}")
+            continue
+        binding = seq.add_possessable(actor)
+        track = binding.add_track(unreal.MovieScene3DTransformTrack)
+        section = track.add_section()
+        section.set_range(0, end)
+        channels = section.get_all_channels()
+        for key in spec.get("keys", []):
+            loc = key["location"]
+            for axis, channel in zip(("x", "y", "z"), channels[:3]):
+                channel.add_key(unreal.FrameNumber(int(key["frame"])), float(loc[axis]))
+    for spec in args.get("audio", []):
+        sound = unreal.EditorAssetLibrary.load_asset(spec["sound_path"])
+        track = seq.add_track(unreal.MovieSceneAudioTrack)
+        section = track.add_section()
+        section.set_sound(sound)
+        length = int(round(sound.get_editor_property("duration") * fps)) if sound else fps
+        section.set_range(int(spec.get("start", 0)), int(spec.get("start", 0)) + max(1, length))
+    unreal.EditorAssetLibrary.save_loaded_asset(seq)
+    return _envelope("sequence_build", not errors, {"asset_path": seq.get_path_name()}, errors=errors, affected=[path],
+                     reversibility="snapshot-only")
+
+
+def _section_range(section):
+    return [section.get_start_frame(), section.get_end_frame()]
+
+
+@op("sequence_inspect", reversibility="read-only")
+def sequence_inspect(args):
+    seq = unreal.EditorAssetLibrary.load_asset(args["sequence_path"])
+    if not isinstance(seq, unreal.LevelSequence):
+        return _envelope("sequence_inspect", False, errors=["not a LevelSequence: " + args["sequence_path"]])
+    bindings = []
+    for b in seq.get_bindings():
+        tracks = []
+        for t in b.get_tracks():
+            keys = 0
+            for s in t.get_sections():
+                for c in s.get_all_channels():
+                    try:
+                        keys += len(c.get_keys())
+                    except Exception:
+                        pass
+            tracks.append({"type": t.get_class().get_name(), "keys": keys})
+        bindings.append({"name": str(b.get_display_name()), "tracks": tracks})
+    cuts, audio = [], []
+    for t in seq.get_tracks():
+        cls = t.get_class().get_name()
+        for s in t.get_sections():
+            if cls == "MovieSceneCameraCutTrack":
+                cuts.append({"range": _section_range(s)})
+            elif cls == "MovieSceneAudioTrack":
+                snd = s.get_sound()
+                audio.append({"range": _section_range(s), "sound": snd.get_path_name() if snd else None})
+    rate = seq.get_display_rate()
+    return _envelope("sequence_inspect", True, {
+        "path": seq.get_path_name(), "fps": rate.numerator / max(rate.denominator, 1),
+        "playback": [seq.get_playback_start(), seq.get_playback_end()], "bindings": bindings,
+        "camera_cuts": sorted(cuts, key=lambda c: c["range"][0]), "audio": audio})
+
+
+@op("sequence_evaluate", reversibility="read-only")
+def sequence_evaluate(args):
+    """Opens the sequence in the editor, scrubs to each frame and reads the bound actors' locations back."""
+    seq = unreal.EditorAssetLibrary.load_asset(args["sequence_path"])
+    lib = unreal.LevelSequenceEditorBlueprintLibrary
+    lib.open_level_sequence(seq)
+    out = []
+    try:
+        for frame in args.get("frames", [0]):
+            lib.set_current_time(int(frame))
+            row = {"frame": int(frame)}
+            for label in args.get("actor_labels", []):
+                actor = _find_actor(label)
+                if actor:
+                    loc = actor.get_actor_location()
+                    row[label] = [round(loc.x, 2), round(loc.y, 2), round(loc.z, 2)]
+            out.append(row)
+    finally:
+        lib.close_level_sequence()
+    return _envelope("sequence_evaluate", True, {"samples": out})
+
+
+_MRQ_JOB = {}
+
+
+@op("sequence_render", mutates=True, reversibility="transient")
+def sequence_render(args):
+    """Queues a Movie Render Queue job (PIE executor) writing a PNG sequence to output_dir; poll the files."""
+    if not hasattr(unreal, "MoviePipelineQueueSubsystem"):
+        return _envelope("sequence_render", False, errors=["MovieRenderPipeline plugin not enabled"])
+    sub = unreal.get_editor_subsystem(unreal.MoviePipelineQueueSubsystem)
+    queue = sub.get_queue()
+    for job in list(queue.get_jobs()):
+        queue.delete_job(job)
+    job = queue.allocate_new_job(unreal.MoviePipelineExecutorJob)
+    job.set_editor_property("sequence", unreal.SoftObjectPath(args["sequence_path"]))
+    job.set_editor_property("map", unreal.SoftObjectPath(args["map_path"]))
+    config = job.get_configuration()
+    # "lit" = MoviePipelineDeferredPassBase; "unlit" renders base colour only (no lighting/exposure dependence).
+    pass_class = {"lit": unreal.MoviePipelineDeferredPassBase,
+                  "unlit": unreal.MoviePipelineDeferredPass_Unlit}[args.get("render_pass", "lit")]
+    config.find_or_add_setting_by_class(pass_class)
+    aa = config.find_or_add_setting_by_class(unreal.MoviePipelineAntiAliasingSetting)
+    aa.set_editor_property("engine_warm_up_count", int(args.get("warmup_frames", 32)))
+    aa.set_editor_property("render_warm_up_count", int(args.get("warmup_frames", 32)))
+    config.find_or_add_setting_by_class(unreal.MoviePipelineImageSequenceOutput_PNG)
+    out = config.find_or_add_setting_by_class(unreal.MoviePipelineOutputSetting)
+    out.set_editor_property("output_directory", unreal.DirectoryPath(args["output_dir"]))
+    res = args.get("resolution", [640, 360])
+    out.set_editor_property("output_resolution", unreal.IntPoint(int(res[0]), int(res[1])))
+    # {sequence_name} resolved to "" in 5.7 (files became hidden ".0000.png"), so use a fixed prefix.
+    out.set_editor_property("file_name_format", args.get("file_prefix", "frame") + ".{frame_number}")
+    executor_class = getattr(unreal, args.get("executor", "MoviePipelinePIEExecutor"))
+    executor = sub.render_queue_with_executor(executor_class)
+    _MRQ_JOB["executor"] = executor
+    return _envelope("sequence_render", executor is not None, {"output_dir": args["output_dir"]},
+                     reversibility="transient")
+
+
+@op("sequence_render_status", reversibility="read-only")
+def sequence_render_status(args):
+    sub = unreal.get_editor_subsystem(unreal.MoviePipelineQueueSubsystem)
+    return _envelope("sequence_render_status", True, {"rendering": bool(sub.is_rendering())})
+
+
+# ── M19 profiling ───────────────────────────────────────────────────────────
+
+_PERF_COMMANDS = ("csvprofile start", "csvprofile stop", "stat unit", "stat fps", "stat none")
+
+
+def _csv_dir():
+    return os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), "Profiling", "CSV")
+
+
+@op("perf_console", mutates=True, reversibility="transient")
+def perf_console(args):
+    """Runs one allow-listed profiling console command in the PIE world (or the editor world if PIE is off)."""
+    cmd = args["command"].strip().lower()
+    if cmd not in _PERF_COMMANDS:
+        return _envelope("perf_console", False, errors=[f"command not allow-listed: {cmd}; allowed: {list(_PERF_COMMANDS)}"])
+    sub = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+    world = sub.get_game_world() or sub.get_editor_world()
+    unreal.SystemLibrary.execute_console_command(world, cmd)
+    return _envelope("perf_console", True, {"command": cmd, "world": world.get_name()}, reversibility="transient")
+
+
+@op("perf_list_csv", reversibility="read-only")
+def perf_list_csv(args):
+    folder = _csv_dir()
+    files = []
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder)):
+            full = os.path.join(folder, name)
+            files.append({"path": full, "bytes": os.path.getsize(full), "mtime": os.path.getmtime(full)})
+    return _envelope("perf_list_csv", True, {"folder": folder, "files": files})
 
 
 @op("rename_asset", mutates=True, reversibility="snapshot-only")
@@ -970,6 +2237,17 @@ def landmark_spawn(args):
                      errors=res.get("errors", []), warnings=res.get("warnings", []))
 
 
+@op("landscape_inspect_layers", reversibility="read-only")
+def landscape_inspect_layers(args):
+    """Per paint layer of the landscape: layer info asset, mean weight and dominant fraction (engine weightmaps)."""
+    if not hasattr(unreal, "GameForgeLandscapeLibrary") or             not hasattr(unreal.GameForgeLandscapeLibrary, "inspect_landscape_layers"):
+        return _envelope("landscape_inspect_layers", False,
+                         errors=["GameForgeLandscapeLibrary.inspect_landscape_layers not loaded (rebuild the plugin)"])
+    res = json.loads(unreal.GameForgeLandscapeLibrary.inspect_landscape_layers())
+    return _envelope("landscape_inspect_layers", res.get("success", False), res.get("data", {}),
+                     errors=res.get("errors", []), warnings=res.get("warnings", []))
+
+
 @op("procedural_world_inspect", reversibility="read-only")
 def procedural_world_inspect(args):
     if not hasattr(unreal, "GameForgeLandscapeLibrary"):
@@ -1161,6 +2439,120 @@ def anim_sample_bone_pose(args):
                      reversibility="read-only")
 
 
+@op("anim_sample_world_pose", reversibility="read-only")
+def anim_sample_world_pose(args):
+    """Component-space (world, actor at origin) bone transforms of an AnimSequence at given times, evaluated by
+    the engine's AnimPose library, plus the same bones in the skeleton's reference pose."""
+    seq = unreal.EditorAssetLibrary.load_asset(args["anim_sequence_path"])
+    if not isinstance(seq, unreal.AnimSequence):
+        return _envelope("anim_sample_world_pose", False, errors=["not an AnimSequence: " + args["anim_sequence_path"]])
+    ext, world = unreal.AnimPoseExtensions, unreal.AnimPoseSpaces.WORLD
+    bones = args.get("bones", [])
+
+    def read(pose, getter):
+        out = {}
+        for bone in bones:
+            t = getter(pose, bone, world)
+            out[bone] = [t.translation.x, t.translation.y, t.translation.z]
+        return out
+
+    frames = []
+    for t in args.get("times", [0.0]):
+        pose = ext.get_anim_pose_at_time(seq, float(t), unreal.AnimPoseEvaluationOptions())
+        frames.append({"time": t, "positions": read(pose, ext.get_bone_pose)})
+    ref = read(ext.get_anim_pose_at_time(seq, 0.0, unreal.AnimPoseEvaluationOptions()), ext.get_ref_bone_pose)
+    return _envelope("anim_sample_world_pose", True, {"frames": frames, "reference": ref,
+                                                      "skeleton": seq.get_editor_property("skeleton").get_path_name(),
+                                                      "play_length_s": seq.get_play_length()},
+                     reversibility="read-only")
+
+
+def _blendspace_record(bs):
+    rec = {"path": bs.get_path_name(), "class": bs.get_class().get_name()}
+    try:
+        params = bs.get_editor_property("blend_parameters")
+        rec["axes"] = [{"name": str(p.get_editor_property("display_name")), "min": p.get_editor_property("min"),
+                        "max": p.get_editor_property("max"), "grid": p.get_editor_property("grid_num")}
+                       for p in list(params)[:1 if isinstance(bs, unreal.BlendSpace1D) else 2]]
+    except Exception as exc:
+        rec["axes_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        rec["samples"] = [{"animation": s.get_editor_property("animation").get_path_name()
+                           if s.get_editor_property("animation") else None,
+                           "value": round(s.get_editor_property("sample_value").x, 3)}
+                          for s in bs.get_editor_property("sample_data")]
+    except Exception as exc:
+        rec["samples_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        rec["skeleton"] = bs.get_editor_property("skeleton").get_path_name()
+    except Exception:
+        pass
+    return rec
+
+
+@op("anim_create_blendspace_1d", mutates=True, reversibility="snapshot-only")
+def anim_create_blendspace_1d(args):
+    """Creates a BlendSpace1D on a skeleton with one axis and samples [{animation, value}] (e.g. Speed 0/150/450)."""
+    path = args["asset_path"]
+    skeleton = unreal.EditorAssetLibrary.load_asset(args["skeleton_path"])
+    if not isinstance(skeleton, unreal.Skeleton):
+        return _envelope("anim_create_blendspace_1d", False, errors=["not a Skeleton: " + args["skeleton_path"]])
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    package_path, name = path.rsplit("/", 1)
+    factory = unreal.BlendSpaceFactory1D()
+    factory.set_editor_property("target_skeleton", skeleton)
+    bs = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, package_path, unreal.BlendSpace1D, factory)
+    if bs is None:
+        return _envelope("anim_create_blendspace_1d", False, errors=["create_asset returned None"])
+    errors = []
+    try:
+        params = list(bs.get_editor_property("blend_parameters"))
+        axis = params[0]
+        axis.set_editor_property("display_name", args.get("axis_name", "Speed"))
+        axis.set_editor_property("min", float(args.get("min", 0.0)))
+        axis.set_editor_property("max", float(args.get("max", 600.0)))
+        axis.set_editor_property("grid_num", int(args.get("grid", 4)))
+        params[0] = axis
+        bs.set_editor_property("blend_parameters", params)
+    except Exception as exc:
+        errors.append(f"axis: {type(exc).__name__}: {exc}")
+    try:
+        samples = []
+        for spec in args.get("samples", []):
+            sample = unreal.BlendSample()
+            sample.set_editor_property("animation", unreal.EditorAssetLibrary.load_asset(spec["animation"]))
+            sample.set_editor_property("sample_value", unreal.Vector(float(spec["value"]), 0.0, 0.0))
+            samples.append(sample)
+        bs.set_editor_property("sample_data", samples)
+    except Exception as exc:
+        errors.append(f"samples: {type(exc).__name__}: {exc}")
+    # Property edits do not rebuild the runtime segments; without them the blend space evaluates to no samples.
+    runtime = {}
+    if hasattr(unreal, "GameForgeAnimationLibrary") and hasattr(unreal.GameForgeAnimationLibrary, "finalize_blend_space"):
+        fin = json.loads(unreal.GameForgeAnimationLibrary.finalize_blend_space(bs.get_path_name()))
+        runtime = fin.get("data", {})
+        errors.extend(fin.get("errors", []))
+    else:
+        errors.append("GameForgeAnimationLibrary.finalize_blend_space unavailable (plugin build older than m10v2)")
+    unreal.EditorAssetLibrary.save_loaded_asset(bs)
+    rec = _blendspace_record(bs) | {"runtime": runtime}
+    got = [s["value"] for s in rec.get("samples", [])]
+    want = [round(float(s["value"]), 3) for s in args.get("samples", [])]
+    if got != want:
+        errors.append(f"sample read-back {got} != requested {want}")
+    return _envelope("anim_create_blendspace_1d", not errors, rec, errors=errors, affected=[path],
+                     reversibility="snapshot-only")
+
+
+@op("anim_inspect_blendspace", reversibility="read-only")
+def anim_inspect_blendspace(args):
+    bs = unreal.EditorAssetLibrary.load_asset(args["blendspace_path"])
+    if not isinstance(bs, unreal.BlendSpace):
+        return _envelope("anim_inspect_blendspace", False, errors=["not a BlendSpace: " + args["blendspace_path"]])
+    return _envelope("anim_inspect_blendspace", True, _blendspace_record(bs))
+
+
 @op("anim_start_locomotion_test", mutates=True, reversibility="transient")
 def anim_start_locomotion_test(args):
     if not hasattr(unreal, "GameForgeAnimationLibrary"):
@@ -1233,7 +2625,20 @@ def anim_ik_retarget(args):
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     assets = [registry.get_asset_by_object_path(p) for p in args["animations"]]
     out = unreal.IKRetargetBatchOperation.duplicate_and_retarget(assets, src_mesh, tgt_mesh, rtg, "", "", "RTG_", "", False, True)
-    created = [str(a.package_name) for a in out]
+    created = []
+    # duplicate_and_retarget takes no output folder and writes next to the project root; move the results
+    # into destination_path so they land where the caller asked.
+    for a in out:
+        path = str(a.package_name)
+        dest = f"{folder}/{path.rsplit('/', 1)[-1]}"
+        if path != dest:
+            if unreal.EditorAssetLibrary.does_asset_exist(dest):
+                errors.append(f"destination already exists, left at {path}: {dest}")
+            elif unreal.EditorAssetLibrary.rename_asset(path, dest):
+                path = dest
+            else:
+                errors.append(f"could not move {path} to {dest}")
+        created.append(path)
     tgt_skel = tgt_mesh.get_editor_property("skeleton")
     on_target = [p for p in created
                  if isinstance(unreal.EditorAssetLibrary.load_asset(p), unreal.AnimSequence)
@@ -1278,19 +2683,33 @@ def pie_view_from(args):
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world()
     if not world:
         return _envelope("pie_view_from", False, errors=["no PIE world"])
-    xf = unreal.Transform(_vec(args["location"]), _rot(args["rotation"]), unreal.Vector(1, 1, 1))
-    cam = unreal.GameplayStatics.begin_deferred_actor_spawn_from_class(world, unreal.CameraActor, xf)
-    cam = unreal.GameplayStatics.finish_spawning_actor(cam, xf)
     pc = unreal.GameplayStatics.get_player_controller(world, 0)
-    if pc:
+    if pc is None:
+        return _envelope("pie_view_from", False, errors=["no player controller in PIE"])
+    if hasattr(unreal.GameplayStatics, "begin_deferred_actor_spawn_from_class"):
+        xf = unreal.Transform(_vec(args["location"]), _rot(args["rotation"]), unreal.Vector(1, 1, 1))
+        cam = unreal.GameplayStatics.begin_deferred_actor_spawn_from_class(world, unreal.CameraActor, xf)
+        cam = unreal.GameplayStatics.finish_spawning_actor(cam, xf)
         pc.set_view_target_with_blend(cam, 0.0)
-    return _envelope("pie_view_from", pc is not None, {"camera": cam.get_name()}, reversibility="transient")
+        return _envelope("pie_view_from", True, {"camera": cam.get_name(), "mode": "camera_actor"},
+                         reversibility="transient")
+    # UE 5.7 Python does not expose deferred spawning; move the player's pawn to the viewpoint instead (this
+    # changes the pawn's position, so use it for evidence framing only).
+    pawn = pc.get_controlled_pawn()
+    if pawn is None:
+        return _envelope("pie_view_from", False, errors=["no camera spawn API and no controlled pawn"])
+    pawn.set_actor_location(_vec(args["location"]), False, True)
+    pc.set_control_rotation(_rot(args["rotation"]))
+    loc = pawn.get_actor_location()
+    return _envelope("pie_view_from", True, {"mode": "pawn_teleport", "pawn": pawn.get_name(),
+                                             "location": {"x": loc.x, "y": loc.y, "z": loc.z}},
+                     warnings=["pawn moved to the viewpoint"], reversibility="transient")
 
 
 @op("pcg_scatter", mutates=True, reversibility="snapshot-only")
 def pcg_scatter(args):
-    """Builds a PCG graph (Input.Landscape -> Surface Sampler -> Static Mesh Spawner), places a PCG
-    Volume over the landscape and generates it. Count instances later with pcg_inspect."""
+    """Builds a PCG graph (Create Points Grid -> Static Mesh Spawner), places a PCG Volume and generates it.
+    Grid sampling only; there is no Surface Sampler yet. Check the result with pcg_verify_authenticity."""
     folder = args.get("graph_folder", "/Game/Audit/PCG")
     graph = _new_asset(args.get("graph_name", "PCG_AuditScatter"), folder, unreal.PCGGraph, unreal.PCGGraphFactory())
     grid_node, grid = graph.add_node_of_type(unreal.PCGCreatePointsGridSettings)
@@ -1319,6 +2738,79 @@ def pcg_scatter(args):
     return _envelope("pcg_scatter", all(e is not None for e in edges),
                      {"graph": graph.get_path_name(), "volume": vol.get_actor_label(), "generation_requested": True},
                      errors=[] if all(e is not None for e in edges) else ["PCG graph edge creation failed"])
+
+
+def _pcg_value(value):
+    """JSON → Unreal value for PCG settings props: {"__enum__": "Type.MEMBER"}, {"__struct__": "Type", field: ...}
+    (recursive), {"x","y","z"} vectors; anything else unchanged."""
+    if isinstance(value, dict) and "__enum__" in value:
+        enum_name, member = value["__enum__"].split(".", 1)
+        return getattr(getattr(unreal, enum_name), member)
+    if isinstance(value, dict) and "__struct__" in value:
+        struct = getattr(unreal, value["__struct__"])()
+        for key, field in value.items():
+            if key != "__struct__":
+                struct.set_editor_property(key, _pcg_value(field))
+        return struct
+    if isinstance(value, dict) and set(value) == {"x", "y", "z"}:
+        return _vec(value)
+    return value
+
+
+@op("pcg_build_graph", mutates=True, reversibility="snapshot-only")
+def pcg_build_graph(args):
+    """Builds a PCG graph from nodes [{id, settings, props, meshes}] and edges [{from, from_pin, to, to_pin}]
+    ("input"/"output" name the graph's own IO nodes), places an unbounded-height PCG Volume and generates it.
+    Example chain: PCGGetLandscapeSettings -> PCGSurfaceSamplerSettings -> PCGDensityFilterSettings ->
+    PCGStaticMeshSpawnerSettings. Struct/enum props use _pcg_value's JSON forms. Verify with pcg_verify_authenticity."""
+    folder, name = args["graph_path"].rsplit("/", 1)
+    graph = _new_asset(name, folder, unreal.PCGGraph, unreal.PCGGraphFactory())
+    nodes, errors = {"input": graph.get_input_node(), "output": graph.get_output_node()}, []
+    for spec in args.get("nodes", []):
+        cls = getattr(unreal, spec["settings"], None)
+        if cls is None:
+            errors.append(f"unknown PCG settings class {spec['settings']}")
+            continue
+        node, settings = graph.add_node_of_type(cls)
+        for key, value in (spec.get("props") or {}).items():
+            try:
+                settings.set_editor_property(key, _pcg_value(value))
+            except Exception as exc:
+                errors.append(f"{spec['id']}.{key}: {exc}")
+        if spec.get("meshes"):
+            selector = settings.get_editor_property("mesh_selector_parameters")
+            entries = []
+            for m in spec["meshes"]:
+                entry = unreal.PCGMeshSelectorWeightedEntry()
+                desc = entry.get_editor_property("descriptor")
+                desc.set_editor_property("static_mesh", unreal.EditorAssetLibrary.load_asset(m["mesh"]))
+                entry.set_editor_property("descriptor", desc)
+                entry.set_editor_property("weight", int(m.get("weight", 1)))
+                entries.append(entry)
+            selector.set_editor_property("mesh_entries", entries)
+        nodes[spec["id"]] = node
+    edges = []
+    for e in args.get("edges", []):
+        edge = graph.add_edge(nodes.get(e["from"]), e.get("from_pin", "Out"), nodes.get(e["to"]), e.get("to_pin", "In"))
+        edges.append({**e, "ok": edge is not None})
+        if edge is None:
+            errors.append(f"edge failed: {e}")
+    unreal.EditorAssetLibrary.save_loaded_asset(graph)
+    center, extent = args.get("center", {"x": 0, "y": 0, "z": 0}), args.get("extent", {"x": 5000, "y": 5000, "z": 5000})
+    label = args.get("label", "GF_PCGGraph")
+    old = _find_actor(label)
+    if old is not None:
+        old.destroy_actor()
+    vol = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PCGVolume, _vec(center))
+    vol.set_actor_label(label)
+    vol.set_actor_scale3d(unreal.Vector(extent["x"] / 100.0, extent["y"] / 100.0, extent["z"] / 100.0))
+    comp = vol.get_component_by_class(unreal.PCGComponent)
+    if args.get("seed") is not None:
+        comp.set_editor_property("seed", int(args["seed"]))
+    comp.set_graph(graph)
+    comp.generate_local(True)
+    return _envelope("pcg_build_graph", not errors, {"graph": graph.get_path_name(), "volume": label, "edges": edges},
+                     errors=errors, affected=[graph.get_path_name()], reversibility="snapshot-only")
 
 
 @op("pcg_inspect", reversibility="read-only")
@@ -1350,6 +2842,70 @@ def pcg_inspect(args):
                         total += c.get_instance_count()
     return _envelope("pcg_inspect", total > 0, {"instances": total, "ism_components": comps, "generating": generating},
                      errors=[] if total > 0 else ["no PCG instances generated"], reversibility="read-only")
+
+
+@op("pcg_verify_authenticity", reversibility="read-only")
+def pcg_verify_authenticity(args):
+    """Proves instances came from a PCG graph: lists the graph's node settings classes and counts only ISM
+    components on the PCG volume that carry PCG's generated-component tag."""
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    label = args.get("label", "GF_PCGScatter")
+    tag = args.get("generated_tag", "PCG Generated Component")
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.PCGVolume):
+        if actor.get_actor_label() != label:
+            continue
+        pcg = actor.get_component_by_class(unreal.PCGComponent)
+        graph, notes = None, []
+        for getter in (lambda: pcg.get_graph(), lambda: pcg.get_editor_property("graph_instance").get_graph(),
+                       lambda: pcg.get_editor_property("graph_instance").get_editor_property("graph"),
+                       lambda: pcg.get_editor_property("graph")):
+            try:
+                graph = getter()
+                if graph:
+                    break
+            except Exception as exc:  # accessor names differ between engine versions
+                notes.append(f"{type(exc).__name__}: {exc}")
+        nodes = []
+        if graph:
+            for node in graph.get_editor_property("nodes"):
+                settings = node.get_settings()
+                nodes.append(settings.get_class().get_name() if settings else "None")
+        tagged, untagged, heights = [], [], []
+        # Optional footprints [{center: [x, y], half: [hx, hy]}] (world XY boxes): count every instance inside.
+        boxes = args.get("exclusion_boxes") or []
+        inside = [0] * len(boxes)
+        for c in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
+            entry = {"name": c.get_name(), "class": c.get_class().get_name(), "instances": c.get_instance_count(),
+                     "mesh": c.static_mesh.get_path_name() if c.static_mesh else None}
+            is_pcg = c.component_has_tag(tag)
+            (tagged if is_pcg else untagged).append(entry)
+            if is_pcg:
+                step = max(1, entry["instances"] // 200)
+                for i in range(0, entry["instances"], step):
+                    heights.append(c.get_instance_transform(i, True).translation.z)
+                if boxes:
+                    for i in range(entry["instances"]):
+                        t = c.get_instance_transform(i, True).translation
+                        for b, box in enumerate(boxes):
+                            if abs(t.x - box["center"][0]) <= box["half"][0] and abs(t.y - box["center"][1]) <= box["half"][1]:
+                                inside[b] += 1
+        instances = sum(e["instances"] for e in tagged)
+        if heights:
+            mean = sum(heights) / len(heights)
+            height_stats = {"sampled": len(heights), "min_z": round(min(heights), 1), "max_z": round(max(heights), 1),
+                            "std_z": round((sum((h - mean) ** 2 for h in heights) / len(heights)) ** 0.5, 1)}
+        else:
+            height_stats = {"sampled": 0}
+        ok = bool(graph) and instances > 0
+        return _envelope("pcg_verify_authenticity", ok,
+                         {"graph": graph.get_path_name() if graph else None, "node_settings": nodes,
+                          "pcg_tagged_components": tagged, "untagged_ism_components": untagged,
+                          "pcg_instances": instances, "instance_heights": height_stats,
+                          "instances_inside_exclusion_boxes": inside if boxes else None,
+                          "graph_accessor_notes": notes},
+                         errors=[] if ok else ["no PCG-tagged instances on the volume"], reversibility="read-only")
+    return _envelope("pcg_verify_authenticity", False, errors=[f"no PCGVolume labelled {label}"],
+                     reversibility="read-only")
 
 
 @op("nav_find_path", reversibility="read-only")
@@ -1387,6 +2943,171 @@ def pie_move_player_to(args):
     res = json.loads(getattr(lib, names[0])(json.dumps(loc)))
     return _envelope("pie_move_player_to", res.get("ok", False), res.get("data", {}), errors=res.get("errors", []),
                      reversibility="transient")
+
+
+@op("landscape_height_at", reversibility="read-only")
+def landscape_height_at(args):
+    """Ground height under each [x, y] point (downward line trace against world-static geometry)."""
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    out = []
+    for x, y in args.get("points", []):
+        hit = unreal.SystemLibrary.line_trace_single(world, unreal.Vector(x, y, 50000), unreal.Vector(x, y, -50000),
+                                                     unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [],
+                                                     unreal.DrawDebugTrace.NONE, True)
+        parts = hit.to_tuple() if hit else None
+        out.append(round(parts[4].z, 1) if parts and parts[0] else None)
+    return _envelope("landscape_height_at", all(z is not None for z in out), {"heights": out},
+                     errors=[] if all(z is not None for z in out) else ["some points hit nothing"])
+
+
+_GENERATED_CLASSES = ("Landscape", "LandscapeStreamingProxy", "PCGVolume")
+
+
+@op("world_clear_generated", mutates=True, reversibility="transactional")
+def world_clear_generated(args):
+    """Deletes generated content only. With `data_layer_asset` (World Partition levels), "generated" means
+    membership of that Data Layer, so user actors are kept whatever their label (roadmap AD-7). Without it,
+    the interim rule applies: labels with a generator prefix (default "GF_") plus generated landscape/PCG classes."""
+    deleted, kept = [], []
+    if args.get("data_layer_asset"):
+        inst, err = _data_layer_instance(args["data_layer_asset"])
+        if inst is None:
+            return _envelope("world_clear_generated", False, errors=[err])
+        # World Partition only has loaded cells in memory; iterating loaded actors would silently skip unloaded
+        # generated actors. Use the actor descriptors (all actors), load exactly the layer's members, delete them.
+        descs = _wp_actor_descs() or []
+        layer_path = inst.get_asset().get_path_name()
+        member_descs = [d for d in descs if layer_path in _desc_layers(d)]
+        unreal.WorldPartitionBlueprintLibrary.load_actors([d.get_editor_property("guid") for d in member_descs])
+        members = set(_dl_sub().get_actors_from_data_layer(inst))
+        with unreal.ScopedEditorTransaction("GameForge world_clear_generated"):
+            for actor in list(members):
+                deleted.append(actor.get_actor_label())
+                actor.destroy_actor()
+        kept = [str(d.get_editor_property("label")) for d in descs if layer_path not in _desc_layers(d)]
+        # Destroyed actors keep their descriptor (and external-actor file) until the level is saved; read back the
+        # live layer instead, and report how many descriptor deletions the next save will commit.
+        remaining = [a.get_actor_label() for a in _dl_sub().get_actors_from_data_layer(inst)]
+        missed = len(member_descs) - len(deleted)
+        ok = not remaining and missed <= 0
+        return _envelope("world_clear_generated", ok,
+                         {"deleted": deleted, "kept": kept, "rule": "data_layer", "members_by_descriptor": len(member_descs),
+                          "descriptors_pending_save": len(deleted)},
+                         errors=[] if ok else [f"still in layer: {remaining}; members not loaded/deleted: {max(missed, 0)}"],
+                         reversibility="transactional")
+    prefixes = tuple(args.get("prefixes", ["GF_"]))
+    with unreal.ScopedEditorTransaction("GameForge world_clear_generated"):
+        for actor in _actor_sub().get_all_level_actors():
+            label, cls = actor.get_actor_label(), actor.get_class().get_name()
+            if label.startswith(prefixes) or cls in _GENERATED_CLASSES:
+                deleted.append(label)
+                actor.destroy_actor()
+            else:
+                kept.append(label)
+    remaining = [a.get_actor_label() for a in _actor_sub().get_all_level_actors()
+                 if a.get_actor_label().startswith(prefixes) or a.get_class().get_name() in _GENERATED_CLASSES]
+    return _envelope("world_clear_generated", not remaining, {"deleted": deleted, "kept": kept, "rule": "label_prefix"},
+                     errors=[] if not remaining else [f"still present: {remaining}"], reversibility="transactional")
+
+
+# ── World Partition Data Layers (generated-content ownership, roadmap AD-7) ──────────────────────────────
+
+def _dl_sub():
+    return unreal.get_editor_subsystem(unreal.DataLayerEditorSubsystem)
+
+
+def _world_is_partitioned():
+    world = unreal.EditorLevelLibrary.get_editor_world()
+    try:
+        return world.get_world_settings().get_editor_property("world_partition") is not None
+    except Exception:
+        return False
+
+
+def _wp_actor_descs():
+    """All actor descriptors of the editor world's World Partition (loaded or not; only saved actors have one);
+    None if the world is not partitioned. In 5.7 Python the call returns the descriptor array itself."""
+    if not _world_is_partitioned():
+        return None
+    res = unreal.WorldPartitionBlueprintLibrary.get_actor_descs()
+    if isinstance(res, tuple):  # (bool, array) on engine versions that keep the return value
+        res = next((x for x in res if not isinstance(x, bool)), [])
+    return list(res)
+
+
+def _desc_layers(desc):
+    # str() of a SoftObjectPath struct is its repr; export_text() gives the "/Game/...Asset.Asset" path.
+    return {p.export_text().strip("'\"") for p in desc.get_editor_property("data_layer_assets")}
+
+
+def _data_layer_instance(asset_path):
+    asset = unreal.EditorAssetLibrary.load_asset(asset_path)
+    if not isinstance(asset, unreal.DataLayerAsset):
+        return None, "not a DataLayerAsset: " + asset_path
+    inst = _dl_sub().get_data_layer_instance(asset)
+    return (inst, "") if inst else (None, "no instance of this Data Layer in the current (partitioned) world")
+
+
+@op("datalayer_ensure", mutates=True, reversibility="snapshot-only")
+def datalayer_ensure(args):
+    """Creates (or reuses) a DataLayerAsset and its instance in the current World Partition level."""
+    path = args["asset_path"]
+    asset = unreal.EditorAssetLibrary.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else None
+    if asset is None:
+        folder, name = path.rsplit("/", 1)
+        asset = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.DataLayerAsset,
+                                                                         unreal.DataLayerFactory())
+        if asset is None:
+            return _envelope("datalayer_ensure", False, errors=["could not create DataLayerAsset " + path])
+        unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    inst = _dl_sub().get_data_layer_instance(asset)
+    created = False
+    if inst is None:
+        params = unreal.DataLayerCreationParameters()
+        params.set_editor_property("data_layer_asset", asset)
+        inst = _dl_sub().create_data_layer_instance(params)
+        created = inst is not None
+    if inst is None:
+        return _envelope("datalayer_ensure", False, errors=["create_data_layer_instance failed (is the level partitioned?)"])
+    return _envelope("datalayer_ensure", True, {"asset_path": asset.get_path_name(), "instance": inst.get_name(),
+                                                "created_instance": created}, affected=[path])
+
+
+@op("datalayer_add_actors", mutates=True, reversibility="transactional")
+def datalayer_add_actors(args):
+    inst, err = _data_layer_instance(args["asset_path"])
+    if inst is None:
+        return _envelope("datalayer_add_actors", False, errors=[err])
+    actors, missing = [], []
+    for label in args["labels"]:
+        a = _find_actor(label)
+        (actors.append(a) if a is not None else missing.append(label))
+    ok = bool(actors) and _dl_sub().add_actors_to_data_layer(actors, inst)
+    members = {a.get_actor_label() for a in _dl_sub().get_actors_from_data_layer(inst)}
+    not_in = [a.get_actor_label() for a in actors if a.get_actor_label() not in members]
+    return _envelope("datalayer_add_actors", bool(ok) and not missing and not not_in,
+                     {"added": len(actors) - len(not_in), "missing": missing, "not_in_layer_after": not_in},
+                     errors=[] if (ok and not missing and not not_in) else ["read-back: some actors not in the layer"],
+                     reversibility="transactional")
+
+
+@op("datalayer_list_actors", reversibility="read-only")
+def datalayer_list_actors(args):
+    inst, err = _data_layer_instance(args["asset_path"])
+    if inst is None:
+        return _envelope("datalayer_list_actors", False, errors=[err])
+    loaded = sorted(a.get_actor_label() for a in _dl_sub().get_actors_from_data_layer(inst))
+    descs = _wp_actor_descs()
+    if descs is None:
+        return _envelope("datalayer_list_actors", True, {"instance": inst.get_name(), "actors": loaded, "source": "loaded"})
+    # World Partition: membership from actor descriptors, so unloaded members are listed too.
+    layer_path = inst.get_asset().get_path_name()
+    labels = sorted(str(d.get_editor_property("label")) for d in descs if layer_path in _desc_layers(d))
+    # Unsaved members have no descriptor yet; report them from the loaded set so nothing is missed.
+    labels = sorted(set(labels) | set(loaded))
+    return _envelope("datalayer_list_actors", True, {"instance": inst.get_name(), "actors": labels,
+                                                     "loaded": loaded, "source": "actor_descriptors+loaded",
+                                                     "descriptor_count": len(descs)})
 
 
 @op("world_generation_digest", reversibility="read-only")

@@ -71,6 +71,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Animation")
 	static FString GetLocomotionTestResult();
 
+	/** Validates samples and rebuilds a blend space's runtime segments/triangles (what the editor UI does on
+	 *  edit). Python property edits alone leave them empty, so evaluation returns no samples. */
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Animation")
+	static FString FinalizeBlendSpace(const FString& BlendSpacePath);
+
 	/** Sends the PIE player's pawn along a NavMesh path to {x,y,z} (UAIBlueprintHelperLibrary::SimpleMoveToLocation). */
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Animation")
 	static FString MovePIEPlayerTo(const FString& ParamsJson);

@@ -1,0 +1,129 @@
+{
+  "timestamp": "2026-10-31T00:52:16+0530",
+  "checks": {
+    "all_pieces_built": true,
+    "piece_bounds_match_kit": true,
+    "openings_cut": true,
+    "room_assembled": true,
+    "screenshot_has_content": true
+  },
+  "steps": {
+    "pieces": {
+      "Wall": {
+        "ok": true,
+        "errors": [],
+        "triangles": 12,
+        "bounds_cm": [
+          400.0,
+          20.0,
+          300.0
+        ],
+        "expected_bounds_cm": [
+          400.0,
+          20.0,
+          300.0
+        ],
+        "bounds_ok": true,
+        "collision": "CTF_USE_COMPLEX_AS_SIMPLE",
+        "simple_collisions": 0
+      },
+      "WallDoor": {
+        "ok": true,
+        "errors": [],
+        "triangles": 32,
+        "bounds_cm": [
+          400.0,
+          20.0,
+          300.0
+        ],
+        "expected_bounds_cm": [
+          400.0,
+          20.0,
+          300.0
+        ],
+        "bounds_ok": true,
+        "collision": "CTF_USE_COMPLEX_AS_SIMPLE",
+        "simple_collisions": 0
+      },
+      "WallWindow": {
+        "ok": true,
+        "errors": [],
+        "triangles": 38,
+        "bounds_cm": [
+          400.0,
+          20.0,
+          300.0
+        ],
+        "expected_bounds_cm": [
+          400.0,
+          20.0,
+          300.0
+        ],
+        "bounds_ok": true,
+        "collision": "CTF_USE_COMPLEX_AS_SIMPLE",
+        "simple_collisions": 0
+      },
+      "Floor": {
+        "ok": true,
+        "errors": [],
+        "triangles": 12,
+        "bounds_cm": [
+          400.0,
+          400.0,
+          20.0
+        ],
+        "expected_bounds_cm": [
+          400.0,
+          400.0,
+          20.0
+        ],
+        "bounds_ok": true,
+        "collision": "CTF_USE_COMPLEX_AS_SIMPLE",
+        "simple_collisions": 0
+      },
+      "Pillar": {
+        "ok": true,
+        "errors": [],
+        "triangles": 12,
+        "bounds_cm": [
+          30.0,
+          30.0,
+          300.0
+        ],
+        "expected_bounds_cm": [
+          30.0,
+          30.0,
+          300.0
+        ],
+        "bounds_ok": true,
+        "collision": "CTF_USE_DEFAULT",
+        "simple_collisions": 1
+      }
+    },
+    "layout": {
+      "pieces": 20,
+      "placed": 20
+    },
+    "screenshot": {
+      "path": "E:\\GameForge\\validation\\m12_kit_demo_20261031\\Saved\\Screenshots\\m12_kit_room.png",
+      "stats": {
+        "size": [
+          1280,
+          720
+        ],
+        "crop_mean_rgb": [
+          87.5,
+          87.55,
+          87.35
+        ],
+        "crop_lum_std": 88.39,
+        "crop_hf_energy": 1.433,
+        "red_over_blue": 1.002
+      },
+      "errors": []
+    }
+  },
+  "project": "E:\\GameForge\\validation\\m12_kit_demo_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

@@ -1,6 +1,6 @@
 # GameForge Performance Report
 
-Updated 2026-10-30T17:20Z (Claude Code).
+Updated 2026-10-30T20:00Z (Claude Code).
 
 ## Shipped IDE budgets (measured earlier by `scripts/ide_resource_benchmark.py`, from the source tree)
 | Metric | Budget (proposed) | Last measured | Status |
@@ -17,5 +17,19 @@ Ryzen 5 7600X, 32 GB DDR5, RX 7700 XT 12 GB. Measured LLM speeds: 4B 102.8 tok/s
 Rule: no UE Editor run concurrently with a >6 GB VRAM model job.
 
 ## Game builds
-Packaged Win64 games are ~860 MB each (Development). There is no profiling data yet. M19 adds `-csvprofile`,
+Packaged Win64 games are ~860 MB each (Development). Packaged games have no profiling data yet.
+
+## First engine profile (M19, 2026-10-30) — `scripts/perf_village_pie.py` → `reports/m19_perf_village.json`
+Generated forest village (landscape 127×127 vertices with 3 paint layers, ~270 PCG instances, 3 kit houses, Sky
+Atmosphere + clouds + fog), editor PIE, `-RenderOffscreen` 1280×720, Development editor, `csvprofile` for ~10 s:
+
+| Stat | Mean | p95 | Max |
+|---|---|---|---|
+| FrameTime | 8.34 ms (≈120 fps) | 8.97 ms | 18.6 ms |
+| GameThreadTime | 3.70 ms | 4.61 ms | 7.47 ms |
+| GPUTime | 2.00 ms | 2.10 ms | 2.16 ms |
+| RenderThreadTime | 0.09 ms | — | 2.61 ms |
+
+1,190 frames. This is an editor-PIE measurement at offscreen resolution, so treat it as a regression baseline,
+not a shipping number. Next: the same capture in a packaged build (`-csvprofile` on the command line), plus
 Insights traces and per-game budgets.

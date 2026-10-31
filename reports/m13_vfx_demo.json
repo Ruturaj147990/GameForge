@@ -1,0 +1,264 @@
+{
+  "timestamp": "2026-10-31T01:16:09+0530",
+  "checks": {
+    "systems_created": true,
+    "pie_explosion_has_live_particles": true,
+    "pie_fountain_has_live_particles": true
+  },
+  "steps": {
+    "systems": {
+      "Explosion": {
+        "ok": true,
+        "errors": [],
+        "inspect_ok": true,
+        "path": "/Game/M13/VFX/NS_GFExplosion.NS_GFExplosion"
+      },
+      "Fountain": {
+        "ok": true,
+        "errors": [],
+        "inspect_ok": true,
+        "path": "/Game/M13/VFX/NS_GFFountain.NS_GFFountain"
+      }
+    },
+    "pie_start": true,
+    "spawned": {
+      "Explosion": {
+        "ok": true,
+        "errors": [],
+        "data": {
+          "label": "GF_Explosion",
+          "system": "/Game/M13/VFX/NS_GFExplosion.NS_GFExplosion",
+          "world": "VFXTest",
+          "active": true
+        }
+      },
+      "Fountain": {
+        "ok": true,
+        "errors": [],
+        "data": {
+          "label": "GF_Fountain",
+          "system": "/Game/M13/VFX/NS_GFFountain.NS_GFFountain",
+          "world": "VFXTest",
+          "active": true
+        }
+      }
+    },
+    "particle_series": [
+      {
+        "t": 0.01,
+        "counts": {
+          "GF_Explosion": 190,
+          "GF_Fountain": 0
+        }
+      },
+      {
+        "t": 0.27,
+        "counts": {
+          "GF_Explosion": 190,
+          "GF_Fountain": 24
+        }
+      },
+      {
+        "t": 0.54,
+        "counts": {
+          "GF_Explosion": 190,
+          "GF_Fountain": 48
+        }
+      },
+      {
+        "t": 0.8,
+        "counts": {
+          "GF_Explosion": 190,
+          "GF_Fountain": 71
+        }
+      },
+      {
+        "t": 1.06,
+        "counts": {
+          "GF_Explosion": 190,
+          "GF_Fountain": 95
+        }
+      },
+      {
+        "t": 1.32,
+        "counts": {
+          "GF_Explosion": 145,
+          "GF_Fountain": 118
+        }
+      },
+      {
+        "t": 1.58,
+        "counts": {
+          "GF_Explosion": 101,
+          "GF_Fountain": 142
+        }
+      },
+      {
+        "t": 1.85,
+        "counts": {
+          "GF_Explosion": 60,
+          "GF_Fountain": 158
+        }
+      },
+      {
+        "t": 2.11,
+        "counts": {
+          "GF_Explosion": 19,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 2.37,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 158
+        }
+      },
+      {
+        "t": 2.63,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 2.89,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 3.15,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 3.41,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 158
+        }
+      },
+      {
+        "t": 3.67,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 3.94,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 158
+        }
+      },
+      {
+        "t": 4.2,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 4.46,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 4.72,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 158
+        }
+      },
+      {
+        "t": 4.99,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 5.25,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 158
+        }
+      },
+      {
+        "t": 5.51,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      },
+      {
+        "t": 5.78,
+        "counts": {
+          "GF_Explosion": 0,
+          "GF_Fountain": 157
+        }
+      }
+    ],
+    "particle_peaks": {
+      "Explosion": 190,
+      "Fountain": 158
+    },
+    "emitters_last": [
+      {
+        "label": "GF_Explosion",
+        "system": "/Game/M13/VFX/NS_GFExplosion.NS_GFExplosion",
+        "active": false,
+        "emitters": [
+          {
+            "name": "OmnidirectionalBurst",
+            "sim_target": "CPU",
+            "particles": 0
+          },
+          {
+            "name": "UpwardMeshBurst",
+            "sim_target": "CPU",
+            "particles": 0
+          },
+          {
+            "name": "SimpleSpriteBurst",
+            "sim_target": "CPU",
+            "particles": 0
+          }
+        ],
+        "particles": 0
+      },
+      {
+        "label": "GF_Fountain",
+        "system": "/Game/M13/VFX/NS_GFFountain.NS_GFFountain",
+        "active": true,
+        "emitters": [
+          {
+            "name": "Fountain",
+            "sim_target": "GPU",
+            "particles": 158
+          }
+        ],
+        "particles": 158
+      }
+    ],
+    "screenshot": {
+      "path": "E:\\GameForge\\validation\\m13_vfx_20261031\\Saved\\Screenshots\\m13_vfx_pie.png",
+      "errors": []
+    }
+  },
+  "not_covered": [
+    "gameplay-event trigger",
+    "M11 renderer material",
+    "stat Niagara cost"
+  ],
+  "project": "E:\\GameForge\\validation\\m13_vfx_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

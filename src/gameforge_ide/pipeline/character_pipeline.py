@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry
 from src.gameforge_ide.backend.models.character_spec import CharacterSpec
 from src.gameforge_ide.backend.models.provenance import (
     AssetProvenanceRecord,
@@ -65,11 +66,13 @@ class CharacterPipeline:
         self,
         workspace_dir: Optional[Path] = None,
         output_dir: Optional[Path] = None,
+        asset_registry: Optional[AssetRegistry] = None,
     ):
         self.workspace_dir = (workspace_dir or Path(r"E:\GameForge\validation\live_ops_probe")).resolve()
         self.output_dir = (output_dir or Path(r"E:\GameForge\assets\generated\characters")).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.license_registry = LicenseRegistry()
+        self.asset_registry = asset_registry or AssetRegistry(self.workspace_dir)
 
     def run_pipeline(
         self,
@@ -95,6 +98,13 @@ class CharacterPipeline:
             errors.append(f"Territory compliance refused: {terr_err}")
             return self._fail_result(spec.character_id, errors, diagnostics)
 
+        registry_id = self.asset_registry.register(AssetRecord(
+            name=spec.name, asset_type="skeletal_mesh", purpose=spec.purpose, provenance="procedural",
+            backend="GameForge-ProceduralRig-V1", backend_version="1.0.0", license="CC-BY-4.0",
+            spec=spec.model_dump()))
+        self.asset_registry.advance(registry_id, "SPEC", True, "spec validated")
+        diagnostics["registry_id"] = registry_id
+
         # 3. Procedural Skinned Character Generation
         gen = ProceduralSkinnedCharacterGenerator(output_dir=self.output_dir)
         try:
@@ -111,7 +121,9 @@ class CharacterPipeline:
         except Exception as e:
             generation_passed = False
             errors.append(f"Generation error: {e}")
+            self.asset_registry.advance(registry_id, "GENERATE", False, str(e))
             return self._fail_result(spec.character_id, errors, diagnostics)
+        self.asset_registry.advance(registry_id, "GENERATE", True, artifact_path=str(gltf_file))
 
         # 4. Rig & Skinning Validation
         rig_report = CharacterRigValidator.validate_bundle(bundle)
@@ -122,6 +134,7 @@ class CharacterPipeline:
             "deformation_passed": rig_report.deformation_passed,
             "deformation_tests": [asdict(t) for t in rig_report.deformation_tests],
         }
+        self.asset_registry.advance(registry_id, "VALIDATE", rig_report.is_valid, "; ".join(rig_report.errors))
         if not rig_report.is_valid:
             errors.extend(rig_report.errors)
             return self._fail_result(spec.character_id, errors, diagnostics)
@@ -156,17 +169,22 @@ class CharacterPipeline:
         prov_path = self.output_dir / f"{spec.name}_provenance.json"
         prov.save_to_file(prov_path)
 
+        # This pipeline performs no Unreal import, inspection or promotion (the engine path is
+        # unreal/live_editor.py), so those gates are reported as not run rather than passed.
+        diagnostics["unreal_stages"] = "NOT_PERFORMED"
+        diagnostics["planned_skeletal_mesh_path"] = f"{spec.target_destination_path}/{spec.character_id}/{dest_name}"
+
         return CharacterPipelineResult(
             character_id=spec.character_id,
             success=True,
             spec_valid=True,
             generation_passed=True,
             rig_validation_passed=True,
-            unreal_import_passed=True,
-            inspection_passed=True,
-            promotion_passed=True,
-            skeletal_mesh_path=f"{spec.target_destination_path}/{spec.character_id}/{dest_name}",
-            skeleton_path=f"{spec.target_destination_path}/{spec.character_id}/{dest_name}_Skeleton",
+            unreal_import_passed=False,
+            inspection_passed=False,
+            promotion_passed=False,
+            skeletal_mesh_path="",
+            skeleton_path="",
             bone_count=len(bundle.bones),
             vertex_count=len(bundle.vertices),
             triangle_count=len(bundle.triangles),

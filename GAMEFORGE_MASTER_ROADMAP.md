@@ -307,14 +307,123 @@ spatial SFX (M14), intro cinematic (M16), HUD/menus (M3/M4), QA scenarios (M19),
 
 ## 5. Next action (always keep current)
 
-Done 2026-10-30T17:45Z: WP-A steps 2–3 (`unreal/op_catalog.py`, `scripts/gen_op_coverage.py`) and step 4 core
-(`backend/assets/registry.py`). 419 unit + 45 protected pass.
+**Status at 2026-10-31T10:00Z (Claude, interactive session).** Tests: 491 unit + 45 protected pass. Nothing committed.
+Done on 2026-10-31 (details in items 1–6 below):
+- M16 cinematic 8/8.
+- M10 v2 blend-space drive 10/10.
+- M13 + M14 gameplay feedback 10/10 and MetaSound 5/5.
+- M8 v2 village 15/15 with PCG exclusion, plus World Partition / Data Layers 9/9.
+- M15 guard 6/6 and quest + save/load 8/8.
+- Packaged kit self-test PARTIAL (`reports/kit_packaged_selftest.json`): gameplay logic and save/restore PASS in a cooked game, but the self-test pawn was snapped, not walked. **Next step #1:** a CharacterMovement pawn (or real input) with the leg-speed check.
 
-1. ~~WP-A step 4b~~ DONE 18:15Z (quarantine → registry; TRELLIS.2 mislabel fixed). Remaining: wire the registry
-   into `pipeline/character_pipeline.py` and `pipeline/animation_pipeline.py` (both build `AssetProvenanceRecord`
-   directly) and backfill the GFAdventurerHero row (provenance `procedural`, evidence
-   `reports/audit_m9_m10_completion.json`).
-2. **WP-A step 1**: re-verify retarget-track authenticity (per-bone world-space comparison) and PCG on a disposable
-   project; write `reports/wpa_reverify_<date>.json`.
-3. M11, starting with the procedural PBR texture generator (`backend/tools/pbr_texture_generator.py`, if not
-   already present), then the material graph ops.
+The list "Done this window" just below is the 2026-10-30 window-#2 record.
+Every engine demo runs on a disposable copy of `E:\GameForge\validation\live_ops_probe` (≈3–6 min each) and
+writes `reports/<name>.json`. Run them from the repo root with `python scripts/<name>.py`.
+
+**Done this window (evidence in `reports/`):**
+- WP-A: PASS. Registry wired everywhere; re-verify 10/10 (`wpa_reverify_20261031.json`).
+- M11: PASS. Material demo 14/14 (`m11_material_demo.json`), landscape layers 7/7 (`m11_landscape_demo.json`).
+- M12: PASS. Prop 9/9 (`m12_asset_demo.json`), kit 5/5 (`m12_kit_demo.json`).
+- M8 v2: surface PCG 4/4 (`m8v2_pcg_demo.json`); forest village acceptance 10/10 (`m8v2_village_demo.json`).
+- M13: PARTIAL. 3/3 (`m13_vfx_demo.json`): template systems, PIE spawn, live particle counts.
+- M14: PARTIAL. 7/7 (`m14_audio_demo.json`): procedural SFX, import, attenuation, PIE playback + GF_EVENT.
+- M10 v2: BlendSpace1D asset 4/4 (`m10v2_blendspace_demo.json`).
+- M16: PARTIAL (`m16_sequence_demo.json`). Sequence build, cut/key/audio read-back and scrubbing all PASS.
+  MRQ wrote 72 PNG frames, but they are pure black (all zeros), so cut detection is NOT VERIFIED.
+- M19: CSV-profiler ops + parser; village PIE capture in `m19_perf_village.json` (see the performance report).
+
+**Next steps, in order (each one: change → run its demo → update this list, the matrix and context.md):**
+1. ~~M16 render fix~~ **DONE 2026-10-31T04:45Z, 8/8 PASS.** Root cause: the demo's sun (yaw 160) lit the cube faces
+   facing away from the cameras, and there is no sky atmosphere, so the visible faces were exactly 0. An Unlit-pass
+   diagnostic (`sequence_render` now takes `render_pass` and `warmup_frames`) proved the cameras, cuts and MRQ were
+   fine. Lesson: before blaming MRQ, render Unlit. Old notes follow.
+   MRQ PNGs are RGBA 640x360 with RGB = 0 and alpha = 255 on every frame. Ruled out:
+   `-RenderOffscreen` (run 3 used a visible window) and exposure (run 4: 20,000-lux sun + SkyLight, no manual
+   exposure volume). Next suspects, in order:
+   (a) the job's deferred pass needs `MoviePipelineDeferredPassBase` settings, or the default "FinalImage"
+   render-pass layer is empty without a `MoviePipelineGameOverrideSetting`;
+   (b) ~~`MoviePipelineNewProcessExecutor`~~ tried in run 5 (`sequence_render` now takes `executor`): still black;
+   (c) render one frame via `HighResShot` from each CineCamera as a fallback cut check.
+   Pass = `cuts_detected_at_24_and_48` and `shots_show_expected_colours` true in `reports/m16_sequence_demo.json`.
+2. ~~M10 v2 WP-10.1 drive~~ **DONE 2026-10-31T05:30Z, 10/10 PASS** (`scripts/demo_m10v2_blend_drive.py`,
+   plugin build **m10v2**). Gotcha: Python-built blend spaces have empty runtime segments until
+   `UBlendSpace::ResampleData()` runs, so `anim_create_blendspace_1d` now calls the native
+   `FinalizeBlendSpace`. Original notes:
+   add an optional `UBlendSpace* LocomotionBlendSpace` to `GameForgeLocomotionAnimInstance`
+   (Runtime module). In `FGameForgeLocomotionProxy::Evaluate`, for Idle/Walk/Run, use
+   `BlendSpace->GetSamplesFromBlendInput(FVector(GroundSpeed,0,0), …)` + `GetAnimationPose`. Rebuild the plugin
+   (command below) and extend the M9/M10 audit PIE run to log blend weights at 0/150/300/450 speed.
+3. ~~M13 gameplay trigger~~ **DONE 2026-10-31T06:00Z, 5/5 PASS** (`scripts/demo_m13_gameplay_vfx.py`, plugin
+   **m13v2**). Implemented as a reusable kit actor, `AGameForgeVFXPickup` (GameForgeRuntime, now depends on Niagara),
+   instead of a per-recipe Blueprint. The real PIE pawn walks into it, which logs `GF_EVENT pickup` and spawns a tagged
+   effect. Remaining: packaged check, `stat Niagara` cost. Original note: spawn `NS_GFExplosion` from a GF_EVENT (pickup) in a recipe game via
+   `UGameForgeVFXLibrary::SpawnSystem` from Blueprint; read particle counts after the event.
+4. ~~M14~~ **DONE 2026-10-31T06:40Z** (plugin **m14v2**). Root cause: `EditorAssetLibrary.load_asset` returns None
+   while PIE runs ("The Editor is currently in a play mode"), so the sound was None. **Any op that loads assets during
+   PIE must use `_load_asset_pie_safe`.** New: `metasound_build_source`/`metasound_inspect` (5/5,
+   `reports/m14_metasound_demo.json`), `pie_actor_state` (read live PIE actor properties), the kit actor
+   `AGameForgePickup` (replaces AGameForgeVFXPickup: VFX + SFX + attenuation on collection), and
+   `scripts/demo_gameplay_feedback.py` 10/10. The M14 demo also had an evidence bug (dict aliasing overwrote the
+   spawn results), now fixed. Its 8/8 includes spawn_sound_at_location. Original note:
+   find why `GameplayStatics.spawn_sound_at_location` returns None in 5.7 PIE (check
+   `World->bAllowAudioPlayback` and the audio device for the PIE world in C++); add MetaSound builder ops.
+5. M8 v2 leftovers. **Partly DONE 2026-10-31T07:30Z** (`demo_m8v2_village.py` 15/15):
+   - Forest thresholds lowered: layers are now 192/32/32.
+   - PCG exclusion around houses via `biomes.scatter_graphs(exclusion_tag=…)`: tagged TriggerBoxes → Get Actor
+     Data (single point) → binary Difference. Proven by a dense control (243 inside without → 0 with).
+   - `pcg_build_graph` takes `{"__enum__"}`/`{"__struct__"}` props.
+   - Bug caught on the way: inserting a helper under an `@op` decorator re-bound the op. New unit test
+     `test_every_op_decorator_wraps_the_function_of_the_same_name`.
+   - **World Partition + Data Layers DONE 08:15Z** (`scripts/demo_m8v2_datalayers.py` 9/9). New ops:
+     `new_level(partitioned=True)`, `datalayer_ensure`, `datalayer_add_actors`, `datalayer_list_actors`, and
+     `world_clear_generated(data_layer_asset=…)` (AD-7 ownership replaces the label prefix). 5.7 lessons:
+     (a) WP loads only always-loaded actors and loaded cells, so list and clear through
+     `WorldPartitionBlueprintLibrary.get_actor_descs()`, then `load_actors(guids)`;
+     (b) in Python, `get_actor_descs()` returns the array itself;
+     (c) a `SoftObjectPath` needs `export_text()`, because `str()` gives its repr;
+     (d) deleted actors keep their descriptor and external file until the level is saved.
+   - **Remaining:** landscape inside a WP world, runtime streaming, packaged village traversal, real vegetation
+     meshes, and migrating `demo_m8v2_village.py` to a WP level + Data Layer ownership.
+   Original note: forest biome Rock/Moss thresholds (they barely appear), PCG exclusion around houses, World
+   Partition for large maps, Data Layers (replace the label-prefix ownership rule of `world_clear_generated`),
+   packaged real-input traversal of the village.
+6. **M15 first increment DONE 2026-10-31T09:00Z**: `AGameForgeGuard` + `AGameForgeGuardAIController` (GameForgeRuntime;
+   AI Perception sight, NavMesh; Patrol/Chase/Search/Return), `scripts/demo_m15_guard.py` 6/6 in PIE.
+   Lessons:
+   - never issue a MoveTo from `OnMoveCompleted`: a request that fails at once completes synchronously, so it
+     recursed until the stack overflowed (editor crash in run 1);
+   - a guard standing on its patrol point gets "RequestSuccessful" then an `Invalid` completion, and no
+     AlreadyAtGoal, so decide arrival in 2D first.
+   **M15 part 2 DONE 09:35Z**: `UGameForgeObjectiveSubsystem` (GameInstance subsystem, USaveGame slot: auto-saves on
+   every change, loads on session start), `AGameForgeQuestGiver`, and `AGameForgePickup.ObjectiveId`.
+   `scripts/demo_m15_quest.py` 8/8, including the restore in a second PIE session. Lesson: `SubsystemBlueprintLibrary`
+   is not in 5.7 Python, so subsystems need a static `GetForWorld` UFUNCTION. **M15 acceptance met in PIE.**
+   Next, in order: (a) M15 extras: hearing sense, a longer pursuit test, dialogue UI (UMG), GAS attributes; (b) M9 v2 character quality; (c) M10 v2 foot IK/montages;
+   (d) packaged checks for pickup/guard/locomotion; (e) M17 genres, M18, M20, flagship "Ember Vale".
+   Original note: Then M9 v2 (character quality), M10 v2 foot IK/montages, gameplay kit (AD-3) → M15 AI, M17 genres, M18, M20.
+
+Plugin binaries: the current build is **m15b** (`E:\GameForge\validation\GameForgePlugin_m15b`, 2026-10-31; Editor DLL sha256 16ec5b0bccca9d58…, Runtime 83b73af4ff6dca0e…; it contains m10v2 + AGameForgePickup + AGameForgeGuard + objectives/quest giver; previous binaries in `E:\GameForge\validation\plugin_binaries_backup_pre_20261031_m15b`), installed in the
+repo plugin folder and in `live_ops_probe`. Rebuild command (PowerShell):
+`& E:\UE\UE_5.7\Engine\Binaries\DotNET\AutomationTool\AutomationTool.exe BuildPlugin "-Plugin=E:\gameforge_step1\src\gameforge_ide\unreal\GameForge\GameForge.uplugin" "-Package=E:\GameForge\validation\GameForgePlugin_<tag>" -TargetPlatforms=Win64`
+then copy `Binaries\Win64\*` into `src\gameforge_ide\unreal\GameForge\Binaries\Win64\` and the probe, and point
+`PLUGIN_BUILD` in `scripts/demo_m11_landscape.py` at the new folder.
+
+Engine-API lessons for 5.7.4 Python (keep):
+- `PCGComponent` has no `get_graph()`; use `get_editor_property("graph_instance").get_editor_property("graph")`.
+- `MaterialInstanceConstantFactoryNew` has no `initial_parent`; use `MaterialEditingLibrary.set_material_instance_parent`.
+- MI parameter setters' return values are unreliable; confirm by read-back.
+- Enums need `.name`.
+- "IDs"/"UVs" suffixes are mangled (`get_num_triangle_i_ds`, `auto_generate_x_atlas_mesh_u_vs`).
+- `AnimPoseExtensions.get_anim_pose_at_time` at exactly `play_length` returns an empty pose.
+- `IKRetargetBatchOperation.duplicate_and_retarget` writes to `/Game/` root.
+- Landscape weightmaps read back as 0 until the edit-layer merge runs on a later tick; poll.
+- LandscapeLayerBlend inputs are named `Layer <Name>`.
+- Captures against a black sky need manual exposure (`scene_set_manual_exposure`).
+- C++: `FLandscapeImportLayerInfo Info(FName(...))` is a vexing parse; spawn names must be unique
+  (`MakeUniqueObjectName`), or regeneration crashes the editor.
+- `NiagaraSystemFactoryNew` takes no emitters from Python.
+- `GameplayStatics` lacks `begin_deferred_actor_spawn_from_class` (`pie_view_from` now moves the pawn; NOT VERIFIED).
+- `LiveEditorLink.launch()` passes `-NoSound` unless `no_sound=False`.
+- Sequencer scrubbing to the exclusive end frame evaluates as frame 0.
+- MRQ `{sequence_name}` resolved to "" (files became `.0000.png`); use a fixed prefix.
+- Coarse meshes (< ~200 tris) cannot reach a 25% LOD; Geometry Script booleans need closed meshes.

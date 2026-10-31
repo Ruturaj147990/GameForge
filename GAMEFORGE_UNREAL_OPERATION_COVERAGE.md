@@ -32,14 +32,17 @@ Data Layers, project/plugin settings, Enhanced Input assets, redirector fix-up, 
 <!-- op-catalog:begin -->
 | Op | Domain | Effect | Read-back | Status | Note |
 |---|---|---|---|---|---|
-| `anim_create_locomotion_blueprint` | animation | project | anim_inspect_blueprint | PASS |  |
-| `anim_ik_retarget` | animation | project | anim_sample_bone_pose | PARTIAL | Genuine IK Retargeter path; per-bone track proof still owed (roadmap WP-A). |
+| `anim_create_blendspace_1d` | animation | project | anim_inspect_blendspace | PASS | Rebuilds runtime segments natively (plugin m10v2+); reports/m10v2_blend_drive_demo.json. |
+| `anim_create_locomotion_blueprint` | animation | project | anim_inspect_blueprint | PASS | Optional blend_space drives Idle/Walk/Run by speed: reports/m10v2_blend_drive_demo.json. |
+| `anim_ik_retarget` | animation | project | anim_sample_world_pose | PASS | Genuine IK retarget: world-space chain proof in reports/wpa_reverify_20261031.json. |
 | `anim_import_motion_clip` | animation | project | anim_sample_bone_pose | PASS |  |
+| `anim_inspect_blendspace` | animation | read |  | PASS |  |
 | `anim_inspect_blueprint` | animation | read |  | PASS |  |
 | `anim_inspect_sequence` | animation | read |  | PASS |  |
 | `anim_locomotion_test_result` | animation | read |  | PASS |  |
 | `anim_retarget_sequence` | animation | project | anim_inspect_sequence | LEGACY | SetSkeleton copy, not a retarget; never cite as retarget evidence. |
 | `anim_sample_bone_pose` | animation | read |  | PASS |  |
+| `anim_sample_world_pose` | animation | read |  | PASS |  |
 | `anim_start_locomotion_test` | animation | runtime | anim_locomotion_test_result | PASS |  |
 | `asset_dependencies` | assets | read |  | PASS |  |
 | `asset_exists` | assets | read |  | PASS |  |
@@ -49,6 +52,17 @@ Data Layers, project/plugin settings, Enhanced Input assets, redirector fix-up, 
 | `list_assets` | assets | read |  | PASS |  |
 | `rename_asset` | assets | project | asset_exists | PASS |  |
 | `save_all` | assets | project | asset_exists | PASS |  |
+| `audio_create_attenuation` | audio | project | audio_inspect_attenuation | PASS | M14 demo |
+| `audio_diagnose_spawn` | audio | runtime | audio_status | DIAGNOSTIC | Tries spawn variants/context objects to locate the audio_play_at failure; never acceptance evidence. |
+| `audio_import` | audio | project | audio_inspect | PASS | M14 demo: reports/m14_audio_demo.json |
+| `audio_inspect` | audio | read |  | PASS |  |
+| `audio_inspect_attenuation` | audio | read |  | PASS |  |
+| `audio_place_ambient` | audio | project | actors_in_level | PASS | M14 demo |
+| `audio_play_actor` | audio | runtime | audio_status | PASS | M14 demo (needs launch(no_sound=False)) |
+| `audio_play_at` | audio | runtime | audio_status | PASS | Fixed 2026-10-31: loads via unreal.load_asset (EditorAssetLibrary refuses during PIE). reports/m14_audio_demo.json. |
+| `audio_status` | audio | read |  | PASS |  |
+| `metasound_build_source` | audio | project | metasound_inspect | PASS | Builder graph -> MetaSoundSource; graph-driven OnFinished verified in PIE: reports/m14_metasound_demo.json. |
+| `metasound_inspect` | audio | read |  | PASS |  |
 | `blueprint_compile` | blueprint | project | blueprint_readback_graph | PASS |  |
 | `blueprint_connect_pins` | blueprint | project | blueprint_readback_graph | PASS |  |
 | `blueprint_create_node` | blueprint | project | blueprint_readback_graph | PASS |  |
@@ -64,24 +78,50 @@ Data Layers, project/plugin settings, Enhanced Input assets, redirector fix-up, 
 | `character_inspect_skeletal_mesh` | character | read |  | PASS |  |
 | `character_measure_deformation` | character | read |  | PASS |  |
 | `character_spawn_preview` | character | project | actors_in_level | PASS |  |
+| `sequence_build` | cinematics | project | sequence_inspect | PASS | reports/m16_sequence_demo.json |
+| `sequence_evaluate` | cinematics | read |  | PASS |  |
+| `sequence_inspect` | cinematics | read |  | PASS |  |
+| `sequence_render` | cinematics | artifact |  | PASS | Lit/unlit MRQ PNG frames; cuts verified in reports/m16_sequence_demo.json. Demo lights must face the cameras. |
+| `sequence_render_status` | cinematics | read |  | PASS |  |
 | `gameplay_get_state` | gameplay | read |  | PASS |  |
 | `gameplay_modify_state` | gameplay | runtime | gameplay_get_state | PASS |  |
+| `gameplay_objectives` | gameplay | read |  | PASS |  |
 | `actors_in_level` | level | read |  | PASS |  |
 | `delete_actor` | level | project | actors_in_level | PASS |  |
 | `load_level` | level | project | actors_in_level | PASS |  |
 | `new_level` | level | project | actors_in_level | PASS |  |
+| `scene_get_exposure` | level | read |  | PASS |  |
+| `scene_set_manual_exposure` | level | project | scene_get_exposure | PASS |  |
 | `set_actor_property` | level | project | actors_in_level | PASS |  |
 | `spawn_actor` | level | project | actors_in_level | PASS |  |
+| `actor_get_materials` | materials | read |  | PASS |  |
+| `material_build_graph` | materials | project | material_readback_graph | PASS | M11 demo: reports/m11_material_demo.json |
+| `material_function_build` | materials | project | material_function_inspect | PASS | M11 demo: reports/m11_material_demo.json |
+| `material_function_inspect` | materials | read |  | PASS |  |
+| `material_instance_create` | materials | project | material_instance_inspect | PASS | M11 demo: reports/m11_material_demo.json |
+| `material_instance_inspect` | materials | read |  | PASS |  |
+| `material_readback_graph` | materials | read |  | PASS |  |
+| `texture_import` | materials | project | texture_inspect | PASS | M11 demo: reports/m11_material_demo.json |
+| `texture_inspect` | materials | read |  | PASS |  |
+| `mesh_generate_prop` | mesh | project | static_mesh_inspect | PASS | M12 Geometry Script demo: reports/m12_asset_demo.json |
+| `static_mesh_configure` | mesh | project | static_mesh_inspect | PASS | M12 Geometry Script demo: reports/m12_asset_demo.json |
+| `static_mesh_inspect` | mesh | read |  | PASS |  |
 | `nav_find_path` | navigation | read |  | PASS |  |
 | `nav_rebuild` | navigation | project | nav_find_path | PASS |  |
+| `pcg_build_graph` | pcg | project | pcg_verify_authenticity | PASS | Surface-sampled PCG: reports/m8v2_pcg_demo.json; tag-based exclusion (Difference): reports/m8v2_village_demo.json |
 | `pcg_inspect` | pcg | read |  | PASS |  |
-| `pcg_scatter` | pcg | project | pcg_inspect | PARTIAL | Grid sampling only; no surface sampler yet. |
+| `pcg_scatter` | pcg | project | pcg_verify_authenticity | PARTIAL | Real UPCGGraph (WP-A re-verify 2026-10-30: 400 instances in a PCG-tagged ISM); grid sampling only. |
+| `pcg_verify_authenticity` | pcg | read |  | PASS |  |
+| `pie_actor_state` | pie | read |  | PASS |  |
 | `pie_character_diagnostics` | pie | read |  | PASS |  |
 | `pie_move_player_to` | pie | runtime | pie_character_diagnostics | PASS |  |
 | `pie_start` | pie | runtime | pie_status | PASS |  |
 | `pie_status` | pie | read |  | PASS |  |
 | `pie_stop` | pie | runtime | pie_status | PASS |  |
 | `pie_view_from` | pie | runtime | pie_character_diagnostics | PASS |  |
+| `perf_console` | profiling | runtime | perf_list_csv | PASS | Allow-listed csvprofile/stat commands only; reports/m19_perf_village.json |
+| `perf_list_csv` | profiling | read |  | PASS |  |
+| `api_introspect` | session | read |  | PASS |  |
 | `handshake` | session | read |  | PASS |  |
 | `log_tail` | session | read |  | PASS |  |
 | `quit_editor` | session | lifecycle |  | PASS |  |
@@ -100,12 +140,22 @@ Data Layers, project/plugin settings, Enhanced Input assets, redirector fix-up, 
 | `widget_set_property` | umg | project | widget_readback_tree | PASS |  |
 | `widget_set_slot_property` | umg | project | widget_readback_tree | PASS |  |
 | `widget_trigger_delegate_diagnostic` | umg | runtime | widget_runtime_state | DIAGNOSTIC | Direct delegate broadcast; never acceptance evidence (use widget_click_button). |
+| `vfx_create_system` | vfx | project | vfx_inspect_system | PARTIAL | Template-system duplication PASS; template_emitters path unsupported in 5.7 Python (empty system). |
+| `vfx_inspect_system` | vfx | read |  | PASS |  |
+| `vfx_particle_counts` | vfx | read |  | PASS |  |
+| `vfx_spawn` | vfx | runtime | vfx_particle_counts | PASS | M13 demo: reports/m13_vfx_demo.json; gameplay-triggered path (AGameForgeVFXPickup): reports/m13_gameplay_vfx_demo.json |
 | `set_viewport_camera` | viewport | view |  | PASS |  |
 | `viewport_screenshot` | viewport | artifact |  | PASS |  |
+| `datalayer_add_actors` | world | project | datalayer_list_actors | PASS | WP Data Layers own generated content; membership read from actor descriptors (covers unloaded actors): reports/m8v2_datalayers_demo.json. |
+| `datalayer_ensure` | world | project | datalayer_list_actors | PASS | WP Data Layers own generated content; membership read from actor descriptors (covers unloaded actors): reports/m8v2_datalayers_demo.json. |
+| `datalayer_list_actors` | world | read |  | PASS |  |
 | `foliage_scatter` | world | project | procedural_world_inspect | PASS |  |
 | `landmark_spawn` | world | project | procedural_world_inspect | PASS |  |
 | `landscape_create` | world | project | procedural_world_inspect | PASS |  |
+| `landscape_height_at` | world | read |  | PASS |  |
+| `landscape_inspect_layers` | world | read |  | PASS |  |
 | `procedural_world_inspect` | world | read |  | PASS |  |
 | `spline_create_road` | world | project | procedural_world_inspect | PASS |  |
+| `world_clear_generated` | world | project | actors_in_level | PASS | Label-prefix ownership (AD-7 interim): reports/m8v2_village_demo.json |
 | `world_generation_digest` | world | read |  | PASS |  |
 <!-- op-catalog:end -->

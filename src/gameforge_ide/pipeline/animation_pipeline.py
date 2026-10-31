@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry
 from src.gameforge_ide.backend.models.animation_spec import (
     AnimationAction,
     AnimationSpec,
@@ -64,11 +65,13 @@ class AnimationPipeline:
         self,
         workspace_dir: Optional[Path] = None,
         output_dir: Optional[Path] = None,
+        asset_registry: Optional[AssetRegistry] = None,
     ):
         self.workspace_dir = (workspace_dir or Path(r"E:\GameForge\validation\live_ops_probe")).resolve()
         self.output_dir = (output_dir or Path(r"E:\GameForge\assets\generated\animations")).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.license_registry = LicenseRegistry()
+        self.asset_registry = asset_registry or AssetRegistry(self.workspace_dir)
 
     def run_pipeline(
         self,
@@ -104,7 +107,14 @@ class AnimationPipeline:
         clip_bundles: List[MotionClipBundle] = []
 
         t0 = time.time()
+        registry_ids: List[str] = []
         for clip_spec in locomotion_set.clips:
+            registry_id = self.asset_registry.register(AssetRecord(
+                name=clip_spec.name, asset_type="animation", purpose=f"{locomotion_set.bundle_id} locomotion clip",
+                provenance="procedural", backend="GameForge-KinematicSynthesis-V1", backend_version="1.0.0",
+                license="CC-BY-4.0", spec=clip_spec.model_dump(), tags=[locomotion_set.bundle_id]))
+            registry_ids.append(registry_id)
+            self.asset_registry.advance(registry_id, "SPEC", True, "spec validated")
             try:
                 bundle = synthesizer.synthesize_clip(clip_spec)
                 clip_bundles.append(bundle)
@@ -120,9 +130,13 @@ class AnimationPipeline:
                 # Export clip bundle JSON
                 out_path = synthesizer.export_motion_json(bundle)
                 exported_files.append(str(out_path))
+                self.asset_registry.advance(registry_id, "GENERATE", True, artifact_path=str(out_path))
+                self.asset_registry.advance(registry_id, "VALIDATE", report.is_valid, "; ".join(report.errors))
             except Exception as e:
                 all_clips_valid = False
                 errors.append(f"Synthesis failed for '{clip_spec.name}': {e}")
+                self.asset_registry.advance(registry_id, "GENERATE", False, str(e))
+        diagnostics["registry_ids"] = registry_ids
 
         synthesis_time = time.time() - t0
         diagnostics["synthesis_time_s"] = round(synthesis_time, 3)
@@ -162,13 +176,12 @@ class AnimationPipeline:
             except Exception as e:
                 errors.append(f"Unreal live_ops exception: {e}")
         else:
-            # Standalone / offline mode marker
-            blueprint_created = True
-            unreal_passed = True
+            # Offline: nothing was created in Unreal, so the engine gate is reported as not run.
             diagnostics["unreal_blueprint"] = {
                 "package_path": target_bp_path,
                 "skeleton": locomotion_set.target_skeleton_path,
                 "offline_staged": True,
+                "status": "NOT_PERFORMED",
             }
 
         # 5. Provenance sealing
@@ -195,7 +208,7 @@ class AnimationPipeline:
         return AnimationPipelineResult(
             bundle_id=locomotion_set.bundle_id,
             character_id=locomotion_set.character_id,
-            success=(len(errors) == 0 and unreal_passed),
+            success=(len(errors) == 0 and (unreal_passed or live_ops_client is None)),
             spec_valid=True,
             motion_synthesis_passed=True,
             validation_passed=all_clips_valid,

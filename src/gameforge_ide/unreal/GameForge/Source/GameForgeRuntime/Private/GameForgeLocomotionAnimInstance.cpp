@@ -4,10 +4,14 @@
 
 #include "Animation/AnimNodeBase.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
 #include "Animation/AnimationPoseData.h"
 #include "AnimationRuntime.h"
+#include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+
+static bool IsLoopingState(EGameForgeLocomotionState State);
 
 FString UGameForgeLocomotionAnimInstance::StateName(EGameForgeLocomotionState State)
 {
@@ -84,6 +88,18 @@ void UGameForgeLocomotionAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	EnterState(Next);
 	bWasFalling = bIsFalling;
+
+	BlendSamples.Reset();
+	BlendSpaceWeights.Reset();
+	if (LocomotionBlendSpace
+		&& LocomotionBlendSpace->GetSamplesFromBlendInput(FVector(GroundSpeed, 0.0, 0.0), BlendSamples, CachedTriangulationIndex, true))
+	{
+		for (const FBlendSampleData& Sample : BlendSamples)
+		{
+			BlendSpaceWeights += FString::Printf(TEXT("%s=%.3f;"),
+				Sample.Animation ? *Sample.Animation->GetName() : TEXT("None"), Sample.GetClampedWeight());
+		}
+	}
 }
 
 FAnimInstanceProxy* UGameForgeLocomotionAnimInstance::CreateAnimInstanceProxy()
@@ -107,14 +123,18 @@ void FGameForgeLocomotionProxy::PreUpdate(UAnimInstance* InAnimInstance, float D
 	Clips[4] = Inst->FallClip;
 	Clips[5] = Inst->LandClip;
 	BlendTime = FMath::Max(0.01f, Inst->BlendTime);
+	BlendSpace = Inst->LocomotionBlendSpace;
+	BlendSamples = Inst->BlendSamples;
 	if (Inst->CurrentState != State)
 	{
+		// Moving between grounded states is continuous inside the blend space, so no cross-fade is needed.
+		const bool bWithinBlendSpace = UsesBlendSpace(State) && UsesBlendSpace(Inst->CurrentState);
 		PrevState = State;
 		PrevStateTime = StateTime;
-		bHasPrev = true;
+		bHasPrev = !bWithinBlendSpace;
 		State = Inst->CurrentState;
 		StateTime = 0.0;
-		BlendElapsed = 0.0f;
+		BlendElapsed = bWithinBlendSpace ? BlendTime : 0.0f;
 	}
 }
 
@@ -123,6 +143,53 @@ void FGameForgeLocomotionProxy::Update(float DeltaSeconds)
 	StateTime += DeltaSeconds;
 	PrevStateTime += DeltaSeconds;
 	BlendElapsed += DeltaSeconds;
+
+	// Advance the shared phase at the weighted cycle length of the active samples.
+	double CycleLength = 0.0;
+	for (const FBlendSampleData& Sample : BlendSamples)
+	{
+		if (Sample.Animation)
+		{
+			CycleLength += Sample.GetClampedWeight() * Sample.Animation->GetPlayLength();
+		}
+	}
+	if (CycleLength > UE_KINDA_SMALL_NUMBER)
+	{
+		GroundPhase = FMath::Fmod(GroundPhase + DeltaSeconds / CycleLength, 1.0);
+	}
+}
+
+bool FGameForgeLocomotionProxy::UsesBlendSpace(EGameForgeLocomotionState InState) const
+{
+	return BlendSpace != nullptr && (InState == EGameForgeLocomotionState::Idle
+		|| InState == EGameForgeLocomotionState::Walk || InState == EGameForgeLocomotionState::Run);
+}
+
+bool FGameForgeLocomotionProxy::HasPoseSource(EGameForgeLocomotionState InState) const
+{
+	return UsesBlendSpace(InState) ? BlendSamples.Num() > 0 : ClipFor(InState) != nullptr;
+}
+
+void FGameForgeLocomotionProxy::SampleState(EGameForgeLocomotionState InState, double Time, FPoseContext& Out)
+{
+	if (UsesBlendSpace(InState) && BlendSamples.Num() > 0)
+	{
+		for (FBlendSampleData& Sample : BlendSamples)
+		{
+			Sample.Time = Sample.Animation ? static_cast<float>(GroundPhase * Sample.Animation->GetPlayLength()) : 0.0f;
+		}
+		FAnimationPoseData PoseData(Out);
+		// Each sample carries its own Time; the context only supplies root-motion/extraction flags.
+		BlendSpace->GetAnimationPose(BlendSamples, FAnimExtractContext(0.0, false), PoseData);
+		return;
+	}
+	SampleClip(ClipFor(InState), Time, IsLoopingState(InState), Out);
+}
+
+static bool IsLoopingState(EGameForgeLocomotionState State)
+{
+	return State == EGameForgeLocomotionState::Idle || State == EGameForgeLocomotionState::Walk
+		|| State == EGameForgeLocomotionState::Run || State == EGameForgeLocomotionState::Fall;
 }
 
 UAnimSequence* FGameForgeLocomotionProxy::ClipFor(EGameForgeLocomotionState InState) const
@@ -138,31 +205,23 @@ void FGameForgeLocomotionProxy::SampleClip(UAnimSequence* Clip, double Time, boo
 	Clip->GetAnimationPose(PoseData, FAnimExtractContext(T, false));
 }
 
-static bool IsLoopingState(EGameForgeLocomotionState State)
-{
-	return State == EGameForgeLocomotionState::Idle || State == EGameForgeLocomotionState::Walk
-		|| State == EGameForgeLocomotionState::Run || State == EGameForgeLocomotionState::Fall;
-}
-
 bool FGameForgeLocomotionProxy::Evaluate(FPoseContext& Output)
 {
-	UAnimSequence* Current = ClipFor(State);
-	if (!Current)
+	if (!HasPoseSource(State))
 	{
 		Output.ResetToRefPose();
 		return true;
 	}
-	UAnimSequence* Previous = bHasPrev ? ClipFor(PrevState) : nullptr;
-	if (!Previous || BlendElapsed >= BlendTime)
+	if (!bHasPrev || !HasPoseSource(PrevState) || BlendElapsed >= BlendTime)
 	{
-		SampleClip(Current, StateTime, IsLoopingState(State), Output);
+		SampleState(State, StateTime, Output);
 		return true;
 	}
 	// Cross-fade from the previous state's pose into the current one.
 	FPoseContext CurrentPose(this);
 	FPoseContext PreviousPose(this);
-	SampleClip(Current, StateTime, IsLoopingState(State), CurrentPose);
-	SampleClip(Previous, PrevStateTime, IsLoopingState(PrevState), PreviousPose);
+	SampleState(State, StateTime, CurrentPose);
+	SampleState(PrevState, PrevStateTime, PreviousPose);
 	const float Alpha = FMath::Clamp(BlendElapsed / BlendTime, 0.0f, 1.0f);
 	FAnimationPoseData CurrentData(CurrentPose);
 	FAnimationPoseData PreviousData(PreviousPose);

@@ -274,3 +274,17 @@ def test_gltf_export_is_a_valid_skinned_hierarchy(valid_spec, tmp_path):
     assert pos["max"][1] == pytest.approx(valid_spec.height_cm / 100.0, rel=0.08)
     assert pos["max"][1] - pos["min"][1] > 1.5
     assert pos["max"][2] - pos["min"][2] < 1.0
+
+
+def test_character_pipeline_registers_asset_and_reports_engine_gates_honestly(valid_spec, tmp_path):
+    """Roadmap WP-A 4b: the run lands in the asset registry, and gates it never ran are not reported as passed."""
+    pipeline = CharacterPipeline(workspace_dir=tmp_path, output_dir=tmp_path / "chars")
+    result = pipeline.run_pipeline(valid_spec)
+    assert result.success and result.rig_validation_passed
+    assert not (result.unreal_import_passed or result.inspection_passed or result.promotion_passed)
+    assert result.skeletal_mesh_path == "" and result.diagnostics["unreal_stages"] == "NOT_PERFORMED"
+    row = pipeline.asset_registry.get(result.diagnostics["registry_id"])
+    assert row["asset_type"] == "skeletal_mesh" and row["provenance"] == "procedural"
+    assert row["stage"] == "VALIDATE"
+    assert [e["stage"] for e in pipeline.asset_registry.history(row["asset_id"])] == ["SPEC", "GENERATE", "VALIDATE"]
+    assert pipeline.asset_registry.artifact_unchanged(row["asset_id"])

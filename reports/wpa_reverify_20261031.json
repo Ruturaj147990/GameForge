@@ -1,0 +1,381 @@
+{
+  "timestamp": "2026-10-31T00:40:44+0530",
+  "project": "E:\\GameForge\\validation\\wpa_reverify_20261031",
+  "checks": {
+    "retarget_produced_sequence_on_target_skeleton": true,
+    "target_is_a_different_skeleton": true,
+    "source_motion_present": true,
+    "leg_tracks_match_source_motion_in_world_space": true,
+    "arm_tracks_match_source_motion_in_world_space": true,
+    "swap_test_has_discriminating_chain": true,
+    "not_a_skeleton_swap": true,
+    "pcg_graph_has_real_pcg_nodes": true,
+    "pcg_instances_in_pcg_tagged_components": true,
+    "no_untagged_ism_on_volume": true
+  },
+  "steps": {
+    "ik_retarget": {
+      "retargeter": "/Game/WPA/Retarget/RTG_Audit.RTG_Audit",
+      "created": [
+        "/Game/RTG_Anim_Walk"
+      ],
+      "on_target_skeleton": [
+        "/Game/RTG_Anim_Walk"
+      ],
+      "errors": []
+    },
+    "sample_probe": {
+      "ok": true,
+      "errors": []
+    },
+    "source_sample": {
+      "ok": true,
+      "errors": [],
+      "skeleton": "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero_Skeleton.GFAdventurerHero_Skeleton"
+    },
+    "target_sample": {
+      "ok": true,
+      "errors": [],
+      "skeleton": "/Game/Audit/RetargetTarget/SK_RetargetTarget_Skeleton.SK_RetargetTarget_Skeleton"
+    },
+    "chain_comparison": {
+      "LeftLeg": {
+        "source_ref_len_cm": 84.0,
+        "target_ref_len_cm": 85.0,
+        "mean_swing_error_deg": 0.01,
+        "source_swing_range_deg": 36.55,
+        "max_target_len_deviation": 0.037,
+        "length_discriminates_swap": false,
+        "lengths_identical_to_source": false,
+        "pass": true,
+        "frames": [
+          {
+            "time": 0.0,
+            "source_swing_deg": 1.5,
+            "target_swing_deg": 1.5,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.1296,
+            "source_swing_deg": 19.63,
+            "target_swing_deg": 19.63,
+            "source_len_cm": 83.88,
+            "target_len_cm": 84.9
+          },
+          {
+            "time": 0.2593,
+            "source_swing_deg": 37.34,
+            "target_swing_deg": 37.36,
+            "source_len_cm": 81.78,
+            "target_len_cm": 83.19
+          },
+          {
+            "time": 0.3889,
+            "source_swing_deg": 38.05,
+            "target_swing_deg": 38.1,
+            "source_len_cm": 80.15,
+            "target_len_cm": 81.85
+          },
+          {
+            "time": 0.5185,
+            "source_swing_deg": 22.87,
+            "target_swing_deg": 22.89,
+            "source_len_cm": 81.53,
+            "target_len_cm": 82.98
+          },
+          {
+            "time": 0.6481,
+            "source_swing_deg": 2.2,
+            "target_swing_deg": 2.2,
+            "source_len_cm": 83.77,
+            "target_len_cm": 84.81
+          },
+          {
+            "time": 0.7778,
+            "source_swing_deg": 19.06,
+            "target_swing_deg": 19.06,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.9074,
+            "source_swing_deg": 24.99,
+            "target_swing_deg": 24.99,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 1.037,
+            "source_swing_deg": 19.82,
+            "target_swing_deg": 19.82,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          }
+        ]
+      },
+      "RightLeg": {
+        "source_ref_len_cm": 84.0,
+        "target_ref_len_cm": 85.0,
+        "mean_swing_error_deg": 0.01,
+        "source_swing_range_deg": 32.87,
+        "max_target_len_deviation": 0.036,
+        "length_discriminates_swap": false,
+        "lengths_identical_to_source": false,
+        "pass": true,
+        "frames": [
+          {
+            "time": 0.0,
+            "source_swing_deg": 8.13,
+            "target_swing_deg": 8.12,
+            "source_len_cm": 83.1,
+            "target_len_cm": 84.27
+          },
+          {
+            "time": 0.1296,
+            "source_swing_deg": 14.74,
+            "target_swing_deg": 14.74,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.2593,
+            "source_swing_deg": 23.96,
+            "target_swing_deg": 23.96,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.3889,
+            "source_swing_deg": 23.06,
+            "target_swing_deg": 23.06,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.5185,
+            "source_swing_deg": 11.13,
+            "target_swing_deg": 11.13,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.6481,
+            "source_swing_deg": 6.84,
+            "target_swing_deg": 6.83,
+            "source_len_cm": 84.0,
+            "target_len_cm": 85.0
+          },
+          {
+            "time": 0.7778,
+            "source_swing_deg": 27.88,
+            "target_swing_deg": 27.88,
+            "source_len_cm": 83.32,
+            "target_len_cm": 84.45
+          },
+          {
+            "time": 0.9074,
+            "source_swing_deg": 39.71,
+            "target_swing_deg": 39.74,
+            "source_len_cm": 80.9,
+            "target_len_cm": 82.46
+          },
+          {
+            "time": 1.037,
+            "source_swing_deg": 34.07,
+            "target_swing_deg": 34.11,
+            "source_len_cm": 80.31,
+            "target_len_cm": 81.98
+          }
+        ]
+      },
+      "LeftArm": {
+        "source_ref_len_cm": 52.0,
+        "target_ref_len_cm": 48.0,
+        "mean_swing_error_deg": 0.4,
+        "source_swing_range_deg": 19.84,
+        "max_target_len_deviation": 0.003,
+        "length_discriminates_swap": true,
+        "lengths_identical_to_source": false,
+        "pass": true,
+        "frames": [
+          {
+            "time": 0.0,
+            "source_swing_deg": 0.0,
+            "target_swing_deg": 1.5,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.1296,
+            "source_swing_deg": 7.98,
+            "target_swing_deg": 7.89,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.2593,
+            "source_swing_deg": 13.54,
+            "target_swing_deg": 13.24,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.3889,
+            "source_swing_deg": 13.55,
+            "target_swing_deg": 13.28,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.5185,
+            "source_swing_deg": 6.66,
+            "target_swing_deg": 6.65,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.6481,
+            "source_swing_deg": 5.45,
+            "target_swing_deg": 5.49,
+            "source_len_cm": 51.98,
+            "target_len_cm": 47.99
+          },
+          {
+            "time": 0.7778,
+            "source_swing_deg": 16.95,
+            "target_swing_deg": 16.49,
+            "source_len_cm": 51.82,
+            "target_len_cm": 47.92
+          },
+          {
+            "time": 0.9074,
+            "source_swing_deg": 19.84,
+            "target_swing_deg": 19.28,
+            "source_len_cm": 51.72,
+            "target_len_cm": 47.87
+          },
+          {
+            "time": 1.037,
+            "source_swing_deg": 14.03,
+            "target_swing_deg": 13.66,
+            "source_len_cm": 51.84,
+            "target_len_cm": 47.93
+          }
+        ]
+      },
+      "RightArm": {
+        "source_ref_len_cm": 52.0,
+        "target_ref_len_cm": 48.0,
+        "mean_swing_error_deg": 0.44,
+        "source_swing_range_deg": 19.9,
+        "max_target_len_deviation": 0.002,
+        "length_discriminates_swap": true,
+        "lengths_identical_to_source": false,
+        "pass": true,
+        "frames": [
+          {
+            "time": 0.0,
+            "source_swing_deg": 0.0,
+            "target_swing_deg": 1.5,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.1296,
+            "source_swing_deg": 13.53,
+            "target_swing_deg": 13.19,
+            "source_len_cm": 51.89,
+            "target_len_cm": 47.95
+          },
+          {
+            "time": 0.2593,
+            "source_swing_deg": 19.9,
+            "target_swing_deg": 19.34,
+            "source_len_cm": 51.73,
+            "target_len_cm": 47.88
+          },
+          {
+            "time": 0.3889,
+            "source_swing_deg": 16.99,
+            "target_swing_deg": 16.52,
+            "source_len_cm": 51.77,
+            "target_len_cm": 47.9
+          },
+          {
+            "time": 0.5185,
+            "source_swing_deg": 7.48,
+            "target_swing_deg": 7.39,
+            "source_len_cm": 51.95,
+            "target_len_cm": 47.98
+          },
+          {
+            "time": 0.6481,
+            "source_swing_deg": 3.07,
+            "target_swing_deg": 3.33,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.7778,
+            "source_swing_deg": 10.48,
+            "target_swing_deg": 10.29,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 0.9074,
+            "source_swing_deg": 14.34,
+            "target_swing_deg": 14.03,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          },
+          {
+            "time": 1.037,
+            "source_swing_deg": 11.77,
+            "target_swing_deg": 11.56,
+            "source_len_cm": 52.0,
+            "target_len_cm": 48.0
+          }
+        ]
+      }
+    },
+    "new_level": true,
+    "pcg_scatter": {
+      "graph": "/Game/WPA/PCG/PCG_AuditScatter.PCG_AuditScatter",
+      "volume": "GF_WPA_PCG",
+      "generation_requested": true,
+      "errors": []
+    },
+    "pcg_verify": {
+      "graph": "/Game/WPA/PCG/PCG_AuditScatter.PCG_AuditScatter",
+      "node_settings": [
+        "PCGCreatePointsGridSettings",
+        "PCGStaticMeshSpawnerSettings"
+      ],
+      "pcg_tagged_components": [
+        {
+          "name": "ISM_Cone_0",
+          "class": "InstancedStaticMeshComponent",
+          "instances": 400,
+          "mesh": "/Engine/BasicShapes/Cone.Cone"
+        }
+      ],
+      "untagged_ism_components": [],
+      "pcg_instances": 400,
+      "graph_accessor_notes": [
+        "AttributeError: 'PCGComponent' object has no attribute 'get_graph'",
+        "AttributeError: 'PCGGraphInstance' object has no attribute 'get_graph'"
+      ],
+      "errors": []
+    },
+    "pcg_surface_sampler_used": false
+  },
+  "tolerances": {
+    "angle_deg": 12.0,
+    "length_frac": 0.15,
+    "min_swing_deg": 5.0
+  },
+  "editor_exit_code": 0,
+  "ok": true
+}

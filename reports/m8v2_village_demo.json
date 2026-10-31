@@ -1,0 +1,585 @@
+{
+  "timestamp": "2026-10-31T10:43:24+0530",
+  "checks": {
+    "kit_built": true,
+    "biome_material_built": true,
+    "landscape_layers_resolved": true,
+    "houses_placed": true,
+    "pcg_scatter_follows_terrain": true,
+    "every_paint_layer_visible": true,
+    "exclusion_volumes_tagged": true,
+    "pcg_graph_has_exclusion_nodes": true,
+    "no_scatter_inside_houses": true,
+    "navmesh_path_between_pois": true,
+    "level_saved": true,
+    "exclusion_control_discriminates": true,
+    "same_seed_same_digest": true,
+    "different_seed_different_digest": true,
+    "user_actor_survives_regeneration": true
+  },
+  "steps": {
+    "world_A": {
+      "landscape": {
+        "min_elevation_cm": -728.125,
+        "max_elevation_cm": 785.15625,
+        "paint_layers": [
+          "Grass",
+          "Rock",
+          "Moss"
+        ],
+        "ok": true,
+        "errors": []
+      },
+      "layers": [
+        [
+          "Grass",
+          191.6
+        ],
+        [
+          "Rock",
+          32.0
+        ],
+        [
+          "Moss",
+          31.5
+        ]
+      ],
+      "houses": [
+        {
+          "origin": [
+            1652.395557045411,
+            -2423.7069603298587,
+            0.0
+          ],
+          "floor_z": -433.9,
+          "placed": 16,
+          "door": {
+            "x": 1852.395557045411,
+            "y": -2673.7069603298587,
+            "z": -333.9
+          },
+          "footprint": {
+            "center": [
+              2052.395557045411,
+              -2023.7069603298587
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        },
+        {
+          "origin": [
+            -2201.1681317665116,
+            -322.9860933444828,
+            0.0
+          ],
+          "floor_z": -465.8,
+          "placed": 16,
+          "door": {
+            "x": -2001.1681317665116,
+            "y": -572.9860933444828,
+            "z": -365.8
+          },
+          "footprint": {
+            "center": [
+              -1801.1681317665116,
+              77.01390665551719
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        },
+        {
+          "origin": [
+            354.87931854713406,
+            1233.5752907348335,
+            90.0
+          ],
+          "floor_z": -460.0,
+          "placed": 16,
+          "door": {
+            "x": 604.8793185471341,
+            "y": 1433.5752907348335,
+            "z": -360.0
+          },
+          "footprint": {
+            "center": [
+              -45.12068145286591,
+              1633.5752907348333
+            ],
+            "half": [
+              450.0,
+              449.9999999999999
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        }
+      ],
+      "pcg": [
+        {
+          "label": "GF_PCG_Trees",
+          "ok": true,
+          "errors": [],
+          "instances": 180,
+          "heights": {
+            "sampled": 180,
+            "min_z": -709.2,
+            "max_z": 505.0,
+            "std_z": 312.3
+          },
+          "inside_house_footprints": [
+            0,
+            0,
+            0
+          ],
+          "node_settings": [
+            "PCGGetLandscapeSettings",
+            "PCGSurfaceSamplerSettings",
+            "PCGDensityFilterSettings",
+            "PCGStaticMeshSpawnerSettings",
+            "PCGDataFromActorSettings",
+            "PCGDifferenceSettings"
+          ]
+        },
+        {
+          "label": "GF_PCG_Bushes",
+          "ok": true,
+          "errors": [],
+          "instances": 91,
+          "heights": {
+            "sampled": 91,
+            "min_z": -725.4,
+            "max_z": 579.5,
+            "std_z": 304.4
+          },
+          "inside_house_footprints": [
+            0,
+            0,
+            0
+          ],
+          "node_settings": [
+            "PCGGetLandscapeSettings",
+            "PCGSurfaceSamplerSettings",
+            "PCGDensityFilterSettings",
+            "PCGStaticMeshSpawnerSettings",
+            "PCGDataFromActorSettings",
+            "PCGDifferenceSettings"
+          ]
+        }
+      ],
+      "digest": "827d37503e0d786dfe2983ee006869491c02ad952c4bdebc3bf2da135180116e",
+      "digest_instances": 271
+    },
+    "nav_path": {
+      "points": 4,
+      "length_cm": 4355.93708920509,
+      "partial": false,
+      "first": [
+        1852.395557045411,
+        -2673.7069603298587,
+        -456.11143241410826
+      ],
+      "last": [
+        604.8793185471341,
+        1433.5752907348335,
+        -445.9980450253943
+      ],
+      "errors": []
+    },
+    "screenshot": {
+      "path": "E:\\GameForge\\validation\\m8v2_village_20261031\\Saved\\Screenshots\\m8v2_village.png",
+      "errors": []
+    },
+    "exclusion_control": {
+      "without": {
+        "build_ok": true,
+        "errors": [],
+        "instances": 14399,
+        "inside_per_house": [
+          81,
+          81,
+          81
+        ],
+        "inside": 243
+      },
+      "with": {
+        "build_ok": true,
+        "errors": [],
+        "instances": 13892,
+        "inside_per_house": [
+          0,
+          0,
+          0
+        ],
+        "inside": 0
+      }
+    },
+    "world_A2": {
+      "landscape": {
+        "min_elevation_cm": -728.125,
+        "max_elevation_cm": 785.15625,
+        "paint_layers": [
+          "Grass",
+          "Rock",
+          "Moss"
+        ],
+        "ok": true,
+        "errors": []
+      },
+      "layers": [
+        [
+          "Grass",
+          191.6
+        ],
+        [
+          "Rock",
+          32.0
+        ],
+        [
+          "Moss",
+          31.5
+        ]
+      ],
+      "houses": [
+        {
+          "origin": [
+            1652.395557045411,
+            -2423.7069603298587,
+            0.0
+          ],
+          "floor_z": -433.9,
+          "placed": 16,
+          "door": {
+            "x": 1852.395557045411,
+            "y": -2673.7069603298587,
+            "z": -333.9
+          },
+          "footprint": {
+            "center": [
+              2052.395557045411,
+              -2023.7069603298587
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        },
+        {
+          "origin": [
+            -2201.1681317665116,
+            -322.9860933444828,
+            0.0
+          ],
+          "floor_z": -465.8,
+          "placed": 16,
+          "door": {
+            "x": -2001.1681317665116,
+            "y": -572.9860933444828,
+            "z": -365.8
+          },
+          "footprint": {
+            "center": [
+              -1801.1681317665116,
+              77.01390665551719
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        },
+        {
+          "origin": [
+            354.87931854713406,
+            1233.5752907348335,
+            90.0
+          ],
+          "floor_z": -460.0,
+          "placed": 16,
+          "door": {
+            "x": 604.8793185471341,
+            "y": 1433.5752907348335,
+            "z": -360.0
+          },
+          "footprint": {
+            "center": [
+              -45.12068145286591,
+              1633.5752907348333
+            ],
+            "half": [
+              450.0,
+              449.9999999999999
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        }
+      ],
+      "pcg": [
+        {
+          "label": "GF_PCG_Trees",
+          "ok": true,
+          "errors": [],
+          "instances": 180,
+          "heights": {
+            "sampled": 180,
+            "min_z": -709.2,
+            "max_z": 505.0,
+            "std_z": 312.3
+          },
+          "inside_house_footprints": [
+            0,
+            0,
+            0
+          ],
+          "node_settings": [
+            "PCGGetLandscapeSettings",
+            "PCGSurfaceSamplerSettings",
+            "PCGDensityFilterSettings",
+            "PCGStaticMeshSpawnerSettings",
+            "PCGDataFromActorSettings",
+            "PCGDifferenceSettings"
+          ]
+        },
+        {
+          "label": "GF_PCG_Bushes",
+          "ok": true,
+          "errors": [],
+          "instances": 91,
+          "heights": {
+            "sampled": 91,
+            "min_z": -725.4,
+            "max_z": 579.5,
+            "std_z": 304.4
+          },
+          "inside_house_footprints": [
+            0,
+            0,
+            0
+          ],
+          "node_settings": [
+            "PCGGetLandscapeSettings",
+            "PCGSurfaceSamplerSettings",
+            "PCGDensityFilterSettings",
+            "PCGStaticMeshSpawnerSettings",
+            "PCGDataFromActorSettings",
+            "PCGDifferenceSettings"
+          ]
+        }
+      ],
+      "digest": "827d37503e0d786dfe2983ee006869491c02ad952c4bdebc3bf2da135180116e",
+      "digest_instances": 271
+    },
+    "clear_generated": {
+      "ok": true,
+      "deleted": 60,
+      "kept": [
+        "PCGWorldActor0",
+        "RecastNavMesh-Default",
+        "User_Statue"
+      ],
+      "errors": []
+    },
+    "world_B": {
+      "landscape": {
+        "min_elevation_cm": -734.375,
+        "max_elevation_cm": 796.09375,
+        "paint_layers": [
+          "Grass",
+          "Rock",
+          "Moss"
+        ],
+        "ok": true,
+        "errors": []
+      },
+      "layers": [
+        [
+          "Grass",
+          200.2
+        ],
+        [
+          "Rock",
+          21.9
+        ],
+        [
+          "Moss",
+          32.9
+        ]
+      ],
+      "houses": [
+        {
+          "origin": [
+            -2025.2609475026775,
+            -2363.9856888037625,
+            0.0
+          ],
+          "floor_z": -429.9,
+          "placed": 16,
+          "door": {
+            "x": -1825.2609475026775,
+            "y": -2613.9856888037625,
+            "z": -329.9
+          },
+          "footprint": {
+            "center": [
+              -1625.2609475026775,
+              -1963.9856888037625
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        },
+        {
+          "origin": [
+            674.4373580136307,
+            -507.48020034890624,
+            90.0
+          ],
+          "floor_z": -546.0,
+          "placed": 16,
+          "door": {
+            "x": 924.4373580136307,
+            "y": -307.48020034890624,
+            "z": -446.0
+          },
+          "footprint": {
+            "center": [
+              274.4373580136307,
+              -107.48020034890621
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        },
+        {
+          "origin": [
+            380.4922385895402,
+            1459.0942323877339,
+            90.0
+          ],
+          "floor_z": -551.8,
+          "placed": 16,
+          "door": {
+            "x": 630.4922385895402,
+            "y": 1659.0942323877339,
+            "z": -451.79999999999995
+          },
+          "footprint": {
+            "center": [
+              -19.50776141045978,
+              1859.0942323877339
+            ],
+            "half": [
+              450.0,
+              450.0
+            ]
+          },
+          "exclusion": {
+            "ok": true,
+            "tags": "[\"GF_PCGExclude\"]"
+          }
+        }
+      ],
+      "pcg": [
+        {
+          "label": "GF_PCG_Trees",
+          "ok": true,
+          "errors": [],
+          "instances": 183,
+          "heights": {
+            "sampled": 183,
+            "min_z": -731.8,
+            "max_z": 574.3,
+            "std_z": 322.1
+          },
+          "inside_house_footprints": [
+            0,
+            0,
+            0
+          ],
+          "node_settings": [
+            "PCGGetLandscapeSettings",
+            "PCGSurfaceSamplerSettings",
+            "PCGDensityFilterSettings",
+            "PCGStaticMeshSpawnerSettings",
+            "PCGDataFromActorSettings",
+            "PCGDifferenceSettings"
+          ]
+        },
+        {
+          "label": "GF_PCG_Bushes",
+          "ok": true,
+          "errors": [],
+          "instances": 92,
+          "heights": {
+            "sampled": 92,
+            "min_z": -689.2,
+            "max_z": 556.5,
+            "std_z": 324.1
+          },
+          "inside_house_footprints": [
+            0,
+            0,
+            0
+          ],
+          "node_settings": [
+            "PCGGetLandscapeSettings",
+            "PCGSurfaceSamplerSettings",
+            "PCGDensityFilterSettings",
+            "PCGStaticMeshSpawnerSettings",
+            "PCGDataFromActorSettings",
+            "PCGDifferenceSettings"
+          ]
+        }
+      ],
+      "digest": "80303cd1d7e7596c61bb9ba7e7f875bb0fca55986623462c8c381a0deaad8581",
+      "digest_instances": 275
+    }
+  },
+  "not_covered": [
+    "packaged real-input traversal",
+    "World Partition",
+    "Data Layers"
+  ],
+  "project": "E:\\GameForge\\validation\\m8v2_village_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

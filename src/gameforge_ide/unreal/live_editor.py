@@ -139,11 +139,14 @@ class LiveEditorLink:
             self.uproject.write_text(json.dumps(data, indent="\t"), encoding="utf-8")
 
     # ── process lifetime ───────────────────────────────────────────────────
-    def launch(self, extra_args: Optional[List[str]] = None, log_path: Optional[Path] = None) -> int:
+    def launch(self, extra_args: Optional[List[str]] = None, log_path: Optional[Path] = None,
+               no_sound: bool = True) -> int:
         exe = self.engine_root / "Engine" / "Binaries" / "Win64" / "UnrealEditor.exe"
         if not exe.is_file():
             raise LiveEditorError(f"UnrealEditor.exe not found at {exe}")
-        argv = [str(exe), str(self.uproject), "-nosplash", "-nopause", "-unattended", "-NoSound"]
+        argv = [str(exe), str(self.uproject), "-nosplash", "-nopause", "-unattended"]
+        if no_sound:  # audio checks (M14) need the real audio device
+            argv.append("-NoSound")
         if log_path:
             argv.append(f"-abslog={log_path}")
         argv += list(extra_args or [])

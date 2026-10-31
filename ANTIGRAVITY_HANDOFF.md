@@ -1,5 +1,32 @@
 # Antigravity handoff — small, scoped follow-ups
 
+## Current (2026-10-31): start here
+
+The active plan is **`GAMEFORGE_MASTER_ROADMAP.md` §5** (ordered next steps, plugin-build notes, 5.7 engine lessons).
+Read `context.md` (top UPDATE blocks), then that section. The evidence for everything below is in `reports/`.
+
+**How to work (patterns that kept evidence honest this week):**
+- Every engine check is a script `scripts/demo_<milestone>_<topic>.py`. Each one copies `E:\GameForge\validation\live_ops_probe`
+  to a disposable project (`demo_m11_landscape.make_disposable()`, which uses `PLUGIN_BUILD`), drives the editor
+  only through named ops (`link.call("<op>", {...})`), and writes `reports/<name>.json` with `checks`/`steps`.
+- A check must be able to fail. Add a control when "0" or "true" could happen by chance (see the exclusion control in
+  `demo_m8v2_village.py`). Read gameplay state from the live actor (`pie_actor_state`) or subsystem (`gameplay_objectives`),
+  never from the op that caused it.
+- New C++ goes in `Source/GameForgeRuntime` (game-usable kit actors) or `Source/GameForgeEditor` (editor ops). Rebuild
+  with AutomationTool BuildPlugin into `E:\GameForge\validation\GameForgePlugin_<tag>`, back up, install into the repo
+  plugin `Binaries` and `live_ops_probe`, and point `PLUGIN_BUILD` at the new tag.
+- New ops: add an `@op("x")` directly above `def x(` (a unit test enforces it), add a catalogue row in
+  `unreal/op_catalog.py`, then run `python scripts/gen_op_coverage.py`.
+- During PIE, load assets with `_load_asset_pie_safe` (EditorAssetLibrary refuses in play mode).
+- After each work package, update `context.md` (mirror to `E:\GameForge\context.md`), the roadmap §5, the capability
+  matrix and `GAMEFORGE_INTEGRATION_TEST_REPORT.md`. Run `pytest tests/unit/` and `pytest graders/protected/`.
+
+**Kit actors available (GameForgeRuntime):** `AGameForgePickup` (VFX + SFX + objective progress), `AGameForgeGuard`
+(perception AI), `AGameForgeQuestGiver`, `UGameForgeObjectiveSubsystem` (save/load), `UGameForgeLocomotionAnimInstance`
+(blend space), `UGameForgeGameplayStateComponent`, `AGameForgeKitSelfTest` (packaged self-test driver).
+
+---
+
 Updated 2026-10-27 (second build-out). Read `context.md` first, then this file.
 Done and verified, so don't redo them: live editor link, toolchain, recipe pipeline (tic-tac-toe, Gomoku,
 N-in-a-row, Connect Four), free-form pipeline with repair ladder and vision review, IDE approval cards,

@@ -6,6 +6,7 @@
 #include "Animation/AnimBlueprintGeneratedClass.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
 #include "AIController.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 #include "Kismet/GameplayStatics.h"
@@ -245,6 +246,23 @@ FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString&
 		}
 	}
 
+	// Optional locomotion blend space (Idle/Walk/Run by ground speed).
+	FString BlendSpacePath;
+	if (JsonObj->TryGetStringField(TEXT("blend_space"), BlendSpacePath) && !BlendSpacePath.IsEmpty())
+	{
+		UBlendSpace* BS = LoadObject<UBlendSpace>(nullptr, *BlendSpacePath);
+		if (!BS || BS->GetSkeleton() != TargetSkeleton)
+		{
+			ClipErrors.Add(FString::Printf(TEXT("blend_space '%s' is not a BlendSpace on the target skeleton"), *BlendSpacePath));
+		}
+		else if (CDO)
+		{
+			CDO->Modify();
+			CDO->LocomotionBlendSpace = BS;
+			Assigned->SetStringField(TEXT("BlendSpace"), BS->GetPathName());
+		}
+	}
+
 	// Defaults edited on the CDO become Blueprint defaults once the Blueprint is recompiled (the same
 	// path as editing Class Defaults in the editor); then read back what the new CDO really holds.
 	if (Assigned->Values.Num() > 0)
@@ -259,6 +277,8 @@ FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString&
 		int32 Persisted = 0;
 		for (const UAnimSequence* S : Back) Persisted += S ? 1 : 0;
 		Assigned->SetNumberField(TEXT("persisted_after_recompile"), Persisted);
+		Assigned->SetStringField(TEXT("blend_space_after_recompile"),
+			NewCDO && NewCDO->LocomotionBlendSpace ? NewCDO->LocomotionBlendSpace->GetPathName() : TEXT(""));
 		if (Persisted != 6)
 		{
 			ClipErrors.Add(FString::Printf(TEXT("only %d/6 clips survived recompilation"), Persisted));
@@ -533,6 +553,26 @@ FString UGameForgeAnimationLibrary::StartLocomotionTest(const FString& ParamsJso
 		Character->GetController() ? TArray<FString>() : TArray<FString>{ TEXT("Character has no controller") });
 }
 
+FString UGameForgeAnimationLibrary::FinalizeBlendSpace(const FString& BlendSpacePath)
+{
+	UBlendSpace* BS = LoadObject<UBlendSpace>(nullptr, *BlendSpacePath);
+	if (!BS)
+	{
+		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("not a BlendSpace: %s"), *BlendSpacePath) });
+	}
+	BS->Modify();
+	BS->ValidateSampleData();
+	BS->ResampleData();
+	BS->MarkPackageDirty();
+	const FBlendSpaceData& Runtime = BS->GetBlendSpaceData();
+	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	Data->SetNumberField(TEXT("samples"), BS->GetNumberOfBlendSamples());
+	Data->SetNumberField(TEXT("runtime_segments"), Runtime.Segments.Num());
+	Data->SetNumberField(TEXT("runtime_triangles"), Runtime.Triangles.Num());
+	return BuildJsonEnvelope(!Runtime.IsEmpty(), Data,
+		Runtime.IsEmpty() ? TArray<FString>{ TEXT("blend space has no runtime segments/triangles after ResampleData") } : TArray<FString>());
+}
+
 FString UGameForgeAnimationLibrary::GetLocomotionTestResult()
 {
 	UWorld* World = GFFindPIEWorld();
@@ -561,6 +601,8 @@ FString UGameForgeAnimationLibrary::GetLocomotionTestResult()
 		for (const FString& S : Anim->TransitionLog) Transitions.Add(MakeShared<FJsonValueString>(S));
 		Data->SetStringField(TEXT("current_state"), UGameForgeLocomotionAnimInstance::StateName(Anim->CurrentState));
 		Data->SetNumberField(TEXT("ground_speed"), Anim->GroundSpeed);
+		Data->SetStringField(TEXT("blend_space"), Anim->LocomotionBlendSpace ? Anim->LocomotionBlendSpace->GetPathName() : TEXT(""));
+		Data->SetStringField(TEXT("blend_space_weights"), Anim->BlendSpaceWeights);
 	}
 	Data->SetArrayField(TEXT("phases"), Phases);
 	Data->SetArrayField(TEXT("transitions"), Transitions);

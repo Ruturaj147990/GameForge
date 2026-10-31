@@ -1,0 +1,111 @@
+{
+  "timestamp": "2026-10-31T10:51:19+0530",
+  "checks": {
+    "level_is_partitioned": true,
+    "data_layer_created": true,
+    "generated_actors_in_layer": true,
+    "one_file_per_actor_saved": true,
+    "layer_membership_persists_after_restart": true,
+    "clear_deletes_exactly_generated": true,
+    "user_actors_kept_including_gf_labelled": true,
+    "layer_empty_after_clear_and_save": true,
+    "external_actor_files_of_generated_removed": true
+  },
+  "steps": {
+    "new_level": {
+      "level_path": "/Game/WP/Maps/WPVillage",
+      "exists": true,
+      "partitioned": true
+    },
+    "datalayer": {
+      "ok": true,
+      "data": {
+        "asset_path": "/Game/WP/DataLayers/DL_GFGenerated.DL_GFGenerated",
+        "instance": "DataLayer_B7A275E9411028FD09E34DAFD4B689A8",
+        "created_instance": true
+      },
+      "errors": []
+    },
+    "pcg": {
+      "ok": true,
+      "errors": []
+    },
+    "add": {
+      "ok": true,
+      "data": {
+        "added": 9,
+        "missing": [],
+        "not_in_layer_after": []
+      },
+      "errors": []
+    },
+    "members_before_restart": [
+      "GF_Floor",
+      "GF_PCGScatter",
+      "GF_Prop_00",
+      "GF_Prop_01",
+      "GF_Prop_02",
+      "GF_Prop_03",
+      "GF_Prop_04",
+      "GF_Prop_05",
+      "GF_Sun"
+    ],
+    "save": {
+      "level": "/Game/WP/Maps/WPVillage.WPVillage",
+      "level_saved": true,
+      "assets_saved": true
+    },
+    "external_actor_files": 14,
+    "members_after_restart": [
+      "GF_Floor",
+      "GF_PCGScatter",
+      "GF_Prop_00",
+      "GF_Prop_01",
+      "GF_Prop_02",
+      "GF_Prop_03",
+      "GF_Prop_04",
+      "GF_Prop_05",
+      "GF_Sun"
+    ],
+    "clear": {
+      "ok": true,
+      "rule": "data_layer",
+      "deleted": [
+        "GF_Floor",
+        "GF_Prop_04",
+        "GF_Prop_00",
+        "GF_PCGScatter",
+        "GF_Sun",
+        "GF_Prop_02",
+        "GF_Prop_03",
+        "GF_Prop_01",
+        "GF_Prop_05"
+      ],
+      "kept": [
+        "WorldPartitionMiniMap",
+        "PCGWorldActor",
+        "GF_UserShrine",
+        "User_Statue",
+        "WorldDataLayers"
+      ],
+      "errors": []
+    },
+    "label_prefix_rule_would_delete_user_actor": true,
+    "members_after_clear_and_save": {
+      "instance": "DataLayer_B7A275E9411028FD09E34DAFD4B689A8",
+      "actors": [],
+      "loaded": [],
+      "source": "actor_descriptors+loaded",
+      "descriptor_count": 5
+    },
+    "external_actor_files_after_clear": 5
+  },
+  "not_covered": [
+    "landscape inside a partitioned world",
+    "runtime streaming / data layer activation in PIE"
+  ],
+  "project": "E:\\GameForge\\validation\\m8v2_datalayers_20261031",
+  "editor_exit_code_a": 0,
+  "editor_exit_code_b": 0,
+  "ok": true
+}

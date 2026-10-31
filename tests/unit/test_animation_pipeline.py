@@ -253,8 +253,17 @@ def test_animation_pipeline_end_to_end(standard_locomotion_spec, tmp_path):
     assert result.spec_valid is True
     assert result.motion_synthesis_passed is True
     assert result.validation_passed is True
-    assert result.blueprint_created is True
+    # Offline run: no Unreal client, so no AnimBlueprint exists and the engine gate must not claim a pass.
+    assert result.blueprint_created is False
+    assert result.unreal_integration_passed is False
+    assert result.diagnostics["unreal_blueprint"]["status"] == "NOT_PERFORMED"
     assert len(result.clip_reports) == 6
+    reg = pipeline.asset_registry
+    assert len(result.diagnostics["registry_ids"]) == 6
+    for rid in result.diagnostics["registry_ids"]:
+        row = reg.get(rid)
+        assert row["stage"] == "VALIDATE" and row["provenance"] == "procedural"
+        assert reg.artifact_unchanged(rid)
     assert len(result.exported_clip_files) == 6
     assert Path(result.provenance_path).exists()
 

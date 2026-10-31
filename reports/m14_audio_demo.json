@@ -1,0 +1,218 @@
+{
+  "timestamp": "2026-10-31T10:23:39+0530",
+  "checks": {
+    "attenuation_read_back": true,
+    "sounds_imported_with_matching_duration": true,
+    "wind_is_looping": true,
+    "spawn_sound_at_location_works": true,
+    "pickup_playing_in_pie": true,
+    "wind_playing_in_pie": true,
+    "one_shot_finished_loop_continues": true,
+    "gf_event_marker_logged": true
+  },
+  "steps": {
+    "generated": {
+      "Pickup": {
+        "path": "E:\\GameForge\\assets\\generated\\audio\\m14_demo_20261031\\SFX_Pickup.wav",
+        "sha256": "af0731a7a4c5883ffbf3a7ee6004511d12a1495bc7f9d6364ced96f2cedf9058",
+        "analysis": {
+          "sample_rate": 44100,
+          "channels": 1,
+          "bits": 16,
+          "duration_s": 0.35,
+          "peak": 0.8,
+          "rms": 0.3794,
+          "clipped_samples": 0
+        }
+      },
+      "Wind": {
+        "path": "E:\\GameForge\\assets\\generated\\audio\\m14_demo_20261031\\SFX_Wind.wav",
+        "sha256": "167ef242db16a42ea61241e65c8f15160c4e86191c100ebdedb9d630612a56be",
+        "analysis": {
+          "sample_rate": 44100,
+          "channels": 1,
+          "bits": 16,
+          "duration_s": 3.75,
+          "peak": 0.8,
+          "rms": 0.1363,
+          "clipped_samples": 0,
+          "loop_seam_ratio": 1.095
+        }
+      }
+    },
+    "attenuation": {
+      "path": "/Game/M14/Audio/ATT_GFDefault.ATT_GFDefault",
+      "spatialize": true,
+      "attenuate": true,
+      "inner_radius": 300.0,
+      "falloff_distance": 2500.0,
+      "function": "LINEAR",
+      "ok": true,
+      "errors": []
+    },
+    "imported": {
+      "Pickup": {
+        "path": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "class": "SoundWave",
+        "duration": 0.35,
+        "num_channels": 1,
+        "looping": false,
+        "volume": 1.0,
+        "pitch": 1.0,
+        "attenuation": "/Game/M14/Audio/ATT_GFDefault.ATT_GFDefault",
+        "ok": true,
+        "errors": []
+      },
+      "Wind": {
+        "path": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "class": "SoundWave",
+        "duration": 3.75,
+        "num_channels": 1,
+        "looping": true,
+        "volume": 1.0,
+        "pitch": 1.0,
+        "attenuation": "/Game/M14/Audio/ATT_GFDefault.ATT_GFDefault",
+        "ok": true,
+        "errors": []
+      }
+    },
+    "ambient_placed": {
+      "Wind": {
+        "label": "GF_AmbWind",
+        "sound": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "auto_activate": false,
+        "ok": true,
+        "errors": []
+      },
+      "Pickup": {
+        "label": "GF_AmbPickup",
+        "sound": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "auto_activate": false,
+        "ok": true,
+        "errors": []
+      }
+    },
+    "pie_start": true,
+    "plays_spawn_at_location": {
+      "Wind": {
+        "ok": true,
+        "errors": [],
+        "data": {
+          "label": "GF_Wind",
+          "playing": true
+        }
+      },
+      "Pickup": {
+        "ok": true,
+        "errors": [],
+        "data": {
+          "label": "GF_Pickup",
+          "playing": true
+        }
+      }
+    },
+    "plays": {
+      "Wind": {
+        "ok": true,
+        "errors": [],
+        "data": {
+          "label": "GF_AmbWind",
+          "playing": true
+        }
+      },
+      "Pickup": {
+        "ok": true,
+        "errors": [],
+        "data": {
+          "label": "GF_AmbPickup",
+          "playing": true
+        }
+      }
+    },
+    "status_t0": {
+      "GF_Wind": {
+        "label": "GF_Wind",
+        "playing": true,
+        "sound": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "distance_to_listener": 1200.2
+      },
+      "GF_Pickup": {
+        "label": "GF_Pickup",
+        "playing": true,
+        "sound": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "distance_to_listener": 151.3
+      },
+      "GF_AmbWind": {
+        "label": "GF_AmbWind",
+        "playing": true,
+        "sound": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "distance_to_listener": 1200.2
+      },
+      "GF_AmbPickup": {
+        "label": "GF_AmbPickup",
+        "playing": true,
+        "sound": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "distance_to_listener": 151.3
+      }
+    },
+    "status_t1_6s": {
+      "GF_Wind": {
+        "label": "GF_Wind",
+        "playing": true,
+        "sound": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "distance_to_listener": 1200.2
+      },
+      "GF_Pickup": {
+        "label": "GF_Pickup",
+        "playing": false,
+        "sound": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "distance_to_listener": 120.0
+      },
+      "GF_AmbWind": {
+        "label": "GF_AmbWind",
+        "playing": true,
+        "sound": "/Game/M14/Audio/SFX_Wind.SFX_Wind",
+        "distance_to_listener": 1200.2
+      },
+      "GF_AmbPickup": {
+        "label": "GF_AmbPickup",
+        "playing": false,
+        "sound": "/Game/M14/Audio/SFX_Pickup.SFX_Pickup",
+        "distance_to_listener": 151.3
+      }
+    },
+    "computed_attenuation": {
+      "GF_Wind": {
+        "distance": 1200.2,
+        "computed_linear_gain": 0.64
+      },
+      "GF_Pickup": {
+        "distance": 151.3,
+        "computed_linear_gain": 1.0
+      },
+      "GF_AmbWind": {
+        "distance": 1200.2,
+        "computed_linear_gain": 0.64
+      },
+      "GF_AmbPickup": {
+        "distance": 151.3,
+        "computed_linear_gain": 1.0
+      }
+    },
+    "log_offset_probe": {
+      "log_path": "E:\\GameForge\\validation\\m14_audio_20261031\\audio_editor.log",
+      "lines": [
+        "[2026.10.31-04.53.48:957][ 68]PIE: Play in editor total start time 0.072 seconds."
+      ]
+    }
+  },
+  "not_covered": [
+    "engine output level / audible attenuation measurement",
+    "packaged playback",
+    "MetaSound builder",
+    "Sound Class / Submix"
+  ],
+  "project": "E:\\GameForge\\validation\\m14_audio_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

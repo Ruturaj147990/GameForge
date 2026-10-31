@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-10-31T01:27:52+0530",
+  "project": "E:\\GameForge\\validation\\m8v2_village_20261031",
+  "checks": {
+    "csv_written": true,
+    "frames_captured": true,
+    "timing_columns_present": true
+  },
+  "steps": {
+    "load_level": true,
+    "pie_start": true,
+    "start": true,
+    "stop": true,
+    "csv_files": [
+      {
+        "path": "E:/GameForge/validation/m8v2_village_20261031/Saved/Profiling\\CSV\\Profile(20261031_012806).csv",
+        "bytes": 1748686,
+        "mtime": 1793390296.1071377
+      }
+    ]
+  },
+  "conditions": "editor PIE, -RenderOffscreen 1280x720, RX 7700 XT, Development editor build",
+  "summary": {
+    "frames": 1190,
+    "columns_present": [
+      "FrameTime",
+      "GameThreadTime",
+      "RenderThreadTime",
+      "GPUTime",
+      "RHIThreadTime"
+    ],
+    "FrameTime": {
+      "mean_ms": 8.343,
+      "p95_ms": 8.973,
+      "max_ms": 18.575
+    },
+    "GameThreadTime": {
+      "mean_ms": 3.696,
+      "p95_ms": 4.609,
+      "max_ms": 7.467
+    },
+    "RenderThreadTime": {
+      "mean_ms": 0.085,
+      "p95_ms": 0.004,
+      "max_ms": 2.612
+    },
+    "GPUTime": {
+      "mean_ms": 2.001,
+      "p95_ms": 2.096,
+      "max_ms": 2.157
+    },
+    "RHIThreadTime": {
+      "mean_ms": 0.058,
+      "p95_ms": 0.075,
+      "max_ms": 0.116
+    },
+    "avg_fps": 119.9
+  },
+  "editor_exit_code": 0,
+  "ok": true,
+  "note": "summary re-parsed host-side after a parser fix (EVENTS first column); same CSV file"
+}

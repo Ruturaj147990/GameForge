@@ -1,0 +1,250 @@
+{
+  "timestamp": "2026-10-31T01:00:20+0530",
+  "project": "E:\\GameForge\\validation\\m11_landscape_20261031",
+  "checks": {
+    "layer_blend_material_built": true,
+    "landscape_created_with_layers": true,
+    "all_layers_have_layer_info": true,
+    "weights_sum_to_full": true,
+    "every_layer_dominates_somewhere": true,
+    "screenshot_shows_grass_rock_snow": true,
+    "layers_identical_after_restart": true
+  },
+  "steps": {
+    "material_attempts": [
+      {
+        "input_style": "Layer {name}",
+        "ok": true,
+        "errors": []
+      }
+    ],
+    "material_readback": {
+      "material": "/Game/M11/Landscape/M_GFLandscapeLayers.M_GFLandscapeLayers",
+      "expression_count": 5,
+      "nodes": [
+        {
+          "name": "MaterialExpressionConstant3Vector_0",
+          "class": "MaterialExpressionConstant3Vector",
+          "constant": [
+            0.1,
+            0.32,
+            0.06,
+            1.0
+          ]
+        },
+        {
+          "name": "MaterialExpressionConstant3Vector_1",
+          "class": "MaterialExpressionConstant3Vector",
+          "constant": [
+            0.22,
+            0.21,
+            0.2,
+            1.0
+          ]
+        },
+        {
+          "name": "MaterialExpressionConstant3Vector_2",
+          "class": "MaterialExpressionConstant3Vector",
+          "constant": [
+            0.85,
+            0.87,
+            0.9,
+            1.0
+          ]
+        },
+        {
+          "name": "MaterialExpressionConstant_0",
+          "class": "MaterialExpressionConstant",
+          "r": 0.85
+        },
+        {
+          "name": "MaterialExpressionLandscapeLayerBlend_0",
+          "class": "MaterialExpressionLandscapeLayerBlend"
+        }
+      ],
+      "edges": [
+        {
+          "from": "MaterialExpressionConstant3Vector_0",
+          "to": "MaterialExpressionLandscapeLayerBlend_0",
+          "input": "0"
+        },
+        {
+          "from": "MaterialExpressionConstant3Vector_1",
+          "to": "MaterialExpressionLandscapeLayerBlend_0",
+          "input": "1"
+        },
+        {
+          "from": "MaterialExpressionConstant3Vector_2",
+          "to": "MaterialExpressionLandscapeLayerBlend_0",
+          "input": "2"
+        }
+      ],
+      "outputs": [
+        {
+          "property": "MP_BASE_COLOR",
+          "from": "MaterialExpressionLandscapeLayerBlend_0",
+          "output": ""
+        },
+        {
+          "property": "MP_ROUGHNESS",
+          "from": "MaterialExpressionConstant_0",
+          "output": ""
+        }
+      ],
+      "used_textures": [],
+      "statistics": {
+        "pixel_shader_instructions": 217,
+        "vertex_shader_instructions": 136,
+        "samplers": 3
+      }
+    },
+    "landscape_create": {
+      "paint_layers": [
+        "Grass",
+        "Rock",
+        "Snow"
+      ],
+      "actor_name": "Landscape_ProceduralWorld",
+      "actor_label": "Landscape",
+      "size_x": 127,
+      "size_y": 127,
+      "component_count_x": 2,
+      "component_count_y": 2,
+      "quads_per_section": 63,
+      "vertex_count": 16129,
+      "min_elevation_cm": -734.375,
+      "max_elevation_cm": 1999.21875,
+      "elevation_range_cm": 2733.59375,
+      "seed": 7,
+      "terrain_type": "Mountains",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    "weight_merge_polls": 2,
+    "layers_before_restart": {
+      "landscape": "Landscape",
+      "material": "/Game/M11/Landscape/M_GFLandscapeLayers.M_GFLandscapeLayers",
+      "vertices": 16129,
+      "layers": [
+        {
+          "name": "Grass",
+          "layer_info": "/Game/M11/Landscape/LayerInfo/LI_Grass.LI_Grass",
+          "mean_weight": 47.41540083080166,
+          "dominant_fraction": 0.1804203608407217
+        },
+        {
+          "name": "Rock",
+          "layer_info": "/Game/M11/Landscape/LayerInfo/LI_Rock.LI_Rock",
+          "mean_weight": 155.34193068386136,
+          "dominant_fraction": 0.6074152148304297
+        },
+        {
+          "name": "Snow",
+          "layer_info": "/Game/M11/Landscape/LayerInfo/LI_Snow.LI_Snow",
+          "mean_weight": 52.24266848533697,
+          "dominant_fraction": 0.20584041168082337
+        }
+      ],
+      "ok": true,
+      "errors": []
+    },
+    "exposure_brackets": [
+      {
+        "bias": 6.0,
+        "exposure_ok": true,
+        "path": "E:\\GameForge\\validation\\m11_landscape_20261031\\Saved\\Screenshots\\m11_landscape_ev6.png",
+        "stats": {
+          "lit_fraction": 0.071,
+          "lit_mean_lum": 42.5,
+          "green_of_lit": 0.01,
+          "grey_of_lit": 0.99,
+          "snow_of_lit": 0.0
+        },
+        "errors": []
+      },
+      {
+        "bias": 8.0,
+        "exposure_ok": true,
+        "path": "E:\\GameForge\\validation\\m11_landscape_20261031\\Saved\\Screenshots\\m11_landscape_ev8.png",
+        "stats": {
+          "lit_fraction": 0.289,
+          "lit_mean_lum": 69.4,
+          "green_of_lit": 0.15,
+          "grey_of_lit": 0.845,
+          "snow_of_lit": 0.0
+        },
+        "errors": []
+      },
+      {
+        "bias": 10.0,
+        "exposure_ok": true,
+        "path": "E:\\GameForge\\validation\\m11_landscape_20261031\\Saved\\Screenshots\\m11_landscape_ev10.png",
+        "stats": {
+          "lit_fraction": 0.314,
+          "lit_mean_lum": 148.7,
+          "green_of_lit": 0.126,
+          "grey_of_lit": 0.545,
+          "snow_of_lit": 0.265
+        },
+        "errors": []
+      },
+      {
+        "bias": 12.0,
+        "exposure_ok": true,
+        "path": "E:\\GameForge\\validation\\m11_landscape_20261031\\Saved\\Screenshots\\m11_landscape_ev12.png",
+        "stats": {
+          "lit_fraction": 0.327,
+          "lit_mean_lum": 211.2,
+          "green_of_lit": 0.031,
+          "grey_of_lit": 0.078,
+          "snow_of_lit": 0.905
+        },
+        "errors": []
+      }
+    ],
+    "screenshot": {
+      "bias": 10.0,
+      "exposure_ok": true,
+      "path": "E:\\GameForge\\validation\\m11_landscape_20261031\\Saved\\Screenshots\\m11_landscape_ev10.png",
+      "stats": {
+        "lit_fraction": 0.314,
+        "lit_mean_lum": 148.7,
+        "green_of_lit": 0.126,
+        "grey_of_lit": 0.545,
+        "snow_of_lit": 0.265
+      },
+      "errors": []
+    },
+    "layers_after_restart": {
+      "landscape": "Landscape",
+      "material": "/Game/M11/Landscape/M_GFLandscapeLayers.M_GFLandscapeLayers",
+      "vertices": 16129,
+      "layers": [
+        {
+          "name": "Grass",
+          "layer_info": "/Game/M11/Landscape/LayerInfo/LI_Grass.LI_Grass",
+          "mean_weight": 47.41540083080166,
+          "dominant_fraction": 0.1804203608407217
+        },
+        {
+          "name": "Rock",
+          "layer_info": "/Game/M11/Landscape/LayerInfo/LI_Rock.LI_Rock",
+          "mean_weight": 155.34193068386136,
+          "dominant_fraction": 0.6074152148304297
+        },
+        {
+          "name": "Snow",
+          "layer_info": "/Game/M11/Landscape/LayerInfo/LI_Snow.LI_Snow",
+          "mean_weight": 52.24266848533697,
+          "dominant_fraction": 0.20584041168082337
+        }
+      ],
+      "ok": true,
+      "errors": []
+    }
+  },
+  "editor_exit_code_a": 0,
+  "editor_exit_code_b": 0,
+  "ok": true
+}

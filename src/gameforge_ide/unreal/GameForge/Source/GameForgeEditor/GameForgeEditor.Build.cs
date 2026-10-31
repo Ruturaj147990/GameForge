@@ -51,7 +51,8 @@ public class GameForgeEditor : ModuleRules
 				"Landscape",
 				"Foliage",
 				"NavigationSystem",
-				"AIModule"
+				"AIModule",
+				"Niagara"
 			}
 		);
 	}

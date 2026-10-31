@@ -5,6 +5,9 @@
 #include "LandscapeInfo.h"
 #include "LandscapeProxy.h"
 #include "LandscapeComponent.h"
+#include "LandscapeEdit.h"
+#include "LandscapeLayerInfoObject.h"
+#include "LandscapeUtils.h"
 #include "Components/SplineComponent.h"
 #include "Components/SplineMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
@@ -150,6 +153,8 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 
 	TArray<uint16> HeightData;
 	HeightData.SetNumUninitialized(SizeX * SizeY);
+	TArray<float> HeightNormData;
+	HeightNormData.SetNumUninitialized(SizeX * SizeY);
 
 	float MinElevFound = 99999.0f;
 	float MaxElevFound = -99999.0f;
@@ -183,6 +188,7 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 			const float HeightDeltaRaw = (HeightNorm - 0.5f) * (ElevationScale * 128.0f / 100.0f);
 			const int32 ClampedVal = FMath::Clamp((int32)(32768.0f + HeightDeltaRaw), 1000, 64500);
 			HeightData[X + Y * SizeX] = (uint16)ClampedVal;
+			HeightNormData[X + Y * SizeX] = HeightNorm;
 
 			const float ActualZ = (float)(ClampedVal - 32768) * (100.0f / 128.0f);
 			MinElevFound = FMath::Min(MinElevFound, ActualZ);
@@ -198,7 +204,9 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	const FVector OriginOffset(-(SizeX - 1) * Scale.X * 0.5f, -(SizeY - 1) * Scale.Y * 0.5f, 0.0f);
 
 	FActorSpawnParameters SpawnParams;
-	SpawnParams.Name = FName(TEXT("Landscape_ProceduralWorld"));
+	// A fixed name is fatal once a previous landscape was destroyed in this level (the name stays reserved), so
+	// ask the level for a unique one.
+	SpawnParams.Name = MakeUniqueObjectName(World->PersistentLevel, ALandscape::StaticClass(), FName(TEXT("Landscape_ProceduralWorld")));
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	ALandscape* Landscape = World->SpawnActor<ALandscape>(OriginOffset, FRotator::ZeroRotator, SpawnParams);
@@ -217,8 +225,69 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 		}
 	}
 
+	// Optional paint layers: "paint_layers": [{"name": "Grass", "rule": "low"}, {"name": "Rock", "rule": "steep"},
+	// {"name": "Snow", "rule": "high"}]. Weights are derived from the generated heightfield (height and slope) and
+	// normalised so every vertex sums to 255, as weight-blended landscape layers require.
+	TArray<FLandscapeImportLayerInfo> ImportLayers;
+	TArray<FString> LayerWarnings;
+	const TArray<TSharedPtr<FJsonValue>>* LayerSpecs = nullptr;
+	if (Json->TryGetArrayField(TEXT("paint_layers"), LayerSpecs) && LayerSpecs && LayerSpecs->Num() > 0)
+	{
+		const FString LayerFolder = Json->HasField(TEXT("layer_info_path")) ? Json->GetStringField(TEXT("layer_info_path")) : TEXT("/Game/Landscape/LayerInfo");
+		const float HighStart = Json->HasField(TEXT("high_start")) ? (float)Json->GetNumberField(TEXT("high_start")) : 0.72f;
+		const float SteepStart = Json->HasField(TEXT("steep_start_cm_per_quad")) ? (float)Json->GetNumberField(TEXT("steep_start_cm_per_quad")) : 45.0f;
+
+		TArray<FString> Rules;
+		for (const TSharedPtr<FJsonValue>& Value : *LayerSpecs)
+		{
+			const TSharedPtr<FJsonObject> Spec = Value->AsObject();
+			if (!Spec.IsValid() || !Spec->HasField(TEXT("name")))
+			{
+				continue;
+			}
+			const FString LayerName = Spec->GetStringField(TEXT("name"));
+			FLandscapeImportLayerInfo Info = FLandscapeImportLayerInfo(FName(*LayerName));
+			Info.LayerInfo = UE::Landscape::CreateTargetLayerInfo(FName(*LayerName), LayerFolder, FString::Printf(TEXT("LI_%s"), *LayerName));
+			Info.LayerData.SetNumZeroed(SizeX * SizeY);
+			ImportLayers.Add(Info);
+			Rules.Add(Spec->HasField(TEXT("rule")) ? Spec->GetStringField(TEXT("rule")) : TEXT("low"));
+		}
+
+		const float CmPerUnit = 100.0f / 128.0f;
+		for (int32 Y = 0; Y < SizeY; ++Y)
+		{
+			for (int32 X = 0; X < SizeX; ++X)
+			{
+				const int32 I = X + Y * SizeX;
+				const float DX = ((float)HeightData[FMath::Min(X + 1, SizeX - 1) + Y * SizeX] - (float)HeightData[FMath::Max(X - 1, 0) + Y * SizeX]) * 0.5f * CmPerUnit;
+				const float DY = ((float)HeightData[X + FMath::Min(Y + 1, SizeY - 1) * SizeX] - (float)HeightData[X + FMath::Max(Y - 1, 0) * SizeX]) * 0.5f * CmPerUnit;
+				const float Slope = FMath::Sqrt(DX * DX + DY * DY); // cm of rise per 100 cm quad
+				const float High = FMath::SmoothStep(HighStart, HighStart + 0.12f, HeightNormData[I]);
+				const float Steep = FMath::SmoothStep(SteepStart, SteepStart * 2.0f, Slope) * (1.0f - High);
+				const float Low = FMath::Max(0.0f, 1.0f - High - Steep);
+
+				TArray<float> Raw;
+				float Sum = 0.0f;
+				for (const FString& Rule : Rules)
+				{
+					const float W = Rule.Equals(TEXT("high")) ? High : Rule.Equals(TEXT("steep")) ? Steep : Low;
+					Raw.Add(W);
+					Sum += W;
+				}
+				int32 Assigned = 0;
+				for (int32 L = 0; L < Raw.Num(); ++L)
+				{
+					const int32 W = (L == Raw.Num() - 1) ? 255 - Assigned
+						: (Sum > KINDA_SMALL_NUMBER ? FMath::RoundToInt(255.0f * Raw[L] / Sum) : (L == 0 ? 255 : 0));
+					ImportLayers[L].LayerData[I] = (uint8)FMath::Clamp(W, 0, 255);
+					Assigned += ImportLayers[L].LayerData[I];
+				}
+			}
+		}
+	}
+
 	TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayers;
-	MaterialLayerDataPerLayers.Add(LayerGuid, TArray<FLandscapeImportLayerInfo>());
+	MaterialLayerDataPerLayers.Add(LayerGuid, ImportLayers);
 	Landscape->Import(FGuid::NewGuid(), 0, 0, SizeX - 1, SizeY - 1, SectionsPerComponent, QuadsPerSection,
 	                  HeightDataPerLayers, TEXT(""), MaterialLayerDataPerLayers,
 	                  ELandscapeImportAlphamapType::Additive, TArrayView<const FLandscapeLayer>());
@@ -226,9 +295,32 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	if (ULandscapeInfo* Info = Landscape->GetLandscapeInfo())
 	{
 		Info->UpdateLayerInfoMap(Landscape);
+		// Register each imported layer as a target layer (as the editor's New Landscape tool does) so it shows
+		// in Paint mode and the material's LandscapeLayerBlend can find it.
+		for (const FLandscapeImportLayerInfo& Layer : ImportLayers)
+		{
+			if (!Layer.LayerInfo)
+			{
+				LayerWarnings.Add(FString::Printf(TEXT("layer %s has no layer info asset"), *Layer.LayerName.ToString()));
+				continue;
+			}
+			Landscape->AddTargetLayer(Layer.LayerInfo->GetLayerName(), FLandscapeTargetLayerSettings(Layer.LayerInfo));
+			const int32 Index = Info->GetLayerInfoIndex(Layer.LayerName);
+			if (Index != INDEX_NONE)
+			{
+				Info->Layers[Index].LayerInfoObj = Layer.LayerInfo;
+			}
+			Layer.LayerInfo->MarkPackageDirty();
+		}
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	TArray<TSharedPtr<FJsonValue>> LayerNames;
+	for (const FLandscapeImportLayerInfo& Layer : ImportLayers)
+	{
+		LayerNames.Add(MakeShared<FJsonValueString>(Layer.LayerName.ToString()));
+	}
+	Data->SetArrayField(TEXT("paint_layers"), LayerNames);
 	Data->SetStringField(TEXT("actor_name"), Landscape->GetName());
 	Data->SetStringField(TEXT("actor_label"), Landscape->GetActorLabel());
 	Data->SetNumberField(TEXT("size_x"), SizeX);
@@ -243,7 +335,65 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	Data->SetNumberField(TEXT("seed"), Seed);
 	Data->SetStringField(TEXT("terrain_type"), TerrainType);
 
-	return MakeEnvelope(true, Data);
+	return MakeEnvelope(true, Data, {}, LayerWarnings);
+}
+
+FString UGameForgeLandscapeLibrary::InspectLandscapeLayers()
+{
+	UWorld* World = GetActiveEditorWorld();
+	if (!World)
+	{
+		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+	}
+	ALandscape* Landscape = nullptr;
+	for (TActorIterator<ALandscape> It(World); It; ++It)
+	{
+		Landscape = *It;
+		break;
+	}
+	ULandscapeInfo* Info = Landscape ? Landscape->GetLandscapeInfo() : nullptr;
+	if (!Info)
+	{
+		return MakeEnvelope(false, nullptr, {TEXT("No landscape in the editor world.")});
+	}
+	int32 MinX = 0, MinY = 0, MaxX = 0, MaxY = 0;
+	if (!Info->GetLandscapeExtent(MinX, MinY, MaxX, MaxY))
+	{
+		return MakeEnvelope(false, nullptr, {TEXT("Landscape has no extent.")});
+	}
+	const int32 W = MaxX - MinX + 1;
+	const int32 H = MaxY - MinY + 1;
+	FLandscapeEditDataInterface Edit(Info);
+	TArray<TSharedPtr<FJsonValue>> Layers;
+	for (const FLandscapeInfoLayerSettings& Settings : Info->Layers)
+	{
+		TSharedPtr<FJsonObject> L = MakeShared<FJsonObject>();
+		L->SetStringField(TEXT("name"), Settings.GetLayerName().ToString());
+		L->SetStringField(TEXT("layer_info"), Settings.LayerInfoObj ? Settings.LayerInfoObj->GetPathName() : TEXT(""));
+		if (Settings.LayerInfoObj)
+		{
+			TArray<uint8> Weights;
+			Weights.SetNumZeroed(W * H);
+			int32 X1 = MinX, Y1 = MinY, X2 = MaxX, Y2 = MaxY;
+			Edit.GetWeightData(Settings.LayerInfoObj, X1, Y1, X2, Y2, Weights.GetData(), 0);
+			double Sum = 0.0;
+			int32 Dominant = 0;
+			for (uint8 V : Weights)
+			{
+				Sum += V;
+				Dominant += V > 127 ? 1 : 0;
+			}
+			L->SetNumberField(TEXT("mean_weight"), Weights.Num() ? Sum / Weights.Num() : 0.0);
+			L->SetNumberField(TEXT("dominant_fraction"), Weights.Num() ? (double)Dominant / Weights.Num() : 0.0);
+		}
+		Layers.Add(MakeShared<FJsonValueObject>(L));
+	}
+	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	Data->SetStringField(TEXT("landscape"), Landscape->GetActorLabel());
+	Data->SetStringField(TEXT("material"), Landscape->LandscapeMaterial ? Landscape->LandscapeMaterial->GetPathName() : TEXT(""));
+	Data->SetNumberField(TEXT("vertices"), W * H);
+	Data->SetArrayField(TEXT("layers"), Layers);
+	return MakeEnvelope(Layers.Num() > 0, Data, Layers.Num() > 0 ? TArray<FString>() : TArray<FString>{TEXT("landscape has no paint layers")});
 }
 
 FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
@@ -279,7 +429,7 @@ FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
 	}
 
 	FActorSpawnParameters SpawnParams;
-	SpawnParams.Name = FName(*RoadName);
+	SpawnParams.Name = MakeUniqueObjectName(World->PersistentLevel, AActor::StaticClass(), FName(*RoadName));
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	AActor* SplineActor = World->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
@@ -415,7 +565,7 @@ FString UGameForgeLandscapeLibrary::CreateFoliageScatter(const FString& ParamsJs
 	}
 
 	FActorSpawnParameters SpawnParams;
-	SpawnParams.Name = FName(*ClusterName);
+	SpawnParams.Name = MakeUniqueObjectName(World->PersistentLevel, AActor::StaticClass(), FName(*ClusterName));
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	AActor* ClusterActor = World->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
@@ -552,7 +702,7 @@ FString UGameForgeLandscapeLibrary::CreateLandmark(const FString& ParamsJson)
 	}
 
 	FActorSpawnParameters SpawnParams;
-	SpawnParams.Name = FName(*LandmarkName);
+	SpawnParams.Name = MakeUniqueObjectName(World->PersistentLevel, AActor::StaticClass(), FName(*LandmarkName));
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	AActor* LandmarkActor = World->SpawnActor<AActor>(AActor::StaticClass(), FVector(PosX, PosY, PosZ), FRotator::ZeroRotator, SpawnParams);

@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-10-31T01:03:17+0530",
+  "checks": {
+    "graph_built_all_edges": true,
+    "graph_uses_surface_sampler_and_density_filter": true,
+    "instances_in_pcg_tagged_components": true,
+    "instances_follow_terrain": true
+  },
+  "steps": {
+    "landscape": {
+      "min_elevation_cm": -1152.34375,
+      "max_elevation_cm": 1006.25,
+      "size_x": 127,
+      "size_y": 127,
+      "ok": true,
+      "errors": []
+    },
+    "pcg_build": {
+      "graph": "/Game/M8v2/PCG/PCG_SurfaceScatter.PCG_SurfaceScatter",
+      "volume": "GF_SurfacePCG",
+      "edges": [
+        {
+          "from": "land",
+          "from_pin": "Out",
+          "to": "sample",
+          "to_pin": "Surface",
+          "ok": true
+        },
+        {
+          "from": "sample",
+          "from_pin": "Out",
+          "to": "density",
+          "to_pin": "In",
+          "ok": true
+        },
+        {
+          "from": "density",
+          "from_pin": "Out",
+          "to": "spawn",
+          "to_pin": "In",
+          "ok": true
+        }
+      ],
+      "ok": true,
+      "errors": []
+    },
+    "pcg_verify": {
+      "graph": "/Game/M8v2/PCG/PCG_SurfaceScatter.PCG_SurfaceScatter",
+      "node_settings": [
+        "PCGGetLandscapeSettings",
+        "PCGSurfaceSamplerSettings",
+        "PCGDensityFilterSettings",
+        "PCGStaticMeshSpawnerSettings"
+      ],
+      "pcg_tagged_components": [
+        {
+          "name": "ISM_Cone_0",
+          "class": "InstancedStaticMeshComponent",
+          "instances": 285,
+          "mesh": "/Engine/BasicShapes/Cone.Cone"
+        }
+      ],
+      "untagged_ism_components": [],
+      "pcg_instances": 285,
+      "instance_heights": {
+        "sampled": 285,
+        "min_z": -996.0,
+        "max_z": 590.3,
+        "std_z": 412.6
+      },
+      "graph_accessor_notes": [
+        "AttributeError: 'PCGComponent' object has no attribute 'get_graph'",
+        "AttributeError: 'PCGGraphInstance' object has no attribute 'get_graph'"
+      ],
+      "ok": true,
+      "errors": []
+    },
+    "screenshot": {
+      "path": "E:\\GameForge\\validation\\m8v2_pcg_20261031\\Saved\\Screenshots\\m8v2_surface_pcg.png",
+      "errors": []
+    }
+  },
+  "project": "E:\\GameForge\\validation\\m8v2_pcg_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

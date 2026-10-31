@@ -1,0 +1,127 @@
+{
+  "timestamp": "2026-10-31T10:15:14+0530",
+  "checks": {
+    "vfx_system_created": true,
+    "pickup_configured": true,
+    "no_effect_before_event": true,
+    "gf_event_pickup_logged_by_player": true,
+    "effect_has_live_particles_after_event": true
+  },
+  "steps": {
+    "pickup": {
+      "spawn": true,
+      "spawn_errors": [],
+      "collect_vfx": {
+        "label": "GF_Pickup",
+        "property": "collect_vfx",
+        "value": "<Object '/Game/M13/VFX/NS_GFExplosion.NS_GFExplosion' (0x0000021F95908C00) Class 'NiagaraSystem'>"
+      },
+      "set_errors": []
+    },
+    "nav_rebuild": {
+      "requested": true
+    },
+    "before_event": {
+      "ok": false,
+      "data": {
+        "world": "PickupTest",
+        "components": [],
+        "total_particles": 0
+      }
+    },
+    "move": {
+      "ok": true,
+      "data": {
+        "pawn": "DefaultPawn",
+        "from": "-600,0,120"
+      },
+      "errors": []
+    },
+    "particle_series": [
+      {
+        "t": 0.01,
+        "particles": 0,
+        "components": 0
+      },
+      {
+        "t": 0.27,
+        "particles": 190,
+        "components": 1
+      },
+      {
+        "t": 1.56,
+        "particles": 147,
+        "components": 1
+      },
+      {
+        "t": 1.82,
+        "particles": 103,
+        "components": 1
+      },
+      {
+        "t": 2.09,
+        "particles": 45,
+        "components": 1
+      },
+      {
+        "t": 2.35,
+        "particles": 10,
+        "components": 1
+      },
+      {
+        "t": 2.61,
+        "particles": 0,
+        "components": 1
+      },
+      {
+        "t": 2.87,
+        "particles": 0,
+        "components": 1
+      },
+      {
+        "t": 3.14,
+        "particles": 0,
+        "components": 1
+      },
+      {
+        "t": 3.4,
+        "particles": 0,
+        "components": 1
+      },
+      {
+        "t": 3.66,
+        "particles": 0,
+        "components": 1
+      },
+      {
+        "t": 3.92,
+        "particles": 0,
+        "components": 1
+      },
+      {
+        "t": 4.19,
+        "particles": 0,
+        "components": 1
+      }
+    ],
+    "particle_peak": 190,
+    "screenshot": {
+      "requested_path": "E:/GameForge/validation/m13_gameplay_vfx_20261031/Saved/Screenshots/m13_gameplay_vfx.png",
+      "async": false,
+      "show_ui": true,
+      "path": "E:\\GameForge\\validation\\m13_gameplay_vfx_20261031\\Saved\\Screenshots\\m13_gameplay_vfx.png",
+      "bytes": 404663
+    },
+    "gf_events": [
+      "GF_EVENT pickup actor=GameForgeVFXPickup_0 collected_by=DefaultPawn_0 vfx=NS_GFExplosion spawned=1"
+    ]
+  },
+  "not_covered": [
+    "stat Niagara cost",
+    "M11 renderer material on the effect",
+    "packaged build"
+  ],
+  "project": "E:\\GameForge\\validation\\m13_gameplay_vfx_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

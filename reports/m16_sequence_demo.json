@@ -1,0 +1,308 @@
+{
+  "timestamp": "2026-10-31T10:00:18+0530",
+  "checks": {
+    "sequence_built": true,
+    "three_camera_cuts": true,
+    "transform_keys_read_back": true,
+    "audio_in_sequence": true,
+    "scrubbing_moves_actor_as_keyed": true,
+    "frames_rendered": true,
+    "cuts_detected_at_24_and_48": true,
+    "shots_show_expected_colours": true
+  },
+  "steps": {
+    "build": {
+      "ok": true,
+      "errors": []
+    },
+    "inspect": {
+      "path": "/Game/M16/Cinematics/LS_GFThreeShots.LS_GFThreeShots",
+      "fps": 24.0,
+      "playback": [
+        0,
+        72
+      ],
+      "bindings": [
+        {
+          "name": "GF_CamRed",
+          "tracks": []
+        },
+        {
+          "name": "GF_CamBlue",
+          "tracks": []
+        },
+        {
+          "name": "GF_CamGreen",
+          "tracks": []
+        },
+        {
+          "name": "GF_Mover",
+          "tracks": [
+            {
+              "type": "MovieScene3DTransformTrack",
+              "keys": 6
+            }
+          ]
+        }
+      ],
+      "camera_cuts": [
+        {
+          "range": [
+            0,
+            24
+          ]
+        },
+        {
+          "range": [
+            24,
+            48
+          ]
+        },
+        {
+          "range": [
+            48,
+            72
+          ]
+        }
+      ],
+      "audio": [
+        {
+          "range": [
+            24,
+            32
+          ],
+          "sound": "/Game/M16/Audio/SFX_Pickup.SFX_Pickup"
+        }
+      ]
+    },
+    "evaluate": [
+      {
+        "frame": 0,
+        "GF_Mover": [
+          -200.0,
+          0.0,
+          400.0
+        ]
+      },
+      {
+        "frame": 36,
+        "GF_Mover": [
+          0.0,
+          0.0,
+          400.0
+        ]
+      },
+      {
+        "frame": 71,
+        "GF_Mover": [
+          199.77,
+          0.0,
+          400.0
+        ]
+      }
+    ],
+    "variants": {
+      "unlit": {
+        "render_request": {
+          "ok": true,
+          "errors": []
+        },
+        "rendered_frames": 72,
+        "frame_stats": {
+          "diffs": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            17.78,
+            0.01,
+            0.01,
+            0.02,
+            0.02,
+            0.01,
+            0.01,
+            0.01,
+            0.02,
+            0.02,
+            0.01,
+            0.01,
+            0.02,
+            0.01,
+            0.02,
+            0.01,
+            0.01,
+            0.02,
+            0.01,
+            0.02,
+            0.02,
+            0.01,
+            0.01,
+            0.01,
+            17.75,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dominant": "RRRRRRRRRRRRRRRRRRRRRRRRGGGGGGGGGGGGGGGGGGGGGGGGBBBBBBBBBBBBBBBBBBBBBBBB",
+          "first_mean": [
+            41.36,
+            27.39,
+            25.2
+          ]
+        },
+        "largest_diffs_after_frame": [
+          24,
+          48
+        ],
+        "cuts_ok": true,
+        "colours_ok": true,
+        "mean_rgb_first_frame": [
+          41.36,
+          27.39,
+          25.2
+        ]
+      },
+      "lit": {
+        "render_request": {
+          "ok": true,
+          "errors": []
+        },
+        "rendered_frames": 72,
+        "frame_stats": {
+          "diffs": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.0,
+            0.01,
+            0.01,
+            18.48,
+            0.01,
+            0.01,
+            0.01,
+            0.02,
+            0.01,
+            0.01,
+            0.03,
+            0.02,
+            0.01,
+            0.02,
+            0.01,
+            0.02,
+            0.02,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            17.03,
+            0.0,
+            0.01,
+            0.0,
+            0.01,
+            0.01,
+            0.01,
+            0.0,
+            0.01,
+            0.0,
+            0.0,
+            0.01,
+            0.0,
+            0.01,
+            0.0,
+            0.0,
+            0.01,
+            0.01,
+            0.0,
+            0.01,
+            0.0,
+            0.0,
+            0.01,
+            0.0
+          ],
+          "dominant": "RRRRRRRRRRRRRRRRRRRRRRRRGGGGGGGGGGGGGGGGGGGGGGGGBBBBBBBBBBBBBBBBBBBBBBBB",
+          "first_mean": [
+            30.98,
+            9.39,
+            7.28
+          ]
+        },
+        "largest_diffs_after_frame": [
+          24,
+          48
+        ],
+        "cuts_ok": true,
+        "colours_ok": true,
+        "mean_rgb_first_frame": [
+          30.98,
+          9.39,
+          7.28
+        ]
+      }
+    }
+  },
+  "project": "E:\\GameForge\\validation\\m16_sequence_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

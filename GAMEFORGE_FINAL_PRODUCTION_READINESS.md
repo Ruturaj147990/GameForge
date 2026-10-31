@@ -14,9 +14,9 @@ Production-capable for small recipe games (puzzle/grid, platformer, arena, card 
 | 7 Character + rig | PASS (prototype quality) |
 | 8 Animation | PASS v1 (PIE); packaged NOT VERIFIED |
 | 9 Materials/textures/shaders | PLANNED |
-| 10 Niagara and audio | PLANNED |
-| 11 Gameplay AI / advanced systems | PARTIAL (basic MoveTo AI) |
-| 12 Cinematics | PLANNED |
+| 10 Niagara and audio | PASS in PIE: template Niagara systems, MetaSound graphs, procedural SFX, and VFX+SFX on a gameplay event (`reports/gameplay_feedback_demo.json`). Packaged playback and Sound Class/Mix still PLANNED |
+| 11 Gameplay AI / advanced systems | M15 acceptance PASS in PIE: perception guard (`reports/m15_guard_demo.json`) + quest giver/objectives with save/load across sessions (`reports/m15_quest_demo.json`). GAS, inventory, BT/StateTree assets, dialogue UI and packaged checks PLANNED |
+| 12 Cinematics | PASS for the 3-shot acceptance (`reports/m16_sequence_demo.json`); character animation tracks, Control Rig and subtitles still PLANNED |
 | 13 Multiplayer | PLANNED |
 | 14 QA/profiling/packaging | PARTIAL (tests + packaging PASS; profiling PLANNED) |
 | 15 Integrated prompt-to-game | PARTIAL (per-recipe pipeline) |

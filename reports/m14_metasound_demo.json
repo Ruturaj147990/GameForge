@@ -1,0 +1,161 @@
+{
+  "timestamp": "2026-10-31T10:25:53+0530",
+  "checks": {
+    "metasound_built": true,
+    "graph_read_back_from_saved_asset": true,
+    "asset_is_metasound_source": true,
+    "plays_in_pie": true,
+    "stops_by_itself_via_graph_on_finished": true
+  },
+  "steps": {
+    "build": {
+      "ok": true,
+      "errors": [],
+      "data": {
+        "asset_path": "/Game/M14/MetaSounds/MS_GFChime",
+        "nodes": [
+          "osc",
+          "env",
+          "mul"
+        ],
+        "steps": [
+          {
+            "add_node": "osc",
+            "result": "SUCCEEDED"
+          },
+          {
+            "add_node": "env",
+            "result": "SUCCEEDED"
+          },
+          {
+            "add_node": "mul",
+            "result": "SUCCEEDED"
+          },
+          {
+            "connect": [
+              "osc",
+              "mul",
+              "PrimaryOperand"
+            ],
+            "result": "SUCCEEDED"
+          },
+          {
+            "connect": [
+              "env",
+              "mul",
+              "AdditionalOperands"
+            ],
+            "result": "SUCCEEDED"
+          },
+          {
+            "connect": [
+              "OnPlay",
+              "env",
+              "Trigger"
+            ],
+            "result": "SUCCEEDED"
+          },
+          {
+            "on_finished": [
+              "env",
+              "On Done"
+            ],
+            "result": "SUCCEEDED"
+          },
+          {
+            "audio_out": [
+              "mul",
+              "Out"
+            ],
+            "result": "SUCCEEDED"
+          }
+        ]
+      }
+    },
+    "inspect": {
+      "ok": true,
+      "errors": [],
+      "data": {
+        "nodes": {
+          "osc": true,
+          "env": true,
+          "mul": true
+        },
+        "edges": [
+          {
+            "to": [
+              "mul",
+              "PrimaryOperand"
+            ],
+            "connected": true
+          },
+          {
+            "to": [
+              "mul",
+              "AdditionalOperands"
+            ],
+            "connected": true
+          }
+        ],
+        "on_play": [
+          {
+            "to": [
+              "env",
+              "Trigger"
+            ],
+            "connected": true
+          }
+        ],
+        "on_finished": null,
+        "asset_class": "MetaSoundSource",
+        "duration": -1.0
+      }
+    },
+    "play": {
+      "ok": true,
+      "errors": [],
+      "data": {
+        "label": "GF_Chime",
+        "playing": true
+      }
+    },
+    "series": [
+      {
+        "t": 0.01,
+        "playing": true
+      },
+      {
+        "t": 0.12,
+        "playing": true
+      },
+      {
+        "t": 0.23,
+        "playing": true
+      },
+      {
+        "t": 0.34,
+        "playing": true
+      },
+      {
+        "t": 0.46,
+        "playing": true
+      },
+      {
+        "t": 0.56,
+        "playing": true
+      },
+      {
+        "t": 0.68,
+        "playing": false
+      }
+    ],
+    "stopped_at_s": 0.68
+  },
+  "not_covered": [
+    "audible output capture",
+    "graph read-back after editor restart (node handles are kept in memory)"
+  ],
+  "project": "E:\\GameForge\\validation\\m14_metasound_20261031",
+  "editor_exit_code": 0,
+  "ok": true
+}

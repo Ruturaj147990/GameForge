@@ -1,0 +1,674 @@
+{
+  "timestamp": "2026-10-31T01:02:33+0530",
+  "project": "E:\\GameForge\\validation\\m11_demo_20261031",
+  "checks": {
+    "pbr_set_valid": true,
+    "textures_imported_with_role_settings": true,
+    "basecolor_srgb_normal_ormmasks": true,
+    "material_graph_built": true,
+    "material_instance_created": true,
+    "material_function_built": true,
+    "material_calls_function_and_compiles": true,
+    "material_outputs_connected": true,
+    "material_compiled": true,
+    "material_uses_generated_textures": true,
+    "instance_overrides_read_back": true,
+    "mi_assigned_to_cube": true,
+    "screenshot_shows_textured_warm_material": true,
+    "readback_identical_after_restart": true
+  },
+  "steps": {
+    "pbr_manifest": {
+      "name": "GFProcRock",
+      "generator": "GameForge-ProceduralPBR-V1",
+      "generator_version": "1.0.0",
+      "provenance": "procedural",
+      "license": "CC0-1.0",
+      "size": 512,
+      "normal_convention": "DirectX (Unreal)",
+      "orm_packing": {
+        "R": "AO",
+        "G": "Roughness",
+        "B": "Metallic"
+      },
+      "files": {
+        "BaseColor": {
+          "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_BaseColor.png",
+          "sha256": "1e0dba1e7990334740acfb7c65578e6741dcf44946e01dd929c128728e087660",
+          "srgb": true,
+          "compression": "TC_Default",
+          "channels": 3
+        },
+        "Normal": {
+          "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_Normal.png",
+          "sha256": "ebbe1621b1b7c4ad1421f2e5dd848b308317db661dfec6a6bd6c3bb37272364e",
+          "srgb": false,
+          "compression": "TC_Normalmap",
+          "channels": 3
+        },
+        "ORM": {
+          "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_ORM.png",
+          "sha256": "444d6c8abd266b87d2f8e234db3631789c1394236dfadb885e057112dd28fe13",
+          "srgb": false,
+          "compression": "TC_Masks",
+          "channels": 3
+        },
+        "Height": {
+          "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_Height.png",
+          "sha256": "a165ed04f56f68198955a6f673eed938924571e11dbfb578af807e329ff2ebb2",
+          "srgb": false,
+          "compression": "TC_Grayscale",
+          "channels": 1
+        }
+      },
+      "registry_ids": {
+        "BaseColor": "texture:T_GFProcRock_BaseColor:031c31c44d27",
+        "Normal": "texture:T_GFProcRock_Normal:0fbc453a93fa",
+        "ORM": "texture:T_GFProcRock_ORM:33602f932170",
+        "Height": "texture:T_GFProcRock_Height:6f1dd973769b"
+      }
+    },
+    "pbr_validation": {
+      "valid": true,
+      "errors": [],
+      "metrics": {
+        "BaseColor": {
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "channel_std": [
+            15.61,
+            7.56,
+            4.54
+          ],
+          "seam_to_interior_step": 0.173
+        },
+        "Normal": {
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "channel_std": [
+            2.66,
+            2.77,
+            0.01
+          ],
+          "seam_to_interior_step": 1.073,
+          "normal_length_min_max": [
+            0.996,
+            1.004
+          ],
+          "normal_z_min": 0.992
+        },
+        "ORM": {
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "channel_std": [
+            21.37,
+            22.66,
+            0.0
+          ],
+          "seam_to_interior_step": 0.837
+        },
+        "Height": {
+          "shape": [
+            512,
+            512
+          ],
+          "channel_std": [
+            50.35
+          ],
+          "seam_to_interior_step": 0.158
+        }
+      }
+    },
+    "new_level": true,
+    "texture_import": {
+      "BaseColor": {
+        "path": "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor",
+        "srgb": true,
+        "compression": "TC_DEFAULT",
+        "size": [
+          512,
+          512
+        ],
+        "role": "color",
+        "ok": true,
+        "errors": []
+      },
+      "Normal": {
+        "path": "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal",
+        "srgb": false,
+        "compression": "TC_NORMALMAP",
+        "size": [
+          512,
+          512
+        ],
+        "role": "normal",
+        "ok": true,
+        "errors": []
+      },
+      "ORM": {
+        "path": "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM",
+        "srgb": false,
+        "compression": "TC_MASKS",
+        "size": [
+          512,
+          512
+        ],
+        "role": "masks",
+        "ok": true,
+        "errors": []
+      }
+    },
+    "material_build": {
+      "asset_path": "/Game/M11/Materials/M_GFProcRock.M_GFProcRock",
+      "expressions": 10,
+      "ok": true,
+      "errors": []
+    },
+    "material_instance": {
+      "asset_path": "/Game/M11/Materials/MI_GFProcRock_Warm.MI_GFProcRock_Warm",
+      "ok": true,
+      "errors": []
+    },
+    "material_function": {
+      "asset_path": "/Game/M11/Functions/MF_GFContrast.MF_GFContrast",
+      "expressions": 4,
+      "ok": true,
+      "errors": []
+    },
+    "function_material": {
+      "ok": true,
+      "errors": [],
+      "statistics": {
+        "pixel_shader_instructions": 226,
+        "vertex_shader_instructions": 140,
+        "samplers": 4
+      },
+      "outputs": [
+        {
+          "property": "MP_BASE_COLOR",
+          "from": "MaterialExpressionMaterialFunctionCall_0",
+          "output": "Result"
+        }
+      ],
+      "calls": [
+        {
+          "name": "MaterialExpressionMaterialFunctionCall_0",
+          "class": "MaterialExpressionMaterialFunctionCall",
+          "material_function": "/Game/M11/Functions/MF_GFContrast.MF_GFContrast"
+        }
+      ]
+    },
+    "readback_before_restart": {
+      "material": {
+        "material": "/Game/M11/Materials/M_GFProcRock.M_GFProcRock",
+        "expression_count": 10,
+        "nodes": [
+          {
+            "name": "MaterialExpressionMultiply_0",
+            "class": "MaterialExpressionMultiply"
+          },
+          {
+            "name": "MaterialExpressionMultiply_1",
+            "class": "MaterialExpressionMultiply"
+          },
+          {
+            "name": "MaterialExpressionMultiply_2",
+            "class": "MaterialExpressionMultiply"
+          },
+          {
+            "name": "MaterialExpressionScalarParameter_0",
+            "class": "MaterialExpressionScalarParameter",
+            "parameter_name": "Tiling",
+            "default_value": 2.0
+          },
+          {
+            "name": "MaterialExpressionScalarParameter_1",
+            "class": "MaterialExpressionScalarParameter",
+            "parameter_name": "RoughnessScale",
+            "default_value": 1.0
+          },
+          {
+            "name": "MaterialExpressionTextureCoordinate_0",
+            "class": "MaterialExpressionTextureCoordinate",
+            "coordinate_index": 0,
+            "u_tiling": 1.0,
+            "v_tiling": 1.0
+          },
+          {
+            "name": "MaterialExpressionTextureSample_0",
+            "class": "MaterialExpressionTextureSample",
+            "sampler_type": "SAMPLERTYPE_COLOR",
+            "texture": "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor"
+          },
+          {
+            "name": "MaterialExpressionTextureSample_1",
+            "class": "MaterialExpressionTextureSample",
+            "sampler_type": "SAMPLERTYPE_NORMAL",
+            "texture": "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal"
+          },
+          {
+            "name": "MaterialExpressionTextureSample_2",
+            "class": "MaterialExpressionTextureSample",
+            "sampler_type": "SAMPLERTYPE_MASKS",
+            "texture": "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM"
+          },
+          {
+            "name": "MaterialExpressionVectorParameter_0",
+            "class": "MaterialExpressionVectorParameter",
+            "parameter_name": "Tint",
+            "default_value": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "from": "MaterialExpressionTextureCoordinate_0",
+            "to": "MaterialExpressionMultiply_0",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionScalarParameter_0",
+            "to": "MaterialExpressionMultiply_0",
+            "input": "1"
+          },
+          {
+            "from": "MaterialExpressionTextureSample_0",
+            "to": "MaterialExpressionMultiply_1",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionVectorParameter_0",
+            "to": "MaterialExpressionMultiply_1",
+            "input": "1"
+          },
+          {
+            "from": "MaterialExpressionTextureSample_2",
+            "to": "MaterialExpressionMultiply_2",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionScalarParameter_1",
+            "to": "MaterialExpressionMultiply_2",
+            "input": "1"
+          },
+          {
+            "from": "MaterialExpressionMultiply_0",
+            "to": "MaterialExpressionTextureSample_0",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionMultiply_0",
+            "to": "MaterialExpressionTextureSample_1",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionMultiply_0",
+            "to": "MaterialExpressionTextureSample_2",
+            "input": "0"
+          }
+        ],
+        "outputs": [
+          {
+            "property": "MP_BASE_COLOR",
+            "from": "MaterialExpressionMultiply_1",
+            "output": ""
+          },
+          {
+            "property": "MP_METALLIC",
+            "from": "MaterialExpressionTextureSample_2",
+            "output": "B"
+          },
+          {
+            "property": "MP_ROUGHNESS",
+            "from": "MaterialExpressionMultiply_2",
+            "output": ""
+          },
+          {
+            "property": "MP_NORMAL",
+            "from": "MaterialExpressionTextureSample_1",
+            "output": "RGB"
+          },
+          {
+            "property": "MP_AMBIENT_OCCLUSION",
+            "from": "MaterialExpressionTextureSample_2",
+            "output": "R"
+          }
+        ],
+        "used_textures": [
+          "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor",
+          "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal",
+          "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM"
+        ],
+        "statistics": {
+          "pixel_shader_instructions": 232,
+          "vertex_shader_instructions": 140,
+          "samplers": 6
+        }
+      },
+      "material_ok": true,
+      "material_errors": [],
+      "instance": {
+        "parent": "/Game/M11/Materials/M_GFProcRock.M_GFProcRock",
+        "scalars": {
+          "Tiling": 3.0,
+          "RoughnessScale": 0.9
+        },
+        "vectors": {
+          "Tint": [
+            1.0,
+            0.85,
+            0.7,
+            1.0
+          ]
+        },
+        "textures": {}
+      },
+      "instance_ok": true,
+      "textures": {
+        "BaseColor": {
+          "path": "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor",
+          "srgb": true,
+          "compression": "TC_DEFAULT",
+          "size": [
+            512,
+            512
+          ]
+        },
+        "Normal": {
+          "path": "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal",
+          "srgb": false,
+          "compression": "TC_NORMALMAP",
+          "size": [
+            512,
+            512
+          ]
+        },
+        "ORM": {
+          "path": "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM",
+          "srgb": false,
+          "compression": "TC_MASKS",
+          "size": [
+            512,
+            512
+          ]
+        }
+      },
+      "textures_ok": true
+    },
+    "screenshots": {
+      "default_materials": {
+        "label": "GF_M11Cube",
+        "slots": [
+          {
+            "component": "StaticMeshComponent0",
+            "slot": 0,
+            "material": "/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"
+          }
+        ]
+      },
+      "default": {
+        "path": "E:\\GameForge\\validation\\m11_demo_20261031\\Saved\\Screenshots\\m11_default.png",
+        "stats": {
+          "size": [
+            1280,
+            720
+          ],
+          "crop_mean_rgb": [
+            85.6,
+            85.83,
+            85.41
+          ],
+          "crop_lum_std": 6.36,
+          "crop_hf_energy": 0.784,
+          "red_over_blue": 1.002
+        },
+        "errors": []
+      },
+      "mi_materials": {
+        "label": "GF_M11Cube",
+        "slots": [
+          {
+            "component": "StaticMeshComponent0",
+            "slot": 0,
+            "material": "/Game/M11/Materials/MI_GFProcRock_Warm.MI_GFProcRock_Warm"
+          }
+        ]
+      },
+      "mi": {
+        "path": "E:\\GameForge\\validation\\m11_demo_20261031\\Saved\\Screenshots\\m11_mi.png",
+        "stats": {
+          "size": [
+            1280,
+            720
+          ],
+          "crop_mean_rgb": [
+            112.3,
+            54.06,
+            37.61
+          ],
+          "crop_lum_std": 9.68,
+          "crop_hf_energy": 0.97,
+          "red_over_blue": 2.986
+        },
+        "errors": []
+      }
+    },
+    "readback_after_restart": {
+      "material": {
+        "material": "/Game/M11/Materials/M_GFProcRock.M_GFProcRock",
+        "expression_count": 10,
+        "nodes": [
+          {
+            "name": "MaterialExpressionMultiply_0",
+            "class": "MaterialExpressionMultiply"
+          },
+          {
+            "name": "MaterialExpressionMultiply_1",
+            "class": "MaterialExpressionMultiply"
+          },
+          {
+            "name": "MaterialExpressionMultiply_2",
+            "class": "MaterialExpressionMultiply"
+          },
+          {
+            "name": "MaterialExpressionScalarParameter_0",
+            "class": "MaterialExpressionScalarParameter",
+            "parameter_name": "Tiling",
+            "default_value": 2.0
+          },
+          {
+            "name": "MaterialExpressionScalarParameter_1",
+            "class": "MaterialExpressionScalarParameter",
+            "parameter_name": "RoughnessScale",
+            "default_value": 1.0
+          },
+          {
+            "name": "MaterialExpressionTextureCoordinate_0",
+            "class": "MaterialExpressionTextureCoordinate",
+            "coordinate_index": 0,
+            "u_tiling": 1.0,
+            "v_tiling": 1.0
+          },
+          {
+            "name": "MaterialExpressionTextureSample_0",
+            "class": "MaterialExpressionTextureSample",
+            "sampler_type": "SAMPLERTYPE_COLOR",
+            "texture": "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor"
+          },
+          {
+            "name": "MaterialExpressionTextureSample_1",
+            "class": "MaterialExpressionTextureSample",
+            "sampler_type": "SAMPLERTYPE_NORMAL",
+            "texture": "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal"
+          },
+          {
+            "name": "MaterialExpressionTextureSample_2",
+            "class": "MaterialExpressionTextureSample",
+            "sampler_type": "SAMPLERTYPE_MASKS",
+            "texture": "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM"
+          },
+          {
+            "name": "MaterialExpressionVectorParameter_0",
+            "class": "MaterialExpressionVectorParameter",
+            "parameter_name": "Tint",
+            "default_value": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "from": "MaterialExpressionTextureCoordinate_0",
+            "to": "MaterialExpressionMultiply_0",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionScalarParameter_0",
+            "to": "MaterialExpressionMultiply_0",
+            "input": "1"
+          },
+          {
+            "from": "MaterialExpressionTextureSample_0",
+            "to": "MaterialExpressionMultiply_1",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionVectorParameter_0",
+            "to": "MaterialExpressionMultiply_1",
+            "input": "1"
+          },
+          {
+            "from": "MaterialExpressionTextureSample_2",
+            "to": "MaterialExpressionMultiply_2",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionScalarParameter_1",
+            "to": "MaterialExpressionMultiply_2",
+            "input": "1"
+          },
+          {
+            "from": "MaterialExpressionMultiply_0",
+            "to": "MaterialExpressionTextureSample_0",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionMultiply_0",
+            "to": "MaterialExpressionTextureSample_1",
+            "input": "0"
+          },
+          {
+            "from": "MaterialExpressionMultiply_0",
+            "to": "MaterialExpressionTextureSample_2",
+            "input": "0"
+          }
+        ],
+        "outputs": [
+          {
+            "property": "MP_BASE_COLOR",
+            "from": "MaterialExpressionMultiply_1",
+            "output": ""
+          },
+          {
+            "property": "MP_METALLIC",
+            "from": "MaterialExpressionTextureSample_2",
+            "output": "B"
+          },
+          {
+            "property": "MP_ROUGHNESS",
+            "from": "MaterialExpressionMultiply_2",
+            "output": ""
+          },
+          {
+            "property": "MP_NORMAL",
+            "from": "MaterialExpressionTextureSample_1",
+            "output": "RGB"
+          },
+          {
+            "property": "MP_AMBIENT_OCCLUSION",
+            "from": "MaterialExpressionTextureSample_2",
+            "output": "R"
+          }
+        ],
+        "used_textures": [
+          "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor",
+          "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal",
+          "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM"
+        ],
+        "statistics": {
+          "pixel_shader_instructions": 232,
+          "vertex_shader_instructions": 140,
+          "samplers": 6
+        }
+      },
+      "material_ok": true,
+      "material_errors": [],
+      "instance": {
+        "parent": "/Game/M11/Materials/M_GFProcRock.M_GFProcRock",
+        "scalars": {
+          "Tiling": 3.0,
+          "RoughnessScale": 0.9
+        },
+        "vectors": {
+          "Tint": [
+            1.0,
+            0.85,
+            0.7,
+            1.0
+          ]
+        },
+        "textures": {}
+      },
+      "instance_ok": true,
+      "textures": {
+        "BaseColor": {
+          "path": "/Game/M11/Textures/T_GFProcRock_BaseColor.T_GFProcRock_BaseColor",
+          "srgb": true,
+          "compression": "TC_DEFAULT",
+          "size": [
+            512,
+            512
+          ]
+        },
+        "Normal": {
+          "path": "/Game/M11/Textures/T_GFProcRock_Normal.T_GFProcRock_Normal",
+          "srgb": false,
+          "compression": "TC_NORMALMAP",
+          "size": [
+            512,
+            512
+          ]
+        },
+        "ORM": {
+          "path": "/Game/M11/Textures/T_GFProcRock_ORM.T_GFProcRock_ORM",
+          "srgb": false,
+          "compression": "TC_MASKS",
+          "size": [
+            512,
+            512
+          ]
+        }
+      },
+      "textures_ok": true
+    }
+  },
+  "editor_exit_code_a": 0,
+  "editor_exit_code_b": 0,
+  "ok": true
+}

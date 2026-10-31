@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
+#include "Animation/AnimationAsset.h"
 #include "GameForgeLocomotionAnimInstance.generated.h"
 
 class UAnimSequence;
+class UBlendSpace;
 
 UENUM(BlueprintType)
 enum class EGameForgeLocomotionState : uint8
@@ -35,7 +37,10 @@ struct GAMEFORGERUNTIME_API FGameForgeLocomotionProxy : public FAnimInstanceProx
 
 private:
 	UAnimSequence* ClipFor(EGameForgeLocomotionState State) const;
+	bool UsesBlendSpace(EGameForgeLocomotionState State) const;
+	bool HasPoseSource(EGameForgeLocomotionState State) const;
 	void SampleClip(UAnimSequence* Clip, double Time, bool bLoop, FPoseContext& Out) const;
+	void SampleState(EGameForgeLocomotionState State, double Time, FPoseContext& Out);
 
 	TObjectPtr<UAnimSequence> Clips[6] = {};
 	EGameForgeLocomotionState State = EGameForgeLocomotionState::Idle;
@@ -45,6 +50,12 @@ private:
 	float BlendElapsed = 1.0f;
 	float BlendTime = 0.15f;
 	bool bHasPrev = false;
+
+	// Grounded locomotion through the blend space: samples/weights come from the game thread each update; every
+	// sample plays at the same normalized phase so walk and run cycles stay in step while blending.
+	TObjectPtr<UBlendSpace> BlendSpace = nullptr;
+	TArray<FBlendSampleData> BlendSamples;
+	double GroundPhase = 0.0;
 };
 
 /**
@@ -86,6 +97,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Locomotion")
 	float BlendTime = 0.15f;
 
+	/** Optional 1D blend space over ground speed (cm/s). When set, Idle/Walk/Run poses come from it instead of
+	 *  the single Idle/Walk/Run clips; Jump/Fall/Land still use their clips. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Locomotion|BlendSpace")
+	TObjectPtr<UBlendSpace> LocomotionBlendSpace;
+
+	/** Current blend-space sample weights, "ClipName=0.42;...", empty when no blend space is used. */
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Locomotion|State")
+	FString BlendSpaceWeights;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Locomotion|State")
 	EGameForgeLocomotionState CurrentState = EGameForgeLocomotionState::Idle;
 
@@ -115,6 +135,8 @@ private:
 
 	bool bWasFalling = false;
 	float LandTimeRemaining = 0.0f;
+	TArray<FBlendSampleData> BlendSamples;
+	int32 CachedTriangulationIndex = -1;
 
 	friend struct FGameForgeLocomotionProxy;
 };
