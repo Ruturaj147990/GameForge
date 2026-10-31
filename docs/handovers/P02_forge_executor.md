@@ -709,7 +709,7 @@ Record this in `reports/P2/rollback_check.json`. Then re-run to completion.
 | 2.2 | DONE | 2026-10-31T12:45Z | 2026-10-31T12:46Z | test_forge_store (6 passed); atomic persistence with lock retry, event logging, latest_for_project, runs index |
 | 2.3 | DONE | 2026-10-31T12:46Z | 2026-10-31T12:47Z | test_forge_checkpoints (5 passed); ensure, commit, rollback/reset_to, editor guard, MAX_COMMIT_MB guard |
 | 2.4 | DONE | 2026-10-31T12:47Z | 2026-10-31T12:50Z | test_jobs (5 passed); Windows Job Object KILL_ON_JOB_CLOSE leak test, ENGINE_LOCK, JobManager |
-| 2.5 | TODO | | | |
+| 2.5 | DONE | 2026-10-31T12:50Z | 2026-10-31T12:52Z | test_forge_executor (9 passed); persistence, resume, dependency invalidation, approvals, repair hooks, timeout, cancellation |
 | 2.6 | TODO | | | |
 | 2.7 | TODO | | | |
 | 2.8 | TODO | | | |

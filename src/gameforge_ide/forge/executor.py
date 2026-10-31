@@ -1,0 +1,239 @@
+"""ForgeExecutor (AD-11): runs a RunSpec step by step with persistence, resume, approvals, retries and checkpoints."""
+from __future__ import annotations
+
+import threading
+import time
+import traceback
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from ..core import events as core_events
+from ..core.jobs import ENGINE_LOCK
+from .checkpoints import CheckpointError, ProjectRepo
+from .model import TERMINAL, ArtifactRef, RunSpec, RunState, StepRecord, StepSpec, StepStatus, canonical_hash
+from .store import RunStore
+
+
+@dataclass
+class StepContext:
+    run: RunSpec
+    step: StepSpec
+    record: StepRecord
+    shared: Dict[str, Any]  # outputs of earlier steps: shared[step_id] = record.data
+    project_dir: Optional[Path]
+    workspace_dir: Path
+    cancel: threading.Event
+    log: Callable[[str], None]  # appends a "log" event (bounded to 2 KB per line)
+
+
+@dataclass
+class StepOutcome:
+    ok: bool
+    data: Dict[str, Any] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+    artifacts: List[Dict[str, Any]] = field(default_factory=list)
+    repairable: bool = False  # handler says a retry after repair may succeed
+    blocked: bool = False  # environment problem (engine missing, approval revoked): no retry
+
+
+Handler = Callable[[StepContext], StepOutcome]
+RepairHook = Callable[[StepContext, StepOutcome], bool]  # returns True if it changed something worth retrying
+
+
+class ForgeExecutor:
+    def __init__(
+        self,
+        handlers: Dict[str, Handler],
+        repair_hooks: Optional[Dict[str, RepairHook]] = None,
+        bus: Optional[core_events.EventBus] = None,
+    ):
+        self.handlers = handlers
+        self.repair_hooks = repair_hooks or {}
+        self.bus = bus or core_events.default_bus()
+        self._run_cancel = threading.Event()  # user cancelled the whole run
+        self._step_cancel: Optional[threading.Event] = None  # current step (also set on timeout)
+
+    def request_cancel(self) -> None:
+        """Called from the UI thread. Stops the current step and prevents further steps."""
+        self._run_cancel.set()
+        ev = self._step_cancel
+        if ev is not None:
+            ev.set()
+
+    # -- public -------------------------------------------------------------------------------
+    def run(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
+        """Execute until DONE, FAILED, CANCELLED, BLOCKED or WAITING_APPROVAL. Safe to call again to resume."""
+        run = state.run
+        repo = ProjectRepo(Path(run.project_dir)) if run.project_dir else None
+        self._recover_interrupted(state)
+        state.status = "RUNNING"
+        self._persist(state, store, {"kind": "run_started"})
+        if self._needs_run_approval(state):
+            return self._suspend(state, store, "run")
+        eff: Dict[str, str] = {}  # effective hash = own inputs + dependencies' effective hashes
+        for step in run.topo_order():
+            eff[step.step_id] = canonical_hash(
+                {"self": step.input_hash, "deps": [eff[d] for d in sorted(step.depends_on)]}
+            )
+            rec = state.records[step.step_id]
+            if self._run_cancel.is_set():
+                return self._finish(state, store, "CANCELLED")
+            if rec.status == StepStatus.DONE and rec.input_hash == eff[step.step_id]:
+                continue  # resume / incremental: unchanged work is skipped
+            if rec.status in TERMINAL and rec.status != StepStatus.DONE:
+                continue  # FAILED/BLOCKED/SKIPPED stay until the run is re-planned
+            if any(state.records[d].status != StepStatus.DONE for d in step.depends_on):
+                rec.status = StepStatus.BLOCKED
+                rec.errors = [
+                    f"dependency not done: {[d for d in step.depends_on if state.records[d].status != StepStatus.DONE]}"
+                ]
+                self._persist(state, store, {"kind": "step_blocked", "step_id": step.step_id})
+                continue
+            if step.approval == "step" and step.step_id not in state.approvals:
+                return self._suspend(state, store, step.step_id)
+            self._run_step(state, store, step, rec, repo, editor_running, eff[step.step_id])
+            # A FAILED step needs no special handling: its dependants become BLOCKED by the dependency check above.
+        final = (
+            "DONE"
+            if all(r.status == StepStatus.DONE for r in state.records.values())
+            else ("CANCELLED" if self._run_cancel.is_set() else "FAILED")
+        )
+        return self._finish(state, store, final)
+
+    # -- internals ----------------------------------------------------------------------------
+    def _run_step(self, state: RunState, store: RunStore, step: StepSpec, rec: StepRecord, repo: Optional[ProjectRepo], editor_running: Callable[[], bool], eff_hash: str) -> None:
+        handler = self.handlers.get(step.kind.value)
+        if handler is None:
+            rec.status, rec.errors = StepStatus.BLOCKED, [f"no handler for step kind {step.kind.value}"]
+            self._persist(state, store, {"kind": "step_blocked", "step_id": step.step_id})
+            return
+        shared = {sid: r.data for sid, r in state.records.items() if r.status == StepStatus.DONE}
+        while True:
+            rec.attempts += 1
+            rec.status, rec.started_at, rec.finished_at = StepStatus.RUNNING, time.time(), None
+            rec.input_hash, rec.errors = eff_hash, []
+            self._persist(state, store, {"kind": "step_started", "step_id": step.step_id, "attempt": rec.attempts})
+            self._step_cancel = threading.Event()
+            if self._run_cancel.is_set():
+                self._step_cancel.set()
+            ctx = StepContext(
+                state.run,
+                step,
+                rec,
+                shared,
+                Path(state.run.project_dir) if state.run.project_dir else None,
+                Path(state.run.workspace_dir),
+                self._step_cancel,
+                lambda line, sid=step.step_id: store.append_event(
+                    state.run.run_id, {"kind": "log", "step_id": sid, "line": line[:2048]}
+                ),
+            )
+            try:
+                if step.engine_lock:
+                    with ENGINE_LOCK:
+                        out = self._with_timeout(handler, ctx, step.timeout_s)
+                else:
+                    out = self._with_timeout(handler, ctx, step.timeout_s)
+            except Exception as exc:  # a handler crash is a typed step failure, never a crashed run
+                out = StepOutcome(False, errors=[f"{type(exc).__name__}: {exc}", traceback.format_exc(limit=4)])
+            rec.finished_at, rec.ok, rec.data = time.time(), out.ok, out.data
+            rec.errors = out.errors
+            rec.artifacts = [ArtifactRef.model_validate(a) for a in out.artifacts]
+            if out.ok:
+                if repo is not None and step.checkpoint and repo.available:
+                    try:
+                        repo.ensure()
+                        rec.checkpoint = repo.commit(f"forge: {step.step_id} ({state.run.run_id})")
+                    except CheckpointError as exc:
+                        rec.data = {**rec.data, "checkpoint_warning": str(exc)}
+                rec.status = StepStatus.DONE
+                self._persist(
+                    state,
+                    store,
+                    {"kind": "step_finished", "step_id": step.step_id, "ok": True, "duration_s": rec.duration_s},
+                )
+                return
+            if self._run_cancel.is_set():
+                rec.status = StepStatus.CANCELLED
+            elif out.blocked:
+                rec.status = StepStatus.BLOCKED
+            elif (
+                rec.attempts < step.max_attempts
+                and out.repairable
+                and self.repair_hooks.get(step.kind.value, lambda c, o: False)(ctx, out)
+            ):
+                self._persist(
+                    state,
+                    store,
+                    {
+                        "kind": "step_repairing",
+                        "step_id": step.step_id,
+                        "attempt": rec.attempts,
+                        "errors": out.errors[:5],
+                    },
+                )
+                continue
+            else:
+                rec.status = StepStatus.FAILED
+            self._persist(
+                state,
+                store,
+                {
+                    "kind": "step_finished",
+                    "step_id": step.step_id,
+                    "ok": False,
+                    "status": rec.status.value,
+                    "errors": out.errors[:10],
+                },
+            )
+            return
+
+    def _with_timeout(self, handler: Handler, ctx: StepContext, timeout_s: float) -> StepOutcome:
+        """Handlers must poll ctx.cancel; on timeout we set cancel and wait up to 60 s for the handler to return."""
+        box: Dict[str, Any] = {}
+
+        def target() -> None:
+            try:
+                box["out"] = handler(ctx)
+            except Exception as exc:  # exceptions in this thread would otherwise be lost
+                box["exc"] = f"{type(exc).__name__}: {exc}"
+                box["tb"] = traceback.format_exc(limit=4)
+
+        t = threading.Thread(target=target, daemon=True, name=f"forge-{ctx.step.step_id}")
+        t.start()
+        t.join(timeout_s)
+        if t.is_alive():
+            ctx.cancel.set()  # stops this step only; the run then records the step as FAILED (TIMEOUT)
+            t.join(60)
+            return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
+        if "exc" in box:
+            return StepOutcome(False, errors=[box["exc"], box["tb"]])
+        return box.get("out") or StepOutcome(False, errors=["handler returned nothing"])
+
+    def _recover_interrupted(self, state: RunState) -> None:
+        for rec in state.records.values():
+            if rec.status in (StepStatus.RUNNING, StepStatus.WAITING_APPROVAL):
+                rec.status = StepStatus.PENDING  # crashed mid-step: re-run it (handlers are idempotent)
+
+    def _needs_run_approval(self, state: RunState) -> bool:
+        return any(s.approval == "run" for s in state.run.steps) and "run" not in state.approvals
+
+    def _suspend(self, state: RunState, store: RunStore, key: str) -> RunState:
+        state.status = "WAITING_APPROVAL"
+        if key != "run":
+            state.records[key].status = StepStatus.WAITING_APPROVAL
+        self._persist(state, store, {"kind": "approval_needed", "key": key})
+        return state
+
+    def _finish(self, state: RunState, store: RunStore, status: str) -> RunState:
+        state.status = status
+        self._persist(state, store, {"kind": "run_finished", "status": status})
+        return state
+
+    def _persist(self, state: RunState, store: RunStore, event: Dict[str, Any]) -> None:
+        state.updated_at = time.time()
+        store.save(state)
+        ev = {"run_id": state.run.run_id, **event}
+        store.append_event(state.run.run_id, ev)
+        self.bus.publish("forge", ev)
