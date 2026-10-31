@@ -7,7 +7,7 @@ design, change architecture decisions, or invent requirements.
 2. Read `docs/handovers/HANDOVER_PROTOCOL.md` in full. It defines how you work, what you may not do, how to ask
    questions (`docs/handovers/QUESTIONS.md`), and how to hand back.
 3. Open the active phase handover named in `context.md` (starting with `docs/handovers/P00_foundation.md`), and
-   execute its work items in order on the phase branch.
+   execute its work items in order, committing on `master` (no branches).
 4. Verify with the commands in `docs/08_TESTING_AND_EVIDENCE.md` §3 (after P0: `scripts\verify_all.ps1`).
 5. Before you stop: update the handover's Progress table, `context.md` (replace CURRENT STATE / NEXT ACTION; mirror to
    `E:\GameForge\context.md`) and `docs/00_STATUS.md`. Leave the tree committed.
