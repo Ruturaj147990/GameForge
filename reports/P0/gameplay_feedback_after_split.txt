@@ -1,0 +1,12 @@
+{
+  "assets_created": true,
+  "pickup_configured": true,
+  "nothing_before_event": true,
+  "collected_by_player_pawn": true,
+  "sound_playing_right_after_event": true,
+  "one_shot_sound_finished_later": true,
+  "sound_is_the_pickup_chime": true,
+  "attenuation_asset_bound": true,
+  "effect_has_live_particles": true,
+  "gf_event_logged_with_vfx_and_sound": true
+} 

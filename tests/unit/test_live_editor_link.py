@@ -67,7 +67,9 @@ def test_prepare_project_enables_loopback_remote_exec_and_writes_token(tmp_path)
     assert "bRemoteExecution=True" in ini
     assert "RemoteExecutionMulticastBindAddress=127.0.0.1" in ini
     assert "RemoteExecutionMulticastTtl=0" in ini
-    assert Path(info["ops_library"]).read_bytes() == OPS_LIBRARY_SOURCE.read_bytes()
+    deployed = Path(info["ops_library"])
+    assert sorted(p.name for p in deployed.glob("*.py")) == sorted(p.name for p in OPS_LIBRARY_SOURCE.glob("*.py"))
+    assert all((deployed / p.name).read_bytes() == p.read_bytes() for p in OPS_LIBRARY_SOURCE.glob("*.py"))
     assert len(link.token_file.read_text(encoding="utf-8").strip()) == 64
     plugins = {p["Name"] for p in json.loads(link.uproject.read_text(encoding="utf-8"))["Plugins"]}
     assert {"PythonScriptPlugin", "EditorScriptingUtilities"} <= plugins
@@ -94,7 +96,7 @@ def test_missing_engine_is_reported(tmp_path):
 
 
 def test_ops_library_declares_token_check_and_sentinel():
-    src = OPS_LIBRARY_SOURCE.read_text(encoding="utf-8")
+    src = (OPS_LIBRARY_SOURCE / "_core.py").read_text(encoding="utf-8")
     assert RESULT_SENTINEL in src
     assert "_check_token(req.get(\"token\"))" in src
     assert "hmac.compare_digest" in src

@@ -1,4 +1,4 @@
-"""Declarative catalogue of the in-editor operations exposed by ``gameforge_ops.py`` (roadmap AD-1).
+"""Declarative catalogue of the in-editor operations exposed by the ``gameforge_ops`` package (roadmap AD-1).
 
 Every ``@op`` in the editor dispatcher must have an entry here. Ops that change project or runtime state must
 name a read-only ``readback_op`` that can confirm the change; ``tests/unit/test_op_catalog.py`` enforces both
@@ -11,7 +11,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-OPS_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops.py"
+OPS_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops"
+
+
+def op_sources(root: Path = OPS_SOURCE) -> list[Path]:
+    """The op package's module files (a single file is accepted for older layouts)."""
+    return [root] if root.is_file() else sorted(root.glob("*.py"))
 
 # effect: "read" (no state change), "artifact" (writes a file outside the project, e.g. a screenshot),
 # "view" (editor camera only), "lifecycle" (editor session), "runtime" (PIE/session state),
@@ -161,7 +166,7 @@ def describe_for_agent() -> str:
 
 def discover_ops(source: Path = OPS_SOURCE) -> list[str]:
     """Names of all ``@op("...")`` functions declared in the editor dispatcher."""
-    return re.findall(r'@op\("([^"]+)"', source.read_text(encoding="utf-8"))
+    return [n for f in op_sources(source) for n in re.findall(r'@op\("([^"]+)"', f.read_text(encoding="utf-8"))]
 
 
 def catalog_problems(discovered: list[str] | None = None) -> list[str]:

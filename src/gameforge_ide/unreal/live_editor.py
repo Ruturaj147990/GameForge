@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 from ..core.settings import engine_root_or_missing
 
 RESULT_SENTINEL = "@@GAMEFORGE_RESULT@@"
-OPS_LIBRARY_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops.py"
+OPS_LIBRARY_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops"  # package (2.1+)
 
 _REMOTE_EXEC_SETTINGS = (
     "[/Script/PythonScriptPlugin.PythonScriptPluginSettings]\n"
@@ -108,9 +108,15 @@ class LiveEditorLink:
         if "bRemoteExecution=True" not in text:
             cfg.write_text(text.rstrip() + "\n\n" + _REMOTE_EXEC_SETTINGS, encoding="utf-8")
         self._ensure_python_plugin_enabled()
-        dest = self.project_dir / "Content" / "Python" / "gameforge_ops.py"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(OPS_LIBRARY_SOURCE, dest)
+        py_dir = self.project_dir / "Content" / "Python"
+        py_dir.mkdir(parents=True, exist_ok=True)
+        stale = py_dir / "gameforge_ops.py"  # pre-2.1 single-file copy
+        if stale.exists():
+            stale.unlink()
+        dest = py_dir / "gameforge_ops"
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(OPS_LIBRARY_SOURCE, dest, ignore=shutil.ignore_patterns("__pycache__"))
 
         # Deploy GameForge native plugin if binaries exist
         plugin_src = Path(__file__).parent / "GameForge"

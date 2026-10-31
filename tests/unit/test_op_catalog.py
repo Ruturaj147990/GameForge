@@ -21,14 +21,15 @@ def test_every_op_decorator_wraps_the_function_of_the_same_name():
     # A helper inserted between "@op(...)" and its def silently becomes the op (2026-10-31: pcg_build_graph
     # echoed its arguments back instead of building a graph).
     import re
-    lines = op_catalog.OPS_SOURCE.read_text(encoding="utf-8").splitlines()
     wrong = []
-    for i, line in enumerate(lines):
-        m = re.match(r'@op\("([^"]+)"', line)
-        if m:
-            nxt = next(l for l in lines[i + 1:] if l.strip() and not l.lstrip().startswith("@"))
-            if not (nxt.startswith(f"def {m.group(1)}(") or nxt.startswith(f"def {m.group(1)}_op(")):
-                wrong.append((m.group(1), nxt.strip()))
+    for src in op_catalog.op_sources():
+        lines = src.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            m = re.match(r'@op\("([^"]+)"', line)
+            if m:
+                nxt = next(l for l in lines[i + 1:] if l.strip() and not l.lstrip().startswith("@"))
+                if not (nxt.startswith(f"def {m.group(1)}(") or nxt.startswith(f"def {m.group(1)}_op(")):
+                    wrong.append((m.group(1), nxt.strip()))
     assert wrong == []
 
 
@@ -67,3 +68,40 @@ def test_tool_schema_enumerates_agent_ops_and_reads_skip_approval(tmp_path):
 def test_markdown_lists_every_op():
     text = op_catalog.render_markdown()
     assert all(f"`{name}`" in text for name in op_catalog.CATALOG)
+
+
+def test_ops_package_is_importable_offline():
+    """P0 WI-0.6: the split package registers every op (fake ``unreal`` module, no editor)."""
+    import importlib
+    import sys
+    import types
+
+    class _Any:
+        def __getattr__(self, name):
+            if name.startswith("__"):  # keep inspect/pytest from unwrapping the fake forever
+                raise AttributeError(name)
+            return _Any()
+
+        def __call__(self, *a, **k):
+            return _Any()
+
+    saved = {k: v for k, v in sys.modules.items() if k == "unreal" or k.startswith("gameforge_ops")}
+    fake = types.ModuleType("unreal")
+    def _mod_getattr(name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return _Any()
+
+    fake.__getattr__ = _mod_getattr
+    sys.modules["unreal"] = fake
+    sys.path.insert(0, str(op_catalog.OPS_SOURCE.parent))
+    try:
+        for k in [k for k in sys.modules if k.startswith("gameforge_ops")]:
+            del sys.modules[k]
+        pkg = importlib.import_module("gameforge_ops")
+        assert len(pkg._OPS) == len(op_catalog.CATALOG) == 126
+    finally:
+        sys.path.remove(str(op_catalog.OPS_SOURCE.parent))
+        for k in [k for k in sys.modules if k == "unreal" or k.startswith("gameforge_ops")]:
+            del sys.modules[k]
+        sys.modules.update(saved)

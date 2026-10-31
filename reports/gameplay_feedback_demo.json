@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-31T10:23:04+0530",
+  "timestamp": "2026-10-31T16:04:00+0530",
   "checks": {
     "assets_created": true,
     "pickup_configured": true,
@@ -35,9 +35,9 @@
       "spawn": true,
       "errors": [],
       "set": {
-        "collect_vfx": "<Object '/Game/Feedback/VFX/NS_GFExplosion.NS_GFExplosion' (0x0000028208E53800) Class 'NiagaraSystem'>",
-        "collect_sound": "<Object '/Game/Feedback/Audio/SFX_Pickup.SFX_Pickup' (0x000002829F5D8200) Class 'SoundWave'>",
-        "collect_attenuation": "<Object '/Game/Feedback/Audio/ATT_GFPickup.ATT_GFPickup' (0x00000282A6040F00) Class 'SoundAttenuation'>"
+        "collect_vfx": "<Object '/Game/Feedback/VFX/NS_GFExplosion.NS_GFExplosion' (0x000001B072173800) Class 'NiagaraSystem'>",
+        "collect_sound": "<Object '/Game/Feedback/Audio/SFX_Pickup.SFX_Pickup' (0x000001B091839600) Class 'SoundWave'>",
+        "collect_attenuation": "<Object '/Game/Feedback/Audio/ATT_GFPickup.ATT_GFPickup' (0x000001B091279600) Class 'SoundAttenuation'>"
       }
     },
     "nav_rebuild": {
@@ -101,7 +101,7 @@
     },
     "series": [
       {
-        "t": 0.02,
+        "t": 0.03,
         "sound_playing": true
       },
       {
@@ -116,27 +116,27 @@
       },
       {
         "t": 1.49,
-        "particles": 143,
+        "particles": 150,
         "sound_playing": false
       },
       {
-        "t": 1.71,
-        "particles": 107,
+        "t": 1.72,
+        "particles": 116,
         "sound_playing": false
       },
       {
-        "t": 1.93,
-        "particles": 74,
+        "t": 1.94,
+        "particles": 70,
         "sound_playing": false
       },
       {
-        "t": 2.15,
-        "particles": 34,
+        "t": 2.16,
+        "particles": 39,
         "sound_playing": false
       },
       {
-        "t": 2.37,
-        "particles": 8,
+        "t": 2.38,
+        "particles": 4,
         "sound_playing": false
       },
       {
@@ -165,17 +165,17 @@
         "sound_playing": false
       },
       {
-        "t": 3.7,
+        "t": 3.71,
         "particles": 0,
         "sound_playing": false
       },
       {
-        "t": 3.92,
+        "t": 3.93,
         "particles": 0,
         "sound_playing": false
       },
       {
-        "t": 4.14,
+        "t": 4.15,
         "particles": 0,
         "sound_playing": false
       }
@@ -186,7 +186,7 @@
       "async": false,
       "show_ui": true,
       "path": "E:\\GameForge\\validation\\gameplay_feedback_20261031\\Saved\\Screenshots\\gameplay_feedback.png",
-      "bytes": 298191
+      "bytes": 392324
     },
     "gf_events": [
       "GF_EVENT pickup actor=GameForgePickup_0 collected_by=DefaultPawn_0 vfx=NS_GFExplosion spawned=1 sound=SFX_Pickup sound_playing=1"
