@@ -24,6 +24,7 @@ class AssistantPanel(QWidget):
 
     closeRequested = Signal()
     modelChanged = Signal(str)
+    openDesignRequested = Signal(str)
 
     def __init__(
         self,
@@ -33,6 +34,8 @@ class AssistantPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("studioAssistantPanel")
         self.chat_panel = chat_panel
+        if hasattr(self.chat_panel, "openDesignRequested"):
+            self.chat_panel.openDesignRequested.connect(self.openDesignRequested)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

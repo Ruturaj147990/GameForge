@@ -473,6 +473,7 @@ class _StartScreen(QWidget):
 # ── Chat panel ─────────────────────────────────────────────────────────────────
 
 class ChatPanel(QWidget):
+    openDesignRequested = Signal(str)
     """Main agentic chat panel.
 
     All communication with the model goes through AgentService (in-process
@@ -1095,6 +1096,50 @@ class ChatPanel(QWidget):
             self._scroll_to_bottom()
 
     # ── Approval-gated actions (create_game, editor ops, builds) ───────────────
+    def _add_open_design_card(self, card_data: dict) -> QFrame:
+        prompt = card_data.get("prompt", "")
+        mode = card_data.get("mode", "create")
+        frame = QFrame(self)
+        frame.setObjectName("openDesignCard")
+        frame.setStyleSheet(
+            f"QFrame#openDesignCard {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  border: 1px solid {tokens.ACCENT_PRIMARY};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 12px;"
+            f"}}"
+        )
+        layout = QVBoxLayout(frame)
+        title = QLabel("Game Design Request" if mode == "create" else "Design Change Request", frame)
+        title.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;")
+        layout.addWidget(title)
+
+        p_lbl = QLabel(f'"{prompt}"', frame)
+        p_lbl.setWordWrap(True)
+        p_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-style: italic;")
+        layout.addWidget(p_lbl)
+
+        if mode == "change":
+            msg_lbl = QLabel("Edit the design to apply this change", frame)
+            msg_lbl.setStyleSheet(f"color: {tokens.ACCENT_WARNING}; font-size: 11px;")
+            layout.addWidget(msg_lbl)
+
+        btn = QPushButton("Open in Design", frame)
+        btn.setObjectName("btnOpenInDesign")
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton#btnOpenInDesign {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: none; border-radius: {tokens.RADIUS}px; padding: 6px 12px; font-weight: 600;"
+            f"}}"
+        )
+        btn.clicked.connect(lambda: self.openDesignRequested.emit(prompt))
+        layout.addWidget(btn)
+
+        self._msg_layout.insertWidget(self._msg_layout.count() - 1, frame)
+        self._scroll_to_bottom()
+        return frame
+
     def _add_approval_card(self, approval: dict) -> ApprovalCard:
         card = ApprovalCard(approval)
         card.approve_clicked.connect(self._on_approve_action)
@@ -1174,6 +1219,12 @@ class ChatPanel(QWidget):
                 self._active_bubble.finalise()
                 self._active_bubble = None
             self._add_approval_card(_meta["approval"])
+        elif status == "READY" and isinstance(_meta.get("card"), dict):
+            if self._active_bubble and self._active_bubble.has_tokens():
+                self._active_bubble.finalise()
+                self._active_bubble = None
+            if _meta["card"].get("type") == "open_design":
+                self._add_open_design_card(_meta["card"])
         omitted = int(_meta.get("omitted_history_messages", 0) or 0)
         if status == "PLANNING" and omitted:
             used = _meta.get("estimated_input_tokens", "?")

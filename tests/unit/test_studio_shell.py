@@ -152,3 +152,24 @@ def test_legacy_shell_flag(qapp, disposable_workspace):
         win.close()
     finally:
         os.environ.pop("GAMEFORGE_LEGACY_SHELL", None)
+
+
+def test_assistant_studio_routing_card(disposable_workspace):
+    """Verify AgentRuntime in studio_mode emits open_design card instead of create_game approval."""
+    import asyncio
+    from src.gameforge_ide.backend.agent.runtime import AgentRuntime
+    from src.gameforge_ide.backend.providers.router import ModelRouter
+    from src.gameforge_ide.backend.session_manager import SessionManager
+
+    sm = SessionManager(disposable_workspace)
+    rt = AgentRuntime(disposable_workspace, sm, ModelRouter(), studio_mode=True)
+    sid = sm.create_session(name="t", model_name="none", provider_type="ollama").session_id
+
+    async def collect():
+        return [e async for e in rt.execute_task_stream(sid, "create a platformer with 5 coins")]
+
+    events = asyncio.run(collect())
+    ready = [e for e in events if e.event_type == "status" and e.content == "READY"]
+    assert ready and ready[0].metadata.get("card", {}).get("type") == "open_design"
+    assert ready[0].metadata["card"]["mode"] == "create"
+

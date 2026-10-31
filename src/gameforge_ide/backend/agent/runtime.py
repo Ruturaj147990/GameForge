@@ -57,7 +57,9 @@ class AgentRuntime:
         session_manager: SessionManager,
         model_router: ModelRouter,
         max_iterations: int = 12,
+        studio_mode: bool = False,
     ):
+        self.studio_mode = studio_mode
         self.workspace_root = workspace_root.resolve()
         self.session_manager = session_manager
         self.router = model_router
@@ -428,6 +430,22 @@ class AgentRuntime:
         # planned deterministically and suspended for one scoped approval. The heavy work then
         # runs from the trusted UI approval path, never from model text (rules 1 and 5).
         if not is_conversational:
+            if self.studio_mode or os.environ.get("GAMEFORGE_STUDIO_MODE") == "1":
+                from ...pipeline.spec_from_prompt import is_game_creation_request
+                is_create = is_game_creation_request(user_prompt)
+                is_change = bool(re.search(r"\b(change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease)\b", user_prompt, re.I)) and not is_create
+                if is_create or is_change:
+                    mode = "change" if is_change else "create"
+                    card = {"type": "open_design", "prompt": user_prompt, "mode": mode}
+                    msg = "Open in Design" if mode == "create" else "Edit the design to apply this change"
+                    yield AgentEvent(event_type="token", content=f"[{msg}]")
+                    self.session_manager.append_message(session_id, "assistant", msg)
+                    task_state.terminal_reason = f"routed to studio design ({mode})"
+                    self._save_task_state(task_state)
+                    yield AgentEvent(event_type="status", content="READY", metadata={"card": card})
+                    yield AgentEvent(event_type="done", content=msg)
+                    return
+
             try:
                 proposal = self.tool_gateway.game_tools.propose_create_game(user_prompt, session_id=session_id)
             except Exception as exc:  # planning must never break the normal agent loop

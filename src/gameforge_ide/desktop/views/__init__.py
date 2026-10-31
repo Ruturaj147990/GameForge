@@ -40,26 +40,14 @@ from .design_view import DesignView
 from .build_view import BuildView
 
 
-class PlayView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("play", "Play", parent)
+from .play_view import PlayView
 
 
-class EvidenceView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("evidence", "Evidence", parent)
+from .evidence_view import EvidenceView
 
 
-class AssetsView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("assets", "Assets", parent)
+from .assets_view import AssetsView
+from .code_view import CodeView
+from .settings_view import SettingsView
+from .onboarding import OnboardingWizard
 
-
-class CodeView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("code", "Code", parent)
-
-
-class SettingsView(BaseStudioView):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__("settings", "Settings", parent)

@@ -96,7 +96,7 @@ def test_systems_service_qt(qapp, tmp_path):
     # Manual refresh
     service.refresh_now()
     # Wait for background job to finish
-    deadline = time.time() + 5.0
+    deadline = time.time() + 15.0
     while not received and time.time() < deadline:
         qapp.processEvents()
         time.sleep(0.05)

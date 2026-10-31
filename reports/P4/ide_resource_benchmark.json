@@ -1,0 +1,18 @@
+{
+ "ts": "2026-11-01T00:10:42+0530",
+ "startup_s": 1.62,
+ "idle_private_mb": 109.1,
+ "idle_working_set_mb": 185.7,
+ "idle_cpu_pct_one_core": 0.31,
+ "threads": 19,
+ "child_processes": 0,
+ "child_names": [],
+ "workspace_metadata_mb": 0.05,
+ "budgets": {
+  "startup_s": 2.5,
+  "idle_private_mb": 300.0,
+  "idle_cpu_pct_one_core": 1.0,
+  "child_processes": 0
+ },
+ "violations": []
+}

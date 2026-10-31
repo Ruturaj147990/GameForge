@@ -1,0 +1,104 @@
+{
+  "dark": {
+    "TEXT_PRIMARY on BG_ROOT": {
+      "text": "#f5f3ff",
+      "background": "#08070d",
+      "ratio": 18.3,
+      "passed": true
+    },
+    "TEXT_PRIMARY on BG_PANEL": {
+      "text": "#f5f3ff",
+      "background": "#0d0b14",
+      "ratio": 17.81,
+      "passed": true
+    },
+    "TEXT_PRIMARY on BG_SURFACE": {
+      "text": "#f5f3ff",
+      "background": "#120f1d",
+      "ratio": 17.22,
+      "passed": true
+    },
+    "TEXT_PRIMARY on BG_HOVER": {
+      "text": "#f5f3ff",
+      "background": "#1a1528",
+      "ratio": 16.2,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_ROOT": {
+      "text": "#9d95b0",
+      "background": "#08070d",
+      "ratio": 7.03,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_PANEL": {
+      "text": "#9d95b0",
+      "background": "#0d0b14",
+      "ratio": 6.85,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_SURFACE": {
+      "text": "#9d95b0",
+      "background": "#120f1d",
+      "ratio": 6.62,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_HOVER": {
+      "text": "#9d95b0",
+      "background": "#1a1528",
+      "ratio": 6.23,
+      "passed": true
+    }
+  },
+  "light": {
+    "TEXT_PRIMARY on BG_ROOT": {
+      "text": "#181226",
+      "background": "#faf9fe",
+      "ratio": 17.38,
+      "passed": true
+    },
+    "TEXT_PRIMARY on BG_PANEL": {
+      "text": "#181226",
+      "background": "#ffffff",
+      "ratio": 18.21,
+      "passed": true
+    },
+    "TEXT_PRIMARY on BG_SURFACE": {
+      "text": "#181226",
+      "background": "#f5f3fa",
+      "ratio": 16.55,
+      "passed": true
+    },
+    "TEXT_PRIMARY on BG_HOVER": {
+      "text": "#181226",
+      "background": "#ede9f7",
+      "ratio": 15.26,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_ROOT": {
+      "text": "#5e5473",
+      "background": "#faf9fe",
+      "ratio": 6.7,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_PANEL": {
+      "text": "#5e5473",
+      "background": "#ffffff",
+      "ratio": 7.02,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_SURFACE": {
+      "text": "#5e5473",
+      "background": "#f5f3fa",
+      "ratio": 6.38,
+      "passed": true
+    },
+    "TEXT_SECONDARY on BG_HOVER": {
+      "text": "#5e5473",
+      "background": "#ede9f7",
+      "ratio": 5.88,
+      "passed": true
+    }
+  },
+  "failures": [],
+  "passed": true
+}

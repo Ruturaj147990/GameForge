@@ -61,6 +61,7 @@ class _AgentWorker(QObject):
             workspace_root=self.workspace_root,
             session_manager=self._session_manager,
             model_router=self._router,
+            studio_mode=True,
         )
 
     def set_task(self, session_id: str, prompt: str) -> None:

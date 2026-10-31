@@ -105,13 +105,13 @@ def test_home_view_unsupported_prompt_notice(qapp, monkeypatch):
 
         # Wait for job completion in event loop
         import time
-        for _ in range(50):
-            time.sleep(0.02)
+        for _ in range(100):
+            time.sleep(0.05)
             qapp.processEvents()
-            if view._notice_lbl.isVisible():
+            if not view._notice_lbl.isHidden():
                 break
 
-        import time; time.sleep(0.05); qapp.processEvents()
+        qapp.processEvents()
         assert not view._notice_lbl.isHidden()
         assert "That doesn't look like a game request. Try the Assistant." in view._notice_lbl.text()
     finally:

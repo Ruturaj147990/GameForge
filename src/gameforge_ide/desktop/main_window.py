@@ -1059,6 +1059,7 @@ class MainWindow(QMainWindow):
         self._assistant_panel = AssistantPanel(self._chat_panel, self)
         self._assistant_panel.closeRequested.connect(lambda: self._set_assistant_visible(False))
         self._assistant_panel.modelChanged.connect(self._on_chat_model_changed)
+        self._assistant_panel.openDesignRequested.connect(self._on_assistant_open_design)
         models = [get_settings().model_for("chat")]
         self._assistant_panel.set_models(models, models[0])
 
@@ -1172,19 +1173,50 @@ class MainWindow(QMainWindow):
             return view
 
         self._view_host.register("build", create_build_view)
+
+        def create_play_view() -> PlayView:
+            view = PlayView(
+                workspace_root=self._workspace,
+                parent=self,
+            )
+            view.launchRequested.connect(self._on_games_play_requested)
+            if self._current_project:
+                view.set_project(self._current_project)
+            return view
+
         self._view_host.register(
             "play",
-            lambda: PlayView(parent=self),
+            create_play_view,
             enabled_when=lambda: (self._current_project_has_package(), "No packaged build found")
         )
+
+        def create_evidence_view() -> EvidenceView:
+            view = EvidenceView(
+                workspace_root=self._workspace,
+                parent=self,
+            )
+            if self._current_project:
+                view.set_project(self._current_project)
+            return view
+
         self._view_host.register(
             "evidence",
-            lambda: EvidenceView(parent=self),
+            create_evidence_view,
             enabled_when=lambda: (bool(self._current_project), "Select a game first")
         )
-        self._view_host.register("assets", lambda: AssetsView(parent=self))
+        self._view_host.register(
+            "assets",
+            lambda: AssetsView(workspace_root=self._workspace, parent=self),
+        )
         self._view_host.register("code", lambda: self._get_or_create_code_view())
-        self._view_host.register("settings", lambda: SettingsView(parent=self))
+
+        def create_settings_view() -> SettingsView:
+            view = SettingsView(workspace_root=self._workspace, parent=self)
+            if hasattr(self, "_systems_service") and self._systems_service:
+                view.settingsChanged.connect(self._systems_service.refresh_now)
+            return view
+
+        self._view_host.register("settings", create_settings_view)
 
     def _register_studio_shortcuts(self) -> None:
         view_shortcuts = [
@@ -1285,6 +1317,20 @@ class MainWindow(QMainWindow):
             bv = self._view_host.get_view_widget("build")
             if bv and hasattr(bv, "set_project"):
                 bv.set_project(project_name)
+            pv = self._view_host.get_view_widget("play")
+            if pv and hasattr(pv, "set_project"):
+                pv.set_project(project_name)
+            ev = self._view_host.get_view_widget("evidence")
+            if ev and hasattr(ev, "set_project"):
+                ev.set_project(project_name)
+
+    def _on_assistant_open_design(self, prompt: str) -> None:
+        self._switch_studio_view("home")
+        hv = self._view_host.get_view_widget("home")
+        if hv and hasattr(hv, "_prompt_box"):
+            hv._prompt_box.setPlainText(prompt)
+            if hasattr(hv, "_on_design_clicked"):
+                hv._on_design_clicked()
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
