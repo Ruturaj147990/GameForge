@@ -21,6 +21,7 @@ from PySide6.QtGui import (
     QPixmap,
 )
 from PySide6.QtWidgets import (
+    QTabBar,
     QApplication,
     QComboBox,
     QDialog,
@@ -104,6 +105,9 @@ class MainWindow(QMainWindow):
         # Storage hygiene 10 s after start, off the UI thread: only policy-safe actions
         # (log rotation, items past retention). Cap-based cleanup is user-confirmed in Mission Control.
         QTimer.singleShot(10_000, self._run_storage_hygiene)
+        # Tabified docks showed "Unreal Engi..." / "Mission Con...": show full titles.
+        QTimer.singleShot(0, self._unelide_dock_tabs)
+        self.tabifiedDockWidgetActivated.connect(lambda _dock: self._unelide_dock_tabs())
 
         # ── Connect cross-panel signals ──────────────────────────────────
         self._chat_panel.diff_pending.connect(self._on_diff_pending)
@@ -117,6 +121,13 @@ class MainWindow(QMainWindow):
         self._health_timer.start(800)
 
     # ── Menu bar ─────────────────────────────────────────────────────────────
+
+    def _unelide_dock_tabs(self) -> None:
+        # QMainWindow creates the dock-area tab bars lazily as direct children of the window.
+        for bar in self.findChildren(QTabBar):
+            if bar.parent() is self:
+                bar.setElideMode(Qt.ElideNone)
+                bar.setExpanding(False)
 
     def _build_menu(self) -> None:
         mb = self.menuBar()
@@ -406,8 +417,7 @@ class MainWindow(QMainWindow):
         self._status_lbl.setToolTip(str(self._workspace))
         sb.addWidget(self._status_lbl)
 
-        sb.addPermanentWidget(QLabel("|"))
-
+        # (no separator before the first permanent widget: it rendered as an orphan "|" on the right)
         self._model_status = QLabel("Model: gameforge-27b-sft:latest")
         self._model_status.setObjectName("status_model")
         self._model_status.setStyleSheet("color: #6c63ff;")

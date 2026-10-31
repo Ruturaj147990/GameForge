@@ -62,6 +62,7 @@ class TerminalPanel(QWidget):
         btn_restart.setObjectName("btn_term_restart")
         btn_restart.setToolTip("Restart shell")
         btn_restart.setFixedSize(30, 26)
+        btn_restart.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
         btn_restart.clicked.connect(self._restart_shell)
         hdr_layout.addWidget(btn_restart)
         layout.addWidget(header)
@@ -106,6 +107,7 @@ class TerminalPanel(QWidget):
         btn_run = QPushButton("▶")
         btn_run.setObjectName("btn_term_run")
         btn_run.setFixedSize(28, 28)
+        btn_run.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
         btn_run.setToolTip("Run command (Enter)")
         btn_run.clicked.connect(self._on_send_command)
         input_layout.addWidget(btn_run)

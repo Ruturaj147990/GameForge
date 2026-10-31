@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...backend.unreal_context import load_unreal_context
+from ...backend.unreal_context import UnrealEditorContext, load_unreal_context
 from ..services.action_runner import ActionRunner
 from ..services.agent_service import AgentService
 from .approval_card import ApprovalCard
@@ -295,6 +295,11 @@ class _StatusBar(QWidget):
         self._model_label.setText(f"🤖 {model_name}")
 
     def set_unreal_status(self, connected: bool, project_name: str = "", active_asset: str = "") -> None:
+        # Called by a 2.5 s poll; setStyleSheet re-polishes the widget, so only touch it when something changed.
+        key = (connected, project_name, active_asset)
+        if getattr(self, "_ue_status_key", None) == key:
+            return
+        self._ue_status_key = key
         if connected:
             txt = f"UE Linked: {project_name}" if project_name else "UE Linked"
             if active_asset:
@@ -547,19 +552,27 @@ class ChatPanel(QWidget):
     def _load_models(self) -> None:
         try:
             models = self._agent.list_models()
-            self._model_combo.blockSignals(True)
+        except Exception:
+            models = []
+        self._model_combo.blockSignals(True)
+        try:  # always unblock: an exception here used to leave the combo's signals blocked for the session
             self._model_combo.clear()
             for m in models:
                 self._model_combo.addItem(m.get("id", m.get("name", "unknown")))
+            if self._model_combo.count() == 0 and self._current_model:
+                # Ollama offline: show the configured model instead of an empty box.
+                self._model_combo.addItem(self._current_model)
+                self._model_combo.setToolTip("Model list unavailable (Ollama offline); showing the configured model")
+            else:
+                self._model_combo.setToolTip("")
             idx = self._model_combo.findText(self._current_model)
             if idx >= 0:
                 self._model_combo.setCurrentIndex(idx)
             elif self._model_combo.count() > 0:
                 self._current_model = self._model_combo.itemText(0)
+        finally:
             self._model_combo.blockSignals(False)
-            self.model_changed.emit(self._current_model)
-        except Exception:
-            pass
+        self.model_changed.emit(self._current_model)
 
     def _setup_unreal_sync(self) -> None:
         """Poll unreal_context.json periodically to update UI badges and chips."""
@@ -573,6 +586,15 @@ class ChatPanel(QWidget):
     def _check_unreal_context_sync(self) -> None:
         if not self._workspace:
             return
+        # Re-read only when the context file changed: one stat() per poll instead of read + parse + validate.
+        try:
+            st = UnrealEditorContext.context_path(self._workspace).stat()
+            stamp = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            stamp = None
+        if stamp is not None and stamp == getattr(self, "_ue_ctx_stamp", None):
+            return
+        self._ue_ctx_stamp = stamp
         try:
             ctx = load_unreal_context(self._workspace)
             if not ctx:

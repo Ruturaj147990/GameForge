@@ -67,6 +67,7 @@ class ExplorerPanel(QWidget):
         btn_open = QPushButton("📂")
         btn_open.setObjectName("btn_explorer_open")
         btn_open.setFixedSize(24, 24)
+        btn_open.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
         btn_open.setToolTip("Open Folder / Switch Workspace…")
         btn_open.clicked.connect(self.open_folder_requested.emit)
         hdr_layout.addWidget(btn_open)
@@ -74,6 +75,7 @@ class ExplorerPanel(QWidget):
         btn_refresh = QPushButton("↻")
         btn_refresh.setObjectName("btn_explorer_refresh")
         btn_refresh.setFixedSize(24, 24)
+        btn_refresh.setStyleSheet("padding: 0px; font-size: 14px;")  # glyph must fit the fixed size
         btn_refresh.setToolTip("Refresh workspace tree")
         btn_refresh.clicked.connect(self._populate_root)
         hdr_layout.addWidget(btn_refresh)
@@ -145,7 +147,7 @@ class ExplorerPanel(QWidget):
             self._schedule_batches(parent_item, rest, total)
         elif total > self.MAX_ITEMS:
             self._add_more_marker(parent_item, total)
-        self._status_lbl.setText(f"{total} items in {dir_path.name}/")
+        self._status_lbl.setText(f"{total} item{'' if total == 1 else 's'} in {dir_path.name}/")
 
     def _schedule_batches(self, parent_item: QTreeWidgetItem, remaining: list, total: int) -> None:
         def step():
