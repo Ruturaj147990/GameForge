@@ -705,7 +705,7 @@ Record this in `reports/P2/rollback_check.json`. Then re-run to completion.
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 2.1 | TODO | | | |
+| 2.1 | DONE | 2026-10-31T12:42Z | 2026-10-31T12:44Z | test_forge_model (9 passed); DAG validation, Kahn cycle check, stable topo_order, canonical_hash |
 | 2.2 | TODO | | | |
 | 2.3 | TODO | | | |
 | 2.4 | TODO | | | |
