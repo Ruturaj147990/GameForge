@@ -210,6 +210,44 @@ QToolButton:pressed {
     background: #1a1528;
 }
 
+/* ── Left Activity Rail ── */
+QToolBar#activity_rail {
+    background-color: #090810;
+    border-right: 1px solid #231c34;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    padding: 6px 0px;
+    spacing: 6px;
+    min-width: 48px;
+    max-width: 48px;
+}
+
+QToolBar#activity_rail QToolButton {
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: 0px;
+    padding: 10px 4px;
+    color: #9d95b0;
+    font-size: 16px;
+    min-width: 40px;
+    max-width: 40px;
+}
+
+QToolBar#activity_rail QToolButton:hover {
+    color: #f5f3ff;
+    background: #141022;
+    border-color: transparent;
+}
+
+QToolBar#activity_rail QToolButton:checked,
+QToolBar#activity_rail QToolButton[active="true"] {
+    color: #a78bfa;
+    border-left: 3px solid #7c3aed;
+    background: #141022;
+}
+
 /* ── Standard Push Buttons ── */
 QPushButton {
     background-color: #120f1d;
@@ -476,6 +514,35 @@ QTabBar::tab:selected {
 QTabBar::tab:hover {
     color: #f5f3ff;
     background-color: #120f1d;
+}
+
+/* ── Left Sidebar Internal Tab Bar ── */
+QTabBar#sidebar_tabbar {
+    background: #090810;
+    border-bottom: 1px solid #231c34;
+}
+
+QTabBar#sidebar_tabbar::tab {
+    background-color: #090810;
+    border: 1px solid #231c34;
+    border-bottom: none;
+    padding: 6px 12px;
+    margin-right: 2px;
+    color: #9d95b0;
+    border-radius: 4px 4px 0 0;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QTabBar#sidebar_tabbar::tab:selected {
+    background-color: #120f1d;
+    color: #a78bfa;
+    border-bottom: 2px solid #7c3aed;
+}
+
+QTabBar#sidebar_tabbar::tab:hover {
+    color: #f5f3ff;
+    background-color: #141022;
 }
 
 /* ── Progress bar ── */

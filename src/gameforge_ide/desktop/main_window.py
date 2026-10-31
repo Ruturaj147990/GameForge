@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
+    QTabWidget,
     QStatusBar,
     QToolBar,
     QVBoxLayout,
@@ -46,6 +48,8 @@ from .panels.chat_panel import ChatPanel
 from .panels.diff_panel import DiffPanel
 from .panels.explorer_panel import ExplorerPanel
 from .panels.mission_panel import MissionPanel
+from .panels.plan_panel import PlanPanel
+from .panels.asset_panel import AssetPanel
 from .panels.terminal_panel import TerminalPanel
 from .panels.unreal_panel import UnrealPanel
 from .services.agent_service import AgentService
@@ -96,6 +100,7 @@ class MainWindow(QMainWindow):
         # ── Build UI ─────────────────────────────────────────────────────
         self._build_menu()
         self._build_toolbar()
+        self._build_activity_rail()
         self._build_central()
         self._build_docks()
         self._build_status_bar()
@@ -205,6 +210,16 @@ class MainWindow(QMainWindow):
             lambda c: (self._dock_mission.setVisible(c), c and self._dock_mission.raise_())
         )
         view_menu.addAction(self._act_show_mission)
+        self._act_show_plans = QAction("Execution Plans", self, checkable=True, checked=False)
+        self._act_show_plans.setObjectName("view_plans")
+        self._act_show_plans.triggered.connect(lambda: self._on_rail_action_clicked(2))
+        view_menu.addAction(self._act_show_plans)
+
+        self._act_show_assets = QAction("Asset Registry", self, checkable=True, checked=False)
+        self._act_show_assets.setObjectName("view_assets")
+        self._act_show_assets.triggered.connect(lambda: self._on_rail_action_clicked(3))
+        view_menu.addAction(self._act_show_assets)
+
         view_menu.addSeparator()
         self._act_theme = QAction("Toggle Studio Dark/Light Theme", self)
         self._act_theme.setObjectName("view_toggle_theme")
@@ -332,6 +347,80 @@ class MainWindow(QMainWindow):
         self._unreal_indicator.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 600; padding-right: 12px;")
         tb.addWidget(self._unreal_indicator)
 
+    # ── Left Activity Rail ───────────────────────────────────────────────────
+
+    def _build_activity_rail(self) -> None:
+        rail = QToolBar("Activity Rail", self)
+        rail.setObjectName("activity_rail")
+        rail.setMovable(False)
+        rail.setIconSize(QSize(20, 20))
+        rail.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.addToolBar(Qt.LeftToolBarArea, rail)
+
+        self._act_rail_explorer = QAction("📁", self)
+        self._act_rail_explorer.setObjectName("rail_act_explorer")
+        self._act_rail_explorer.setCheckable(True)
+        self._act_rail_explorer.setChecked(True)
+        self._act_rail_explorer.setToolTip("Explorer (Files) — Ctrl+Shift+E")
+        self._act_rail_explorer.triggered.connect(lambda: self._on_rail_action_clicked(0))
+        rail.addAction(self._act_rail_explorer)
+
+        self._act_rail_games = QAction("🎮", self)
+        self._act_rail_games.setObjectName("rail_act_games")
+        self._act_rail_games.setCheckable(True)
+        self._act_rail_games.setToolTip("Games & Mission Control — Ctrl+Shift+M")
+        self._act_rail_games.triggered.connect(lambda: self._on_rail_action_clicked(1))
+        rail.addAction(self._act_rail_games)
+
+        self._act_rail_plans = QAction("📋", self)
+        self._act_rail_plans.setObjectName("rail_act_plans")
+        self._act_rail_plans.setCheckable(True)
+        self._act_rail_plans.setToolTip("Execution Plans")
+        self._act_rail_plans.triggered.connect(lambda: self._on_rail_action_clicked(2))
+        rail.addAction(self._act_rail_plans)
+
+        self._act_rail_assets = QAction("📦", self)
+        self._act_rail_assets.setObjectName("rail_act_assets")
+        self._act_rail_assets.setCheckable(True)
+        self._act_rail_assets.setToolTip("Asset Registry")
+        self._act_rail_assets.triggered.connect(lambda: self._on_rail_action_clicked(3))
+        rail.addAction(self._act_rail_assets)
+
+    @Slot(int)
+    def _on_sidebar_tab_changed(self, index: int) -> None:
+        if hasattr(self, "_left_stack"):
+            self._left_stack.setCurrentIndex(index)
+        self._sync_rail_actions(index)
+        if hasattr(self, "_dock_explorer") and not self._dock_explorer.isVisible():
+            self._dock_explorer.show()
+
+    def _sync_rail_actions(self, active_index: int) -> None:
+        actions = [
+            getattr(self, "_act_rail_explorer", None),
+            getattr(self, "_act_rail_games", None),
+            getattr(self, "_act_rail_plans", None),
+            getattr(self, "_act_rail_assets", None),
+        ]
+        is_vis = getattr(self, "_dock_explorer", None) and self._dock_explorer.isVisible()
+        for i, act in enumerate(actions):
+            if act is not None:
+                act.setChecked(i == active_index and bool(is_vis))
+
+    @Slot(int)
+    def _on_rail_action_clicked(self, index: int) -> None:
+        if hasattr(self, "_dock_explorer"):
+            if self._dock_explorer.isVisible() and hasattr(self, "_left_stack") and self._left_stack.currentIndex() == index:
+                self._dock_explorer.hide()
+                self._sync_rail_actions(-1)
+            else:
+                self._dock_explorer.show()
+                self._dock_explorer.raise_()
+                if hasattr(self, "_sidebar_tabbar"):
+                    self._sidebar_tabbar.setCurrentIndex(index)
+                if hasattr(self, "_left_stack"):
+                    self._left_stack.setCurrentIndex(index)
+                self._sync_rail_actions(index)
+
     # ── Central widget (Chat) ─────────────────────────────────────────────────
 
     def _build_central(self) -> None:
@@ -344,13 +433,49 @@ class MainWindow(QMainWindow):
         # Corner configurations so left/right docks can extend cleanly
         self.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
         self.setCorner(Qt.BottomRightCorner, Qt.RightDockWidgetArea)
+        self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
 
-        # ── Explorer (left) ──────────────────────────────────────────────
+        # ── Left Activity Views (Explorer, Games, Plans, Assets) ─────────
         self._explorer = ExplorerPanel(self._tools, self._workspace, parent=self)
         self._explorer.open_folder_requested.connect(self._open_folder)
-        self._dock_explorer = self._make_dock("Explorer", self._explorer, Qt.LeftDockWidgetArea)
+
+        self._mission = MissionPanel(self._workspace, parent=self)
+        self._mission.play_requested.connect(self._chat_panel._on_play_game)
+        self._mission.open_approval.connect(self._chat_panel.show_approval)
+        self._chat_panel.action_finished.connect(lambda *_: self._mission.refresh_lists())
+
+        self._plan_panel = PlanPanel(self._workspace, parent=self)
+        self._plan_panel.approval_review_requested.connect(self._chat_panel.show_approval)
+        self._chat_panel.action_finished.connect(lambda *_: self._plan_panel.refresh_from_disk())
+
+        self._asset_panel = AssetPanel(self._workspace, parent=self)
+
+        # Assemble left sidebar container with collapsed tabs
+        self._left_sidebar_container = QWidget()
+        sidebar_layout = QVBoxLayout(self._left_sidebar_container)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
+
+        self._sidebar_tabbar = QTabBar()
+        self._sidebar_tabbar.setObjectName("sidebar_tabbar")
+        self._sidebar_tabbar.addTab("📁 Explorer")
+        self._sidebar_tabbar.addTab("🎮 Games")
+        self._sidebar_tabbar.addTab("📋 Plans")
+        self._sidebar_tabbar.addTab("📦 Assets")
+        self._sidebar_tabbar.currentChanged.connect(self._on_sidebar_tab_changed)
+        sidebar_layout.addWidget(self._sidebar_tabbar)
+
+        self._left_stack = QStackedWidget()
+        self._left_stack.addWidget(self._explorer)
+        self._left_stack.addWidget(self._mission)
+        self._left_stack.addWidget(self._plan_panel)
+        self._left_stack.addWidget(self._asset_panel)
+        sidebar_layout.addWidget(self._left_stack, 1)
+
+        self._dock_explorer = self._make_dock("Explorer", self._left_sidebar_container, Qt.LeftDockWidgetArea)
         self._dock_explorer.setMinimumWidth(220)
-        self._dock_explorer.setMaximumWidth(400)
+        self._dock_explorer.setMaximumWidth(450)
+        self._dock_mission = self._dock_explorer  # alias for backward compat
 
         # ── Unreal Engine (right) ─────────────────────────────────────────
         self._unreal_panel = UnrealPanel(self._tools, self._workspace, parent=self)
@@ -365,15 +490,7 @@ class MainWindow(QMainWindow):
         self._dock_diff = self._make_dock("Diff Review", self._diff_panel, Qt.RightDockWidgetArea)
         self.tabifyDockWidget(self._dock_unreal, self._dock_diff)
         self._dock_diff.hide()  # Hidden until a diff is pending
-
-        # ── Mission Control (right, tabbed with Unreal; samples only while visible) ──
-        self._mission = MissionPanel(self._workspace, parent=self)
-        self._dock_mission = self._make_dock("Mission Control", self._mission, Qt.RightDockWidgetArea)
-        self.tabifyDockWidget(self._dock_unreal, self._dock_mission)
         self._dock_unreal.raise_()
-        self._mission.play_requested.connect(self._chat_panel._on_play_game)
-        self._mission.open_approval.connect(self._chat_panel.show_approval)
-        self._chat_panel.action_finished.connect(lambda *_: self._mission.refresh_lists())
 
         # ── Terminal (bottom) ─────────────────────────────────────────────
         self._terminal = TerminalPanel(self._workspace, parent=self)
@@ -388,7 +505,13 @@ class MainWindow(QMainWindow):
 
         # ── Visibility sync with menu & toolbar items ─────────────────────
         self._dock_explorer.visibilityChanged.connect(
-            lambda v: self._act_show_explorer.setChecked(v)
+            lambda v: (
+                self._act_show_explorer.setChecked(v and self._left_stack.currentIndex() == 0),
+                self._act_show_mission.setChecked(v and self._left_stack.currentIndex() == 1),
+                self._act_show_plans.setChecked(v and self._left_stack.currentIndex() == 2),
+                self._act_show_assets.setChecked(v and self._left_stack.currentIndex() == 3),
+                self._sync_rail_actions(self._left_stack.currentIndex() if v else -1),
+            )
         )
         self._dock_unreal.visibilityChanged.connect(
             lambda v: self._act_show_unreal.setChecked(v)
@@ -399,19 +522,15 @@ class MainWindow(QMainWindow):
         self._dock_terminal.visibilityChanged.connect(
             lambda v: (self._act_show_terminal.setChecked(v), self._act_tb_terminal.setChecked(v))
         )
-        self._dock_mission.visibilityChanged.connect(
-            lambda v: self._act_show_mission.setChecked(v)
-        )
 
     def _make_dock(self, title: str, widget: QWidget, area: Qt.DockWidgetArea) -> QDockWidget:
         dock = QDockWidget(title, self)
         dock.setObjectName(f"dock_{title.lower().replace(' ', '_')}")
         dock.setWidget(widget)
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable
-            | QDockWidget.DockWidgetFloatable
-            | QDockWidget.DockWidgetClosable
-        )
+        dock.setFeatures(QDockWidget.DockWidgetClosable)
+        empty_title = QWidget()
+        empty_title.setFixedHeight(0)
+        dock.setTitleBarWidget(empty_title)
         self.addDockWidget(area, dock)
         return dock
 
@@ -487,6 +606,11 @@ class MainWindow(QMainWindow):
         self._chat_panel.set_workspace(self._agent, self._workspace)
         self._terminal.set_workspace(self._workspace)
         self._mission.set_workspace(self._workspace)
+        if hasattr(self, "_plan_panel"):
+            self._plan_panel._workspace = self._workspace
+            self._plan_panel.refresh_from_disk()
+        if hasattr(self, "_asset_panel"):
+            self._asset_panel.set_workspace(self._workspace)
         self._diff_panel.clear()
         self._apply_unreal_status(False, "", "")
 

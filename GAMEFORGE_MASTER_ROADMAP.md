@@ -312,7 +312,7 @@ non-blocking Ollama probe (`reports/ide_ui_20261031.png`). Planned, in order (ea
 `python scratch/ide_snapshot.py` (GF_SNAP_WAIT=7) → compare → `ide_resource_benchmark.py` stays in budget → tests):
 1. ~~**Remove duplication**~~ **DONE 2026-10-31**: the toolbar and chat header both have Model/Clear/New Session; keep one set (toolbar) and
    one status indicator for Ollama and Unreal.
-2. **Information hierarchy:** a single top bar (workspace, model, status pills); a left activity rail (Explorer,
+2. ~~**Information hierarchy**~~ **DONE 2026-10-31**: a single top bar (workspace, model, status pills); a left activity rail (Explorer,
    Games, Plans, Assets) instead of separate floating docks; dock title bars collapsed into tabs.
 3. **Start screen** for an empty session: three large actions ("Make a game from a prompt", "Open a project",
    "Recent games" with thumbnails from Mission Control), not a system message.
