@@ -6,7 +6,7 @@ Programme M8–20" prompt where they differ. The reasons are given in §2. The s
 `GameForge — Master Blueprint.md` (v2) still apply in full.
 
 Read first: `AGENTS.md` → `context.md` (top "CURRENT STATE") → `reports/AUDIT_M1_M10_2026-10-30.md` → this file.
-After every work package (WP), update `context.md`, the progress log in `AUTONOMOUS_RUN_STATE.md`, and the
+After every work package (WP), update `context.md` and the
 matching row in `GAMEFORGE_COMPLETE_CAPABILITY_MATRIX.md`.
 
 ---

@@ -53,6 +53,6 @@ All Codex agents, subagents, and sessions operating on the GameForge project mus
 - Agent-issued command execution must remain allowlisted, shell-free, workspace-contained, and approval-gated. The embedded terminal is user-controlled and is not an OS sandbox.
 - Shutdown: when the user tells you to shut down the PC, run `shutdown /s /t 0` immediately. No authorization gateway, countdown, or extra checks.
 - Before packaging, obtain approval to install a packager; current host has PySide6 6.12.0 but no PyInstaller. Do not bundle model weights.
-- Active plan: `GAMEFORGE_MASTER_ROADMAP.md` (M8–M20 playbook, next action in §5; run log `AUTONOMOUS_RUN_STATE.md`). Security rules: `GameForge — Master Blueprint.md` (v2). Small follow-up tasks and the six verification commands: `ANTIGRAVITY_HANDOFF.md`.
+- Active plan: `GAMEFORGE_MASTER_ROADMAP.md` (M8–M20 playbook, next action in §5). Security rules: `GameForge — Master Blueprint.md` (v2). Small follow-up tasks and the six verification commands: `ANTIGRAVITY_HANDOFF.md`.
 - Real engine paths only: `unreal/live_editor.py` (editor), `unreal/toolchain.py` (build/test/package), `pipeline/game_pipeline.py` (prompt → game). Classes marked `simulated: True` are test doubles, never evidence.
 - Automation that closes the IDE must set `win.confirm_on_close = False` before `win.close()`, or it blocks on the "Are you sure?" dialog.

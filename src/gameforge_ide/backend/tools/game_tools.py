@@ -26,12 +26,13 @@ from ...pipeline.game_pipeline import GamePipeline
 from ...pipeline.spec_from_prompt import is_game_creation_request, match_prompt
 from ...recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
+from ...unreal import op_catalog
 from ...unreal.toolchain import UnrealToolchain
 
-READ_ONLY_EDITOR_OPS = {"handshake", "asset_exists", "list_assets", "asset_dependencies",
-                        "actors_in_level", "log_tail", "blueprint_inspect", "blueprint_readback_graph",
-                        "widget_inspect", "widget_readback_tree", "widget_inspect_events",
-                        "widget_runtime_state", "gameplay_get_state"}
+# Generated from the op catalogue (single source of truth). The hand-kept list this replaced covered 13 of ~40
+# read ops, so harmless reads of animation/PCG/material/audio state needed an approval card.
+READ_ONLY_EDITOR_OPS = op_catalog.read_only_ops()
+AGENT_EDITOR_OPS = frozenset(op_catalog.agent_ops())
 
 
 class ApprovalStore:
@@ -270,6 +271,10 @@ class GameTools:
     def unreal_editor(self, uproject: str, op: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if not Path(uproject).is_file():
             return {"status": "ERROR", "error": f"uproject not found: {uproject}"}
+        if op not in AGENT_EDITOR_OPS:
+            # Fail closed before touching the editor: unknown (e.g. model-invented), diagnostic or legacy op.
+            return {"status": "ERROR", "error": f"unknown or non-agent editor op: {op!r}",
+                    "hint": "valid ops: " + op_catalog.describe_for_agent()}
         res = self._link(uproject).call(op, args or {})
         return {"status": "SUCCESS" if res.get("ok") else "ERROR", "result": res}
 

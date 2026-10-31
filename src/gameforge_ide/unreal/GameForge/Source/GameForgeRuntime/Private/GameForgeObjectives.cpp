@@ -166,6 +166,14 @@ void AGameForgeQuestGiver::HandleOverlap(UPrimitiveComponent* OverlappedComponen
 	{
 		return;
 	}
+	if (ObjectiveId.IsNone())
+	{
+		for (const FString& Line : IntroLines)  // plain NPC: talks, starts nothing
+		{
+			Say(Line);
+		}
+		return;
+	}
 	switch (Objectives->GetState(ObjectiveId))
 	{
 		case EGameForgeObjectiveState::Inactive:
@@ -176,7 +184,10 @@ void AGameForgeQuestGiver::HandleOverlap(UPrimitiveComponent* OverlappedComponen
 			Objectives->StartObjective(ObjectiveId, ObjectiveTitle, ObjectiveTarget);
 			break;
 		case EGameForgeObjectiveState::Completed:
-			Say(TurnInLine);
+			if (!TurnInLine.IsEmpty())
+			{
+				Say(TurnInLine);
+			}
 			break;
 		default:
 			break;

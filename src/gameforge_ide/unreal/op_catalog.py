@@ -138,6 +138,27 @@ CATALOG: dict[str, OpSpec] = {spec.name: spec for spec in [
 ]}
 
 
+AGENT_HIDDEN_STATUSES = ("DIAGNOSTIC", "LEGACY")
+
+
+def agent_ops() -> list[str]:
+    """Ops the agent may call: everything catalogued except diagnostics and legacy ops (never evidence)."""
+    return sorted(n for n, s in CATALOG.items() if s.status not in AGENT_HIDDEN_STATUSES)
+
+
+def read_only_ops() -> frozenset[str]:
+    """Ops with no state change; the tool gateway runs these without an approval card."""
+    return frozenset(n for n, s in CATALOG.items() if s.effect == "read" and s.status not in AGENT_HIDDEN_STATUSES)
+
+
+def describe_for_agent() -> str:
+    """Compact per-domain op list for the tool description shown to the model."""
+    domains: dict[str, list[str]] = {}
+    for name in agent_ops():
+        domains.setdefault(CATALOG[name].domain, []).append(name)
+    return "; ".join(f"{d}: {', '.join(ops)}" for d, ops in sorted(domains.items()))
+
+
 def discover_ops(source: Path = OPS_SOURCE) -> list[str]:
     """Names of all ``@op("...")`` functions declared in the editor dispatcher."""
     return re.findall(r'@op\("([^"]+)"', source.read_text(encoding="utf-8"))

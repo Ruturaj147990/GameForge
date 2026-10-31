@@ -11,6 +11,7 @@ from ..security.boundary import BoundaryManager, SecurityViolationError
 from .asset_tools import ProceduralMeshGenerator
 from .edit_tools import EditTools
 from .fs_tools import tool_list_dir, tool_read_file, tool_search_code
+from ...unreal import op_catalog
 from .game_tools import READ_ONLY_EDITOR_OPS, GameTools
 from .git_tools import GitTools
 from .terminal_tools import TerminalTools
@@ -207,8 +208,10 @@ class ToolGateway:
             ),
             ToolDefinition(
                 name="unreal_editor",
-                description="Run one named operation in the live Unreal Editor for a project (spawn_actor, new_level, create_material, create_blueprint, actors_in_level, ...).",
-                parameters={"type": "object", "properties": {"uproject": {"type": "string"}, "op": {"type": "string"},
+                description=("Run one named operation in the live Unreal Editor for a project. Read-only ops run "
+                             "without approval. Ops by domain: " + op_catalog.describe_for_agent()),
+                parameters={"type": "object", "properties": {"uproject": {"type": "string"},
+                                                             "op": {"type": "string", "enum": op_catalog.agent_ops()},
                                                              "args": {"type": "object"}},
                             "required": ["uproject", "op"]},
                 requires_approval=True,

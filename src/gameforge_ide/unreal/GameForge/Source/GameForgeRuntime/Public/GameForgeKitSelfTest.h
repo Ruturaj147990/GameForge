@@ -27,7 +27,7 @@ public:
 	TArray<FVector> Waypoints;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SelfTest")
-	FName ObjectiveId = TEXT("collect_relics");
+	FName ObjectiveId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SelfTest")
 	float WaypointTimeout = 20.0f;

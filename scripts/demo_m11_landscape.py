@@ -26,7 +26,7 @@ sys.path.insert(0, str(REPO))
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
 PROBE = Path(r"E:\GameForge\validation\live_ops_probe")
-PLUGIN_BUILD = Path(r"E:\GameForge\validation\GameForgePlugin_m15b")
+PLUGIN_BUILD = Path(r"E:\GameForge\validation\GameForgePlugin_neutral")
 DATE = time.strftime("%Y%m%d")
 PROJECT_DIR = Path(rf"E:\GameForge\validation\m11_landscape_{DATE}")
 REPORT = REPO / "reports" / "m11_landscape_demo.json"

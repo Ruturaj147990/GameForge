@@ -102,7 +102,7 @@ private:
 };
 
 /**
- * Gameplay kit quest giver: when the player-controlled pawn walks up, it "speaks" its dialogue lines (logged as
+ * Gameplay kit quest giver (content-neutral: dialogue and objective come from the game spec, not defaults): when the player-controlled pawn walks up, it "speaks" its dialogue lines (logged as
  * GF_EVENT dialogue, kept in SpokenLines) and starts its objective; after completion it speaks its turn-in line.
  */
 UCLASS(Blueprintable)
@@ -120,19 +120,19 @@ public:
 	TObjectPtr<UStaticMeshComponent> Visual;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
-	FName ObjectiveId = TEXT("collect_relics");
+	FName ObjectiveId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
-	FString ObjectiveTitle = TEXT("Recover the relics");
+	FString ObjectiveTitle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
-	int32 ObjectiveTarget = 2;
+	int32 ObjectiveTarget = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
-	TArray<FString> IntroLines = { TEXT("Traveller! Thieves scattered our relics."), TEXT("Bring two of them back, please.") };
+	TArray<FString> IntroLines;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
-	FString TurnInLine = TEXT("You found them all. Thank you!");
+	FString TurnInLine;
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Quest|State")
 	TArray<FString> SpokenLines;

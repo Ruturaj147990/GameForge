@@ -65,6 +65,12 @@ def build_level(uproject: Path, steps: dict) -> bool:
                                                 "label": f"GF_Relic{i}", "location": spot}).get("ok"))
             ok.append(link.call("set_actor_property", {"label": f"GF_Relic{i}", "property": "objective_id",
                                                        "value": "collect_relics"}).get("ok"))
+        # Kit actors are content-neutral: the game spec supplies the quest content.
+        for prop, value in {"objective_id": "collect_relics", "objective_title": "Recover the relics", "objective_target": 2,
+                            "intro_lines": ["Traveller! Thieves scattered our relics.", "Bring two of them back, please."],
+                            "turn_in_line": "You found them all. Thank you!"}.items():
+            ok.append(link.call("set_actor_property", {"label": "GF_QuestGiver", "property": prop, "value": value}).get("ok"))
+        ok.append(link.call("set_actor_property", {"label": "GF_SelfTest", "property": "objective_id", "value": "collect_relics"}).get("ok"))
         ok.append(link.call("set_actor_property", {"label": "GF_Guard", "property": "patrol_points", "value": GUARD_ROUTE}).get("ok"))
         ok.append(link.call("set_actor_property", {"label": "GF_SelfTest", "property": "waypoints", "value": WAYPOINTS}).get("ok"))
         ok.append(link.call("nav_rebuild", {}, timeout_s=120).get("ok"))

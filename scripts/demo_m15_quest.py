@@ -27,6 +27,9 @@ REPORT = REPO / "reports" / "m15_quest_demo.json"
 GIVER_CLASS = "/Script/GameForgeRuntime.GameForgeQuestGiver"
 GIVER, RELICS = {"x": -700, "y": 0, "z": 100}, [{"x": 300, "y": 600, "z": 100}, {"x": 300, "y": -600, "z": 100}]
 QUEST = "collect_relics"
+QUEST_CONTENT = {"objective_id": QUEST, "objective_title": "Recover the relics", "objective_target": 2,
+                 "intro_lines": ["Traveller! Thieves scattered our relics.", "Bring two of them back, please."],
+                 "turn_in_line": "You found them all. Thank you!"}
 
 
 def objective(link) -> tuple[dict, dict]:
@@ -52,7 +55,7 @@ def walk_until(link, spot: dict, pred, timeout_s: float = 15.0):
 
 def run(rep: dict) -> None:
     checks, steps = rep["checks"], rep["steps"]
-    land.PLUGIN_BUILD = Path(r"E:\GameForge\validation\GameForgePlugin_m15b")
+    land.PLUGIN_BUILD = Path(r"E:\GameForge\validation\GameForgePlugin_neutral")
     land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "m15_quest_"))
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()
@@ -72,6 +75,9 @@ def run(rep: dict) -> None:
                                   "location": {"x": 0, "y": 0, "z": 100}, "scale": {"x": 25, "y": 25, "z": 4}})
         g = link.call("spawn_actor", {"actor_class": GIVER_CLASS, "label": "GF_QuestGiver", "location": GIVER})
         placed = [bool(g.get("ok"))]
+        # Kit actors are content-neutral; the quest content comes from the game spec (here: QUEST_CONTENT).
+        for prop, value in QUEST_CONTENT.items():
+            placed.append(bool(link.call("set_actor_property", {"label": "GF_QuestGiver", "property": prop, "value": value}).get("ok")))
         for i, spot in enumerate(RELICS):
             p = link.call("spawn_actor", {"actor_class": "/Script/GameForgeRuntime.GameForgePickup", "label": f"GF_Relic{i}",
                                           "location": spot})
