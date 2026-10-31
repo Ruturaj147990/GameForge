@@ -40,6 +40,45 @@ def test_gateway_refuses_invalid_args_without_an_editor(tmp_path):
     assert res["status"] == "ERROR" and res["error"] == "invalid args for op"
 
 
+def test_all_thirty_reviewed_ops_reject_bogus_keys():
+    assert len(op_schemas.REVIEWED) == 30
+    for op in op_schemas.REVIEWED:
+        clean, errs = op_schemas.validate_args(op, {"completely_bogus_key_123": True})
+        assert clean is None and errs, f"Op {op} should have rejected completely_bogus_key_123"
+
+
+def test_reviewed_ops_valid_payloads_round_trip():
+    # create_material
+    clean, errs = op_schemas.validate_args("create_material", {
+        "asset_path": "/Game/Materials/M_Test",
+        "base_color": [1.0, 0.5, 0.0],
+        "roughness": 0.2
+    })
+    assert errs == [] and clean["asset_path"] == "/Game/Materials/M_Test"
+    assert clean["base_color"] == [1.0, 0.5, 0.0]
+
+    # landscape_create
+    clean, errs = op_schemas.validate_args("landscape_create", {
+        "elevation_scale": 1500.0,
+        "terrain_type": "Mountains"
+    })
+    assert errs == [] and clean["elevation_scale"] == 1500.0
+
+    # nav_find_path
+    clean, errs = op_schemas.validate_args("nav_find_path", {
+        "start": {"x": 100, "y": 200, "z": 0},
+        "end": {"x": 500, "y": 600, "z": 50}
+    })
+    assert errs == [] and clean["start"]["x"] == 100.0
+
+    # viewport_screenshot
+    clean, errs = op_schemas.validate_args("viewport_screenshot", {
+        "output_path": "E:/temp/shot.png",
+        "show_ui": True
+    })
+    assert errs == [] and clean["show_ui"] is True
+
+
 def test_generated_drafts_are_current():
     r = subprocess.run([sys.executable, str(REPO / "scripts/tools/gen_op_schemas.py"), "--check"],
                        capture_output=True, text=True)

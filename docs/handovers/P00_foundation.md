@@ -927,7 +927,7 @@ path argument, keeping the path argument as an alternative.
 | 0.5 | DONE | 2026-10-31 | 2026-10-31 | `4c88b81`; test_no_epic_reference_asset_in_diagnostics |
 | 0.6 | DONE | 2026-10-31 | 2026-10-31 | `6c2b0d1`; 19 domain modules, 126 ops; contract 16/16 + gameplay feedback 10/10 (`reports/P0/`) |
 | 0.7 | DONE | 2026-10-31 | 2026-10-31 | `7f72750`..`4475aca`; OpSpec.undo + true_reversibility + test; `reports/P0/undo_spotcheck.json` PASS (ScopedEditorTransaction + TRANSACTION UNDO verified in 5.7.4) |
-| 0.8 | PARTIAL | 2026-10-31 | 2026-10-31 | `7f72750`; drafts for all 126 ops + gateway validation; hand-reviewed models for 6 core level ops (handover asked 30) |
+| 0.8 | DONE | 2026-10-31 | 2026-10-31 | `7f72750`..current; all 30 high-use ops hand-reviewed in `REVIEWED` (`op_schemas.py`); `test_op_schemas` 9 passed |
 | 0.9 | PARTIAL | 2026-10-31 | 2026-10-31 | `4475aca`; plugin p0 built (0 warnings) + installed; contract 16/16 with p0; bridge health 200 on 47815. Editor-originated SyncContext request not exercised |
 | 0.10 | DONE | 2026-10-31 | 2026-10-31 | `1d7b6ee`; test_declared_dependencies (fails if numpy removed) |
 | 0.11 | DONE | 2026-10-31 | 2026-10-31 | `035d90c`; 80 scripts moved; `_harness.py`; demos default to host-profile probe/plugin; coverage table in docs/generated |
