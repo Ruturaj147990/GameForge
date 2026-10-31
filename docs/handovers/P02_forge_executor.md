@@ -707,7 +707,7 @@ Record this in `reports/P2/rollback_check.json`. Then re-run to completion.
 |---|---|---|---|---|
 | 2.1 | DONE | 2026-10-31T12:42Z | 2026-10-31T12:44Z | test_forge_model (9 passed); DAG validation, Kahn cycle check, stable topo_order, canonical_hash |
 | 2.2 | DONE | 2026-10-31T12:45Z | 2026-10-31T12:46Z | test_forge_store (6 passed); atomic persistence with lock retry, event logging, latest_for_project, runs index |
-| 2.3 | TODO | | | |
+| 2.3 | DONE | 2026-10-31T12:46Z | 2026-10-31T12:47Z | test_forge_checkpoints (5 passed); ensure, commit, rollback/reset_to, editor guard, MAX_COMMIT_MB guard |
 | 2.4 | TODO | | | |
 | 2.5 | TODO | | | |
 | 2.6 | TODO | | | |
