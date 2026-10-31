@@ -266,6 +266,7 @@ class _StatusBar(QWidget):
         # Unreal connection badge
         self._ue_label = QLabel("Unreal: Disconnected")
         self._ue_label.setStyleSheet(theme_stylesheet("color: #64748b; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: #161c28;"))
+        self._ue_label.setVisible(False)
         layout.addWidget(self._ue_label)
 
         layout.addStretch()
@@ -274,6 +275,7 @@ class _StatusBar(QWidget):
         self._model_label.setStyleSheet(theme_stylesheet(
             "color: #818cf8; font-size: 12px; font-weight: 700;"
         ))
+        self._model_label.setVisible(False)
         layout.addWidget(self._model_label)
 
     def set_ready(self) -> None:
@@ -325,6 +327,7 @@ class ChatPanel(QWidget):
     action_finished = Signal(str, dict)
     slash_command_executed = Signal(str, str)
     model_changed = Signal(str)
+    unreal_status_changed = Signal(bool, str, str)
 
     def __init__(
         self,
@@ -618,12 +621,14 @@ class ChatPanel(QWidget):
             ctx = load_unreal_context(self._workspace)
             if not ctx:
                 self._status_bar.set_unreal_status(False)
+                self.unreal_status_changed.emit(False, "", "")
                 return
             last_sync = ctx.get("last_sync", "")
             project_name = ctx.get("project_name", "")
             active_asset = ctx.get("active_asset", "")
             is_connected = bool(project_name or active_asset)
             self._status_bar.set_unreal_status(is_connected, project_name, active_asset)
+            self.unreal_status_changed.emit(is_connected, project_name, active_asset)
             if last_sync and last_sync != self._last_unreal_sync:
                 self._last_unreal_sync = last_sync
         except Exception:

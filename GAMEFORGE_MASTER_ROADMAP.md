@@ -310,7 +310,7 @@ spatial SFX (M14), intro cinematic (M16), HUD/menus (M3/M4), QA scenarios (M19),
 Done 2026-10-31: idle-CPU fix, blank icon buttons, model box, truncated tabs, status bar, honest welcome/offline notice,
 non-blocking Ollama probe (`reports/ide_ui_20261031.png`). Planned, in order (each: change → render with
 `python scratch/ide_snapshot.py` (GF_SNAP_WAIT=7) → compare → `ide_resource_benchmark.py` stays in budget → tests):
-1. **Remove duplication:** the toolbar and chat header both have Model/Clear/New Session; keep one set (toolbar) and
+1. ~~**Remove duplication**~~ **DONE 2026-10-31**: the toolbar and chat header both have Model/Clear/New Session; keep one set (toolbar) and
    one status indicator for Ollama and Unreal.
 2. **Information hierarchy:** a single top bar (workspace, model, status pills); a left activity rail (Explorer,
    Games, Plans, Assets) instead of separate floating docks; dock title bars collapsed into tabs.

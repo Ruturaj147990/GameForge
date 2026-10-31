@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
         self._chat_panel.diff_pending.connect(self._on_diff_pending)
         self._chat_panel.slash_command_executed.connect(self._on_slash_command)
         self._chat_panel.model_changed.connect(self._on_chat_model_changed)
+        self._chat_panel.unreal_status_changed.connect(self._apply_unreal_status)
 
         # ── Deferred startup health-check ────────────────────────────────
         self._health_timer = QTimer(self)
@@ -326,6 +327,10 @@ class MainWindow(QMainWindow):
         self._ollama_indicator.setObjectName("ollama_indicator")
         self._ollama_indicator.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 600; padding-right: 12px;")
         tb.addWidget(self._ollama_indicator)
+        self._unreal_indicator = QLabel("● Unreal: disconnected")
+        self._unreal_indicator.setObjectName("unreal_indicator")
+        self._unreal_indicator.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 600; padding-right: 12px;")
+        tb.addWidget(self._unreal_indicator)
 
     # ── Central widget (Chat) ─────────────────────────────────────────────────
 
@@ -483,6 +488,7 @@ class MainWindow(QMainWindow):
         self._terminal.set_workspace(self._workspace)
         self._mission.set_workspace(self._workspace)
         self._diff_panel.clear()
+        self._apply_unreal_status(False, "", "")
 
         # Update toolbar and status bar labels
         if hasattr(self, "_tb_workspace_btn"):
@@ -575,6 +581,24 @@ class MainWindow(QMainWindow):
             self._ollama_indicator.setText(f"● Ollama: error ({exc})")
             self._ollama_indicator.setStyleSheet(theme_stylesheet(
                 "color: #ff6b6b; font-size: 12px; padding-right: 12px;"
+            ))
+
+    @Slot(bool, str, str)
+    def _apply_unreal_status(self, connected: bool, project_name: str = "", active_asset: str = "") -> None:
+        if not hasattr(self, "_unreal_indicator"):
+            return
+        if connected:
+            txt = f"● UE: {project_name}" if project_name else "● UE: connected"
+            if active_asset:
+                txt += f" ({Path(active_asset).name})"
+            self._unreal_indicator.setText(txt)
+            self._unreal_indicator.setStyleSheet(theme_stylesheet(
+                "color: #00d9a3; font-size: 12px; padding-right: 12px; font-weight: 600;"
+            ))
+        else:
+            self._unreal_indicator.setText("● Unreal: disconnected")
+            self._unreal_indicator.setStyleSheet(theme_stylesheet(
+                "color: #9ca3af; font-size: 12px; padding-right: 12px; font-weight: 600;"
             ))
 
     def _sync_models_to_toolbar(self) -> None:
