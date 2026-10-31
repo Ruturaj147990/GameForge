@@ -39,7 +39,7 @@ BORDER_FOCUS = "#8b5cf6"   # Focus outlines
 
 TEXT_PRIMARY = "#f5f3ff"   # High-contrast primary text (contrast > 14:1)
 TEXT_SECONDARY = "#9d95b0" # Readable secondary labels (contrast > 6.5:1)
-TEXT_MUTED = "#675f78"     # Subtle hints and timestamps
+TEXT_MUTED = "#9d95b0"     # High-contrast secondary/muted (contrast > 6.6:1)
 
 # Accent Colors (from styles/ only)
 ACCENT_PRIMARY = "#7c3aed" # Refined purple

@@ -223,7 +223,7 @@ class UnrealPanel(QWidget):
         lbl_eb_sub = QLabel("Build logs, compiler warnings, and cook diagnostics will stream here.")
         lbl_eb_sub.setAlignment(Qt.AlignCenter)
         lbl_eb_sub.setWordWrap(True)
-        lbl_eb_sub.setStyleSheet("color: #675f78; font-size: 11px; background: transparent;")
+        lbl_eb_sub.setStyleSheet("color: #9d95b0; font-size: 11px; background: transparent;")
         eb_layout.addWidget(lbl_eb_sub)
 
         self._build_output = QTextEdit()

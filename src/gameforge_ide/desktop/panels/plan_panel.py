@@ -235,7 +235,7 @@ class PlanPanel(QWidget):
     def _on_task_selected(self) -> None:
         items = self._tree.selectedItems()
         if not items or not self._active_plan:
-            self._detail_browser.setHtml("<span style='color: #675f78;'>Select a task above to view details.</span>")
+            self._detail_browser.setHtml("<span style='color: #9d95b0;'>Select a task above to view details.</span>")
             return
 
         task_id = items[0].data(0, Qt.UserRole)
@@ -248,8 +248,8 @@ class PlanPanel(QWidget):
             f"<h3 style='margin: 0; color: #f5f3ff;'>{task.title} <span style='color: {color}; font-size: 12px;'>[{task.status}]</span></h3>",
             f"<p style='color: #9d95b0; margin: 4px 0;'><b>Objective:</b> {task.objective}</p>",
             f"<p style='color: #9d95b0; margin: 4px 0;'><b>Expected Result:</b> {task.expected_result}</p>",
-            f"<p style='color: #675f78; margin: 4px 0;'>Type: <code>{task.task_type}</code> | Reversibility: <code>{task.reversibility}</code> | Approval Required: <code>{task.requires_approval}</code></p>",
-            f"<p style='color: #675f78; margin: 4px 0;'>Permitted Tools: <code>{', '.join(task.permitted_tools) or 'None'}</code></p>",
+            f"<p style='color: #9d95b0; margin: 4px 0;'>Type: <code>{task.task_type}</code> | Reversibility: <code>{task.reversibility}</code> | Approval Required: <code>{task.requires_approval}</code></p>",
+            f"<p style='color: #9d95b0; margin: 4px 0;'>Permitted Tools: <code>{', '.join(task.permitted_tools) or 'None'}</code></p>",
         ]
 
         if task.error_message:
@@ -264,11 +264,11 @@ class PlanPanel(QWidget):
             html.append("<ul style='margin: 0; padding-left: 20px;'>")
             for pred in task.acceptance:
                 mark = "<span style='color: #00d9a3;'>✔ SATISFIED</span>" if pred.satisfied else "<span style='color: #ef4444;'>✘ UNMET</span>"
-                ev = f"<br/><span style='color: #675f78;'>Evidence: {pred.evidence}</span>" if pred.evidence else ""
+                ev = f"<br/><span style='color: #9d95b0;'>Evidence: {pred.evidence}</span>" if pred.evidence else ""
                 html.append(f"<li style='color: #f5f3ff; margin-bottom: 4px;'>{mark} <b>{pred.predicate_type}</b>(<code>{pred.target}</code>){ev}</li>")
             html.append("</ul>")
         else:
-            html.append("<p style='color: #675f78;'>No explicit machine predicates attached.</p>")
+            html.append("<p style='color: #9d95b0;'>No explicit machine predicates attached.</p>")
 
         # Tool Call / Output
         if task.tool_call:

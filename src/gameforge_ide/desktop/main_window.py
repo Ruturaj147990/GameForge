@@ -572,7 +572,7 @@ class MainWindow(QMainWindow):
 
         self._version_lbl = QLabel("GameForge IDE v1.0.0")
         self._version_lbl.setObjectName("status_version")
-        self._version_lbl.setStyleSheet("color: #675f78; font-size: 11px;")
+        self._version_lbl.setStyleSheet("color: #9d95b0; font-size: 11px;")
         sb.addPermanentWidget(self._version_lbl)
 
     # ── Slots ─────────────────────────────────────────────────────────────────

@@ -48,7 +48,7 @@ class _MessageBubble(QFrame):
         "assistant": ("#131b26", "#00d9a3", "#00d9a3"),
         "tool":      ("#1a1f2b", "#f59e0b", "#fbbf24"),
         "error":     ("#28161a", "#ef4444", "#f87171"),
-        "system":    ("#111622", "#64748b", "#94a3b8"),
+        "system":    ("#111622", "#9d95b0", "#94a3b8"),
     }
 
     _DOCUMENT_CSS = """
@@ -608,7 +608,7 @@ class ChatPanel(QWidget):
         chips_layout.setSpacing(6)
 
         chips_lbl = QLabel("Context:")
-        chips_lbl.setStyleSheet("color: #64748b; font-size: 11px; font-weight: 600;")
+        chips_lbl.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 600;")
         chips_layout.addWidget(chips_lbl)
 
         self._btn_chip_ue = QPushButton("🎮 @ue")

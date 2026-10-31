@@ -319,7 +319,7 @@ non-blocking Ollama probe (`reports/ide_ui_20261031.png`). Planned, in order (ea
 4. ~~**Consistent design tokens**~~ **DONE 2026-10-31**: one spacing scale (4/8/12/16), one radius (6px), two font sizes per level (11/13px body, 14/18px headings), and accent colors (`#7c3aed`, `#8b5cf6`, `#00d9a3`, `#f59e0b`, `#ef4444`) from `styles/` tokens only (`src/gameforge_ide/desktop/styles/tokens.py`). Ad-hoc inline colors across main window and panels replaced.
 5. ~~**Empty states**~~ **DONE 2026-10-31**: Unreal panel shows card "No .uproject in this workspace. Create one with /game" with action button when workspace has no projects; build output area displays clean empty state card until a staged build is run.
 6. ~~**Keyboard**~~ **DONE 2026-10-31**: command palette wired to Ctrl+Shift+P (and Ctrl+K), expanded command palette commands covering all workspace/view/unreal actions with styled modal dialog, defined focus order, and visible focus rings on inputs, buttons, and views.
-7. **Accessibility:** contrast ≥ 4.5:1 for secondary text (#64748b on #161c28 is below that), scalable fonts at 125–150% DPI.
+7. ~~**Accessibility**~~ **DONE 2026-10-31**: secondary text contrast verified >= 4.5:1 across all surfaces (WCAG measured 6.23:1 to 7.03:1 with `#9d95b0`), purged legacy `#64748b`, high-DPI pass-through rounding policy and scalable fonts.
 
 ## 5. Next action (always keep current)
 
