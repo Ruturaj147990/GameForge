@@ -66,7 +66,7 @@ class PlanGenerator:
                 "arguments": {"uproject": uproject_path, "op": "actors_in_level", "args": {"limit": 100}},
             },
             acceptance=[
-                TaskAcceptancePredicate(predicate_type="custom", target="editor_responsive", satisfied=True),
+                TaskAcceptancePredicate(predicate_type="custom", target="editor_responsive"),
             ],
         )
 
@@ -220,7 +220,11 @@ class PlanGenerator:
         return plan
 
     def generate_plan_from_prompt(self, user_prompt: str, context: Optional[Dict[str, Any]] = None) -> TaskPlan:
-        """Parses natural language prompt into an executable TaskPlan."""
+        """Parses natural language prompt into an executable TaskPlan.
+
+        Keyword-templated helper used by tests and demos only. The product creates plans through Forge (P2);
+        do not call this from the IDE.
+        """
         prompt_lower = user_prompt.lower()
         ctx = context or {}
 
@@ -228,11 +232,6 @@ class PlanGenerator:
         uproject = ctx.get("uproject") or next(
             (p for p in self.workspace_root.glob("*.uproject")), None
         )
-        if not uproject:
-            # Check validation directory
-            val_up = Path(r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
-            if val_up.is_file():
-                uproject = val_up
 
         if any(w in prompt_lower for w in ("unreal", "actor", "mesh", "level", "spawn", "ue5", "uproject")) and uproject:
             # Extract desired actor label if mentioned
@@ -264,8 +263,9 @@ class PlanGenerator:
             expected_result="Workspace state cataloged",
             task_type="inspect",
             permitted_tools=["list_dir", "read_file", "search_code"],
+            tool_call={"name": "list_dir", "arguments": {"subpath": ".", "max_depth": 1}},
             dependency_ids=[],
-            acceptance=[TaskAcceptancePredicate(predicate_type="custom", target="inspection_complete", satisfied=True)],
+            acceptance=[TaskAcceptancePredicate(predicate_type="custom", target="inspection_complete")],
         )
         plan.add_task(task1)
         return plan

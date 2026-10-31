@@ -374,7 +374,10 @@ class TaskPlanExecutor:
     def _dispatch_tool_call(self, task: TaskNode) -> Dict[str, Any]:
         """Dispatches the tool call attached to task node."""
         if not task.tool_call:
-            # Inspection or custom task without tool call: evaluate predicates directly
+            if not task.acceptance and not task.requires_approval:  # an approved gate is its own evidence
+                return {"status": "ERROR",
+                        "error": "NO_EVIDENCE: task declares neither a tool call nor acceptance predicates"}
+            # Evaluation-only task: its predicates are evaluated against observed state next.
             return {"status": "SUCCESS", "message": "No direct tool call, evaluation only"}
 
         tool_name = task.tool_call.get("name", "")

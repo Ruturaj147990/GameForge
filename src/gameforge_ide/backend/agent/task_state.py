@@ -16,8 +16,31 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
+
+
+# A "custom" predicate is satisfied only when a registered evaluator confirms it from observed state.
+# The predicate's own ``satisfied`` field is output, never input (design contract rule 2).
+def _history_has_success(tool_history: list[dict], tools: frozenset[str]) -> tuple[bool, str]:
+    for entry in tool_history:
+        if entry.get("tool_name") in tools and str(entry.get("status", "")).upper() == "SUCCESS":
+            return True, f"{entry.get('tool_name')} returned SUCCESS"
+    return False, f"no successful call to any of {sorted(tools)} in tool history"
+
+
+def _editor_responsive(tool_history: list[dict]) -> tuple[bool, str]:
+    for entry in tool_history:
+        out = entry.get("output") or {}
+        if entry.get("tool_name") == "unreal_editor" and isinstance(out, dict)                 and out.get("status") == "SUCCESS" and (out.get("result") or {}).get("ok") is True:
+            return True, f"editor op {(out.get('result') or {}).get('op')} returned ok"
+    return False, "no successful unreal_editor read-back in tool history"
+
+
+CUSTOM_PREDICATE_EVALUATORS: dict[str, Callable[[list[dict]], tuple[bool, str]]] = {
+    "inspection_complete": lambda h: _history_has_success(h, frozenset({"list_dir", "read_file", "search_code"})),
+    "editor_responsive": _editor_responsive,
+}
 
 
 TaskIntent = Literal["answer", "inspect", "plan", "mutate", "validate"]
@@ -511,8 +534,16 @@ class TaskState(BaseModel):
                     unmet.append(f"menu_interaction_verified({pred.target}): Menu button interaction not observed in tool history")
 
             elif pred.predicate_type == "custom":
-                if not pred.satisfied:
-                    unmet.append(f"custom({pred.target}): Condition not yet satisfied")
+                evaluator = CUSTOM_PREDICATE_EVALUATORS.get(pred.target)
+                if evaluator is None:
+                    pred.satisfied = False
+                    unmet.append(f"custom({pred.target}): no registered evaluator (cannot be satisfied)")
+                else:
+                    ok, why = evaluator(tool_history)
+                    pred.satisfied = ok
+                    pred.evidence = why
+                    if not ok:
+                        unmet.append(f"custom({pred.target}): {why}")
 
         all_satisfied = len(unmet) == 0
         return all_satisfied, unmet
