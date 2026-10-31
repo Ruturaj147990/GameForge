@@ -1,112 +1,51 @@
-# GameForge Step 1 Starter Pack
+# GameForge
 
-This bundle starts Phase 0 from the master blueprint. It defines the charter, task schema, grading contract, first 30 logical tasks, and six pilot-task drafts.
+GameForge is a Windows desktop platform that turns a natural-language game idea into a **playable, verified Unreal
+Engine 5 game**. The game can then be changed with further prompts. It plans the work, writes a reviewable Game Design
+Spec, builds the game from a tested gameplay kit (with generated code only where needed), assembles levels in the
+live Unreal Editor, tests the game by replaying input against the packaged build, and reports the evidence.
 
-## Contents
-- `PROJECT_CHARTER.md` — mission, scope, operating definition of success, acceptance gate.
-- `TASK_SCHEMA.yaml` — proposed machine-readable task format; illustrative and not yet schema-validated.
-- `TASK_INVENTORY.csv` — 30 logical T2/T3 task specifications.
-- `EVALUATION_CONTRACT.md` — grading layers, result vocabulary, per-run report fields, baseline fairness.
-- `DECISION_LOG.csv` — open technical/legal choices.
-- `pilot_tasks/` — six task-spec drafts to be turned into clean engine fixtures and hidden graders.
+> Status (2026-10-31): five genres go from prompt to packaged game, and the engine layer for worlds, materials, props,
+> VFX, audio, AI, quests and cinematics is verified in Play-In-Editor. The roadmap to 1.0 is in
+> [`docs/04_ROADMAP.md`](docs/04_ROADMAP.md). Live status, with evidence, is in [`docs/00_STATUS.md`](docs/00_STATUS.md).
 
-## Important status
-These are specifications only. Engine-specific starter projects, hidden graders, reference solutions, probes, license reviews, and repeatability tests have not been implemented. Engine versions are intentionally not pinned until actual runner availability and license/CI constraints are checked.
+## Requirements (current development host)
 
-## Recommended next action
-Implement the *harness skeleton* and choose one pilot task to validate end-to-end in one engine before scaling out to all variants. Record runner flakiness separately from model failure.
+- Windows 11, Unreal Engine **5.7.4** (Epic Launcher install, detected automatically after P0), Visual Studio 2022
+  C++ toolchain.
+- Python 3.14, PySide6 6.12, numpy, Pillow (`pip install -r requirements.txt`).
+- Local models through Ollama (four GameForge models), or an opt-in hosted provider.
+- Disk: games and artifacts are stored on the drive configured in Settings (the development host uses `E:`).
 
----
-
-# GameForge-Bench Implementation & Execution Guide (Step 1)
-
-## 1. Quick Setup
+## Run
 
 ```powershell
-# Set Python path to include source root
-$env:PYTHONPATH = "src"
-
-# Install dependencies (if needed)
-pip install -r requirements.txt
+python -m src.gameforge_ide.launcher            # desktop IDE
+python -m src.gameforge_ide.launcher --serve    # loopback bridge for the Unreal plugin (development)
 ```
 
-## 2. Benchmark Tooling Commands
-
-### Environment and Engine Audit (`doctor`)
-Inspects Python, .NET, MSVC, MSBuild, Git, and auto-discovers installed Unreal and Unity game engines:
-```powershell
-python -m gameforge_bench.cli doctor
-python -m gameforge_bench.cli doctor --json
-```
-
-### Validate Benchmark Specifications (`validate-specs`)
-Validates logical inventory (`TASK_INVENTORY.csv`), pilot drafts (`pilot_tasks/`), formal schemas, and reports discrepancies:
-```powershell
-python -m gameforge_bench.cli validate-specs
-```
-
-### List Logical Tasks (`list-tasks`)
-Lists all 30 logical tasks with tiers, categories, and matching engine pilot variants:
-```powershell
-python -m gameforge_bench.cli list-tasks
-```
-
-### Execute Benchmark Task Runner (`run`)
-Runs the 15-step grading pipeline on a task against an engine and candidate project:
-```powershell
-# Run reference solution for third-person player controller on Unreal Engine 5:
-python -m gameforge_bench.cli run --task-id t2-001-third-person-controller --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_001_controller
-
-# Run controlled fault candidate (demonstrates partial build / defect detection):
-python -m gameforge_bench.cli run --task-id t2-001-third-person-controller --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_001_failing_speed --candidate-id defective_speed_candidate
-
-# Run reference solution for health/damage system (Pilot 2) on Unreal Engine 5:
-python -m gameforge_bench.cli run --task-id t2-004-health-damage --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_004_health
-
-# Run reference solution for pickup collection system (Step 3 Task 1):
-python -m gameforge_bench.cli run --task-id t2-005-pickup-collection --engine unreal --candidate-dir graders/reference_solutions/unreal/t2_005_pickup
-
-# Run reference solution for player character composition (Step 3 Task 2):
-python -m gameforge_bench.cli run --task-id t3-016-player-composition --engine unreal --candidate-dir graders/reference_solutions/unreal/t3_016_composition
-```
-
-### Summarize Benchmark Runs (`summarize`)
-Aggregates machine-readable evaluation reports across runs:
-```powershell
-python -m gameforge_bench.cli summarize --report-dir reports
-```
-
-## 3. Running Automated Tests
+## Test
 
 ```powershell
-# Unit tests (harness, policy, discovery, adapters, reporting, isolation provider)
-pytest tests/unit -v
-
-# Hidden grader oracles (isolated tests for temporal and event contracts)
-pytest graders/protected -v
-
-# Real-engine integration tests:
-# Pilot 1: Third-person movement & camera
-pytest tests/integration/test_pipeline_execution.py -v
-
-# Pilot 2: Health and damage, invulnerability window, and exactly-once death
-pytest tests/integration/test_health_damage_pipeline.py -v
-
-# Step 3 Task 1: Pickup collection, health/stamina effects, exactly-once events
-pytest tests/integration/test_pickup_pipeline.py -v
-
-# Step 3 Task 2: Player composition, scene integration, kinematics and health parity
-pytest tests/integration/test_composition_pipeline.py -v
-
-# Run entire test suite
-pytest -v
+$env:TEMP="E:\gameforge_step1\scratch\pytest_os_temp"; $env:TMP=$env:TEMP
+python -m pytest tests/unit/ -q
+python -m pytest graders/protected/ -q
 ```
 
-## 4. Discovered Environment Status
-- **Operating System:** Windows 11 Build 10.0.26100 (x64)
-- **Python:** 3.14.6
-- **Unreal Engine:** 5.7.4 installed at `E:\UE\UE_5.7` (verified runnable with `UnrealEditor-Cmd.exe` and `PythonScriptPlugin`)
-- **Unity Engine:** Not installed locally in standard locations (adapter implemented and unit-tested; real-engine execution marked UNVERIFIED).
-- **GitHub Remote:** `https://github.com/Ruturaj147990/GameForge.git`
+More commands are in [`docs/08_TESTING_AND_EVIDENCE.md`](docs/08_TESTING_AND_EVIDENCE.md).
 
+## Repository map
 
+| Path | Contents |
+|---|---|
+| `src/gameforge_ide/` | The product: desktop IDE, agent, design/build/QA pipelines, Unreal integration and plugin |
+| `src/gameforge_ide/unreal/GameForge/` | Unreal plugin: `GameForgeEditor` (editor ops) and `GameForgeRuntime` (gameplay kit) |
+| `src/gameforge_bench/` | Benchmark and model-training product line (frozen; see `docs/README.md`) |
+| `docs/` | Knowledge base: architecture, audit, research, roadmap, UX spec, engine notes, handovers |
+| `reports/` | Evidence from real runs and model-training reports |
+| `scripts/` | Engine demos, pipeline runners, IDE benchmarks, model tooling |
+| `tests/` | Unit and integration tests; `graders/protected/` holds protected benchmark oracles |
+
+## For agents
+
+Read `AGENTS.md` first, then `context.md`. Implementation agents start with `ANTIGRAVITY_HANDOFF.md`.

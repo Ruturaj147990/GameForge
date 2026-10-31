@@ -30,7 +30,7 @@
       "base_url": "http://127.0.0.1:8088/v1",
       "enabled": false,
       "unmetered": true,
-      "data_policy": "Self-hosted GameForge inference gateway (see GAMEFORGE_HOSTED_INFERENCE_ARCHITECTURE.md).",
+      "data_policy": "Self-hosted GameForge inference gateway (design only; see docs/history/HOSTED_GATEWAY_DESIGN_2026-10-24.md).",
       "models": []
     }
   ]
