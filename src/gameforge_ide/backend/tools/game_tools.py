@@ -406,5 +406,6 @@ class GameTools:
             return {"status": "ERROR", "error": f"not a packaged game executable: {exe}"}
         if self.projects_root.resolve() not in path.resolve().parents:
             return {"status": "BLOCKED", "error": "only games produced under the GameForge projects root can be launched"}
+        # Kept as plain subprocess.Popen (not jobs.spawn): launched for the user to keep playing, so it must not die with the IDE job.
         proc = subprocess.Popen([str(path), "-windowed", "-ResX=1280", "-ResY=800"], cwd=str(path.parent))
         return {"status": "SUCCESS", "pid": proc.pid, "exe": str(path)}

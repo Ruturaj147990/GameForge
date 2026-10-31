@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from ..core.settings import engine_root_or_missing
+from ..core import jobs
 from . import op_catalog
 
 RESULT_SENTINEL = "@@GAMEFORGE_RESULT@@"
@@ -158,7 +159,7 @@ class LiveEditorLink:
         if log_path:
             argv.append(f"-abslog={log_path}")
         argv += list(extra_args or [])
-        self._process = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        self._process = jobs.spawn(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return self._process.pid
 

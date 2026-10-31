@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 from ..core.settings import engine_root_or_missing
+from ..core import jobs
 
 BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -176,7 +177,7 @@ class UnrealToolchain:
             with open(log_path, "w", encoding="utf-8", errors="replace") as log:
                 log.write("ARGV: " + json.dumps(argv) + "\n")
                 log.flush()
-                proc = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None,
+                proc = jobs.spawn(argv, stdout=log, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None,
                                         creationflags=BELOW_NORMAL | NO_WINDOW)
                 try:
                     code = self._wait(proc, timeout_s)
@@ -331,7 +332,7 @@ class UnrealToolchain:
         argv = [str(exe)] + list(args) + [f"-abslog={log_path}", "-unattended", "-nosplash", "-NoSound"]
         started = time.monotonic()
         try:
-            proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            proc = jobs.spawn(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                     creationflags=NO_WINDOW)
             code = self._wait(proc, timeout_s)
         except TimeoutError:
