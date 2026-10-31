@@ -1,9 +1,43 @@
-﻿{
-    "checked":  "2026-10-31T16:16:37.1204248+05:30",
-    "health_status":  200,
-    "health_body":  "{\"status\":\"ok\",\"version\":\"1.0.0\",\"workspace\":\"E:\\\\gameforge_step1\",\"local_ollama_online\":true,\"unreal_engine_5_7_detected\":true}",
-    "listening_47815":  true,
-    "listen_address":  "127.0.0.1",
-    "listening_8000":  false,
-    "note":  "--serve needs GAMEFORGE_BRIDGE_TOKEN (unchanged). Editor-originated SyncContext request not exercised; C++ default URL 47815 is compiled into GameForgePlugin_p0."
+{
+ "ts": "2026-10-31T16:39:28+0530",
+ "bridge_port": 47815,
+ "token_configured": true,
+ "steps": [
+  {
+   "step": "bridge_health",
+   "ok": true,
+   "port": 47815
+  },
+  {
+   "step": "probe_created",
+   "uproject": "E:\\GameForge\\validation\\bridge_47815_20261031\\GFProbe.uproject"
+  },
+  {
+   "step": "editor_connected",
+   "engine_version": "5.7.4-51494982+++UE5+Release-5.7"
+  },
+  {
+   "step": "execute_sync_command",
+   "output": [
+    {
+     "type": "Info",
+     "output": "@@SYNC_SENT@@DONE\r\n"
+    }
+   ]
+  },
+  {
+   "step": "received_context",
+   "context": {
+    "project_name": "GFProbe",
+    "engine_version": "5.7.4",
+    "selected_actor": "",
+    "active_asset": "",
+    "open_assets": [],
+    "last_sync": "2026-10-31T11:09:39+00:00"
+   }
+  }
+ ],
+ "verdict": "PASS",
+ "bridge_log": "INFO:     Started server process [16016]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Uvicorn running on http://127.0.0.1:47815 (Press CTRL+C to quit)\n====================================================\nGameForge IDE - Backend Server Mode\n   API: http://127.0.0.1:None/docs\n====================================================\nINFO:     127.0.0.1:58294 - \"GET /api/health HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:58451 - \"POST /api/unreal/context HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:58470 - \"GET /api/unreal/context HTTP/1.1\" 200 OK\n",
+ "finished": "2026-10-31T16:39:44+0530"
 }
