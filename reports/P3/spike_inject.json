@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-10-31T13:32:30Z",
+  "passed": true,
+  "criteria": "distance_cm >= 1000.0 in both Development and Shipping builds",
+  "development": {
+    "exe": "E:\\GameForge\\validation\\GFInjectSpike\\package_dev\\Windows\\GFInjectSpike.exe",
+    "distance_cm": 1112.34,
+    "result": {
+      "passed": true,
+      "distance_cm": 1112.34,
+      "distance_3d_cm": 1112.34,
+      "start": [
+        0.0,
+        0.0,
+        98.2
+      ],
+      "end": [
+        1112.3,
+        0.0,
+        98.2
+      ]
+    },
+    "duration_s": 11.19,
+    "package_duration_s": 46.1
+  },
+  "shipping": {
+    "exe": "E:\\GameForge\\validation\\GFInjectSpike\\package_ship\\Windows\\GFInjectSpike.exe",
+    "distance_cm": 1111.86,
+    "result": {
+      "passed": true,
+      "distance_cm": 1111.86,
+      "distance_3d_cm": 1111.86,
+      "start": [
+        0.0,
+        0.0,
+        98.2
+      ],
+      "end": [
+        1111.9,
+        0.0,
+        98.2
+      ]
+    },
+    "duration_s": 4.32,
+    "package_duration_s": 46.1
+  }
+}
