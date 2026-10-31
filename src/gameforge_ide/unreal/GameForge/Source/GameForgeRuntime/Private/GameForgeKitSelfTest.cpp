@@ -6,6 +6,8 @@
 #include "EngineUtils.h"
 #include "GameForgeGuard.h"
 #include "GameForgeObjectives.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -82,6 +84,27 @@ void AGameForgeKitSelfTest::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	// Run 2 drove the DefaultPawn with SimpleMoveToLocation and it was snapped between waypoints (11-17 m legs in
+	// <=0.01 s). Walk a real Character instead: capsule + CharacterMovement, steered with movement input.
+	ACharacter* Walker = Cast<ACharacter>(Pawn);
+	if (!Walker)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		Walker = GetWorld()->SpawnActor<ACharacter>(ACharacter::StaticClass(), Pawn->GetActorLocation() + FVector(0, 0, 40),
+			FRotator::ZeroRotator, Params);
+		if (!Walker)
+		{
+			Finish(false, TEXT("could not spawn the walking Character"));
+			return;
+		}
+		Pawn->Destroy();
+		PC->Possess(Walker);
+		UE_LOG(LogTemp, Display, TEXT("GF_KIT_SELFTEST walker=%s max_walk_speed=%.0f"), *Walker->GetName(),
+			Walker->GetCharacterMovement()->MaxWalkSpeed);
+		return;
+	}
+	Pawn = Walker;
 	const bool bWalking = WaypointIndex >= 0 && WaypointIndex < Waypoints.Num();
 	const bool bAtWaypoint = bWalking && FVector::Dist2D(Pawn->GetActorLocation(), Waypoints[WaypointIndex]) < 150.0f;
 	if (WaypointIndex < 0 || bAtWaypoint || (bWalking && StepElapsed > WaypointTimeout))
@@ -97,9 +120,13 @@ void AGameForgeKitSelfTest::Tick(float DeltaSeconds)
 		StepElapsed = 0.0f;
 		if (WaypointIndex < Waypoints.Num())
 		{
-			UAIBlueprintHelperLibrary::SimpleMoveToLocation(PC, Waypoints[WaypointIndex]);
 			return;
 		}
+	}
+	if (WaypointIndex >= 0 && WaypointIndex < Waypoints.Num())
+	{
+		const FVector ToTarget = (Waypoints[WaypointIndex] - Pawn->GetActorLocation()).GetSafeNormal2D();
+		Pawn->AddMovementInput(ToTarget, 1.0f);  // like a player holding the stick toward the waypoint
 	}
 	if (WaypointIndex >= Waypoints.Num() && StepElapsed > 3.0f)
 	{

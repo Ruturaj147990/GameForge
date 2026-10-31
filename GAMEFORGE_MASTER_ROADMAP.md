@@ -314,7 +314,7 @@ Done on 2026-10-31 (details in items 1–6 below):
 - M13 + M14 gameplay feedback 10/10 and MetaSound 5/5.
 - M8 v2 village 15/15 with PCG exclusion, plus World Partition / Data Layers 9/9.
 - M15 guard 6/6 and quest + save/load 8/8.
-- Packaged kit self-test PARTIAL (`reports/kit_packaged_selftest.json`): gameplay logic and save/restore PASS in a cooked game, but the self-test pawn was snapped, not walked. **Next step #1:** a CharacterMovement pawn (or real input) with the leg-speed check.
+- Packaged kit self-test **PASS 6/6** (`reports/kit_packaged_selftest.json`): a Character walks physically (legs ~550–600 cm/s); quest, save → restore in a new process, and guard all verified in a cooked game. **Next step #1:** add leg-speed checks to the PIE demos, which use `pie_move_player_to` on a DefaultPawn that may snap.
 
 The list "Done this window" just below is the 2026-10-30 window-#2 record.
 Every engine demo runs on a disposable copy of `E:\GameForge\validation\live_ops_probe` (≈3–6 min each) and

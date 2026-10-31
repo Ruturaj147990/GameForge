@@ -50,6 +50,7 @@ actually executed. Every engine run below used a disposable copy of `E:\GameForg
 | 2026-10-31 | AutomationTool BuildPlugin (m15b: objectives subsystem, quest giver, pickup ObjectiveId; Runtime → Json) | exit 0 (run 1: missing Json module link) | `scratch/plugin_build_m15b.log` |
 | 2026-10-31 | `python scripts/demo_m15_quest.py` (runs 1–2) | 8/8 PASS. Run 1: gameplay and save/load already worked per GF_EVENTs, but the read op failed (`SubsystemBlueprintLibrary` missing in Python); added `GetForWorld` | `reports/m15_quest_demo.json` |
 | 2026-10-31 | `python scripts/package_kit_selftest.py` (runs 1–2) | PARTIAL 5/6. Cooked build: quest/objectives/save→restore in a new process, guard perception: PASS. `walk_physically_plausible` FAIL: legs took ≤0.01 s, so the pawn was snapped, not walked. Run 1: self-test index crash + JSON string-match bug, fixed | `reports/kit_packaged_selftest.json` |
+| 2026-10-31 | `python scripts/package_kit_selftest.py` (run 3) | **6/6 PASS**: a Character walker steered by movement input; legs 546–597 cm/s; fresh + restore PASS | `reports/kit_packaged_selftest.json` |
 | 2026-10-31 | `python -m pytest tests/unit/` / `graders/protected/` | 491 passed / 45 passed, exit 0 | — |
 | 2026-10-31 | `python -m pytest tests/unit/` / `graders/protected/` | 489 passed / 45 passed, exit 0 | — |
 

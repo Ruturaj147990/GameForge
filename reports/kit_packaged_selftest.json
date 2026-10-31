@@ -1,12 +1,12 @@
 {
-  "timestamp": "2026-10-31T11:25:40+0530",
+  "timestamp": "2026-10-31T11:31:30+0530",
   "project": "E:\\GameForge\\validation\\kit_packaged_20261031",
   "checks": {
     "editor_target_builds": true,
     "level_built_by_ops": true,
     "packages": true,
     "packaged_fresh_selftest_pass": true,
-    "walk_physically_plausible": false,
+    "walk_physically_plausible": true,
     "packaged_restore_selftest_pass": true
   },
   "steps": {
@@ -14,7 +14,7 @@
       "ok": true,
       "step": "build",
       "exit_code": 0,
-      "duration_s": 35.1,
+      "duration_s": 35.3,
       "log_path": "E:\\GameForge\\validation\\kit_packaged_20261031\\logs\\build_GFKitTestEditor_Development.log",
       "diagnostics": [],
       "data": {
@@ -52,7 +52,7 @@
         "archive_dir": "E:\\GameForge\\validation\\kit_packaged_20261031\\Packaged",
         "exe": "E:\\GameForge\\validation\\kit_packaged_20261031\\Packaged\\Windows\\GFKitTest.exe",
         "exe_exists": true,
-        "archive_bytes": 866469600
+        "archive_bytes": 866477792
       },
       "errors": [],
       "log": "E:\\GameForge\\validation\\kit_packaged_20261031\\Saved\\GameForge\\logs\\package_Win64_Development.log"
@@ -62,61 +62,62 @@
       "exit": 0,
       "errors": [],
       "selftest_lines": [
-        "[2026.10.31-05.57.11:473][  0]LogTemp: Display: GF_KIT_SELFTEST start mode=fresh waypoints=5",
-        "[2026.10.31-05.57.13:523][865]LogTemp: Display: GF_KIT_SELFTEST waypoint=0 reached=1 leg_s=0.00 world_t=2.01 pawn=-818,0,55",
-        "[2026.10.31-05.57.13:533][869]LogTemp: Display: GF_KIT_SELFTEST waypoint=1 reached=1 leg_s=0.01 world_t=2.02 pawn=345,628,45",
-        "[2026.10.31-05.57.13:539][872]LogTemp: Display: GF_KIT_SELFTEST waypoint=2 reached=1 leg_s=0.01 world_t=2.02 pawn=300,-632,45",
-        "[2026.10.31-05.57.13:544][875]LogTemp: Display: GF_KIT_SELFTEST waypoint=3 reached=1 leg_s=0.01 world_t=2.03 pawn=-649,-32,45",
-        "[2026.10.31-05.57.13:549][878]LogTemp: Display: GF_KIT_SELFTEST waypoint=4 reached=1 leg_s=0.01 world_t=2.03 pawn=1095,190,45",
-        "[2026.10.31-05.57.16:549][504]LogTemp: Display: GF_KIT_SELFTEST PASS objective=2 spoken=3 guard_patrols=1 guard_chased=1 objectives={"
+        "[2026.10.31-06.03.01:931][  0]LogTemp: Display: GF_KIT_SELFTEST start mode=fresh waypoints=5",
+        "[2026.10.31-06.03.03:976][836]LogTemp: Display: GF_KIT_SELFTEST walker=Character_2147482412 max_walk_speed=600",
+        "[2026.10.31-06.03.05:830][656]LogTemp: Display: GF_KIT_SELFTEST waypoint=0 reached=1 leg_s=1.85 world_t=3.85 pawn=-849,11,90",
+        "[2026.10.31-06.03.07:739][507]LogTemp: Display: GF_KIT_SELFTEST waypoint=1 reached=1 leg_s=1.91 world_t=5.76 pawn=168,528,90",
+        "[2026.10.31-06.03.09:517][454]LogTemp: Display: GF_KIT_SELFTEST waypoint=2 reached=1 leg_s=1.78 world_t=7.54 pawn=292,-451,90",
+        "[2026.10.31-06.03.11:233][403]LogTemp: Display: GF_KIT_SELFTEST waypoint=3 reached=1 leg_s=1.72 world_t=9.26 pawn=-567,-70,90",
+        "[2026.10.31-06.03.14:186][999]LogTemp: Display: GF_KIT_SELFTEST waypoint=4 reached=1 leg_s=2.95 world_t=12.21 pawn=1051,181,90",
+        "[2026.10.31-06.03.17:187][546]LogTemp: Display: GF_KIT_SELFTEST PASS objective=2 spoken=3 guard_patrols=3 guard_chased=1 objectives={"
       ],
       "gf_events": [
-        "[2026.10.31-05.57.12:019][177]LogTemp: Display: GF_EVENT guard_patrol guard=GameForgeGuard_0 arrived=0",
-        "[2026.10.31-05.57.13:521][864]LogTemp: Display: GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"Traveller! Thieves scattered our relics.\"",
-        "[2026.10.31-05.57.13:521][864]LogTemp: Display: GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"Bring two of them back, please.\"",
-        "[2026.10.31-05.57.13:521][864]LogTemp: Display: GF_EVENT objective_start id=collect_relics target=2",
-        "[2026.10.31-05.57.13:522][864]LogTemp: Display: GF_EVENT objective_save slot=GF_Objectives ok=1 count=1",
-        "[2026.10.31-05.57.13:528][867]LogTemp: Display: GF_EVENT objective_progress id=collect_relics progress=1/2",
-        "[2026.10.31-05.57.13:528][867]LogTemp: Display: GF_EVENT objective_save slot=GF_Objectives ok=1 count=2",
-        "[2026.10.31-05.57.13:528][867]LogTemp: Display: GF_EVENT pickup actor=GameForgePickup_0 collected_by=DefaultPawn_2147482415 vfx=None spawned=0 sound=None sound_playing=0",
-        "[2026.10.31-05.57.13:535][870]LogTemp: Display: GF_EVENT guard_state guard=GameForgeGuard_0 Patrol->Chase t=2.02 target=DefaultPawn_2147482415",
-        "[2026.10.31-05.57.13:536][871]LogTemp: Display: GF_EVENT objective_progress id=collect_relics progress=2/2",
-        "[2026.10.31-05.57.13:536][871]LogTemp: Display: GF_EVENT objective_complete id=collect_relics",
-        "[2026.10.31-05.57.13:537][871]LogTemp: Display: GF_EVENT objective_save slot=GF_Objectives ok=1 count=3",
-        "[2026.10.31-05.57.13:537][871]LogTemp: Display: GF_EVENT pickup actor=GameForgePickup_1 collected_by=DefaultPawn_2147482415 vfx=None spawned=0 sound=None sound_playing=0",
-        "[2026.10.31-05.57.13:541][873]LogTemp: Display: GF_EVENT guard_state guard=GameForgeGuard_0 Chase->Search t=2.02 target=DefaultPawn_2147482415",
-        "[2026.10.31-05.57.13:542][874]LogTemp: Display: GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"You found them all. Thank you!\"",
-        "[2026.10.31-05.57.13:546][876]LogTemp: Display: GF_EVENT guard_state guard=GameForgeGuard_0 Search->Chase t=2.03 target=DefaultPawn_2147482415"
+        "[2026.10.31-06.03.02:478][171]LogTemp: Display: GF_EVENT guard_patrol guard=GameForgeGuard_0 arrived=0",
+        "[2026.10.31-06.03.05:655][579]LogTemp: Display: GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"Traveller! Thieves scattered our relics.\"",
+        "[2026.10.31-06.03.05:656][579]LogTemp: Display: GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"Bring two of them back, please.\"",
+        "[2026.10.31-06.03.05:656][579]LogTemp: Display: GF_EVENT objective_start id=collect_relics target=2",
+        "[2026.10.31-06.03.05:656][579]LogTemp: Display: GF_EVENT objective_save slot=GF_Objectives ok=1 count=1",
+        "[2026.10.31-06.03.06:042][746]LogTemp: Display: GF_EVENT guard_patrol guard=GameForgeGuard_0 arrived=1",
+        "[2026.10.31-06.03.07:734][505]LogTemp: Display: GF_EVENT objective_progress id=collect_relics progress=1/2",
+        "[2026.10.31-06.03.07:734][505]LogTemp: Display: GF_EVENT objective_save slot=GF_Objectives ok=1 count=2",
+        "[2026.10.31-06.03.07:734][505]LogTemp: Display: GF_EVENT pickup actor=GameForgePickup_0 collected_by=Character_2147482412 vfx=None spawned=0 sound=None sound_playing=0",
+        "[2026.10.31-06.03.09:119][237]LogTemp: Display: GF_EVENT guard_patrol guard=GameForgeGuard_0 arrived=0",
+        "[2026.10.31-06.03.09:123][239]LogTemp: Display: GF_EVENT guard_state guard=GameForgeGuard_0 Patrol->Chase t=7.15 target=Character_2147482412",
+        "[2026.10.31-06.03.09:509][450]LogTemp: Display: GF_EVENT objective_progress id=collect_relics progress=2/2",
+        "[2026.10.31-06.03.09:509][450]LogTemp: Display: GF_EVENT objective_complete id=collect_relics",
+        "[2026.10.31-06.03.09:510][450]LogTemp: Display: GF_EVENT objective_save slot=GF_Objectives ok=1 count=3",
+        "[2026.10.31-06.03.09:510][450]LogTemp: Display: GF_EVENT pickup actor=GameForgePickup_1 collected_by=Character_2147482412 vfx=None spawned=0 sound=None sound_playing=0",
+        "[2026.10.31-06.03.11:060][307]LogTemp: Display: GF_EVENT dialogue speaker=GameForgeQuestGiver_0 line=\"You found them all. Thank you!\""
       ]
     },
     "legs": [
       {
         "to": 1,
         "reached": true,
-        "dist_cm": 1322,
-        "dt_s": 0.01,
-        "speed": 132172
+        "dist_cm": 1141,
+        "dt_s": 1.91,
+        "speed": 597
       },
       {
         "to": 2,
         "reached": true,
-        "dist_cm": 1261,
-        "dt_s": 0.0,
-        "speed": 1260803
+        "dist_cm": 987,
+        "dt_s": 1.78,
+        "speed": 554
       },
       {
         "to": 3,
         "reached": true,
-        "dist_cm": 1123,
-        "dt_s": 0.01,
-        "speed": 112276
+        "dist_cm": 940,
+        "dt_s": 1.72,
+        "speed": 546
       },
       {
         "to": 4,
         "reached": true,
-        "dist_cm": 1758,
-        "dt_s": 0.0,
-        "speed": 1758073
+        "dist_cm": 1637,
+        "dt_s": 2.95,
+        "speed": 555
       }
     ],
     "run_restore": {
@@ -124,17 +125,17 @@
       "exit": 0,
       "errors": [],
       "selftest_lines": [
-        "[2026.10.31-05.57.19:054][  0]LogTemp: Display: GF_KIT_SELFTEST start mode=restore waypoints=5",
-        "[2026.10.31-05.57.21:107][788]LogTemp: Display: GF_KIT_SELFTEST PASS restore objectives={"
+        "[2026.10.31-06.03.19:518][  0]LogTemp: Display: GF_KIT_SELFTEST start mode=restore waypoints=5",
+        "[2026.10.31-06.03.21:564][939]LogTemp: Display: GF_KIT_SELFTEST PASS restore objectives={"
       ],
       "gf_events": [
-        "[2026.10.31-05.57.19:033][  0]LogTemp: Display: GF_EVENT objective_load slot=GF_Objectives objectives=1 saves=3",
-        "[2026.10.31-05.57.19:606][168]LogTemp: Display: GF_EVENT guard_patrol guard=GameForgeGuard_0 arrived=0"
+        "[2026.10.31-06.03.19:501][  0]LogTemp: Display: GF_EVENT objective_load slot=GF_Objectives objectives=1 saves=3",
+        "[2026.10.31-06.03.20:065][177]LogTemp: Display: GF_EVENT guard_patrol guard=GameForgeGuard_0 arrived=0"
       ]
     },
     "save_file": [
       "E:\\GameForge\\validation\\kit_packaged_20261031\\Packaged\\Windows\\GFKitTest\\Saved\\SaveGames\\GF_Objectives.sav"
     ]
   },
-  "ok": false
+  "ok": true
 }
