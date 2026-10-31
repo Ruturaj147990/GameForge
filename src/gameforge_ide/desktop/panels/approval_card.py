@@ -66,6 +66,27 @@ class ApprovalCard(QFrame):
         consequence.setTextFormat(Qt.RichText)
         lay.addWidget(consequence)
         self._consequence = consequence
+
+        summary_md = approval.get("summary_md", "")
+        if summary_md:
+            self._spec_toggle = QPushButton("▶  Show Game Design Spec")
+            self._spec_toggle.setFlat(True)
+            self._spec_toggle.setCursor(Qt.PointingHandCursor)
+            self._spec_toggle.setStyleSheet("text-align: left; padding: 2px 0; color: #a78bfa; font-weight: bold;")
+            lay.addWidget(self._spec_toggle)
+
+            self._spec_content = QLabel(summary_md)
+            self._spec_content.setWordWrap(True)
+            self._spec_content.setTextFormat(Qt.MarkdownText)
+            self._spec_content.setVisible(False)
+            lay.addWidget(self._spec_content)
+
+            def toggle_spec():
+                is_vis = not self._spec_content.isVisible()
+                self._spec_content.setVisible(is_vis)
+                self._spec_toggle.setText("▼  Hide Game Design Spec" if is_vis else "▶  Show Game Design Spec")
+
+            self._spec_toggle.clicked.connect(toggle_spec)
         self._elapsed = QLabel("")
         self._elapsed.setVisible(False)
         lay.addWidget(self._elapsed)

@@ -46,7 +46,11 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
 
     from .desktop.main_window import MainWindow
     window = MainWindow(target_ws)
+    print(f"Launching GameForge IDE desktop [workspace: {target_ws}]...")
     window.show()
+    window.raise_()
+    window.activateWindow()
+    print("GameForge IDE window opened.")
 
     sys.exit(app.exec())
 

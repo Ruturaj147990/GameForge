@@ -34,6 +34,9 @@ from ..recipes.procedural_world.recipe import (
     RECIPE_ID as PROCEDURAL_RECIPE_ID, RECIPE_VERSION as PROCEDURAL_RECIPE_VERSION,
     SELFTEST_LOG_PASS as PROCEDURAL_SELFTEST_PASS, ProceduralWorldParams, generate as procedural_generate)
 from . import stages as engine_stages
+from ..design import store as design_store
+from ..design.legacy import to_legacy_params
+from ..design.gds import GameDesignSpec
 from ..unreal.toolchain import UnrealToolchain
 from ..core.settings import engine_root_or_missing, get_settings
 
@@ -89,13 +92,15 @@ class GamePipeline:
     def __init__(self, projects_root: Optional[Path] = None,
                  engine_root: Optional[Path] = None,
                  on_event: Optional[Callable[[str, Dict], None]] = None,
-                 max_parallel_actions: Optional[int] = None, cancel_event=None):
+                 max_parallel_actions: Optional[int] = None, cancel_event=None,
+                 on_project_dir_ready: Optional[Callable[[Path], None]] = None):
         self.projects_root = Path(projects_root or get_settings().projects_root)
         self.engine_root = Path(engine_root or engine_root_or_missing())
         self.toolchain = UnrealToolchain(self.engine_root, max_parallel_actions=max_parallel_actions)
         self.on_event = on_event or (lambda kind, data: None)
         self.cancel_event = cancel_event
         self.toolchain.cancel_event = cancel_event
+        self.on_project_dir_ready = on_project_dir_ready
 
     def _emit(self, kind: str, **data) -> None:
         try:
@@ -103,8 +108,13 @@ class GamePipeline:
         except Exception:
             pass
 
-    def run(self, params: Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams], skip_package: bool = False,
+    def run(self, params: Union[GameDesignSpec, GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams], skip_package: bool = False,
             stop_after: Optional[str] = None) -> PipelineResult:
+        if isinstance(params, GameDesignSpec):
+            gds = params
+            params = to_legacy_params(gds)
+            if self.on_project_dir_ready is None:
+                self.on_project_dir_ready = lambda pdir: design_store.save(pdir, gds)
         is_procedural = isinstance(params, ProceduralWorldParams)
         is_platformer = isinstance(params, PlatformerParams)
         is_arena = isinstance(params, ArenaCombatParams)
@@ -194,6 +204,11 @@ class GamePipeline:
             info = self.toolchain.scaffold_cpp_project(
                 project_dir, name, default_map=f"/Game/Maps/{name}Map",
                 game_mode=default_gm, module_deps=deps, display_title=params.display_title)
+            if uproject.is_file() and self.on_project_dir_ready:
+                try:
+                    self.on_project_dir_ready(project_dir)
+                except Exception as exc:
+                    return StageRecord("scaffold", False, 0, errors=[f"on_project_dir_ready failed: {exc}"])
             return StageRecord("scaffold", uproject.is_file(), 0, info)
 
         # 3 sources

@@ -1,0 +1,359 @@
+{
+ "ok": true,
+ "project_dir": "E:\\GameForge\\projects\\Game3DPlatformer",
+ "report_path": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\pipeline_report.json",
+ "failed_stage": null,
+ "stages": [
+  {
+   "stage": "spec",
+   "ok": true,
+   "duration_s": 0.0,
+   "data": {
+    "params": {
+     "project_name": "Game3DPlatformer",
+     "display_title": "3D Platformer",
+     "collectible_target": 6,
+     "difficulty": "normal",
+     "starting_level": "Level1",
+     "player_speed": 600.0,
+     "jump_velocity": 650.0,
+     "gravity_scale": 1.2,
+     "air_control": 0.35,
+     "kill_z": -500.0
+    },
+    "engine": "5.7.4"
+   },
+   "errors": []
+  },
+  {
+   "stage": "scaffold",
+   "ok": true,
+   "duration_s": 0.0,
+   "data": {
+    "uproject": "E:\\GameForge\\projects\\Game3DPlatformer\\Game3DPlatformer.uproject",
+    "files": [
+     "Game3DPlatformer.uproject",
+     "Source/Game3DPlatformer.Target.cs",
+     "Source/Game3DPlatformerEditor.Target.cs",
+     "Source/Game3DPlatformer/Game3DPlatformer.Build.cs",
+     "Source/Game3DPlatformer/Game3DPlatformer.h",
+     "Source/Game3DPlatformer/Game3DPlatformer.cpp",
+     "Config/DefaultGame.ini",
+     "Config/DefaultInput.ini",
+     "Config/DefaultEngine.ini"
+    ]
+   },
+   "errors": []
+  },
+  {
+   "stage": "sources",
+   "ok": true,
+   "duration_s": 0.0,
+   "data": {
+    "files": [
+     "Source/Game3DPlatformer/GFPlatformerCharacter.cpp",
+     "Source/Game3DPlatformer/GFPlatformerCharacter.h",
+     "Source/Game3DPlatformer/GFPlatformerCheckpoint.cpp",
+     "Source/Game3DPlatformer/GFPlatformerCheckpoint.h",
+     "Source/Game3DPlatformer/GFPlatformerCollectible.cpp",
+     "Source/Game3DPlatformer/GFPlatformerCollectible.h",
+     "Source/Game3DPlatformer/GFPlatformerConfig.h",
+     "Source/Game3DPlatformer/GFPlatformerGameMode.cpp",
+     "Source/Game3DPlatformer/GFPlatformerGameMode.h",
+     "Source/Game3DPlatformer/GFPlatformerGoal.cpp",
+     "Source/Game3DPlatformer/GFPlatformerGoal.h",
+     "Source/Game3DPlatformer/GFPlatformerHUD.cpp",
+     "Source/Game3DPlatformer/GFPlatformerHUD.h",
+     "Source/Game3DPlatformer/GFPlatformerTests.cpp"
+    ]
+   },
+   "errors": []
+  },
+  {
+   "stage": "build_editor",
+   "ok": true,
+   "duration_s": 30.0,
+   "data": {
+    "exit_code": 0,
+    "log": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\logs\\build_Game3DPlatformerEditor_Development.log",
+    "errors": 0,
+    "warnings": 0,
+    "diagnostics": []
+   },
+   "errors": []
+  },
+  {
+   "stage": "assemble_level",
+   "ok": true,
+   "duration_s": 14.5,
+   "data": {
+    "map": "/Game/Maps/Game3DPlatformerMap",
+    "calls": [
+     {
+      "op": "new_level",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "create_material",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "create_material",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "create_material",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "create_material",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "spawn_actor",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_create_blueprint",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_create",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_create",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_create",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_create",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_compile",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "widget_save",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "save_all",
+      "ok": true,
+      "errors": []
+     },
+     {
+      "op": "actors_in_level",
+      "ok": true,
+      "errors": []
+     }
+    ],
+    "editor_exit": 0,
+    "graceful": true
+   },
+   "errors": []
+  },
+  {
+   "stage": "automation_tests",
+   "ok": true,
+   "duration_s": 10.3,
+   "data": {
+    "exit_code": 0,
+    "log": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\logs\\automation.log",
+    "filter": "GameForge.Game3DPlatformer",
+    "report_dir": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\automation",
+    "found": true,
+    "tests": [
+     {
+      "name": "GameForge.Game3DPlatformer.CharacterMovement",
+      "state": "Success",
+      "errors": []
+     },
+     {
+      "name": "GameForge.Game3DPlatformer.Checkpoint",
+      "state": "Success",
+      "errors": []
+     },
+     {
+      "name": "GameForge.Game3DPlatformer.Collectibles",
+      "state": "Success",
+      "errors": []
+     },
+     {
+      "name": "GameForge.Game3DPlatformer.Completion",
+      "state": "Success",
+      "errors": []
+     },
+     {
+      "name": "GameForge.Game3DPlatformer.Reset",
+      "state": "Success",
+      "errors": []
+     }
+    ],
+    "succeeded": 5,
+    "failed": 0,
+    "not_run": 0
+   },
+   "errors": []
+  },
+  {
+   "stage": "package",
+   "ok": true,
+   "duration_s": 48.3,
+   "data": {
+    "exit_code": 0,
+    "log": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\logs\\package_Win64_Development.log",
+    "archive_dir": "E:\\GameForge\\projects\\Game3DPlatformer\\Packaged",
+    "exe": "E:\\GameForge\\projects\\Game3DPlatformer\\Packaged\\Windows\\Game3DPlatformer.exe",
+    "exe_exists": true,
+    "archive_bytes": 867336263,
+    "errors": 0,
+    "diagnostics": []
+   },
+   "errors": []
+  },
+  {
+   "stage": "packaged_smoke",
+   "ok": true,
+   "duration_s": 14.1,
+   "data": {
+    "exit_code": 0,
+    "log": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\packaged_smoke.log",
+    "expect": "GF_PLATFORMER_SELFTEST PASS",
+    "matched_lines": [
+     "[2026.10.31-12.00.04:002][  0]LogTemp: Display: GF_PLATFORMER_SELFTEST PASS: movement, jump, collectible, checkpoint, fall respawn, goal complete, reset"
+    ],
+    "exe_sha256": "f9b1e09a8b169b9679af398435f91001d4bbdacada5c66f78407d9b119a51364",
+    "screenshot": "E:\\GameForge\\projects\\Game3DPlatformer\\Saved\\GameForge\\packaged_gameplay.png",
+    "screenshot_content": {
+     "checked": true,
+     "size": [
+      1280,
+      720
+     ],
+     "lit_fraction": 0.0506,
+     "stddev": 12.88,
+     "has_content": true
+    },
+    "selftest_lines": [
+     "[2026.10.31-12.00.04:002][  0]LogTemp: Display: GF_PLATFORMER_SELFTEST PASS: movement, jump, collectible, checkpoint, fall respawn, goal complete, reset"
+    ],
+    "game_errors": []
+   },
+   "errors": []
+  }
+ ],
+ "recipe": "platformer",
+ "recipe_version": "1.0.0",
+ "params": {
+  "project_name": "Game3DPlatformer",
+  "display_title": "3D Platformer",
+  "collectible_target": 6,
+  "difficulty": "normal",
+  "starting_level": "Level1",
+  "player_speed": 600.0,
+  "jump_velocity": 650.0,
+  "gravity_scale": 1.2,
+  "air_control": 0.35,
+  "kill_z": -500.0
+ },
+ "engine_version": "5.7.4",
+ "finished": "2026-10-31T17:30:16+0530"
+}

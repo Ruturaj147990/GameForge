@@ -23,6 +23,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from ...pipeline.game_pipeline import GamePipeline
+from ...design.gds import GameDesignSpec
+from ...design.legacy import LegacyUnsupported, to_legacy_params
+from ...design.prompt_to_gds import PRESET_TITLES, prompt_to_gds
+from ...design.render import render_markdown
+from ...design import store as design_store
 from ...pipeline.spec_from_prompt import is_game_creation_request, match_prompt
 from ...recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
@@ -122,35 +127,70 @@ class GameTools:
 
     # ── T1 ─────────────────────────────────────────────────────────────────
     def plan_game(self, prompt: str) -> Dict[str, Any]:
-        spec = match_prompt(prompt)
-        res = {"status": "SUCCESS" if spec.matched else "NO_RECIPE", "spec": spec.to_dict(),
-               "projects_root": str(self.projects_root)}
-        if spec.matched:
-            res["project_dir"] = str(self.projects_root / spec.params.project_name)
-        return res
+        result = prompt_to_gds(prompt)
+        gds = result.gds
+        if gds is not None:
+            legacy_supported = True
+            try:
+                to_legacy_params(gds)
+            except LegacyUnsupported:
+                legacy_supported = False
+            summary_md = render_markdown(gds)
+            return {
+                "status": "SUCCESS" if result.status == "OK" else result.status,
+                "gds": gds.model_dump(),
+                "summary_md": summary_md,
+                "questions": result.questions,
+                "legacy_supported": legacy_supported,
+                "projects_root": str(self.projects_root),
+                "project_dir": str(self.projects_root / gds.meta.project_name),
+            }
+        return {
+            "status": result.status,
+            "gds": None,
+            "summary_md": "",
+            "questions": result.questions,
+            "legacy_supported": False,
+            "projects_root": str(self.projects_root),
+        }
+
+
+
+
+
 
     def propose_create_game(self, prompt: str, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """For a game-creation prompt with a matching recipe, persist a pending create_game action."""
+        """For a game-creation prompt, produce a GDS and persist a pending create_game action."""
         if not is_game_creation_request(prompt):
             return None
-        spec = match_prompt(prompt)
-        if not spec.matched:
+        res = prompt_to_gds(prompt)
+        if res.gds is None:
             return self._propose_freeform(prompt, session_id)
-        project_dir = self.projects_root / spec.params.project_name
+        gds = res.gds
+        summary_md = render_markdown(gds)
+        project_dir = self.projects_root / gds.meta.project_name
+        legacy_dict = None
+        try:
+            legacy_dict = to_legacy_params(gds).to_dict()
+        except LegacyUnsupported:
+            pass
+        args_payload = {"gds": gds.to_json(), "package": True}
+        if legacy_dict is not None:
+            args_payload["params"] = legacy_dict
+
         rec = self.approvals.create(
-            "create_game", {"params": spec.params.to_dict(), "package": True}, spec.summary(),
+            "create_game", args_payload,
+            f"{gds.meta.title} ({gds.overview.genre.value})",
             consequence=(f"Writes a new Unreal C++ project to {project_dir}, compiles it, launches Unreal Editor "
                          "to build the level, runs automation tests, then cooks and packages a Windows build. "
                          "Typical time 5-20 minutes; uses CPU/GPU heavily while building."),
             session_id=session_id)
-        rec["spec"] = spec.to_dict()
+        rec["gds"] = gds.model_dump()
+        rec["summary_md"] = summary_md
+        rec["questions"] = res.questions
         rec["stages"] = ["spec", "scaffold", "sources", "build_editor", "assemble_level", "automation_tests",
                          "package", "packaged_smoke"]
-        rec["plan_text"] = (
-            f"**Game plan — {spec.recipe_title}** (verified recipe `{spec.recipe_id}`)\n\n{spec.summary()}\n\n"
-            "**Acceptance criteria (checked against the real engine):**\n"
-            + "\n".join(f"- `{a}`" for a in spec.acceptance)
-            + "\n\nApprove below to build it. Nothing runs until you approve.")
+        rec["plan_text"] = summary_md
         return rec
 
     def _propose_freeform(self, prompt: str, session_id: Optional[str]) -> Dict[str, Any]:
@@ -215,19 +255,82 @@ class GameTools:
             pass
         return unloaded
 
-    def create_game(self, params: Dict[str, Any], package: bool = True,
-                    on_event: Optional[Callable[[str, Dict], None]] = None, cancel_event=None) -> Dict[str, Any]:
-        p = GridBoardParams(**{k: tuple(v) if isinstance(v, list) else v for k, v in params.items()})
+    def create_game(self, gds_or_params: Any = None, package: bool = True,
+                    on_event: Optional[Callable[[str, Dict], None]] = None, cancel_event=None,
+                    **kwargs: Any) -> Dict[str, Any]:
+        gds: Optional[GameDesignSpec] = None
+        params = None
+
+        if isinstance(gds_or_params, str):
+            try:
+                gds = GameDesignSpec.model_validate_json(gds_or_params)
+            except Exception:
+                pass
+        elif isinstance(gds_or_params, dict):
+            if "gds" in gds_or_params:
+                raw = gds_or_params["gds"]
+                gds = GameDesignSpec.model_validate_json(raw) if isinstance(raw, str) else GameDesignSpec.model_validate(raw)
+            elif "params" in gds_or_params:
+                params = gds_or_params["params"]
+            else:
+                params = gds_or_params
+        elif isinstance(kwargs.get("gds"), str):
+            gds = GameDesignSpec.model_validate_json(kwargs["gds"])
+        elif isinstance(kwargs.get("gds"), dict):
+            gds = GameDesignSpec.model_validate(kwargs["gds"])
+        elif "params" in kwargs:
+            params = kwargs["params"]
+
+        hook = None
+        if gds is not None:
+            try:
+                recipe_params = to_legacy_params(gds)
+            except LegacyUnsupported as exc:
+                preset_str = ", ".join(PRESET_TITLES)
+                return {
+                    "status": "FAILED",
+                    "ok": False,
+                    "error": f"This design needs the composer (planned for phase 6). Supported today: {preset_str}",
+                    "failed_stage": "spec",
+                }
+            hook = lambda pdir: design_store.save(pdir, gds)
+        elif params is not None:
+            # Backward compatibility branch for pre-P1 approval records
+            from ...recipes.grid_board_game.recipe import GridBoardParams
+            from ...recipes.platformer.recipe import PlatformerParams
+            from ...recipes.arena_combat.recipe import ArenaCombatParams
+            from ...recipes.card_battler.recipe import CardBattlerParams
+            from ...recipes.procedural_world.recipe import ProceduralWorldParams
+            if isinstance(params, (GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams)):
+                recipe_params = params
+            elif isinstance(params, dict):
+                # Infer recipe type or default to GridBoardParams
+                if "collectible_target" in params:
+                    recipe_params = PlatformerParams(**params)
+                elif "wave_count" in params:
+                    recipe_params = ArenaCombatParams(**params)
+                elif "lane_count" in params:
+                    recipe_params = CardBattlerParams(**params)
+                elif "elevation_scale" in params:
+                    recipe_params = ProceduralWorldParams(**params)
+                else:
+                    recipe_params = GridBoardParams(**{k: tuple(v) if isinstance(v, list) else v for k, v in params.items()})
+            else:
+                recipe_params = params
+        else:
+            return {"status": "FAILED", "ok": False, "error": "No valid GDS or params provided", "failed_stage": "spec"}
+
         freed = self.release_llm_vram()
         if on_event and freed:
             on_event("gpu_released", {"unloaded_models": freed})
         pipe = GamePipeline(self.projects_root, self.engine_root, on_event=on_event,
-                            max_parallel_actions=max(2, (os.cpu_count() or 4) - 2), cancel_event=cancel_event)
-        res = pipe.run(p, skip_package=not package)
+                            max_parallel_actions=max(2, (os.cpu_count() or 4) - 2), cancel_event=cancel_event,
+                            on_project_dir_ready=hook)
+        res = pipe.run(recipe_params, skip_package=not package)
         out = {"status": "SUCCESS" if res.ok else "FAILED", **res.to_dict()}
         smoke = next((s for s in res.stages if s.stage == "packaged_smoke"), None)
         if smoke and smoke.ok:
-            exe = Path(res.project_dir) / "Packaged" / "Windows" / f"{p.project_name}.exe"
+            exe = Path(res.project_dir) / "Packaged" / "Windows" / f"{recipe_params.project_name}.exe"
             out["exe"] = str(exe)
             out["screenshot"] = smoke.data.get("screenshot")
         return out

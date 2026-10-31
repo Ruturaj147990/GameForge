@@ -51,6 +51,7 @@ from .panels.explorer_panel import ExplorerPanel
 from .panels.mission_panel import MissionPanel
 from .panels.plan_panel import PlanPanel
 from .panels.asset_panel import AssetPanel
+from .panels.design_panel import DesignPanel
 from .panels.terminal_panel import TerminalPanel
 from .panels.unreal_panel import UnrealPanel
 from .services.agent_service import AgentService
@@ -402,6 +403,13 @@ class MainWindow(QMainWindow):
         self._act_rail_assets.triggered.connect(lambda: self._on_rail_action_clicked(3))
         rail.addAction(self._act_rail_assets)
 
+        self._act_rail_design = QAction("📐", self)
+        self._act_rail_design.setObjectName("rail_act_design")
+        self._act_rail_design.setCheckable(True)
+        self._act_rail_design.setToolTip("Game Design Spec (Design)")
+        self._act_rail_design.triggered.connect(lambda: self._on_rail_action_clicked(4))
+        rail.addAction(self._act_rail_design)
+
     @Slot(int)
     def _on_sidebar_tab_changed(self, index: int) -> None:
         if hasattr(self, "_left_stack"):
@@ -416,6 +424,7 @@ class MainWindow(QMainWindow):
             getattr(self, "_act_rail_games", None),
             getattr(self, "_act_rail_plans", None),
             getattr(self, "_act_rail_assets", None),
+            getattr(self, "_act_rail_design", None),
         ]
         is_vis = getattr(self, "_dock_explorer", None) and self._dock_explorer.isVisible()
         for i, act in enumerate(actions):
@@ -465,6 +474,7 @@ class MainWindow(QMainWindow):
         self._chat_panel.action_finished.connect(lambda *_: self._plan_panel.refresh_from_disk())
 
         self._asset_panel = AssetPanel(self._workspace, parent=self)
+        self._design_panel = DesignPanel(self._workspace, parent=self)
 
         # Assemble left sidebar container with collapsed tabs
         self._left_sidebar_container = QWidget()
@@ -478,6 +488,7 @@ class MainWindow(QMainWindow):
         self._sidebar_tabbar.addTab("🎮 Games")
         self._sidebar_tabbar.addTab("📋 Plans")
         self._sidebar_tabbar.addTab("📦 Assets")
+        self._sidebar_tabbar.addTab("📐 Design")
         self._sidebar_tabbar.currentChanged.connect(self._on_sidebar_tab_changed)
         sidebar_layout.addWidget(self._sidebar_tabbar)
 
@@ -486,6 +497,7 @@ class MainWindow(QMainWindow):
         self._left_stack.addWidget(self._mission)
         self._left_stack.addWidget(self._plan_panel)
         self._left_stack.addWidget(self._asset_panel)
+        self._left_stack.addWidget(self._design_panel)
         sidebar_layout.addWidget(self._left_stack, 1)
 
         self._dock_explorer = self._make_dock("Explorer", self._left_sidebar_container, Qt.LeftDockWidgetArea)
