@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.gameforge_ide.backend.models.character_spec import CharacterSpec
+from ...core.settings import artifacts_dir
 
 
 @dataclass
@@ -80,7 +81,7 @@ class ProceduralSkinnedCharacterGenerator:
     """Generates procedural skinned humanoid character meshes and skeletons."""
 
     def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = (output_dir or Path(r"E:\GameForge\assets\generated\characters")).resolve()
+        self.output_dir = (output_dir or artifacts_dir("assets", "generated", "characters")).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def _build_standard_humanoid_skeleton(self, height: float) -> List[BoneNode]:

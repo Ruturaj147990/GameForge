@@ -28,7 +28,7 @@ class ModelRouter:
     def __init__(
         self,
         ollama_host: str = "127.0.0.1:11434",
-        storage_root: Path = Path(r"E:\GameForge"),
+        storage_root: Optional[Path] = None,
     ):
         self.providers: Dict[str, ModelProvider] = {
             "ollama": OllamaProvider(host=ollama_host),

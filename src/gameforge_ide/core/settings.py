@@ -182,3 +182,16 @@ def get_settings() -> Settings:
 def reset_settings_cache() -> None:
     """Tests and the Settings view call this after changing the environment or settings.json."""
     get_settings.cache_clear()
+
+
+MISSING_ENGINE = Path("UNREAL_ENGINE_NOT_CONFIGURED")
+
+
+def engine_root_or_missing() -> Path:
+    """Engine root for constructors that must not raise; a missing engine fails later in tool checks."""
+    s = get_settings()
+    return s.engine.root if s.engine is not None else MISSING_ENGINE
+
+
+def artifacts_dir(*parts: str) -> Path:
+    return get_settings().artifacts_root.joinpath(*parts)

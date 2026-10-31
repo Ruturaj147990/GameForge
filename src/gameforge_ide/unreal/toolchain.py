@@ -17,6 +17,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
+from ..core.settings import engine_root_or_missing
 
 BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -113,8 +114,8 @@ def parse_automation_report(report_dir: Path) -> Dict:
 # ── toolchain ───────────────────────────────────────────────────────────────
 
 class UnrealToolchain:
-    def __init__(self, engine_root: Path = Path(r"E:\UE\UE_5.7"), max_parallel_actions: Optional[int] = None):
-        self.engine_root = Path(engine_root)
+    def __init__(self, engine_root: Optional[Path] = None, max_parallel_actions: Optional[int] = None):
+        self.engine_root = Path(engine_root or engine_root_or_missing())
         e = self.engine_root / "Engine"
         self.ubt = e / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool.exe"
         self.uat = e / "Binaries" / "DotNET" / "AutomationTool" / "AutomationTool.exe"

@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.settings import artifacts_dir, get_settings
 from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry
 from src.gameforge_ide.backend.models.character_spec import CharacterSpec
 from src.gameforge_ide.backend.models.provenance import (
@@ -68,8 +69,8 @@ class CharacterPipeline:
         output_dir: Optional[Path] = None,
         asset_registry: Optional[AssetRegistry] = None,
     ):
-        self.workspace_dir = (workspace_dir or Path(r"E:\GameForge\validation\live_ops_probe")).resolve()
-        self.output_dir = (output_dir or Path(r"E:\GameForge\assets\generated\characters")).resolve()
+        self.workspace_dir = (workspace_dir or get_settings().require_dev("validation_root") / "live_ops_probe").resolve()
+        self.output_dir = (output_dir or artifacts_dir("assets", "generated", "characters")).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.license_registry = LicenseRegistry()
         self.asset_registry = asset_registry or AssetRegistry(self.workspace_dir)
@@ -139,17 +140,11 @@ class CharacterPipeline:
             errors.extend(rig_report.errors)
             return self._fail_result(spec.character_id, errors, diagnostics)
 
-        # 5. Native Unreal Engine 5.7.4 Import via Live Operations or Reference Pipeline
-        # Determine FBX source for native Unreal SkeletalMesh import
-        # For UE 5.7.4, native FBX import is verified with engine reference character assets
-        ref_fbx = Path(r"E:\UE\UE_5.7\Engine\Content\FbxEditorAutomation\AnimatedCharacter.fbx")
-        if not ref_fbx.exists():
-            ref_fbx = Path(r"E:\UE\UE_5.7\Engine\Content\FbxEditorAutomation\SkinBasic.fbx")
-
+        # 5. Engine import is not performed here (the engine path is unreal/live_editor.py).
         dest_quarantine = f"{spec.quarantine_path}/{spec.character_id}"
         dest_name = spec.get_destination_asset_name()
 
-        diagnostics["import_source_fbx"] = str(ref_fbx)
+        diagnostics["provenance_class"] = "PROC"
         diagnostics["quarantine_path"] = dest_quarantine
 
         # Provenance record setup
@@ -158,7 +153,7 @@ class CharacterPipeline:
             asset_name=spec.name,
             model_name="GameForge-ProceduralRig-V1",
             model_version="1.0.0",
-            license_name="CC-BY-4.0",
+            license_name="GameForge-Generated (project-owned)",
             target_territory=spec.target_territory,
             input_hashes={"spec_sha256": spec_hash},
             parameters=spec.model_dump(),

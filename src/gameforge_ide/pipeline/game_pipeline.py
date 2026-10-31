@@ -35,6 +35,7 @@ from ..recipes.procedural_world.recipe import (
     SELFTEST_LOG_PASS as PROCEDURAL_SELFTEST_PASS, ProceduralWorldParams, generate as procedural_generate)
 from . import stages as engine_stages
 from ..unreal.toolchain import UnrealToolchain
+from ..core.settings import engine_root_or_missing, get_settings
 
 STAGES = ["spec", "scaffold", "sources", "build_editor", "assemble_level",
           "automation_tests", "package", "packaged_smoke", "report"]
@@ -85,12 +86,12 @@ def _image_content(path: Path) -> Dict:
 
 
 class GamePipeline:
-    def __init__(self, projects_root: Path = Path(r"E:\GameForge\projects"),
-                 engine_root: Path = Path(r"E:\UE\UE_5.7"),
+    def __init__(self, projects_root: Optional[Path] = None,
+                 engine_root: Optional[Path] = None,
                  on_event: Optional[Callable[[str, Dict], None]] = None,
                  max_parallel_actions: Optional[int] = None, cancel_event=None):
-        self.projects_root = Path(projects_root)
-        self.engine_root = Path(engine_root)
+        self.projects_root = Path(projects_root or get_settings().projects_root)
+        self.engine_root = Path(engine_root or engine_root_or_missing())
         self.toolchain = UnrealToolchain(self.engine_root, max_parallel_actions=max_parallel_actions)
         self.on_event = on_event or (lambda kind, data: None)
         self.cancel_event = cancel_event

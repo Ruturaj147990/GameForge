@@ -26,6 +26,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from ..core.settings import engine_root_or_missing
 
 RESULT_SENTINEL = "@@GAMEFORGE_RESULT@@"
 OPS_LIBRARY_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops.py"
@@ -81,11 +82,11 @@ def build_command(op_name: str, args: Dict[str, Any], token: str) -> str:
 
 
 class LiveEditorLink:
-    def __init__(self, uproject: Path, engine_root: Path = Path(r"E:\UE\UE_5.7"),
+    def __init__(self, uproject: Path, engine_root: Optional[Path] = None,
                  call_timeout_s: float = 60.0):
         self.uproject = Path(uproject).resolve()
         self.project_dir = self.uproject.parent
-        self.engine_root = Path(engine_root)
+        self.engine_root = Path(engine_root or engine_root_or_missing())
         self.call_timeout_s = call_timeout_s
         self._rx_module = None
         self._rx = None

@@ -28,6 +28,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ...core.settings import artifacts_dir
 from src.gameforge_ide.backend.models.animation_spec import (
     AnimationAction,
     AnimationSpec,
@@ -84,7 +85,7 @@ class ProceduralKinematicMotionSynthesizer:
     """Synthesizes biomechanically plausible kinematic skeletal animation tracks."""
 
     def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = (output_dir or Path(r"E:\GameForge\assets\generated\animations")).resolve()
+        self.output_dir = (output_dir or artifacts_dir("assets", "generated", "animations")).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def synthesize_clip(self, spec: AnimationSpec, bone_names: Optional[List[str]] = None) -> MotionClipBundle:

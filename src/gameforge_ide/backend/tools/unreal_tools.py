@@ -9,15 +9,15 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from ...core.settings import discover_engines
 
 
 class UnrealEngineTools:
     """Manages Unreal Engine discovery, project inspection, and staged build validation."""
 
-    KNOWN_ENGINE_PATHS = [
-        Path(r"E:\UE\UE_5.7"),
-        Path(r"C:\Program Files\Epic Games\UE_5.7"),
-    ]
+    @property
+    def KNOWN_ENGINE_PATHS(self) -> list:
+        return [e.root for e in discover_engines()]
 
     def __init__(self, workspace_root: Path):
         self.workspace_root = workspace_root.resolve()

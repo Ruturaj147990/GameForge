@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.settings import artifacts_dir, get_settings
 from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry
 from src.gameforge_ide.backend.models.animation_spec import (
     AnimationAction,
@@ -67,8 +68,8 @@ class AnimationPipeline:
         output_dir: Optional[Path] = None,
         asset_registry: Optional[AssetRegistry] = None,
     ):
-        self.workspace_dir = (workspace_dir or Path(r"E:\GameForge\validation\live_ops_probe")).resolve()
-        self.output_dir = (output_dir or Path(r"E:\GameForge\assets\generated\animations")).resolve()
+        self.workspace_dir = (workspace_dir or get_settings().require_dev("validation_root") / "live_ops_probe").resolve()
+        self.output_dir = (output_dir or artifacts_dir("assets", "generated", "animations")).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.license_registry = LicenseRegistry()
         self.asset_registry = asset_registry or AssetRegistry(self.workspace_dir)

@@ -288,3 +288,13 @@ def test_character_pipeline_registers_asset_and_reports_engine_gates_honestly(va
     assert row["stage"] == "VALIDATE"
     assert [e["stage"] for e in pipeline.asset_registry.history(row["asset_id"])] == ["SPEC", "GENERATE", "VALIDATE"]
     assert pipeline.asset_registry.artifact_unchanged(row["asset_id"])
+
+
+def test_no_epic_reference_asset_in_diagnostics(valid_spec, tmp_path):
+    """P0 WI-0.5 (audit F-07): no Epic sample asset is cited and the licence is the project-owned one."""
+    import json as _json
+    result = CharacterPipeline(workspace_dir=tmp_path, output_dir=tmp_path / "chars").run_pipeline(valid_spec)
+    assert "FbxEditorAutomation" not in _json.dumps(result.diagnostics)
+    assert result.diagnostics["provenance_class"] == "PROC"
+    prov = _json.loads(Path(result.provenance_path).read_text(encoding="utf-8"))
+    assert "CC-BY" not in _json.dumps(prov) and "GameForge-Generated" in _json.dumps(prov)

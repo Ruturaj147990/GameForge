@@ -12,9 +12,9 @@ import os
 import sys
 import threading
 from pathlib import Path
+from .core.settings import get_settings
 
 
-WORKSPACE_ROOT = Path(r"E:\gameforge_step1").resolve()
 
 
 def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
@@ -38,7 +38,7 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
     from .desktop.styles.dark_theme import apply_theme
     apply_theme(app, "dark")
 
-    target_ws = Path(workspace_path).resolve() if workspace_path else WORKSPACE_ROOT
+    target_ws = Path(workspace_path).resolve() if workspace_path else get_settings().default_workspace
     if not target_ws.exists():
         target_ws.mkdir(parents=True, exist_ok=True)
 

@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
+from ...core.settings import get_settings
 
 
 DataEgressClass = Literal["local_only", "authorized_cloud"]
@@ -41,8 +42,8 @@ class CapabilityRecord(BaseModel):
 class CapabilityRegistry:
     """Discovers installed models from disk manifests and manages explicit capability records."""
 
-    def __init__(self, storage_root: Path = Path(r"E:\GameForge")):
-        self.storage_root = storage_root.resolve()
+    def __init__(self, storage_root: Optional[Path] = None):
+        self.storage_root = (storage_root or get_settings().artifacts_root).resolve()
         self.ollama_manifests = self.storage_root / "models" / "ollama" / "manifests" / "registry.ollama.ai" / "library"
         self.hf_root = self.storage_root / "models" / "hf"
         self._records: Dict[str, CapabilityRecord] = {}

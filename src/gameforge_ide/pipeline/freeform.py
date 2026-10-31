@@ -28,6 +28,7 @@ from . import stages
 from .authoring import ModelAuthor, parse_files, safety_scan
 from .autofix import autofix, hints_for
 from .vision_review import review_screenshot
+from ..core.settings import engine_root_or_missing
 
 BUILD_REPAIRS = 5
 RUNTIME_REPAIRS = 3
@@ -75,12 +76,12 @@ SYSTEM = ("You are an expert Unreal Engine 5.7 C++ gameplay programmer. You writ
 
 
 class FreeformGamePipeline:
-    def __init__(self, workspace_root: Path, projects_root: Path, engine_root: Path = Path(r"E:\UE\UE_5.7"),
+    def __init__(self, workspace_root: Path, projects_root: Path, engine_root: Optional[Path] = None,
                  on_event: Optional[Callable[[str, Dict], None]] = None, use_reference_impl: bool = False,
                  local_model: Optional[str] = None, resume: bool = False, cancel_event=None):
         self.workspace_root = Path(workspace_root)
         self.projects_root = Path(projects_root)
-        self.engine_root = Path(engine_root)
+        self.engine_root = Path(engine_root or engine_root_or_missing())
         self.toolchain = UnrealToolchain(self.engine_root, max_parallel_actions=max(2, (os.cpu_count() or 4) - 2))
         self.on_event = on_event or (lambda k, d: None)
         self.use_reference_impl = use_reference_impl

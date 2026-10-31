@@ -28,6 +28,7 @@ from ...recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
 from ...unreal import op_catalog
 from ...unreal.toolchain import UnrealToolchain
+from ...core.settings import engine_root_or_missing
 
 # Generated from the op catalogue (single source of truth). The hand-kept list this replaced covered 13 of ~40
 # read ops, so harmless reads of animation/PCG/material/audio state needed an approval card.
@@ -94,10 +95,10 @@ class ApprovalStore:
 
 class GameTools:
     def __init__(self, workspace_root: Path, projects_root: Optional[Path] = None,
-                 engine_root: Path = Path(r"E:\UE\UE_5.7")):
+                 engine_root: Optional[Path] = None):
         self.workspace_root = Path(workspace_root).resolve()
         self.projects_root = Path(projects_root or self._configured_projects_root())
-        self.engine_root = Path(engine_root)
+        self.engine_root = Path(engine_root or engine_root_or_missing())
         self.approvals = ApprovalStore(self.workspace_root)
         self._links: Dict[str, LiveEditorLink] = {}
         self._last_used: Dict[str, float] = {}

@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field, field_validator
+from ...core.settings import artifacts_dir
 
 
 class AssetSpec(BaseModel):
@@ -70,7 +71,7 @@ class ProceduralMeshGenerator:
     """Generates procedural 3D meshes (Wavefront OBJ/MTL) and Unreal import metadata."""
 
     def __init__(self, output_root: Optional[Path] = None):
-        self.output_root = (output_root or Path(r"E:\GameForge\assets\generated")).resolve()
+        self.output_root = (output_root or artifacts_dir("assets", "generated")).resolve()
         self.output_root.mkdir(parents=True, exist_ok=True)
 
     def _compute_sha256(self, file_path: Path) -> str:

@@ -15,6 +15,7 @@ from .providers.router import ModelRouter
 from .session_manager import SessionManager
 from .tools.gateway import ToolGateway
 from .unreal_context import UnrealEditorContext, persist_unreal_context
+from ..core.settings import get_settings
 
 app = FastAPI(
     title="GameForge IDE Backend",
@@ -23,7 +24,7 @@ app = FastAPI(
 )
 
 # Global runtime state
-WORKSPACE_ROOT = Path(r"E:\gameforge_step1").resolve()
+WORKSPACE_ROOT = get_settings().default_workspace.resolve()
 session_manager = SessionManager(WORKSPACE_ROOT)
 model_router = ModelRouter()
 tool_gateway = ToolGateway(WORKSPACE_ROOT)
