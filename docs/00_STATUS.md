@@ -18,8 +18,8 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | Game Design Spec (typed, reviewable) | PASS | schema gds/1, deterministic expander, presets, prompt_to_gds eval 100% valid, store/revisions, pipeline wired; 2 packaged games from GDS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json) | P1 |
 | One durable executor, resume, checkpoints | PASS | Forge executor, atomic persistence, git checkpoints, resume kill test (reports/P2/resume_kill_test.json), rollback check (reports/P2/rollback_check.json), plan demos on Forge (reports/P2/plan_demos_forge.json), leak test (reports/P2/job_object_leak_test.json) | P2 |
 | Scenario playtests (injected input, Shipping-safe) | PASS | Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, 5 dev scenarios (incl. 2 controls) & 3 ship scenarios (`reports/P3/kit_testbed_scenarios.json`) | P3 |
-| Studio UI for the loop | PARTIAL | P4 WI-4.1–WI-4.7 DONE (icons, systems service, studio shell, Home, Games, Design, Build views) | P4 |
-| Composition of kit modules from a spec | PLANNED | — | P6 |
+| Studio UI for the loop | PASS | P4 WI-4.1–WI-4.10 DONE (icons, systems service, studio shell, Home, Games, Design, Build, Play/QA, Settings views, packaging/launch, theme persistence) | P4 |
+| Composition of kit modules from a spec | PARTIAL | P6 underway (model, layouts, placement, level_ops) | P6 |
 | Change requests / incremental rebuild | PLANNED | — | P8 |
 | Incremental modification of user projects | PLANNED | — | P8 |
 
@@ -82,8 +82,8 @@ capabilities pass in PIE, but none is reachable from a prompt (audit F-01). The 
 | Packaged kit self-test (Character walker) | PASS 6/6 | `reports/kit_packaged_selftest.json` | — |
 | Event bus (C++ UGameForgeEventBus subsystem + JSONL session logs) | PASS | P3 WI-3.1 (GameForgeEventNames.h, parity test PASS) | P3 |
 | Scenario QA Harness (headless Dev/Ship replay, autopilot, injected input) | PASS | P3 WI-3.0-3.6 (reports/P3/kit_testbed_scenarios.json, 8/8 gates PASS) | P3 |
-| Rules engine, GAS health, enemies, spawner, HUD, menus | PLANNED | — | P5 |
-| Board / card logic as kit modules | PLANNED | logic lives in recipe templates today | P5 |
+| Rules engine, GAS health, enemies, spawner, HUD, menus | PASS | P5 complete (`reports/P5/kit_scenarios_final.json`, 19/19 gates PASS, 3/3 AutomationTests PASS) | P5 |
+| Board / card logic as kit modules | PASS | P5 complete (AGameForgeGridBoard, AGameForgeCardTable, card match component, packaged Dev/Ship tested) | P5 |
 
 ## F. Models and specialists
 

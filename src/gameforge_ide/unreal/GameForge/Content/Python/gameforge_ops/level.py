@@ -92,6 +92,20 @@ def set_actor_property(args):
                      reversibility="transactional")
 
 
+@op("actor_set_tags", mutates=True, reversibility="transactional")
+def actor_set_tags(args):
+    actor = _find_actor(args["label"])
+    if actor is None:
+        return _envelope("actor_set_tags", False, errors=["actor not found: %s" % args["label"]])
+    tags = [unreal.Name(t) if isinstance(t, str) else t for t in args.get("tags", [])]
+    with unreal.ScopedEditorTransaction("GameForge actor_set_tags"):
+        actor.set_editor_property("tags", tags)
+    readback = [str(t) for t in actor.get_editor_property("tags")]
+    return _envelope("actor_set_tags", True, {"label": args["label"], "tags": readback},
+                     reversibility="transactional")
+
+
+
 @op("scene_set_manual_exposure", mutates=True, reversibility="transactional")
 def scene_set_manual_exposure(args):
     """Unbound PostProcessVolume with manual exposure, so captures do not depend on eye adaptation."""
@@ -125,14 +139,18 @@ def scene_get_exposure(args):
 @op("new_level", mutates=True, reversibility="snapshot-only")
 def new_level(args):
     path = args["level_path"]
+    if_exists = args.get("if_exists", "load")
     if unreal.EditorAssetLibrary.does_asset_exist(path):
-        if args.get("if_exists", "load") != "load":
+        if if_exists == "replace":
+            unreal.EditorAssetLibrary.delete_asset(path)
+        elif if_exists != "load":
             return _envelope("new_level", False, {"level_path": path, "exists": True},
                              errors=["level already exists: " + path])
-        ok = _level_sub().load_level(path)
-        return _envelope("new_level", bool(ok), {"level_path": path, "exists": True, "loaded_existing": True},
-                         warnings=["level existed; loaded instead of created"], affected=[path],
-                         reversibility="snapshot-only", errors=[] if ok else ["load_level failed"])
+        else:
+            ok = _level_sub().load_level(path)
+            return _envelope("new_level", bool(ok), {"level_path": path, "exists": True, "loaded_existing": True},
+                             warnings=["level existed; loaded instead of created"], affected=[path],
+                             reversibility="snapshot-only", errors=[] if ok else ["load_level failed"])
     partitioned = bool(args.get("partitioned", False))
     ok = _level_sub().new_level(path, partitioned) if partitioned else _level_sub().new_level(path)
     exists = unreal.EditorAssetLibrary.does_asset_exist(path)

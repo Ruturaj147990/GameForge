@@ -32,7 +32,7 @@ UNDO_CLASSES = ("transaction", "checkpoint", "runtime", "none")
 NATIVE_TRANSACTION = frozenset({"blueprint_create_node", "blueprint_set_pin_default", "blueprint_connect_pins",
                                 "blueprint_disconnect_pins", "blueprint_delete_node"})
 PYTHON_TRANSACTION = frozenset({"scene_set_manual_exposure", "spawn_actor", "delete_actor", "set_actor_property",
-                                "world_clear_generated", "audio_place_ambient"})
+                                "actor_set_tags", "world_clear_generated", "audio_place_ambient"})
 # What callers are told, per undo class (the editor envelope's own field is not trusted; see true_reversibility).
 REVERSIBILITY = {"transaction": "transactional", "checkpoint": "irreversible", "runtime": "transient",
                  "none": "read-only"}
@@ -72,7 +72,7 @@ CATALOG: dict[str, OpSpec] = {spec.name: spec for spec in [
     *_ops("assets", "project", "import_asset rename_asset delete_asset save_all create_material", "asset_exists"),
     *_ops("level", "read", "actors_in_level scene_get_exposure"),
     *_ops("level", "project", "scene_set_manual_exposure", "scene_get_exposure"),
-    *_ops("level", "project", "spawn_actor delete_actor set_actor_property new_level load_level", "actors_in_level"),
+    *_ops("level", "project", "spawn_actor delete_actor set_actor_property actor_set_tags new_level load_level", "actors_in_level"),
     *_ops("viewport", "artifact", "viewport_screenshot"),
     *_ops("viewport", "view", "set_viewport_camera"),
     *_ops("pie", "read", "pie_status pie_character_diagnostics pie_actor_state"),
@@ -90,8 +90,9 @@ CATALOG: dict[str, OpSpec] = {spec.name: spec for spec in [
     *_ops("umg", "runtime", "widget_display_in_game widget_click_button", "widget_runtime_state"),
     *_ops("umg", "runtime", "widget_trigger_delegate_diagnostic", "widget_runtime_state", "DIAGNOSTIC",
           "Direct delegate broadcast; never acceptance evidence (use widget_click_button)."),
-    *_ops("gameplay", "read", "gameplay_get_state gameplay_objectives"),
+    *_ops("gameplay", "read", "gameplay_get_state gameplay_objectives gamedef_inspect"),
     *_ops("gameplay", "runtime", "gameplay_modify_state", "gameplay_get_state"),
+    *_ops("gameplay", "project", "gamedef_write", "gamedef_inspect"),
     *_ops("world", "read", "procedural_world_inspect world_generation_digest landscape_inspect_layers "
           "landscape_height_at"),
     *_ops("world", "project", "world_clear_generated", "actors_in_level", "PASS",

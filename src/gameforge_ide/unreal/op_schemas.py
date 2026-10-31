@@ -349,11 +349,29 @@ class ViewportScreenshotArgs(_Strict):
     show_ui: bool = Field(False, description="Capture UI/UMG widgets alongside viewport")
 
 
+class ActorSetTagsArgs(_Strict):
+    label: str = Field(..., min_length=1, max_length=200)
+    tags: list[str] = Field(default_factory=list)
+
+
+class GameDefWriteArgs(_Strict):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    asset_path: str = Field("/Game/GameForge/GD_Main", pattern=r"^/(Game|Engine|Script)/")
+    def_json: Any = Field(..., alias="json")
+
+
+class GameDefInspectArgs(_Strict):
+    asset_path: str = Field("/Game/GameForge/GD_Main", pattern=r"^/(Game|Engine|Script)/")
+
+
 # ── Registry & Dispatch ──────────────────────────────────────────────────────
 
 REVIEWED: dict[str, type[BaseModel]] = {
     # 6 core level ops
     "spawn_actor": SpawnActorArgs,
+    "actor_set_tags": ActorSetTagsArgs,
+    "gamedef_write": GameDefWriteArgs,
+    "gamedef_inspect": GameDefInspectArgs,
     "new_level": NewLevelArgs,
     "load_level": LoadLevelArgs,
     "set_actor_property": SetActorPropertyArgs,

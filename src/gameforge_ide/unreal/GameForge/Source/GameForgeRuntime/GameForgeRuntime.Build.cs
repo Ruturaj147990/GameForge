@@ -9,7 +9,11 @@ public class GameForgeRuntime : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule", "GameplayTasks", "NavigationSystem" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "UMG", "Slate", "SlateCore", "Niagara", "Json" });
+		PublicDependencyModuleNames.AddRange(new string[] {
+			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
+			"AIModule", "GameplayTasks", "NavigationSystem", "DeveloperSettings",
+			"GameplayAbilities", "GameplayTags", "Json"
+		});
+		PrivateDependencyModuleNames.AddRange(new string[] { "UMG", "Slate", "SlateCore", "Niagara" });
 	}
 }

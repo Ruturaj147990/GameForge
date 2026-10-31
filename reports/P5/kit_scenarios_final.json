@@ -1,0 +1,1202 @@
+{
+  "timestamp": "2026-10-31T19:37:41Z",
+  "phase": "P5",
+  "all_gates_pass": true,
+  "gates": {
+    "dev_collect_3": true,
+    "dev_quest_complete": true,
+    "dev_spotted_by_guard": true,
+    "dev_win_goal_after_relics": true,
+    "dev_lose_hazard": true,
+    "dev_respawn_checkpoint": true,
+    "dev_door_requires_key": true,
+    "dev_win_waves": true,
+    "dev_lose_enemies": true,
+    "dev_board_win": true,
+    "dev_board_draw": true,
+    "dev_card_win": true,
+    "dev_teleport_cheat": true,
+    "dev_impossible": true,
+    "ship_collect_3": true,
+    "ship_quest_complete": true,
+    "ship_spotted_by_guard": true,
+    "ship_win_goal_after_relics": true,
+    "ship_lose_hazard": true
+  },
+  "package_metrics": {
+    "dev_size_mb": 840.6,
+    "ship_size_mb": 531.6,
+    "dev_package_duration_s": 39.1,
+    "ship_package_duration_s": 33.1
+  },
+  "development_results": {
+    "collect_3": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "collect_3",
+      "passed": true,
+      "duration_s": 7.264874458312988,
+      "start_delay_s": 0.0001001991331577301,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.601874828338623e-06,
+          "t1": 4.063033103942871,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.063034534454346,
+          "t1": 5.865703105926514,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 5.8657050132751465,
+          "t1": 7.26487398147583,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2122.15673828125,
+          "seconds": 4.064523220062256,
+          "max_step_cm": 1.5515416860580444,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1080.7562255859375,
+          "seconds": 1.8026714324951172,
+          "max_step_cm": 1.264918565750122,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 818.2212524414062,
+          "seconds": 1.3991122245788574,
+          "max_step_cm": 1.2082792520523071,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event_count\": \"pickup.collected\",\r\n\t\"min\": 3,\r\n\t\"max\": null,\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 3
+        },
+        {
+          "expect": "{\r\n\t\"legs_ok\": true\r\n}",
+          "ok": true,
+          "observed": 0
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\collect_3_events.jsonl"
+    },
+    "quest_complete": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "quest_complete",
+      "passed": true,
+      "duration_s": 7.985848903656006,
+      "start_delay_s": 0.00010010227560997009,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.6987323760986328e-06,
+          "t1": 1.8459899425506592,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 1.8459919691085815,
+          "t1": 2.3472182750701904,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 2.347219705581665,
+          "t1": 4.3615899085998535,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 3,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.361591339111328,
+          "t1": 6.085620403289795,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 4,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 6.085622310638428,
+          "t1": 7.484315872192383,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 5,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 7.484317779541016,
+          "t1": 7.985848903656006,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Giver",
+          "distance_cm": 966.86083984375,
+          "seconds": 1.8474781513214111,
+          "max_step_cm": 1.912680983543396,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 1072.08056640625,
+          "seconds": 2.0143682956695557,
+          "max_step_cm": 1.2112810611724854,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1011.0503540039062,
+          "seconds": 1.7239735126495361,
+          "max_step_cm": 1.2208207845687866,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 818.0108032226562,
+          "seconds": 1.3987807035446167,
+          "max_step_cm": 1.2061201333999634,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"objective.completed\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\quest_complete_events.jsonl"
+    },
+    "spotted_by_guard": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "spotted_by_guard",
+      "passed": true,
+      "duration_s": 4.969959735870361,
+      "start_delay_s": 0.00010010227560997009,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to_point",
+          "status": "DONE",
+          "t0": 1.601874828338623e-06,
+          "t1": 4.967837333679199,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_event",
+          "status": "DONE",
+          "t0": 4.967839241027832,
+          "t1": 4.969959735870361,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "point",
+          "distance_cm": 2859.630615234375,
+          "seconds": 4.969211578369141,
+          "max_step_cm": 1.495139241218567,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"guard.spotted_player\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\spotted_by_guard_events.jsonl"
+    },
+    "win_goal_after_relics": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "win_goal_after_relics",
+      "passed": true,
+      "duration_s": 8.806078910827637,
+      "start_delay_s": 0.00010020285844802856,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.8030405044555664e-06,
+          "t1": 4.060046195983887,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.060047626495361,
+          "t1": 5.864986896514893,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 5.864988327026367,
+          "t1": 7.264678478240967,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 3,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 7.2646803855896,
+          "t1": 7.805942535400391,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 4,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 7.805944442749023,
+          "t1": 8.806078910827637,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2121.424072265625,
+          "seconds": 4.061951160430908,
+          "max_step_cm": 1.6369208097457886,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1082.1241455078125,
+          "seconds": 1.8049209117889404,
+          "max_step_cm": 1.230961799621582,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 818.2608032226562,
+          "seconds": 1.399452567100525,
+          "max_step_cm": 1.2250810861587524,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Goal",
+          "distance_cm": 324.6610412597656,
+          "seconds": 0.5413985848426819,
+          "max_step_cm": 1.2481189966201782,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"goal.reached\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\win_goal_after_relics_events.jsonl"
+    },
+    "lose_hazard": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "lose_hazard",
+      "passed": true,
+      "duration_s": 4.937504768371582,
+      "start_delay_s": 0.00010010227560997009,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.6987323760986328e-06,
+          "t1": 2.93628191947937,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 2.9362833499908447,
+          "t1": 4.937504291534424,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Hazard",
+          "distance_cm": 1444.4974365234375,
+          "seconds": 2.9377939701080322,
+          "max_step_cm": 1.3374522924423218,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"hazard.touched\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\lose_hazard_events.jsonl"
+    },
+    "respawn_checkpoint": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "respawn_checkpoint",
+      "passed": true,
+      "duration_s": 3.4379982948303223,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.4007091522216797e-06,
+          "t1": 2.4374077320098877,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 2.4374094009399414,
+          "t1": 3.437998056411743,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Checkpoint",
+          "distance_cm": 1302.4566650390625,
+          "seconds": 2.438886880874634,
+          "max_step_cm": 1.7291396856307983,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"checkpoint.reached\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\respawn_checkpoint_events.jsonl"
+    },
+    "door_requires_key": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "door_requires_key",
+      "passed": true,
+      "duration_s": 2.3374366760253906,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 2.902001142501831e-06,
+          "t1": 1.336285948753357,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 1.3362878561019897,
+          "t1": 2.3374361991882324,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Switch",
+          "distance_cm": 682.087158203125,
+          "seconds": 1.3386180400848389,
+          "max_step_cm": 1.5567004680633545,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"switch.toggled\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\door_requires_key_events.jsonl"
+    },
+    "win_waves": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "win_waves",
+      "passed": true,
+      "duration_s": 0.05641769990324974,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "wait_event",
+          "status": "DONE",
+          "t0": 2.201646566390991e-06,
+          "t1": 0.05641700327396393,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"wave.started\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\win_waves_events.jsonl"
+    },
+    "lose_enemies": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "lose_enemies",
+      "passed": true,
+      "duration_s": 1.998368740081787,
+      "start_delay_s": 0.00010010227560997009,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 1.8998980522155762e-06,
+          "t1": 1.998368501663208,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"player.spawned\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\lose_enemies_events.jsonl"
+    },
+    "board_win": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "board_win",
+      "passed": true,
+      "duration_s": 2.4565176963806152,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.601874828338623e-06,
+          "t1": 2.4559879302978516,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "select_actor",
+          "status": "DONE",
+          "t0": 2.4559895992279053,
+          "t1": 2.4565176963806152,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Board",
+          "distance_cm": 1330.647216796875,
+          "seconds": 2.457533836364746,
+          "max_step_cm": 1.504319190979004,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"board.move\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 2
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\board_win_events.jsonl"
+    },
+    "board_draw": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "board_draw",
+      "passed": true,
+      "duration_s": 2.459102153778076,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.7993152141571045e-06,
+          "t1": 2.4584438800811768,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "select_actor",
+          "status": "DONE",
+          "t0": 2.4584457874298096,
+          "t1": 2.459102153778076,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Board",
+          "distance_cm": 1330.92919921875,
+          "seconds": 2.459824562072754,
+          "max_step_cm": 1.4349616765975952,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"board.move\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 2
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\board_draw_events.jsonl"
+    },
+    "card_win": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "card_win",
+      "passed": true,
+      "duration_s": 0.9989209771156311,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 1.5981495380401611e-06,
+          "t1": 0.9989207983016968,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"game.started\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\card_win_events.jsonl"
+    },
+    "teleport_cheat": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "teleport_cheat",
+      "passed": false,
+      "duration_s": 0.9996523261070251,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "FAILED",
+          "t0": 1.7024576663970947e-06,
+          "t1": 0.999651312828064,
+          "error": "TELEPORT_SUSPECTED",
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2979.185791015625,
+          "seconds": 1.0015546083450317,
+          "max_step_cm": 2500.702392578125,
+          "result": "TELEPORT_SUSPECTED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"legs_ok\": true\r\n}",
+          "ok": false,
+          "observed": 0
+        }
+      ],
+      "failures": [
+        "Step 0 (navigate_to) failed: TELEPORT_SUSPECTED",
+        "Leg to GF_Pickup_1 had result: TELEPORT_SUSPECTED",
+        "Expectation failed: {\r\n\t\"legs_ok\": true\r\n} (observed 0)"
+      ],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\teleport_cheat_events.jsonl"
+    },
+    "impossible": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "impossible",
+      "passed": false,
+      "duration_s": 7.268726825714111,
+      "start_delay_s": 0.00010010227560997009,
+      "build": {
+        "configuration": "Development",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.4007091522216797e-06,
+          "t1": 4.065969467163086,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.065971374511719,
+          "t1": 5.870162010192871,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 5.870163917541504,
+          "t1": 7.268726825714111,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2121.90283203125,
+          "seconds": 4.06743860244751,
+          "max_step_cm": 1.5651583671569824,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1081.7142333984375,
+          "seconds": 1.8042097091674805,
+          "max_step_cm": 1.225501298904419,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 817.5030517578125,
+          "seconds": 1.3985646963119507,
+          "max_step_cm": 1.2097790241241455,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event_count\": \"pickup.collected\",\r\n\t\"min\": 4,\r\n\t\"max\": null,\r\n\t\"entity\": null\r\n}",
+          "ok": false,
+          "observed": 3
+        }
+      ],
+      "failures": [
+        "Expectation failed: {\r\n\t\"event_count\": \"pickup.collected\",\r\n\t\"min\": 4,\r\n\t\"max\": null,\r\n\t\"entity\": null\r\n} (observed 3)"
+      ],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_dev_p5\\impossible_events.jsonl"
+    }
+  },
+  "shipping_results": {
+    "collect_3": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "collect_3",
+      "passed": true,
+      "duration_s": 7.270794868469238,
+      "start_delay_s": 0.0001001991331577301,
+      "build": {
+        "configuration": "Shipping",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.8030405044555664e-06,
+          "t1": 4.067378520965576,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.067379951477051,
+          "t1": 5.871946811676025,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 5.8719482421875,
+          "t1": 7.27079439163208,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2121.19189453125,
+          "seconds": 4.068141460418701,
+          "max_step_cm": 1.1394001245498657,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1082.0565185546875,
+          "seconds": 1.804567575454712,
+          "max_step_cm": 1.0244406461715698,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 818.1862182617188,
+          "seconds": 1.3988548517227173,
+          "max_step_cm": 1.1243395805358887,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event_count\": \"pickup.collected\",\r\n\t\"min\": 3,\r\n\t\"max\": null,\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 3
+        },
+        {
+          "expect": "{\r\n\t\"legs_ok\": true\r\n}",
+          "ok": true,
+          "observed": 0
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_ship_p5\\collect_3_events.jsonl"
+    },
+    "quest_complete": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "quest_complete",
+      "passed": true,
+      "duration_s": 7.986297130584717,
+      "start_delay_s": 0.0001001991331577301,
+      "build": {
+        "configuration": "Shipping",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.3969838619232178e-06,
+          "t1": 1.847874641418457,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 1.847875952720642,
+          "t1": 2.3492321968078613,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 2.349233627319336,
+          "t1": 4.363038063049316,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 3,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.363039493560791,
+          "t1": 6.086847305297852,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 4,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 6.086848735809326,
+          "t1": 7.485100746154785,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 5,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 7.485102653503418,
+          "t1": 7.986297130584717,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Giver",
+          "distance_cm": 967.2003173828125,
+          "seconds": 1.848756194114685,
+          "max_step_cm": 1.7546988725662231,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 1071.935302734375,
+          "seconds": 2.013880968093872,
+          "max_step_cm": 1.0583996772766113,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1011.191650390625,
+          "seconds": 1.7238030433654785,
+          "max_step_cm": 1.0710597038269043,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 817.8033447265625,
+          "seconds": 1.3982664346694946,
+          "max_step_cm": 1.0223395824432373,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"objective.completed\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_ship_p5\\quest_complete_events.jsonl"
+    },
+    "spotted_by_guard": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "spotted_by_guard",
+      "passed": true,
+      "duration_s": 4.968533039093018,
+      "start_delay_s": 0.0001001991331577301,
+      "build": {
+        "configuration": "Shipping",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to_point",
+          "status": "DONE",
+          "t0": 1.5981495380401611e-06,
+          "t1": 4.966948986053467,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_event",
+          "status": "DONE",
+          "t0": 4.966950416564941,
+          "t1": 4.968532562255859,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "point",
+          "distance_cm": 2859.741455078125,
+          "seconds": 4.967770576477051,
+          "max_step_cm": 1.3198189735412598,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"guard.spotted_player\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_ship_p5\\spotted_by_guard_events.jsonl"
+    },
+    "win_goal_after_relics": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "win_goal_after_relics",
+      "passed": true,
+      "duration_s": 8.808426856994629,
+      "start_delay_s": 0.0001001991331577301,
+      "build": {
+        "configuration": "Shipping",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.300126314163208e-06,
+          "t1": 4.062767028808594,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 4.062768459320068,
+          "t1": 5.8658599853515625,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 2,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 5.865861415863037,
+          "t1": 7.2644829750061035,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 3,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 7.264484405517578,
+          "t1": 7.806962966918945,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 4,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 7.806964874267578,
+          "t1": 8.808426856994629,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Pickup_1",
+          "distance_cm": 2121.312744140625,
+          "seconds": 4.063577175140381,
+          "max_step_cm": 1.3480782508850098,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_2",
+          "distance_cm": 1081.179443359375,
+          "seconds": 1.8030869960784912,
+          "max_step_cm": 1.0243780612945557,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Pickup_3",
+          "distance_cm": 818.097412109375,
+          "seconds": 1.3986303806304932,
+          "max_step_cm": 1.0311014652252197,
+          "result": "ARRIVED"
+        },
+        {
+          "target": "GF_Goal",
+          "distance_cm": 325.3664855957031,
+          "seconds": 0.5424870252609253,
+          "max_step_cm": 1.007460117340088,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"goal.reached\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_ship_p5\\win_goal_after_relics_events.jsonl"
+    },
+    "lose_hazard": {
+      "schema_": "scenario_result/1",
+      "scenario_id": "lose_hazard",
+      "passed": true,
+      "duration_s": 4.934033393859863,
+      "start_delay_s": 0.00010009855031967163,
+      "build": {
+        "configuration": "Shipping",
+        "engine": "5.7.4"
+      },
+      "steps": [
+        {
+          "i": 0,
+          "kind": "navigate_to",
+          "status": "DONE",
+          "t0": 1.601874828338623e-06,
+          "t1": 2.933196783065796,
+          "error": null,
+          "detail": {}
+        },
+        {
+          "i": 1,
+          "kind": "wait_s",
+          "status": "DONE",
+          "t0": 2.9331982135772705,
+          "t1": 4.934032917022705,
+          "error": null,
+          "detail": {}
+        }
+      ],
+      "legs": [
+        {
+          "target": "GF_Hazard",
+          "distance_cm": 1444.13427734375,
+          "seconds": 2.9340243339538574,
+          "max_step_cm": 1.1673599481582642,
+          "result": "ARRIVED"
+        }
+      ],
+      "expect": [
+        {
+          "expect": "{\r\n\t\"event\": \"hazard.touched\",\r\n\t\"entity\": null\r\n}",
+          "ok": true,
+          "observed": 1
+        }
+      ],
+      "failures": [],
+      "events_file": "E:\\GameForge\\validation\\P3_kittest_20261031\\qa_runs_ship_p5\\lose_hazard_events.jsonl"
+    }
+  }
+}

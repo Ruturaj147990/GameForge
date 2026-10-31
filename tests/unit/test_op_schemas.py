@@ -41,7 +41,7 @@ def test_gateway_refuses_invalid_args_without_an_editor(tmp_path):
 
 
 def test_all_thirty_reviewed_ops_reject_bogus_keys():
-    assert len(op_schemas.REVIEWED) == 30
+    assert len(op_schemas.REVIEWED) == 33
     for op in op_schemas.REVIEWED:
         clean, errs = op_schemas.validate_args(op, {"completely_bogus_key_123": True})
         assert clean is None and errs, f"Op {op} should have rejected completely_bogus_key_123"
@@ -83,7 +83,7 @@ def test_generated_drafts_are_current():
     r = subprocess.run([sys.executable, str(REPO / "scripts/tools/gen_op_schemas.py"), "--check"],
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "126 ops" in r.stdout
+    assert f"{len(op_catalog.CATALOG)} ops" in r.stdout
 
 
 def test_agent_ops_have_schemas_and_hosted_oneof(tmp_path):

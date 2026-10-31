@@ -11,6 +11,12 @@ class ActorGetMaterialsArgs(BaseModel):
     label: Any | None = None
 
 
+class ActorSetTagsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: Any | None = None
+    tags: list | None = None
+
+
 class ActorsInLevelArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     limit: float | None = None
@@ -303,6 +309,17 @@ class DeleteAssetArgs(BaseModel):
 
 class FoliageScatterArgs(BaseModel):
     model_config = ConfigDict(extra="allow")  # MANUAL: args forwarded to a helper or none read
+
+
+class GamedefInspectArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    asset_path: str | None = None
+
+
+class GamedefWriteArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    asset_path: str | None = None
+    json: str | None = None
 
 
 class GameplayGetStateArgs(BaseModel):
@@ -790,6 +807,7 @@ class WorldGenerationDigestArgs(BaseModel):
 
 GENERATED: dict[str, type[BaseModel]] = {
     "actor_get_materials": ActorGetMaterialsArgs,
+    "actor_set_tags": ActorSetTagsArgs,
     "actors_in_level": ActorsInLevelArgs,
     "anim_create_blendspace_1d": AnimCreateBlendspace1dArgs,
     "anim_create_locomotion_blueprint": AnimCreateLocomotionBlueprintArgs,
@@ -837,6 +855,8 @@ GENERATED: dict[str, type[BaseModel]] = {
     "delete_actor": DeleteActorArgs,
     "delete_asset": DeleteAssetArgs,
     "foliage_scatter": FoliageScatterArgs,
+    "gamedef_inspect": GamedefInspectArgs,
+    "gamedef_write": GamedefWriteArgs,
     "gameplay_get_state": GameplayGetStateArgs,
     "gameplay_modify_state": GameplayModifyStateArgs,
     "gameplay_objectives": GameplayObjectivesArgs,

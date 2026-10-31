@@ -128,6 +128,7 @@ def _actor_record(actor):
         "path": actor.get_path_name(),
         "location": {"x": loc.x, "y": loc.y, "z": loc.z},
         "rotation": {"pitch": rot.pitch, "yaw": rot.yaw, "roll": rot.roll},
+        "tags": [str(t) for t in getattr(actor, "tags", [])],
     }
 
 

@@ -45,3 +45,80 @@ def gameplay_modify_state(args):
                      errors=res.get("errors", []), warnings=res.get("warnings", []))
 
 
+@op("gamedef_write", mutates=True, reversibility="irreversible")
+def gamedef_write(args):
+    """Create or update a UGameForgeGameDefinition primary data asset with gfdef JSON (WI-5.1)."""
+    asset_path = str(args.get("asset_path", "/Game/GameForge/GD_Main"))
+    definition_json = args.get("json", "{}")
+    if isinstance(definition_json, dict):
+        definition_json = json.dumps(definition_json, indent=2)
+    elif not isinstance(definition_json, str):
+        return _envelope("gamedef_write", False, errors=["'json' must be a dict or a JSON string"])
+
+    pkg_path, asset_name = asset_path.rsplit("/", 1) if "/" in asset_path else ("/Game/GameForge", asset_path)
+    asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
+    editor_asset_subsystem = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+
+    asset = None
+    if editor_asset_subsystem.does_asset_exist(asset_path):
+        asset = editor_asset_subsystem.load_asset(asset_path)
+    else:
+        factory = unreal.DataAssetFactory()
+        cls = getattr(unreal, "GameForgeGameDefinition", None)
+        if cls is None:
+            return _envelope("gamedef_write", False, errors=["GameForgeGameDefinition class not available in engine"])
+        factory.data_asset_class = cls
+        asset = asset_tools.create_asset(asset_name, pkg_path, cls, factory)
+
+    if not asset:
+        return _envelope("gamedef_write", False, errors=[f"Failed to create or load asset at {asset_path}"])
+
+    asset.set_editor_property("definition_json", definition_json)
+    editor_asset_subsystem.save_asset(asset_path)
+
+    parse_errors = []
+    if hasattr(asset, "validate_definition"):
+        parse_errors = list(asset.validate_definition())
+
+    return _envelope(
+        "gamedef_write",
+        len(parse_errors) == 0,
+        {"asset_path": asset_path, "parse_errors": parse_errors, "valid": len(parse_errors) == 0},
+        errors=parse_errors,
+        affected=[asset_path],
+        reversibility="irreversible",
+    )
+
+
+@op("gamedef_inspect", reversibility="read-only")
+def gamedef_inspect(args):
+    """Read and validate a UGameForgeGameDefinition asset (WI-5.1)."""
+    asset_path = str(args.get("asset_path", "/Game/GameForge/GD_Main"))
+    editor_asset_subsystem = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    if not editor_asset_subsystem.does_asset_exist(asset_path):
+        return _envelope("gamedef_inspect", False, errors=[f"Asset not found: {asset_path}"])
+
+    asset = editor_asset_subsystem.load_asset(asset_path)
+    cls = getattr(unreal, "GameForgeGameDefinition", None)
+    if not asset or (cls is not None and not isinstance(asset, cls)):
+        return _envelope("gamedef_inspect", False, errors=[f"Asset at {asset_path} is not a GameForgeGameDefinition"])
+
+    parse_errors = []
+    if hasattr(asset, "validate_definition"):
+        parse_errors = list(asset.validate_definition())
+
+    def_json = asset.get_editor_property("definition_json") if hasattr(asset, "get_editor_property") else ""
+    schema_ver = asset.get_editor_property("schema_version") if hasattr(asset, "get_editor_property") else "gfdef/1"
+
+    return _envelope(
+        "gamedef_inspect",
+        True,
+        {
+            "asset_path": asset_path,
+            "definition_json": def_json,
+            "schema_version": schema_ver,
+            "parse_errors": parse_errors,
+            "valid": len(parse_errors) == 0,
+        },
+        reversibility="read-only",
+    )

@@ -416,6 +416,20 @@ class GameDesignSpec(_M):
         for e in self.entities:
             if e.level_id not in level_ids:
                 errs.append(f"entity {e.entity_id}: unknown level {e.level_id}")
+
+        # Lazy entity props validation against KitModule params_model (WI-5.14)
+        try:
+            from ..kit.registry import KIT
+            for e in self.entities:
+                if e.module in KIT:
+                    mod = KIT[e.module]
+                    try:
+                        mod.params_model.model_validate(e.props)
+                    except Exception as ex:
+                        errs.append(f"entity {e.entity_id} props invalid for {e.module}: {ex}")
+        except Exception:
+            pass
+
         events = self._declared_events()
 
         def check_cond(c, where: str) -> None:
