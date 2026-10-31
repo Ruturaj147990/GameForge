@@ -913,7 +913,7 @@ with 6 coins"` both go prompt → GDS → legacy params → packaged game, with 
 | 1.3 | DONE | 2026-10-31T11:32Z | 2026-10-31T11:35Z | `test_draft_schema` (4 passed); DesignDraft JSON schema 3.2 KB <= 6 KB |
 | 1.4 | DONE | 2026-10-31T11:38Z | 2026-10-31T11:42Z | `test_gds_expand` (5 passed); deterministic draft -> GDS across genres verified |
 | 1.5 | DONE | 2026-10-31T11:45Z | 2026-10-31T11:50Z | `test_gds_presets` (6 passed); 7 legacy presets reproduce recipes losslessly |
-| 1.6 | TODO | | | |
+| 1.6 | DONE | 2026-10-31T11:55Z | 2026-10-31T12:01Z | prompt_to_gds (9 passed); preset and model draft path with 1 repair attempt |
 | 1.7 | TODO | | | |
 | 1.8 | TODO | | | |
 | 1.9 | TODO | | | |

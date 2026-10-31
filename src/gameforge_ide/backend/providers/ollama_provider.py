@@ -153,6 +153,42 @@ class OllamaProvider(ModelProvider):
             "total_duration_ns": data.get("total_duration", 0),
         }
 
+    def complete_json(
+        self,
+        model_id: str,
+        system: str,
+        user: str,
+        schema: dict,
+        num_ctx: int = 8192,
+        temperature: float = 0.2,
+        timeout_s: float = 120.0,
+    ) -> Optional[str]:
+        """Structured output via /api/chat `format` (JSON schema). Returns the raw JSON text or None on transport errors."""
+        payload = {
+            "model": model_id,
+            "stream": False,
+            "think": False,
+            "format": schema,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "options": {"num_ctx": num_ctx, "temperature": temperature},
+        }
+        req = urllib.request.Request(
+            f"http://{self.host}/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            msg = data.get("message", {}) or {}
+            return msg.get("content", "")
+        except Exception:
+            return None
+
     def native_tool_self_test(self, model_id: str, num_ctx: int = 4096) -> Dict[str, Any]:
         """Startup gate: the model must answer a one-tool request with a structured call."""
         tool = {"name": "list_dir", "description": "List files in a workspace directory.",

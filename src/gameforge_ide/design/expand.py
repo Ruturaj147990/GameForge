@@ -50,6 +50,14 @@ from .gds import (
     Vec2,
 )
 
+
+class ExpandError(RuntimeError):
+    """Raised when a draft cannot be deterministically expanded into a GameDesignSpec."""
+    def __init__(self, message: str, question: Optional[str] = None):
+        super().__init__(message)
+        self.question = question
+
+
 LEVEL_SIZES: Dict[str, Tuple[float, float]] = {
     "small": (60.0, 60.0),
     "medium": (150.0, 150.0),
