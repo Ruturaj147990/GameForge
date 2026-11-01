@@ -1,10 +1,35 @@
 {
   "schema": "model_routing/1",
-  "source": "Blueprint v2 routing table (2026-10-27). Replaced by the P9 eval-generated table.",
+  "source": {
+    "description": "Generated from latest P9 empirical evaluation reports.",
+    "generated_at": "2026-11-01T11:24:21Z",
+    "reports": [
+      {
+        "path": "reports/P9/eval_gameforge-27b-sft_latest_20261101T112010Z.json",
+        "sha256": "6dcb7ec97aba8a649424c9537594e60c29e1104048cfd2cb54035b84e13299b0",
+        "model_id": "gameforge-27b-sft:latest"
+      },
+      {
+        "path": "reports/P9/eval_gameforge-qwen3.5-4b_latest_20261101T110904Z.json",
+        "sha256": "d25b671f5a858e7dac414ef5ef5c8313ef1099d0a6eeda1296f1f36751cf4576",
+        "model_id": "gameforge-qwen3.5-4b:latest"
+      },
+      {
+        "path": "reports/P9/eval_gameforge-qwen3.5-9b_latest_20261101T111318Z.json",
+        "sha256": "44cb57cc3cb96b8494b92cf4005a1c23cb1d9933e372c2fe997b0c4f315d7ea7",
+        "model_id": "gameforge-qwen3.5-9b:latest"
+      },
+      {
+        "path": "reports/P9/eval_llama3.1_8b_20261101T111351Z.json",
+        "sha256": "5afc5d37e2df235f9051eca27dba68191ccc4be89bb2cbd9a3e3bbb78fe50b80",
+        "model_id": "llama3.1:8b"
+      }
+    ]
+  },
   "roles": {
     "chat": "gameforge-qwen3.5-9b:latest",
-    "design": "gameforge-qwen3.5-9b:latest",
-    "codegen": "gameforge-qwen3.5-9b:latest",
+    "design": "gameforge-qwen3.5-4b:latest",
+    "codegen": "gameforge-qwen3.5-4b:latest",
     "fast": "gameforge-qwen3.5-4b:latest",
     "vision": "gameforge-qwen3.5-4b:latest",
     "heavy_local": "gameforge-27b-sft:latest"

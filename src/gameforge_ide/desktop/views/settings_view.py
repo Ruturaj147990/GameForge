@@ -230,6 +230,11 @@ class SettingsView(QWidget):
         )
         layout.addWidget(self._models_table)
 
+        self._lbl_routing_source = QLabel(box)
+        self._lbl_routing_source.setObjectName("lblSettingsRoutingSource")
+        self._lbl_routing_source.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        layout.addWidget(self._lbl_routing_source)
+
         return box
 
     def _build_appearance_section(self) -> QGroupBox:
@@ -331,6 +336,19 @@ class SettingsView(QWidget):
         for row, (role, model) in enumerate(sorted(s.models.items())):
             self._models_table.setItem(row, 0, QTableWidgetItem(role))
             self._models_table.setItem(row, 1, QTableWidgetItem(model))
+
+        # Routing Source info
+        try:
+            r_cfg = Path(__file__).resolve().parents[2] / "config" / "model_routing.json"
+            if r_cfg.is_file():
+                r_data = json.loads(r_cfg.read_text(encoding="utf-8"))
+                src_desc = r_data.get("source", {}).get("description", "Static")
+                src_date = r_data.get("source", {}).get("generated_at", "")
+                self._lbl_routing_source.setText(f"Routing Source: {src_desc} ({src_date})")
+            else:
+                self._lbl_routing_source.setText("Routing Source: Default table")
+        except Exception:
+            self._lbl_routing_source.setText("Routing Source: Default table")
 
     @Slot()
     def save_settings(self) -> None:
