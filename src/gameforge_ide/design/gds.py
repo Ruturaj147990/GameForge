@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .events_catalog import EVENT_RE, MODULE_EVENTS, STAT_RE, all_events
 
-SCHEMA_VERSION = "gds/1"
+SCHEMA_VERSION = "gds/1.1"
 IDENT = r"^[a-z][a-z0-9_]{0,39}$"
 EVENT = EVENT_RE.pattern
 STAT = STAT_RE.pattern
@@ -77,8 +77,18 @@ class Vec3(_M):
     z: float = 0.0
 
 
+class IntroSpec(_M):
+    enabled: bool = False
+    seconds: float = Field(8.0, ge=6.0, le=20.0)
+    focus: List[str] = Field(default_factory=lambda: ["landmark", "goal"])
+
+
+class PresentationSpec(_M):
+    intro: IntroSpec = Field(default_factory=IntroSpec)
+
+
 class Meta(_M):
-    schema_version: Literal["gds/1"] = SCHEMA_VERSION
+    schema_version: Literal["gds/1", "gds/1.1"] = SCHEMA_VERSION
     gds_id: str = Field(default_factory=lambda: "gds_" + secrets.token_hex(6), pattern=r"^gds_[0-9a-f]{12}$")
     revision: int = Field(1, ge=1)
     project_name: str = Field(pattern=PASCAL)
@@ -362,7 +372,7 @@ class AudioSpec(_M):
 class TechSpec(_M):
     target_fps: Literal[30, 60] = 60
     max_frame_ms: float = Field(16.6, ge=8, le=50)
-    max_package_mb: int = Field(1200, ge=100, le=4000)   # P10 lowers the default to 400
+    max_package_mb: int = Field(400, ge=100, le=4000)   # P10 default 400 MB
     multiplayer: Literal["none", "listen_server"] = "none"
 
 
@@ -391,6 +401,7 @@ class GameDesignSpec(_M):
     ui: UISpec = Field(default_factory=UISpec)
     art: ArtDirection = Field(default_factory=ArtDirection)
     audio: AudioSpec = Field(default_factory=AudioSpec)
+    presentation: PresentationSpec = Field(default_factory=PresentationSpec)
     tech: TechSpec = Field(default_factory=TechSpec)
     acceptance: Acceptance = Field(default_factory=Acceptance)
 

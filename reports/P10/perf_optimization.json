@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-11-01T11:28:38Z",
+  "game_title": "Relic Hunt",
+  "budgets": {
+    "target_fps": 60.0,
+    "max_frame_ms": 16.67
+  },
+  "baseline": {
+    "avg_fps": 54.2,
+    "frame_time_p95_ms": 18.45,
+    "frame_time_mean_ms": 16.82,
+    "gpu_time_p95_ms": 16.9,
+    "vision_rubric_score": 4.52
+  },
+  "final": {
+    "avg_fps": 64.8,
+    "frame_time_p95_ms": 15.43,
+    "frame_time_mean_ms": 14.1,
+    "gpu_time_p95_ms": 13.8,
+    "vision_rubric_score": 4.48,
+    "within_budget": true
+  },
+  "attempts": [
+    {
+      "rule_name": "reduce_pcg_density",
+      "description": "Reduce entity and scatter density by 25%",
+      "before_p95_ms": 18.45,
+      "after_p95_ms": 17.21,
+      "improvement_pct": 6.72,
+      "accepted": true,
+      "reason": "ACCEPTED: p95 improved 6.72% with stable vision & scenarios"
+    },
+    {
+      "rule_name": "cap_shadow_distance",
+      "description": "Cap shadow draw distance (r.Shadow.DistanceScale=0.75)",
+      "before_p95_ms": 17.21,
+      "after_p95_ms": 15.43,
+      "improvement_pct": 10.34,
+      "accepted": true,
+      "reason": "ACCEPTED: p95 improved 10.34% with stable vision & scenarios"
+    }
+  ]
+}

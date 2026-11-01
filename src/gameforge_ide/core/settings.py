@@ -52,6 +52,7 @@ class Settings:
     plugin_build: Optional[Path] = None      # developer hosts only
     host_profile: Dict[str, Any] = field(default_factory=dict)
     host_profile_path: Optional[Path] = None
+    engine_channel: str = "pinned"  # "pinned" (5.7.4) | "next" (5.8)
 
     @property
     def engine_root(self) -> Path:
@@ -176,6 +177,7 @@ def get_settings() -> Settings:
         plugin_build=_path(profile.get("plugin_build")),
         host_profile=profile,
         host_profile_path=profile_path if profile else None,
+        engine_channel=str(pick("GAMEFORGE_ENGINE_CHANNEL", "engine_channel") or "pinned"),
     )
 
 

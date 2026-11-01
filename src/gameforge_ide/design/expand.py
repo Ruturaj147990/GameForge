@@ -488,7 +488,7 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     tech = TechSpec(
         target_fps=60,
         max_frame_ms=16.6,
-        max_package_mb=1200,
+        max_package_mb=400,
         multiplayer="none",
     )
     progression = Progression(difficulty=draft.difficulty)

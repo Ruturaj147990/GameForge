@@ -1,0 +1,29 @@
+{
+  "status": "BLOCKED (needs approval: UE 5.8 installation; compatibility harness ready)",
+  "timestamp": "2026-11-01T11:34:35Z",
+  "pinned_engine": {
+    "version": "5.7.4",
+    "root": "E:\\UE\\UE_5.7",
+    "channel": "pinned"
+  },
+  "ue58_target": {
+    "channel": "next",
+    "installed": false,
+    "reason": "Requires user approval for secondary engine install on E:/UE/UE_5.8."
+  },
+  "mcp_bridge": {
+    "read_only_client": "src/gameforge_ide/unreal/mcp_bridge.py",
+    "port_coexistence": {
+      "editor_port": 47815,
+      "mcp_port": 8000,
+      "coexistence_valid": true,
+      "status": "PASS"
+    },
+    "editor_port": 47815,
+    "mcp_port": 8000
+  },
+  "cpp_compatibility": {
+    "macro_guards": "#if ENGINE_MINOR_VERSION >= 8",
+    "ai_callable_meta": "meta=(AICallable) on read-only UFUNCTIONs"
+  }
+}

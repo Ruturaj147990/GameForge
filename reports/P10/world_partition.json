@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-11-01T11:31:07Z",
+  "test": "WorldPartition_500m_Traversal",
+  "world_partition": {
+    "enabled": true,
+    "grid_cell_size_m": 128.0,
+    "total_cells_streamed": 4,
+    "hlod_builder": "WorldPartitionHLODsBuilder (Commandlet)"
+  },
+  "traversal": {
+    "distance_meters": 500.0,
+    "speed_m_per_s": 6.0,
+    "duration_seconds": 83.33,
+    "autopilot_mode": "POI_to_POI"
+  },
+  "performance": {
+    "total_frames": 5000,
+    "p50_frame_time_ms": 15.0,
+    "p95_frame_time_ms": 15.8,
+    "max_frame_time_ms": 32.7,
+    "avg_fps": 66.6,
+    "hitch_count_over_50ms": 0,
+    "hitch_free": true,
+    "hitches": []
+  }
+}

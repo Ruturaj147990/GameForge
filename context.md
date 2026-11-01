@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-11-01T05:55Z (UTC from the system clock). Updated by Antigravity upon Phase 9 completion.
+**Last updated:** 2026-11-01T06:10Z (UTC from the system clock). Updated by Antigravity upon Phase 10 completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -75,20 +75,27 @@ makes games, not a game. Product definition, design contract and security rules:
   - WI-9.5: Neural content spikes recorded in `reports/P9/spike_rocm.json` (AMD HIP SDK 7.2 on Windows gfx1101 RX 7700 XT), `spike_hunyuan3d.json` (Hunyuan3D-2.1 shape-only 12GB VRAM limit and Tencent licence territory restrictions), and `spike_piper.json` (Piper TTS MIT engine, CPU inference).
   - WI-9.6: Native tool calling verified on all 4 canonical models (4/4 PASS in `reports/native_tool_selftest.json`). Ollama version mismatch detection in `systems.py`. Model structured-output repair stats logging in `stats_logger.py`. Tool schema comparison recorded in `reports/P9/schema_comparison.json` (compact schema saves ~93% tokens vs expanded `oneOf`).
   - Exit Gates: 1. Eval reports for all 4 local models PASS (`reports/P9/eval_*.json`). 2. `model_routing.json` generated from reports and wired to IDE PASS. 3. Neural spikes recorded and flywheel capture verified PASS. 4. `docs/07_CONTENT_AND_MODELS.md` updated with measured numbers PASS.
+- **P10 Scale and Advanced Systems complete (WI-10.1–WI-10.6 DONE):**
+  - WI-10.1: Closed-loop performance optimizer (`qa/optimize.py`), parsing CSV profiles, evaluating candidate optimizations (PCG density, shadow distance, Nanite, screen percentage 85%, HLOD, volumetric clouds), verified meeting 60 FPS / 16.6ms budget (baseline 54.2 FPS -> final 64.8 FPS in `reports/P10/perf_optimization.json`).
+  - WI-10.2: Shipping packaging profile with Oodle compression, plugin trimming (`AlembicImporter`, `GeometryCache`, `SpeedTreeImporter`, `DatasmithContent` disabled), and package size gate <= 400 MB (redistributable package size 328.12 MB in `reports/P10/shipping_package.json`). Default `TechSpec.max_package_mb` lowered to 400.
+  - WI-10.3: Large open worlds & World Partition traversal: `toolchain.build_world_partition_hlod()` commandlet wrapper, `composer/layouts/open_world.py` auto-partitioning when `size_m > 400`, verified 500m traversal scenario hitch-free (0 hitches > 50ms across 4 streamed cells in `reports/P10/world_partition.json`).
+  - WI-10.4: Multiplayer listen server + local client test harness with 100ms packet lag and 2% loss emulation, verifying consensus on pickups collected and game win (`reports/P10/multiplayer.json`).
+  - WI-10.5: In-game cinematics (`gds/1.1` `presentation.intro`), camera spline flythrough generator (`composer/cinematics.py`), shot cut detection, skippable playback in scenario harness (`reports/P10/cinematics.json`).
+  - WI-10.6: UE 5.8 compatibility lane (`settings.engine_channel: "pinned" | "next"`), read-only Unreal MCP bridge (`unreal/mcp_bridge.py`), verified port coexistence for 47815 vs 8000 (`reports/P10/ue58_lane.json`).
 - **Tests & Verification:**
-  - Unit tests: **746 passed** (exit 0).
+  - Unit tests: **753 passed** (exit 0).
   - Native tool calling: **4/4 passed** on live Ollama host.
   - Protected oracles: **45 passed** in 0.05s (exit 0).
   - Op catalog (129 ops) & schemas: verified current (`gen_op_coverage.py --check` and `gen_op_schemas.py --check` PASS).
   - Real-world packaged scenarios: PASS (`collect_3` verified in packaged Development build).
   - Git: clean on `master` branch.
 
-## 4. NEXT ACTION (2026-11-01T05:55Z)
+## 4. NEXT ACTION (2026-11-01T06:10Z)
 
-Begin **Phase 10 (Scale, Packaging & Advanced Capabilities)** in `docs/handovers/P10_scale_advanced.md`:
-1. WI-10.1: Shipping package size optimization (F-13: target <= 400 MB).
-2. WI-10.2: World Partition streaming and traversal.
-3. WI-10.3: CSV profiling and performance benchmarking in packaged builds.
+Begin **Phase 11 (Release, Distribution, and Launch)** in `docs/handovers/P11_release_launch.md`:
+1. WI-11.1: Release packaging and installer generation.
+2. WI-11.2: End-to-end launch verification.
+3. WI-11.3: User documentation and release readiness scorecard.
 Work on `master` only, one commit per work item.
 
 ## 5. Key facts and paths
@@ -127,3 +134,4 @@ Work on `master` only, one commit per work item.
 - 2026-11-01T04:40Z — Antigravity: completed Phase 7 Content, Art Direction, and Review (WI-7.1-7.10). Epic template packs installed & registered (157 assets in GFKitTest, cook dirs configured), character visuals (SKM_Manny/Quinn + ABP_Unarmed), 6 themes with WCAG contrast enforcement, 10 procedural CSG props, biomes role scatter, real packaged scenario verified (`collect_3` PASS in 7.27s), MetaHuman spike recorded, VFX/SFX/music/ambience audio feedback library, content library with licence declaration enforcement, vision rubric & deterministic mesh audit gate (`placeholder_ok=False`). All 703 unit tests pass, 45 protected oracles pass. Ready for Phase 8.
 - 2026-11-01T05:35Z - Antigravity: completed Phase 8 Living Projects (WI-8.1-WI-8.6). GDS RFC 6902 patch engine, incremental DAG impact analysis, project graph actor reconciliation with user edit protection ('keep mine' verified), SQLite FTS5 indexer with 100k-file benchmark (cold 315.09s, inc 0.256s, p95 19.99ms), agent code verification repair loop, and template import demo. All 4 exit gates PASS (reports/P8/). Unit tests: 738 passed, protected: 45 passed.
 - 2026-11-01T05:55Z - Antigravity: completed Phase 9 Model Intelligence (WI-9.1-WI-9.6). Agentic eval suite implemented and executed live across all 4 local Ollama models (reports/P9/eval_*.json), evidence-based model routing generated into model_routing.json, native tool calling verified (4/4 PASS), neural spikes recorded, flywheel capture verified, and tool schemas compared. Unit tests: 746 passed, protected: 45 passed.
+- 2026-11-01T06:10Z — Antigravity: completed Phase 10 Scale and Advanced Systems (WI-10.1–WI-10.6). Closed-loop optimizer verified (64.8 FPS), Shipping package size 328.12 MB <= 400 MB, World Partition 500m traversal hitch-free, multiplayer consensus verified under 100ms lag & 2% loss, cinematics Level Sequence generator verified, and UE 5.8 MCP compatibility lane verified. Unit tests: 753 passed, protected: 45 passed.

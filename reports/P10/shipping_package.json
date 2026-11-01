@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-11-01T11:30:28Z",
+  "archive_dir": "E:/GameForge/validation/P3_kittest_20261031/package_ship/Windows",
+  "total_raw_mb": 531.6,
+  "redistributable_mb": 328.12,
+  "max_package_budget_mb": 400.0,
+  "meets_budget": true,
+  "compression": {
+    "format": "Oodle",
+    "share_material_shader_code": true,
+    "shared_material_native_libraries": true,
+    "prerequisites_included": false
+  },
+  "largest_files": [
+    {
+      "file": "GFKitTest/Binaries/Win64/GFKitTest-Win64-Shipping.pdb",
+      "size_mb": 203.48,
+      "is_debug_symbol": true
+    },
+    {
+      "file": "GFKitTest/Binaries/Win64/GFKitTest-Win64-Shipping.exe",
+      "size_mb": 138.79,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "GFKitTest/Content/Paks/GFKitTest-Windows.ucas",
+      "size_mb": 117.46,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "GFKitTest/Binaries/Win64/DML/x64/DirectML.dll",
+      "size_mb": 17.68,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "Engine/Plugins/NNE/NNERuntimeORT/Binaries/ThirdParty/Onnxruntime/Win64/onnxruntime.dll",
+      "size_mb": 14.01,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "GFKitTest/Content/Paks/GFKitTest-Windows.pak",
+      "size_mb": 9.76,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "Engine/Binaries/ThirdParty/NVIDIA/NVaftermath/Win64/GFSDK_Aftermath_Lib.x64.dll",
+      "size_mb": 5.19,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "Engine/Content/SlateDebug/Fonts/LastResort.ttf",
+      "size_mb": 5.15,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "GFKitTest/Binaries/Win64/D3D12/x64/d3d12SDKLayers.dll",
+      "size_mb": 4.87,
+      "is_debug_symbol": false
+    },
+    {
+      "file": "GFKitTest/Binaries/Win64/D3D12/x64/D3D12Core.dll",
+      "size_mb": 4.33,
+      "is_debug_symbol": false
+    }
+  ]
+}

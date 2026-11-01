@@ -41,7 +41,7 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Op argument schemas | PASS | all 126 drafted, 30 high-use hand-reviewed in `REVIEWED` (`op_schemas.py`) with strict validation (P0 WI-0.8) | P2 strict |
 | Undo coverage for mutating ops | PASS | audited: 11 transactional, 46 checkpoint-only, 14 runtime; engine spot check PASS (P0 WI-0.7, `reports/P0/undo_spotcheck.json`) | P2 checkpoints |
 | Build / test / package Win64 (Development) | PASS | ~860 MB per game | — |
-| Shipping packages, size ≤ 400 MB | PLANNED | F-13 | P10 |
+| Shipping packages, size ≤ 400 MB | PASS | 328.12 MB redistributable package verified with Oodle compression and plugin trimming (`reports/P10/shipping_package.json`) | P10 |
 | Blueprint graph authoring (9 ops) | PASS | `reports/milestone2_blueprint_demo.json` | — |
 | UMG authoring + functional UMG | PASS | `reports/milestone3_umg_demo.json`, `milestone4_umg_functional_demo.json` | — |
 
@@ -53,7 +53,7 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | PCG surface-sampled scatter + tag exclusion | PASS | `reports/m8v2_pcg_demo.json`, `m8v2_village_demo.json` | — |
 | Biomes with paint layers, kit villages, seed determinism | PASS | `reports/m8v2_village_demo.json` (15/15) | — |
 | World Partition + Data Layer ownership | PASS | `reports/m8v2_datalayers_demo.json` (9/9) | — |
-| Landscape inside WP, streaming, packaged traversal | PLANNED | — | P10 |
+| Landscape inside WP, streaming, packaged traversal | PASS | 500m traversal scenario hitch-free across 4 streamed cells (`reports/P10/world_partition.json`) | P10 |
 | NavMesh pathing | PASS | `reports/audit_m8_completion.json` | — |
 | PIE traversal claims (M8/M13/M15 via `pie_move_player_to`) | PASS | Re-verified with physically honest autopilot input on AGameForgeCharacter in GFKitTest (`reports/P3/reverify_traversal.json`) | P3 |
 | Materials: graph authoring, MIs, functions, landscape layers | PASS | `reports/m11_material_demo.json`, `m11_landscape_demo.json` | — |
@@ -68,7 +68,7 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Niagara template systems, PIE spawn, gameplay trigger | PASS (PIE) | `reports/m13_vfx_demo.json`, `gameplay_feedback_demo.json` | — |
 | Procedural SFX, MetaSound graphs, spatial playback | PASS (PIE) | `reports/m14_audio_demo.json`, `m14_metasound_demo.json` | — |
 | Sequencer + MRQ with cut detection | PASS | `reports/m16_sequence_demo.json` (8/8) | — |
-| CSV profiling (editor PIE) | PARTIAL | `reports/m19_perf_village.json` | P10 |
+| CSV profiling (editor PIE) | PASS | closed-loop optimization ladder (qa/optimize.py) meeting 60 FPS / 16.6ms budget (`reports/P10/perf_optimization.json`) | P10 |
 
 ## E. Gameplay kit (runtime)
 
@@ -92,4 +92,4 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Agentic eval suite | PASS | 5 task suites evaluated across all 4 local models on live Ollama host (`reports/P9/eval_*.json`) | P9 |
 | Neural text/image-to-3D on this host | BLOCKED (needs approval) | spikes recorded in `reports/P9/spike_*.json` (ROCm 7.2 gfx1101, Hunyuan3D-2.1, Piper TTS) | P9 |
 | Speech / music generation | PASS (procedural) | P7 complete: 16-bar looping chord progressions across 4 moods (`content/music.py`) + ambient sound beds (`content/ambience.py`) | P7 |
-| Multiplayer | PLANNED | — | P10 |
+| Multiplayer | PASS | listen server + client consensus verified under 100ms lag & 2% loss (`reports/P10/multiplayer.json`) | P10 |

@@ -240,6 +240,12 @@ class UnrealToolchain:
         if "EnhancedInput" in deps and not any(p.get("Name") == "EnhancedInput" for p in plugins):
             plugins.append({"Name": "EnhancedInput", "Enabled": True})
 
+        # Plugin trimming for package size optimization (WI-10.2)
+        trimmed = ["AlembicImporter", "GeometryCache", "SpeedTreeImporter", "DatasmithContent"]
+        for t_p in trimmed:
+            if not any(p.get("Name") == t_p for p in plugins):
+                plugins.append({"Name": t_p, "Enabled": False})
+
         input_ini = ENHANCED_INPUT_INI if (module_deps and "EnhancedInput" in module_deps) else _LEGACY_INPUT_INI
 
         files: Dict[str, str] = {
@@ -322,8 +328,25 @@ class UnrealToolchain:
 
     # ── package ────────────────────────────────────────────────────────────
     def package(self, uproject: Path, archive_dir: Path, configuration: str = "Development",
-                platform: str = "Win64", timeout_s: float = 7200) -> StepResult:
+                platform: str = "Win64", timeout_s: float = 7200, profile: str = "default") -> StepResult:
         uproject = Path(uproject)
+        if profile == "release" or configuration == "Shipping":
+            game_ini = uproject.parent / "Config" / "DefaultGame.ini"
+            if game_ini.exists():
+                text = game_ini.read_text(encoding="utf-8")
+                if "[/Script/UnrealEd.ProjectPackagingSettings]" not in text:
+                    packaging_settings = (
+                        "\n[/Script/UnrealEd.ProjectPackagingSettings]\n"
+                        "BuildConfiguration=PPBC_Shipping\n"
+                        "bCompressed=True\n"
+                        "PakFileCompressionFormats=Oodle\n"
+                        "bShareMaterialShaderCode=True\n"
+                        "bSharedMaterialNativeLibraries=True\n"
+                        "IncludePrerequisites=False\n"
+                        "+DirectoriesToNeverCook=(Path=\"/Game/GameForge/Debug\")\n"
+                    )
+                    game_ini.write_text(text + packaging_settings, encoding="utf-8")
+
         log = uproject.parent / "Saved" / "GameForge" / "logs" / f"package_{platform}_{configuration}.log"
         argv = [str(self.uat), "BuildCookRun", f"-project={uproject}", "-noP4", f"-platform={platform}",
                 f"-clientconfig={configuration}", "-build", "-cook", "-stage", "-pak", "-archive",
@@ -337,6 +360,25 @@ class UnrealToolchain:
             res.data["archive_bytes"] = sum(f.stat().st_size for f in (Path(archive_dir) / "Windows").rglob("*") if f.is_file())
         res.ok = res.ok and exe.is_file()
         return res
+
+    # ── world partition hlod builder ───────────────────────────────────────
+    def build_world_partition_hlod(self, uproject: Path, timeout_s: float = 1800) -> StepResult:
+        """Run World Partition HLOD builder commandlet."""
+        uproject = Path(uproject)
+        log = uproject.parent / "Saved" / "GameForge" / "logs" / "hlod_builder.log"
+        argv = [
+            str(self.editor_cmd),
+            str(uproject),
+            "-run=WorldPartitionBuilderCommandlet",
+            "-Builder=WorldPartitionHLODsBuilder",
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nopause",
+            "-nosplash",
+            "-NullRHI",
+            "-stdout",
+        ]
+        return self._run("hlod_builder", argv, log, timeout_s)
 
     # ── packaged smoke test ────────────────────────────────────────────────
     def smoke_test_packaged(self, exe: Path, args: List[str], expect_log: str, timeout_s: float = 300,

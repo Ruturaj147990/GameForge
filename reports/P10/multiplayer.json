@@ -1,0 +1,94 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-11-01T11:31:25Z",
+  "multiplayer_mode": "listen_server",
+  "consensus": true,
+  "metrics": {
+    "duration_s": 8.55,
+    "server_pickups": 3,
+    "client_pickups": 3,
+    "server_won": true,
+    "client_won": true,
+    "replication_latency_ms": 105.0
+  },
+  "server": {
+    "scenario_id": "server_listen_authority",
+    "role": "server",
+    "status": "PASS",
+    "duration_s": 8.42,
+    "is_server": true,
+    "connected_clients": 1,
+    "events": [
+      {
+        "event": "client_connected",
+        "client_id": 1,
+        "t": 0.5
+      },
+      {
+        "event": "pickup_collected",
+        "client_id": 1,
+        "pickup_id": "relic_1",
+        "t": 2.1
+      },
+      {
+        "event": "pickup_collected",
+        "client_id": 1,
+        "pickup_id": "relic_2",
+        "t": 4.6
+      },
+      {
+        "event": "pickup_collected",
+        "client_id": 1,
+        "pickup_id": "relic_3",
+        "t": 7.3
+      },
+      {
+        "event": "game_won",
+        "outcome": "VICTORY",
+        "t": 7.5
+      }
+    ],
+    "final_stats": {
+      "entity.pickups.collected": 3,
+      "game.won": 1,
+      "game.ended": 1
+    }
+  },
+  "client": {
+    "scenario_id": "client_collect_3",
+    "role": "client",
+    "status": "PASS",
+    "duration_s": 8.55,
+    "net_emulation": {
+      "packet_lag_ms": 100,
+      "packet_loss_pct": 2
+    },
+    "replicated_events": [
+      {
+        "event": "pickup_collected",
+        "pickup_id": "relic_1",
+        "t": 2.21
+      },
+      {
+        "event": "pickup_collected",
+        "pickup_id": "relic_2",
+        "t": 4.72
+      },
+      {
+        "event": "pickup_collected",
+        "pickup_id": "relic_3",
+        "t": 7.42
+      },
+      {
+        "event": "game_won",
+        "outcome": "VICTORY",
+        "t": 7.62
+      }
+    ],
+    "final_stats": {
+      "entity.pickups.collected": 3,
+      "game.won": 1,
+      "game.ended": 1
+    }
+  }
+}
