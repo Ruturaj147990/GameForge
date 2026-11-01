@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QPlainTextEdit,
@@ -40,6 +41,7 @@ from ..widgets.gds_form import GdsForm
 from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
 from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.design.gds import GameDesignSpec
+from src.gameforge_ide.design.patch import apply_patch, propose_patch, summarize_patch
 from src.gameforge_ide.design.presets import PRESETS
 import src.gameforge_ide.design.store as gds_store
 
@@ -311,6 +313,103 @@ class DesignView(QWidget):
         self._questions_panel.setVisible(False)
         main_layout.addWidget(self._questions_panel)
 
+        # ── 2b. Change Request Panel (WI-8.1) ──────────────────────────────────
+        self._pending_change_ops: List[Dict[str, Any]] = []
+        self._change_panel = QFrame(self)
+        self._change_panel.setObjectName("designChangePanel")
+        self._change_panel.setAccessibleName("Change request panel")
+        self._change_panel.setStyleSheet(
+            f"QFrame#{self._change_panel.objectName()} {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: {tokens.SPACE_SM}px;"
+            f"}}"
+        )
+        self._change_layout = QVBoxLayout(self._change_panel)
+        self._change_layout.setContentsMargins(10, 8, 10, 8)
+        self._change_layout.setSpacing(6)
+
+        row_req = QHBoxLayout()
+        self._txt_change = QLineEdit(self._change_panel)
+        self._txt_change.setObjectName("txtDesignChangeRequest")
+        self._txt_change.setPlaceholderText("Change this game… (e.g. make guards faster, add a hazard area, make it night)")
+        self._txt_change.setStyleSheet(
+            f"QLineEdit {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px 10px; font-size: {tokens.FONT_BODY}px;"
+            f"}}"
+        )
+        self._txt_change.returnPressed.connect(self._on_propose_change)
+        row_req.addWidget(self._txt_change, 1)
+
+        self._btn_preview_change = QPushButton("Preview change", self._change_panel)
+        self._btn_preview_change.setObjectName("btnDesignPreviewChange")
+        self._btn_preview_change.setCursor(Qt.PointingHandCursor)
+        self._btn_preview_change.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+        self._btn_preview_change.clicked.connect(self._on_propose_change)
+        row_req.addWidget(self._btn_preview_change)
+
+        self._change_layout.addLayout(row_req)
+
+        self._diff_preview_box = QFrame(self._change_panel)
+        self._diff_preview_box.setObjectName("designDiffPreviewBox")
+        diff_box_layout = QVBoxLayout(self._diff_preview_box)
+        diff_box_layout.setContentsMargins(0, 4, 0, 0)
+        diff_box_layout.setSpacing(6)
+
+        self._lbl_diff_preview = QLabel(self._diff_preview_box)
+        self._lbl_diff_preview.setObjectName("lblDesignDiffPreview")
+        self._lbl_diff_preview.setStyleSheet(
+            f"color: {tokens.ACCENT_PRIMARY}; font-size: {tokens.FONT_BODY_SM}px;"
+        )
+        self._lbl_diff_preview.setWordWrap(True)
+        diff_box_layout.addWidget(self._lbl_diff_preview)
+
+        row_actions = QHBoxLayout()
+        row_actions.addStretch(1)
+
+        self._btn_apply_change = QPushButton("Apply (new revision)", self._diff_preview_box)
+        self._btn_apply_change.setObjectName("btnDesignApplyChange")
+        self._btn_apply_change.setCursor(Qt.PointingHandCursor)
+        self._btn_apply_change.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_SUCCESS};"
+            f"  border: 1px solid {tokens.ACCENT_SUCCESS}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_MD}px; font-weight: 600;"
+            f"}}"
+        )
+        self._btn_apply_change.clicked.connect(self._on_apply_change)
+        row_actions.addWidget(self._btn_apply_change)
+
+        self._btn_rebuild_changes = QPushButton("Rebuild changes", self._diff_preview_box)
+        self._btn_rebuild_changes.setObjectName("btnDesignRebuildChanges")
+        self._btn_rebuild_changes.setCursor(Qt.PointingHandCursor)
+        self._btn_rebuild_changes.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: none; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_LG}px; font-weight: 600;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+        )
+        self._btn_rebuild_changes.clicked.connect(self._on_rebuild_changes)
+        row_actions.addWidget(self._btn_rebuild_changes)
+
+        diff_box_layout.addLayout(row_actions)
+        self._diff_preview_box.setVisible(False)
+        self._change_layout.addWidget(self._diff_preview_box)
+
+        main_layout.addWidget(self._change_panel)
+
         # ── 3. Scrollable Form Container ──────────────────────────────────────
         scroll = QScrollArea(self)
         scroll.setObjectName("designScrollArea")
@@ -528,3 +627,58 @@ class DesignView(QWidget):
             self._form.set_spec(dlg.validated_spec)
             self._is_dirty = True
             self._lbl_dirty.setVisible(True)
+
+    @Slot()
+    def _on_propose_change(self) -> None:
+        text = self._txt_change.text().strip()
+        if not text:
+            return
+        curr_spec = self._form.get_spec() or self._current_spec
+        if not curr_spec:
+            return
+        prop = propose_patch(curr_spec, text)
+        if prop.status == "OK" and prop.ops:
+            self._pending_change_ops = prop.ops
+            sentences = summarize_patch(curr_spec, prop.ops)
+            summary_txt = "<b>Diff preview:</b><br/>" + "<br/>".join(f"• {s}" for s in sentences)
+            self._lbl_diff_preview.setText(summary_txt)
+            self._btn_apply_change.setEnabled(True)
+            self._btn_rebuild_changes.setEnabled(True)
+            self._diff_preview_box.setVisible(True)
+        else:
+            msg = prop.summary or "Could not generate patch."
+            if prop.questions:
+                msg += "<br/>" + "<br/>".join(f"• {q}" for q in prop.questions)
+            self._lbl_diff_preview.setText(f"<font color='{tokens.ACCENT_ERROR}'>{msg}</font>")
+            self._btn_apply_change.setEnabled(False)
+            self._btn_rebuild_changes.setEnabled(False)
+            self._diff_preview_box.setVisible(True)
+
+    @Slot()
+    def _on_apply_change(self) -> None:
+        if not self._pending_change_ops:
+            return
+        curr_spec = self._form.get_spec() or self._current_spec
+        if not curr_spec:
+            return
+        try:
+            patched = apply_patch(curr_spec, self._pending_change_ops)
+            self._current_spec = patched
+            self._form.set_spec(patched)
+            self._is_dirty = False
+            self._lbl_dirty.setVisible(False)
+            if self._current_project:
+                p_root = get_settings().projects_root
+                if p_root:
+                    p_dir = Path(p_root) / self._current_project
+                    gds_store.save(p_dir, patched)
+            self._diff_preview_box.setVisible(False)
+            self._txt_change.clear()
+            self._pending_change_ops = []
+        except Exception as exc:
+            QMessageBox.warning(self, "Patch Error", f"Could not apply patch: {exc}")
+
+    @Slot()
+    def _on_rebuild_changes(self) -> None:
+        self._on_apply_change()
+        self.build_game()

@@ -43,6 +43,11 @@ def test_design_view_widget_hierarchy(qapp):
         assert view.findChild(object, "btnDesignRawJson") is not None
         assert view.findChild(object, "btnDesignBuild") is not None
         assert view.findChild(object, "designQuestionsPanel") is not None
+        assert view.findChild(object, "designChangePanel") is not None
+        assert view.findChild(object, "txtDesignChangeRequest") is not None
+        assert view.findChild(object, "btnDesignPreviewChange") is not None
+        assert view.findChild(object, "btnDesignApplyChange") is not None
+        assert view.findChild(object, "btnDesignRebuildChanges") is not None
         assert view.findChild(GdsForm, "gdsForm") is not None
     finally:
         view.deleteLater()
@@ -164,6 +169,47 @@ def test_design_save_and_history_diff(qapp, tmp_path, monkeypatch):
         r2_spec = gds_store.load_revision(proj_dir, 2)
         diff_ops = gds_store.diff(r1_spec, r2_spec)
         assert len(diff_ops) > 0
+    finally:
+        view.deleteLater()
+
+
+def test_design_view_change_request_workflow(qapp, tmp_path, monkeypatch):
+    """Verify change request input, preview diff, and apply to new revision (WI-8.1)."""
+    monkeypatch.setattr(
+        "src.gameforge_ide.desktop.views.design_view.get_settings",
+        lambda: type("SettingsMock", (), {"projects_root": str(tmp_path)})(),
+    )
+
+    proj_dir = tmp_path / "ChangeReqGame"
+    proj_dir.mkdir(parents=True)
+    from src.gameforge_ide.design.presets import preset_relic_hunt
+    spec = preset_relic_hunt(title="ChangeReqGame")
+    spec.meta.project_name = "ChangeReqGame"
+    spec.meta.revision = 1
+    gds_store.save(proj_dir, spec)
+
+    view = DesignView()
+    view.show()
+    try:
+        assert view.load_project("ChangeReqGame") is True
+        assert view._current_spec.meta.revision == 1
+
+        # Propose faster guards
+        view._txt_change.setText("make guards faster")
+        view._btn_preview_change.click()
+
+        assert not view._diff_preview_box.isHidden()
+        assert "500.0" in view._lbl_diff_preview.text()
+
+        # Apply change
+        view._btn_apply_change.click()
+
+        # Spec revision should bump to 2
+        assert view._current_spec.meta.revision == 2
+        assert view._diff_preview_box.isHidden()
+
+        p_guard = next(e for e in view._current_spec.entities if e.entity_id == "guard")
+        assert p_guard.props["move_speed"] == 500.0
     finally:
         view.deleteLater()
 
