@@ -506,12 +506,32 @@ class DesignView(QWidget):
             if not self.save_spec():
                 return
 
-        # Show run approval scope dialog
+        # Show run approval scope dialog with impact analysis (WI-8.2)
+        impact_summary = ""
+        p_root = get_settings().projects_root
+        if p_root:
+            p_dir = Path(p_root) / self._current_project
+            store = RunStore(p_dir / ".gameforge" / "runs")
+            latest_id = store.latest_run_id()
+            if latest_id:
+                prev_state = store.load(latest_id)
+                if prev_state and self._current_spec:
+                    try:
+                        from src.gameforge_ide.composer.compose import compose
+                        from src.gameforge_ide.composer.plan import composition_to_run_spec
+                        from src.gameforge_ide.forge.impact import impact
+                        comp = compose(self._current_spec, str(p_dir))
+                        new_spec = composition_to_run_spec(comp, str(p_dir.parent), str(p_dir), origin="change_request")
+                        rep = impact(prev_state, new_spec)
+                        impact_summary = f"{rep.format_summary()}\n\n"
+                    except Exception:
+                        pass
+
         msg = (
+            f"{impact_summary}"
             f"Approval Scope for '{self._current_project}':\n\n"
             f"• Project Folder: {get_settings().projects_root}/{self._current_project}\n"
-            f"• Unreal Editor operations (compile C++, assemble level, lighting, package)\n"
-            f"• Estimated runtime: ~1-2 minutes\n\n"
+            f"• Unreal Editor operations (compile C++, assemble level, lighting, package)\n\n"
             f"Do you want to start this Forge run now?"
         )
         reply = QMessageBox.question(self, "Approve Forge Run", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
