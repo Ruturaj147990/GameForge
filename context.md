@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-11-01T05:35Z (UTC from the system clock). Updated by Antigravity upon Phase 8 completion.
+**Last updated:** 2026-11-01T05:55Z (UTC from the system clock). Updated by Antigravity upon Phase 9 completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -67,19 +67,28 @@ makes games, not a game. Product definition, design contract and security rules:
   - WI-8.5: Agent work on existing code with verification (`backend/agent/code_verify.py`): DAG verification specs (`build_editor -> automation -> package -> scenarios`), and `propose_assistant_fix` repair loop capped at 3 attempts with symbol indexing.
   - WI-8.6: Opening existing Unreal projects in read-only mode (`pipeline/project_import.py`), generating reverse draft GDS (`generator="model:import"`, `imported: true`), and enabling GameForge management with checkpoints protection.
   - Exit Gates: 10 scripted change requests PASS (`reports/P8/change_requests.json`), user-edit guard conflict PASS, 100k index benchmark PASS (`reports/P8/index_benchmark.json`), Epic template import demo PASS (`reports/P8/import_demo.json`).
+- **P9 Model Intelligence and Agentic Specialization complete (WI-9.1-WI-9.6 DONE, commits `4e8e48a`, `0afd0fa`, `dfed02e`, `57b5886`, `7b7c768`):**
+  - WI-9.1: Agentic evaluation suite implemented in `src/gameforge_ide/evals/` (`runner.py`, `metrics.py`, `adapters.py`, `report.py`) across 5 task suites (60 design draft, 40 GDS patch, 20 codegen rule, 30 compiler repair, 30 vision rubric). Evaluated live on Ollama host across all 4 local models (`reports/P9/eval_*.json`).
+  - WI-9.2: Hosted tier validation harness verified with `GuardedProvider` (Anthropic Messages API format with `tool_use`, OpenAI-compatible format, spend ledger, per-day/per-task caps). Live calls marked `BLOCKED (needs approval: hosted API key and egress consent)`.
+  - WI-9.3: Evidence-based model routing (`scripts/models/gen_routing.py`) generating `src/gameforge_ide/config/model_routing.json` with strict latency budgets. Settings view displays live evidence source report.
+  - WI-9.4: Local fine-tune flywheel capture implemented in `src/gameforge_ide/models/flywheel.py` (opt-in, local-only, capturing accepted designs, patches, and compiler repairs to `E:\GameForge\datasetslywheel\<yyyymm>.jsonl`). GPU training run marked `BLOCKED (needs approval)`.
+  - WI-9.5: Neural content spikes recorded in `reports/P9/spike_rocm.json` (AMD HIP SDK 7.2 on Windows gfx1101 RX 7700 XT), `spike_hunyuan3d.json` (Hunyuan3D-2.1 shape-only 12GB VRAM limit and Tencent licence territory restrictions), and `spike_piper.json` (Piper TTS MIT engine, CPU inference).
+  - WI-9.6: Native tool calling verified on all 4 canonical models (4/4 PASS in `reports/native_tool_selftest.json`). Ollama version mismatch detection in `systems.py`. Model structured-output repair stats logging in `stats_logger.py`. Tool schema comparison recorded in `reports/P9/schema_comparison.json` (compact schema saves ~93% tokens vs expanded `oneOf`).
+  - Exit Gates: 1. Eval reports for all 4 local models PASS (`reports/P9/eval_*.json`). 2. `model_routing.json` generated from reports and wired to IDE PASS. 3. Neural spikes recorded and flywheel capture verified PASS. 4. `docs/07_CONTENT_AND_MODELS.md` updated with measured numbers PASS.
 - **Tests & Verification:**
-  - Unit tests: **738 passed** (exit 0).
+  - Unit tests: **746 passed** (exit 0).
+  - Native tool calling: **4/4 passed** on live Ollama host.
   - Protected oracles: **45 passed** in 0.05s (exit 0).
   - Op catalog (129 ops) & schemas: verified current (`gen_op_coverage.py --check` and `gen_op_schemas.py --check` PASS).
   - Real-world packaged scenarios: PASS (`collect_3` verified in packaged Development build).
   - Git: clean on `master` branch.
 
-## 4. NEXT ACTION (2026-11-01T05:35Z)
+## 4. NEXT ACTION (2026-11-01T05:55Z)
 
-Begin **Phase 9 (Local Multi-Model Roster, Agentic Specialization, and Hosted Tier)** in `docs/handovers/P09_models_and_specialists.md`:
-1. WI-9.1: Role routing enforcement (`design`, `codegen`, `review`, `chat`) and fallback ladder.
-2. WI-9.2: Specialized prompt templates and few-shot calibration per local model.
-3. WI-9.3: Agentic evaluation suite (F-19) for autonomous verification.
+Begin **Phase 10 (Scale, Packaging & Advanced Capabilities)** in `docs/handovers/P10_scale_advanced.md`:
+1. WI-10.1: Shipping package size optimization (F-13: target <= 400 MB).
+2. WI-10.2: World Partition streaming and traversal.
+3. WI-10.3: CSV profiling and performance benchmarking in packaged builds.
 Work on `master` only, one commit per work item.
 
 ## 5. Key facts and paths
@@ -117,3 +126,4 @@ Work on `master` only, one commit per work item.
 - 2026-10-31T20:00Z — Antigravity: completed Phase 4 (WI-4.8-4.10, commit `7b09da3`), completed Phase 5 Gameplay Kit v2 (17 kit actor types, compiled GFKitTestEditor, packaged Dev & Ship builds, 14/14 dev + 5/5 ship scenarios PASS, `reports/P5/kit_scenarios_final.json`, commit `0d04565`), completed Phase 6 Composer (deterministic composer, 6 layouts, Bridson scatter, ballistic reachability, level_ops strict validation, gfdef runtime def, Forge DAG plan, legacy recipes retired to test fixtures, 6 parity reports + 2 new genres PASS, `reports/P6/`, commit `780ac45`). All 693 unit tests pass, 45 protected oracles pass. Ready for Phase 7.
 - 2026-11-01T04:40Z — Antigravity: completed Phase 7 Content, Art Direction, and Review (WI-7.1-7.10). Epic template packs installed & registered (157 assets in GFKitTest, cook dirs configured), character visuals (SKM_Manny/Quinn + ABP_Unarmed), 6 themes with WCAG contrast enforcement, 10 procedural CSG props, biomes role scatter, real packaged scenario verified (`collect_3` PASS in 7.27s), MetaHuman spike recorded, VFX/SFX/music/ambience audio feedback library, content library with licence declaration enforcement, vision rubric & deterministic mesh audit gate (`placeholder_ok=False`). All 703 unit tests pass, 45 protected oracles pass. Ready for Phase 8.
 - 2026-11-01T05:35Z - Antigravity: completed Phase 8 Living Projects (WI-8.1-WI-8.6). GDS RFC 6902 patch engine, incremental DAG impact analysis, project graph actor reconciliation with user edit protection ('keep mine' verified), SQLite FTS5 indexer with 100k-file benchmark (cold 315.09s, inc 0.256s, p95 19.99ms), agent code verification repair loop, and template import demo. All 4 exit gates PASS (reports/P8/). Unit tests: 738 passed, protected: 45 passed.
+- 2026-11-01T05:55Z - Antigravity: completed Phase 9 Model Intelligence (WI-9.1-WI-9.6). Agentic eval suite implemented and executed live across all 4 local Ollama models (reports/P9/eval_*.json), evidence-based model routing generated into model_routing.json, native tool calling verified (4/4 PASS), neural spikes recorded, flywheel capture verified, and tool schemas compared. Unit tests: 746 passed, protected: 45 passed.
