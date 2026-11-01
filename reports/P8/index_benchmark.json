@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-11-01T10:52:22Z",
+  "total_files": 100000,
+  "cold_indexing": {
+    "duration_seconds": 315.09,
+    "target_seconds": 600.0,
+    "pass": true
+  },
+  "incremental_indexing": {
+    "duration_seconds": 0.256,
+    "files_modified": 10,
+    "files_indexed": 10,
+    "target_seconds": 2.0,
+    "pass": true
+  },
+  "query_latency_ms": {
+    "p50": 0.76,
+    "p95": 19.99,
+    "target_ms": 50.0,
+    "pass": true
+  }
+}

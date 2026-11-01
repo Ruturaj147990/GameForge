@@ -1,0 +1,161 @@
+{
+  "suite": "P8 Living Projects Change Requests & User Edit Protection",
+  "timestamp": "2026-11-01T10:46:22Z",
+  "overall_status": "PASS",
+  "change_requests": [
+    {
+      "id": "CR-1",
+      "request": "make the guards faster",
+      "description": "Guard speed scaled x1.25",
+      "revision": 2,
+      "impact": {
+        "skip_count": 3,
+        "rerun_count": 8,
+        "new_count": 0,
+        "estimated_minutes": 5.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.603
+    },
+    {
+      "id": "CR-2",
+      "request": "more relics",
+      "description": "Relics count increased +50% and goal updated",
+      "revision": 3,
+      "impact": {
+        "skip_count": 10,
+        "rerun_count": 1,
+        "new_count": 0,
+        "estimated_minutes": 0.1
+      },
+      "status": "PASS",
+      "duration_seconds": 0.087
+    },
+    {
+      "id": "CR-3",
+      "request": "add a hazard area",
+      "description": "Hazard entity added to level",
+      "revision": 4,
+      "impact": {
+        "skip_count": 3,
+        "rerun_count": 8,
+        "new_count": 0,
+        "estimated_minutes": 5.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.601
+    },
+    {
+      "id": "CR-4",
+      "request": "make it night",
+      "description": "Scene lighting switched to night",
+      "revision": 5,
+      "impact": {
+        "skip_count": 3,
+        "rerun_count": 8,
+        "new_count": 0,
+        "estimated_minutes": 5.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.597
+    },
+    {
+      "id": "CR-5",
+      "request": "add a checkpoint",
+      "description": "Checkpoint entity added to level",
+      "revision": 6,
+      "impact": {
+        "skip_count": 3,
+        "rerun_count": 8,
+        "new_count": 0,
+        "estimated_minutes": 5.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.6
+    },
+    {
+      "id": "CR-6",
+      "request": "change the win to also require reaching the gate",
+      "description": "Win goal condition updated",
+      "revision": 7,
+      "impact": {
+        "skip_count": 10,
+        "rerun_count": 1,
+        "new_count": 0,
+        "estimated_minutes": 0.1
+      },
+      "status": "PASS",
+      "duration_seconds": 0.092
+    },
+    {
+      "id": "CR-7",
+      "request": "rename the title to Relic Hunt Shadows",
+      "description": "Title renamed in metadata",
+      "revision": 8,
+      "impact": {
+        "skip_count": 0,
+        "rerun_count": 11,
+        "new_count": 0,
+        "estimated_minutes": 7.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.819
+    },
+    {
+      "id": "CR-8",
+      "request": "add a second level",
+      "description": "Level 2 added to scene",
+      "revision": 9,
+      "impact": {
+        "skip_count": 4,
+        "rerun_count": 7,
+        "new_count": 1,
+        "estimated_minutes": 5.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.608
+    },
+    {
+      "id": "CR-9",
+      "request": "remove guards",
+      "description": "Guard entity removed",
+      "revision": 10,
+      "impact": {
+        "skip_count": 3,
+        "rerun_count": 9,
+        "new_count": 0,
+        "estimated_minutes": 6.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.665
+    },
+    {
+      "id": "CR-10",
+      "request": "add a door with a key",
+      "description": "Door and bronze key entities added",
+      "revision": 11,
+      "impact": {
+        "skip_count": 3,
+        "rerun_count": 9,
+        "new_count": 0,
+        "estimated_minutes": 6.3
+      },
+      "status": "PASS",
+      "duration_seconds": 0.689
+    }
+  ],
+  "user_edit_protection": {
+    "status": "PASS",
+    "actor_id": "level_1/guard_1",
+    "original_hash": "173671f27c5fe126e8d1932e00fae4ed643878cfc17302e158e7167d7708eb31",
+    "modified_location": {
+      "x": 777.0,
+      "y": 888.0,
+      "z": 0.0
+    },
+    "conflict_detected": true,
+    "resolution_applied": "keep_mine",
+    "final_owner": "user",
+    "preserved_in_plan": true
+  }
+}

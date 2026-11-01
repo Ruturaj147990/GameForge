@@ -48,7 +48,7 @@ class ImpactReport(BaseModel):
         names = ", ".join(to_rebuild[:4])
         if len(to_rebuild) > 4:
             names += f", +{len(to_rebuild) - 4} more"
-        return f"This change rebuilds: {names} (≈ {self.estimated_minutes} min)"
+        return f"This change rebuilds: {names} (~ {self.estimated_minutes} min)"
 
 
 def compute_effective_hashes(spec: RunSpec) -> Dict[str, str]:

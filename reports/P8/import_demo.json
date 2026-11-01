@@ -1,0 +1,44 @@
+{
+  "suite": "P8 Import Demo",
+  "timestamp": "2026-11-01T10:48:34Z",
+  "status": "PASS",
+  "source_template": "E:\\UE\\UE_5.7\\Templates\\TP_ThirdPersonBP",
+  "imported_project": "E:\\GameForge\\validation\\P8_import_20261101",
+  "inspection": {
+    "project_name": "TP_ThirdPersonBP",
+    "engine_association": "",
+    "levels_count": 1,
+    "classes_count": 0,
+    "input_actions_count": 0,
+    "total_files": 7
+  },
+  "reverse_draft": {
+    "title": "TP_ThirdPersonBP",
+    "generator": "model:import",
+    "extra_checks": [
+      "imported: true"
+    ],
+    "levels": [
+      "thirdperson_lvl_thirdperson"
+    ]
+  },
+  "management": {
+    "plugin_installed": true,
+    "git_strategy": "disabled",
+    "warning": "Checkpoints disabled: rollback unavailable on external git repository.",
+    "project_graph_initialized": true
+  },
+  "change_request": {
+    "request": "add one kit pickup",
+    "added_entity_id": "pickup_1",
+    "tags": [
+      "GF_Owned"
+    ],
+    "revision": 2
+  },
+  "build": {
+    "run_id": "run_20261101_104834_8e20bd",
+    "steps_count": 11,
+    "status": "DONE"
+  }
+}

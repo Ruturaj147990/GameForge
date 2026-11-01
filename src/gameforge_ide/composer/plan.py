@@ -39,7 +39,7 @@ def composition_to_run_spec(
             step_id="scaffold",
             kind=StepKind.SCAFFOLD,
             title=f"Scaffold project {comp.project_name}",
-            depends_on=["design"],
+            depends_on=[],
             engine_lock=False,
             inputs={
                 "project_name": comp.project_name,

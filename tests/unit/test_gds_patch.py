@@ -106,7 +106,7 @@ def test_shortcut_add_hazard(base_gds: GameDesignSpec):
     patched = apply_patch(base_gds, prop.ops)
     h = next((e for e in patched.entities if e.kind.value == "hazard"), None)
     assert h is not None
-    assert h.props["damage"] == 25.0
+    assert h.props["damage_per_second"] == 25.0
 
 
 def test_shortcut_add_second_level(base_gds: GameDesignSpec):
@@ -152,7 +152,7 @@ def test_shortcut_add_door_with_key(base_gds: GameDesignSpec):
     key = next((e for e in patched.entities if e.entity_id == "key_bronze"), None)
     assert door is not None
     assert key is not None
-    assert door.props["key_id"] == "key_bronze"
+    assert door.props["required_stat"] == "entity.key_bronze.collected"
 
 
 def test_summarize_patch_sentences(base_gds: GameDesignSpec):

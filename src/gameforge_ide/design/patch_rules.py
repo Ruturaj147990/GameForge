@@ -31,6 +31,11 @@ def match_deterministic_rule(gds: GameDesignSpec, request: str) -> Optional[Prop
     if patch:
         return patch
 
+    # Rule 3b: Add pickup / relic
+    patch = _match_add_pickup(gds, req)
+    if patch:
+        return patch
+
     # Rule 4: Lighting (day / dusk / night / indoor)
     patch = _match_lighting(gds, req)
     if patch:
@@ -188,6 +193,27 @@ def _match_add_n(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     return None
 
 
+def _match_add_pickup(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    if not re.search(r"(?i)\badd\s+(?:1\s+|one\s+|a\s+)?(?:kit\s+)?(pickup|relic|coin)\b", req):
+        return None
+
+    level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
+    existing_pickups = [e for e in gds.entities if e.kind == EntityKind.PICKUP]
+    p_id = f"pickup_{len(existing_pickups) + 1}"
+    new_entity = {
+        "entity_id": p_id,
+        "kind": "pickup",
+        "module": "kit.pickup",
+        "level_id": level_id,
+        "count": 1,
+        "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
+        "tags": ["GF_Owned"],
+        "props": {"value": 1, "objective_id": p_id},
+    }
+    ops = [{"op": "add", "path": "/entities/-", "value": new_entity}]
+    return ProposedPatch(ops=ops, summary=f"Added kit pickup '{p_id}'", status="OK")
+
+
 def _match_lighting(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     m = re.search(r"(?i)\b(night|dusk|day|indoor)\s*(?:lighting|light)?\b", req)
     if not m:
@@ -215,7 +241,7 @@ def _match_add_checkpoint(gds: GameDesignSpec, req: str) -> Optional[ProposedPat
         "level_id": level_id,
         "count": 1,
         "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
-        "props": {"respawn_health": 100.0},
+        "props": {"activate_once": True},
         "tags": ["GF_Owned"],
     }
     ops = [{"op": "add", "path": "/entities/-", "value": new_entity}]
@@ -237,7 +263,7 @@ def _match_add_hazard(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
         "level_id": level_id,
         "count": 1,
         "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
-        "props": {"damage": 25.0, "radius": 300.0},
+        "props": {"damage_per_second": 25.0, "shape_extent": 150.0},
         "tags": ["GF_Owned"],
     }
     ops = [{"op": "add", "path": "/entities/-", "value": new_entity}]
@@ -340,7 +366,7 @@ def _match_add_door_key(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch
         "count": 1,
         "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
         "tags": ["GF_Owned"],
-        "props": {"item_id": "key_bronze", "value": 1.0},
+        "props": {"value": 1, "objective_id": "key_bronze"},
     }
     door_ent = {
         "entity_id": "door_gate",
@@ -350,7 +376,7 @@ def _match_add_door_key(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch
         "count": 1,
         "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
         "tags": ["GF_Owned"],
-        "props": {"key_id": "key_bronze", "locked": True},
+        "props": {"required_stat": "entity.key_bronze.collected", "required_value": 1.0, "open_seconds": 1.0},
     }
     ops = [
         {"op": "add", "path": "/entities/-", "value": key_ent},
