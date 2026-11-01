@@ -450,3 +450,23 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
             overrides["foliage_density"] = float(m.group(1))
 
     return overrides
+
+
+def get_preset_spec(name: str) -> GameDesignSpec:
+    """Retrieve a default GameDesignSpec for a named preset."""
+    factories = {
+        "relic_hunt": preset_relic_hunt,
+        "platformer": preset_platformer,
+        "arena_combat": preset_arena_combat,
+        "card_battler": preset_card_battler,
+        "procedural_world": preset_procedural_world,
+        "top_down_shooter": preset_top_down_shooter,
+        "tic_tac_toe": preset_tic_tac_toe,
+        "connect_four": preset_connect_four,
+        "gomoku": preset_gomoku,
+    }
+    factory = factories.get(name)
+    if factory is None:
+        raise KeyError(f"Unknown preset name: {name!r}")
+    return factory()
+

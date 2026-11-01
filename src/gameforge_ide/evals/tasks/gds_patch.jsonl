@@ -1,0 +1,40 @@
+{"id": "gp_01", "gds_fixture": "relic_hunt", "request": "make the guards faster", "expect": [{"path": "/entities/*/props/movement_speed", "op": ">", "multiplier": 1.25}]}
+{"id": "gp_02", "gds_fixture": "platformer", "request": "make the player faster", "expect": [{"path": "/entities/*/props/speed", "op": ">", "multiplier": 1.25}]}
+{"id": "gp_03", "gds_fixture": "relic_hunt", "request": "make the guards slower", "expect": [{"path": "/entities/*/props/movement_speed", "op": "<", "multiplier": 0.85}]}
+{"id": "gp_04", "gds_fixture": "platformer", "request": "add 3 more relics", "expect": [{"path": "/entities/*/count", "op": ">", "delta": 3}]}
+{"id": "gp_05", "gds_fixture": "relic_hunt", "request": "add 5 more coins", "expect": [{"path": "/entities/*/count", "op": ">", "delta": 5}]}
+{"id": "gp_06", "gds_fixture": "platformer", "request": "reduce enemies by 50%", "expect": [{"path": "/entities/*/count", "op": "<", "multiplier": 0.6}]}
+{"id": "gp_07", "gds_fixture": "relic_hunt", "request": "add a hazard area", "expect": [{"path": "/entities", "op": "contains_kind", "value": "hazard"}]}
+{"id": "gp_08", "gds_fixture": "platformer", "request": "add night lighting", "expect": [{"path": "/scene/lighting", "op": "==", "value": "night"}]}
+{"id": "gp_09", "gds_fixture": "relic_hunt", "request": "change lighting to dusk", "expect": [{"path": "/scene/lighting", "op": "==", "value": "dusk"}]}
+{"id": "gp_10", "gds_fixture": "platformer", "request": "make it day lighting", "expect": [{"path": "/scene/lighting", "op": "==", "value": "day"}]}
+{"id": "gp_11", "gds_fixture": "relic_hunt", "request": "add a checkpoint station", "expect": [{"path": "/entities", "op": "contains_kind", "value": "checkpoint"}]}
+{"id": "gp_12", "gds_fixture": "platformer", "request": "add a locked door with a key", "expect": [{"path": "/entities", "op": "contains_kind", "value": "door"}]}
+{"id": "gp_13", "gds_fixture": "relic_hunt", "request": "also require reaching the escape gate to win", "expect": [{"path": "/goals", "op": "count_increase", "delta": 1}]}
+{"id": "gp_14", "gds_fixture": "platformer", "request": "rename the title to Shadow Keep", "expect": [{"path": "/meta/title", "op": "==", "value": "Shadow Keep"}]}
+{"id": "gp_15", "gds_fixture": "relic_hunt", "request": "rename the game to Crystal Valley", "expect": [{"path": "/meta/title", "op": "==", "value": "Crystal Valley"}]}
+{"id": "gp_16", "gds_fixture": "platformer", "request": "add a second level called Level 2", "expect": [{"path": "/scene/levels", "op": "count_increase", "delta": 1}]}
+{"id": "gp_17", "gds_fixture": "relic_hunt", "request": "remove all guards", "expect": [{"path": "/entities", "op": "does_not_contain_kind", "value": "guard"}]}
+{"id": "gp_18", "gds_fixture": "platformer", "request": "remove all hazards", "expect": [{"path": "/entities", "op": "does_not_contain_kind", "value": "hazard"}]}
+{"id": "gp_19", "gds_fixture": "relic_hunt", "request": "add 2 more checkpoints", "expect": [{"path": "/entities", "op": "contains_kind", "value": "checkpoint"}]}
+{"id": "gp_20", "gds_fixture": "platformer", "request": "add 4 spikes hazards", "expect": [{"path": "/entities", "op": "contains_kind", "value": "hazard"}]}
+{"id": "gp_21", "gds_fixture": "relic_hunt", "request": "make the guards faster in level_1", "expect": [{"path": "/entities/*/props/movement_speed", "op": ">", "multiplier": 1.25}]}
+{"id": "gp_22", "gds_fixture": "platformer", "request": "make the player faster in level_2", "expect": [{"path": "/entities/*/props/speed", "op": ">", "multiplier": 1.25}]}
+{"id": "gp_23", "gds_fixture": "relic_hunt", "request": "make the guards slower in level_1", "expect": [{"path": "/entities/*/props/movement_speed", "op": "<", "multiplier": 0.85}]}
+{"id": "gp_24", "gds_fixture": "platformer", "request": "add 3 more relics in level_2", "expect": [{"path": "/entities/*/count", "op": ">", "delta": 3}]}
+{"id": "gp_25", "gds_fixture": "relic_hunt", "request": "add 5 more coins in level_1", "expect": [{"path": "/entities/*/count", "op": ">", "delta": 5}]}
+{"id": "gp_26", "gds_fixture": "platformer", "request": "reduce enemies by 50% in level_2", "expect": [{"path": "/entities/*/count", "op": "<", "multiplier": 0.6}]}
+{"id": "gp_27", "gds_fixture": "relic_hunt", "request": "add a hazard area in level_1", "expect": [{"path": "/entities", "op": "contains_kind", "value": "hazard"}]}
+{"id": "gp_28", "gds_fixture": "platformer", "request": "add night lighting in level_2", "expect": [{"path": "/scene/lighting", "op": "==", "value": "night"}]}
+{"id": "gp_29", "gds_fixture": "relic_hunt", "request": "change lighting to dusk in level_1", "expect": [{"path": "/scene/lighting", "op": "==", "value": "dusk"}]}
+{"id": "gp_30", "gds_fixture": "platformer", "request": "make it day lighting in level_2", "expect": [{"path": "/scene/lighting", "op": "==", "value": "day"}]}
+{"id": "gp_31", "gds_fixture": "relic_hunt", "request": "add a checkpoint station in level_1", "expect": [{"path": "/entities", "op": "contains_kind", "value": "checkpoint"}]}
+{"id": "gp_32", "gds_fixture": "platformer", "request": "add a locked door with a key in level_2", "expect": [{"path": "/entities", "op": "contains_kind", "value": "door"}]}
+{"id": "gp_33", "gds_fixture": "relic_hunt", "request": "also require reaching the escape gate to win in level_1", "expect": [{"path": "/goals", "op": "count_increase", "delta": 1}]}
+{"id": "gp_34", "gds_fixture": "platformer", "request": "rename the title to Shadow Keep in level_2", "expect": [{"path": "/meta/title", "op": "==", "value": "Shadow Keep"}]}
+{"id": "gp_35", "gds_fixture": "relic_hunt", "request": "rename the game to Crystal Valley in level_1", "expect": [{"path": "/meta/title", "op": "==", "value": "Crystal Valley"}]}
+{"id": "gp_36", "gds_fixture": "platformer", "request": "add a second level called Level 2 in level_2", "expect": [{"path": "/scene/levels", "op": "count_increase", "delta": 1}]}
+{"id": "gp_37", "gds_fixture": "relic_hunt", "request": "remove all guards in level_1", "expect": [{"path": "/entities", "op": "does_not_contain_kind", "value": "guard"}]}
+{"id": "gp_38", "gds_fixture": "platformer", "request": "remove all hazards in level_2", "expect": [{"path": "/entities", "op": "does_not_contain_kind", "value": "hazard"}]}
+{"id": "gp_39", "gds_fixture": "relic_hunt", "request": "add 2 more checkpoints in level_1", "expect": [{"path": "/entities", "op": "contains_kind", "value": "checkpoint"}]}
+{"id": "gp_40", "gds_fixture": "platformer", "request": "add 4 spikes hazards in level_2", "expect": [{"path": "/entities", "op": "contains_kind", "value": "hazard"}]}
