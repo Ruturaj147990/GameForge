@@ -394,17 +394,18 @@ class TaskPlanExecutor:
                 "error": f"Tool '{tool_name}' not in permitted tools for task '{task.task_id}' ({task.permitted_tools})",
             }
 
+        is_approved = getattr(task, "approved", False) or not task.requires_approval
         res = self.tool_gateway.execute_tool(
             tool_name,
             tool_args,
-            approval_granted=True,  # Approval was checked at task node level
+            approval_granted=is_approved,
         )
         if tool_name == "propose_edit" and res.get("status") == "PENDING_APPROVAL" and res.get("diff_id"):
             # If the task node execution is approved, apply the diff to the filesystem
             apply_res = self.tool_gateway.execute_tool(
                 "apply_edit",
                 {"diff_id": res["diff_id"]},
-                approval_granted=True,
+                approval_granted=is_approved,
             )
             apply_res["diff_id"] = res["diff_id"]
             apply_res["file_path"] = res.get("file_path")

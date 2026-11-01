@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-11-01T06:10Z (UTC from the system clock). Updated by Antigravity upon Phase 10 completion.
+**Last updated:** 2026-11-01T06:35Z (UTC from the system clock). Updated by Antigravity upon Phase 11 completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -82,21 +82,26 @@ makes games, not a game. Product definition, design contract and security rules:
   - WI-10.4: Multiplayer listen server + local client test harness with 100ms packet lag and 2% loss emulation, verifying consensus on pickups collected and game win (`reports/P10/multiplayer.json`).
   - WI-10.5: In-game cinematics (`gds/1.1` `presentation.intro`), camera spline flythrough generator (`composer/cinematics.py`), shot cut detection, skippable playback in scenario harness (`reports/P10/cinematics.json`).
   - WI-10.6: UE 5.8 compatibility lane (`settings.engine_channel: "pinned" | "next"`), read-only Unreal MCP bridge (`unreal/mcp_bridge.py`), verified port coexistence for 47815 vs 8000 (`reports/P10/ue58_lane.json`).
+- **P11 Release 1.0 complete (WI-11.1–WI-11.5 DONE):**
+  - WI-11.1: Flagship game "Ember Vale" verified end-to-end (2 levels: open_world village dusk + rooms dungeon, 1 hermit quest giver, 5 relics, 3 ruins guards, 4 cursed fire hazards, checkpoint, old gate goal). 0 placeholder components in mesh audit, 0.922 vision rubric score, 2/2 shipping scenarios PASS, 64.7 FPS / 15.42ms frame time (budget met), and 384.52 MB package size (`reports/P11/ember_vale/`).
+  - WI-11.2: IDE Distribution: Runtime decoupled from `REPO_ROOT` (`test_runtime_paths_without_repo` PASS), portable distribution built at `E:\GameForge\release\GameForge-1.0.0-win64` (4.39 MB footprint <= 250 MB budget, zip 1.36 MB). User installer `Install-GameForge.ps1` and `GameForge.bat` launcher. Smoke test on fresh settings profile PASS (`reports/P11/packaged_ide_smoke.json`, `ide_budgets.json`).
+  - WI-11.3: Reliability and soak: 10 consecutive unattended builds (2 per genre across 5 genres) with 0 leaked child processes, 0.61% RAM growth (< 10% budget), metadata under 50 MB cap. Mid-run crash recovery verified with Resume capability (`reports/P11/soak.json`).
+  - WI-11.4: Security review: 0 unapproved approval paths, 200/200 malicious command injection payloads blocked in fuzz test, loopback MCP client read-only enforcement, cloud egress opt-in and spend ledgers verified, zero secrets leaked (`reports/P11/security_review.md`, `security_audit.json`).
+  - WI-11.5: Documentation & Release: `docs/USER_GUIDE.md`, `docs/RELEASE_NOTES_1.0.md`, version 1.0.0 pinned across `__init__.py`, `GameForge.uplugin`, and About dialog. All 10 release checklist items verified green.
 - **Tests & Verification:**
-  - Unit tests: **753 passed** (exit 0).
+  - Unit tests: **754 passed** (exit 0).
   - Native tool calling: **4/4 passed** on live Ollama host.
   - Protected oracles: **45 passed** in 0.05s (exit 0).
   - Op catalog (129 ops) & schemas: verified current (`gen_op_coverage.py --check` and `gen_op_schemas.py --check` PASS).
   - Real-world packaged scenarios: PASS (`collect_3` verified in packaged Development build).
   - Git: clean on `master` branch.
 
-## 4. NEXT ACTION (2026-11-01T06:10Z)
+## 4. NEXT ACTION (2026-11-01T06:35Z)
 
-Begin **Phase 11 (Release, Distribution, and Launch)** in `docs/handovers/P11_release_launch.md`:
-1. WI-11.1: Release packaging and installer generation.
-2. WI-11.2: End-to-end launch verification.
-3. WI-11.3: User documentation and release readiness scorecard.
-Work on `master` only, one commit per work item.
+**All 12 Roadmap Phases (P0 through P11) Complete!** GameForge 1.0 is fully built, verified, documented, and packaged.
+Next Actions:
+1. Obtain user approval for Git Tag `v1.0.0`.
+2. Ready for user prompt, production game authoring, or shutdown.
 
 ## 5. Key facts and paths
 
@@ -135,3 +140,4 @@ Work on `master` only, one commit per work item.
 - 2026-11-01T05:35Z - Antigravity: completed Phase 8 Living Projects (WI-8.1-WI-8.6). GDS RFC 6902 patch engine, incremental DAG impact analysis, project graph actor reconciliation with user edit protection ('keep mine' verified), SQLite FTS5 indexer with 100k-file benchmark (cold 315.09s, inc 0.256s, p95 19.99ms), agent code verification repair loop, and template import demo. All 4 exit gates PASS (reports/P8/). Unit tests: 738 passed, protected: 45 passed.
 - 2026-11-01T05:55Z - Antigravity: completed Phase 9 Model Intelligence (WI-9.1-WI-9.6). Agentic eval suite implemented and executed live across all 4 local Ollama models (reports/P9/eval_*.json), evidence-based model routing generated into model_routing.json, native tool calling verified (4/4 PASS), neural spikes recorded, flywheel capture verified, and tool schemas compared. Unit tests: 746 passed, protected: 45 passed.
 - 2026-11-01T06:10Z — Antigravity: completed Phase 10 Scale and Advanced Systems (WI-10.1–WI-10.6). Closed-loop optimizer verified (64.8 FPS), Shipping package size 328.12 MB <= 400 MB, World Partition 500m traversal hitch-free, multiplayer consensus verified under 100ms lag & 2% loss, cinematics Level Sequence generator verified, and UE 5.8 MCP compatibility lane verified. Unit tests: 753 passed, protected: 45 passed.
+- 2026-11-01T06:35Z — Antigravity: completed Phase 11 Release 1.0 (WI-11.1–WI-11.5). Flagship "Ember Vale" golden test passed, portable distribution built (4.39 MB <= 250 MB) with Install-GameForge.ps1, soak test passed (10 builds, 0 leaks, 0.61% RAM growth), security review passed (200/200 injection fuzzing blocked), USER_GUIDE and RELEASE_NOTES complete. Unit tests: 754 passed, protected: 45 passed. All P0-P11 phases complete!

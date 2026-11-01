@@ -37,7 +37,7 @@ class TerminalTools:
         "git", "git.exe", "cmake", "cmake.exe", "dotnet", "dotnet.exe",
         "msbuild", "msbuild.exe",
     }
-    SHELL_SYNTAX = re.compile(r"(?:[;&|`]|\r|\n|\$\(|[<>])")
+    SHELL_SYNTAX = re.compile(r"(?:[;&|`%*?]|\r|\n|\$\(|[<>]|\$env:|\$\{)")
     MAX_TIMEOUT_SECONDS = 300
 
     def __init__(self, workspace_root: Path):
@@ -68,9 +68,16 @@ class TerminalTools:
             raise ValueError(f"Unable to parse command: {exc}") from exc
         if not args:
             raise ValueError("Command is empty.")
+        if len(Path(args[0]).parts) > 1:
+            raise ValueError(f"Path-qualified executable '{args[0]}' is not permitted.")
         executable = Path(args[0]).name.lower()
         if executable not in self.ALLOWED_EXECUTABLES:
             raise ValueError(f"Executable '{args[0]}' is not in the approved agent command allowlist.")
+        for arg in args[1:]:
+            if ".." in arg or "%" in arg or "$env:" in arg or "${" in arg:
+                raise ValueError(f"Argument '{arg}' contains prohibited interpolation or traversal.")
+            if arg.startswith(("/", "\\")) or (len(arg) > 1 and arg[1] == ":"):
+                raise ValueError(f"Argument '{arg}' refers to an absolute path outside workspace.")
         return args
 
     def run_command(

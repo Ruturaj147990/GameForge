@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "timestamp": "2026-11-01T06:30:49Z",
+  "results": {
+    "approval_paths": {
+      "passed": true,
+      "violations": [],
+      "count": 0
+    },
+    "command_fuzzing": {
+      "passed": true,
+      "total_payloads": 200,
+      "blocked_count": 200,
+      "allowed_payloads": []
+    },
+    "editor_link_mcp": {
+      "passed": true,
+      "read_only_enforced": true,
+      "bridge_port": 47815,
+      "mcp_port": 8000,
+      "loopback_only": true
+    },
+    "egress_controls": {
+      "passed": true,
+      "opt_in_required": true,
+      "spend_caps_enforced": true,
+      "metahuman_consent_required": true
+    },
+    "secrets_scanner": {
+      "passed": true,
+      "scanned_locations": [
+        "reports",
+        ".gameforge"
+      ],
+      "leaked_secrets": []
+    },
+    "codegen_scanner": {
+      "passed": true,
+      "malicious_blocked": true,
+      "benign_passed": true
+    }
+  },
+  "elapsed_seconds": 0.12
+}

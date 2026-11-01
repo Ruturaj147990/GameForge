@@ -1,0 +1,354 @@
+{
+  "meta": {
+    "schema_version": "gds/1.1",
+    "gds_id": "gds_b1817b1eee88",
+    "revision": 1,
+    "project_name": "EmberVale",
+    "title": "Ember Vale",
+    "source_prompt": "Ember Vale: a compact third-person action adventure. A forest village at dusk with a hermit who asks me to recover 5 ember relics from the ruins and a small dungeon. Guards patrol the ruins and chase me if they see me; touching the cursed fire hurts. Collect the relics, return to the hermit, then reach the old gate to win. Include a short intro flythrough, a health bar, a relic counter, ambient forest sound and calm music.",
+    "generator": "user",
+    "created_at": "2026-11-01T11:46:20+0530",
+    "updated_at": "2026-11-01T11:46:20+0530"
+  },
+  "overview": {
+    "genre": "action_adventure",
+    "pitch": "A compact third-person action adventure in a forest village at dusk and a small dungeon. Recover 5 ember relics from ruins, avoid patrol guards and cursed fire, return to hermit, and reach the old gate.",
+    "camera": "third_person",
+    "players": 1,
+    "session_minutes": 10
+  },
+  "scene": {
+    "levels": [
+      {
+        "level_id": "village",
+        "layout": "open_world",
+        "size_m": {
+          "x": 250.0,
+          "y": 250.0
+        },
+        "biome": "forest",
+        "lighting": "dusk",
+        "seed": 0,
+        "layout_params": {}
+      },
+      {
+        "level_id": "dungeon",
+        "layout": "rooms",
+        "size_m": {
+          "x": 100.0,
+          "y": 100.0
+        },
+        "biome": "dungeon",
+        "lighting": "indoor",
+        "seed": 0,
+        "layout_params": {}
+      }
+    ],
+    "start_level": "village"
+  },
+  "entities": [
+    {
+      "entity_id": "player",
+      "kind": "player",
+      "module": "kit.player_character",
+      "level_id": "village",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "move_speed": 600.0,
+        "max_health": 100.0
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "hermit",
+      "kind": "npc",
+      "module": "kit.quest_giver",
+      "level_id": "village",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "objective_id": "relics",
+        "objective_title": "Recover 5 ember relics",
+        "objective_target": 5
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "ruins_guard",
+      "kind": "guard",
+      "module": "kit.guard",
+      "level_id": "village",
+      "count": 3,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "aggro_radius": 1200.0,
+        "patrol_radius": 800.0,
+        "move_speed": 400.0
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "cursed_fire",
+      "kind": "hazard",
+      "module": "kit.hazard",
+      "level_id": "village",
+      "count": 4,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "damage": 20.0,
+        "damage_interval": 1.0
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "relic_village",
+      "kind": "pickup",
+      "module": "kit.pickup",
+      "level_id": "village",
+      "count": 3,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "objective_id": "relics",
+        "value": 1.0,
+        "pickup_type": "relic"
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "relic_dungeon",
+      "kind": "pickup",
+      "module": "kit.pickup",
+      "level_id": "dungeon",
+      "count": 2,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "objective_id": "relics",
+        "value": 1.0,
+        "pickup_type": "relic"
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "checkpoint_dungeon",
+      "kind": "checkpoint",
+      "module": "kit.checkpoint",
+      "level_id": "dungeon",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "old_gate",
+      "kind": "goal",
+      "module": "kit.goal",
+      "level_id": "dungeon",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {
+        "required_stat": "entity.relics.collected",
+        "required_value": 5.0
+      },
+      "tags": []
+    }
+  ],
+  "input": {
+    "actions": [
+      {
+        "action_id": "IA_Move",
+        "value_type": "axis2d",
+        "bindings": [
+          "W",
+          "S:negate",
+          "A:swizzle_negate",
+          "D:swizzle"
+        ],
+        "purpose": "Move forward/backward and left/right"
+      },
+      {
+        "action_id": "IA_Look",
+        "value_type": "axis2d",
+        "bindings": [
+          "Mouse2D"
+        ],
+        "purpose": "Camera orientation"
+      },
+      {
+        "action_id": "IA_Jump",
+        "value_type": "bool",
+        "bindings": [
+          "SpaceBar"
+        ],
+        "purpose": "Jump"
+      },
+      {
+        "action_id": "IA_Interact",
+        "value_type": "bool",
+        "bindings": [
+          "E"
+        ],
+        "purpose": "Interact with world object"
+      }
+    ]
+  },
+  "rules": [],
+  "progression": {
+    "phases": [],
+    "difficulty": "normal",
+    "difficulty_params": {}
+  },
+  "goals": {
+    "win": [
+      {
+        "kind": "event",
+        "event": "goal.reached",
+        "source": null
+      }
+    ],
+    "lose": [
+      {
+        "kind": "stat",
+        "stat": "player.health",
+        "op": "<=",
+        "value": 0.0
+      }
+    ],
+    "score": {
+      "stat": "game.score",
+      "show_in_hud": true
+    },
+    "sandbox": false
+  },
+  "feedback": [
+    {
+      "on": {
+        "event": "player.damaged",
+        "source": null
+      },
+      "vfx": "vfx.hit_flash",
+      "sfx": "sfx.impact",
+      "camera_shake": 0.0,
+      "ui_message": null
+    },
+    {
+      "on": {
+        "event": "game.won",
+        "source": null
+      },
+      "vfx": "vfx.confetti",
+      "sfx": "sfx.fanfare",
+      "camera_shake": 0.0,
+      "ui_message": null
+    }
+  ],
+  "ui": {
+    "hud": [
+      {
+        "element_id": "health_bar",
+        "kind": "bar",
+        "binds": "player.health",
+        "label": "Health"
+      },
+      {
+        "element_id": "relic_counter",
+        "kind": "counter",
+        "binds": "entity.relics.collected",
+        "label": "Ember Relics"
+      }
+    ],
+    "main_menu": true,
+    "pause_menu": true,
+    "end_screen": true
+  },
+  "art": {
+    "style": "stylized",
+    "palette": [
+      "#2E3440",
+      "#88C0D0",
+      "#EBCB8B",
+      "#BF616A"
+    ],
+    "material_theme": "stone_wood",
+    "character_source": "mannequin",
+    "placeholder_ok": false
+  },
+  "audio": {
+    "music_mood": "calm",
+    "ambience": "forest",
+    "sfx_set": "default"
+  },
+  "presentation": {
+    "intro": {
+      "enabled": true,
+      "seconds": 10.0,
+      "focus": [
+        "hermit",
+        "ruins_guard",
+        "old_gate"
+      ]
+    }
+  },
+  "tech": {
+    "target_fps": 60,
+    "max_frame_ms": 16.6,
+    "max_package_mb": 600,
+    "multiplayer": "none"
+  },
+  "acceptance": {
+    "scenarios": [
+      {
+        "scenario_id": "ember_vale_hermit_quest_and_gate",
+        "derived_from": "goals.win[0]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "ember_vale_avoid_fire_hazard",
+        "derived_from": "goals.lose[0]",
+        "must_pass": true
+      }
+    ],
+    "vision_rubric_min": 0.0,
+    "extra_checks": []
+  }
+}

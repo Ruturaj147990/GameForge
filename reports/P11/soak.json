@@ -1,0 +1,133 @@
+{
+  "status": "PASS",
+  "consecutive_builds": 10,
+  "all_builds_passed": true,
+  "leaked_processes": 0,
+  "baseline_ram_mb": 44.74,
+  "build_1_ram_mb": 45.68,
+  "build_10_ram_mb": 45.96,
+  "ram_growth_percent": 0.61,
+  "ram_growth_budget_percent": 10.0,
+  "ram_growth_budget_met": true,
+  "metadata_size_mb": 0.033,
+  "metadata_budget_mb": 50.0,
+  "metadata_budget_met": true,
+  "crash_resilience": {
+    "simulated_crash_recovered": true,
+    "steps_resumed_cleanly": true,
+    "status": "PASS"
+  },
+  "build_details": [
+    {
+      "build_number": 1,
+      "genre": "platformer",
+      "title": "PlatformerRun1",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 6,
+      "ram_rss_mb": 45.68,
+      "leaked_children": 0,
+      "duration_s": 0.05
+    },
+    {
+      "build_number": 2,
+      "genre": "platformer",
+      "title": "PlatformerRun2",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 6,
+      "ram_rss_mb": 45.73,
+      "leaked_children": 0,
+      "duration_s": 0.043
+    },
+    {
+      "build_number": 3,
+      "genre": "arena_combat",
+      "title": "ArenaRun1",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 1,
+      "ram_rss_mb": 45.82,
+      "leaked_children": 0,
+      "duration_s": 0.042
+    },
+    {
+      "build_number": 4,
+      "genre": "arena_combat",
+      "title": "ArenaRun2",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 1,
+      "ram_rss_mb": 45.84,
+      "leaked_children": 0,
+      "duration_s": 0.042
+    },
+    {
+      "build_number": 5,
+      "genre": "card_battler",
+      "title": "CardRun1",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 2,
+      "ram_rss_mb": 45.84,
+      "leaked_children": 0,
+      "duration_s": 0.041
+    },
+    {
+      "build_number": 6,
+      "genre": "card_battler",
+      "title": "CardRun2",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 2,
+      "ram_rss_mb": 45.85,
+      "leaked_children": 0,
+      "duration_s": 0.042
+    },
+    {
+      "build_number": 7,
+      "genre": "top_down_shooter",
+      "title": "ShooterRun1",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 1,
+      "ram_rss_mb": 45.89,
+      "leaked_children": 0,
+      "duration_s": 0.041
+    },
+    {
+      "build_number": 8,
+      "genre": "top_down_shooter",
+      "title": "ShooterRun2",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 1,
+      "ram_rss_mb": 45.91,
+      "leaked_children": 0,
+      "duration_s": 0.039
+    },
+    {
+      "build_number": 9,
+      "genre": "relic_hunt",
+      "title": "RelicRun1",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 5,
+      "ram_rss_mb": 45.95,
+      "leaked_children": 0,
+      "duration_s": 0.037
+    },
+    {
+      "build_number": 10,
+      "genre": "relic_hunt",
+      "title": "RelicRun2",
+      "status": "PASS",
+      "levels_count": 1,
+      "actors_count": 5,
+      "ram_rss_mb": 45.96,
+      "leaked_children": 0,
+      "duration_s": 0.038
+    }
+  ],
+  "elapsed_seconds": 0.48
+}

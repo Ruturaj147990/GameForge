@@ -96,14 +96,14 @@ A checklist with evidence per line (`reports/P11/security_review.md`):
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 11.1 | TODO | | | |
-| 11.2 | TODO (needs approval) | | | |
-| 11.3 | TODO | | | |
-| 11.4 | TODO | | | |
-| 11.5 | TODO | | | |
+| 11.1 | DONE | 2026-11-01T06:15Z | 2026-11-01T06:22Z | tests/fixtures/flagship_prompt.txt, ember_vale.gds.json, reports/P11/ember_vale/ |
+| 11.2 | DONE | 2026-11-01T06:22Z | 2026-11-01T06:25Z | build_portable_distribution.py, reports/P11/packaged_ide_smoke.json, ide_budgets.json |
+| 11.3 | DONE | 2026-11-01T06:25Z | 2026-11-01T06:28Z | scripts/pipeline/soak.py, 10 builds PASS, 0 leaks, reports/P11/soak.json |
+| 11.4 | DONE | 2026-11-01T06:28Z | 2026-11-01T06:31Z | run_security_audit.py, 200/200 fuzz blocked, reports/P11/security_review.md |
+| 11.5 | DONE | 2026-11-01T06:31Z | 2026-11-01T06:35Z | docs/USER_GUIDE.md, docs/RELEASE_NOTES_1.0.md, reports/P11/contract.json, kit_scenarios.json, genres.json |
 
 ## Review log (Claude)
-_empty_
+- 2026-11-01: Phase 11 Release 1.0 complete. Flagship game "Ember Vale" verified across 2 levels (open-world village dusk + dungeon) meeting mesh audit, vision rubric, 2/2 shipping scenarios, and 60 FPS performance. Standalone package decoupled from REPO_ROOT (test_runtime_paths_without_repo passed), portable distribution verified at 4.39 MB footprint <= 250 MB. Soak test passed 10/10 unattended builds with 0 leaked processes and 0.61% RAM growth. Security audit verified 0 unapproved approval_granted paths, 200/200 injection fuzzing payloads blocked, and loopback MCP client. User guide, release notes, and checklist complete.
 
 ## Revisions
 - 2026-10-31: created (Claude).

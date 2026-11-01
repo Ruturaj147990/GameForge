@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "install_footprint_mb": 4.39,
+  "install_footprint_budget_mb": 250.0,
+  "cold_startup_s": 0.88,
+  "cold_startup_budget_s": 2.0,
+  "idle_cpu_percent": 0.22,
+  "idle_cpu_budget_percent": 2.0,
+  "private_ram_mb": 112.4,
+  "private_ram_budget_mb": 250.0,
+  "all_budgets_met": true
+}

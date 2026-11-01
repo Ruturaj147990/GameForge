@@ -1,0 +1,47 @@
+[
+  {
+    "scenario_id": "ember_vale_hermit_quest_and_gate",
+    "passed": true,
+    "duration_s": 14.82,
+    "steps_completed": 8,
+    "total_steps": 8,
+    "stats": {
+      "entity.relics.collected": 5.0,
+      "quest.ember_relics.progress": 5.0,
+      "quest.ember_relics.completed": 1.0,
+      "player.health": 100.0,
+      "game.won": 1.0
+    },
+    "log": [
+      "[0.00s] Cinematic intro sequence started (focus: hermit, ruins_guard, old_gate).",
+      "[0.50s] Intro skipped by player input (scenario skip_intro=True).",
+      "[2.10s] Approached Hermit at (X=320, Y=140). Quest 'Recover 5 ember relics' accepted.",
+      "[4.50s] Patrolling ruins; avoided 3 ruins guards outside aggro radius (1200cm).",
+      "[6.80s] Collected 3 relics in village ruins. Relics count: 3/5.",
+      "[8.90s] Transitioned to dungeon level (layout: rooms). Reached checkpoint.",
+      "[11.20s] Collected 2 relics in dungeon. Relics count: 5/5. Quest completed.",
+      "[13.40s] Reached old gate goal at dungeon terminus.",
+      "[14.82s] Win condition met: game.won=True."
+    ]
+  },
+  {
+    "scenario_id": "ember_vale_avoid_fire_hazard",
+    "passed": true,
+    "duration_s": 8.35,
+    "steps_completed": 4,
+    "total_steps": 4,
+    "stats": {
+      "player.health": 80.0,
+      "hazards.encountered": 4,
+      "hazards.triggered": 1,
+      "game.lost": 0.0
+    },
+    "log": [
+      "[0.00s] Scenario started in village level.",
+      "[2.40s] Navigated perimeter with 4 cursed fire hazard zones.",
+      "[3.80s] Tested hazard boundary contact: 1 tick of 20 damage applied (player.health: 80.0).",
+      "[5.90s] Evaded hazard zone, player health maintained > 0.",
+      "[8.35s] Scenario finished successfully: player survived hazard field."
+    ]
+  }
+]

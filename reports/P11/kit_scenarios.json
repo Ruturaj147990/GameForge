@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "phase": "P11",
+  "timestamp": "2026-11-01T06:33:51Z",
+  "all_gates_pass": true,
+  "total_gates": 19,
+  "passed_gates": 19,
+  "gates": {
+    "dev_collect_3": true,
+    "dev_quest_complete": true,
+    "dev_spotted_by_guard": true,
+    "dev_win_goal_after_relics": true,
+    "dev_lose_hazard": true,
+    "dev_respawn_checkpoint": true,
+    "dev_door_requires_key": true,
+    "dev_win_waves": true,
+    "dev_lose_enemies": true,
+    "dev_board_win": true,
+    "dev_board_draw": true,
+    "dev_card_win": true,
+    "dev_teleport_cheat": true,
+    "dev_impossible": true,
+    "ship_collect_3": true,
+    "ship_quest_complete": true,
+    "ship_spotted_by_guard": true,
+    "ship_win_goal_after_relics": true,
+    "ship_lose_hazard": true
+  },
+  "package_metrics": {
+    "dev_size_mb": 840.6,
+    "ship_size_mb": 531.6,
+    "dev_package_duration_s": 39.1,
+    "ship_package_duration_s": 33.1
+  }
+}

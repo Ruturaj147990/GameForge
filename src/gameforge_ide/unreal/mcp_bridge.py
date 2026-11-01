@@ -43,6 +43,12 @@ class UnrealMcpClient:
         except Exception:
             return []
 
+    def call_tool(self, tool_name: str, arguments: Dict[str, Any], timeout_s: float = 5.0) -> Dict[str, Any]:
+        """Invoke a tool in Unreal MCP registry, strictly enforcing read-only boundary."""
+        if not tool_name.startswith(("inspect_", "get_", "list_", "query_")):
+            raise PermissionError(f"Tool '{tool_name}' rejected: GameForge MCP Bridge is strictly read-only")
+        return self.call_read_only_tool(tool_name, arguments, timeout_s)
+
     def call_read_only_tool(self, tool_name: str, arguments: Dict[str, Any], timeout_s: float = 5.0) -> Dict[str, Any]:
         """Invoke a tool in the Unreal MCP registry if it is read-only."""
         # Read-only whitelist check

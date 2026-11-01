@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "package_dir": "E:\\GameForge\\release\\GameForge-1.0.0-win64",
+  "zip_path": "E:\\GameForge\\release\\GameForge-1.0.0-win64.zip",
+  "install_footprint_mb": 4.39,
+  "zip_archive_mb": 1.36,
+  "files_packaged": 318,
+  "budget_mb": 250.0,
+  "budget_met": true,
+  "fresh_profile_smoke": {
+    "onboarding_ready": true,
+    "engine_detected": true,
+    "preset_composed": true,
+    "duration_s": 0.51
+  }
+}

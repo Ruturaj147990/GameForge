@@ -1,0 +1,14 @@
+{
+  "configuration": "Shipping",
+  "profile": "release",
+  "compression": "Oodle",
+  "max_package_mb_budget": 600,
+  "total_package_mb": 384.52,
+  "budget_met": true,
+  "breakdown": {
+    "village_level_pak_mb": 182.4,
+    "dungeon_level_pak_mb": 76.2,
+    "engine_runtime_core_mb": 94.6,
+    "audio_and_vfx_mb": 31.32
+  }
+}

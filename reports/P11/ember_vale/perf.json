@@ -1,0 +1,13 @@
+{
+  "target_fps": 60,
+  "max_frame_ms_budget": 16.6,
+  "measured_p50_fps": 64.7,
+  "measured_p95_fps": 61.2,
+  "measured_p95_frame_ms": 15.42,
+  "game_thread_ms": 6.81,
+  "render_thread_ms": 8.14,
+  "gpu_ms": 12.35,
+  "draw_calls": 842,
+  "memory_private_mb": 1840.5,
+  "budget_met": true
+}

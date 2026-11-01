@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 from .model import CodegenTask
 
 DENYLIST_PATTERN = re.compile(
-    r"#include|FPlatformProcess|FFileHelper|IFileManager|Exec\(|ConsoleCommand|asm|reinterpret_cast",
+    r"#include|FPlatformProcess|FFileHelper|IFileManager|Exec\(|ConsoleCommand|asm|reinterpret_cast|system\(|ShellExecute|socket\(|fork\(",
     re.IGNORECASE,
 )
 

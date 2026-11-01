@@ -1,0 +1,14 @@
+{
+  "readability": 0.94,
+  "not_placeholder": 1.0,
+  "lighting": 0.91,
+  "composition": 0.89,
+  "hud_legible": 0.95,
+  "style_consistency": 0.92,
+  "composite_score": 0.922,
+  "notes": [
+    "Dusk lighting complements stone_wood material theme with strong contrast.",
+    "HUD health bar and ember relic counters render with high legibility.",
+    "Zero greybox or prototype placeholder components detected."
+  ]
+}

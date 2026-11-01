@@ -19,11 +19,22 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]          # src/gameforge_ide
-REPO_ROOT = PACKAGE_ROOT.parents[1]                          # repository root (source checkouts only)
+REPO_ROOT = PACKAGE_ROOT.parents[1]                          # repository root (source checkouts only, dev-only)
 PINNED_ENGINE = "5.7"
 DEFAULT_BRIDGE_PORT = 47815
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL_ROUTING_FILE = PACKAGE_ROOT / "config" / "model_routing.json"
+
+
+def get_ops_root() -> Path:
+    """Path to bundled gameforge_ops Content package under PACKAGE_ROOT."""
+    return PACKAGE_ROOT / "unreal" / "GameForge" / "Content" / "Python" / "gameforge_ops"
+
+
+def get_plugin_root() -> Path:
+    """Path to bundled Unreal plugin package under PACKAGE_ROOT."""
+    return PACKAGE_ROOT / "unreal" / "GameForge"
+
 
 
 class EngineNotFoundError(RuntimeError):
