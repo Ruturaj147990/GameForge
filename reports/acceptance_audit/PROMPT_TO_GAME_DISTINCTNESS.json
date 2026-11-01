@@ -1,0 +1,1146 @@
+{
+  "timestamp": "2026-11-02T00:00:00Z",
+  "verdict": "PASSED",
+  "distinct_genres": 3,
+  "distinct_cameras": 2,
+  "distinct_layouts": 3,
+  "actions_distinct": true,
+  "entities_distinct": true,
+  "games": {
+    "CyberStorm": {
+      "prompt": "Create a fast-paced sci-fi top-down shooter game called CyberStorm where the player controls an agile drone defending an energy core from waves of robotic enemies, collecting energy cells to score points and surviving for 60 seconds.",
+      "status": "OK",
+      "path": "model",
+      "title": "CyberStorm",
+      "genre": "Genre.TOP_DOWN_SHOOTER",
+      "camera": "CameraKind.TOP_DOWN",
+      "layout": "LayoutKind.ARENA",
+      "actions": [
+        "IA_Move",
+        "IA_Look",
+        "IA_Fire"
+      ],
+      "entities": [
+        {
+          "kind": "EntityKind.PLAYER",
+          "count": 1,
+          "placement": "strategy='slot' points_m=[] min_spacing_m=2.0 slot='player_start'"
+        },
+        {
+          "kind": "EntityKind.SPAWNER",
+          "count": 1,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.GOAL",
+          "count": 1,
+          "placement": "strategy='slot' points_m=[] min_spacing_m=2.0 slot='goal'"
+        },
+        {
+          "kind": "EntityKind.PICKUP",
+          "count": 5,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.ENEMY",
+          "count": 10,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.RANGED_ENEMY",
+          "count": 5,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.HAZARD",
+          "count": 3,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        }
+      ],
+      "win_conditions": [
+        "TimerElapsed",
+        "StatCompare"
+      ],
+      "lose_conditions": [
+        "StatCompare"
+      ],
+      "raw_gds": {
+        "meta": {
+          "schema_version": "gds/1.1",
+          "gds_id": "gds_f602a1745af0",
+          "revision": 1,
+          "project_name": "CyberStorm",
+          "title": "CyberStorm",
+          "source_prompt": "A fast-paced vertical shooter where the player pilots a drone to defend a central energy core from relentless robotic waves.",
+          "generator": "user",
+          "created_at": "2026-11-02T00:05:35+0530",
+          "updated_at": "2026-11-02T00:05:35+0530"
+        },
+        "overview": {
+          "genre": "top_down_shooter",
+          "pitch": "A fast-paced vertical shooter where the player pilots a drone to defend a central energy core from relentless robotic waves.",
+          "camera": "top_down",
+          "players": 1,
+          "session_minutes": 10
+        },
+        "scene": {
+          "levels": [
+            {
+              "level_id": "level_1",
+              "layout": "arena",
+              "size_m": {
+                "x": 60.0,
+                "y": 60.0
+              },
+              "biome": "indoor",
+              "lighting": "night",
+              "seed": 2026,
+              "layout_params": {}
+            }
+          ],
+          "start_level": "level_1"
+        },
+        "entities": [
+          {
+            "entity_id": "player",
+            "kind": "player",
+            "module": "kit.player_character",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "slot",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": "player_start"
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "spawner",
+            "kind": "spawner",
+            "module": "kit.spawner",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "goal",
+            "kind": "goal",
+            "module": "kit.goal",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "slot",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": "goal"
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "pickups",
+            "kind": "pickup",
+            "module": "kit.pickup",
+            "level_id": "level_1",
+            "count": 5,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "enemys",
+            "kind": "enemy",
+            "module": "kit.enemy_melee",
+            "level_id": "level_1",
+            "count": 10,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "ranged_enemys",
+            "kind": "ranged_enemy",
+            "module": "kit.enemy_ranged",
+            "level_id": "level_1",
+            "count": 5,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "hazards",
+            "kind": "hazard",
+            "module": "kit.hazard",
+            "level_id": "level_1",
+            "count": 3,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          }
+        ],
+        "input": {
+          "actions": [
+            {
+              "action_id": "IA_Move",
+              "value_type": "axis2d",
+              "bindings": [
+                "W",
+                "S:negate",
+                "A:swizzle_negate",
+                "D:swizzle"
+              ],
+              "purpose": "Move forward/backward and left/right"
+            },
+            {
+              "action_id": "IA_Look",
+              "value_type": "axis2d",
+              "bindings": [
+                "Mouse2D"
+              ],
+              "purpose": "Camera orientation"
+            },
+            {
+              "action_id": "IA_Fire",
+              "value_type": "bool",
+              "bindings": [
+                "LeftMouseButton"
+              ],
+              "purpose": "Fire projectile"
+            }
+          ]
+        },
+        "rules": [
+          {
+            "rule_id": "rule_1",
+            "when": {
+              "event": "pickup.collected",
+              "source": null
+            },
+            "conditions": [],
+            "effects": [
+              {
+                "kind": "add_stat",
+                "stat": "game.score",
+                "delta": 10.0
+              }
+            ],
+            "description": "Award points on pickup"
+          },
+          {
+            "rule_id": "rule_2",
+            "when": {
+              "event": "enemy.killed",
+              "source": null
+            },
+            "conditions": [],
+            "effects": [
+              {
+                "kind": "add_stat",
+                "stat": "game.score",
+                "delta": 25.0
+              }
+            ],
+            "description": "Award points on enemy defeat"
+          }
+        ],
+        "progression": {
+          "phases": [],
+          "difficulty": "normal",
+          "difficulty_params": {}
+        },
+        "goals": {
+          "win": [
+            {
+              "kind": "timer",
+              "seconds": 60.0
+            },
+            {
+              "kind": "stat",
+              "stat": "game.score",
+              "op": ">=",
+              "value": 100.0
+            }
+          ],
+          "lose": [
+            {
+              "kind": "stat",
+              "stat": "player.health",
+              "op": "<=",
+              "value": 0.0
+            }
+          ],
+          "score": {
+            "stat": "game.score",
+            "show_in_hud": true
+          },
+          "sandbox": false
+        },
+        "feedback": [
+          {
+            "on": {
+              "event": "pickup.collected",
+              "source": null
+            },
+            "vfx": "vfx.sparkle_burst",
+            "sfx": "sfx.pickup_chime",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "player.damaged",
+              "source": null
+            },
+            "vfx": "vfx.hit_flash",
+            "sfx": "sfx.impact",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "enemy.killed",
+              "source": null
+            },
+            "vfx": "vfx.poof",
+            "sfx": "sfx.defeat",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "game.won",
+              "source": null
+            },
+            "vfx": "vfx.confetti",
+            "sfx": "sfx.fanfare",
+            "camera_shake": 0.0,
+            "ui_message": null
+          }
+        ],
+        "ui": {
+          "hud": [
+            {
+              "element_id": "hud_health",
+              "kind": "bar",
+              "binds": "player.health",
+              "label": "Health"
+            },
+            {
+              "element_id": "hud_pickups",
+              "kind": "counter",
+              "binds": "entity.pickups.collected",
+              "label": "Pickups"
+            },
+            {
+              "element_id": "hud_timer",
+              "kind": "timer",
+              "binds": "game.time_s",
+              "label": "Time"
+            },
+            {
+              "element_id": "hud_score",
+              "kind": "counter",
+              "binds": "game.score",
+              "label": "Score"
+            }
+          ],
+          "main_menu": true,
+          "pause_menu": true,
+          "end_screen": true
+        },
+        "art": {
+          "style": "stylized",
+          "palette": [
+            "#2E3440",
+            "#88C0D0",
+            "#EBCB8B",
+            "#BF616A"
+          ],
+          "material_theme": "default",
+          "character_source": "mannequin",
+          "placeholder_ok": false
+        },
+        "audio": {
+          "music_mood": "tense",
+          "ambience": "none",
+          "sfx_set": "default"
+        },
+        "presentation": {
+          "intro": {
+            "enabled": false,
+            "seconds": 8.0,
+            "focus": [
+              "landmark",
+              "goal"
+            ]
+          }
+        },
+        "tech": {
+          "target_fps": 60,
+          "max_frame_ms": 16.6,
+          "max_package_mb": 400,
+          "multiplayer": "none"
+        },
+        "acceptance": {
+          "scenarios": [
+            {
+              "scenario_id": "win_1",
+              "derived_from": "goals.win[0]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "win_2",
+              "derived_from": "goals.win[1]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "lose_1",
+              "derived_from": "goals.lose[0]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "smoke",
+              "derived_from": "smoke",
+              "must_pass": true
+            }
+          ],
+          "vision_rubric_min": 0.0,
+          "extra_checks": []
+        }
+      }
+    },
+    "StarJumper": {
+      "prompt": "Create a vibrant 3D platformer game called StarJumper where the player leaps across floating crystal platforms in space, collecting 5 starlight shards and reaching the extraction warp portal.",
+      "status": "OK",
+      "path": "preset",
+      "title": "StarJumper",
+      "genre": "Genre.PLATFORMER",
+      "camera": "CameraKind.THIRD_PERSON",
+      "layout": "LayoutKind.COURSE",
+      "actions": [
+        "IA_Move",
+        "IA_Look",
+        "IA_Jump"
+      ],
+      "entities": [
+        {
+          "kind": "EntityKind.PLAYER",
+          "count": 1,
+          "placement": "strategy='slot' points_m=[] min_spacing_m=2.0 slot='player_start'"
+        },
+        {
+          "kind": "EntityKind.PICKUP",
+          "count": 5,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.GOAL",
+          "count": 1,
+          "placement": "strategy='slot' points_m=[] min_spacing_m=2.0 slot='goal'"
+        }
+      ],
+      "win_conditions": [
+        "CountAtLeast",
+        "EventOccurred"
+      ],
+      "lose_conditions": [
+        "EventOccurred"
+      ],
+      "raw_gds": {
+        "meta": {
+          "schema_version": "gds/1.1",
+          "gds_id": "gds_bf0b821b02b8",
+          "revision": 1,
+          "project_name": "StarJumper",
+          "title": "StarJumper",
+          "source_prompt": "3D obstacle course with jumping, collectibles, checkpoints, and goal",
+          "generator": "user",
+          "created_at": "2026-11-02T00:05:35+0530",
+          "updated_at": "2026-11-02T00:05:35+0530"
+        },
+        "overview": {
+          "genre": "platformer",
+          "pitch": "3D obstacle course with jumping, collectibles, checkpoints, and goal",
+          "camera": "third_person",
+          "players": 1,
+          "session_minutes": 10
+        },
+        "scene": {
+          "levels": [
+            {
+              "level_id": "level_1",
+              "layout": "course",
+              "size_m": {
+                "x": 60.0,
+                "y": 60.0
+              },
+              "biome": "none",
+              "lighting": "day",
+              "seed": 2026,
+              "layout_params": {}
+            }
+          ],
+          "start_level": "level_1"
+        },
+        "entities": [
+          {
+            "entity_id": "player",
+            "kind": "player",
+            "module": "kit.player_character",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "slot",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": "player_start"
+            },
+            "props": {
+              "player_speed": 600,
+              "jump_velocity": 650,
+              "gravity_scale": 1.2,
+              "air_control": 0.35,
+              "kill_z": -500
+            },
+            "tags": []
+          },
+          {
+            "entity_id": "pickups",
+            "kind": "pickup",
+            "module": "kit.pickup",
+            "level_id": "level_1",
+            "count": 5,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "goal",
+            "kind": "goal",
+            "module": "kit.goal",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "slot",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": "goal"
+            },
+            "props": {},
+            "tags": []
+          }
+        ],
+        "input": {
+          "actions": [
+            {
+              "action_id": "IA_Move",
+              "value_type": "axis2d",
+              "bindings": [
+                "W",
+                "S:negate",
+                "A:swizzle_negate",
+                "D:swizzle"
+              ],
+              "purpose": "Move forward/backward and left/right"
+            },
+            {
+              "action_id": "IA_Look",
+              "value_type": "axis2d",
+              "bindings": [
+                "Mouse2D"
+              ],
+              "purpose": "Camera orientation"
+            },
+            {
+              "action_id": "IA_Jump",
+              "value_type": "bool",
+              "bindings": [
+                "SpaceBar"
+              ],
+              "purpose": "Jump"
+            }
+          ]
+        },
+        "rules": [
+          {
+            "rule_id": "rule_1",
+            "when": {
+              "event": "pickup.collected",
+              "source": null
+            },
+            "conditions": [],
+            "effects": [
+              {
+                "kind": "add_stat",
+                "stat": "game.score",
+                "delta": 10.0
+              }
+            ],
+            "description": "Award points on pickup"
+          }
+        ],
+        "progression": {
+          "phases": [],
+          "difficulty": "normal",
+          "difficulty_params": {}
+        },
+        "goals": {
+          "win": [
+            {
+              "kind": "count_at_least",
+              "event": "pickup.collected",
+              "n": 5,
+              "source": null
+            },
+            {
+              "kind": "event",
+              "event": "goal.reached",
+              "source": null
+            }
+          ],
+          "lose": [
+            {
+              "kind": "event",
+              "event": "player.died",
+              "source": null
+            }
+          ],
+          "score": {
+            "stat": "game.score",
+            "show_in_hud": true
+          },
+          "sandbox": false
+        },
+        "feedback": [
+          {
+            "on": {
+              "event": "pickup.collected",
+              "source": null
+            },
+            "vfx": "vfx.sparkle_burst",
+            "sfx": "sfx.pickup_chime",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "player.damaged",
+              "source": null
+            },
+            "vfx": "vfx.hit_flash",
+            "sfx": "sfx.impact",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "game.won",
+              "source": null
+            },
+            "vfx": "vfx.confetti",
+            "sfx": "sfx.fanfare",
+            "camera_shake": 0.0,
+            "ui_message": null
+          }
+        ],
+        "ui": {
+          "hud": [
+            {
+              "element_id": "hud_health",
+              "kind": "bar",
+              "binds": "player.health",
+              "label": "Health"
+            },
+            {
+              "element_id": "hud_pickups",
+              "kind": "counter",
+              "binds": "entity.pickups.collected",
+              "label": "Pickups"
+            },
+            {
+              "element_id": "hud_score",
+              "kind": "counter",
+              "binds": "game.score",
+              "label": "Score"
+            }
+          ],
+          "main_menu": true,
+          "pause_menu": true,
+          "end_screen": true
+        },
+        "art": {
+          "style": "stylized",
+          "palette": [
+            "#2E3440",
+            "#88C0D0",
+            "#EBCB8B",
+            "#BF616A"
+          ],
+          "material_theme": "default",
+          "character_source": "mannequin",
+          "placeholder_ok": false
+        },
+        "audio": {
+          "music_mood": "none",
+          "ambience": "none",
+          "sfx_set": "default"
+        },
+        "presentation": {
+          "intro": {
+            "enabled": false,
+            "seconds": 8.0,
+            "focus": [
+              "landmark",
+              "goal"
+            ]
+          }
+        },
+        "tech": {
+          "target_fps": 60,
+          "max_frame_ms": 16.6,
+          "max_package_mb": 400,
+          "multiplayer": "none"
+        },
+        "acceptance": {
+          "scenarios": [
+            {
+              "scenario_id": "win_1",
+              "derived_from": "goals.win[0]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "win_2",
+              "derived_from": "goals.win[1]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "lose_1",
+              "derived_from": "goals.lose[0]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "smoke",
+              "derived_from": "smoke",
+              "must_pass": true
+            }
+          ],
+          "vision_rubric_min": 0.0,
+          "extra_checks": []
+        }
+      }
+    },
+    "VelocityRush": {
+      "prompt": "Create a high-speed futuristic racing game called VelocityRush where the player drives down multi-lane neon tracks, collecting 8 speed boosts and crossing checkpoints to reach the finish line.",
+      "status": "OK",
+      "path": "model",
+      "title": "VelocityRush",
+      "genre": "Genre.EXPLORATION",
+      "camera": "CameraKind.THIRD_PERSON",
+      "layout": "LayoutKind.OPEN_WORLD",
+      "actions": [
+        "IA_Move",
+        "IA_Look",
+        "IA_Jump",
+        "IA_Interact"
+      ],
+      "entities": [
+        {
+          "kind": "EntityKind.PLAYER",
+          "count": 1,
+          "placement": "strategy='slot' points_m=[] min_spacing_m=2.0 slot='player_start'"
+        },
+        {
+          "kind": "EntityKind.PICKUP",
+          "count": 8,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.CHECKPOINT",
+          "count": 3,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        },
+        {
+          "kind": "EntityKind.GOAL",
+          "count": 1,
+          "placement": "strategy='slot' points_m=[] min_spacing_m=2.0 slot='goal'"
+        },
+        {
+          "kind": "EntityKind.HAZARD",
+          "count": 4,
+          "placement": "strategy='scatter' points_m=[] min_spacing_m=2.0 slot=None"
+        }
+      ],
+      "win_conditions": [
+        "CountAtLeast",
+        "EventOccurred"
+      ],
+      "lose_conditions": [
+        "StatCompare"
+      ],
+      "raw_gds": {
+        "meta": {
+          "schema_version": "gds/1.1",
+          "gds_id": "gds_1e02eb293538",
+          "revision": 1,
+          "project_name": "VelocityRush",
+          "title": "VelocityRush",
+          "source_prompt": "High-speed futuristic racing with neon tracks, collecting 8 speed boosts and crossing checkpoints to reach the finish line.",
+          "generator": "user",
+          "created_at": "2026-11-02T00:05:42+0530",
+          "updated_at": "2026-11-02T00:05:42+0530"
+        },
+        "overview": {
+          "genre": "exploration",
+          "pitch": "High-speed futuristic racing with neon tracks, collecting 8 speed boosts and crossing checkpoints to reach the finish line.",
+          "camera": "third_person",
+          "players": 1,
+          "session_minutes": 10
+        },
+        "scene": {
+          "levels": [
+            {
+              "level_id": "level_1",
+              "layout": "open_world",
+              "size_m": {
+                "x": 60.0,
+                "y": 60.0
+              },
+              "biome": "none",
+              "lighting": "night",
+              "seed": 2026,
+              "layout_params": {}
+            }
+          ],
+          "start_level": "level_1"
+        },
+        "entities": [
+          {
+            "entity_id": "player",
+            "kind": "player",
+            "module": "kit.player_character",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "slot",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": "player_start"
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "pickups",
+            "kind": "pickup",
+            "module": "kit.pickup",
+            "level_id": "level_1",
+            "count": 8,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "checkpoints",
+            "kind": "checkpoint",
+            "module": "kit.checkpoint",
+            "level_id": "level_1",
+            "count": 3,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "goal",
+            "kind": "goal",
+            "module": "kit.goal",
+            "level_id": "level_1",
+            "count": 1,
+            "placement": {
+              "strategy": "slot",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": "goal"
+            },
+            "props": {},
+            "tags": []
+          },
+          {
+            "entity_id": "hazards",
+            "kind": "hazard",
+            "module": "kit.hazard",
+            "level_id": "level_1",
+            "count": 4,
+            "placement": {
+              "strategy": "scatter",
+              "points_m": [],
+              "min_spacing_m": 2.0,
+              "slot": null
+            },
+            "props": {},
+            "tags": []
+          }
+        ],
+        "input": {
+          "actions": [
+            {
+              "action_id": "IA_Move",
+              "value_type": "axis2d",
+              "bindings": [
+                "W",
+                "S:negate",
+                "A:swizzle_negate",
+                "D:swizzle"
+              ],
+              "purpose": "Move forward/backward and left/right"
+            },
+            {
+              "action_id": "IA_Look",
+              "value_type": "axis2d",
+              "bindings": [
+                "Mouse2D"
+              ],
+              "purpose": "Camera orientation"
+            },
+            {
+              "action_id": "IA_Jump",
+              "value_type": "bool",
+              "bindings": [
+                "SpaceBar"
+              ],
+              "purpose": "Jump"
+            },
+            {
+              "action_id": "IA_Interact",
+              "value_type": "bool",
+              "bindings": [
+                "E"
+              ],
+              "purpose": "Interact with world object"
+            }
+          ]
+        },
+        "rules": [
+          {
+            "rule_id": "rule_1",
+            "when": {
+              "event": "pickup.collected",
+              "source": null
+            },
+            "conditions": [],
+            "effects": [
+              {
+                "kind": "add_stat",
+                "stat": "game.score",
+                "delta": 10.0
+              }
+            ],
+            "description": "Award points on pickup"
+          }
+        ],
+        "progression": {
+          "phases": [],
+          "difficulty": "normal",
+          "difficulty_params": {}
+        },
+        "goals": {
+          "win": [
+            {
+              "kind": "count_at_least",
+              "event": "pickup.collected",
+              "n": 8,
+              "source": null
+            },
+            {
+              "kind": "event",
+              "event": "goal.reached",
+              "source": null
+            }
+          ],
+          "lose": [
+            {
+              "kind": "stat",
+              "stat": "player.health",
+              "op": "<=",
+              "value": 0.0
+            }
+          ],
+          "score": {
+            "stat": "game.score",
+            "show_in_hud": true
+          },
+          "sandbox": false
+        },
+        "feedback": [
+          {
+            "on": {
+              "event": "pickup.collected",
+              "source": null
+            },
+            "vfx": "vfx.sparkle_burst",
+            "sfx": "sfx.pickup_chime",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "player.damaged",
+              "source": null
+            },
+            "vfx": "vfx.hit_flash",
+            "sfx": "sfx.impact",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "game.won",
+              "source": null
+            },
+            "vfx": "vfx.confetti",
+            "sfx": "sfx.fanfare",
+            "camera_shake": 0.0,
+            "ui_message": null
+          },
+          {
+            "on": {
+              "event": "checkpoint.reached",
+              "source": null
+            },
+            "vfx": "vfx.ring",
+            "sfx": "sfx.chime_low",
+            "camera_shake": 0.0,
+            "ui_message": null
+          }
+        ],
+        "ui": {
+          "hud": [
+            {
+              "element_id": "hud_health",
+              "kind": "bar",
+              "binds": "player.health",
+              "label": "Health"
+            },
+            {
+              "element_id": "hud_pickups",
+              "kind": "counter",
+              "binds": "entity.pickups.collected",
+              "label": "Pickups"
+            },
+            {
+              "element_id": "hud_score",
+              "kind": "counter",
+              "binds": "game.score",
+              "label": "Score"
+            }
+          ],
+          "main_menu": true,
+          "pause_menu": true,
+          "end_screen": true
+        },
+        "art": {
+          "style": "stylized",
+          "palette": [
+            "#2E3440",
+            "#88C0D0",
+            "#EBCB8B",
+            "#BF616A"
+          ],
+          "material_theme": "default",
+          "character_source": "mannequin",
+          "placeholder_ok": false
+        },
+        "audio": {
+          "music_mood": "tense",
+          "ambience": "none",
+          "sfx_set": "default"
+        },
+        "presentation": {
+          "intro": {
+            "enabled": false,
+            "seconds": 8.0,
+            "focus": [
+              "landmark",
+              "goal"
+            ]
+          }
+        },
+        "tech": {
+          "target_fps": 60,
+          "max_frame_ms": 16.6,
+          "max_package_mb": 400,
+          "multiplayer": "none"
+        },
+        "acceptance": {
+          "scenarios": [
+            {
+              "scenario_id": "win_1",
+              "derived_from": "goals.win[0]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "win_2",
+              "derived_from": "goals.win[1]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "lose_1",
+              "derived_from": "goals.lose[0]",
+              "must_pass": true
+            },
+            {
+              "scenario_id": "smoke",
+              "derived_from": "smoke",
+              "must_pass": true
+            }
+          ],
+          "vision_rubric_min": 0.0,
+          "extra_checks": []
+        }
+      }
+    }
+  }
+}

@@ -50,6 +50,7 @@ from ..widgets.problems_table import ProblemsTable
 from ..widgets.step_row import STEP_ROLE, StepRowDelegate, format_step_duration
 from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
 from src.gameforge_ide.core.settings import get_settings
+from src.gameforge_ide.core.projects import resolve_project_dir, open_folder_in_file_manager
 from src.gameforge_ide.forge.checkpoints import ProjectRepo
 from src.gameforge_ide.forge.model import RunState, StepRecord
 from src.gameforge_ide.forge.store import RunStore
@@ -192,6 +193,23 @@ class BuildView(QWidget):
         )
         self._btn_rollback.clicked.connect(self._show_rollback_menu)
         header_layout.addWidget(self._btn_rollback)
+
+        # Open project folder button
+        self._btn_open_folder = QPushButton("📁 Folder", self)
+        self._btn_open_folder.setObjectName("btnBuildOpenFolder")
+        self._btn_open_folder.setAccessibleName("Open project directory in Explorer")
+        self._btn_open_folder.setToolTip("Open active project folder in Explorer")
+        self._btn_open_folder.setCursor(Qt.PointingHandCursor)
+        self._btn_open_folder.setStyleSheet(
+            f"QPushButton#{self._btn_open_folder.objectName()} {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+            f"QPushButton#{self._btn_open_folder.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+        self._btn_open_folder.clicked.connect(self._on_open_folder_clicked)
+        header_layout.addWidget(self._btn_open_folder)
 
         main_layout.addLayout(header_layout)
 
@@ -340,23 +358,35 @@ class BuildView(QWidget):
         super().showEvent(event)
         self.refresh_runs()
 
-    def set_project(self, project_name: str) -> None:
+    def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         """Filter runs for project_name and switch store scope."""
         self._current_project = project_name
-        p_root = get_settings().projects_root
-        if p_root and project_name:
-            p_dir = Path(p_root) / project_name
+        p_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        self._current_project_dir = p_dir
+        if p_dir:
             self._store = RunStore(project_dir=p_dir, workspace_dir=self._workspace)
         self.refresh_runs()
 
-    def start_build(self, project_name: str, spec: Optional[Any] = None) -> None:
+    @Slot()
+    def _on_open_folder_clicked(self) -> None:
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if p_dir:
+            open_folder_in_file_manager(p_dir)
+        elif self._workspace:
+            open_folder_in_file_manager(self._workspace)
+
+    def start_build(self, project_name: str, spec: Optional[Any] = None, project_dir: Optional[Path] = None) -> None:
         """Start or resume a Forge build run for project_name in a background thread."""
         self._current_project = project_name
-        p_root = get_settings().projects_root
-        if not p_root:
-            return
-        p_dir = Path(p_root) / project_name
+        p_dir = project_dir or getattr(self, "_current_project_dir", None) or resolve_project_dir(project_name, self._workspace)
+        if not p_dir:
+            p_root = get_settings().projects_root
+            if not p_root:
+                return
+            p_dir = Path(p_root) / project_name
+        p_dir = Path(p_dir).resolve()
         p_dir.mkdir(parents=True, exist_ok=True)
+        self._current_project_dir = p_dir
         self._store = RunStore(project_dir=p_dir, workspace_dir=self._workspace)
 
         # 1. Obtain spec
@@ -563,9 +593,8 @@ class BuildView(QWidget):
                     break
 
         # Check standard project locations if log_path still not resolved
-        p_root = get_settings().projects_root
-        if not log_path and self._current_project and p_root:
-            p_dir = Path(p_root) / self._current_project
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if not log_path and p_dir and p_dir.is_dir():
             candidate_logs = [
                 p_dir / "Saved" / "GameForge" / "logs" / f"{step.step_id}.log",
                 p_dir / "Saved" / "GameForge" / f"{step.step_id}.log",
@@ -747,10 +776,9 @@ class BuildView(QWidget):
     def _on_resume_clicked(self) -> None:
         if not self._current_run_id or not self._current_project:
             return
-        p_root = get_settings().projects_root
-        if not p_root:
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if not p_dir:
             return
-        p_dir = Path(p_root) / self._current_project
         state = self._store.load(self._current_run_id)
         if not state:
             return
@@ -780,11 +808,8 @@ class BuildView(QWidget):
     def _show_rollback_menu(self) -> None:
         if not self._current_state or not self._current_project:
             return
-        p_root = get_settings().projects_root
-        if not p_root:
-            return
-        p_dir = Path(p_root) / self._current_project
-        if not p_dir.is_dir():
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if not p_dir or not p_dir.is_dir():
             return
 
         # Check if editor link is open

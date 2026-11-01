@@ -366,7 +366,7 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
                 target_enemy = enemy_ent.entity_id if enemy_ent else "enemies"
                 win_conds.append(StatCompare(stat=f"entity.{target_enemy}.remaining", op="<=", value=0.0))
         elif w.type == "survive_seconds":
-            win_conds.append(TimerElapsed(seconds=float(w.target or 60)))
+            win_conds.append(TimerElapsed(seconds=float(w.seconds or w.target or 60)))
             has_timer_win = True
         elif w.type == "score_at_least":
             win_conds.append(StatCompare(stat="game.score", op=">=", value=float(w.target or 100)))
@@ -382,7 +382,7 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
             lose_conds.append(StatCompare(stat="player.health", op="<=", value=0.0))
         elif l.type == "timer_runs_out":
             if not has_timer_win:
-                lose_conds.append(TimerElapsed(seconds=float(l.seconds or 60)))
+                lose_conds.append(TimerElapsed(seconds=float(l.seconds or l.target or 60)))
         elif l.type == "fall_off":
             lose_conds.append(EventOccurred(event="player.died"))
         elif l.type == "board_loss":

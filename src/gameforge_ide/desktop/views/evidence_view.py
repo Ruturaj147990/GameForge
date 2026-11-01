@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 
 from ..styles import tokens
 from src.gameforge_ide.core.settings import get_settings
+from src.gameforge_ide.core.projects import resolve_project_dir, open_folder_in_file_manager
 from src.gameforge_ide.forge.model import ArtifactRef, RunState
 from src.gameforge_ide.forge.store import RunStore
 
@@ -113,6 +114,22 @@ class EvidenceView(QWidget):
         self._btn_refresh.clicked.connect(self.refresh_artifacts)
         header.addWidget(self._btn_refresh)
 
+        self._btn_folder = QPushButton("📁 Folder", self)
+        self._btn_folder.setObjectName("btnEvidenceOpenFolder")
+        self._btn_folder.setAccessibleName("Open evidence folder in Explorer")
+        self._btn_folder.setToolTip("Open evidence folder in Explorer")
+        self._btn_folder.setCursor(Qt.PointingHandCursor)
+        self._btn_folder.setStyleSheet(
+            f"QPushButton#{self._btn_folder.objectName()} {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+            f"QPushButton#{self._btn_folder.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+        self._btn_folder.clicked.connect(self._on_open_folder)
+        header.addWidget(self._btn_folder)
+
         main_layout.addLayout(header)
 
         # ── Summary ──────────────────────────────────────────────────────────
@@ -156,6 +173,7 @@ class EvidenceView(QWidget):
             f"}}"
         )
         self._gallery.currentItemChanged.connect(self._on_item_selected)
+        self._gallery.itemDoubleClicked.connect(self._on_item_double_clicked)
         splitter.addWidget(self._gallery)
 
         # Right: detail pane
@@ -235,9 +253,21 @@ class EvidenceView(QWidget):
         super().showEvent(event)
         self.refresh_artifacts()
 
-    def set_project(self, project_name: str) -> None:
+    def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         self._current_project = project_name
+        self._current_project_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        if self._current_project_dir:
+            self._store = RunStore(project_dir=self._current_project_dir, workspace_dir=self._workspace)
         self.refresh_artifacts()
+
+    @Slot()
+    def _on_open_folder(self) -> None:
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if p_dir:
+            ev_dir = p_dir / "Saved" / "GameForge" / "evidence"
+            open_folder_in_file_manager(ev_dir if ev_dir.is_dir() else p_dir)
+        elif self._workspace:
+            open_folder_in_file_manager(self._workspace)
 
     @Slot()
     def refresh_artifacts(self) -> None:
@@ -253,12 +283,10 @@ class EvidenceView(QWidget):
             self._lbl_summary.setText("No project selected.")
             return
 
-        p_root = get_settings().projects_root
-        if not p_root:
-            self._lbl_summary.setText("Projects root not configured.")
+        project_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if not project_dir or not project_dir.is_dir():
+            self._lbl_summary.setText(f"Project directory not found for '{self._current_project}'.")
             return
-
-        project_dir = Path(p_root) / self._current_project
 
         # Collect from RunStore
         seen_paths: set = set()
@@ -337,6 +365,15 @@ class EvidenceView(QWidget):
     @Slot(int)
     def _apply_filter(self, _index: int = 0) -> None:
         self._populate_gallery()
+
+    @Slot(QListWidgetItem)
+    def _on_item_double_clicked(self, item: Optional[QListWidgetItem]) -> None:
+        if not item:
+            return
+        path_str = item.data(Qt.UserRole)
+        if path_str:
+            self.openFileRequested.emit(str(path_str))
+            open_folder_in_file_manager(Path(path_str))
 
     @Slot()
     def _on_item_selected(self, current: Optional[QListWidgetItem] = None, previous: Optional[QListWidgetItem] = None) -> None:

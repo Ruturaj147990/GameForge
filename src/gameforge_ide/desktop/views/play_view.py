@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from ..styles import tokens
 from src.gameforge_ide.core.settings import get_settings
+from src.gameforge_ide.core.projects import resolve_project_dir, open_folder_in_file_manager
 from src.gameforge_ide.forge.model import RunState
 from src.gameforge_ide.forge.store import RunStore
 from src.gameforge_ide.qa.scenario import ScenarioResult
@@ -87,6 +88,22 @@ class PlayView(QWidget):
         )
         self._btn_refresh.clicked.connect(self.refresh_results)
         header.addWidget(self._btn_refresh)
+
+        self._btn_folder = QPushButton("📁 Folder", self)
+        self._btn_folder.setObjectName("btnPlayOpenFolder")
+        self._btn_folder.setAccessibleName("Open game folder in Explorer")
+        self._btn_folder.setToolTip("Open game folder in Explorer")
+        self._btn_folder.setCursor(Qt.PointingHandCursor)
+        self._btn_folder.setStyleSheet(
+            f"QPushButton#{self._btn_folder.objectName()} {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+            f"QPushButton#{self._btn_folder.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+        self._btn_folder.clicked.connect(self._on_open_folder)
+        header.addWidget(self._btn_folder)
 
         self._btn_launch = QPushButton("Launch Game", self)
         self._btn_launch.setObjectName("btnPlayLaunch")
@@ -201,9 +218,20 @@ class PlayView(QWidget):
         super().showEvent(event)
         self.refresh_results()
 
-    def set_project(self, project_name: str) -> None:
+    def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         self._current_project = project_name
+        self._current_project_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        if self._current_project_dir:
+            self._store = RunStore(project_dir=self._current_project_dir, workspace_dir=self._workspace)
         self.refresh_results()
+
+    @Slot()
+    def _on_open_folder(self) -> None:
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if p_dir:
+            open_folder_in_file_manager(p_dir)
+        elif self._workspace:
+            open_folder_in_file_manager(self._workspace)
 
     @Slot()
     def refresh_results(self) -> None:
@@ -218,12 +246,11 @@ class PlayView(QWidget):
             return
 
         # Find latest run for this project
-        p_root = get_settings().projects_root
-        if not p_root:
-            self._lbl_summary.setText("Projects root not configured.")
+        project_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if not project_dir or not project_dir.is_dir():
+            self._lbl_summary.setText(f"Project directory not found for '{self._current_project}'.")
             return
 
-        project_dir = Path(p_root) / self._current_project
         state = self._store.latest_for_project(project_dir)
         if not state:
             self._lbl_summary.setText("No runs found for this project.")

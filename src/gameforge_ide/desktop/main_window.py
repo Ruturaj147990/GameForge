@@ -46,6 +46,15 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.settings import get_settings
+from ..core.projects import (
+    find_packaged_executable,
+    find_uproject,
+    find_gds,
+    is_gameforge_project,
+    list_all_project_dirs,
+    open_folder_in_file_manager,
+    resolve_project_dir,
+)
 from .panels.chat_panel import ChatPanel
 from .panels.diff_panel import DiffPanel
 from .panels.explorer_panel import ExplorerPanel
@@ -105,6 +114,8 @@ class MainWindow(QMainWindow):
     def __init__(self, workspace_root: Path) -> None:
         super().__init__()
         self._workspace = workspace_root
+        self._current_project: Optional[str] = None
+        self._current_project_dir: Optional[Path] = None
         self._ollama_check_running = False
         self._ollama_status_ready.connect(self._apply_ollama_status)
         settings_path = workspace_root / ".gameforge" / "ide_settings.ini"
@@ -625,15 +636,41 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_folder(self) -> None:
-        """Prompt user with native directory picker dialog and switch workspace."""
+        """Prompt user with native directory picker dialog and switch workspace or open project."""
         chosen = QFileDialog.getExistingDirectory(
             self,
-            "Open Workspace Folder",
-            str(self._workspace),
+            "Open Project or Workspace Folder",
+            str(self._current_project_dir or self._workspace),
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
         )
         if chosen:
-            self.switch_workspace(Path(chosen))
+            self.open_project_folder(Path(chosen))
+
+    def open_project_folder(self, folder: Path) -> None:
+        """Handle opening a specific project or workspace folder."""
+        target = folder.resolve()
+        if not target.exists():
+            QMessageBox.warning(self, "Invalid Directory", f"The directory does not exist:\n{target}")
+            return
+
+        if is_gameforge_project(target):
+            # Target is a project itself!
+            p_name = target.name
+            parent_ws = target.parent if target.parent != target else target
+            self.switch_workspace(parent_ws)
+            self.refresh_projects(select_project=p_name)
+            self._on_project_selected(p_name)
+            if hasattr(self, "_toasts"):
+                self._toasts.info("Project Opened", f"Opened project '{p_name}' from {target}")
+            self.statusBar().showMessage(f"Opened project: {p_name} ({target})", 4000)
+            self._switch_studio_view("design")
+        else:
+            # Target is a workspace folder containing projects or general workspace
+            self.switch_workspace(target)
+            self.refresh_projects()
+            projects = self._list_projects()
+            if projects:
+                self._on_project_selected(projects[0])
 
     def switch_workspace(self, new_workspace: Path | str) -> None:
         """Switch active workspace directory across all panels and services."""
@@ -1121,6 +1158,7 @@ class MainWindow(QMainWindow):
             self._plan_panel = self._code_view._plan_panel
             self._asset_panel = self._code_view._asset_panel
             self._design_panel = self._code_view._design_panel
+            self._explorer.open_folder_requested.connect(self._open_folder)
         return self._code_view
 
     def _register_studio_views(self) -> None:
@@ -1295,21 +1333,50 @@ class MainWindow(QMainWindow):
             self._center_splitter.setSizes([max(400, total - w), w])
 
     def _list_projects(self) -> List[str]:
-        p_root = get_settings().projects_root
-        if not p_root or not Path(p_root).is_dir():
-            return []
-        projects = []
-        try:
-            for d in sorted(Path(p_root).iterdir()):
-                if d.is_dir() and (d / f"{d.name}.uproject").is_file():
-                    projects.append(d.name)
-        except Exception:
-            pass
-        return projects
+        dirs_map = list_all_project_dirs(self._workspace)
+        return list(dirs_map.keys())
+
+    def _resolve_project_dir(self, project_name: str) -> Optional[Path]:
+        return resolve_project_dir(project_name, self._workspace)
+
+    def refresh_projects(self, select_project: Optional[str] = None) -> None:
+        projects = self._list_projects()
+        target = select_project or self._current_project
+        if target and target not in projects:
+            projects.insert(0, target)
+        if hasattr(self, "_top_bar"):
+            self._top_bar.set_projects(projects, target)
+        if hasattr(self, "_view_host"):
+            gv = self._view_host.get_view_widget("games")
+            if gv and hasattr(gv, "refresh_games"):
+                gv.refresh_games()
+            hv = self._view_host.get_view_widget("home")
+            if hv and hasattr(hv, "refresh_recent_games"):
+                hv.refresh_recent_games()
 
     def _on_project_selected(self, project_name: str) -> None:
         self._current_project = project_name
-        print(f"[GameForge Studio] Selected project: '{project_name}'", flush=True)
+        p_dir = self._resolve_project_dir(project_name)
+        self._current_project_dir = p_dir
+        print(f"[GameForge Studio] Selected project: '{project_name}' -> {p_dir}", flush=True)
+
+        # Synchronize active project directory across backend services, agent, and panels
+        if p_dir and p_dir.is_dir():
+            self._agent.set_workspace(p_dir)
+            self._tools.set_workspace(p_dir)
+            if hasattr(self, "_chat_panel"):
+                self._chat_panel.set_workspace(self._agent, p_dir)
+            if hasattr(self, "_explorer"):
+                self._explorer.set_workspace(p_dir, self._tools)
+            if hasattr(self, "_terminal"):
+                self._terminal.set_workspace(p_dir)
+            if hasattr(self, "_unreal_panel"):
+                self._unreal_panel.set_workspace(self._tools, p_dir)
+            if hasattr(self, "_design_panel"):
+                self._design_panel.set_workspace(p_dir)
+            if hasattr(self, "_asset_panel"):
+                self._asset_panel.set_workspace(p_dir)
+
         if hasattr(self, "_rail") and hasattr(self, "_view_host"):
             self._rail.update_enabled_states(self._view_host.is_enabled)
             current = self._view_host.current_view_id
@@ -1317,16 +1384,25 @@ class MainWindow(QMainWindow):
                 self._switch_studio_view("home")
             dv = self._view_host.get_view_widget("design")
             if dv and hasattr(dv, "load_project"):
-                dv.load_project(project_name)
+                dv.load_project(project_name, project_dir=p_dir)
             bv = self._view_host.get_view_widget("build")
             if bv and hasattr(bv, "set_project"):
-                bv.set_project(project_name)
+                bv.set_project(project_name, project_dir=p_dir)
             pv = self._view_host.get_view_widget("play")
             if pv and hasattr(pv, "set_project"):
-                pv.set_project(project_name)
+                pv.set_project(project_name, project_dir=p_dir)
             ev = self._view_host.get_view_widget("evidence")
             if ev and hasattr(ev, "set_project"):
-                ev.set_project(project_name)
+                ev.set_project(project_name, project_dir=p_dir)
+
+        # Ensure top bar reflects the active project
+        if hasattr(self, "_top_bar") and hasattr(self._top_bar, "project_combo"):
+            combo = self._top_bar.project_combo
+            idx = combo.findData(project_name)
+            if idx >= 0 and combo.currentIndex() != idx:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
 
     def _on_assistant_open_design(self, prompt: str) -> None:
         self._switch_studio_view("home")
@@ -1341,7 +1417,9 @@ class MainWindow(QMainWindow):
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
-            self._on_project_selected(gds.meta.project_name)
+            p_name = gds.meta.project_name
+            self.refresh_projects(select_project=p_name)
+            self._on_project_selected(p_name)
         self._switch_studio_view("design")
         design_view = self._view_host.get_view_widget("design")
         if design_view and hasattr(design_view, "open_draft"):
@@ -1361,8 +1439,9 @@ class MainWindow(QMainWindow):
         bv = self._view_host.get_view_widget("build")
         dv = self._view_host.get_view_widget("design")
         spec = getattr(dv, "_current_spec", None) if dv else None
+        p_dir = self._current_project_dir or self._resolve_project_dir(project_name)
         if bv and hasattr(bv, "start_build"):
-            bv.start_build(project_name, spec)
+            bv.start_build(project_name, spec, project_dir=p_dir)
 
     def _on_settings_saved(self) -> None:
         new_theme = "light" if self._settings.value("appearance/theme", "dark") == "light" else "dark"
@@ -1373,22 +1452,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
 
     def _find_packaged_exe(self, project_name: str) -> Optional[Path]:
-        p_root = get_settings().projects_root
-        if not p_root:
+        p_dir = self._resolve_project_dir(project_name)
+        if not p_dir:
             return None
-        p_dir = Path(p_root) / project_name
-        if not p_dir.is_dir():
-            return None
-        for exe_candidate in (
-            p_dir / "Packaged" / "Windows" / f"{project_name}.exe",
-            p_dir / "Packaged" / "WindowsNoEditor" / f"{project_name}.exe",
-            p_dir / "package_dev" / "Windows" / f"{project_name}.exe",
-            p_dir / "package_ship" / "Windows" / f"{project_name}.exe",
-            p_dir / "Binaries" / "Win64" / f"{project_name}.exe",
-        ):
-            if exe_candidate.is_file():
-                return exe_candidate
-        return None
+        return find_packaged_executable(p_dir, project_name)
 
     def _current_project_has_package(self) -> bool:
         if not getattr(self, "_current_project", None):

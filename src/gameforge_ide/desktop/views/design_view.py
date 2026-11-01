@@ -41,6 +41,7 @@ from ..styles import tokens
 from ..widgets.gds_form import GdsForm
 from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
 from src.gameforge_ide.core.settings import get_settings
+from src.gameforge_ide.core.projects import resolve_project_dir
 from src.gameforge_ide.design.gds import GameDesignSpec
 from src.gameforge_ide.design.patch import apply_patch, propose_patch, summarize_patch
 from src.gameforge_ide.design.presets import PRESETS
@@ -493,17 +494,26 @@ class DesignView(QWidget):
         self._render_questions(questions or [])
         self._update_header_status(is_valid=True, errors=[])
 
-    def load_project(self, project_name: str) -> bool:
+    def load_project(self, project_name: str, project_dir: Optional[Path] = None) -> bool:
         """Load game.gds.json for project_name."""
-        p_root = get_settings().projects_root
-        if not p_root:
+        p_dir = project_dir
+        if not p_dir:
+            p_root = get_settings().projects_root
+            if p_root:
+                cand = Path(p_root) / project_name
+                if cand.is_dir():
+                    p_dir = cand
+        if not p_dir:
+            p_dir = resolve_project_dir(project_name)
+
+        if not p_dir or not p_dir.is_dir():
             return False
-        p_dir = Path(p_root) / project_name
         loaded = gds_store.load(p_dir)
         if not loaded:
             return False
 
         self._current_project = project_name
+        self._current_project_dir = p_dir
         self._current_spec = loaded
         self._is_dirty = False
         self._lbl_dirty.setVisible(False)
@@ -523,15 +533,22 @@ class DesignView(QWidget):
         if not spec or not self._current_project:
             return False
 
-        p_root = get_settings().projects_root
-        if not p_root:
+        p_dir = getattr(self, "_current_project_dir", None)
+        if not p_dir:
+            p_root = get_settings().projects_root
+            if p_root:
+                p_dir = Path(p_root) / self._current_project
+        if not p_dir:
+            p_dir = resolve_project_dir(self._current_project)
+        if not p_dir:
             return False
-        p_dir = Path(p_root) / self._current_project
+        p_dir.mkdir(parents=True, exist_ok=True)
 
         spec.meta.revision += 1
         try:
             gds_store.save(p_dir, spec)
             self._current_spec = spec
+            self._current_project_dir = p_dir
             self._is_dirty = False
             self._lbl_dirty.setVisible(False)
             self._update_header_status(is_valid=True, errors=[])
@@ -545,7 +562,7 @@ class DesignView(QWidget):
                 QMessageBox.Yes,
             )
             if reply == QMessageBox.Yes:
-                self.load_project(self._current_project)
+                self.load_project(self._current_project, p_dir)
             return False
         except Exception as exc:
             QMessageBox.critical(self, "Save Error", f"Failed to save design spec:\n{exc}")
@@ -561,9 +578,8 @@ class DesignView(QWidget):
 
         # Show run approval scope dialog with impact analysis (WI-8.2)
         impact_summary = ""
-        p_root = get_settings().projects_root
-        if p_root and self._current_project:
-            p_dir = Path(p_root) / self._current_project
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project)
+        if p_dir and self._current_project:
             try:
                 from src.gameforge_ide.forge.store import RunStore
                 store = RunStore(project_dir=p_dir, workspace_dir=p_dir.parent)
@@ -582,7 +598,7 @@ class DesignView(QWidget):
         msg = (
             f"{impact_summary}"
             f"Approval Scope for '{self._current_project}':\n\n"
-            f"• Project Folder: {get_settings().projects_root}/{self._current_project}\n"
+            f"• Project Folder: {p_dir or self._current_project}\n"
             f"• Unreal Editor operations (compile C++, assemble level, lighting, package)\n\n"
             f"Do you want to start this Forge run now?"
         )
@@ -783,10 +799,9 @@ class DesignView(QWidget):
     def _show_history_menu(self) -> None:
         if not self._current_project:
             return
-        p_root = get_settings().projects_root
-        if not p_root:
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project)
+        if not p_dir or not p_dir.is_dir():
             return
-        p_dir = Path(p_root) / self._current_project
         revs = gds_store.history(p_dir)
         if not revs:
             QMessageBox.information(self, "No History", "No previous revisions preserved for this game.")
@@ -912,9 +927,9 @@ class DesignView(QWidget):
             self._is_dirty = False
             self._lbl_dirty.setVisible(False)
             if self._current_project:
-                p_root = get_settings().projects_root
-                if p_root:
-                    p_dir = Path(p_root) / self._current_project
+                p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project)
+                if p_dir:
+                    p_dir.mkdir(parents=True, exist_ok=True)
                     gds_store.save(p_dir, patched)
             self._diff_preview_box.setVisible(False)
             self._txt_change.clear()

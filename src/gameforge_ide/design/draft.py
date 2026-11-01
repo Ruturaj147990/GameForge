@@ -20,11 +20,13 @@ class DraftWin(_D):
     type: Literal["collect_all", "reach_goal", "defeat_all", "survive_seconds", "score_at_least",
                   "board_win", "match_win"]
     target: Optional[int] = Field(None, ge=1, le=10000)
+    seconds: Optional[int] = Field(None, ge=1, le=3600)
 
 
 class DraftLose(_D):
     type: Literal["health_zero", "timer_runs_out", "fall_off", "board_loss", "match_loss", "caught_by_guard"]
-    seconds: Optional[int] = Field(None, ge=5, le=3600)
+    seconds: Optional[int] = Field(None, ge=1, le=3600)
+    target: Optional[int] = Field(None, ge=0, le=10000)
 
 
 class DesignDraft(_D):

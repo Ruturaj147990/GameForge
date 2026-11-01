@@ -14,6 +14,15 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from src.gameforge_ide.core.jobs import JobManager, default_job_manager
 from src.gameforge_ide.core.settings import get_settings
+from src.gameforge_ide.core.projects import (
+    find_uproject,
+    find_gds,
+    is_gameforge_project,
+    resolve_project_dir,
+    list_all_project_dirs,
+    find_packaged_executable,
+    open_folder_in_file_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +70,7 @@ def find_project_thumbnail(project_dir: Path) -> Optional[Path]:
 
 def check_project_has_package(project_dir: Path, name: str) -> bool:
     """Check if project has a packaged executable."""
-    for exe_candidate in (
-        project_dir / "Binaries" / "Win64" / f"{name}.exe",
-        project_dir / "package_dev" / "Windows" / f"{name}.exe",
-        project_dir / "package_ship" / "Windows" / f"{name}.exe",
-        project_dir / "Packaged" / "Windows" / f"{name}.exe",
-    ):
-        if exe_candidate.is_file():
-            return True
-    return False
+    return find_packaged_executable(project_dir, name) is not None
 
 
 def load_runs_index(project_root: Optional[Path] = None, workspace_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
@@ -104,16 +105,26 @@ def list_games(
     projects_root: Optional[Union[str, Path]] = None,
     workspace_dir: Optional[Union[str, Path]] = None,
 ) -> List[GameSummary]:
-    """Scan projects_root for GameForge projects, joining GDS and runs index."""
-    root_str = projects_root or get_settings().projects_root
-    if not root_str:
+    """Scan projects_root and workspace for GameForge projects, joining GDS and runs index."""
+    project_dirs_map: Dict[str, Path] = {}
+    if projects_root:
+        root = Path(projects_root).resolve()
+        if root.is_dir():
+            try:
+                for d in root.iterdir():
+                    if d.is_dir() and not d.name.startswith("."):
+                        if is_gameforge_project(d):
+                            project_dirs_map[d.name] = d.resolve()
+            except OSError:
+                pass
+    else:
+        project_dirs_map = list_all_project_dirs(workspace_dir)
+
+    if not project_dirs_map:
         return []
 
-    root = Path(root_str).resolve()
-    if not root.is_dir():
-        return []
-
-    runs = load_runs_index(root, Path(workspace_dir).resolve() if workspace_dir else None)
+    p_root = Path(projects_root).resolve() if projects_root else get_settings().projects_root
+    runs = load_runs_index(Path(p_root) if p_root else None, Path(workspace_dir).resolve() if workspace_dir else None)
     # Map project directory string to newest run
     runs_by_proj: Dict[str, Dict[str, Any]] = {}
     for r in runs:
@@ -126,17 +137,12 @@ def list_games(
 
     games: List[GameSummary] = []
 
-    try:
-        subdirs = [d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".")]
-    except Exception:
-        return []
-
-    for d in subdirs:
-        uproject_file = d / f"{d.name}.uproject"
-        gds_file = d / "GameForge" / "design" / "game.gds.json"
+    for name, d in project_dirs_map.items():
+        uproject_file = find_uproject(d)
+        gds_file = find_gds(d)
 
         # A game exists if either game.gds.json or .uproject exists
-        if not gds_file.is_file() and not uproject_file.is_file():
+        if not gds_file and not uproject_file:
             continue
 
         title = d.name
@@ -145,7 +151,7 @@ def list_games(
         revision = 1
         updated_at = d.stat().st_mtime
 
-        if gds_file.is_file():
+        if gds_file and gds_file.is_file():
             try:
                 gds_data = json.loads(gds_file.read_text(encoding="utf-8"))
                 meta = gds_data.get("meta", {})
@@ -181,8 +187,8 @@ def list_games(
                 genre=genre,
                 pitch=pitch,
                 project_dir=d,
-                uproject_path=uproject_file if uproject_file.is_file() else None,
-                gds_path=gds_file if gds_file.is_file() else None,
+                uproject_path=uproject_file if (uproject_file and uproject_file.is_file()) else None,
+                gds_path=gds_file if (gds_file and gds_file.is_file()) else None,
                 revision=revision,
                 updated_at=updated_at,
                 last_run_id=last_run_id,
@@ -210,11 +216,8 @@ def delete_project(project_name: str, projects_root: Optional[Union[str, Path]] 
     except ImportError:
         pass
 
-    root_str = projects_root or get_settings().projects_root
-    if not root_str:
-        return False
-    pdir = Path(root_str).resolve() / project_name
-    if not pdir.is_dir():
+    pdir = resolve_project_dir(project_name, projects_root)
+    if not pdir or not pdir.is_dir():
         return False
 
     shutil.rmtree(pdir)
