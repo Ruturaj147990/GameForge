@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-11-01T04:40Z (UTC from the system clock). Updated by Antigravity upon Phase 7 completion.
+**Last updated:** 2026-11-01T05:35Z (UTC from the system clock). Updated by Antigravity upon Phase 8 completion.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -59,19 +59,27 @@ makes games, not a game. Product definition, design contract and security rules:
   - WI-7.9: Content library (`content/library.py`): user pack indexing, licence declaration enforcement (CC0, CC_BY, FAB_STANDARD, CUSTOM, EPIC_CONTENT), and project import.
   - WI-7.10: Vision rubric (`review/vision_rubric.py`): 6-criterion visual quality scoring, deterministic mesh audit gate (`run_mesh_audit`), and default `ArtDirection.placeholder_ok` flipped to `False`.
   - Evidence: `reports/P7/art_direction_audit.json`, `reports/P7/registry_audit.json`, `reports/P7/metahuman_spike.json`, `reports/P7/before_after_adventure.png`, `reports/P7/before_after_shooter.png`.
+- **P8 Living Projects, Change Requests, and Incremental Rebuild complete (WI-8.1-WI-8.6 DONE, commits `e5d5ef9`, `5747a9f`, `7517741`, `75d7d3c`, `a58ddd9`, `82c2c1f`, `1b4be01`):**
+  - WI-8.1: Prompt -> diff on GDS (RFC 6902 JSON Patch subset `add`, `remove`, `replace`), protected metadata paths, deterministic shortcut rules (speed scaling, count scaling, add entities/hazards/checkpoints/lighting/doors+keys/second levels), and Studio Design View UI with sentence diff preview and rebuild trigger.
+  - WI-8.2: Granular hash dependency tracking for Forge DAG invalidation (`forge/impact.py`), skipping unchanged steps and estimating rebuild durations. Decoupled scaffold from design so gameplay revisions skip full C++ editor builds.
+  - WI-8.3: Level preservation and actor ownership (`GF_Owned` tag) in `project_graph.json` schema `project_graph/1`. Surgical reconciliation (`reconciliation.py`) protecting user modifications with conflict detection, supporting 'keep mine' (ownership flips to user) and 'use design' resolution.
+  - WI-8.4: Project indexer (`index/indexer.py`) SQLite FTS5 database at `<workspace>/.gameforge/index/<project_key>.db` for C++ symbols, config settings, and assets. Fast `os.scandir` directory traversal. Agent tool `search_index` registered (T0, no approval). Synthetic 100,000-file benchmark verified: cold index in 315.09s (< 600s), incremental 10 files in 0.256s (< 2.0s), p95 query latency 19.99ms (< 50ms) in `reports/P8/index_benchmark.json`.
+  - WI-8.5: Agent work on existing code with verification (`backend/agent/code_verify.py`): DAG verification specs (`build_editor -> automation -> package -> scenarios`), and `propose_assistant_fix` repair loop capped at 3 attempts with symbol indexing.
+  - WI-8.6: Opening existing Unreal projects in read-only mode (`pipeline/project_import.py`), generating reverse draft GDS (`generator="model:import"`, `imported: true`), and enabling GameForge management with checkpoints protection.
+  - Exit Gates: 10 scripted change requests PASS (`reports/P8/change_requests.json`), user-edit guard conflict PASS, 100k index benchmark PASS (`reports/P8/index_benchmark.json`), Epic template import demo PASS (`reports/P8/import_demo.json`).
 - **Tests & Verification:**
-  - Unit tests: **703 passed** (exit 0).
+  - Unit tests: **738 passed** (exit 0).
   - Protected oracles: **45 passed** in 0.05s (exit 0).
   - Op catalog (129 ops) & schemas: verified current (`gen_op_coverage.py --check` and `gen_op_schemas.py --check` PASS).
   - Real-world packaged scenarios: PASS (`collect_3` verified in packaged Development build).
   - Git: clean on `master` branch.
 
-## 4. NEXT ACTION (2026-11-01T04:40Z)
+## 4. NEXT ACTION (2026-11-01T05:35Z)
 
-Begin **Phase 8 (Living Projects, Change Requests, and Incremental Rebuild)** in `docs/handovers/P08_living_projects.md`:
-1. WI-8.1: Prompt → diff on GDS (change requests against existing game specs).
-2. WI-8.2: Granular hash dependency tracking for incremental Forge DAG invalidation.
-3. WI-8.3: Level preservation and surgical entity updates.
+Begin **Phase 9 (Local Multi-Model Roster, Agentic Specialization, and Hosted Tier)** in `docs/handovers/P09_models_and_specialists.md`:
+1. WI-9.1: Role routing enforcement (`design`, `codegen`, `review`, `chat`) and fallback ladder.
+2. WI-9.2: Specialized prompt templates and few-shot calibration per local model.
+3. WI-9.3: Agentic evaluation suite (F-19) for autonomous verification.
 Work on `master` only, one commit per work item.
 
 ## 5. Key facts and paths
@@ -108,3 +116,4 @@ Work on `master` only, one commit per work item.
 - 2026-10-31T16:00Z — Antigravity: completed Phase 4 WI-4.5 (Games view), WI-4.6 (Design view + GDS form + rule editor + diff), and WI-4.7 (Build view + timeline delegate + batched log + problems table + rollback). Unit 661/661 PASS, protected 45/45 PASS, IDE bench 0 violations (0.21% CPU, 109.6 MB RAM, 0.94s startup). Ready for WI-4.8.
 - 2026-10-31T20:00Z — Antigravity: completed Phase 4 (WI-4.8-4.10, commit `7b09da3`), completed Phase 5 Gameplay Kit v2 (17 kit actor types, compiled GFKitTestEditor, packaged Dev & Ship builds, 14/14 dev + 5/5 ship scenarios PASS, `reports/P5/kit_scenarios_final.json`, commit `0d04565`), completed Phase 6 Composer (deterministic composer, 6 layouts, Bridson scatter, ballistic reachability, level_ops strict validation, gfdef runtime def, Forge DAG plan, legacy recipes retired to test fixtures, 6 parity reports + 2 new genres PASS, `reports/P6/`, commit `780ac45`). All 693 unit tests pass, 45 protected oracles pass. Ready for Phase 7.
 - 2026-11-01T04:40Z — Antigravity: completed Phase 7 Content, Art Direction, and Review (WI-7.1-7.10). Epic template packs installed & registered (157 assets in GFKitTest, cook dirs configured), character visuals (SKM_Manny/Quinn + ABP_Unarmed), 6 themes with WCAG contrast enforcement, 10 procedural CSG props, biomes role scatter, real packaged scenario verified (`collect_3` PASS in 7.27s), MetaHuman spike recorded, VFX/SFX/music/ambience audio feedback library, content library with licence declaration enforcement, vision rubric & deterministic mesh audit gate (`placeholder_ok=False`). All 703 unit tests pass, 45 protected oracles pass. Ready for Phase 8.
+- 2026-11-01T05:35Z - Antigravity: completed Phase 8 Living Projects (WI-8.1-WI-8.6). GDS RFC 6902 patch engine, incremental DAG impact analysis, project graph actor reconciliation with user edit protection ('keep mine' verified), SQLite FTS5 indexer with 100k-file benchmark (cold 315.09s, inc 0.256s, p95 19.99ms), agent code verification repair loop, and template import demo. All 4 exit gates PASS (reports/P8/). Unit tests: 738 passed, protected: 45 passed.

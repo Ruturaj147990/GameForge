@@ -18,8 +18,8 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Scenario playtests (injected input, Shipping-safe) | PASS | Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, 5 dev scenarios (incl. 2 controls) & 3 ship scenarios (`reports/P3/kit_testbed_scenarios.json`) | P3 |
 | Studio UI for the loop | PASS | P4 WI-4.1–WI-4.10 DONE (icons, systems service, studio shell, Home, Games, Design, Build, Play/QA, Settings views, packaging/launch, theme persistence) | P4 |
 | Composition of kit modules from a spec | PASS | P6 complete: deterministic composer (`compose.py`), 6 layouts (`board`, `arena`, `course`, `rooms`, `open_world`, `lanes`), Bridson Poisson-disk scatter, ballistic reachability, level_ops strict schema validation, gfdef runtime definition, Forge DAG plan, parity across 6 legacy presets + 2 new genres (`reports/P6/parity_*.json`, `reports/P6/genre_*.json`) | P6 |
-| Change requests / incremental rebuild | PLANNED | — | P8 |
-| Incremental modification of user projects | PLANNED | — | P8 |
+| Change requests / incremental rebuild | PASS | RFC 6902 JSON patch, shortcuts, impact analysis, 10 change requests verified (reports/P8/change_requests.json) | P8 |
+| Incremental modification of user projects | PASS | project_graph actor reconciliation with user edit protection ('keep mine'), template import verified (reports/P8/import_demo.json), 100k index benchmark (reports/P8/index_benchmark.json) | P8 |
 
 ## B. Agent, planner, IDE
 

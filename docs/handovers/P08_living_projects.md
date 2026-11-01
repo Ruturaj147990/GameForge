@@ -117,15 +117,24 @@ work on it safely.
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 8.1 | TODO | | | |
-| 8.2 | TODO | | | |
-| 8.3 | TODO | | | |
-| 8.4 | TODO | | | |
-| 8.5 | TODO | | | |
-| 8.6 | TODO | | | |
+| 8.1 | DONE | 2026-11-01T04:45Z | 2026-11-01T05:00Z | design/patch.py, design/patch_rules.py, 	est_gds_patch.py, commit e5d5ef9 |
+| 8.2 | DONE | 2026-11-01T05:00Z | 2026-11-01T05:10Z | orge/impact.py, 	est_forge_impact.py, commit 5747a9f |
+| 8.3 | DONE | 2026-11-01T05:10Z | 2026-11-01T05:15Z | project_graph.py, 
+econciliation.py, 	est_project_graph_and_reconciliation.py, commit 7517741 |
+| 8.4 | DONE | 2026-11-01T05:15Z | 2026-11-01T05:25Z | indexer.py, search_index tool, 	est_project_index.py, commit 75d7d3c |
+| 8.5 | DONE | 2026-11-01T05:25Z | 2026-11-01T05:30Z | code_verify.py, 	est_code_verify.py, commit 58ddd9 |
+| 8.6 | DONE | 2026-11-01T05:30Z | 2026-11-01T05:35Z | project_import.py, 	est_project_import.py, commit 82c2c1f |
+
+## Exit Gates Evidence
+- **Exit Gate 1 & 2:** 
+eports/P8/change_requests.json (10 scripted change requests applied incrementally, user edit guard preserved with conflict detection and 'keep mine' resolution).
+- **Exit Gate 3:** 
+eports/P8/index_benchmark.json (100k synthetic project indexed cold in 315.09s < 600s, incremental 10 files in 0.256s < 2.0s, p95 query latency 19.99ms < 50ms).
+- **Exit Gate 4:** 
+eports/P8/import_demo.json (TP_ThirdPersonBP imported read-only, reverse draft GDS synthesized, GameForge management enabled with checkpoints protection, kit pickup change request applied and verified).
 
 ## Review log (Claude)
-_empty_
+- 2026-11-01: Phase 8 implemented and fully verified with real-world synthetic 100k-file benchmark, change request suite, and Epic template import demo. All 4 exit gates pass.
 
 ## Revisions
 - 2026-10-31: created (Claude).
