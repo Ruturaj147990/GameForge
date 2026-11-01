@@ -150,21 +150,47 @@ def legacy_spec(ctx: StepContext) -> StepOutcome:
 
 def legacy_scaffold(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
-    uproject = pdir / f"{params.project_name}.uproject"
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    display_title = ctx.step.inputs.get("display_title") or getattr(params, "display_title", project_name)
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
+    uproject = pdir / f"{project_name}.uproject"
     recipe_id = get_recipe_id(params)
-    impl = RECIPE_IMPL[recipe_id]
-    default_gm = impl[3].format(name=params.project_name)
-    deps = impl[2]
+    impl = RECIPE_IMPL.get(recipe_id, RECIPE_IMPL[GRID_RECIPE_ID])
+    default_gm = ctx.step.inputs.get("game_mode") or "/Script/GameForgeRuntime.GameForgeGameModeBase"
+    deps = ctx.step.inputs.get("module_deps") or impl[2]
+    plugins = ctx.step.inputs.get("plugins")
     tc = _get_toolchain(ctx)
+
+    # Clean up stale project files if an earlier run scaffolded with a different name
+    if pdir.is_dir():
+        for old_up in pdir.glob("*.uproject"):
+            if old_up.stem != project_name:
+                try:
+                    old_up.unlink()
+                    old_target = pdir / "Source" / f"{old_up.stem}.Target.cs"
+                    old_ed_target = pdir / "Source" / f"{old_up.stem}Editor.Target.cs"
+                    old_src_dir = pdir / "Source" / old_up.stem
+                    if old_target.exists():
+                        old_target.unlink()
+                    if old_ed_target.exists():
+                        old_ed_target.unlink()
+                    if old_src_dir.exists():
+                        import shutil
+                        shutil.rmtree(old_src_dir, ignore_errors=True)
+                except Exception:
+                    pass
+
     info = tc.scaffold_cpp_project(
         pdir,
-        params.project_name,
-        default_map=f"/Game/Maps/{params.project_name}Map",
+        project_name,
+        default_map=f"/Game/Maps/{project_name}Map",
         game_mode=default_gm,
         module_deps=deps,
-        display_title=params.display_title,
+        display_title=display_title,
+        plugins=plugins,
     )
+    # Ensure GameForge plugin is deployed into Plugins/GameForge
+    tc.deploy_gameforge_plugin(pdir)
     if uproject.is_file():
         repo = ProjectRepo(pdir)
         if repo.available:
@@ -199,7 +225,8 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
 
 def legacy_sources(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
     recipe_id = get_recipe_id(params)
     generator = RECIPE_IMPL[recipe_id][0]
     files = generator(params)
@@ -212,14 +239,22 @@ def legacy_sources(ctx: StepContext) -> StepOutcome:
 
 def legacy_build(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
-    uproject = pdir / f"{params.project_name}.uproject"
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
+    uproject = pdir / f"{project_name}.uproject"
+    if not uproject.is_file():
+        uprojects = list(pdir.glob("*.uproject"))
+        if uprojects:
+            uproject = uprojects[0]
     tc = _get_toolchain(ctx)
-    r = tc.build(uproject, f"{params.project_name}Editor")
+    target = ctx.step.inputs.get("target") or f"{project_name}Editor"
+    config = ctx.step.inputs.get("configuration") or "Development"
+    r = tc.build(uproject, target, configuration=config)
     d = r.to_dict()
     data = {
         "exit_code": r.exit_code,
         "log": r.log_path,
+        "log_path": r.log_path,
         "errors": d.get("error_count", len(r.errors)),
         "warnings": d.get("warning_count", 0),
         "diagnostics": [x.__dict__ for x in r.diagnostics[:20]],
@@ -230,30 +265,58 @@ def legacy_build(ctx: StepContext) -> StepOutcome:
 
 def legacy_assemble(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
-    uproject = pdir / f"{params.project_name}.uproject"
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
+    uproject = pdir / f"{project_name}.uproject"
+    if not uproject.is_file():
+        uprojects = list(pdir.glob("*.uproject"))
+        if uprojects:
+            uproject = uprojects[0]
     evidence_dir = pdir / "Saved" / "GameForge"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     recipe_id = get_recipe_id(params)
     assemble_fn = RECIPE_IMPL[recipe_id][1]
     eng_root = Path(ctx.step.inputs.get("engine_root") or engine_root_or_missing())
-    ok, data, errors = assemble_fn(eng_root, uproject, evidence_dir, params.project_name, params)
-    return StepOutcome(ok, data=data, errors=errors)
+    ok, data, errors = assemble_fn(eng_root, uproject, evidence_dir, project_name, params)
+    data = dict(data or {})
+    log_file = evidence_dir / "assemble_editor.log"
+    artifacts = [{"path": str(log_file), "kind": "log"}] if log_file.is_file() else []
+    if log_file.is_file():
+        data["log"] = str(log_file)
+        data["log_path"] = str(log_file)
+    return StepOutcome(ok, data=data, errors=errors, artifacts=artifacts)
 
 
 def legacy_tests(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
-    uproject = pdir / f"{params.project_name}.uproject"
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
+    uproject = pdir / f"{project_name}.uproject"
+    if not uproject.is_file():
+        uprojects = list(pdir.glob("*.uproject"))
+        if uprojects:
+            uproject = uprojects[0]
     tc = _get_toolchain(ctx)
-    r = tc.run_automation_tests(uproject, f"GameForge.{params.project_name}")
-    return StepOutcome(r.ok, data={"exit_code": r.exit_code, "log": r.log_path, **r.data}, errors=r.errors)
+    tests = ctx.step.inputs.get("tests")
+    if tests:
+        test_filter = "+".join(tests) if isinstance(tests, list) else str(tests)
+    else:
+        test_filter = ctx.step.inputs.get("test_filter") or f"GameForge.{project_name}"
+    r = tc.run_automation_tests(uproject, test_filter)
+    data = {"exit_code": r.exit_code, "log": r.log_path, "log_path": r.log_path, **r.data}
+    artifacts = [{"path": str(r.log_path), "kind": "log"}] if r.log_path else []
+    return StepOutcome(r.ok, data=data, errors=r.errors, artifacts=artifacts)
 
 
 def legacy_package(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
-    uproject = pdir / f"{params.project_name}.uproject"
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
+    uproject = pdir / f"{project_name}.uproject"
+    if not uproject.is_file():
+        uprojects = list(pdir.glob("*.uproject"))
+        if uprojects:
+            uproject = uprojects[0]
     tc = _get_toolchain(ctx)
     ok, data, errors = engine_stages.package(tc, uproject)
     return StepOutcome(ok, data=data, errors=errors)
@@ -261,7 +324,8 @@ def legacy_package(ctx: StepContext) -> StepOutcome:
 
 def legacy_smoke(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
-    pdir = ctx.project_dir or (ctx.workspace_dir / params.project_name)
+    project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
     evidence_dir = pdir / "Saved" / "GameForge"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     recipe_id = get_recipe_id(params)
@@ -271,6 +335,6 @@ def legacy_smoke(ctx: StepContext) -> StepOutcome:
     if not exe:
         return StepOutcome(False, errors=["packaged executable path not found in package step outputs"])
     ok, data, errors = engine_stages.packaged_smoke(
-        tc, Path(exe), evidence_dir, params.project_name, expect_log=selftest_pass
+        tc, Path(exe), evidence_dir, project_name, expect_log=selftest_pass
     )
     return StepOutcome(ok, data=data, errors=errors)

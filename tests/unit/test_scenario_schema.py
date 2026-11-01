@@ -93,3 +93,23 @@ def test_level_manifest_serialization(tmp_path: Path):
     assert loaded.level_id == "level_01"
     assert len(loaded.actors) == 2
     assert loaded.actors[1].yaw == 90.0
+
+
+def test_scenario_handler_fallback_valid_schema():
+    """Verify that default smoke scenario fallback conforms strictly to scenario/1 schema."""
+    fallback = Scenario(
+        scenario_id="smoke",
+        description="Smoke test for TestGame: launch and stay alive",
+        timeout_s=30.0,
+        steps=[WaitStep(wait_s=WaitArgs(seconds=5.0))],
+        expect=[
+            EventExpectation(event="game.started"),
+            NoEventExpectation(no_event="player.died"),
+        ],
+        captures=[],
+    )
+    assert fallback.scenario_id == "smoke"
+    assert fallback.schema_ == "scenario/1"
+    dumped = fallback.model_dump(by_alias=True)
+    assert Scenario.model_validate(dumped).scenario_id == "smoke"
+

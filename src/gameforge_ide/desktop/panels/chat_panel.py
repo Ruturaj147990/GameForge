@@ -35,6 +35,7 @@ from ...backend.unreal_context import UnrealEditorContext, load_unreal_context
 from ..services.action_runner import ActionRunner
 from ..services.agent_service import AgentService
 from .approval_card import ApprovalCard
+from ..styles import tokens
 from ..styles.dark_theme import theme_color, theme_stylesheet
 
 
@@ -1023,10 +1024,10 @@ class ChatPanel(QWidget):
             self._start_screen.hide()
 
     def _on_start_make_game(self) -> None:
-        self._input.setText("/game ")
+        self._input.setPlainText("/game ")
         self._input.setFocus()
         cursor = self._input.textCursor()
-        cursor.movePosition(cursor.End)
+        cursor.movePosition(QTextCursor.End)
         self._input.setTextCursor(cursor)
 
     def _on_start_play_game(self, game_id: str) -> None:
@@ -1304,8 +1305,13 @@ class ChatPanel(QWidget):
             self._status_bar.set_ready()
             return
         if self._active_bubble:
+            if not self._active_bubble.has_tokens() and _full_text:
+                self._active_bubble.append_token(_full_text)
             self._active_bubble.finalise()
             self._active_bubble = None
+        elif _full_text:
+            b = self._add_bubble("assistant", _full_text)
+            b.finalise()
         self._btn_send.setEnabled(True)
         self._btn_stop.setEnabled(False)
         self._status_bar.set_ready()
@@ -1359,12 +1365,22 @@ class ChatPanel(QWidget):
         ))
 
     def _clear_chat(self) -> None:
-        for i in reversed(range(self._msg_layout.count() - 1)):
+        try:
+            if self._agent.is_busy:
+                self._ignore_active_task_events = True
+                self._agent.stop()
+                self._active_bubble = None
+        except Exception:
+            pass
+        for i in reversed(range(self._msg_layout.count())):
             item = self._msg_layout.itemAt(i)
             if item and item.widget():
                 if item.widget() is getattr(self, "_start_screen", None):
                     continue
-                item.widget().deleteLater()
+                w = item.widget()
+                self._msg_layout.removeWidget(w)
+                w.setParent(None)
+                w.deleteLater()
         self._show_start_screen()
 
     def _new_session(self) -> None:

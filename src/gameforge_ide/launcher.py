@@ -8,19 +8,107 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import logging
 import os
 import sys
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from .core.settings import get_settings
 
 
+def _configure_terminal_logging(verbose: bool = False) -> None:
+    """Configure terminal logging so all engine, model, forge and UI events are visible."""
+    level = logging.DEBUG if verbose else logging.INFO
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    # Also explicitly ensure gameforge loggers are set to INFO
+    logging.getLogger("src.gameforge_ide").setLevel(level)
+    logging.getLogger("gameforge").setLevel(level)
+
+    # Format with clean timestamps and module names
+    formatter = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(level)
+        handler.setFormatter(formatter)
+        root.addHandler(handler)
+    else:
+        for h in root.handlers:
+            h.setLevel(level)
+            h.setFormatter(formatter)
+
+    # Suppress verbose noise from external libraries
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
-def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
+def _safe_print(msg: str) -> None:
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        try:
+            # Fall back to replacing unencodable characters
+            ascii_msg = msg.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(sys.stdout.encoding or "utf-8")
+            print(ascii_msg, flush=True)
+        except Exception:
+            pass
+
+
+def _setup_terminal_event_listener() -> None:
+    """Subscribe to EventBus to print real-time Forge, pipeline, and job execution logs in the terminal."""
+    try:
+        from .core.events import default_bus
+        bus = default_bus()
+
+        def _on_event(topic: str, ev: Dict[str, Any]) -> None:
+            if topic == "forge":
+                kind = ev.get("kind")
+                run_id = ev.get("run_id", "")
+                if kind == "run_started":
+                    title = ev.get("title", "")
+                    count = ev.get("steps_count", "")
+                    _safe_print(f"\n[Forge Run] ═══════════════════════════════════════════════════════")
+                    _safe_print(f"[Forge Run] STARTING RUN: {run_id} ({title}) [{count} steps]")
+                    _safe_print(f"[Forge Run] ═══════════════════════════════════════════════════════")
+                elif kind == "step_started":
+                    step_id = ev.get("step_id", "")
+                    k_type = ev.get("kind_type", "")
+                    _safe_print(f"[Forge Step] ▶ [{step_id}] ({k_type}) Starting...")
+                elif kind == "step_finished":
+                    step_id = ev.get("step_id", "")
+                    ok = ev.get("ok", False)
+                    dur = ev.get("duration_s", 0)
+                    status_str = "✓ OK" if ok else "✗ FAILED"
+                    errs = ev.get("errors") or []
+                    err_str = f" | Errors: {errs}" if errs else ""
+                    _safe_print(f"[Forge Step] {status_str} [{step_id}] in {dur}s{err_str}")
+                elif kind == "run_finished":
+                    st = ev.get("status", "")
+                    _safe_print(f"[Forge Run] ═══════════════════════════════════════════════════════")
+                    _safe_print(f"[Forge Run] RUN {run_id} FINISHED: {st}")
+                    _safe_print(f"[Forge Run] ═══════════════════════════════════════════════════════\n")
+            elif topic == "pipeline":
+                stage = ev.get("stage", "")
+                status = ev.get("status", "")
+                _safe_print(f"[GameForge Pipeline] {stage}: {status}")
+
+        bus.subscribe("*", _on_event)
+    except Exception as exc:
+        _safe_print(f"[GameForge Warning] Failed to attach terminal event listener: {exc}")
+
+
+def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose: bool = False) -> None:
     """Launch the genuine native PySide6 QMainWindow desktop application."""
+    _configure_terminal_logging(verbose=verbose)
+    _setup_terminal_event_listener()
+
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import Qt
 
@@ -44,16 +132,15 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None) -> None:
     if not target_ws.exists():
         target_ws.mkdir(parents=True, exist_ok=True)
 
+    print(f"[GameForge] Launching GameForge IDE desktop [workspace: {target_ws}]...", flush=True)
     from .desktop.main_window import MainWindow
     window = MainWindow(target_ws)
-    print(f"Launching GameForge IDE desktop [workspace: {target_ws}]...")
     window.show()
     window.raise_()
     window.activateWindow()
-    print("GameForge IDE window opened.")
+    print("[GameForge] GameForge IDE window opened and active.", flush=True)
 
     sys.exit(app.exec())
-
 
 
 def _launch_server(host: str = "127.0.0.1", port: Optional[int] = None) -> None:
@@ -93,6 +180,8 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1", help="Host (only used with --serve)")
     parser.add_argument("--port", type=int, default=None,
                         help="Port (only used with --serve; default: settings bridge_port, 47815)")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="Enable verbose debug logging to the terminal.")
     args = parser.parse_args()
 
     if args.serve:
@@ -108,8 +197,7 @@ def main() -> None:
         _launch_server(args.host, args.port)
     else:
         # Native desktop is the default
-        _launch_native_desktop(args.workspace)
-
+        _launch_native_desktop(args.workspace, verbose=args.verbose)
 
 
 if __name__ == "__main__":

@@ -189,6 +189,107 @@ def test_build_view_load_run_and_banner(qapp, tmp_path):
         view.deleteLater()
 
 
+def test_build_view_failed_run_show_problems_action(qapp, tmp_path):
+    """Verify that clicking Show Problems navigates to the failed step and populates problems table."""
+    ws = tmp_path / "ws_fail"
+    ws.mkdir(parents=True, exist_ok=True)
+    store = RunStore(project_dir=None, workspace_dir=ws)
+
+    s1 = StepSpec(step_id="design", kind=StepKind.DESIGN, title="Design Step")
+    s2 = StepSpec(step_id="automation", kind=StepKind.AUTOMATION, title="Automation Step", depends_on=["design"])
+    run_spec = RunSpec(
+        run_id="run_fail_001",
+        title="Failed Build Run",
+        workspace_dir=str(ws),
+        steps=[s1, s2],
+    )
+    state = RunState.new(run_spec)
+    now = time.time()
+    state.records["design"].status = StepStatus.DONE
+    state.records["design"].started_at = now - 10
+    state.records["design"].finished_at = now - 8
+    state.records["design"].data = {"engine": "5.7.4", "params": {"project_name": "DarkLadder"}}
+
+    state.records["automation"].status = StepStatus.FAILED
+    state.records["automation"].started_at = now - 8
+    state.records["automation"].finished_at = now
+    state.records["automation"].errors = ["no automation report written (tests did not run)"]
+    state.records["automation"].data = {"exit_code": 255}
+
+    state.status = StepStatus.FAILED
+    store.save(state)
+
+    view = BuildView(workspace_root=ws)
+    try:
+        view._store = store
+        view.refresh_runs()
+
+        # Failed run should show banner with "Show Problems"
+        assert not view._summary_banner.isHidden()
+        assert "Show Problems" in view._btn_banner_action.text()
+        assert "no automation report written" in view._lbl_banner_msg.text()
+
+        # Auto-selection on failed run should select automation step (index 1)
+        cur_idx = view._timeline_view.currentIndex()
+        assert cur_idx.row() == 1
+
+        # Now simulate user having navigated to design step (index 0)
+        view._timeline_view.setCurrentIndex(view._timeline_model.index(0, 0))
+        view._on_step_selected(view._timeline_model.index(0, 0))
+        assert "design" in view._lbl_step_header.text().lower()
+
+        # User clicks "Show Problems" in banner
+        view._btn_banner_action.click()
+
+        # Should jump back to automation step and show problems
+        assert view._timeline_view.currentIndex().row() == 1
+        assert "automation" in view._lbl_step_header.text().lower()
+        assert view._lower_tabs.currentIndex() == 0
+        assert view._problems_table.rowCount() == 1
+        assert "no automation report written" in view._problems_table.item(0, 2).text()
+    finally:
+        view.deleteLater()
+
+
+def test_build_view_display_step_structured_logs(qapp, tmp_path):
+    """Verify procedural steps like design and scaffold display structured logs."""
+    ws = tmp_path / "ws_logs"
+    ws.mkdir(parents=True, exist_ok=True)
+    view = BuildView(workspace_root=ws)
+    try:
+        # Step: Design
+        rec_design = StepRecord(
+            step_id="design",
+            status=StepStatus.DONE,
+            started_at=100.0,
+            finished_at=101.5,
+            checkpoint="git_hash_abc",
+            data={"engine": "5.7.4", "params": {"project_name": "TestGame", "board_size": 3}},
+        )
+        view._display_step(rec_design)
+        log_text = view._log_view._edit.toPlainText()
+        assert "Design specification validated" in log_text
+        assert "Target Unreal Engine: 5.7.4" in log_text
+        assert "project_name: TestGame" in log_text
+        assert "Git Checkpoint: git_hash_abc" in log_text
+
+        # Step: Scaffold
+        rec_scaffold = StepRecord(
+            step_id="scaffold",
+            status=StepStatus.DONE,
+            started_at=102.0,
+            finished_at=103.0,
+            data={"uproject": "C:/Games/TestGame.uproject", "files": ["TestGame.uproject", "Source/Game.cpp"]},
+        )
+        view._display_step(rec_scaffold)
+        scaffold_text = view._log_view._edit.toPlainText()
+        assert "C++ project scaffolding complete" in scaffold_text
+        assert "C:/Games/TestGame.uproject" in scaffold_text
+        assert "Generated files (2)" in scaffold_text
+    finally:
+        view.deleteLater()
+
+
 def test_build_view_no_raw_hex_colors():
     """Verify zero raw hex colors in build view and widgets."""
     pattern = re.compile(r'#[0-9a-fA-F]{3,8}\b')

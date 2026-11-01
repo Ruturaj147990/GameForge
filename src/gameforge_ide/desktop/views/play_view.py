@@ -197,6 +197,10 @@ class PlayView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        self.refresh_results()
+
     def set_project(self, project_name: str) -> None:
         self._current_project = project_name
         self.refresh_results()
@@ -228,30 +232,32 @@ class PlayView(QWidget):
         # Collect scenario_result artifacts from all steps
         for step_id, rec in state.records.items():
             for art in rec.artifacts:
-                art_path = getattr(art, "path", str(art))
+                art_path = str(getattr(art, "path", art))
                 kind = getattr(art, "kind", "other")
-                if kind == "scenario_result" or art_path.endswith("_result.json"):
+                if (kind == "scenario_result" or art_path.endswith("_result.json")) and art_path.endswith(".json"):
                     full_path = Path(art_path)
                     if not full_path.is_absolute():
                         full_path = project_dir / art_path
                     if full_path.is_file():
                         try:
                             result = ScenarioResult.from_file(full_path)
-                            self._results.append(result)
+                            if not any(r.scenario_id == result.scenario_id for r in self._results):
+                                self._results.append(result)
                         except Exception as e:
                             logger.warning("Failed to parse scenario result %s: %s", full_path, e)
 
-        # Also scan the project's scenario results directory
-        sc_dir = project_dir / "Saved" / "GameForge" / "scenarios"
-        if sc_dir.is_dir():
-            for f in sorted(sc_dir.glob("*_result.json")):
-                try:
-                    result = ScenarioResult.from_file(f)
-                    # Deduplicate by scenario_id
-                    if not any(r.scenario_id == result.scenario_id for r in self._results):
-                        self._results.append(result)
-                except Exception:
-                    pass
+        # Also scan the project's scenario results directories
+        for sc_sub in ("evidence/scenarios", "scenarios"):
+            sc_dir = project_dir / "Saved" / "GameForge" / sc_sub
+            if sc_dir.is_dir():
+                for f in sorted(sc_dir.glob("*_result.json")):
+                    try:
+                        result = ScenarioResult.from_file(f)
+                        # Deduplicate by scenario_id
+                        if not any(r.scenario_id == result.scenario_id for r in self._results):
+                            self._results.append(result)
+                    except Exception:
+                        pass
 
         self._populate_table()
 

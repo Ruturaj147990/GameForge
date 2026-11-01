@@ -619,6 +619,10 @@ class GamesView(QWidget):
         # Initial refresh
         self.refresh_games()
 
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        self.refresh_games()
+
     # ── Slots & Logic ────────────────────────────────────────────────────────
 
     @Slot()

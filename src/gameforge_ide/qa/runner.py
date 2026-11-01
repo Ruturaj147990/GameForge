@@ -37,6 +37,7 @@ def run_packaged(
 
     argv: List[str] = [
         str(exe),
+        "?game=/Script/GameForgeRuntime.GameForgeGameModeBase",
         f"-GFScenario={scenario_path.resolve()}",
         f"-GFScenarioOut={scenario_out.resolve()}",
         f"-GFEventsOut={events_out.resolve()}",

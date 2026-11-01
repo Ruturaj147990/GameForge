@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
@@ -184,6 +185,54 @@ class DiffDialog(QDialog):
         )
         btn_close.clicked.connect(self.accept)
         layout.addWidget(btn_close, alignment=Qt.AlignRight)
+
+
+def parse_question_options(question: str) -> List[str]:
+    """Parse discrete choices from a question string if present; fallback to ['Yes', 'No']."""
+    q_clean = question.strip().rstrip("?").strip()
+
+    # 1. Colon pattern: e.g. 'Which camera style: third person, first person, or top-down'
+    if ":" in q_clean:
+        _, after_colon = q_clean.split(":", 1)
+        parts = re.split(r",\s*(?:or\s+)?|\s+or\s+", after_colon.strip())
+        parts = [p.strip().strip(".").strip() for p in parts if p.strip()]
+        if len(parts) >= 2:
+            return [re.sub(r"^(?:a|an|the)\s+", "", p, flags=re.IGNORECASE).capitalize() for p in parts]
+
+    # 2. Check for 'or' pattern
+    if re.search(r"\bor\b", q_clean, re.IGNORECASE):
+        pivots = [
+            r"\b(?:play\s+as|act\s+as|as)\s+(?:a|an|the)?\s*",
+            r"\b(?:between)\s+",
+            r"\b(?:prefer|choose|pick)\s+(?:a|an|the)?\s*",
+            r"\b(?:want|like|feature|include|use|have)\s+(?:to\s+)?(?:be\s+)?(?:add\s+)?(?:a|an|the)?\s*",
+            r"\b(?:should\s+(?:the\s+)?\w+\s+(?:be\s+)?)",
+            r"\b(?:is\s+(?:the\s+)?\w+\s+(?:be\s+)?)",
+            r"\b(?:are\s+(?:the\s+)?\w+\s+)",
+            r"\b(?:will\s+(?:the\s+)?\w+\s+be\s+)",
+            r"\b(?:either)\s+",
+            r"\b(?:be)\s+(?:a|an|the)?\s*",
+            r"\b(?:is\s+it)\s+",
+        ]
+
+        for pivot in pivots:
+            m = re.search(pivot + r"(.+)$", q_clean, re.IGNORECASE)
+            if m:
+                rest = m.group(1).strip()
+                if re.search(r"\bor\b", rest, re.IGNORECASE):
+                    parts = re.split(r",\s*(?:or\s+)?|\s+or\s+", rest, flags=re.IGNORECASE)
+                    parts = [re.sub(r"^(?:a|an|the)\s+", "", p.strip(), flags=re.IGNORECASE) for p in parts if p.strip()]
+                    if len(parts) >= 2 and all(0 < len(p) <= 35 for p in parts):
+                        return [p.capitalize() if p.islower() else p for p in parts]
+
+        # General concise question fallback: e.g. "First person or third person?"
+        if q_clean.count(" ") <= 8:
+            parts = re.split(r",\s*(?:or\s+)?|\s+or\s+", q_clean, flags=re.IGNORECASE)
+            parts = [re.sub(r"^(?:a|an|the)\s+", "", p.strip(), flags=re.IGNORECASE) for p in parts if p.strip()]
+            if len(parts) >= 2 and all(0 < len(p) <= 35 for p in parts):
+                return [p.capitalize() if p.islower() else p for p in parts]
+
+    return ["Yes", "No"]
 
 
 class DesignView(QWidget):
@@ -466,7 +515,11 @@ class DesignView(QWidget):
 
     def save_spec(self) -> bool:
         """Save current form spec with revision+1."""
-        spec = self._form.get_spec()
+        try:
+            spec = self._form.get_spec()
+        except Exception as exc:
+            logger.error("Failed to get spec from form: %s", exc)
+            return False
         if not spec or not self._current_project:
             return False
 
@@ -509,23 +562,22 @@ class DesignView(QWidget):
         # Show run approval scope dialog with impact analysis (WI-8.2)
         impact_summary = ""
         p_root = get_settings().projects_root
-        if p_root:
+        if p_root and self._current_project:
             p_dir = Path(p_root) / self._current_project
-            store = RunStore(p_dir / ".gameforge" / "runs")
-            latest_id = store.latest_run_id()
-            if latest_id:
-                prev_state = store.load(latest_id)
+            try:
+                from src.gameforge_ide.forge.store import RunStore
+                store = RunStore(project_dir=p_dir, workspace_dir=p_dir.parent)
+                prev_state = store.latest_for_project(p_dir)
                 if prev_state and self._current_spec:
-                    try:
-                        from src.gameforge_ide.composer.compose import compose
-                        from src.gameforge_ide.composer.plan import composition_to_run_spec
-                        from src.gameforge_ide.forge.impact import impact
-                        comp = compose(self._current_spec, str(p_dir))
-                        new_spec = composition_to_run_spec(comp, str(p_dir.parent), str(p_dir), origin="change_request")
-                        rep = impact(prev_state, new_spec)
-                        impact_summary = f"{rep.format_summary()}\n\n"
-                    except Exception:
-                        pass
+                    from src.gameforge_ide.composer.compose import compose
+                    from src.gameforge_ide.composer.plan import composition_to_run_spec
+                    from src.gameforge_ide.forge.impact import impact
+                    comp = compose(self._current_spec, str(p_dir))
+                    new_spec = composition_to_run_spec(comp, str(p_dir.parent), str(p_dir), origin="change_request")
+                    rep = impact(prev_state, new_spec)
+                    impact_summary = f"{rep.format_summary()}\n\n"
+            except Exception as exc:
+                logger.debug("Failed to calculate impact summary: %s", exc)
 
         msg = (
             f"{impact_summary}"
@@ -536,6 +588,7 @@ class DesignView(QWidget):
         )
         reply = QMessageBox.question(self, "Approve Forge Run", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if reply == QMessageBox.Yes:
+            print(f"[GameForge Studio] Forge run approved for '{self._current_project}' — launching build DAG...", flush=True)
             self.buildRequested.emit(self._current_project)
 
     # ── Internal Slots & Helpers ─────────────────────────────────────────────
@@ -567,6 +620,14 @@ class DesignView(QWidget):
             w = item.widget()
             if w:
                 w.deleteLater()
+            elif item.layout():
+                while item.layout().count() > 0:
+                    sub = item.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+
+        self._answered_questions: Dict[str, str] = {}
+        self._total_questions = len(questions)
 
         if not questions:
             self._questions_panel.setVisible(False)
@@ -574,37 +635,149 @@ class DesignView(QWidget):
 
         lbl_q_head = QLabel(f"Clarification Questions ({len(questions)}):", self._questions_panel)
         lbl_q_head.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: 600; font-size: {tokens.FONT_BODY}px;")
+        self._lbl_q_head = lbl_q_head
         self._questions_layout.addWidget(lbl_q_head)
 
         for q in questions:
-            q_row = QHBoxLayout()
-            q_lbl = QLabel(f"• {q}", self._questions_panel)
+            row_widget = QWidget(self._questions_panel)
+            row_widget.setObjectName("designQuestionRow")
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 2, 0, 2)
+            row_layout.setSpacing(8)
+
+            q_lbl = QLabel(f"• {q}", row_widget)
             q_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
-            q_row.addWidget(q_lbl, 1)
+            q_lbl.setWordWrap(True)
+            row_layout.addWidget(q_lbl, 1)
 
-            btn_yes = QPushButton("Yes", self._questions_panel)
-            btn_yes.setStyleSheet(
-                f"background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_SUCCESS};"
-                f"border: 1px solid {tokens.BORDER}; border-radius: 4px; padding: 2px 8px;"
+            actions_widget = QWidget(row_widget)
+            actions_layout = QHBoxLayout(actions_widget)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            actions_layout.setSpacing(6)
+
+            options = parse_question_options(q)
+            for opt in options:
+                btn = QPushButton(opt, actions_widget)
+                if opt.lower() == "yes":
+                    color = tokens.ACCENT_SUCCESS
+                elif opt.lower() == "no":
+                    color = tokens.ACCENT_ERROR
+                else:
+                    color = tokens.ACCENT_PRIMARY
+
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.setStyleSheet(
+                    f"QPushButton {{"
+                    f"  background-color: {tokens.BG_SURFACE}; color: {color};"
+                    f"  border: 1px solid {tokens.BORDER}; border-radius: 4px;"
+                    f"  padding: 3px 10px; font-size: {tokens.FONT_BODY_SM}px; font-weight: 500;"
+                    f"}}"
+                    f"QPushButton:hover {{"
+                    f"  background-color: {tokens.BG_PANEL}; border-color: {color};"
+                    f"}}"
+                )
+                btn.clicked.connect(
+                    lambda _, a=opt, r=row_widget, act=actions_widget, l=q_lbl, qu=q: self._answer_question(
+                        qu, a, r, act, l
+                    )
+                )
+                actions_layout.addWidget(btn)
+
+            txt_other = QLineEdit(actions_widget)
+            txt_other.setPlaceholderText("Other…")
+            txt_other.setFixedWidth(130)
+            txt_other.setStyleSheet(
+                f"QLineEdit {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: 4px;"
+                f"  padding: 3px 8px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+                f"QLineEdit:focus {{"
+                f"  border-color: {tokens.ACCENT_PRIMARY};"
+                f"}}"
             )
-            btn_yes.clicked.connect(lambda _, w=q_lbl: self._dismiss_question(w))
-            q_row.addWidget(btn_yes)
 
-            btn_no = QPushButton("No", self._questions_panel)
-            btn_no.setStyleSheet(
-                f"background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_ERROR};"
-                f"border: 1px solid {tokens.BORDER}; border-radius: 4px; padding: 2px 8px;"
+            btn_submit = QPushButton("Submit", actions_widget)
+            btn_submit.setCursor(Qt.PointingHandCursor)
+            btn_submit.setStyleSheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: none; border-radius: 4px;"
+                f"  padding: 3px 10px; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;"
+                f"}}"
+                f"QPushButton:hover {{"
+                f"  background-color: {tokens.ACCENT_HOVER};"
+                f"}}"
             )
-            btn_no.clicked.connect(lambda _, w=q_lbl: self._dismiss_question(w))
-            q_row.addWidget(btn_no)
 
-            self._questions_layout.addLayout(q_row)
+            def _make_submit(t=txt_other, r=row_widget, act=actions_widget, l=q_lbl, qu=q):
+                def _submit():
+                    val = t.text().strip()
+                    if val:
+                        self._answer_question(qu, val, r, act, l)
+                return _submit
+
+            submit_fn = _make_submit(txt_other, row_widget, actions_widget, q_lbl, q)
+            btn_submit.clicked.connect(submit_fn)
+            txt_other.returnPressed.connect(submit_fn)
+
+            actions_layout.addWidget(txt_other)
+            actions_layout.addWidget(btn_submit)
+
+            row_layout.addWidget(actions_widget)
+            self._questions_layout.addWidget(row_widget)
 
         self._questions_panel.setVisible(True)
+
+    def _answer_question(
+        self,
+        question: str,
+        answer: str,
+        row_widget: QWidget,
+        actions_widget: QWidget,
+        label: QLabel,
+    ) -> None:
+        actions_widget.setVisible(False)
+
+        badge = QLabel(f"✓ {answer}", row_widget)
+        badge.setStyleSheet(
+            f"color: {tokens.ACCENT_SUCCESS}; font-weight: 600; font-size: {tokens.FONT_BODY_SM}px;"
+            f"background-color: {tokens.BG_SURFACE}; border: 1px solid {tokens.ACCENT_SUCCESS};"
+            f"border-radius: 4px; padding: 2px 8px;"
+        )
+        row_widget.layout().addWidget(badge)
+
+        label.setText(f"• <s>{question}</s>")
+        label.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+
+        if not hasattr(self, "_answered_questions"):
+            self._answered_questions = {}
+        self._answered_questions[question] = answer
+
+        self._is_dirty = True
+        self._lbl_dirty.setVisible(True)
+
+        if hasattr(self, "_lbl_q_head") and hasattr(self, "_total_questions") and self._total_questions > 0:
+            answered_count = len(self._answered_questions)
+            if answered_count >= self._total_questions:
+                self._lbl_q_head.setText(f"Clarification Questions ({answered_count}/{self._total_questions} answered ✓):")
+                self._lbl_q_head.setStyleSheet(
+                    f"color: {tokens.ACCENT_SUCCESS}; font-weight: 600; font-size: {tokens.FONT_BODY}px;"
+                )
+            else:
+                self._lbl_q_head.setText(f"Clarification Questions ({answered_count}/{self._total_questions} answered):")
+
+        if hasattr(self, "_form") and self._form and hasattr(self._form, "_edit_pitch"):
+            curr_pitch = self._form._edit_pitch.toPlainText().strip()
+            addition = f" [{answer}]"
+            if answer.lower() not in curr_pitch.lower() and len(curr_pitch) + len(addition) <= 270:
+                self._form._edit_pitch.setPlainText(f"{curr_pitch}{addition}")
 
     def _dismiss_question(self, label: QLabel) -> None:
         label.setText(f"<s>{label.text()}</s> (Answered)")
         label.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+        self._is_dirty = True
+        self._lbl_dirty.setVisible(True)
 
     @Slot()
     def _show_history_menu(self) -> None:
@@ -648,15 +821,66 @@ class DesignView(QWidget):
             self._is_dirty = True
             self._lbl_dirty.setVisible(True)
 
+    def _get_model_caller(self):
+        import os
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            return None
+        try:
+            from ..providers.ollama_provider import OllamaProvider
+            settings = get_settings()
+            provider = OllamaProvider(host=settings.ollama_url.replace("http://", "").replace("https://", ""))
+            model = settings.model_for("design")
+
+            def _caller(task: str, prompt: str) -> str:
+                sys_prompt = (
+                    "You are a GameForge GDS patch assistant. Generate RFC 6902 JSON patch ops "
+                    "to update the GameDesignSpec based on the user request. "
+                    "Return a JSON object with keys: ops (array of {op, path, value}), summary (string), questions (array of string)."
+                )
+                raw_json = provider.complete_json(
+                    model,
+                    sys_prompt,
+                    prompt,
+                    {
+                        "type": "object",
+                        "properties": {
+                            "ops": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "op": {"type": "string", "enum": ["add", "remove", "replace"]},
+                                        "path": {"type": "string"},
+                                        "value": {}
+                                    },
+                                    "required": ["op", "path"]
+                                }
+                            },
+                            "summary": {"type": "string"},
+                            "questions": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "required": ["ops", "summary"]
+                    }
+                )
+                return raw_json or "{}"
+
+            return _caller
+        except Exception:
+            return None
+
     @Slot()
     def _on_propose_change(self) -> None:
         text = self._txt_change.text().strip()
         if not text:
             return
-        curr_spec = self._form.get_spec() or self._current_spec
+        try:
+            curr_spec = self._form.get_spec() or self._current_spec
+        except Exception as exc:
+            logger.error("Failed to get spec from form: %s", exc)
+            curr_spec = self._current_spec
         if not curr_spec:
             return
-        prop = propose_patch(curr_spec, text)
+        prop = propose_patch(curr_spec, text, model_caller=self._get_model_caller())
         if prop.status == "OK" and prop.ops:
             self._pending_change_ops = prop.ops
             sentences = summarize_patch(curr_spec, prop.ops)

@@ -577,7 +577,7 @@ class AgentRuntime:
                     yield AgentEvent(event_type="token", content=chunk.token)
 
             # Check for tool call in response
-            tool_call = native_call if used_native else self._extract_tool_call(full_response)
+            tool_call = native_call or self._extract_tool_call(full_response)
             if not tool_call:
                 task_actionable = self._is_actionable_task(user_prompt, full_response)
 
@@ -794,13 +794,27 @@ class AgentRuntime:
                         summary_info[k] = compact_list
                         summary_info[f"total_{k}"] = len(v)
                         summary_info["note"] = f"Displaying first 3 of {len(v)} {k} to preserve context budget."
+                    elif isinstance(v, dict):
+                        if k == "gds":
+                            summary_info[k] = {
+                                "title": v.get("meta", {}).get("title"),
+                                "genre": v.get("overview", {}).get("genre"),
+                                "project_name": v.get("meta", {}).get("project_name"),
+                                "levels": len(v.get("scene", {}).get("levels", [])),
+                                "entities": len(v.get("entities", [])),
+                            }
+                        elif len(v) > 5:
+                            summary_info[k] = {ik: str(iv)[:80] for ik, iv in list(v.items())[:5]}
+                            summary_info[f"total_{k}_keys"] = len(v)
+                        else:
+                            summary_info[k] = v
                     elif isinstance(v, str) and len(v) > 350:
                         summary_info[k] = v[:350] + "... [truncated]"
                     else:
                         summary_info[k] = v
                 obs_json = json.dumps(summary_info, indent=2, ensure_ascii=False)
-            if len(obs_json) > 900:
-                obs_json = obs_json[:900] + "\n... [truncated]"
+            if len(obs_json) > 1200:
+                obs_json = obs_json[:1200] + "\n... [truncated]"
 
             # Build continuation nudge
             if call_count >= 2:

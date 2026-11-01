@@ -483,6 +483,7 @@ class HomeView(QWidget):
         if not prompt_text:
             return
 
+        print(f"[GameForge Studio] Drafting design for prompt: '{prompt_text}'...", flush=True)
         self._notice_lbl.setVisible(False)
         self._btn_design.setEnabled(False)
         self._status_lbl.setText("Drafting a design…")
@@ -491,7 +492,24 @@ class HomeView(QWidget):
 
         def work():
             from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds
-            return prompt_to_gds(prompt_text)
+            from src.gameforge_ide.backend.providers.ollama_provider import OllamaProvider
+            from src.gameforge_ide.core.settings import get_settings
+            from src.gameforge_ide.pipeline.spec_from_prompt import is_game_creation_request
+
+            settings = get_settings()
+            provider = OllamaProvider(host=settings.ollama_url.replace("http://", "").replace("https://", ""))
+            model = settings.model_for("design")
+
+            def complete_json(system: str, user: str, schema: dict):
+                return provider.complete_json(model, system, user, schema)
+
+            effective_prompt = prompt_text
+            coding_hints = ("fix", "debug", "error", "bug", "refactor", "compile", "build error", ".cs", ".cpp")
+            if not any(k in prompt_text.lower() for k in coding_hints):
+                if not is_game_creation_request(effective_prompt):
+                    effective_prompt = f"Create a game: {prompt_text}"
+
+            return prompt_to_gds(effective_prompt, complete_json=complete_json, model=model)
 
         handle = self._job_manager.submit(work, name=f"Draft Design: {prompt_text[:30]}")
         self._active_job = handle
@@ -524,6 +542,9 @@ class HomeView(QWidget):
             return
 
         result = handle.result()
+        pname = getattr(result.gds.meta, 'project_name', '') if getattr(result, 'gds', None) and hasattr(result.gds, 'meta') else ''
+        q_count = len(result.questions) if getattr(result, 'questions', None) else 0
+        print(f"[GameForge Studio] Design draft status: {result.status}" + (f" (Project: '{pname}')" if pname else "") + (f" | {q_count} questions" if q_count else ""), flush=True)
         if result.status == "OK":
             self.designReady.emit(result.gds, [])
         elif result.status == "NEEDS_INPUT":
@@ -611,6 +632,11 @@ class HomeView(QWidget):
             rw = ReadinessRowWidget(row, self._readiness_section)
             self._readiness_rows_layout.addWidget(rw)
         self._readiness_rows_layout.addStretch(1)
+
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        self.refresh_recent_games()
+        self.refresh_readiness()
 
     def attach_systems_service(self, service: SystemsService) -> None:
         """Connect to SystemsService to receive live snapshot updates."""

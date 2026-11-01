@@ -10,8 +10,10 @@ with argv lists and no shell. Builds run at below-normal priority so the IDE sta
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import shutil
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
@@ -24,6 +26,7 @@ BELOW_NORMAL = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 _IDENT = re.compile(r"^[A-Z][A-Za-z0-9]{1,30}$")
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -206,6 +209,7 @@ class UnrealToolchain:
              cwd: Optional[Path] = None) -> StepResult:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         started = time.monotonic()
+        print(f"[Unreal Toolchain] Running step '{step}' (timeout: {timeout_s}s)...", flush=True)
         try:
             with open(log_path, "w", encoding="utf-8", errors="replace") as log:
                 log.write("ARGV: " + json.dumps(argv) + "\n")
@@ -215,19 +219,28 @@ class UnrealToolchain:
                 try:
                     code = self._wait(proc, timeout_s)
                 except (TimeoutError, InterruptedError) as exc:
+                    print(f"[Unreal Toolchain] Step '{step}' TIMEOUT/INTERRUPTED: {exc}", flush=True)
                     return StepResult(False, step, None, round(time.monotonic() - started, 1), str(log_path),
                                       errors=[str(exc)])
         except OSError as exc:
+            print(f"[Unreal Toolchain] Step '{step}' LAUNCH FAILED: {exc}", flush=True)
             return StepResult(False, step, None, 0.0, str(log_path), errors=[f"launch failed: {exc}"])
+        dur = round(time.monotonic() - started, 1)
+        status_tag = "OK" if code == 0 else f"FAILED (code {code})"
+        try:
+            print(f"[Unreal Toolchain] Step '{step}' {status_tag} in {dur}s (log: {log_path.name})", flush=True)
+        except Exception:
+            pass
         text = log_path.read_text(encoding="utf-8", errors="replace")
         diags = parse_build_diagnostics(text)
-        return StepResult(code == 0, step, code, round(time.monotonic() - started, 1), str(log_path), diags)
+        return StepResult(code == 0, step, code, dur, str(log_path), diags)
 
     # ── scaffold ───────────────────────────────────────────────────────────
     def scaffold_cpp_project(self, project_dir: Path, name: str, extra_files: Optional[Dict[str, str]] = None,
                              default_map: Optional[str] = None, game_mode: Optional[str] = None,
                              module_deps: Optional[List[str]] = None, overwrite_source: bool = True,
-                             display_title: Optional[str] = None) -> Dict:
+                             display_title: Optional[str] = None,
+                             plugins: Optional[List[str]] = None) -> Dict:
         """Write a minimal, valid UE C++ project. Returns the files written."""
         if not _IDENT.match(name):
             raise ValueError(f"project name must be PascalCase alphanumeric (got {name!r})")
@@ -235,16 +248,21 @@ class UnrealToolchain:
         project_dir = Path(project_dir)
         deps = ["Core", "CoreUObject", "Engine", "InputCore"] + [d for d in (module_deps or []) if d not in
                                                                   ("Core", "CoreUObject", "Engine", "InputCore")]
-        plugins = [{"Name": "PythonScriptPlugin", "Enabled": True},
-                   {"Name": "EditorScriptingUtilities", "Enabled": True}]
-        if "EnhancedInput" in deps and not any(p.get("Name") == "EnhancedInput" for p in plugins):
-            plugins.append({"Name": "EnhancedInput", "Enabled": True})
+        plugin_list = [{"Name": "PythonScriptPlugin", "Enabled": True},
+                       {"Name": "EditorScriptingUtilities", "Enabled": True}]
+        if "EnhancedInput" in deps and not any(p.get("Name") == "EnhancedInput" for p in plugin_list):
+            plugin_list.append({"Name": "EnhancedInput", "Enabled": True})
+        if plugins:
+            for p_item in plugins:
+                p_name = p_item if isinstance(p_item, str) else p_item.get("Name", "")
+                if p_name and not any(p.get("Name") == p_name for p in plugin_list):
+                    plugin_list.append({"Name": p_name, "Enabled": True})
 
         # Plugin trimming for package size optimization (WI-10.2)
         trimmed = ["AlembicImporter", "GeometryCache", "SpeedTreeImporter", "DatasmithContent"]
         for t_p in trimmed:
-            if not any(p.get("Name") == t_p for p in plugins):
-                plugins.append({"Name": t_p, "Enabled": False})
+            if not any(p.get("Name") == t_p for p in plugin_list):
+                plugin_list.append({"Name": t_p, "Enabled": False})
 
         input_ini = ENHANCED_INPUT_INI if (module_deps and "EnhancedInput" in module_deps) else _LEGACY_INPUT_INI
 
@@ -253,7 +271,7 @@ class UnrealToolchain:
                 "FileVersion": 3, "EngineAssociation": self.engine_version().rsplit(".", 1)[0],
                 "Category": "", "Description": f"{name} - generated by GameForge",
                 "Modules": [{"Name": name, "Type": "Runtime", "LoadingPhase": "Default"}],
-                "Plugins": plugins,
+                "Plugins": plugin_list,
             }, indent="\t"),
             f"Source/{name}.Target.cs": _TARGET_CS.format(name=name, cls=f"{name}Target", type="Game", extra=""),
             f"Source/{name}Editor.Target.cs": _TARGET_CS.format(name=name, cls=f"{name}EditorTarget", type="Editor", extra=""),
@@ -286,12 +304,64 @@ class UnrealToolchain:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
             written.append(rel)
+
+        # Deploy GameForge plugin if referenced in plugin_list
+        if any(p.get("Name") == "GameForge" for p in plugin_list):
+            self.deploy_gameforge_plugin(project_dir)
+
         return {"uproject": str(project_dir / f"{name}.uproject"), "files": written}
+
+    def deploy_gameforge_plugin(self, project_dir: Path) -> Path:
+        """Ensure GameForge plugin is deployed into <project_dir>/Plugins/GameForge."""
+        project_dir = Path(project_dir)
+        target = project_dir / "Plugins" / "GameForge"
+        if (target / "GameForge.uplugin").is_file() and (target / "Binaries" / "Win64").is_dir():
+            return target
+
+        # Find best plugin source
+        candidates = [
+            Path(__file__).resolve().parent / "GameForge",
+            Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
+        ]
+        try:
+            from ..core.settings import get_settings
+            s = get_settings()
+            if s.plugin_build and s.plugin_build.is_dir():
+                candidates.insert(0, s.plugin_build)
+            if s.validation_root:
+                candidates.insert(1, s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+        except Exception:
+            pass
+
+        src = None
+        for c in candidates:
+            if c.is_dir() and (c / "GameForge.uplugin").is_file():
+                src = c
+                break
+
+        if not src:
+            logger.warning("Could not find GameForge plugin source to deploy into %s", project_dir)
+            return target
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, target, dirs_exist_ok=True)
+        logger.info("Deployed GameForge plugin from %s to %s", src, target)
+        return target
 
     # ── build ──────────────────────────────────────────────────────────────
     def build(self, uproject: Path, target: str, configuration: str = "Development", platform: str = "Win64",
               timeout_s: float = 3600, log_dir: Optional[Path] = None) -> StepResult:
         uproject = Path(uproject)
+        # Ensure GameForge plugin exists if referenced in .uproject
+        try:
+            if uproject.is_file():
+                uproj_data = json.loads(uproject.read_text(encoding="utf-8"))
+                plugins = uproj_data.get("Plugins", [])
+                if any(p.get("Name") == "GameForge" for p in plugins):
+                    self.deploy_gameforge_plugin(uproject.parent)
+        except Exception as exc:
+            logger.warning("Could not check/deploy plugin before build: %s", exc)
+
         log = (log_dir or uproject.parent / "Saved" / "GameForge" / "logs") / f"build_{target}_{configuration}.log"
         argv = [str(self.ubt), target, platform, configuration, f"-Project={uproject}", "-WaitMutex",
                 "-NoHotReloadFromIDE", "-FromMsBuild", "-NoUBA"]

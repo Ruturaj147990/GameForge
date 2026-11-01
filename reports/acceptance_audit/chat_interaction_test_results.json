@@ -1,0 +1,45 @@
+[
+  {
+    "test": "empty_prompt_discard",
+    "passed": true,
+    "detail": "count_before=2, count_after=2"
+  },
+  {
+    "test": "conversational_streaming",
+    "passed": true,
+    "duration_s": 0.644996166229248,
+    "response_preview": "I am GameForge IDE Agent, an autonomous expert game-dev assistant that helps you build Unreal Engine 5.7 projects.",
+    "statuses_seen": []
+  },
+  {
+    "test": "conversation_history_recall",
+    "passed": true,
+    "response": "98765{\"tool\": \"list_dir\", \"args\": {\"subpath\": \"Projects/CounterStrikeLite\"}}{\"tool\": \"list_dir\", \"ar"
+  },
+  {
+    "test": "enter_key_eventfilter",
+    "passed": true,
+    "response": "OK Enter"
+  },
+  {
+    "test": "open_design_card_rendering",
+    "passed": true,
+    "card_object": "QFrame"
+  },
+  {
+    "test": "user_cancellation",
+    "passed": true,
+    "stopped_ok": true,
+    "final_bubble_text": "\n\n*[Stopped by user]*"
+  },
+  {
+    "test": "slash_command_clear",
+    "passed": true,
+    "remaining_bubbles": 0
+  },
+  {
+    "test": "model_switching",
+    "passed": true,
+    "switched_to": "gameforge-qwen3.5-4b:latest"
+  }
+]

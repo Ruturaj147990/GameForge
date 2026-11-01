@@ -131,21 +131,36 @@ _CREATE_GAME = re.compile(r"\b(?:create|make|build|generate|develop|design|write
                           r"(?:[\w\-']+\s+){0,8}?games?\b(?!\s*(?:mode|state|instance|play|object)\b)", re.I)
 
 
+_NOUN_GAME = re.compile(r"^(?:(?:a|an|the)\s+)?(?:[\w\-']+\s+){0,8}games?(?:\s+(?:with|where|featuring|set in|having)\b.*)?$", re.I)
+
+
 def is_game_creation_request(prompt: str) -> bool:
     """A request to create a whole game: a create-verb plus the standalone word 'game' or a recipe name.
 
     'game' inside identifiers or paths (GameForgeProject, Source/GameMode.cpp) does not count, so ordinary
     coding requests keep going to the normal agent loop.
     """
-    text = prompt.lower()
+    text = prompt.lower().strip()
+    if re.search(r"^(?:what\s+(?:is|was|are|were)|how\s+(?:to|do|can|does)|why\b|who\b|explain\b|tell me\b|remind me\b)", text):
+        return False
+    if re.search(r"\b(?:fix|debug|error|bug|issue|problem|refactor|compile|build error)\b", text):
+        return False
+    if re.search(r"^(?:my|your|our|their|his|her|its)\b", text):
+        return False
+    if re.search(r"\b(?:analysis|essay|article|overview|document|lore|story|script|breakdown|history|historical)\b", text):
+        return False
+    # "... for my game", "in the game", "to our game": work inside an existing game, not a new one.
+    if re.search(r"\b(?:for|in|into|inside|of|to)\s+(?:my|the|this|our|your)\s+games?\b", text):
+        return False
+    if _CREATE_GAME.search(text):
+        return True
+    if _NOUN_GAME.match(text):
+        return True
     if not _CREATE.search(text):
         return False
     if any(k in text for r in RECIPES for k in r.keywords):
         return True
     if not _GAME_WORD.search(text):
-        return False
-    # "... for my game", "in the game", "to our game": work inside an existing game, not a new one.
-    if re.search(r"\b(?:for|in|into|inside|of|to)\s+(?:my|the|this|our|your)\s+games?\b", text):
         return False
     return bool(_CREATE_GAME.search(text))
 

@@ -1134,7 +1134,7 @@ class MainWindow(QMainWindow):
             view = HomeView(parent=self)
             if hasattr(self, "_systems_service"):
                 view.attach_systems_service(self._systems_service)
-            view.projectSelected.connect(self._on_project_selected)
+            view.projectSelected.connect(self._on_games_open_requested)
             view.designReady.connect(self._on_home_design_ready)
             return view
 
@@ -1179,7 +1179,7 @@ class MainWindow(QMainWindow):
                 workspace_root=self._workspace,
                 parent=self,
             )
-            view.launchRequested.connect(self._on_games_play_requested)
+            view.launchRequested.connect(self._on_launch_game)
             if self._current_project:
                 view.set_project(self._current_project)
             return view
@@ -1214,6 +1214,7 @@ class MainWindow(QMainWindow):
             view = SettingsView(workspace_root=self._workspace, parent=self)
             if hasattr(self, "_systems_service") and self._systems_service:
                 view.settingsChanged.connect(self._systems_service.refresh_now)
+            view.settingsChanged.connect(self._on_settings_saved)
             return view
 
         self._view_host.register("settings", create_settings_view)
@@ -1266,6 +1267,8 @@ class MainWindow(QMainWindow):
             title = view_id.capitalize()
             self._top_bar.set_breadcrumb(f"› {title}")
             self._settings.setValue("studio/last_view", view_id)
+            proj_str = f" [Project: '{self._current_project}']" if getattr(self, "_current_project", None) else ""
+            print(f"[GameForge Studio] Navigated to view: '{view_id}'{proj_str}", flush=True)
             return True
         return False
 
@@ -1306,6 +1309,7 @@ class MainWindow(QMainWindow):
 
     def _on_project_selected(self, project_name: str) -> None:
         self._current_project = project_name
+        print(f"[GameForge Studio] Selected project: '{project_name}'", flush=True)
         if hasattr(self, "_rail") and hasattr(self, "_view_host"):
             self._rail.update_enabled_states(self._view_host.is_enabled)
             current = self._view_host.current_view_id
@@ -1327,10 +1331,13 @@ class MainWindow(QMainWindow):
     def _on_assistant_open_design(self, prompt: str) -> None:
         self._switch_studio_view("home")
         hv = self._view_host.get_view_widget("home")
-        if hv and hasattr(hv, "_prompt_box"):
-            hv._prompt_box.setPlainText(prompt)
-            if hasattr(hv, "_on_design_clicked"):
-                hv._on_design_clicked()
+        if hv:
+            edit = getattr(hv, "_prompt_input", getattr(hv, "_prompt_box", None))
+            if edit:
+                edit.setPlainText(prompt)
+            fn = getattr(hv, "_on_design_it_clicked", getattr(hv, "_on_design_clicked", None))
+            if fn:
+                fn()
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
@@ -1351,24 +1358,58 @@ class MainWindow(QMainWindow):
     def _on_games_build_requested(self, project_name: str) -> None:
         self._on_project_selected(project_name)
         self._switch_studio_view("build")
+        bv = self._view_host.get_view_widget("build")
+        dv = self._view_host.get_view_widget("design")
+        spec = getattr(dv, "_current_spec", None) if dv else None
+        if bv and hasattr(bv, "start_build"):
+            bv.start_build(project_name, spec)
+
+    def _on_settings_saved(self) -> None:
+        new_theme = "light" if self._settings.value("appearance/theme", "dark") == "light" else "dark"
+        if new_theme != self._theme:
+            self._theme = new_theme
+            apply_theme(QApplication.instance(), self._theme)
+            from .styles.dark_theme import get_theme_display_name
+            self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
+
+    def _find_packaged_exe(self, project_name: str) -> Optional[Path]:
+        p_root = get_settings().projects_root
+        if not p_root:
+            return None
+        p_dir = Path(p_root) / project_name
+        if not p_dir.is_dir():
+            return None
+        for exe_candidate in (
+            p_dir / "Packaged" / "Windows" / f"{project_name}.exe",
+            p_dir / "Packaged" / "WindowsNoEditor" / f"{project_name}.exe",
+            p_dir / "package_dev" / "Windows" / f"{project_name}.exe",
+            p_dir / "package_ship" / "Windows" / f"{project_name}.exe",
+            p_dir / "Binaries" / "Win64" / f"{project_name}.exe",
+        ):
+            if exe_candidate.is_file():
+                return exe_candidate
+        return None
 
     def _current_project_has_package(self) -> bool:
         if not getattr(self, "_current_project", None):
             return False
-        p_root = get_settings().projects_root
-        if not p_root:
-            return False
-        p_dir = Path(p_root) / self._current_project
-        if not p_dir.is_dir():
-            return False
-        for exe_candidate in (
-            p_dir / "Binaries" / "Win64" / f"{self._current_project}.exe",
-            p_dir / "package_dev" / "Windows" / f"{self._current_project}.exe",
-            p_dir / "package_ship" / "Windows" / f"{self._current_project}.exe",
-        ):
-            if exe_candidate.is_file():
-                return True
-        return False
+        return self._find_packaged_exe(self._current_project) is not None
+
+    def _on_launch_game(self, project_name: str) -> None:
+        exe = self._find_packaged_exe(project_name)
+        if exe:
+            from PySide6.QtCore import QProcess
+            ok = QProcess.startDetached(str(exe), [])
+            if ok:
+                if hasattr(self, "_toasts"):
+                    self._toasts.info("Launching Game", f"Launching {project_name} ({exe.name})...")
+                self.statusBar().showMessage(f"Launched {project_name} ({exe})", 5000)
+            else:
+                if hasattr(self, "_toasts"):
+                    self._toasts.error("Launch Failed", f"Failed to start {exe}")
+        else:
+            if hasattr(self, "_toasts"):
+                self._toasts.warning("Executable Not Found", f"No packaged build found for {project_name}. Build the project first.")
 
     def _cancel_active_run(self) -> None:
         if not hasattr(self, "_forge_service"):

@@ -116,13 +116,14 @@ class OllamaProvider(ModelProvider):
         `tools` uses the provider-neutral shape {name, description, parameters}. `think` is
         always False and `num_ctx` is always explicit (Master Blueprint v2 §6).
         """
+        effective_ctx = max(8192, num_ctx) if tools else num_ctx
         payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
             "tools": [{"type": "function", "function": t} for t in tools],
             "stream": False,
             "think": False,
-            "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": num_ctx},
+            "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": effective_ctx},
         }
         if keep_alive is not None:
             payload["keep_alive"] = keep_alive
@@ -132,8 +133,12 @@ class OllamaProvider(ModelProvider):
             headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Ollama API HTTP {exc.code}: {body}") from exc
         msg = data.get("message", {}) or {}
         calls = []
         for c in msg.get("tool_calls") or []:
@@ -186,7 +191,12 @@ class OllamaProvider(ModelProvider):
                 data = json.loads(resp.read().decode("utf-8"))
             msg = data.get("message", {}) or {}
             return msg.get("content", "")
-        except Exception:
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            logger.warning("Ollama complete_json HTTP %s: %s", exc.code, body)
+            return None
+        except Exception as exc:
+            logger.debug("Ollama complete_json error: %s", exc)
             return None
 
     def native_tool_self_test(self, model_id: str, num_ctx: int = 4096) -> Dict[str, Any]:

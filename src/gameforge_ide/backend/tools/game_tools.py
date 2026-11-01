@@ -132,9 +132,23 @@ class GameTools:
         env = os.environ.get("GAMEFORGE_PROJECTS_ROOT")
         return Path(env) if env else self.workspace_root / "Games"
 
+    def _get_complete_json(self):
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            return None, None
+        try:
+            from ..providers.ollama_provider import OllamaProvider
+            from ...core.settings import get_settings
+            settings = get_settings()
+            provider = OllamaProvider(host=settings.ollama_url.replace("http://", "").replace("https://", ""))
+            model = settings.model_for("design")
+            return (lambda s, u, sch: provider.complete_json(model, s, u, sch)), model
+        except Exception:
+            return None, None
+
     # ── T1 ─────────────────────────────────────────────────────────────────
     def plan_game(self, prompt: str) -> Dict[str, Any]:
-        result = prompt_to_gds(prompt)
+        complete_json, model = self._get_complete_json()
+        result = prompt_to_gds(prompt, complete_json=complete_json, model=model)
         gds = result.gds
         if gds is not None:
             legacy_supported = True
@@ -170,7 +184,8 @@ class GameTools:
         """For a game-creation prompt, produce a GDS and persist a pending create_game action."""
         if not is_game_creation_request(prompt):
             return None
-        res = prompt_to_gds(prompt)
+        complete_json, model = self._get_complete_json()
+        res = prompt_to_gds(prompt, complete_json=complete_json, model=model)
         if res.gds is None:
             return self._propose_freeform(prompt, session_id)
         gds = res.gds

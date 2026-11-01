@@ -16,6 +16,7 @@ from src.gameforge_ide.desktop.views.design_view import (
     DesignView,
     DiffDialog,
     RawJsonDialog,
+    parse_question_options,
 )
 from src.gameforge_ide.desktop.widgets.gds_form import GdsForm
 from src.gameforge_ide.desktop.widgets.rule_editor import RuleEditorDialog
@@ -99,16 +100,72 @@ def test_rule_editor_dialog(qapp):
         dlg.deleteLater()
 
 
+def test_parse_question_options():
+    """Verify parse_question_options extracts choices or defaults to Yes/No."""
+    assert parse_question_options("Do you want to play as a ghost or a human?") == ["Ghost", "Human"]
+    assert parse_question_options("Is the board haunted or just dark?") == ["Haunted", "Just dark"]
+    assert parse_question_options("Should the player roll dice or move automatically?") == ["Roll dice", "Move automatically"]
+    assert parse_question_options("Do you want single-player, co-op, or versus?") == ["Single-player", "Co-op", "Versus"]
+    assert parse_question_options("Which camera style: third person, first person, or top-down?") == ["Third person", "First person", "Top-down"]
+    assert parse_question_options("Do you want jump scares?") == ["Yes", "No"]
+
+
 def test_design_view_questions_panel(qapp):
-    """Verify opening draft with questions shows questions panel and handles answers."""
+    """Verify opening draft with questions shows custom option buttons, Other input, and records answers."""
     view = DesignView()
     try:
         spec = PRESETS["platformer"]()
-        questions = ["Should guards end the game on sight?", "How many relics?"]
+        questions = [
+            "Do you want to play as a ghost or a human?",
+            "Is the board haunted or just dark?",
+        ]
         view.open_draft(spec, questions)
 
         assert not view._questions_panel.isHidden()
-        assert view._questions_layout.count() >= 3  # Header + 2 question rows
+        assert view._questions_layout.count() == 3  # Header + 2 question rows
+
+        # Row 1: "Do you want to play as a ghost or a human?"
+        row1 = view._questions_layout.itemAt(1).widget()
+        assert row1 is not None
+
+        # Inspect buttons in row 1
+        from PySide6.QtWidgets import QPushButton, QLineEdit, QLabel
+        buttons_row1 = row1.findChildren(QPushButton)
+        btn_texts = [b.text() for b in buttons_row1]
+        assert "Ghost" in btn_texts
+        assert "Human" in btn_texts
+        assert "Submit" in btn_texts
+
+        # Click "Ghost" button
+        btn_ghost = next(b for b in buttons_row1 if b.text() == "Ghost")
+        btn_ghost.click()
+
+        # Check row 1 state after answer
+        assert view._answered_questions.get("Do you want to play as a ghost or a human?") == "Ghost"
+        assert view._is_dirty is True
+        badges_row1 = [lbl.text() for lbl in row1.findChildren(QLabel) if "✓ Ghost" in lbl.text()]
+        assert len(badges_row1) == 1
+
+        # Row 2: "Is the board haunted or just dark?"
+        row2 = view._questions_layout.itemAt(2).widget()
+        assert row2 is not None
+
+        txt_other = row2.findChild(QLineEdit)
+        assert txt_other is not None
+        assert txt_other.placeholderText() == "Other…"
+
+        # Type custom answer in Other and submit
+        txt_other.setText("Foggy cemetery")
+        btn_submit = next(b for b in row2.findChildren(QPushButton) if b.text() == "Submit")
+        btn_submit.click()
+
+        # Check row 2 state after answer
+        assert view._answered_questions.get("Is the board haunted or just dark?") == "Foggy cemetery"
+        badges_row2 = [lbl.text() for lbl in row2.findChildren(QLabel) if "✓ Foggy cemetery" in lbl.text()]
+        assert len(badges_row2) == 1
+
+        # All questions answered -> header updated
+        assert "answered ✓" in view._lbl_q_head.text()
     finally:
         view.deleteLater()
 
@@ -214,6 +271,47 @@ def test_design_view_change_request_workflow(qapp, tmp_path, monkeypatch):
         view.deleteLater()
 
 
+def test_design_view_build_game_triggers_without_name_error(qapp, tmp_path, monkeypatch):
+    """Verify build_game checks impact analysis safely without NameError and emits buildRequested."""
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(
+        "src.gameforge_ide.desktop.views.design_view.get_settings",
+        lambda: type("SettingsMock", (), {"projects_root": str(tmp_path)})(),
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *args, **kwargs: QMessageBox.Yes,
+    )
+    proj_dir = tmp_path / "BuildTestGame"
+    proj_dir.mkdir(parents=True)
+    spec = PRESETS["platformer"]()
+    spec.meta.project_name = "BuildTestGame"
+    gds_store.save(proj_dir, spec)
+
+    view = DesignView()
+    try:
+        assert view.load_project("BuildTestGame") is True
+        emitted = []
+        view.buildRequested.connect(emitted.append)
+        view.build_game()
+        assert emitted == ["BuildTestGame"]
+    finally:
+        view.deleteLater()
+
+
+def test_collapsible_section_safe_stylesheet(qapp):
+    """Verify CollapsibleSection object names and selectors do not contain invalid characters like '&'."""
+    from src.gameforge_ide.desktop.widgets.gds_form import CollapsibleSection
+    sec = CollapsibleSection("Look & Sound", object_name="secLookSound")
+    assert sec.objectName() == "secLookSound"
+    assert "&" not in sec.styleSheet()
+
+    sec2 = CollapsibleSection("HUD & Menus")
+    assert "&" not in sec2.objectName()
+    assert "&" not in sec2.styleSheet()
+
+
 def test_no_hardcoded_hex_colors_in_design_view():
     """Verify normative rule: colours come only from tokens; zero hex literals."""
     views_dir = Path("src/gameforge_ide/desktop/views")
@@ -224,3 +322,44 @@ def test_no_hardcoded_hex_colors_in_design_view():
         content = p.read_text(encoding="utf-8")
         matches = hex_pattern.findall(content)
         assert matches == [], f"Found hardcoded hex literals in {p.name}: {matches}"
+
+
+def test_gds_form_player_count_support(qapp):
+    """Verify GdsForm cleanly accepts players=4 without pydantic ValidationError crash."""
+    from src.gameforge_ide.design.gds import Overview, Genre, CameraKind
+    form = GdsForm()
+    try:
+        spec = PRESETS["tic_tac_toe"]()
+        form.set_spec(spec)
+
+        # Set players spinbox to 4
+        form._spin_players.setValue(4)
+        form._apply_inputs_to_spec()
+
+        updated = form.get_spec()
+        assert updated is not None
+        assert updated.overview.players == 4
+
+        # Validate form doesn't raise exception
+        form._validate_form()
+    finally:
+        form.deleteLater()
+
+
+def test_overview_players_range_validation():
+    """Verify Overview accepts players between 1 and 8 and rejects out-of-range values."""
+    from src.gameforge_ide.design.gds import Overview, Genre, CameraKind
+    import pydantic
+
+    # Valid values
+    for count in [1, 2, 4, 8]:
+        o = Overview(genre=Genre.GRID_BOARD, camera=CameraKind.FIXED_BOARD, players=count)
+        assert o.players == count
+
+    # Out of range
+    with pytest.raises(pydantic.ValidationError):
+        Overview(genre=Genre.GRID_BOARD, camera=CameraKind.FIXED_BOARD, players=0)
+
+    with pytest.raises(pydantic.ValidationError):
+        Overview(genre=Genre.GRID_BOARD, camera=CameraKind.FIXED_BOARD, players=9)
+

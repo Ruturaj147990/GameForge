@@ -231,6 +231,10 @@ class EvidenceView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        self.refresh_artifacts()
+
     def set_project(self, project_name: str) -> None:
         self._current_project = project_name
         self.refresh_artifacts()

@@ -108,7 +108,7 @@ class Overview(_M):
     genre: Genre
     pitch: str = Field("", max_length=280)
     camera: CameraKind
-    players: Literal[1, 2] = 1
+    players: int = Field(1, ge=1, le=8)
     session_minutes: int = Field(10, ge=1, le=120)
 
 
@@ -478,9 +478,9 @@ class GameDesignSpec(_M):
         rule_ids = [r.rule_id for r in self.rules]
         if len(rule_ids) != len(set(rule_ids)):
             errs.append("duplicate rule_id")
-        if self.overview.players == 2 and self.tech.multiplayer == "none" and \
+        if self.overview.players > 1 and self.tech.multiplayer == "none" and \
                 self.overview.genre not in (Genre.GRID_BOARD, Genre.CARD_BATTLER):
-            errs.append("players=2 needs tech.multiplayer=listen_server (hot-seat is only for board/card games)")
+            errs.append("players > 1 needs tech.multiplayer=listen_server (hot-seat is only for board/card games)")
         if errs:
             raise ValueError("; ".join(errs))
         return self

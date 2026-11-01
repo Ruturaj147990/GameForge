@@ -26,6 +26,13 @@ class StepContext:
     cancel: threading.Event
     log: Callable[[str], None]  # appends a "log" event (bounded to 2 KB per line)
 
+    @property
+    def artifacts_dir(self) -> Path:
+        base = Path(self.project_dir) if self.project_dir else Path(self.workspace_dir)
+        d = base / "Saved" / "GameForge" / "evidence"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
 
 @dataclass
 class StepOutcome:
@@ -42,6 +49,8 @@ RepairHook = Callable[[StepContext, StepOutcome], bool]  # returns True if it ch
 
 
 class ForgeExecutor:
+    _active_executors: Dict[str, "ForgeExecutor"] = {}
+
     def __init__(
         self,
         handlers: Dict[str, Handler],
@@ -54,8 +63,22 @@ class ForgeExecutor:
         self._run_cancel = threading.Event()  # user cancelled the whole run
         self._step_cancel: Optional[threading.Event] = None  # current step (also set on timeout)
 
-    def request_cancel(self) -> None:
+    @classmethod
+    def cancel_run(cls, run_id: str) -> bool:
+        ex = cls._active_executors.get(run_id)
+        if ex is not None:
+            ex.request_cancel()
+            return True
+        return False
+
+    def request_cancel(self, run_id: Optional[str] = None) -> None:
         """Called from the UI thread. Stops the current step and prevents further steps."""
+        if isinstance(self, str) and run_id is None:
+            ForgeExecutor.cancel_run(self)
+            return
+        if run_id:
+            ForgeExecutor.cancel_run(run_id)
+            return
         self._run_cancel.set()
         ev = self._step_cancel
         if ev is not None:
@@ -63,6 +86,14 @@ class ForgeExecutor:
 
     # -- public -------------------------------------------------------------------------------
     def run(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
+        """Execute until DONE, FAILED, CANCELLED, BLOCKED or WAITING_APPROVAL. Safe to call again to resume."""
+        ForgeExecutor._active_executors[state.run.run_id] = self
+        try:
+            return self._run_internal(state, store, editor_running)
+        finally:
+            ForgeExecutor._active_executors.pop(state.run.run_id, None)
+
+    def _run_internal(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
         """Execute until DONE, FAILED, CANCELLED, BLOCKED or WAITING_APPROVAL. Safe to call again to resume."""
         run = state.run
         repo = ProjectRepo(Path(run.project_dir)) if run.project_dir else None
@@ -139,7 +170,20 @@ class ForgeExecutor:
                 out = StepOutcome(False, errors=[f"{type(exc).__name__}: {exc}", traceback.format_exc(limit=4)])
             rec.finished_at, rec.ok, rec.data = time.time(), out.ok, out.data
             rec.errors = out.errors
-            rec.artifacts = [ArtifactRef.model_validate(a) for a in out.artifacts]
+            valid_artifacts = []
+            for a in (out.artifacts or []):
+                try:
+                    if isinstance(a, dict):
+                        a_copy = dict(a)
+                        kind = a_copy.get("kind", "other")
+                        if kind not in ("log", "report", "screenshot", "package", "scenario_result", "other"):
+                            a_copy["kind"] = "other"
+                        valid_artifacts.append(ArtifactRef.model_validate(a_copy))
+                    elif isinstance(a, ArtifactRef):
+                        valid_artifacts.append(a)
+                except Exception:
+                    pass
+            rec.artifacts = valid_artifacts
             if out.ok:
                 if repo is not None and step.checkpoint and repo.available:
                     try:

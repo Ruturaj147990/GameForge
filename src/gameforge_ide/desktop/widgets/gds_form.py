@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
@@ -46,11 +47,17 @@ logger = logging.getLogger(__name__)
 class CollapsibleSection(QFrame):
     """Collapsible card container for secondary GDS sections."""
 
-    def __init__(self, title: str, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        title: str,
+        parent: Optional[QWidget] = None,
+        object_name: Optional[str] = None,
+    ) -> None:
         super().__init__(parent)
-        self.setObjectName(f"collapsible_{title.replace(' ', '_').lower()}")
+        safe_name = object_name or re.sub(r"[^a-zA-Z0-9_]", "", f"collapsible_{title.replace(' ', '_').lower()}")
+        self.setObjectName(safe_name)
         self.setStyleSheet(
-            f"QFrame#{self.objectName()} {{"
+            f"QFrame#{safe_name} {{"
             f"  background-color: {tokens.BG_PANEL};"
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
@@ -325,29 +332,25 @@ class GdsForm(QWidget):
         main_layout.addWidget(sec_rules)
 
         # ── 5. Collapsible Sections ───────────────────────────────────────────
-        self._sec_look_sound = CollapsibleSection("Look & Sound", self)
-        self._sec_look_sound.setObjectName("secLookSound")
+        self._sec_look_sound = CollapsibleSection("Look & Sound", self, object_name="secLookSound")
         lbl_look = QLabel("Art style: Low-poly stylized | Audio: Procedural SFX & Ambient music", self._sec_look_sound)
         lbl_look.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._sec_look_sound.add_widget(lbl_look)
         main_layout.addWidget(self._sec_look_sound)
 
-        self._sec_hud_menus = CollapsibleSection("HUD & Menus", self)
-        self._sec_hud_menus.setObjectName("secHudMenus")
+        self._sec_hud_menus = CollapsibleSection("HUD & Menus", self, object_name="secHudMenus")
         lbl_hud = QLabel("HUD: Reticle, Score, Health bar | Menus: Pause, Game Over screen", self._sec_hud_menus)
         lbl_hud.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._sec_hud_menus.add_widget(lbl_hud)
         main_layout.addWidget(self._sec_hud_menus)
 
-        self._sec_tech = CollapsibleSection("Tech & Budgets", self)
-        self._sec_tech.setObjectName("secTech")
+        self._sec_tech = CollapsibleSection("Tech & Budgets", self, object_name="secTech")
         lbl_tech = QLabel("Target: 60 FPS Win64 | Max draw calls: 1500 | Memory budget: 4 GB", self._sec_tech)
         lbl_tech.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._sec_tech.add_widget(lbl_tech)
         main_layout.addWidget(self._sec_tech)
 
-        self._sec_acceptance = CollapsibleSection("Acceptance Tests (Scenarios)", self)
-        self._sec_acceptance.setObjectName("secAcceptance")
+        self._sec_acceptance = CollapsibleSection("Acceptance Tests (Scenarios)", self, object_name="secAcceptance")
         self._lbl_scenarios = QLabel("No scenarios generated yet.", self._sec_acceptance)
         self._lbl_scenarios.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._sec_acceptance.add_widget(self._lbl_scenarios)
@@ -451,7 +454,10 @@ class GdsForm(QWidget):
         """Return the current spec with edited form fields applied."""
         if not self._spec:
             return None
-        self._apply_inputs_to_spec()
+        try:
+            self._apply_inputs_to_spec()
+        except Exception as exc:
+            logger.warning("Failed to apply form inputs to spec: %s", exc)
         return copy.deepcopy(self._spec)
 
     def _apply_inputs_to_spec(self) -> None:
@@ -470,9 +476,20 @@ class GdsForm(QWidget):
         except Exception:
             pass
 
-        self._spec.overview.session_minutes = self._spin_session.value()
-        self._spec.overview.players = self._spin_players.value()
-        self._spec.overview.pitch = self._edit_pitch.toPlainText().strip()
+        try:
+            self._spec.overview.session_minutes = self._spin_session.value()
+        except Exception:
+            pass
+
+        try:
+            self._spec.overview.players = self._spin_players.value()
+        except Exception:
+            pass
+
+        try:
+            self._spec.overview.pitch = self._edit_pitch.toPlainText().strip()
+        except Exception:
+            pass
 
     @Slot()
     def _on_field_changed(self) -> None:
@@ -486,8 +503,8 @@ class GdsForm(QWidget):
         if not self._spec:
             self.validationChanged.emit(True, [])
             return
-        self._apply_inputs_to_spec()
         try:
+            self._apply_inputs_to_spec()
             # Fast pydantic validation
             data = self._spec.model_dump()
             GameDesignSpec.model_validate(data)

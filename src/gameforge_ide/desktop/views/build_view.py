@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -272,12 +273,16 @@ class BuildView(QWidget):
         )
         right_layout.addWidget(self._lbl_step_header)
 
+        # Vertical splitter for log view and lower tabs
+        right_splitter = QSplitter(Qt.Vertical, right_widget)
+        right_splitter.setObjectName("buildRightSplitter")
+
         # Log view
-        self._log_view = LogView(right_widget)
-        right_layout.addWidget(self._log_view, 2)
+        self._log_view = LogView(right_splitter)
+        right_splitter.addWidget(self._log_view)
 
         # Lower tabs: Problems & Artifacts
-        self._lower_tabs = QTabWidget(right_widget)
+        self._lower_tabs = QTabWidget(right_splitter)
         self._lower_tabs.setObjectName("buildLowerTabs")
         self._lower_tabs.setStyleSheet(
             f"QTabWidget::pane {{"
@@ -294,6 +299,7 @@ class BuildView(QWidget):
             f"  background-color: {tokens.BG_ACTIVE}; color: {tokens.TEXT_PRIMARY};"
             f"}}"
         )
+        self._lower_tabs.setMinimumHeight(150)
 
         # Problems tab
         self._problems_table = ProblemsTable(self._lower_tabs)
@@ -310,7 +316,12 @@ class BuildView(QWidget):
         )
         self._lower_tabs.addTab(self._artifacts_text, "Artifacts (0)")
 
-        right_layout.addWidget(self._lower_tabs, 1)
+        right_splitter.addWidget(self._lower_tabs)
+        right_splitter.setSizes([340, 180])
+        right_splitter.setCollapsible(0, False)
+        right_splitter.setCollapsible(1, False)
+
+        right_layout.addWidget(right_splitter, 1)
         splitter.addWidget(right_widget)
 
         splitter.setSizes([320, 680])
@@ -325,10 +336,88 @@ class BuildView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def set_project(self, project_name: str) -> None:
-        """Filter runs for project_name."""
-        self._current_project = project_name
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
         self.refresh_runs()
+
+    def set_project(self, project_name: str) -> None:
+        """Filter runs for project_name and switch store scope."""
+        self._current_project = project_name
+        p_root = get_settings().projects_root
+        if p_root and project_name:
+            p_dir = Path(p_root) / project_name
+            self._store = RunStore(project_dir=p_dir, workspace_dir=self._workspace)
+        self.refresh_runs()
+
+    def start_build(self, project_name: str, spec: Optional[Any] = None) -> None:
+        """Start or resume a Forge build run for project_name in a background thread."""
+        self._current_project = project_name
+        p_root = get_settings().projects_root
+        if not p_root:
+            return
+        p_dir = Path(p_root) / project_name
+        p_dir.mkdir(parents=True, exist_ok=True)
+        self._store = RunStore(project_dir=p_dir, workspace_dir=self._workspace)
+
+        # 1. Obtain spec
+        if spec is None:
+            try:
+                from src.gameforge_ide.design import store as gds_store
+                spec = gds_store.load(p_dir)
+            except Exception as exc:
+                logger.debug("Could not load design spec from %s: %s", p_dir, exc)
+
+        run_spec = None
+        if spec is not None:
+            # Try composer first (WI-6.2)
+            try:
+                from src.gameforge_ide.composer import compose, composition_to_run_spec
+                comp = compose(spec, allow_partial=True)
+                run_spec = composition_to_run_spec(comp, str(self._workspace), str(p_dir), origin="prompt")
+            except Exception as exc:
+                logger.debug("Composer planning failed, falling back to legacy: %s", exc)
+                try:
+                    from src.gameforge_ide.design.legacy import to_legacy_params
+                    from src.gameforge_ide.forge.legacy_adapter import plan_legacy
+                    params = to_legacy_params(spec)
+                    run_spec = plan_legacy(
+                        params,
+                        projects_root=Path(p_root),
+                        engine_root=Path(get_settings().engine_root) if get_settings().engine_root else None,
+                    )
+                except Exception as exc2:
+                    logger.error("Failed to plan build run: %s", exc2)
+                    QMessageBox.warning(self, "Build Error", f"Failed to plan build for {project_name}: {exc2}")
+                    return
+        else:
+            # Check if there is an existing run to re-execute
+            latest = self._store.latest_for_project(p_dir)
+            if latest:
+                run_spec = latest.run
+
+        if not run_spec:
+            QMessageBox.warning(self, "No Build Plan", f"No design specification or existing run found for '{project_name}'.")
+            return
+
+        state = RunState.new(run_spec)
+        self._store.save(state)
+        self._current_run_id = state.run.run_id
+        self._current_state = state
+        self.refresh_runs()
+
+        # Run in background daemon thread
+        def _worker():
+            try:
+                from src.gameforge_ide.forge.executor import ForgeExecutor
+                from src.gameforge_ide.forge.handlers import HANDLERS
+                from src.gameforge_ide.core.events import default_bus
+                executor = ForgeExecutor(HANDLERS, bus=default_bus())
+                executor.run(state, self._store)
+            except Exception as exc:
+                logger.error("Background Forge run crashed: %s", exc, exc_info=True)
+
+        t = threading.Thread(target=_worker, daemon=True, name=f"ForgeBuild-{project_name}")
+        t.start()
 
     def set_forge_service(self, service: ForgeService) -> None:
         self._forge_service = service
@@ -366,11 +455,19 @@ class BuildView(QWidget):
         if run_id:
             self._load_run_by_id(str(run_id))
 
-    def _load_run_by_id(self, run_id: str) -> None:
+    def _load_run_by_id(self, run_id: str, preserve_selection: bool = False) -> None:
         self._current_run_id = run_id
         state = self._store.load(run_id)
         if not state:
             return
+
+        prev_selected_id = None
+        if preserve_selection:
+            cur_idx = self._timeline_view.currentIndex()
+            if cur_idx.isValid():
+                prev_step = self._timeline_model.get_step(cur_idx.row())
+                if prev_step:
+                    prev_selected_id = prev_step.step_id
 
         self._current_state = state
         self._btn_cancel.setEnabled(state.status in ("RUNNING", "WAITING_APPROVAL", "PENDING"))
@@ -383,13 +480,24 @@ class BuildView(QWidget):
         # Update banner
         self._update_summary_banner(state)
 
-        # Select first or currently running step
+        # Select appropriate step
         if records:
             active_idx = 0
-            for i, rec in enumerate(records):
-                if rec.status == "RUNNING":
-                    active_idx = i
-                    break
+            if prev_selected_id:
+                for i, rec in enumerate(records):
+                    if rec.step_id == prev_selected_id:
+                        active_idx = i
+                        break
+            elif state.status == "FAILED":
+                for i, rec in enumerate(records):
+                    if rec.status == "FAILED" or rec.errors:
+                        active_idx = i
+                        break
+            else:
+                for i, rec in enumerate(records):
+                    if rec.status == "RUNNING":
+                        active_idx = i
+                        break
             self._timeline_view.setCurrentIndex(self._timeline_model.index(active_idx, 0))
             self._display_step(records[active_idx])
 
@@ -418,6 +526,18 @@ class BuildView(QWidget):
         if self._current_state.status == "DONE":
             self.playRequested.emit(self._current_project or "")
         elif self._current_state.status == "FAILED":
+            # Jump to the failed step in the timeline
+            records = list(self._current_state.records.values())
+            failed_idx = None
+            for idx, rec in enumerate(records):
+                if rec.status == "FAILED" or rec.errors:
+                    failed_idx = idx
+                    break
+            if failed_idx is not None:
+                model_idx = self._timeline_model.index(failed_idx, 0)
+                self._timeline_view.setCurrentIndex(model_idx)
+                self._display_step(records[failed_idx])
+
             self._lower_tabs.setCurrentIndex(0)
 
     @Slot(QModelIndex)
@@ -432,26 +552,134 @@ class BuildView(QWidget):
         lock_info = " · engine lock held" if step.status == "RUNNING" else ""
         self._lbl_step_header.setText(f"Step: {title} (attempt {step.attempts}) — Status {step.status} {dur}{lock_info}")
 
-        # Logs
-        log_path = step.data.get("log_path")
+        # Resolve log path
+        log_content: Optional[str] = None
+        log_path = step.data.get("log_path") or step.data.get("log")
+        if not log_path and step.artifacts:
+            for a in step.artifacts:
+                p = getattr(a, "path", None) or (a.get("path") if isinstance(a, dict) else None)
+                if p and (str(p).endswith(".log") or getattr(a, "kind", "") == "log"):
+                    log_path = p
+                    break
+
+        # Check standard project locations if log_path still not resolved
+        p_root = get_settings().projects_root
+        if not log_path and self._current_project and p_root:
+            p_dir = Path(p_root) / self._current_project
+            candidate_logs = [
+                p_dir / "Saved" / "GameForge" / "logs" / f"{step.step_id}.log",
+                p_dir / "Saved" / "GameForge" / f"{step.step_id}.log",
+            ]
+            if "assemble" in step.step_id:
+                candidate_logs.append(p_dir / "Saved" / "GameForge" / "assemble_editor.log")
+            if step.step_id == "automation":
+                candidate_logs.append(p_dir / "Saved" / "GameForge" / "logs" / "automation.log")
+            for c in candidate_logs:
+                if c.is_file():
+                    log_path = str(c)
+                    break
+
         if log_path and Path(log_path).is_file():
             try:
-                content = Path(log_path).read_text(encoding="utf-8", errors="replace")
-                self._log_view.set_text(content[-50000:])
-            except Exception:
-                self._log_view.set_text(f"Unable to read log file: {log_path}")
-        else:
-            step_logs = step.data.get("output", "") or step.data.get("stdout", "")
-            if step_logs:
-                self._log_view.set_text(step_logs)
+                raw_text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+                log_content = raw_text[-50000:]
+            except Exception as exc:
+                log_content = f"Unable to read log file ({log_path}): {exc}"
+
+        if not log_content:
+            direct_output = step.data.get("output", "") or step.data.get("stdout", "")
+            if direct_output:
+                log_content = direct_output
             else:
-                self._log_view.set_text(f"No logs recorded for step '{step.step_id}'.")
+                lines = []
+                lines.append("=" * 64)
+                lines.append(f" STEP: {step.step_id} (Attempt {step.attempts})")
+                lines.append(f" Status: {step.status} | Duration: {dur}")
+                if step.checkpoint:
+                    lines.append(f" Git Checkpoint: {step.checkpoint}")
+                lines.append("=" * 64)
+                lines.append("")
+
+                if step.step_id == "design":
+                    lines.append("Design specification validated.")
+                    if "engine" in step.data:
+                        lines.append(f"Target Unreal Engine: {step.data['engine']}")
+                    params = step.data.get("params", {})
+                    if params:
+                        lines.append("\nParameters:")
+                        for k, v in params.items():
+                            lines.append(f"  • {k}: {v}")
+
+                elif step.step_id == "scaffold":
+                    lines.append("C++ project scaffolding complete.")
+                    if "uproject" in step.data:
+                        lines.append(f"Project descriptor: {step.data['uproject']}")
+                    files = step.data.get("files", [])
+                    if files:
+                        lines.append(f"\nGenerated files ({len(files)}):")
+                        for f in files:
+                            lines.append(f"  • {f}")
+
+                elif step.step_id == "content":
+                    lines.append("Content preparation complete.")
+                    packs = step.data.get("installed_packs", [])
+                    if packs:
+                        lines.append(f"Installed packs: {', '.join(packs)}")
+                    dirs = step.data.get("cook_dirs", [])
+                    if dirs:
+                        lines.append(f"Cook directories: {', '.join(dirs)}")
+                    if "artifacts_count" in step.data:
+                        lines.append(f"Artifacts generated: {step.data['artifacts_count']}")
+
+                elif "assemble" in step.step_id:
+                    lines.append("Level assembly complete.")
+                    if "map" in step.data:
+                        lines.append(f"Map: {step.data['map']}")
+                    calls = step.data.get("calls", [])
+                    if calls:
+                        lines.append(f"\nOperations executed ({len(calls)}):")
+                        for call in calls:
+                            status = "OK" if call.get("ok") else f"FAILED: {call.get('errors')}"
+                            lines.append(f"  • {call.get('op', 'op')}: {status}")
+
+                elif step.step_id == "scenario_gen":
+                    lines.append("Scenario generation complete.")
+
+                # Gather matching events from events.jsonl
+                if self._current_run_id:
+                    try:
+                        events = self._store.load_events(self._current_run_id)
+                        step_events = [e for e in events if e.get("step_id") == step.step_id]
+                        if step_events:
+                            lines.append("\nExecution Events:")
+                            for ev in step_events:
+                                kind = ev.get("kind", "")
+                                if kind == "log":
+                                    lines.append(f"  [LOG] {ev.get('line', '')}")
+                                elif kind == "step_started":
+                                    lines.append(f"  [START] Attempt {ev.get('attempt', 1)}")
+                                elif kind == "step_finished":
+                                    lines.append(f"  [FINISH] ok={ev.get('ok')} (duration: {ev.get('duration_s', 0)}s)")
+                                elif kind == "step_blocked":
+                                    lines.append("  [BLOCKED]")
+                    except Exception:
+                        pass
+
+                if step.errors:
+                    lines.append("\nErrors encountered:")
+                    for err in step.errors:
+                        lines.append(f"  ✗ {err}")
+
+                log_content = "\n".join(lines)
+
+        self._log_view.set_text(log_content)
 
         # Diagnostics / Problems
         diagnostics = list(step.data.get("diagnostics", []))
         if step.errors:
             for err in step.errors:
-                diagnostics.append({"severity": "Error", "message": err, "file": "", "line": 0})
+                if not any(d.get("message") == err for d in diagnostics if isinstance(d, dict)):
+                    diagnostics.append({"severity": "Error", "message": err, "file": step.step_id, "line": 0})
         self._problems_table.set_problems(diagnostics)
         self._lower_tabs.setTabText(0, f"Problems ({len(diagnostics)})")
 
@@ -477,8 +705,20 @@ class BuildView(QWidget):
     def _on_forge_event(self, event: Dict[str, Any]) -> None:
         run_id = event.get("run_id")
         if run_id and run_id == self._current_run_id:
-            # Refresh currently displayed run
-            self._load_run_by_id(run_id)
+            kind = event.get("kind")
+            step_id = event.get("step_id")
+            cur_idx = self._timeline_view.currentIndex()
+            current_step = self._timeline_model.get_step(cur_idx.row()) if cur_idx.isValid() else None
+
+            # If live log line arrives for currently selected step, append immediately
+            if kind == "log" and step_id and current_step and current_step.step_id == step_id:
+                line = event.get("line")
+                if line:
+                    self._log_view.append_log(line)
+                return
+
+            # Refresh currently displayed run while preserving selection
+            self._load_run_by_id(run_id, preserve_selection=True)
 
     @Slot()
     def _on_cancel_clicked(self) -> None:
@@ -505,9 +745,36 @@ class BuildView(QWidget):
 
     @Slot()
     def _on_resume_clicked(self) -> None:
-        if not self._current_run_id:
+        if not self._current_run_id or not self._current_project:
             return
-        QMessageBox.information(self, "Resume Run", f"Resuming run {self._current_run_id} from last valid checkpoint.")
+        p_root = get_settings().projects_root
+        if not p_root:
+            return
+        p_dir = Path(p_root) / self._current_project
+        state = self._store.load(self._current_run_id)
+        if not state:
+            return
+        from src.gameforge_ide.forge.model import StepStatus
+        for rec in state.records.values():
+            if rec.status in (StepStatus.SKIPPED, StepStatus.FAILED, StepStatus.CANCELLED, StepStatus.BLOCKED):
+                rec.status = StepStatus.PENDING
+                rec.errors = []
+        state.status = "RUNNING"
+        self._store.save(state)
+        self._load_run_by_id(self._current_run_id)
+
+        def _worker():
+            try:
+                from src.gameforge_ide.forge.executor import ForgeExecutor
+                from src.gameforge_ide.forge.handlers import HANDLERS
+                from src.gameforge_ide.core.events import default_bus
+                executor = ForgeExecutor(HANDLERS, bus=default_bus())
+                executor.run(state, self._store)
+            except Exception as exc:
+                logger.error("Background Forge resume crashed: %s", exc, exc_info=True)
+
+        t = threading.Thread(target=_worker, daemon=True, name=f"ForgeResume-{self._current_project}")
+        t.start()
 
     @Slot()
     def _show_rollback_menu(self) -> None:

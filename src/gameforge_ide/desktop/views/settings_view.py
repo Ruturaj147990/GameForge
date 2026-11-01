@@ -244,11 +244,15 @@ class SettingsView(QWidget):
         layout = QVBoxLayout(box)
 
         form = QFormLayout()
+        form.setContentsMargins(12, 8, 12, 8)
+        form.setVerticalSpacing(14)
+        form.setHorizontalSpacing(16)
 
         self._theme_combo = QComboBox(box)
         self._theme_combo.setObjectName("settingsThemeCombo")
         self._theme_combo.setAccessibleName("IDE Theme selection")
         self._theme_combo.addItems(["Studio Dark", "Studio Light"])
+        self._theme_combo.setMinimumHeight(32)
         form.addRow("Theme:", self._theme_combo)
 
         self._font_scale_spin = QSpinBox(box)
@@ -258,6 +262,7 @@ class SettingsView(QWidget):
         self._font_scale_spin.setSingleStep(5)
         self._font_scale_spin.setValue(100)
         self._font_scale_spin.setSuffix("%")
+        self._font_scale_spin.setMinimumHeight(32)
         form.addRow("Font Scale:", self._font_scale_spin)
 
         layout.addLayout(form)
@@ -317,6 +322,10 @@ class SettingsView(QWidget):
 
     # ── Data Load & Save ─────────────────────────────────────────────────────
 
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        self.load_settings()
+
     def load_settings(self) -> None:
         s = get_settings()
 
@@ -336,6 +345,17 @@ class SettingsView(QWidget):
         for row, (role, model) in enumerate(sorted(s.models.items())):
             self._models_table.setItem(row, 0, QTableWidgetItem(role))
             self._models_table.setItem(row, 1, QTableWidgetItem(model))
+
+        # Appearance
+        from PySide6.QtCore import QSettings
+        ide_settings = QSettings("GameForge", "GameForgeIDE")
+        current_theme = ide_settings.value("appearance/theme", "dark")
+        self._theme_combo.setCurrentIndex(1 if str(current_theme).lower() == "light" else 0)
+        try:
+            scale_val = int(ide_settings.value("appearance/font_scale", 100))
+            self._font_scale_spin.setValue(scale_val)
+        except (ValueError, TypeError):
+            self._font_scale_spin.setValue(100)
 
         # Routing Source info
         try:
@@ -394,4 +414,18 @@ class SettingsView(QWidget):
 
         cfg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         reset_settings_cache()
+
+        # Appearance persistence and live application
+        from PySide6.QtCore import QSettings, QTimer
+        from PySide6.QtWidgets import QApplication
+        from ..styles.dark_theme import apply_theme
+        ide_settings = QSettings("GameForge", "GameForgeIDE")
+        new_theme = "light" if self._theme_combo.currentIndex() == 1 else "dark"
+        ide_settings.setValue("appearance/theme", new_theme)
+        ide_settings.setValue("appearance/font_scale", self._font_scale_spin.value())
+        apply_theme(QApplication.instance(), new_theme)
+
+        self._btn_save.setText("Saved ✓")
+        QTimer.singleShot(2000, lambda: self._btn_save.setText("Save Settings"))
+        print(f"[GameForge Settings] Saved: Theme='{new_theme}', FontScale={self._font_scale_spin.value()}%, Engine='{eng or 'None'}', Projects='{proj}'", flush=True)
         self.settingsChanged.emit()
