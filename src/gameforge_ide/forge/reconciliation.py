@@ -1,0 +1,181 @@
+"""Living project level reconciliation and user-edit protection (WI-8.3).
+
+Instead of wiping levels on rebuild, reconciles planned actors against existing actors:
+- Preserves user-added actors (without GF_Owned tag).
+- Detects user-modified owned actors (state_hash mismatch) and raises conflicts.
+- Supports resolutions: "keep_mine" (node becomes owner: "user"), "use_design" (overwrite).
+- Updates modified actors and spawns new plan actors.
+"""
+from __future__ import annotations
+
+import copy
+from typing import Any, Dict, List, Literal, Optional, Tuple
+
+from pydantic import BaseModel, Field
+
+from .project_graph import (
+    GeneratedBy,
+    ProjectGraph,
+    ProjectNode,
+    compute_actor_state_hash,
+)
+
+TAG_GF_OWNED = "GF_Owned"
+
+
+class ActorConflict(BaseModel):
+    actor_id: str
+    label: str
+    level: str
+    recorded_hash: str
+    current_hash: str
+    current_state: Dict[str, Any] = Field(default_factory=dict)
+    planned_state: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AssetConflict(BaseModel):
+    asset_id: str
+    path: str
+    recorded_sha256: str
+    current_sha256: str
+
+
+class ReconciliationPlan(BaseModel):
+    level_id: str
+    to_spawn: List[Dict[str, Any]] = Field(default_factory=list)
+    to_update: List[Dict[str, Any]] = Field(default_factory=list)
+    to_delete: List[str] = Field(default_factory=list)  # labels
+    conflicts: List[ActorConflict] = Field(default_factory=list)
+    asset_conflicts: List[AssetConflict] = Field(default_factory=list)
+    preserved_user_actors: List[str] = Field(default_factory=list)
+
+    @property
+    def has_conflicts(self) -> bool:
+        return bool(self.conflicts or self.asset_conflicts)
+
+
+def plan_reconciliation(
+    graph: ProjectGraph,
+    level_id: str,
+    new_plan_actors: List[Dict[str, Any]],
+    current_actors: List[Dict[str, Any]],
+    resolutions: Optional[Dict[str, Literal["keep_mine", "use_design"]]] = None,
+) -> ReconciliationPlan:
+    """Compare desired new_plan_actors with current_actors on disk / in engine.
+
+    Returns a ReconciliationPlan detailing spawns, updates, deletes, and conflicts.
+    """
+    resolutions = resolutions or {}
+    plan = ReconciliationPlan(level_id=level_id)
+
+    # 1. Categorise current actors
+    owned_current: Dict[str, Dict[str, Any]] = {}
+    for a in current_actors:
+        label = a.get("label", "")
+        tags = a.get("tags", [])
+        if TAG_GF_OWNED in tags:
+            owned_current[label] = a
+        else:
+            plan.preserved_user_actors.append(label)
+
+    # 2. Map planned actors by label (or planned id)
+    planned_by_label: Dict[str, Dict[str, Any]] = {}
+    for p in new_plan_actors:
+        lbl = p.get("label") or p.get("id") or p.get("entity_id")
+        if lbl:
+            planned_by_label[lbl] = p
+
+    # 3. Check owned current actors: deleted or in plan
+    for label, cur_act in owned_current.items():
+        node_id = f"{level_id}/{label}"
+        node = graph.find_node(node_id)
+        cur_hash = compute_actor_state_hash(cur_act)
+
+        if label not in planned_by_label:
+            # Actor was owned by GameForge but removed from the new plan
+            if node and node.owner == "user":
+                # User claimed ownership with "keep_mine"; do not delete
+                plan.preserved_user_actors.append(label)
+            else:
+                plan.to_delete.append(label)
+        else:
+            # Actor is in both current level and new plan
+            planned = planned_by_label[label]
+            if node and node.owner == "user":
+                # User previously opted to keep their version; ignore planned changes
+                plan.preserved_user_actors.append(label)
+            elif node and node.state_hash and node.state_hash != cur_hash:
+                # State changed outside of Forge! Conflict!
+                res = resolutions.get(node_id)
+                if res == "keep_mine":
+                    # User resolution: convert to user owned, preserve state
+                    node.owner = "user"
+                    node.state_hash = cur_hash
+                    plan.preserved_user_actors.append(label)
+                elif res == "use_design":
+                    # User resolution: overwrite with design
+                    node.owner = "gameforge"
+                    node.state_hash = compute_actor_state_hash(planned)
+                    plan.to_update.append(planned)
+                else:
+                    # Unresolved conflict
+                    plan.conflicts.append(
+                        ActorConflict(
+                            actor_id=node_id,
+                            label=label,
+                            level=level_id,
+                            recorded_hash=node.state_hash,
+                            current_hash=cur_hash,
+                            current_state=cur_act,
+                            planned_state=planned,
+                        )
+                    )
+            else:
+                # Not user modified; check if planned properties changed
+                planned_hash = compute_actor_state_hash(planned)
+                if cur_hash != planned_hash:
+                    plan.to_update.append(planned)
+
+    # 4. Planned actors not currently present -> spawn
+    for label, planned in planned_by_label.items():
+        if label not in owned_current:
+            plan.to_spawn.append(planned)
+
+    return plan
+
+
+def apply_resolutions(
+    graph: ProjectGraph,
+    plan: ReconciliationPlan,
+    resolutions: Dict[str, Literal["keep_mine", "use_design"]],
+) -> ReconciliationPlan:
+    """Apply resolutions to unresolved conflicts in a plan."""
+    remaining_conflicts: List[ActorConflict] = []
+
+    for conflict in plan.conflicts:
+        node_id = conflict.actor_id
+        res = resolutions.get(node_id)
+        node = graph.find_node(node_id)
+        if not node:
+            node = ProjectNode(
+                id=node_id,
+                kind="actor",
+                level=conflict.level,
+                label=conflict.label,
+                owner="gameforge",
+            )
+            graph.upsert_node(node)
+
+        if res == "keep_mine":
+            node.owner = "user"
+            node.state_hash = conflict.current_hash
+            plan.preserved_user_actors.append(conflict.label)
+        elif res == "use_design":
+            node.owner = "gameforge"
+            node.state_hash = compute_actor_state_hash(conflict.planned_state)
+            plan.to_update.append(conflict.planned_state)
+        else:
+            remaining_conflicts.append(conflict)
+
+    plan.conflicts = remaining_conflicts
+    return plan
