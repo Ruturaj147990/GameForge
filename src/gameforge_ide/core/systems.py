@@ -62,11 +62,35 @@ def probe_ollama(settings: Settings, timeout_s: float = 3.0) -> SystemRow:
         except Exception:
             pass
 
+        # Check Ollama version and compare against evaluation report
+        version_changed = False
+        try:
+            req_ver = urllib.request.Request(f"{url}/api/version", headers={"User-Agent": "GameForge-IDE"})
+            with urllib.request.urlopen(req_ver, timeout=timeout_s) as resp_ver:
+                ver_data = json.loads(resp_ver.read().decode("utf-8"))
+            live_ver = ver_data.get("version")
+            if live_ver:
+                # Check latest eval report in reports/P9
+                rep_dir = Path("reports/P9")
+                if rep_dir.is_dir():
+                    for rep_file in rep_dir.glob("eval_*.json"):
+                        rep_data = json.loads(rep_file.read_text(encoding="utf-8"))
+                        rep_ver = rep_data.get("version_info")
+                        if rep_ver and rep_ver != "unknown" and rep_ver != live_ver:
+                            version_changed = True
+                            break
+        except Exception:
+            pass
+
         vram_gb = vram_bytes / (1024 ** 3)
         if vram_gb > 0:
             summary = f"{len(models)} models · {vram_gb:.1f} GB VRAM in use"
         else:
             summary = f"{len(models)} models"
+
+        if version_changed:
+            summary += " · Models changed since last evaluation"
+
         return SystemRow(key="ollama", state="ok", summary=summary, fix_action=None)
     except Exception:
         return SystemRow(key="ollama", state="offline", summary="Ollama offline", fix_action="start_ollama")
