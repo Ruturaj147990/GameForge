@@ -109,15 +109,19 @@ label a procedural asset as neural (the TRELLIS.2 mislabel lesson).
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 9.1 | TODO | | | |
-| 9.2 | TODO (needs approval) | | | |
-| 9.3 | TODO | | | |
-| 9.4 | TODO (needs approval) | | | |
-| 9.5 | TODO (needs approval) | | | |
-| 9.6 | TODO | | | |
+| 9.1 | DONE | 2026-11-01T05:35Z | 2026-11-01T05:45Z | src/gameforge_ide/evals/, 5 task suites, 
+eports/P9/eval_*.json |
+| 9.2 | BLOCKED (needs approval) | 2026-11-01T05:35Z | | Needs explicit user approval for paid API key and data egress |
+| 9.3 | DONE | 2026-11-01T05:45Z | 2026-11-01T05:50Z | scripts/models/gen_routing.py, model_routing.json, 	est_model_routing_evidence.py |
+| 9.4 | DONE (Capture) / BLOCKED (Train) | 2026-11-01T05:45Z | 2026-11-01T05:50Z | models/flywheel.py, 	est_flywheel.py; training run needs approval |
+| 9.5 | BLOCKED (needs approval) | 2026-11-01T05:45Z | 2026-11-01T05:50Z | 
+eports/P9/spike_rocm.json, spike_hunyuan3d.json, spike_piper.json |
+| 9.6 | DONE | 2026-11-01T05:35Z | 2026-11-01T05:50Z | 
+eports/native_tool_selftest.json (4/4 PASS), stats_logger.py, 
+eports/P9/schema_comparison.json |
 
 ## Review log (Claude)
-_empty_
+- 2026-11-01: Phase 9 Agentic Evaluation Suite implemented and executed across all 4 local models on live Ollama host. Evidence-based routing generated into model_routing.json. Native tool self-test passed on all 4 models. Spikes and flywheel capture recorded.
 
 ## Revisions
 - 2026-10-31: created (Claude).

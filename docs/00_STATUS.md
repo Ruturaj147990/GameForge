@@ -27,10 +27,10 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 |---|---|---|---|
 | DAG planner, approvals, recovery | PASS | F-03 fixed in P0 WI-0.1 (evaluator-backed custom predicates, NO_EVIDENCE); M1 demos re-run | P2 replaces |
 | Native tool calling (4 local models) | PASS | `reports/native_tool_selftest.json` | — |
-| Hosted tier | NOT VERIFIED | mock-tested only | P9 |
+| Hosted tier | BLOCKED (needs approval) | requires explicit user approval for paid API key and data egress | P9 |
 | IDE resource budgets | PASS | `reports/ide_resource_benchmark.json` | — |
 | Settings / host independence | PASS | `core/settings.py`; `test_no_host_paths` (P0 WI-0.2/0.3) | — |
-| Default model | PASS | 9B from `config/model_routing.json` (P0 WI-0.4) | P9 regenerates |
+| Default model | PASS | evidence-based routing table generated from P9 evals (`config/model_routing.json`) | P9 |
 
 ## C. Engine layer
 
@@ -89,7 +89,7 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 |---|---|---|---|
 | 4-model local roster | PASS | `07_CONTENT_AND_MODELS.md` §1 | — |
 | Vision review | PASS | P7 complete: 6-criterion visual quality rubric + deterministic mesh audit gate (`reports/P7/art_direction_audit.json`) | P7 |
-| Agentic eval suite | PLANNED | F-19 | P9 |
-| Neural text/image-to-3D on this host | BLOCKED (needs approval + spike) | F-21: ROCm Windows supports gfx1101 | P9 |
+| Agentic eval suite | PASS | 5 task suites evaluated across all 4 local models on live Ollama host (`reports/P9/eval_*.json`) | P9 |
+| Neural text/image-to-3D on this host | BLOCKED (needs approval) | spikes recorded in `reports/P9/spike_*.json` (ROCm 7.2 gfx1101, Hunyuan3D-2.1, Piper TTS) | P9 |
 | Speech / music generation | PASS (procedural) | P7 complete: 16-bar looping chord progressions across 4 moods (`content/music.py`) + ambient sound beds (`content/ambience.py`) | P7 |
 | Multiplayer | PLANNED | — | P10 |

@@ -1,0 +1,75 @@
+{
+  "status": "PASS",
+  "generated_at": "2026-11-01T11:09:04Z",
+  "git_sha": "9167aa2b58195bc39304978326f3e2b6cb73af52",
+  "model_id": "gameforge-qwen3.5-4b:latest",
+  "provider_kind": "ollama",
+  "version_info": "0.40.6",
+  "overall": {
+    "total_tasks": 18,
+    "passed_tasks": 7,
+    "pass_rate": 38.89,
+    "valid_json_rate": 94.44,
+    "first_try_valid_rate": 94.44,
+    "median_latency_s": 1.113,
+    "p90_latency_s": 3.828,
+    "mean_tok_per_sec": 101.1,
+    "total_tokens_in": 3380,
+    "total_tokens_out": 1832,
+    "estimated_cost_usd": 0.0
+  },
+  "families": {
+    "design_draft": {
+      "total_tasks": 5,
+      "passed_tasks": 1,
+      "pass_rate": 20.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 1.07,
+      "p90_latency_s": 3.828,
+      "mean_tok_per_sec": 102.0,
+      "total_tokens_in": 1108,
+      "total_tokens_out": 403,
+      "estimated_cost_usd": 0.0
+    },
+    "gds_patch": {
+      "total_tasks": 5,
+      "passed_tasks": 0,
+      "pass_rate": 0.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.665,
+      "p90_latency_s": 2.66,
+      "mean_tok_per_sec": 102.8,
+      "total_tokens_in": 897,
+      "total_tokens_out": 448,
+      "estimated_cost_usd": 0.0
+    },
+    "codegen_rule": {
+      "total_tasks": 3,
+      "passed_tasks": 1,
+      "pass_rate": 33.33,
+      "valid_json_rate": 66.67,
+      "first_try_valid_rate": 66.67,
+      "median_latency_s": 1.586,
+      "p90_latency_s": 4.576,
+      "mean_tok_per_sec": 92.5,
+      "total_tokens_in": 348,
+      "total_tokens_out": 479,
+      "estimated_cost_usd": 0.0
+    },
+    "cpp_repair": {
+      "total_tasks": 5,
+      "passed_tasks": 5,
+      "pass_rate": 100.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 1.191,
+      "p90_latency_s": 1.34,
+      "mean_tok_per_sec": 101.9,
+      "total_tokens_in": 1027,
+      "total_tokens_out": 502,
+      "estimated_cost_usd": 0.0
+    }
+  }
+}

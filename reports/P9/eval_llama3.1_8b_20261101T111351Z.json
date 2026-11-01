@@ -1,0 +1,75 @@
+{
+  "status": "PASS",
+  "generated_at": "2026-11-01T11:13:51Z",
+  "git_sha": "9167aa2b58195bc39304978326f3e2b6cb73af52",
+  "model_id": "llama3.1:8b",
+  "provider_kind": "ollama",
+  "version_info": "0.40.6",
+  "overall": {
+    "total_tasks": 18,
+    "passed_tasks": 6,
+    "pass_rate": 33.33,
+    "valid_json_rate": 100.0,
+    "first_try_valid_rate": 100.0,
+    "median_latency_s": 1.314,
+    "p90_latency_s": 2.811,
+    "mean_tok_per_sec": 76.4,
+    "total_tokens_in": 1591,
+    "total_tokens_out": 1558,
+    "estimated_cost_usd": 0.0
+  },
+  "families": {
+    "design_draft": {
+      "total_tasks": 5,
+      "passed_tasks": 1,
+      "pass_rate": 20.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 1.464,
+      "p90_latency_s": 5.462,
+      "mean_tok_per_sec": 76.3,
+      "total_tokens_in": 574,
+      "total_tokens_out": 508,
+      "estimated_cost_usd": 0.0
+    },
+    "gds_patch": {
+      "total_tasks": 5,
+      "passed_tasks": 0,
+      "pass_rate": 0.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.799,
+      "p90_latency_s": 2.639,
+      "mean_tok_per_sec": 76.8,
+      "total_tokens_in": 352,
+      "total_tokens_out": 396,
+      "estimated_cost_usd": 0.0
+    },
+    "codegen_rule": {
+      "total_tasks": 3,
+      "passed_tasks": 0,
+      "pass_rate": 0.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.468,
+      "p90_latency_s": 0.517,
+      "mean_tok_per_sec": 76.3,
+      "total_tokens_in": 206,
+      "total_tokens_out": 86,
+      "estimated_cost_usd": 0.0
+    },
+    "cpp_repair": {
+      "total_tasks": 5,
+      "passed_tasks": 5,
+      "pass_rate": 100.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 1.36,
+      "p90_latency_s": 2.811,
+      "mean_tok_per_sec": 76.2,
+      "total_tokens_in": 459,
+      "total_tokens_out": 568,
+      "estimated_cost_usd": 0.0
+    }
+  }
+}

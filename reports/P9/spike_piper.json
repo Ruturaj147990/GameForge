@@ -1,0 +1,21 @@
+{
+  "spike": "piper_tts",
+  "status": "BLOCKED (needs approval: binary and voice weights download)",
+  "timestamp": "2026-11-01T11:06:16Z",
+  "engine_spec": {
+    "name": "Piper TTS",
+    "target_dir": "E:/GameForge/models/piper",
+    "engine_license": "MIT",
+    "compute_target": "CPU (ONNX Runtime)",
+    "voice_license": "Recorded per voice (CC-BY / Public Domain)"
+  },
+  "acceptance_criteria": {
+    "realtime_factor_cpu_target": "< 0.25",
+    "wav_sample_rate_hz": 22050,
+    "unreal_import_pipeline": "UGameForgeAudioSubsystem -> SoundWave / MetaSound"
+  },
+  "measured": {
+    "installed": false,
+    "reason": "Requires user approval for binary and voice models download."
+  }
+}

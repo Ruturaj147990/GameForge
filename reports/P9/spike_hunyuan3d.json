@@ -1,0 +1,27 @@
+{
+  "spike": "hunyuan3d_21",
+  "status": "BLOCKED (needs approval: model weights download and environment setup)",
+  "timestamp": "2026-11-01T11:06:16Z",
+  "model_spec": {
+    "name": "Hunyuan3D-2.1 shape-only",
+    "weights_target": "E:/GameForge/models/hunyuan3d21",
+    "license": "Tencent Hunyuan Community License",
+    "license_territory_restrictions": true,
+    "provenance_class": "NEURAL"
+  },
+  "post_processing_pipeline": [
+    "Geometry Script CSG remesh",
+    "XAtlas UV unwrapping",
+    "GameForge master material assignment",
+    "StaticMesh LOD generation and convex collision"
+  ],
+  "acceptance_criteria": {
+    "peak_vram_limit_gb": 12.0,
+    "valid_mesh_rate_target": ">= 7/10",
+    "manifold_topology_required": true
+  },
+  "measured": {
+    "installed": false,
+    "reason": "Requires user approval for 10+ GB weights download and Tencent community licence acceptance."
+  }
+}

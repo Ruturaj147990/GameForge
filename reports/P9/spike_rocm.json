@@ -1,0 +1,25 @@
+{
+  "spike": "rocm_windows",
+  "status": "BLOCKED (needs approval: AMD HIP SDK 7.2 and PyTorch ROCm installation)",
+  "timestamp": "2026-11-01T11:06:16Z",
+  "target_hardware": {
+    "gpu": "AMD Radeon RX 7700 XT",
+    "vram_gb": 12,
+    "architecture": "RDNA 3",
+    "gfx_target": "gfx1101"
+  },
+  "prerequisites": {
+    "sdk": "AMD HIP SDK 7.2 for Windows",
+    "support_status": "Officially supported on gfx1101 (RDNA 3)",
+    "environment_path": "E:/GameForge/envs/rocm"
+  },
+  "acceptance_criteria": {
+    "torch_cuda_available": true,
+    "matmul_4k_latency_target_ms": 15.0,
+    "vram_headroom_gb": 2.0
+  },
+  "measured": {
+    "installed": false,
+    "reason": "Requires user approval for host compiler and SDK installation."
+  }
+}

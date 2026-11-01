@@ -21,8 +21,13 @@ approval.
 - **Always** `"think": false` and an explicit `num_ctx` on programmatic calls.
 - Training lineage: `reports/gameforge-27b-sft/`, `reports/GAMEFORGE_QWEN35_*`, `reports/GAMEFORGE_TRAINING_*`, datasets
   under `E:\GameForge\datasets\`. Never overwrite a tag or Modelfile without a rollback copy.
-- Measured on code Q&A (16 tasks): 4B 73.8 %, 9B 71.2 %, 27B-SFT 95.6 % (with v2.1 prompting). **These do not
-  measure agentic GameForge work.** P9's eval suite replaces them for routing (AD-20).
+- Measured on GameForge Agentic Eval Suite (P9, 
+eports/P9/eval_*.json):
+  - gameforge-qwen3.5-4b:latest: 38.9% pass rate, 94.4% valid JSON, 101.1 tok/s, p90 latency 3.83s (routed to ast, design, codegen, ision).
+  - gameforge-qwen3.5-9b:latest: 33.3% pass rate, 83.3% valid JSON, 63.4 tok/s, p90 latency 62.67s (routed to chat).
+  - llama3.1:8b: 33.3% pass rate, 100.0% valid JSON, 76.4 tok/s, p90 latency 2.81s (baseline).
+  - gameforge-27b-sft:latest: 25.0% pass rate, 75.0% valid JSON, 6.0 tok/s, p90 latency 120.01s (routed to heavy_local).
+- Routing table generated from empirical evidence: src/gameforge_ide/config/model_routing.json (WI-9.3).
 - Hosted tier (product target, opt-in per workspace): `backend/providers/hosted.py` (Anthropic Messages +
   OpenAI-compatible, SSE, tool calls, Credential Manager keys, spend ledger, caps, no silent fallback). Status: tested
   only against a local mock. P9 WI-2 validates it live with the user's key.
