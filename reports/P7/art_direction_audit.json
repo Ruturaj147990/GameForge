@@ -1,0 +1,71 @@
+{
+  "schema_": "p7_art_direction_audit/1",
+  "timestamp": "2026-11-01T04:32:15.032493+00:00",
+  "placeholder_ok_default": false,
+  "genres_audited": {
+    "adventure": {
+      "genre": "relic_hunt",
+      "theme": "stone_wood",
+      "character_mesh": "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple",
+      "animation_class": "/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C",
+      "procedural_props": [
+        "SM_StylizedTree",
+        "SM_Rock",
+        "SM_Altar"
+      ],
+      "mesh_audit": {
+        "total_components": 28,
+        "placeholder_components": 0,
+        "unthemed_actors": [],
+        "default_materials_detected": [],
+        "passed": true
+      },
+      "vision_rubric": {
+        "readability": 0.88,
+        "not_placeholder": 0.94,
+        "lighting": 0.87,
+        "composition": 0.85,
+        "hud_legible": 0.86,
+        "style_consistency": 0.89,
+        "overall": 0.882,
+        "passed": true
+      },
+      "before_after_capture": "reports/P7/before_after_adventure.png",
+      "scenarios_status": "PASS"
+    },
+    "shooter": {
+      "genre": "top_down_shooter",
+      "theme": "scifi_metal",
+      "character_mesh": "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple",
+      "enemy_mesh": "/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple",
+      "procedural_props": [
+        "SM_Pillar",
+        "SM_Crate"
+      ],
+      "vfx_presets": [
+        "vfx.hit_flash",
+        "vfx.magic_trail"
+      ],
+      "mesh_audit": {
+        "total_components": 18,
+        "placeholder_components": 0,
+        "unthemed_actors": [],
+        "default_materials_detected": [],
+        "passed": true
+      },
+      "vision_rubric": {
+        "readability": 0.9,
+        "not_placeholder": 0.92,
+        "lighting": 0.89,
+        "composition": 0.86,
+        "hud_legible": 0.87,
+        "style_consistency": 0.91,
+        "overall": 0.892,
+        "passed": true
+      },
+      "before_after_capture": "reports/P7/before_after_shooter.png",
+      "scenarios_status": "PASS"
+    }
+  },
+  "all_gates_pass": true
+}

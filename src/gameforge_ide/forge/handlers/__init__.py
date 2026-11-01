@@ -14,6 +14,8 @@ from ..executor import Handler
 from . import legacy_stages
 from . import tool_call
 from . import scenario
+from . import content
+from . import review
 
 HANDLERS: Dict[str, Handler] = {
     # Named stages
@@ -29,9 +31,11 @@ HANDLERS: Dict[str, Handler] = {
     "design": legacy_stages.legacy_spec,
     "codegen": legacy_stages.legacy_sources,
     "build": legacy_stages.legacy_build,
+    "content": content.content_handler,
     "assemble": legacy_stages.legacy_assemble,
     "automation": legacy_stages.legacy_tests,
     "scenario": scenario.scenario_handler,
+    "review": review.review_handler,
     "tool_call": tool_call.tool_call_handler,
 }
 

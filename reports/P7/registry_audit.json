@@ -1,0 +1,21 @@
+{
+  "schema_": "p7_registry_audit/1",
+  "timestamp": "2026-11-01T04:32:15.032493+00:00",
+  "database_path": "E:/GameForge/validation/P3_kittest_20261031/.gameforge/assets.db",
+  "total_registered_assets": 157,
+  "promoted_assets": 157,
+  "compliance": {
+    "all_assets_have_licence": true,
+    "all_assets_have_valid_provenance": true,
+    "missing_licence_count": 0,
+    "unverified_provenance_count": 0,
+    "audit_result": "PASS"
+  },
+  "provenance_breakdown": {
+    "EPIC_CONTENT": 157
+  },
+  "licence_breakdown": {
+    "Unreal Engine EULA (engine template content)": 157
+  },
+  "test_registry_licence_complete": "PASS"
+}

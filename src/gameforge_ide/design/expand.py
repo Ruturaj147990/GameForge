@@ -478,7 +478,7 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     art = ArtDirection(
         style=draft.art_style,
         character_source="mannequin",
-        placeholder_ok=True,
+        placeholder_ok=False,
     )
     audio = AudioSpec(
         music_mood=draft.music_mood,

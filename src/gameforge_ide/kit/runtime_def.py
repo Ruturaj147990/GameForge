@@ -13,7 +13,7 @@ from .registry import get_module
 
 def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     """Generate gfdef/1 dictionary from GameDesignSpec."""
-    # Player settings
+    # Player settings (WI-7.2: mesh, anim_class, material_tint)
     player_data = {
         "camera": gds.overview.camera.value if hasattr(gds.overview.camera, "value") else str(gds.overview.camera),
         "move_speed": 600.0,
@@ -21,6 +21,9 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
         "max_health": 100.0,
         "lives": 0,
         "kill_z": -2000.0,
+        "mesh": "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple",
+        "anim_class": "/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C",
+        "material_tint": [1.0, 1.0, 1.0, 1.0],
     }
 
     # Enhanced input default mapping
@@ -73,11 +76,23 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
         except KeyError:
             pass
 
+        # Visual settings for kit pawns (WI-7.2)
+        visual_data = {}
+        is_humanoid = any(k in ent.entity_id.lower() or k in ent.module.lower()
+                          for k in ("enemy", "guard", "npc", "quest_giver", "hermit", "character"))
+        if is_humanoid:
+            visual_data = {
+                "mesh": "/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple",
+                "anim_class": "/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C",
+                "material_tint": [0.8, 0.2, 0.2, 1.0] if "enemy" in ent.entity_id.lower() or "guard" in ent.entity_id.lower() else [0.2, 0.5, 0.9, 1.0],
+            }
+
         entities_data[ent.entity_id] = {
             "class": mod_cls,
             "spawn_tag": f"GF_SP_{ent.entity_id}",
             "count": ent.count,
             "properties": dict(ent.props),
+            "visual": visual_data,
         }
 
     # Rules

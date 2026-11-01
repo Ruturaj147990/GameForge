@@ -343,7 +343,7 @@ class ArtDirection(_M):
                                min_length=2, max_length=8)
     material_theme: str = Field("default", pattern=IDENT)
     character_source: Literal["procedural", "mannequin", "metahuman", "library"] = "mannequin"
-    placeholder_ok: bool = True  # P7 flips the default to False
+    placeholder_ok: bool = False  # P7 flipped default to False per AD-17
 
     @field_validator("palette")
     @classmethod

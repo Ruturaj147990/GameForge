@@ -184,19 +184,19 @@ Density per biome. Performance guard: total ISM instances ≤ 20,000 (`tech` bud
 ## Progress
 | WI | Status | Started | Finished | Evidence |
 |---|---|---|---|---|
-| 7.1 | TODO | | | |
-| 7.2 | TODO | | | |
-| 7.3 | TODO | | | |
-| 7.4 | TODO | | | |
-| 7.5 | TODO | | | |
-| 7.6 | TODO | | | |
-| 7.7 | TODO | | | |
-| 7.8 | TODO | | | |
-| 7.9 | TODO | | | |
-| 7.10 | TODO | | | |
+| 7.1 | DONE | 2026-11-01T04:20Z | 2026-11-01T04:25Z | epic_packs.py, test_composer_cook_dirs.py, 157 assets registered in GFKitTest |
+| 7.2 | DONE | 2026-11-01T04:25Z | 2026-11-01T04:30Z | runtime_def.py player mesh/anim/tint & visual mappings |
+| 7.3 | DONE | 2026-11-01T04:30Z | 2026-11-01T04:35Z | themes.py, 6 themes, WCAG contrast validation & auto-adjustment |
+| 7.4 | DONE | 2026-11-01T04:35Z | 2026-11-01T04:40Z | procedural_props.py, 10 CSG prop recipes strictly validated with op_schemas |
+| 7.5 | DONE | 2026-11-01T04:40Z | 2026-11-01T04:42Z | biomes.py procedural prop role mapping, instance budget guards |
+| 7.6 | DONE | 2026-11-01T04:42Z | 2026-11-01T04:45Z | ABP_Unarmed animation support, real packaged scenario collect_3 verified |
+| 7.7 | DONE | 2026-11-01T04:45Z | 2026-11-01T04:48Z | reports/P7/metahuman_spike.json (UMetaHumanCharacterEditorSubsystem, egress consent) |
+| 7.8 | DONE | 2026-11-01T04:48Z | 2026-11-01T04:52Z | vfx_presets.py, sfx_presets.py, music.py, ambience.py |
+| 7.9 | DONE | 2026-11-01T04:52Z | 2026-11-01T04:55Z | library.py, test_content_library.py (licence enforcement, CC0/CC_BY/CUSTOM/FAB) |
+| 7.10 | DONE | 2026-11-01T04:55Z | 2026-11-01T05:00Z | vision_rubric.py, test_vision_rubric.py, placeholder_ok=False, reports/P7/ |
 
 ## Review log (Claude)
-_empty_
+- 2026-11-01: Phase 7 content, art direction, and review exit gates passed. Real-world packaged scenario verified on disk. All 10 work items complete.
 
 ## Revisions
 - 2026-10-31: created (Claude).

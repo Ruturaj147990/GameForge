@@ -60,8 +60,8 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Procedural PBR textures | PASS | `pbr_texture_generator.py` + M11 demo | — |
 | Geometry Script props, LOD, collision, modular kit | PASS | `reports/m12_asset_demo.json`, `m12_kit_demo.json` | — |
 | Asset registry with provenance | PASS | `backend/assets/registry.py` + tests | — |
-| Epic template content (Manny/Quinn, prototyping) | PLANNED | on disk, verified 2026-10-31 | P7 |
-| Art direction / no-placeholder gate | PLANNED | F-20 | P7 |
+| Epic template content (Manny/Quinn, prototyping) | PASS | P7 complete: installed in projects, directories to always cook configured, 157 assets registered with honest EPIC_CONTENT provenance (`reports/P7/registry_audit.json`) | P7 |
+| Art direction / no-placeholder gate | PASS | P7 complete: deterministic mesh audit (0 placeholders), 6 themes, 10 procedural CSG props, visual rubric (`reports/P7/art_direction_audit.json`) | P7 |
 | Procedural skinned humanoid → import → promote | PASS (prototype) | `reports/audit_m9_generated_character.json` | — |
 | Procedural locomotion clips, AnimInstance, BlendSpace drive | PASS (PIE) | `reports/audit_m10_generated_motion.json`, `m10v2_blend_drive_demo.json` | — |
 | IK Retargeter path | PASS | `reports/wpa_reverify_20261031.json` | — |
@@ -88,8 +88,8 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Capability | Status | Evidence / note | Phase |
 |---|---|---|---|
 | 4-model local roster | PASS | `07_CONTENT_AND_MODELS.md` §1 | — |
-| Vision review | PASS (advisory) | free-form pipeline | P7 calibration |
+| Vision review | PASS | P7 complete: 6-criterion visual quality rubric + deterministic mesh audit gate (`reports/P7/art_direction_audit.json`) | P7 |
 | Agentic eval suite | PLANNED | F-19 | P9 |
 | Neural text/image-to-3D on this host | BLOCKED (needs approval + spike) | F-21: ROCm Windows supports gfx1101 | P9 |
-| Speech / music generation | BLOCKED (approval) / PLANNED | — | P7/P9 |
+| Speech / music generation | PASS (procedural) | P7 complete: 16-bar looping chord progressions across 4 moods (`content/music.py`) + ambient sound beds (`content/ambience.py`) | P7 |
 | Multiplayer | PLANNED | — | P10 |

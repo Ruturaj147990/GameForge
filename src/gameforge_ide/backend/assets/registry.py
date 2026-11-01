@@ -16,7 +16,8 @@ from pathlib import Path
 
 STAGES = ("SPEC", "GENERATE", "POSTPROCESS", "VALIDATE", "QUARANTINE", "IMPORT", "ENGINE_VERIFY", "REVIEW",
           "PROMOTE", "REJECTED")
-PROVENANCE = ("procedural", "neural", "imported", "human", "native", "codegen")
+PROVENANCE = ("procedural", "neural", "imported", "human", "native", "codegen",
+              "PROC", "NATIVE", "CODEGEN", "EPIC_CONTENT", "LIBRARY", "NEURAL", "HUMAN")
 ASSET_TYPES = ("mesh", "skeletal_mesh", "texture", "material", "animation", "sound", "vfx", "sequence",
                "blueprint", "widget", "level", "other")
 
