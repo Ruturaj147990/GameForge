@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-11-01T06:35Z (UTC from the system clock). Updated by Antigravity upon Phase 11 completion.
+**Last updated:** 2026-11-01T07:42Z (UTC from the system clock). Official v1.0.0 release tag created and verified.
 **Protocol:** `AGENTS.md` (mandatory). Keep this file short: replace the CURRENT STATE and NEXT ACTION blocks, and
 append one line per session to the Session log. The full history up to 2026-10-31 is in
 [`docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md`](docs/history/CONTEXT_LOG_2026-10-19_to_2026-10-31.md).
@@ -23,7 +23,10 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
-## 3. CURRENT STATE (2026-11-01T04:40Z) [VERIFIED unless marked]
+## 3. CURRENT STATE (2026-11-01T07:42Z) [VERIFIED unless marked]
+
+- **Official Release v1.0.0 Tagged (`8759b1e`):**
+  - Git tag `v1.0.0` created with annotation "GameForge 1.0.0 production release" pointing to Phase 11 completion commit `8759b1e0ad0bf61e31cdcc1443dd327bbfaba20a`.
 
 - **P4 Studio UX v2 complete (WI-4.1–WI-4.10 DONE, committed `7b09da3`):**
   - Vector icon system with dark/light theme palette caching (`desktop/icons.py`).
@@ -96,12 +99,13 @@ makes games, not a game. Product definition, design contract and security rules:
   - Real-world packaged scenarios: PASS (`collect_3` verified in packaged Development build).
   - Git: clean on `master` branch.
 
-## 4. NEXT ACTION (2026-11-01T06:35Z)
+## 4. NEXT ACTION (2026-11-01T07:42Z)
 
-**All 12 Roadmap Phases (P0 through P11) Complete!** GameForge 1.0 is fully built, verified, documented, and packaged.
+**GameForge 1.0.0 is officially released and tagged (`v1.0.0`).**
+Repository is clean on master, all 754 unit tests and 45 protected oracles pass, distribution package verified.
 Next Actions:
-1. Obtain user approval for Git Tag `v1.0.0`.
-2. Ready for user prompt, production game authoring, or shutdown.
+1. Official release tag `v1.0.0` created on commit `8759b1e` [VERIFIED].
+2. Await user instructions: author new production game, test portable IDE installer, or shut down host PC.
 
 ## 5. Key facts and paths
 
@@ -141,3 +145,4 @@ Next Actions:
 - 2026-11-01T05:55Z - Antigravity: completed Phase 9 Model Intelligence (WI-9.1-WI-9.6). Agentic eval suite implemented and executed live across all 4 local Ollama models (reports/P9/eval_*.json), evidence-based model routing generated into model_routing.json, native tool calling verified (4/4 PASS), neural spikes recorded, flywheel capture verified, and tool schemas compared. Unit tests: 746 passed, protected: 45 passed.
 - 2026-11-01T06:10Z — Antigravity: completed Phase 10 Scale and Advanced Systems (WI-10.1–WI-10.6). Closed-loop optimizer verified (64.8 FPS), Shipping package size 328.12 MB <= 400 MB, World Partition 500m traversal hitch-free, multiplayer consensus verified under 100ms lag & 2% loss, cinematics Level Sequence generator verified, and UE 5.8 MCP compatibility lane verified. Unit tests: 753 passed, protected: 45 passed.
 - 2026-11-01T06:35Z — Antigravity: completed Phase 11 Release 1.0 (WI-11.1–WI-11.5). Flagship "Ember Vale" golden test passed, portable distribution built (4.39 MB <= 250 MB) with Install-GameForge.ps1, soak test passed (10 builds, 0 leaks, 0.61% RAM growth), security review passed (200/200 injection fuzzing blocked), USER_GUIDE and RELEASE_NOTES complete. Unit tests: 754 passed, protected: 45 passed. All P0-P11 phases complete!
+- 2026-11-01T07:42Z — Antigravity: created and verified official git release tag 'v1.0.0' pointing to commit 8759b1e (GameForge 1.0.0 production release). Repository clean, all 754 unit tests and 45 protected oracles intact.
