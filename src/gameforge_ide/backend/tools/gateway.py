@@ -96,6 +96,21 @@ class ToolGateway:
                 requires_approval=False,
             ),
             ToolDefinition(
+                name="search_index",
+                description="Search indexed C++ symbols, config settings, and assets across the project.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "kind": {"type": "string"},
+                        "limit": {"type": "integer", "default": 50},
+                        "offset": {"type": "integer", "default": 0},
+                    },
+                    "required": ["query"],
+                },
+                requires_approval=False,
+            ),
+            ToolDefinition(
                 name="search_code",
                 description="Search workspace for text or regex patterns.",
                 parameters={
@@ -308,7 +323,16 @@ class ToolGateway:
                 "execution_time_seconds": round(time.time() - t0, 3),
             }
         try:
-            if name == "list_dir":
+            if name == "search_index":
+                from ...index.indexer import ProjectIndex
+                idx = ProjectIndex(self.workspace_root)
+                res = idx.search_symbols(
+                    query=arguments.get("query", ""),
+                    kind=arguments.get("kind"),
+                    limit=int(arguments.get("limit", 50)),
+                    offset=int(arguments.get("offset", 0)),
+                )
+            elif name == "list_dir":
                 res = tool_list_dir(self.boundary, **arguments)
             elif name == "read_file":
                 res = tool_read_file(self.boundary, **arguments)
@@ -367,3 +391,4 @@ class ToolGateway:
                 "error": f"Tool execution failed: {str(e)}",
                 "execution_time_seconds": round(time.time() - t0, 3),
             }
+
