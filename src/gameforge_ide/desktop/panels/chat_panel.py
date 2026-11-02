@@ -505,6 +505,7 @@ class ChatPanel(QWidget):
         self._last_prompt = ""
         self._ignore_active_task_events = False
         self._last_unreal_sync = ""
+        self._tokens_streamed_in_turn = False
         self._cards: dict = {}
         self._runner = ActionRunner(Path(self._workspace or "."), parent=self)
         self._runner.progress.connect(self._on_action_progress)
@@ -1089,6 +1090,7 @@ class ChatPanel(QWidget):
     def _on_token(self, token: str) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
+        self._tokens_streamed_in_turn = True
         if not self._active_bubble:
             self._active_bubble = self._add_bubble("assistant", "")
         was_at_bottom = self._is_scrolled_to_bottom()
@@ -1310,17 +1312,18 @@ class ChatPanel(QWidget):
             self._status_bar.set_ready()
             return
         if self._active_bubble:
-            if not self._active_bubble.has_tokens() and _full_text:
+            if not self._active_bubble.has_tokens() and _full_text and not self._tokens_streamed_in_turn:
                 clean_text = _full_text.strip()
                 if not (clean_text.startswith('{"tool"') or clean_text.startswith('```json\n{"tool"')):
                     self._active_bubble.append_token(_full_text)
             self._active_bubble.finalise()
             self._active_bubble = None
-        elif _full_text:
+        elif _full_text and not self._tokens_streamed_in_turn:
             clean_text = _full_text.strip()
             if not (clean_text.startswith('{"tool"') or clean_text.startswith('```json\n{"tool"')):
                 b = self._add_bubble("assistant", _full_text)
                 b.finalise()
+        self._tokens_streamed_in_turn = False
         self._btn_send.setEnabled(True)
         self._btn_stop.setEnabled(False)
         self._status_bar.set_ready()

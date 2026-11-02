@@ -46,3 +46,24 @@ def test_chat_panel_open_design_card(qapp, tmp_path):
         assert emitted == ["create a space shooter"]
     finally:
         agent.shutdown()
+
+def test_chat_panel_no_duplicate_assistant_bubble_on_card(qapp, tmp_path):
+    """Verify ChatPanel displays token notice once and does not duplicate text below card."""
+    agent = AgentService(tmp_path)
+    panel = ChatPanel(agent, workspace_root=tmp_path)
+    try:
+        from src.gameforge_ide.desktop.panels.chat_panel import _MessageBubble
+        msg = "I've mapped your request to update active project TeamArena."
+        panel._on_token(msg)
+        panel._on_status("READY", {"card": {"type": "open_design", "prompt": "Complete the game", "mode": "change"}})
+        panel._on_done(msg)
+
+        assistant_bubbles = [
+            panel._msg_layout.itemAt(i).widget()
+            for i in range(panel._msg_layout.count())
+            if isinstance(panel._msg_layout.itemAt(i).widget(), _MessageBubble)
+            and panel._msg_layout.itemAt(i).widget().role == "assistant"
+        ]
+        assert len(assistant_bubbles) == 1, f"Expected exactly 1 assistant bubble, got {len(assistant_bubbles)}"
+    finally:
+        agent.shutdown()

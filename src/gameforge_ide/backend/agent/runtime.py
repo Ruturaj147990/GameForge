@@ -278,6 +278,22 @@ class AgentRuntime:
         if any(p.startswith(pfx) for pfx in qa_prefixes):
             return True
 
+        # Any inquiry ending with '?' or containing question phrases
+        if (p.endswith("?") or "?" in p) and not re.search(r"\b(create|scaffold|generate|build me|make me)\b", p):
+            return True
+
+        # Questions or discussions about GameForge itself, the chat, IDE, or general concepts
+        meta_qa = (
+            "what does the chat", "what does the assistant", "what does chat do",
+            "what does the ide do", "how does the chat work", "how does gameforge work",
+            "what can you do", "what are your capabilities", "who are you",
+        )
+        if any(mq in p for mq in meta_qa):
+            return True
+
+        if any(re.search(rf"(?:^|[,\.]\s*){re.escape(pfx)}\b", p) for pfx in qa_prefixes):
+            return True
+
         return False
 
     @staticmethod
@@ -394,11 +410,20 @@ class AgentRuntime:
         self._save_task_state(task_state)
 
         # 1. Build context and preflight the prompt before provider execution.
-        tools_desc = "" if is_conversational else self._format_tools_description()
-        system_prompt = self.context_manager.build_system_prompt(
+        tools_desc = self._format_tools_description()
+        full_system_prompt = self.context_manager.build_system_prompt(
             tools_desc,
             active_model=session.model_name,
-            include_tools=(not is_conversational),
+            include_tools=True,
+        )
+        system_prompt = (
+            self.context_manager.build_system_prompt(
+                "",
+                active_model=session.model_name,
+                include_tools=False,
+            )
+            if is_conversational
+            else full_system_prompt
         )
         provider = self.router.get_provider(session.provider_type)
         capabilities = provider.get_capabilities(session.model_name)
@@ -411,7 +436,7 @@ class AgentRuntime:
             )
             pinned_prompt = {"role": "user", "content": user_prompt}
             conversation_history, budget = self.fit_history_to_context(
-                system_prompt,
+                full_system_prompt,
                 conversation_history,
                 capabilities.max_context,
                 output_tokens=output_tokens,
@@ -437,19 +462,32 @@ class AgentRuntime:
             if self.studio_mode or os.environ.get("GAMEFORGE_STUDIO_MODE") == "1":
                 from ...pipeline.spec_from_prompt import is_game_creation_request
                 is_create = is_game_creation_request(user_prompt)
-                is_change = bool(re.search(
-                    r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease|more|less|replace|enhance|fix|improve|weapon|enemy|combat|shooting|bots?|only\s+a\s+box)\b",
-                    user_prompt,
-                    re.I,
-                )) and not is_create
+
+                # Distinguish informational queries from imperative game changes
+                is_question = (
+                    user_prompt.strip().endswith("?")
+                    or bool(re.search(r"^(what|how|why|where|when|who|which)\b", user_prompt.strip(), re.I))
+                    or bool(re.search(r"\b(what does (?:the )?(?:chat|assistant)|can you explain|tell me about)\b", user_prompt, re.I))
+                )
+
+                if is_question:
+                    is_create = False
+                    is_change = False
+                else:
+                    is_change = bool(re.search(
+                        r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease|more|less|replace|enhance|fix|improve)\b",
+                        user_prompt,
+                        re.I,
+                    )) and bool(re.search(
+                        r"\b(game|project|level|scene|weapon|weapons?|gun|pistol|rifle|knife|bot|bots|enemy|enemies|combat|spawner|hazard|speed|health|damage|rules?|arena|box)\b",
+                        user_prompt,
+                        re.I,
+                    )) and not is_create
 
                 active_has_gds = (self.workspace_root / "GameForge" / "design" / "game.gds.json").is_file()
-                if not is_create and not is_change and active_has_gds:
-                    if re.search(rf"\b({re.escape(self.workspace_root.name)}|game|project|level|scene|it)\b", user_prompt, re.I):
-                        is_change = True
 
                 if is_create or is_change:
-                    mode = "change" if (is_change or active_has_gds) else "create"
+                    mode = "change" if active_has_gds else "create"
                     p_name = self.workspace_root.name
                     card = {
                         "type": "open_design",
@@ -457,11 +495,19 @@ class AgentRuntime:
                         "mode": mode,
                         "project": p_name if (mode == "change" or active_has_gds) else "",
                     }
-                    if mode == "change" or active_has_gds:
-                        msg = f"I've mapped this request to your active project '{p_name}'. Click [Open in Design] to configure the gameplay mechanics and build the game."
+                    if mode == "change":
+                        msg = (
+                            f"I've mapped your request to update active project **{p_name}**.\n\n"
+                            f"In GameForge, gameplay mechanics, weapons, and level rules are managed through "
+                            f"the Game Definition Spec (GDS) and compiled through the engine pipeline. "
+                            f"Click **Open in Design** below to review these rules and trigger the build."
+                        )
                     else:
-                        msg = "Open in Design"
-                    yield AgentEvent(event_type="token", content=f"[{msg}]")
+                        msg = (
+                            "I've mapped your game prompt into a Game Definition Spec (GDS).\n\n"
+                            "Click **Open in Design** below to review the architecture, mechanics, and build your game."
+                        )
+                    yield AgentEvent(event_type="token", content=msg)
                     self.session_manager.append_message(session_id, "assistant", msg)
                     task_state.terminal_reason = f"routed to studio design ({mode})"
                     self._save_task_state(task_state)

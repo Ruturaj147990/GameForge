@@ -437,6 +437,17 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         if "player_max_health" not in p_props:
             ops.append({"op": "add", "path": f"/entities/{player_idx}/props/player_max_health", "value": 100})
 
+        # Configure weapons if mentioned in request
+        weapons = []
+        if re.search(r"\bpistols?\b", req, re.I):
+            weapons.append("pistol")
+        if re.search(r"\brifles?\b", req, re.I):
+            weapons.append("rifle")
+        if re.search(r"\bknif(?:e|es)\b", req, re.I):
+            weapons.append("knife")
+        if weapons and "weapons" not in p_props:
+            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/weapons", "value": weapons})
+
     # 3. Upgrade level layout to arena for combat/shooter games
     if gds.scene.levels:
         cur_layout = getattr(gds.scene.levels[0], "layout", None)

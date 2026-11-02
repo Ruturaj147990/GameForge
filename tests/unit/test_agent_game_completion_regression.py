@@ -75,3 +75,24 @@ def test_fs_tools_handles_redundant_project_prefix(tmp_path):
     res = tool_list_dir(boundary, subpath="MyProject/Content")
     assert res.get("status") == "SUCCESS"
     assert res.get("count", 0) > 0
+
+def test_conversational_questions_not_routed_to_open_design():
+    """Verify informational and meta-questions are treated as conversational, not routed to design."""
+    assert AgentRuntime._is_conversational("what does the chat even actually do")
+    assert AgentRuntime._is_conversational("the gameforge chat always just sends all of the prompts to build design, what does the chat even actually do")
+    assert AgentRuntime._is_conversational("how do weapon sockets work in Unreal Engine?")
+    assert AgentRuntime._is_conversational("can you explain GAS abilities?")
+
+
+def test_propose_patch_weapons_arsenal(tmp_path):
+    """Verify propose_patch adds pistol, rifle, and knife to player props when requested."""
+    spec = get_preset_spec("arena_combat")
+    spec.meta.project_name = "TeamArena"
+    save_gds(tmp_path, spec)
+
+    prop = propose_patch(spec, "Complete the game , each player can have 1 pistol, 1 rifle, and a knife")
+    assert prop.status == "OK"
+    updated = apply_patch(spec, prop.ops)
+    player = next(e for e in updated.entities if e.kind.value == "player")
+    assert "weapons" in player.props
+    assert player.props["weapons"] == ["pistol", "rifle", "knife"]
