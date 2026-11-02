@@ -463,14 +463,20 @@ class AgentRuntime:
                 from ...pipeline.spec_from_prompt import is_game_creation_request
                 is_create = is_game_creation_request(user_prompt)
 
-                # Distinguish informational queries from imperative game changes
+                # Distinguish informational queries and direct C++ code requests from GDS game changes
                 is_question = (
                     user_prompt.strip().endswith("?")
                     or bool(re.search(r"^(what|how|why|where|when|who|which)\b", user_prompt.strip(), re.I))
                     or bool(re.search(r"\b(what does (?:the )?(?:chat|assistant)|can you explain|tell me about)\b", user_prompt, re.I))
                 )
 
-                if is_question:
+                is_code_request = bool(re.search(
+                    r"\b(source\s+code|\.cpp\b|\.h\b|source/|c\+\+|header\s+file|cpp\s+file|\bclass\s+[A-Z]\w*|\bstruct\s+[A-Z]\w*)\b",
+                    user_prompt,
+                    re.I,
+                ))
+
+                if is_question or is_code_request:
                     is_create = False
                     is_change = False
                 else:

@@ -96,3 +96,24 @@ def test_propose_patch_weapons_arsenal(tmp_path):
     player = next(e for e in updated.entities if e.kind.value == "player")
     assert "weapons" in player.props
     assert player.props["weapons"] == ["pistol", "rifle", "knife"]
+
+def test_cpp_source_code_requests_not_routed_to_open_design(tmp_path):
+    """Verify direct C++ code requests bypass studio open_design routing."""
+    spec = get_preset_spec("arena_combat")
+    spec.meta.project_name = "TeamArena"
+    save_gds(tmp_path, spec)
+
+    sm = SessionManager(tmp_path)
+    router = ModelRouter()
+    runtime = AgentRuntime(tmp_path, sm, router, studio_mode=True)
+    sid = sm.create_session("t", "none", "ollama").session_id
+
+    async def collect():
+        return [e async for e in runtime.execute_task_stream(sid, "Write a C++ class for a weapon in Source/TeamArena/Weapon_Pistol.h")]
+
+    events = asyncio.run(collect())
+    open_design_events = [
+        e for e in events
+        if e.event_type == "status" and e.metadata.get("card", {}).get("type") == "open_design"
+    ]
+    assert len(open_design_events) == 0, "Direct C++ code requests must not be routed to open_design"
