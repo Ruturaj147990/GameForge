@@ -173,3 +173,51 @@ def test_assistant_studio_routing_card(disposable_workspace):
     assert ready and ready[0].metadata.get("card", {}).get("type") == "open_design"
     assert ready[0].metadata["card"]["mode"] == "create"
 
+
+def test_project_selection_no_attribute_error(qapp, disposable_workspace):
+    """Verify selecting a project updates panels without AttributeError."""
+    from src.gameforge_ide.design.presets import get_preset_spec
+    from src.gameforge_ide.design.store import save as save_gds
+
+    p_dir = disposable_workspace / "Projects" / "TestCS"
+    p_dir.mkdir(parents=True, exist_ok=True)
+    (p_dir / "TestCS.uproject").write_text("{}", encoding="utf-8")
+    save_gds(p_dir, get_preset_spec("platformer"))
+
+    win = MainWindow(disposable_workspace)
+    win.confirm_on_close = False
+    try:
+        win.open_project_folder(p_dir)
+        assert win._current_project == "TestCS"
+        assert win._current_project_dir == p_dir.resolve()
+
+        # Trigger project selection again directly
+        win._on_project_selected("TestCS")
+    finally:
+        win.close()
+
+
+def test_legacy_shell_project_selection(qapp, disposable_workspace):
+    """Verify legacy shell dock panels handle project selection without AttributeError."""
+    os.environ["GAMEFORGE_LEGACY_SHELL"] = "1"
+    try:
+        from src.gameforge_ide.design.presets import get_preset_spec
+        from src.gameforge_ide.design.store import save as save_gds
+
+        p_dir = disposable_workspace / "Projects" / "TestCSLegacy"
+        p_dir.mkdir(parents=True, exist_ok=True)
+        (p_dir / "TestCSLegacy.uproject").write_text("{}", encoding="utf-8")
+        save_gds(p_dir, get_preset_spec("platformer"))
+
+        win = MainWindow(disposable_workspace)
+        win.confirm_on_close = False
+        assert hasattr(win, "_design_panel")
+        win._on_project_selected("TestCSLegacy")
+        assert win._current_project == "TestCSLegacy"
+        assert win._design_panel.workspace_root == p_dir.resolve()
+        win.close()
+    finally:
+        os.environ.pop("GAMEFORGE_LEGACY_SHELL", None)
+
+
+

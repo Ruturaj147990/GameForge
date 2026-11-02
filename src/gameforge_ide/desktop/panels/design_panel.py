@@ -77,6 +77,11 @@ class DesignPanel(QWidget):
 
         self.reload_from_disk()
 
+    def set_workspace(self, workspace_root: Path) -> None:
+        """Switch active workspace directory and reload GDS."""
+        self.workspace_root = Path(workspace_root)
+        self.reload_from_disk()
+
     def set_gds(self, gds: GameDesignSpec) -> None:
         self._current_gds = gds
         md_text = render_markdown(gds)

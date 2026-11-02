@@ -705,8 +705,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_plan_panel"):
             self._plan_panel._workspace = self._workspace
             self._plan_panel.refresh_from_disk()
-        if hasattr(self, "_asset_panel"):
+        if hasattr(self, "_asset_panel") and hasattr(self._asset_panel, "set_workspace"):
             self._asset_panel.set_workspace(self._workspace)
+        if hasattr(self, "_design_panel") and hasattr(self._design_panel, "set_workspace"):
+            self._design_panel.set_workspace(self._workspace)
         self._diff_panel.clear()
         self._apply_unreal_status(False, "", "")
 
@@ -1395,11 +1397,11 @@ class MainWindow(QMainWindow):
                 self._explorer.set_workspace(p_dir, self._tools)
             if hasattr(self, "_terminal"):
                 self._terminal.set_workspace(p_dir)
-            if hasattr(self, "_unreal_panel"):
+            if hasattr(self, "_unreal_panel") and hasattr(self._unreal_panel, "set_workspace"):
                 self._unreal_panel.set_workspace(self._tools, p_dir)
-            if hasattr(self, "_design_panel"):
+            if hasattr(self, "_design_panel") and hasattr(self._design_panel, "set_workspace"):
                 self._design_panel.set_workspace(p_dir)
-            if hasattr(self, "_asset_panel"):
+            if hasattr(self, "_asset_panel") and hasattr(self._asset_panel, "set_workspace"):
                 self._asset_panel.set_workspace(p_dir)
 
         if hasattr(self, "_rail") and hasattr(self, "_view_host"):
