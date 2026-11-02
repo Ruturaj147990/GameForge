@@ -198,6 +198,8 @@ class RecentGameCard(QFrame):
 class ReadinessRowWidget(QWidget):
     """Row displaying a single readiness probe outcome."""
 
+    fixActionRequested = Signal(str)
+
     def __init__(self, row: SystemRow, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setObjectName(f"readinessRow_{row.key}")
@@ -234,6 +236,9 @@ class ReadinessRowWidget(QWidget):
             btn = QPushButton("Set up", self)
             btn.setObjectName(f"btn_fix_{row.key}")
             btn.setCursor(Qt.PointingHandCursor)
+            action_key = str(row.fix_action)
+            btn.clicked.connect(lambda checked=False, act=action_key: self.fixActionRequested.emit(act))
+            btn.setToolTip(f"Set up {row.key.capitalize()}")
             btn.setStyleSheet(
                 f"QPushButton {{"
                 f"  background: transparent;"
@@ -256,6 +261,7 @@ class HomeView(QWidget):
     designReady = Signal(object, list)       # (GameDesignSpec, questions)
     projectSelected = Signal(str)             # (project_name)
     openAssistantRequested = Signal()         # Request to open assistant panel
+    fixActionRequested = Signal(str)          # ("start_ollama" | "set_engine" | "open_hosted")
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -630,6 +636,7 @@ class HomeView(QWidget):
 
         for row in snap.rows:
             rw = ReadinessRowWidget(row, self._readiness_section)
+            rw.fixActionRequested.connect(self.fixActionRequested)
             self._readiness_rows_layout.addWidget(rw)
         self._readiness_rows_layout.addStretch(1)
 

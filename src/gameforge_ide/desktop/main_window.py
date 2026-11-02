@@ -737,6 +737,29 @@ class MainWindow(QMainWindow):
         from .dialogs.hosted_settings import HostedSettingsDialog  # lazy: keeps startup fast
         HostedSettingsDialog(self._workspace, parent=self).exec()
 
+    @Slot(str)
+    def _handle_fix_action(self, action_key: str) -> None:
+        """Handle readiness probe fix actions across HomeView and TopBar."""
+        if action_key == "start_ollama":
+            self._open_ollama_setup()
+        elif action_key == "open_hosted":
+            self._open_hosted_settings()
+        elif action_key == "set_engine":
+            self._switch_studio_view("settings")
+            if hasattr(self, "_toasts"):
+                self._toasts.info("Engine Setup", "Configure Unreal Engine 5.7 root path in Settings.")
+
+    def _open_ollama_setup(self) -> None:
+        from .dialogs.ollama_setup import OllamaSetupDialog
+        dlg = OllamaSetupDialog(
+            workspace_root=self._workspace,
+            systems_service=getattr(self, "_systems_service", None),
+            parent=self,
+        )
+        dlg.settingsRequested.connect(lambda: self._switch_studio_view("settings"))
+        dlg.serviceStarted.connect(self._check_ollama_status)
+        dlg.exec()
+
     def _new_session(self) -> None:
         self._chat_panel._new_session()
         self.statusBar().showMessage("New session started.", 3000)
@@ -1080,6 +1103,7 @@ class MainWindow(QMainWindow):
         self._top_bar.paletteRequested.connect(self._open_command_palette)
         self._top_bar.projectSelected.connect(self._on_project_selected)
         self._top_bar.openFolderRequested.connect(self._open_folder)
+        self._top_bar.fixActionRequested.connect(self._handle_fix_action)
         self._systems_service.snapshotChanged.connect(self._top_bar.update_systems)
 
         # Activity rail (56px)
@@ -1174,6 +1198,7 @@ class MainWindow(QMainWindow):
                 view.attach_systems_service(self._systems_service)
             view.projectSelected.connect(self._on_games_open_requested)
             view.designReady.connect(self._on_home_design_ready)
+            view.fixActionRequested.connect(self._handle_fix_action)
             return view
 
         def create_games_view() -> GamesView:
