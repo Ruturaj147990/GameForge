@@ -14,6 +14,9 @@ from src.gameforge_ide.backend.providers.base import ModelProvider, ProviderCapa
 from src.gameforge_ide.desktop.panels.chat_panel import ChatPanel
 from src.gameforge_ide.desktop.panels.approval_card import ApprovalCard
 from src.gameforge_ide.desktop.services.agent_service import AgentService
+from src.gameforge_ide.desktop.services.action_runner import ActionRunner
+from src.gameforge_ide.backend.tools.game_tools import ApprovalStore, GameTools
+from src.gameforge_ide.design.presets import preset_top_down_shooter
 
 
 class MockApprovalToolProvider(ModelProvider):
@@ -108,3 +111,67 @@ def test_chat_panel_renders_approval_card(qapp, tmp_path):
         assert cards[0].approval_id == "apr_test123"
     finally:
         agent.shutdown()
+
+
+def test_action_runner_approve_create_game_with_gds_no_key_error(qapp, tmp_path, monkeypatch):
+    """Verify approving create_game with only 'gds' in args does not raise KeyError: 'params'."""
+    store = ApprovalStore(tmp_path)
+    gds = preset_top_down_shooter()
+    args_payload = {"gds": gds.to_json(), "package": False}
+    rec = store.create(
+        "create_game",
+        args_payload,
+        f"{gds.meta.title} ({gds.overview.genre.value})",
+        consequence="Writes a new Unreal C++ project",
+    )
+    approval_id = rec["approval_id"]
+
+    runner = ActionRunner(tmp_path)
+    executed = []
+
+    def fake_create_game(self, gds_or_params=None, package=True, on_event=None, cancel_event=None, **kwargs):
+        executed.append(gds_or_params)
+        return {"status": "SUCCESS", "ok": True, "exe": "Mini_CS.exe"}
+
+    monkeypatch.setattr(GameTools, "create_game", fake_create_game)
+
+    results = []
+    runner.finished.connect(lambda aid, res: results.append(res))
+
+    assert runner.approve(approval_id) is True
+
+    # Wait for worker thread to finish
+    import time
+    start = time.time()
+    while not results and time.time() - start < 5.0:
+        qapp.processEvents()
+        time.sleep(0.05)
+
+    assert len(results) == 1, "Expected finished result"
+    assert results[0].get("status") == "SUCCESS"
+    assert "error" not in results[0] or results[0]["error"] is None
+    assert len(executed) == 1
+    # Verify no KeyError: 'params' occurred and status transitioned to DONE
+    assert store.get(approval_id)["status"] == "DONE"
+
+
+def test_approval_card_on_progress_mapped_stages(qapp):
+    """Verify ApprovalCard updates stage labels for mapped and unmapped forge steps."""
+    approval_rec = {
+        "approval_id": "apr_stages_test",
+        "tool": "create_game",
+        "stages": ["spec", "scaffold", "sources", "build_editor", "assemble_level", "automation_tests", "package", "packaged_smoke"],
+        "summary": "Mini_CS (top_down_shooter)",
+        "status": "PENDING",
+    }
+    card = ApprovalCard(approval_rec)
+    card.set_running()
+
+    # Progress event with assemble_level_1 -> should map to assemble_level
+    card.on_progress("stage_started", {"stage": "assemble_level_1", "step_id": "assemble_level_1"})
+    lbl = card._stage_labels.get("assemble_level")
+    assert lbl is not None
+    assert "◐" in lbl.text()
+
+    card.on_progress("stage_finished", {"stage": "assemble_level", "step_id": "assemble_level_1", "ok": True, "duration_s": 1.2})
+    assert "✔" in lbl.text()

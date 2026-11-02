@@ -32,6 +32,13 @@ STAGE_LABELS = {
     "author": "Write gameplay C++ (model) + safety scan",
     "build_repair": "Compile, repairing from compiler errors",
     "quality_review": "Vision review of gameplay (advisory) + improvement round",
+    "content": "Prepare visual and audio assets",
+    "codegen": "Generate gameplay source code",
+    "automation": "Run automation tests",
+    "scenarios": "Play-test packaged game scenarios",
+    "scenario_gen": "Generate QA test scenarios",
+    "review": "Vision and quality review",
+    "report": "Compile build and test evidence report",
 }
 
 
@@ -189,9 +196,16 @@ class ApprovalCard(QFrame):
     def on_progress(self, kind: str, data: Dict) -> None:
         stage = data.get("stage")
         lbl = self._stage_labels.get(stage)
+        if not lbl and stage and stage.startswith("assemble_"):
+            lbl = self._stage_labels.get("assemble_level")
+        if not lbl and "step_id" in data:
+            sid = data["step_id"]
+            lbl = self._stage_labels.get(sid)
+            if not lbl and sid.startswith("assemble_"):
+                lbl = self._stage_labels.get("assemble_level")
         if not lbl:
             return
-        text = STAGE_LABELS[stage]
+        text = STAGE_LABELS.get(stage) or STAGE_LABELS.get(data.get("step_id", "")) or stage
         if kind == "stage_started":
             lbl.setText(f"◐  {text} …")
         elif kind == "build_attempt" and not data.get("ok"):

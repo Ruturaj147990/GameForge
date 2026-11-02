@@ -99,8 +99,9 @@ class ActionRunner(QObject):
                         result = {"status": "SUCCESS" if ok else state.status, "run_id": state.run.run_id}
 
                 elif tool == "create_game":
+                    gds_or_params = args.get("gds") or args.get("params") or args
                     result = gateway.game_tools.create_game(
-                        args["params"],
+                        gds_or_params,
                         package=args.get("package", True),
                         on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
                         cancel_event=cancel_ev,

@@ -283,7 +283,9 @@ class GameTools:
         gds: Optional[GameDesignSpec] = None
         params = None
 
-        if isinstance(gds_or_params, str):
+        if isinstance(gds_or_params, GameDesignSpec):
+            gds = gds_or_params
+        elif isinstance(gds_or_params, str):
             try:
                 gds = GameDesignSpec.model_validate_json(gds_or_params)
             except Exception:
@@ -292,14 +294,16 @@ class GameTools:
             if "gds" in gds_or_params:
                 raw = gds_or_params["gds"]
                 gds = GameDesignSpec.model_validate_json(raw) if isinstance(raw, str) else GameDesignSpec.model_validate(raw)
-            elif "params" in gds_or_params:
+            if "params" in gds_or_params:
                 params = gds_or_params["params"]
-            else:
+            elif gds is None:
                 params = gds_or_params
         elif isinstance(kwargs.get("gds"), str):
             gds = GameDesignSpec.model_validate_json(kwargs["gds"])
         elif isinstance(kwargs.get("gds"), dict):
             gds = GameDesignSpec.model_validate(kwargs["gds"])
+        elif isinstance(kwargs.get("gds"), GameDesignSpec):
+            gds = kwargs["gds"]
         elif "params" in kwargs:
             params = kwargs["params"]
 
@@ -307,15 +311,103 @@ class GameTools:
         if gds is not None:
             try:
                 recipe_params = to_legacy_params(gds)
-            except LegacyUnsupported as exc:
-                preset_str = ", ".join(PRESET_TITLES)
-                return {
-                    "status": "FAILED",
-                    "ok": False,
-                    "error": f"This design needs the composer (planned for phase 6). Supported today: {preset_str}",
-                    "failed_stage": "spec",
+                hook = lambda pdir: design_store.save(pdir, gds)
+            except LegacyUnsupported:
+                # Modern Composer + Forge DAG path
+                from ...composer import compose, composition_to_run_spec
+                from ...forge.store import RunStore
+                from ...forge.executor import ForgeExecutor
+                from ...forge.handlers import HANDLERS
+                from ...forge.model import RunState, StepStatus
+                from ...core.events import default_bus
+
+                pdir = self.projects_root / gds.meta.project_name
+                pdir.mkdir(parents=True, exist_ok=True)
+                design_store.save(pdir, gds)
+
+                freed = self.release_llm_vram()
+                if on_event and freed:
+                    on_event("gpu_released", {"unloaded_models": freed})
+
+                comp = compose(gds, allow_partial=True)
+                run_spec = composition_to_run_spec(
+                    comp,
+                    str(self.workspace_root),
+                    str(pdir),
+                    origin="prompt",
+                )
+                if not package:
+                    run_spec.steps = [s for s in run_spec.steps if s.step_id not in ("package", "scenarios")]
+                    for s in run_spec.steps:
+                        s.depends_on = [d for d in s.depends_on if d not in ("package", "scenarios")]
+
+                rstore = RunStore(project_dir=pdir, workspace_dir=self.workspace_root)
+                state = RunState.new(run_spec)
+                rstore.save(state)
+                bus = default_bus()
+
+                def _on_ev(topic: str, ev: Dict[str, Any]):
+                    kind = ev.get("kind")
+                    sid = ev.get("step_id", "")
+                    stage = sid
+                    if sid.startswith("assemble_"):
+                        stage = "assemble_level"
+                    elif sid == "automation":
+                        stage = "automation_tests"
+                    elif sid == "scenarios":
+                        stage = "packaged_smoke"
+                    elif sid == "codegen":
+                        stage = "sources"
+                    elif sid == "design":
+                        stage = "spec"
+
+                    if kind == "step_started":
+                        if on_event:
+                            on_event("stage_started", {"stage": stage, "step_id": sid})
+                    elif kind == "step_finished":
+                        if on_event:
+                            on_event("stage_finished", {
+                                "stage": stage,
+                                "step_id": sid,
+                                "ok": ev.get("ok", False),
+                                "duration_s": ev.get("duration_s", 0.0),
+                                "errors": ev.get("errors", []),
+                            })
+                            if sid == "scaffold" and not comp.codegen:
+                                on_event("stage_finished", {
+                                    "stage": "sources",
+                                    "step_id": "sources",
+                                    "ok": True,
+                                    "duration_s": 0.0,
+                                    "errors": [],
+                                })
+
+                unsub = bus.subscribe("forge", _on_ev)
+                try:
+                    executor = ForgeExecutor(HANDLERS, bus=bus)
+                    if cancel_event is not None and cancel_event.is_set():
+                        executor.request_cancel()
+                    state = executor.run(state, rstore)
+                finally:
+                    unsub()
+
+                ok = state.status == "DONE"
+                exe_path = pdir / "Packaged" / "Windows" / f"{gds.meta.project_name}.exe"
+                report_path = pdir / "Saved" / "GameForge" / "pipeline_report.json"
+                first_failed = next((sid for sid, r in state.records.items() if r.status == StepStatus.FAILED), None)
+
+                out = {
+                    "status": "SUCCESS" if ok else state.status,
+                    "ok": ok,
+                    "project_dir": str(pdir),
+                    "run_id": state.run.run_id,
+                    "report_path": str(report_path) if report_path.is_file() else None,
+                    "failed_stage": first_failed,
+                    "error": state.error if not ok else None,
                 }
-            hook = lambda pdir: design_store.save(pdir, gds)
+                if exe_path.is_file():
+                    out["exe"] = str(exe_path)
+                return out
         elif params is not None:
             # Backward compatibility branch for pre-P1 approval records
             from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
