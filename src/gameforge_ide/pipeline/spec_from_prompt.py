@@ -156,6 +156,9 @@ def is_game_creation_request(prompt: str) -> bool:
         return True
     if _NOUN_GAME.match(text):
         return True
+    if re.search(r"\b(?:clone|shooter|fps|platformer|adventure|rpg|roguelike|counterstrike|counter-strike)\b", text):
+        if _CREATE.search(text) or text.startswith(("a ", "an ", "the ")) or ":" in text:
+            return True
     if not _CREATE.search(text):
         return False
     if any(k in text for r in RECIPES for k in r.keywords):

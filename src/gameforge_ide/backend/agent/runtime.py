@@ -762,14 +762,29 @@ class AgentRuntime:
                 (item for item in self.tool_gateway.get_definitions() if item.name == tool_name),
                 None,
             )
-            if definition and definition.requires_approval and tool_name != "propose_edit":
+            if definition and self.tool_gateway.tool_requires_approval(tool_name, tool_args) and tool_name != "propose_edit":
+                store = self.tool_gateway.game_tools.approvals
+                op_name = tool_args.get("op", "")
+                proj = tool_args.get("uproject", "")
+                summary = f"Run `{tool_name}`: {op_name} on `{proj}`" if op_name else f"Run tool `{tool_name}`"
+                consequence = (
+                    f"Executes Unreal Editor operation '{op_name}' in project '{proj}'"
+                    if op_name
+                    else f"Executes approval-gated tool '{tool_name}' inside project"
+                )
+                approval_rec = store.create(
+                    tool=tool_name,
+                    args=tool_args,
+                    summary=summary,
+                    consequence=consequence,
+                    session_id=session_id,
+                )
+
                 tool_result = {
-                    "status": "PENDING_APPROVAL",
+                    "status": "WAITING_APPROVAL",
+                    "approval_id": approval_rec["approval_id"],
                     "tool": tool_name,
-                    "error": (
-                        "This action requires an explicit user approval flow and was not executed. "
-                        "Use the corresponding reviewed UI workflow."
-                    ),
+                    "summary": summary,
                 }
                 self.session_manager.record_tool(
                     session_id=session_id,
@@ -778,15 +793,19 @@ class AgentRuntime:
                     output=json.dumps(tool_result),
                     status="PENDING_APPROVAL",
                 )
+
+                task_state.terminal_reason = f"waiting for approval {approval_rec['approval_id']}"
+                self._save_task_state(task_state)
+
+                msg = f"Action requires user approval: **{summary}**"
+                self.session_manager.append_message(session_id, "assistant", msg)
+
                 yield AgentEvent(
-                    event_type="tool_result",
-                    content=f"Tool {tool_name} requires approval.",
-                    metadata={"tool": tool_name, "result": tool_result},
+                    event_type="status",
+                    content="WAITING_APPROVAL",
+                    metadata={"tool": tool_name, "approval": approval_rec},
                 )
-                self.session_manager.append_message(
-                    session_id, "assistant", f"{full_response}\n\n[Action requires user approval: {tool_name}]"
-                )
-                yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"tool": tool_name})
+                yield AgentEvent(event_type="done", content=msg)
                 return
 
             # Execute tool (or return cached observation if second repeat)
