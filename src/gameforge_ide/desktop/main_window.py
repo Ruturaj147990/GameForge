@@ -1432,6 +1432,23 @@ class MainWindow(QMainWindow):
                 combo.blockSignals(False)
 
     def _on_assistant_open_design(self, prompt: str) -> None:
+        p_dir = getattr(self, "_current_project_dir", None)
+        has_active_gds = p_dir and (p_dir / "GameForge" / "design" / "game.gds.json").is_file()
+
+        if has_active_gds and getattr(self, "_current_project", None):
+            # Apply design change / completion directly to active project
+            self._switch_studio_view("design")
+            dv = self._view_host.get_view_widget("design")
+            if dv and hasattr(dv, "load_project"):
+                dv.load_project(self._current_project, project_dir=p_dir)
+                if hasattr(dv, "_txt_change"):
+                    dv._txt_change.setText(prompt)
+                if hasattr(dv, "_on_propose_change"):
+                    dv._on_propose_change()
+            if hasattr(self, "_toasts"):
+                self._toasts.info("Design Updated", f"Applied prompt update to '{self._current_project}' in Design View.")
+            return
+
         self._switch_studio_view("home")
         hv = self._view_host.get_view_widget("home")
         if hv:

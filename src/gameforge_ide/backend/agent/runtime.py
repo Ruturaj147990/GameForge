@@ -258,11 +258,11 @@ class AgentRuntime:
                 return True
 
         greeting_prefixes = (
-            "hi", "hello", "hey", "sup", "yo", "hiya",
+            "hi", "hello", "hey", "bro", "sup", "yo", "hiya",
             "good morning", "good afternoon", "good evening",
             "how are you", "how r u", "what's up", "whats up",
             "thanks", "thank you", "thx", "cheers",
-            "ok", "okay", "got it", "noted", "cool", "great", "nice",
+            "ok", "okay", "got it", "noted", "cool", "great", "nice", "continue",
         )
         for prefix in greeting_prefixes:
             if p == prefix or p.startswith(prefix + " ") or p.startswith(prefix + ","):
@@ -394,8 +394,12 @@ class AgentRuntime:
         self._save_task_state(task_state)
 
         # 1. Build context and preflight the prompt before provider execution.
-        tools_desc = self._format_tools_description()
-        system_prompt = self.context_manager.build_system_prompt(tools_desc, active_model=session.model_name)
+        tools_desc = "" if is_conversational else self._format_tools_description()
+        system_prompt = self.context_manager.build_system_prompt(
+            tools_desc,
+            active_model=session.model_name,
+            include_tools=(not is_conversational),
+        )
         provider = self.router.get_provider(session.provider_type)
         capabilities = provider.get_capabilities(session.model_name)
         output_tokens = min(1024, max(256, capabilities.max_context // 4))
@@ -433,11 +437,30 @@ class AgentRuntime:
             if self.studio_mode or os.environ.get("GAMEFORGE_STUDIO_MODE") == "1":
                 from ...pipeline.spec_from_prompt import is_game_creation_request
                 is_create = is_game_creation_request(user_prompt)
-                is_change = bool(re.search(r"\b(change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease)\b", user_prompt, re.I)) and not is_create
+                is_change = bool(re.search(
+                    r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease|more|less|replace|enhance|fix|improve|weapon|enemy|combat|shooting|bots?|only\s+a\s+box)\b",
+                    user_prompt,
+                    re.I,
+                )) and not is_create
+
+                active_has_gds = (self.workspace_root / "GameForge" / "design" / "game.gds.json").is_file()
+                if not is_create and not is_change and active_has_gds:
+                    if re.search(rf"\b({re.escape(self.workspace_root.name)}|game|project|level|scene|it)\b", user_prompt, re.I):
+                        is_change = True
+
                 if is_create or is_change:
-                    mode = "change" if is_change else "create"
-                    card = {"type": "open_design", "prompt": user_prompt, "mode": mode}
-                    msg = "Open in Design" if mode == "create" else "Edit the design to apply this change"
+                    mode = "change" if (is_change or active_has_gds) else "create"
+                    p_name = self.workspace_root.name
+                    card = {
+                        "type": "open_design",
+                        "prompt": user_prompt,
+                        "mode": mode,
+                        "project": p_name if (mode == "change" or active_has_gds) else "",
+                    }
+                    if mode == "change" or active_has_gds:
+                        msg = f"I've mapped this request to your active project '{p_name}'. Click [Open in Design] to configure the gameplay mechanics and build the game."
+                    else:
+                        msg = "Open in Design"
                     yield AgentEvent(event_type="token", content=f"[{msg}]")
                     self.session_manager.append_message(session_id, "assistant", msg)
                     task_state.terminal_reason = f"routed to studio design ({mode})"
@@ -487,7 +510,10 @@ class AgentRuntime:
                     return
                 if chunk.token:
                     full_response += chunk.token
-                    yield AgentEvent(event_type="token", content=chunk.token)
+                    # Suppress streaming tokens if model output is an internal JSON tool call
+                    stripped = full_response.strip()
+                    if not (stripped.startswith('{"tool"') or stripped.startswith('```json\n{"tool"') or stripped.startswith('```\n{"tool"')):
+                        yield AgentEvent(event_type="token", content=chunk.token)
             self.session_manager.append_message(session_id, "assistant", full_response)
             task_state.terminal_status = "COMPLETED"
             self._save_task_state(task_state)
@@ -555,8 +581,7 @@ class AgentRuntime:
                     yield AgentEvent(event_type="token", content=full_response)
                 if native.get("tool_calls"):
                     native_call = native["tool_calls"][0]
-                    if not full_response:
-                        full_response = json.dumps({"tool": native_call["name"], "args": native_call["arguments"]})
+                    # Never set full_response to tool JSON dumps so the user sees clean conversation
             used_native = self.native_tools and hasattr(provider, "chat_with_tools")
             async for chunk in (_no_chunks() if used_native else provider.stream_chat(
                 model_id=session.model_name,

@@ -76,6 +76,11 @@ def match_deterministic_rule(gds: GameDesignSpec, request: str) -> Optional[Prop
     if patch:
         return patch
 
+    # Rule 12: Complete game / add shooting combat / enemies
+    patch = _match_complete_game_or_add_combat(gds, req)
+    if patch:
+        return patch
+
     return None
 
 
@@ -383,3 +388,94 @@ def _match_add_door_key(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch
         {"op": "add", "path": "/entities/-", "value": door_ent},
     ]
     return ProposedPatch(ops=ops, summary="Added door 'door_gate' with key 'key_bronze'", status="OK")
+
+
+def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to complete the game, add gameplay, shooting, enemies, or combat."""
+    pattern = re.compile(
+        r"(?i)\b(complete|finish|expand|build\s+out|add\s+gameplay|only\s+a\s+box|shooting|shooter|counterstrike|counter-strike|combat|enemies|weapons?|bots?|5v5|five\s+v\s+five)\b"
+    )
+    if not pattern.search(req):
+        return None
+
+    ops = []
+    level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
+
+    # 1. Add enemy wave spawner if no spawner or hostile entity exists
+    has_spawner = any(e.kind == EntityKind.SPAWNER or "enemy" in e.entity_id.lower() or "guard" in e.entity_id.lower() for e in gds.entities)
+    if not has_spawner:
+        spawner_ent = {
+            "entity_id": "spawner",
+            "kind": "spawner",
+            "module": "kit.spawner",
+            "level_id": level_id,
+            "count": 1,
+            "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 10.0, "slot": None},
+            "props": {
+                "wave_count": 3,
+                "enemies_per_wave": 5,
+                "enemy_max_health": 100,
+                "enemy_attack_damage": 20,
+                "enemy_speed": 350.0,
+                "seconds_between_waves": 3.0,
+                "spawn_radius": 500.0,
+            },
+            "tags": ["enemy", "hostile", "GF_Owned"],
+        }
+        ops.append({"op": "add", "path": "/entities/-", "value": spawner_ent})
+
+    # 2. Update player props for projectile shooting combat if not configured
+    player_idx = next((i for i, e in enumerate(gds.entities) if e.kind == EntityKind.PLAYER), None)
+    if player_idx is not None:
+        p_props = gds.entities[player_idx].props or {}
+        if not isinstance(p_props, dict):
+            p_props = p_props.model_dump()
+        if p_props.get("attack_mode") != "projectile":
+            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/attack_mode", "value": "projectile"})
+        if "move_speed" not in p_props or float(p_props["move_speed"]) < 600:
+            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/move_speed", "value": 650.0})
+        if "player_max_health" not in p_props:
+            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/player_max_health", "value": 100})
+
+    # 3. Upgrade level layout to arena for combat/shooter games
+    if gds.scene.levels:
+        cur_layout = getattr(gds.scene.levels[0], "layout", None)
+        layout_val = cur_layout.value if hasattr(cur_layout, "value") else str(cur_layout)
+        if layout_val != "arena":
+            ops.append({"op": "replace", "path": "/scene/levels/0/layout", "value": "arena"})
+
+    # 4. Add wave cleared tracking rule if missing
+    has_wave_rule = any("wave.cleared" in getattr(r.when, "event", "") for r in gds.rules)
+    if not has_wave_rule:
+        wave_rule = {
+            "rule_id": "rule_wave_cleared",
+            "when": {"event": "wave.cleared", "source": None},
+            "conditions": [],
+            "effects": [{"kind": "add_stat", "stat": "game.counter.waves_cleared", "delta": 1.0}],
+            "description": "Track cleared waves",
+        }
+        ops.append({"op": "add", "path": "/rules/-", "value": wave_rule})
+
+    # 5. Ensure win condition accounts for wave completion or defeat all
+    has_wave_win = any("wave.cleared" in str(w) for w in gds.goals.win)
+    if not has_wave_win:
+        win_goal = [
+            {
+                "kind": "all",
+                "items": [
+                    {"kind": "event", "event": "wave.cleared", "source": None},
+                    {"kind": "stat", "stat": "game.counter.waves_cleared", "op": ">=", "value": 3.0},
+                ],
+            }
+        ]
+        ops.append({"op": "replace", "path": "/goals/win", "value": win_goal})
+
+    if not ops:
+        return None
+
+    return ProposedPatch(
+        ops=ops,
+        summary="Completed game design: Added enemy wave spawner with 5 combat bots, enabled projectile shooting mechanics for player, updated level layout to arena with cover, and configured wave-cleared win condition.",
+        status="OK",
+    )
+

@@ -19,6 +19,17 @@ def tool_list_dir(
     """Lists files and directories under subpath with safety checks."""
     target_dir = boundary.validate_path(subpath, allow_write=False)
     if not target_dir.exists():
+        clean_sub = subpath.replace("\\", "/").strip("/")
+        parts = clean_sub.split("/")
+        if parts and parts[0].lower() == boundary.workspace_root.name.lower():
+            remapped = "/".join(parts[1:]) or "."
+            try:
+                remapped_dir = boundary.validate_path(remapped, allow_write=False)
+                if remapped_dir.exists():
+                    target_dir = remapped_dir
+            except Exception:
+                pass
+    if not target_dir.exists():
         return {"error": f"Directory not found: {subpath}"}
     if not target_dir.is_dir():
         return {"error": f"Path is not a directory: {subpath}"}
@@ -67,6 +78,17 @@ def tool_read_file(
 ) -> Dict[str, Any]:
     """Reads line-numbered content from a file inside the workspace."""
     target_file = boundary.validate_path(subpath, allow_write=False)
+    if not target_file.exists():
+        clean_sub = subpath.replace("\\", "/").strip("/")
+        parts = clean_sub.split("/")
+        if parts and parts[0].lower() == boundary.workspace_root.name.lower():
+            remapped = "/".join(parts[1:])
+            try:
+                remapped_file = boundary.validate_path(remapped, allow_write=False)
+                if remapped_file.exists():
+                    target_file = remapped_file
+            except Exception:
+                pass
     if not target_file.exists():
         return {"error": f"File does not exist: {subpath}"}
     if not target_file.is_file():

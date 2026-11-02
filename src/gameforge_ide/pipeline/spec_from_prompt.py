@@ -24,7 +24,7 @@ from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
 from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
 from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 
-_CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write)\b", re.I)
+_CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write|complete|finish|expand|build out|author|code|implement)\b", re.I)
 
 
 @dataclass
@@ -127,7 +127,7 @@ class GameSpec:
 
 _GAME_WORD = re.compile(r"(?<![\w/\\.])games?(?![\w/\\.])", re.I)
 # the create verb's object ends in "game": "create a (simple 2D platformer) game", "make me a racing game"
-_CREATE_GAME = re.compile(r"\b(?:create|make|build|generate|develop|design|write|give me)\s+(?:me\s+)?"
+_CREATE_GAME = re.compile(r"\b(?:create|make|build|generate|develop|design|write|give me|complete|finish|expand|build out|author|code|implement)\s+(?:me\s+)?"
                           r"(?:[\w\-']+\s+){0,8}?games?\b(?!\s*(?:mode|state|instance|play|object)\b)", re.I)
 
 

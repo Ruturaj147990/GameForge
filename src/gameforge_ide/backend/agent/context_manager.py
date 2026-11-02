@@ -95,7 +95,12 @@ class ContextManager:
             summary = summary[:max_chars].rstrip() + "\n[Canonical context summary truncated at configured character limit.]"
         return summary
 
-    def build_system_prompt(self, tools_description: str, active_model: Optional[str] = None) -> str:
+    def build_system_prompt(
+        self,
+        tools_description: str,
+        active_model: Optional[str] = None,
+        include_tools: bool = True,
+    ) -> str:
         """Assembles a compact system prompt that stays well within the model's input budget."""
         active_model = active_model or get_settings().model_for("chat")
         # Ultra-compact workspace identity (avoids embedding the full context.md)
@@ -126,11 +131,22 @@ class ContextManager:
                 + "\n"
             )
 
-        return (
+        base_header = (
             "You are GameForge IDE Agent — autonomous expert game-dev assistant.\n"
             f"Workspace: {workspace_name} | Model: {active_model}\n"
             f"{context_snippet}\n"
             f"Engine rules: {ue_note}{ue_ctx_note}\n"
+        )
+
+        if not include_tools or not tools_description:
+            return (
+                f"{base_header}"
+                "Assist the user with game development, Unreal Engine 5 architecture, game ideas, and GameForge features.\n"
+                "Respond conversationally and directly in clean markdown. Do not emit tool calls or raw JSON blocks."
+            )
+
+        return (
+            f"{base_header}"
             "=== TOOLS ===\n"
             f"{tools_description}\n\n"
             "=== TOOL CALL FORMAT ===\n"

@@ -1111,7 +1111,12 @@ class ChatPanel(QWidget):
             f"}}"
         )
         layout = QVBoxLayout(frame)
-        title = QLabel("Game Design Request" if mode == "create" else "Design Change Request", frame)
+        project_name = card_data.get("project", "")
+        if project_name:
+            title_text = f"Game Update: {project_name}"
+        else:
+            title_text = "Game Design Request" if mode == "create" else "Design Change Request"
+        title = QLabel(title_text, frame)
         title.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;")
         layout.addWidget(title)
 
@@ -1306,12 +1311,16 @@ class ChatPanel(QWidget):
             return
         if self._active_bubble:
             if not self._active_bubble.has_tokens() and _full_text:
-                self._active_bubble.append_token(_full_text)
+                clean_text = _full_text.strip()
+                if not (clean_text.startswith('{"tool"') or clean_text.startswith('```json\n{"tool"')):
+                    self._active_bubble.append_token(_full_text)
             self._active_bubble.finalise()
             self._active_bubble = None
         elif _full_text:
-            b = self._add_bubble("assistant", _full_text)
-            b.finalise()
+            clean_text = _full_text.strip()
+            if not (clean_text.startswith('{"tool"') or clean_text.startswith('```json\n{"tool"')):
+                b = self._add_bubble("assistant", _full_text)
+                b.finalise()
         self._btn_send.setEnabled(True)
         self._btn_stop.setEnabled(False)
         self._status_bar.set_ready()
