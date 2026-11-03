@@ -97,6 +97,7 @@ class Meta(_M):
     generator: str = Field("user", pattern=r"^(user|preset:[a-z_]+|model:[\w.:\-/]+|patch)$")
     created_at: str = Field(default_factory=_now)
     updated_at: str = Field(default_factory=_now)
+    project_dir: Optional[str] = None
 
     @field_validator("title")
     @classmethod

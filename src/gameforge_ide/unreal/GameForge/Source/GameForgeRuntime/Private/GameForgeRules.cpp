@@ -234,6 +234,20 @@ void UGameForgeRulesSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 			Def = DefAsset->GetParsed();
 		}
 	}
+	if (!Def.IsValid())
+	{
+		if (UGameForgeGameDefinition* FallbackAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main.GD_Main")))
+		{
+			Def = FallbackAsset->GetParsed();
+		}
+	}
+	if (!Def.IsValid())
+	{
+		if (UGameForgeGameDefinition* FallbackAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main")))
+		{
+			Def = FallbackAsset->GetParsed();
+		}
+	}
 
 	if (!Def.IsValid())
 	{

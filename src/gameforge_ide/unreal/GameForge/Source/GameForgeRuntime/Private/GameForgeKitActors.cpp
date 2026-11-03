@@ -367,6 +367,11 @@ AGameForgeProjectile::AGameForgeProjectile()
 	Collision->SetCollisionProfileName(TEXT("BlockAllDynamic"));
 	Collision->OnComponentHit.AddDynamic(this, &AGameForgeProjectile::OnHit);
 
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+	Mesh->SetCastShadow(false);
+
 	Movement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("Movement"));
 	Movement->InitialSpeed = 1500.f;
 	Movement->MaxSpeed = 1500.f;
@@ -374,6 +379,23 @@ AGameForgeProjectile::AGameForgeProjectile()
 	Movement->ProjectileGravityScale = 0.f;
 
 	InitialLifeSpan = 5.0f;
+}
+
+void AGameForgeProjectile::BeginPlay()
+{
+	Super::BeginPlay();
+	if (Mesh && Mesh->GetStaticMesh() == nullptr)
+	{
+		if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere")))
+		{
+			Mesh->SetStaticMesh(SM);
+			Mesh->SetWorldScale3D(FVector(0.15f, 0.15f, 0.15f));
+			if (UMaterialInterface* OrangeMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Orange")))
+			{
+				Mesh->SetMaterial(0, OrangeMat);
+			}
+		}
+	}
 }
 
 void AGameForgeProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
@@ -392,6 +414,11 @@ AGameForgeEnemy::AGameForgeEnemy()
 {
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AttributeSet = CreateDefaultSubobject<UGameForgeAttributeSet>(TEXT("AttributeSet"));
+
+	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
+	WeaponMesh->SetupAttachment(GetMesh(), FName(TEXT("hand_rSocket")));
+	WeaponMesh->SetCollisionProfileName(TEXT("NoCollision"));
+
 	AIControllerClass = AGameForgeEnemyAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 }
@@ -406,6 +433,34 @@ void AGameForgeEnemy::BeginPlay()
 		AttributeSet->SetHealth(MaxHealth);
 	}
 	GetCharacterMovement()->MaxWalkSpeed = MoveSpeed;
+
+	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset() == nullptr)
+	{
+		USkeletalMesh* SKM = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple"));
+		if (!SKM)
+		{
+			SKM = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple"));
+		}
+		if (SKM)
+		{
+			GetMesh()->SetSkeletalMeshAsset(SKM);
+			GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+			GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+			if (UMaterialInterface* EnemyMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Orange")))
+			{
+				GetMesh()->SetMaterial(0, EnemyMat);
+			}
+		}
+	}
+
+	if (WeaponMesh && WeaponMesh->GetStaticMesh() == nullptr)
+	{
+		if (UStaticMesh* GunSM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+		{
+			WeaponMesh->SetStaticMesh(GunSM);
+			WeaponMesh->SetRelativeScale3D(FVector(0.10f, 0.35f, 0.12f));
+		}
+	}
 
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{
@@ -573,5 +628,116 @@ void AGameForgeSpawner::HandleEvent(const FGameForgeEvent& Event)
 				GetWorld()->GetTimerManager().SetTimer(WaveTimerHandle, this, &AGameForgeSpawner::StartWave, SecondsBetweenWaves, false);
 			}
 		}
+	}
+}
+
+// ── Bomb Site & Bomb ─────────────────────────────────────────────────────────
+
+AGameForgeBombSite::AGameForgeBombSite()
+{
+	PrimaryActorTick.bCanEverTick = false;
+	Trigger = CreateDefaultSubobject<USphereComponent>(TEXT("Trigger"));
+	RootComponent = Trigger;
+	Trigger->SetSphereRadius(300.f);
+	Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+}
+
+bool AGameForgeBombSite::CanInteract(AController* InController) const
+{
+	return !bBombPlanted;
+}
+
+void AGameForgeBombSite::Interact(AController* InController)
+{
+	if (bBombPlanted) return;
+	bBombPlanted = true;
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = InController ? InController->GetPawn() : nullptr;
+	FVector BombLoc = GetActorLocation() + FVector(0.f, 0.f, 20.f);
+	GetWorld()->SpawnActor<AGameForgeBomb>(AGameForgeBomb::StaticClass(), BombLoc, FRotator::ZeroRotator, SpawnParams);
+
+	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+	{
+		Bus->Emit(FName(TEXT("bomb.planted")), GetName(), FString::Printf(TEXT("{\"site\":\"%s\"}"), *SiteName.ToString()), EntityId);
+	}
+}
+
+AGameForgeBomb::AGameForgeBomb()
+{
+	PrimaryActorTick.bCanEverTick = true;
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	RootComponent = Mesh;
+	Mesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+	if (UStaticMesh* BoxMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+	{
+		Mesh->SetStaticMesh(BoxMesh);
+		Mesh->SetWorldScale3D(FVector(0.4f, 0.3f, 0.2f));
+	}
+
+	DefuseTrigger = CreateDefaultSubobject<USphereComponent>(TEXT("DefuseTrigger"));
+	DefuseTrigger->SetupAttachment(RootComponent);
+	DefuseTrigger->SetSphereRadius(180.f);
+	DefuseTrigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+}
+
+bool AGameForgeBomb::CanInteract(AController* InController) const
+{
+	return !bDefused && !bExploded;
+}
+
+void AGameForgeBomb::Interact(AController* InController)
+{
+	if (bDefused || bExploded) return;
+	CurrentDefuseProgress += 2.5f;
+	if (CurrentDefuseProgress >= DefuseTimeRequired)
+	{
+		Defused();
+	}
+}
+
+void AGameForgeBomb::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (bDefused || bExploded) return;
+
+	FuseTimeRemaining -= DeltaSeconds;
+	if (FuseTimeRemaining <= 0.f)
+	{
+		Explode();
+	}
+}
+
+void AGameForgeBomb::Explode()
+{
+	if (bExploded || bDefused) return;
+	bExploded = true;
+
+	TArray<AActor*> OverlappingActors;
+	UGameplayStatics::GetAllActorsOfClass(this, ACharacter::StaticClass(), OverlappingActors);
+	for (AActor* Act : OverlappingActors)
+	{
+		if (FVector::Dist(Act->GetActorLocation(), GetActorLocation()) <= ExplosionRadius)
+		{
+			UGameForgeDamageLibrary::ApplyDamage(Act, this, 5000.f);
+		}
+	}
+
+	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+	{
+		Bus->Emit(FName(TEXT("bomb.exploded")), GetName(), TEXT("{}"), FName(TEXT("bomb")));
+	}
+}
+
+void AGameForgeBomb::Defused()
+{
+	if (bDefused || bExploded) return;
+	bDefused = true;
+
+	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+	{
+		Bus->Emit(FName(TEXT("bomb.defused")), GetName(), TEXT("{}"), FName(TEXT("bomb")));
 	}
 }

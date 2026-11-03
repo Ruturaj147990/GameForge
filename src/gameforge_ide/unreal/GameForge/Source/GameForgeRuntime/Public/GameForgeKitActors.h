@@ -279,10 +279,15 @@ public:
 	TObjectPtr<USphereComponent> Collision;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UProjectileMovementComponent> Movement;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	float Damage = 10.f;
+
+	virtual void BeginPlay() override;
 
 protected:
 	UFUNCTION()
@@ -333,6 +338,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	float ProjectileSpeed = 1500.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	uint8 TeamId = 1; // 0 = CT / Friendly, 1 = Terrorist / Enemy
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> WeaponMesh;
 
 	virtual void BeginPlay() override;
 	void PerformAttack(AActor* Target);
@@ -395,4 +406,65 @@ private:
 	int32 CurrentWave = 0;
 	int32 AliveEnemiesInWave = 0;
 	FTimerHandle WaveTimerHandle;
+};
+
+// ── Bomb Site & Bomb (Tactical Bomb Defusal) ──────────────────────────────
+
+UCLASS(Blueprintable)
+class GAMEFORGERUNTIME_API AGameForgeBombSite : public AActor, public IGameForgeInteractable
+{
+	GENERATED_BODY()
+public:
+	AGameForgeBombSite();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<USphereComponent> Trigger;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FName SiteName = FName(TEXT("A"));
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FName EntityId = FName(TEXT("bombsite_a"));
+
+	virtual bool CanInteract(AController* InController) const override;
+	virtual void Interact(AController* InController) override;
+
+protected:
+	bool bBombPlanted = false;
+};
+
+UCLASS(Blueprintable)
+class GAMEFORGERUNTIME_API AGameForgeBomb : public AActor, public IGameForgeInteractable
+{
+	GENERATED_BODY()
+public:
+	AGameForgeBomb();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<USphereComponent> DefuseTrigger;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float FuseTimeRemaining = 45.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float DefuseTimeRequired = 5.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float ExplosionRadius = 1500.f;
+
+	virtual bool CanInteract(AController* InController) const override;
+	virtual void Interact(AController* InController) override;
+
+	virtual void Tick(float DeltaSeconds) override;
+
+protected:
+	void Explode();
+	void Defused();
+
+	bool bDefused = false;
+	bool bExploded = false;
+	float CurrentDefuseProgress = 0.f;
 };

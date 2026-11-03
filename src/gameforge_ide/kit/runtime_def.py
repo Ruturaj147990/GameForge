@@ -13,6 +13,8 @@ from .registry import get_module
 
 def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     """Generate gfdef/1 dictionary from GameDesignSpec."""
+    from src.gameforge_ide.design.gds import EntityKind
+
     # Player settings (WI-7.2: mesh, anim_class, material_tint)
     player_data = {
         "camera": gds.overview.camera.value if hasattr(gds.overview.camera, "value") else str(gds.overview.camera),
@@ -25,6 +27,21 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
         "anim_class": "/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C",
         "material_tint": [1.0, 1.0, 1.0, 1.0],
     }
+
+    # Populate customized player props if defined on player entity
+    player_ent = next((e for e in gds.entities if getattr(e, "kind", None) == EntityKind.PLAYER), None)
+    if player_ent and getattr(player_ent, "props", None):
+        p_props = player_ent.props if isinstance(player_ent.props, dict) else player_ent.props.model_dump()
+        for k, v in p_props.items():
+            if k in ("move_speed", "jump_velocity", "max_health", "lives", "kill_z", "attack_damage", "attack_mode", "weapons", "projectile_speed"):
+                player_data[k] = v
+
+    camera_str = str(player_data.get("camera", "")).lower()
+    genre_str = str(getattr(gds.overview, "genre", "")).lower()
+    if "first_person" in camera_str or "shooter" in genre_str or "arena" in genre_str:
+        player_data.setdefault("attack_mode", "projectile")
+        player_data.setdefault("projectile_speed", 2500.0)
+        player_data.setdefault("attack_damage", 35.0)
 
     # Enhanced input default mapping
     input_bindings = [
@@ -55,6 +72,11 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
         },
         {
             "action": "IA_Attack",
+            "type": "digital",
+            "bindings": [{"key": "LeftMouseButton", "mods": []}],
+        },
+        {
+            "action": "IA_Fire",
             "type": "digital",
             "bindings": [{"key": "LeftMouseButton", "mods": []}],
         },

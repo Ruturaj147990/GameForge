@@ -43,6 +43,17 @@ def plan_to_op_calls(
         purpose=f"Create level {plan.level_id}",
     )
 
+    # 1b. Spawn PlayerStart actor at planned spawn location
+    emit(
+        "spawn_actor",
+        {
+            "actor_class": "PlayerStart",
+            "label": "GF_PlayerStart",
+            "location": {"x": plan.player_start[0], "y": plan.player_start[1], "z": plan.player_start[2]},
+        },
+        purpose="Spawn primary player start point",
+    )
+
     # 2. Lighting preset
     light_key = plan.lighting
     if light_key == "day":

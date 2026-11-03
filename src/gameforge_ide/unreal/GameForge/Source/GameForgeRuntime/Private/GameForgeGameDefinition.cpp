@@ -4,6 +4,7 @@ UGameForgeRuntimeSettings::UGameForgeRuntimeSettings()
 {
 	CategoryName = TEXT("Game");
 	SectionName = TEXT("GameForge Runtime");
+	GameDefinition = FSoftObjectPath(TEXT("/Game/GameForge/GD_Main.GD_Main"));
 }
 
 TSharedPtr<FJsonObject> UGameForgeGameDefinition::GetParsed() const

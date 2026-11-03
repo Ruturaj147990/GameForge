@@ -349,13 +349,22 @@ class SettingsView(QWidget):
         # Appearance
         from PySide6.QtCore import QSettings
         ide_settings = QSettings("GameForge", "GameForgeIDE")
-        current_theme = ide_settings.value("appearance/theme", "dark")
+        ws_ini = self._workspace / ".gameforge" / "ide_settings.ini"
+        if ws_ini.is_file():
+            ws_settings = QSettings(str(ws_ini), QSettings.IniFormat)
+            current_theme = ws_settings.value("appearance/theme", ide_settings.value("appearance/theme", "dark"))
+            try:
+                scale_val = int(ws_settings.value("appearance/font_scale", ide_settings.value("appearance/font_scale", 100)))
+            except (ValueError, TypeError):
+                scale_val = 100
+        else:
+            current_theme = ide_settings.value("appearance/theme", "dark")
+            try:
+                scale_val = int(ide_settings.value("appearance/font_scale", 100))
+            except (ValueError, TypeError):
+                scale_val = 100
         self._theme_combo.setCurrentIndex(1 if str(current_theme).lower() == "light" else 0)
-        try:
-            scale_val = int(ide_settings.value("appearance/font_scale", 100))
-            self._font_scale_spin.setValue(scale_val)
-        except (ValueError, TypeError):
-            self._font_scale_spin.setValue(100)
+        self._font_scale_spin.setValue(scale_val)
 
         # Routing Source info
         try:
@@ -419,10 +428,21 @@ class SettingsView(QWidget):
         from PySide6.QtCore import QSettings, QTimer
         from PySide6.QtWidgets import QApplication
         from ..styles.dark_theme import apply_theme
-        ide_settings = QSettings("GameForge", "GameForgeIDE")
         new_theme = "light" if self._theme_combo.currentIndex() == 1 else "dark"
+        ide_settings = QSettings("GameForge", "GameForgeIDE")
         ide_settings.setValue("appearance/theme", new_theme)
         ide_settings.setValue("appearance/font_scale", self._font_scale_spin.value())
+
+        ws_ini = self._workspace / ".gameforge" / "ide_settings.ini"
+        try:
+            ws_ini.parent.mkdir(parents=True, exist_ok=True)
+            ws_settings = QSettings(str(ws_ini), QSettings.IniFormat)
+            ws_settings.setValue("appearance/theme", new_theme)
+            ws_settings.setValue("appearance/font_scale", self._font_scale_spin.value())
+            ws_settings.sync()
+        except Exception as exc:
+            logger.debug("Could not write workspace ini settings: %s", exc)
+
         apply_theme(QApplication.instance(), new_theme)
 
         self._btn_save.setText("Saved ✓")

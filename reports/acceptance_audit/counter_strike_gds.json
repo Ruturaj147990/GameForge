@@ -1,0 +1,475 @@
+{
+  "meta": {
+    "schema_version": "gds/1.1",
+    "gds_id": "gds_188c326c0ef6",
+    "revision": 1,
+    "project_name": "CounterStrikeLite",
+    "title": "CounterStrikeLite",
+    "source_prompt": "Tactical shooter with low-angle FOV for immersion.",
+    "generator": "model:None",
+    "created_at": "2026-11-02T12:42:44+0530",
+    "updated_at": "2026-11-02T12:42:44+0530"
+  },
+  "overview": {
+    "genre": "arena_combat",
+    "pitch": "Tactical shooter with low-angle FOV for immersion.",
+    "camera": "first_person",
+    "players": 1,
+    "session_minutes": 10
+  },
+  "scene": {
+    "levels": [
+      {
+        "level_id": "level_1",
+        "layout": "arena",
+        "size_m": {
+          "x": 60.0,
+          "y": 60.0
+        },
+        "biome": "indoor",
+        "lighting": "indoor",
+        "seed": 2026,
+        "layout_params": {}
+      }
+    ],
+    "start_level": "level_1"
+  },
+  "entities": [
+    {
+      "entity_id": "player",
+      "kind": "player",
+      "module": "kit.player_character",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "slot",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": "player_start"
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "spawner",
+      "kind": "spawner",
+      "module": "kit.spawner",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "enemys",
+      "kind": "enemy",
+      "module": "kit.enemy_melee",
+      "level_id": "level_1",
+      "count": 5,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "pickups",
+      "kind": "pickup",
+      "module": "kit.pickup",
+      "level_id": "level_1",
+      "count": 3,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "goal",
+      "kind": "goal",
+      "module": "kit.goal",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "slot",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": "goal"
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "hazard",
+      "kind": "hazard",
+      "module": "kit.hazard",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "checkpoints",
+      "kind": "checkpoint",
+      "module": "kit.checkpoint",
+      "level_id": "level_1",
+      "count": 2,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    }
+  ],
+  "input": {
+    "actions": [
+      {
+        "action_id": "IA_Move",
+        "value_type": "axis2d",
+        "bindings": [
+          "W",
+          "S:negate",
+          "A:swizzle_negate",
+          "D:swizzle"
+        ],
+        "purpose": "Move forward/backward and left/right"
+      },
+      {
+        "action_id": "IA_Look",
+        "value_type": "axis2d",
+        "bindings": [
+          "Mouse2D"
+        ],
+        "purpose": "Camera orientation"
+      },
+      {
+        "action_id": "IA_Attack",
+        "value_type": "bool",
+        "bindings": [
+          "LeftMouseButton"
+        ],
+        "purpose": "Primary attack"
+      },
+      {
+        "action_id": "IA_Restart",
+        "value_type": "bool",
+        "bindings": [
+          "R"
+        ],
+        "purpose": "Restart session"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "rule_1",
+      "when": {
+        "event": "pickup.collected",
+        "source": null
+      },
+      "conditions": [],
+      "effects": [
+        {
+          "kind": "add_stat",
+          "stat": "game.score",
+          "delta": 10.0
+        }
+      ],
+      "description": "Award points on pickup"
+    },
+    {
+      "rule_id": "rule_2",
+      "when": {
+        "event": "enemy.killed",
+        "source": null
+      },
+      "conditions": [],
+      "effects": [
+        {
+          "kind": "add_stat",
+          "stat": "game.score",
+          "delta": 25.0
+        }
+      ],
+      "description": "Award points on enemy defeat"
+    },
+    {
+      "rule_id": "rule_3",
+      "when": {
+        "event": "wave.cleared",
+        "source": null
+      },
+      "conditions": [],
+      "effects": [
+        {
+          "kind": "add_stat",
+          "stat": "game.counter.waves_cleared",
+          "delta": 1.0
+        }
+      ],
+      "description": "Increment cleared wave count"
+    },
+    {
+      "rule_id": "custom_1",
+      "when": {
+        "event": "game.started",
+        "source": null
+      },
+      "conditions": [],
+      "effects": [
+        {
+          "kind": "custom_code",
+          "description": "Defusing the bomb requires holding the interaction key for 5 seconds while alive.",
+          "handler_name": "Custom1Rule"
+        }
+      ],
+      "description": "Custom rule 1"
+    },
+    {
+      "rule_id": "custom_2",
+      "when": {
+        "event": "game.started",
+        "source": null
+      },
+      "conditions": [],
+      "effects": [
+        {
+          "kind": "custom_code",
+          "description": "Killing an enemy bot drops their weapon as a pickup.",
+          "handler_name": "Custom2Rule"
+        }
+      ],
+      "description": "Custom rule 2"
+    },
+    {
+      "rule_id": "custom_3",
+      "when": {
+        "event": "game.started",
+        "source": null
+      },
+      "conditions": [],
+      "effects": [
+        {
+          "kind": "custom_code",
+          "description": "The round resets if the timer expires without a win condition met.",
+          "handler_name": "Custom3Rule"
+        }
+      ],
+      "description": "Custom rule 3"
+    }
+  ],
+  "progression": {
+    "phases": [],
+    "difficulty": "normal",
+    "difficulty_params": {}
+  },
+  "goals": {
+    "win": [
+      {
+        "kind": "all",
+        "items": [
+          {
+            "kind": "event",
+            "event": "wave.cleared",
+            "source": null
+          },
+          {
+            "kind": "stat",
+            "stat": "game.counter.waves_cleared",
+            "op": ">=",
+            "value": 5.0
+          }
+        ]
+      },
+      {
+        "kind": "event",
+        "event": "goal.reached",
+        "source": null
+      }
+    ],
+    "lose": [
+      {
+        "kind": "stat",
+        "stat": "player.health",
+        "op": "<=",
+        "value": 0.0
+      },
+      {
+        "kind": "timer",
+        "seconds": 120.0
+      }
+    ],
+    "score": {
+      "stat": "game.score",
+      "show_in_hud": true
+    },
+    "sandbox": false
+  },
+  "feedback": [
+    {
+      "on": {
+        "event": "pickup.collected",
+        "source": null
+      },
+      "vfx": "vfx.sparkle_burst",
+      "sfx": "sfx.pickup_chime",
+      "camera_shake": 0.0,
+      "ui_message": null
+    },
+    {
+      "on": {
+        "event": "player.damaged",
+        "source": null
+      },
+      "vfx": "vfx.hit_flash",
+      "sfx": "sfx.impact",
+      "camera_shake": 0.0,
+      "ui_message": null
+    },
+    {
+      "on": {
+        "event": "enemy.killed",
+        "source": null
+      },
+      "vfx": "vfx.poof",
+      "sfx": "sfx.defeat",
+      "camera_shake": 0.0,
+      "ui_message": null
+    },
+    {
+      "on": {
+        "event": "game.won",
+        "source": null
+      },
+      "vfx": "vfx.confetti",
+      "sfx": "sfx.fanfare",
+      "camera_shake": 0.0,
+      "ui_message": null
+    },
+    {
+      "on": {
+        "event": "checkpoint.reached",
+        "source": null
+      },
+      "vfx": "vfx.ring",
+      "sfx": "sfx.chime_low",
+      "camera_shake": 0.0,
+      "ui_message": null
+    }
+  ],
+  "ui": {
+    "hud": [
+      {
+        "element_id": "hud_health",
+        "kind": "bar",
+        "binds": "player.health",
+        "label": "Health"
+      },
+      {
+        "element_id": "hud_pickups",
+        "kind": "counter",
+        "binds": "entity.pickups.collected",
+        "label": "Pickups"
+      },
+      {
+        "element_id": "hud_timer",
+        "kind": "timer",
+        "binds": "game.time_s",
+        "label": "Time"
+      },
+      {
+        "element_id": "hud_score",
+        "kind": "counter",
+        "binds": "game.score",
+        "label": "Score"
+      }
+    ],
+    "main_menu": true,
+    "pause_menu": true,
+    "end_screen": true
+  },
+  "art": {
+    "style": "stylized",
+    "palette": [
+      "#2E3440",
+      "#88C0D0",
+      "#EBCB8B",
+      "#BF616A"
+    ],
+    "material_theme": "default",
+    "character_source": "mannequin",
+    "placeholder_ok": false
+  },
+  "audio": {
+    "music_mood": "tense",
+    "ambience": "none",
+    "sfx_set": "default"
+  },
+  "presentation": {
+    "intro": {
+      "enabled": false,
+      "seconds": 8.0,
+      "focus": [
+        "landmark",
+        "goal"
+      ]
+    }
+  },
+  "tech": {
+    "target_fps": 60,
+    "max_frame_ms": 16.6,
+    "max_package_mb": 400,
+    "multiplayer": "none"
+  },
+  "acceptance": {
+    "scenarios": [
+      {
+        "scenario_id": "win_1",
+        "derived_from": "goals.win[0]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "win_2",
+        "derived_from": "goals.win[1]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "lose_1",
+        "derived_from": "goals.lose[0]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "lose_2",
+        "derived_from": "goals.lose[1]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "smoke",
+        "derived_from": "smoke",
+        "must_pass": true
+      }
+    ],
+    "vision_rubric_min": 0.0,
+    "extra_checks": []
+  }
+}

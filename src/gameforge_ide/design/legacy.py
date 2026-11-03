@@ -31,6 +31,10 @@ def to_legacy_params(
     gds: GameDesignSpec,
 ) -> Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams]:
     """Convert a preset-derived GDS to legacy recipe params, or raise LegacyUnsupported."""
+    if getattr(gds.meta, "generator", "").startswith("model:"):
+        raise LegacyUnsupported("Model-generated designs route to modern Composer + Forge DAG path")
+    if hasattr(gds.overview, "camera") and str(getattr(gds.overview.camera, "value", gds.overview.camera)) == "first_person":
+        raise LegacyUnsupported("First-person games route to modern Composer + Forge DAG path")
     genre = gds.overview.genre
 
     if genre == Genre.GRID_BOARD:

@@ -40,6 +40,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UCameraComponent> Camera;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> WeaponMesh;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	EGameForgeCameraMode CameraMode = EGameForgeCameraMode::ThirdPerson;
 
@@ -64,10 +67,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	int32 Lives = 0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	bool bProjectileAttack = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float ProjectileSpeed = 2500.f;
+
 	UFUNCTION(BlueprintCallable, Category = "GameForge")
 	void ApplyCameraMode();
 
+	void PerformAttack();
 	void PerformMeleeAttack();
+	void PerformRangedAttack();
 	void PerformInteract();
 
 	virtual void FellOutOfWorld(const UDamageType& dmgType) override;

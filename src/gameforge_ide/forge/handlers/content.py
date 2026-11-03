@@ -41,6 +41,7 @@ def content_handler(ctx: StepContext) -> StepOutcome:
         "/Game/Characters",
         "/Game/LevelPrototyping",
         "/Game/GameForge",
+        "/Game/Maps",
     ]
     ini_path = update_default_game_ini_cook_dirs(project_dir, cook_dirs)
     artifacts.append(str(ini_path))

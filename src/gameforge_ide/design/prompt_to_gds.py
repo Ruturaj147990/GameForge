@@ -4,7 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 import logging
-from typing import Callable, List, Literal, Optional
+import re
+from typing import Callable, List, Literal, Optional, Set
 
 from pydantic import ValidationError
 
@@ -17,6 +18,22 @@ from .presets import PRESETS, PRESET_KEYWORDS, extract_preset_overrides
 logger = logging.getLogger(__name__)
 
 CompleteJson = Callable[[str, str, dict], Optional[str]]
+
+CUSTOM_DETAIL_KEYWORDS: Set[str] = {
+    "relic", "relics", "guard", "guards", "laser", "lasers", "plasma", "alien", "aliens",
+    "robot", "robots", "invader", "invaders", "zombie", "zombies", "vampire", "vampires",
+    "drone", "drones", "ship", "ships", "spaceship", "spaceships", "core", "energy",
+    "temple", "altar", "cage", "cages", "villager", "villagers", "chalice", "island", "islands",
+    "dungeon", "dungeons", "boss", "skeleton", "skeletons", "portal", "portals",
+    "terminal", "terminals", "hack", "hacking", "bomb", "bombs", "defuse", "defusing",
+    "counter-strike", "counter strike", "terrorist", "terrorists", "ct", "t", "swat",
+    "police", "gun", "guns", "rifle", "rifles", "pistol", "pistols", "sniper", "grenade",
+    "knife", "knives", "stealth", "infiltrate", "infiltration", "magic", "spell", "potion",
+    "quest", "dialogue", "npc", "npcs", "hermit", "cursed", "loot", "treasure",
+    "escape", "facility", "burning", "arctic", "desert", "crystal", "crystals", "sail",
+    "pirate", "monsters", "slaying", "asteroid", "meteor", "mars", "space", "cyber",
+    "defending", "defend", "survive", "survival", "bullet", "shooting", "shooter",
+}
 
 DRAFT_SYSTEM_PROMPT = """You turn a game idea into a JSON object that matches the given schema exactly.
 Rules:
@@ -72,28 +89,32 @@ def prompt_to_gds(
             path="none",
         )
 
-    # 2. Preset path: keyword match
+    # 2. Preset path: keyword match (only for direct preset requests without custom narrative/mechanics)
     text = " " + prompt.lower().replace("’", "'") + " "
+    words = set(re.findall(r"\b\w+\b", text))
+    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS))
+
     best_preset: Optional[str] = None
     best_kw: str = ""
-    for preset_id, kws in PRESET_KEYWORDS.items():
-        for kw in kws:
-            if kw in text and len(kw) > len(best_kw):
-                best_preset = preset_id
-                best_kw = kw
+    if not (allow_model and complete_json is not None and has_custom_detail):
+        for preset_id, kws in PRESET_KEYWORDS.items():
+            for kw in kws:
+                if kw in text and len(kw) > len(best_kw):
+                    best_preset = preset_id
+                    best_kw = kw
 
-    if best_preset is not None and best_preset in PRESETS:
-        overrides = extract_preset_overrides(best_preset, prompt)
-        title = overrides.pop("title", None)
-        try:
-            gds = PRESETS[best_preset](title=title, **overrides)
-            return PromptToGdsResult(
-                status="OK",
-                gds=gds,
-                path="preset",
-            )
-        except Exception as exc:
-            logger.warning("Preset creation failed for %s: %s", best_preset, exc)
+        if best_preset is not None and best_preset in PRESETS:
+            overrides = extract_preset_overrides(best_preset, prompt)
+            title = overrides.pop("title", None)
+            try:
+                gds = PRESETS[best_preset](title=title, **overrides)
+                return PromptToGdsResult(
+                    status="OK",
+                    gds=gds,
+                    path="preset",
+                )
+            except Exception as exc:
+                logger.warning("Preset creation failed for %s: %s", best_preset, exc)
 
     # 3. Model path
     if allow_model and complete_json is not None:
@@ -143,6 +164,7 @@ def prompt_to_gds(
         if draft is not None:
             try:
                 gds = expand_draft(draft)
+                gds.meta.generator = f"model:{model}"
             except Exception as exc:
                 errors.append(f"Draft expansion failed: {exc}")
                 return PromptToGdsResult(

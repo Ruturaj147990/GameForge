@@ -119,27 +119,47 @@ def _install(root: Path, source: str) -> Optional[EngineInstall]:
 
 
 def discover_engines() -> List[EngineInstall]:
-    """Installed engines: the Epic launcher manifest first, then the registry. Only verified roots are returned."""
+    """Installed engines: Epic launcher manifests (*.item and dat), registry, and drive scanning. Only verified roots are returned."""
     found: List[EngineInstall] = []
+
+    # 1. Check custom launcher manifest override (for tests/custom environments)
     manifest = os.environ.get("GAMEFORGE_LAUNCHER_MANIFEST")
-    if not manifest and os.environ.get("PROGRAMDATA"):
-        manifest = str(Path(os.environ["PROGRAMDATA"]) / "Epic" / "UnrealEngineLauncher" / "LauncherInstalled.dat")
-    for item in _read_json(Path(manifest) if manifest else None).get("InstallationList", []):
-        if str(item.get("AppName", "")).startswith("UE_") and item.get("InstallLocation"):
-            inst = _install(Path(item["InstallLocation"]), "launcher")
-            if inst and all(i.root != inst.root for i in found):
-                found.append(inst)
-    if not os.environ.get("GAMEFORGE_SKIP_REGISTRY"):
-        try:
-            import winreg  # Windows only
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\EpicGames\Unreal Engine") as base:
-                for i in range(winreg.QueryInfoKey(base)[0]):
-                    with winreg.OpenKey(base, winreg.EnumKey(base, i)) as key:
-                        inst = _install(Path(winreg.QueryValueEx(key, "InstalledDirectory")[0]), "registry")
-                        if inst and all(x.root != inst.root for x in found):
-                            found.append(inst)
-        except OSError:
-            pass
+    if manifest:
+        for item in _read_json(Path(manifest)).get("InstallationList", []):
+            if str(item.get("AppName", "")).startswith("UE_") and item.get("InstallLocation"):
+                inst = _install(Path(item["InstallLocation"]), "launcher")
+                if inst and all(i.root != inst.root for i in found):
+                    found.append(inst)
+        return found
+
+    # 2. Comprehensive multi-source Unreal Engine discovery
+    try:
+        from ..unreal.discovery import discover_all_engines
+        discovered = discover_all_engines(pinned_minor=PINNED_ENGINE)
+        for d in discovered:
+            if all(i.root != d.root for i in found):
+                found.append(EngineInstall(root=d.root, version=d.version, changelist=d.changelist, source=d.source))
+    except Exception:
+        # Fall back to standard discovery if discovery module encounters an error
+        if not manifest and os.environ.get("PROGRAMDATA"):
+            manifest = str(Path(os.environ["PROGRAMDATA"]) / "Epic" / "UnrealEngineLauncher" / "LauncherInstalled.dat")
+            for item in _read_json(Path(manifest) if manifest else None).get("InstallationList", []):
+                if str(item.get("AppName", "")).startswith("UE_") and item.get("InstallLocation"):
+                    inst = _install(Path(item["InstallLocation"]), "launcher")
+                    if inst and all(i.root != inst.root for i in found):
+                        found.append(inst)
+        if not os.environ.get("GAMEFORGE_SKIP_REGISTRY"):
+            try:
+                import winreg
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\EpicGames\Unreal Engine") as base:
+                    for i in range(winreg.QueryInfoKey(base)[0]):
+                        with winreg.OpenKey(base, winreg.EnumKey(base, i)) as key:
+                            inst = _install(Path(winreg.QueryValueEx(key, "InstalledDirectory")[0]), "registry")
+                            if inst and all(x.root != inst.root for x in found):
+                                found.append(inst)
+            except OSError:
+                pass
+
     return found
 
 

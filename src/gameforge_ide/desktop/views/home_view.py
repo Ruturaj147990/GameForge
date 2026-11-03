@@ -10,6 +10,7 @@ Displays:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -319,6 +321,48 @@ class HomeView(QWidget):
         chips_layout.addStretch(1)
         hero_layout.addLayout(chips_layout)
 
+        # Project Root Location Selection (Two-Location Storage Architecture)
+        location_layout = QHBoxLayout()
+        location_layout.setSpacing(tokens.SPACE_SM)
+        lbl_loc = QLabel("Project Folder:", self)
+        lbl_loc.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 500;")
+        self._edit_project_dir = QLineEdit(self)
+        self._edit_project_dir.setObjectName("homeEditProjectDir")
+        self._edit_project_dir.setPlaceholderText("Select user project directory (authoritative root)…")
+        self._edit_project_dir.setStyleSheet(
+            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
+            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; "
+            f"padding: 4px 8px; font-size: {tokens.FONT_BODY_SM}px;"
+        )
+        from src.gameforge_ide.core.settings import get_settings
+        s = get_settings()
+        default_root = s.projects_root
+        if not (default_root and default_root.is_dir()):
+            hp_root = s.host_profile.get("projects_root") if hasattr(s, "host_profile") and isinstance(s.host_profile, dict) else None
+            if hp_root and Path(hp_root).is_dir():
+                default_root = Path(hp_root)
+            elif s.artifacts_root and (Path(s.artifacts_root) / "projects").is_dir():
+                default_root = Path(s.artifacts_root) / "projects"
+            else:
+                default_root = Path.home() / "Documents" / "GameForge" / "Projects"
+        self._edit_project_dir.setText(str(default_root))
+        self._edit_project_dir.textChanged.connect(self._on_project_dir_text_changed)
+
+        btn_browse_loc = QPushButton("Browse…", self)
+        btn_browse_loc.setObjectName("homeBtnBrowseProjectDir")
+        btn_browse_loc.setCursor(Qt.PointingHandCursor)
+        btn_browse_loc.setStyleSheet(
+            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
+            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; "
+            f"padding: 4px 12px; font-size: {tokens.FONT_BODY_SM}px;"
+        )
+        btn_browse_loc.clicked.connect(self._on_browse_project_dir_clicked)
+
+        location_layout.addWidget(lbl_loc)
+        location_layout.addWidget(self._edit_project_dir, 1)
+        location_layout.addWidget(btn_browse_loc)
+        hero_layout.addLayout(location_layout)
+
         # Action Bar: Design it -> + Spinner / Cancel + Unsupported notice
         action_layout = QHBoxLayout()
         action_layout.setSpacing(tokens.SPACE_MD)
@@ -477,6 +521,21 @@ class HomeView(QWidget):
     # ── Slot helpers ─────────────────────────────────────────────────────────
 
     @Slot()
+    def _on_browse_project_dir_clicked(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        current = self._edit_project_dir.text().strip()
+        chosen = QFileDialog.getExistingDirectory(self, "Choose Project Directory", current or str(Path.home()))
+        if chosen:
+            self._edit_project_dir.setText(str(Path(chosen).resolve()))
+            self.refresh_recent_games()
+
+    @Slot(str)
+    def _on_project_dir_text_changed(self, text: str) -> None:
+        p = Path(text.strip())
+        if p.is_dir():
+            self.refresh_recent_games()
+
+    @Slot()
     def _on_preset_chip_clicked(self) -> None:
         chip = self.sender()
         if isinstance(chip, PresetChip):
@@ -550,6 +609,18 @@ class HomeView(QWidget):
         result = handle.result()
         pname = getattr(result.gds.meta, 'project_name', '') if getattr(result, 'gds', None) and hasattr(result.gds, 'meta') else ''
         q_count = len(result.questions) if getattr(result, 'questions', None) else 0
+
+        # Attach authoritative user-selected project directory (Two-Location Storage Architecture)
+        pdir_text = self._edit_project_dir.text().strip()
+        if pdir_text and getattr(result, "gds", None) and hasattr(result.gds, "meta"):
+            base_dir = Path(pdir_text).resolve()
+            proj_name = result.gds.meta.project_name or "MyGame"
+            if base_dir.name.lower() == proj_name.lower():
+                target_pdir = base_dir
+            else:
+                target_pdir = base_dir / proj_name
+            setattr(result.gds.meta, "project_dir", str(target_pdir))
+
         print(f"[GameForge Studio] Design draft status: {result.status}" + (f" (Project: '{pname}')" if pname else "") + (f" | {q_count} questions" if q_count else ""), flush=True)
         if result.status == "OK":
             self.designReady.emit(result.gds, [])
@@ -558,6 +629,7 @@ class HomeView(QWidget):
         elif result.status == "UNSUPPORTED":
             self._notice_lbl.setText("That doesn't look like a game request. Try the Assistant.")
             self._notice_lbl.setVisible(True)
+            self.openAssistantRequested.emit()
         else:
             err_msg = "; ".join(result.errors) if result.errors else "Unknown design drafting error."
             self._notice_lbl.setText(err_msg)
@@ -572,7 +644,13 @@ class HomeView(QWidget):
 
     def refresh_recent_games(self) -> None:
         """Scan recent games off the UI thread and render cards."""
+        pdir = self._edit_project_dir.text().strip() if hasattr(self, "_edit_project_dir") else ""
+
         def work():
+            if pdir and Path(pdir).is_dir():
+                custom_games = list_games(projects_root=pdir)
+                if custom_games:
+                    return custom_games
             return list_games()
 
         def done(handle: JobHandle):
@@ -581,6 +659,8 @@ class HomeView(QWidget):
                 res = handle.result()
                 self._latest_games = res[:6] if res else []
                 QMetaObject.invokeMethod(self, "_render_recent_games", Qt.QueuedConnection)
+            else:
+                logger.error("Scan Recent Games failed: %s", handle.error)
 
         handle = self._job_manager.submit(work, name="Scan Recent Games")
         handle.add_done_callback(done)

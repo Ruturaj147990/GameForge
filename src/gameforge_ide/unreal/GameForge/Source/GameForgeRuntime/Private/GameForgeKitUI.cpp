@@ -56,14 +56,33 @@ void UGameForgeHUDWidget::BuildRows(UCanvasPanel* Root)
 		}
 	}
 
-	// Read HUD items from settings definition
-	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
-	if (!Settings || Settings->GameDefinition.IsNull())
+	// Center Crosshair for first-person / shooting
+	UTextBlock* Crosshair = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Crosshair"));
+	if (Crosshair)
 	{
-		return;
+		Crosshair->SetText(FText::FromString(TEXT("+")));
+		Crosshair->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.85f)));
+		if (UCanvasPanelSlot* CrossSlot = Root->AddChildToCanvas(Crosshair))
+		{
+			CrossSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+			CrossSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			CrossSlot->SetAutoSize(true);
+		}
 	}
 
-	UGameForgeGameDefinition* DefAsset = Settings->GameDefinition.LoadSynchronous();
+	// Read HUD items from settings definition
+	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
+	UGameForgeGameDefinition* DefAsset = (Settings && !Settings->GameDefinition.IsNull())
+		? Settings->GameDefinition.LoadSynchronous()
+		: nullptr;
+	if (!DefAsset)
+	{
+		DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main.GD_Main"));
+	}
+	if (!DefAsset)
+	{
+		DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main"));
+	}
 	if (!DefAsset)
 	{
 		return;

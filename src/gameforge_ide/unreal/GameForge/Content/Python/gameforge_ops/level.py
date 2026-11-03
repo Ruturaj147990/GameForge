@@ -32,6 +32,8 @@ def spawn_actor(args):
         if label:
             actor.set_actor_label(label)
         mesh_path = args.get("static_mesh")
+        if not mesh_path and isinstance(actor, unreal.StaticMeshActor):
+            mesh_path = "/Engine/BasicShapes/Cube.Cube"
         if mesh_path and isinstance(actor, unreal.StaticMeshActor):
             mesh = unreal.EditorAssetLibrary.load_asset(mesh_path)
             if mesh:
@@ -45,6 +47,8 @@ def spawn_actor(args):
         if "light_intensity" in args and hasattr(actor, "light_component") and actor.light_component:
             actor.light_component.set_intensity(float(args["light_intensity"]))
         material = args.get("material")
+        if not material and isinstance(actor, unreal.StaticMeshActor):
+            material = "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"
         if material and isinstance(actor, unreal.StaticMeshActor):
             mat = unreal.EditorAssetLibrary.load_asset(material)
             if mat:
@@ -142,6 +146,16 @@ def new_level(args):
     if_exists = args.get("if_exists", "load")
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         if if_exists == "replace":
+            try:
+                world = unreal.EditorLevelLibrary.get_editor_world() if hasattr(unreal, "EditorLevelLibrary") else None
+                curr_path = world.get_path_name() if world else ""
+                if curr_path and (path in curr_path or curr_path.startswith(path)):
+                    if hasattr(unreal, "EditorLoadingAndSavingUtils"):
+                        unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
+                    elif hasattr(_level_sub(), "new_level"):
+                        _level_sub().new_level("/Engine/Maps/Templates/Template_Default")
+            except Exception:
+                pass
             unreal.EditorAssetLibrary.delete_asset(path)
         elif if_exists != "load":
             return _envelope("new_level", False, {"level_path": path, "exists": True},

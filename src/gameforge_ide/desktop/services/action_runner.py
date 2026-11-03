@@ -103,6 +103,7 @@ class ActionRunner(QObject):
                     result = gateway.game_tools.create_game(
                         gds_or_params,
                         package=args.get("package", True),
+                        project_dir=args.get("project_dir"),
                         on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
                         cancel_event=cancel_ev,
                     )
@@ -110,6 +111,7 @@ class ActionRunner(QObject):
                     result = gateway.game_tools.create_game_freeform(
                         args["prompt"],
                         args.get("title"),
+                        project_dir=args.get("project_dir"),
                         on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
                         cancel_event=cancel_ev,
                     )

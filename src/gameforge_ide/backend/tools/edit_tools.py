@@ -109,6 +109,9 @@ class EditTools:
                 if "\r\n" in original_text:
                     target_content = norm_target.replace("\n", "\r\n")
                     replacement_content = replacement_content.replace("\r\n", "\n").replace("\n", "\r\n")
+                else:
+                    target_content = norm_target
+                    replacement_content = replacement_content.replace("\r\n", "\n")
             else:
                 return {
                     "status": "ERROR",

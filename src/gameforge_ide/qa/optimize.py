@@ -114,6 +114,9 @@ class OptimizationLoop:
             if current_perf.meets_budget(target_fps, max_frame_ms):
                 break
 
+            ini_path = self.project_dir / "Config" / "DefaultEngine.ini"
+            ini_backup = ini_path.read_text(encoding="utf-8") if ini_path.is_file() else None
+
             candidate_gds = copy.deepcopy(current_gds)
             applied = apply_fn(candidate_gds)
             if not applied:
@@ -138,6 +141,12 @@ class OptimizationLoop:
             else:
                 accepted = True
                 reason = f"ACCEPTED: p95 improved {improvement_pct:.2f}% with stable vision & scenarios"
+
+            if not accepted:
+                if ini_backup is not None:
+                    ini_path.write_text(ini_backup, encoding="utf-8")
+                elif ini_path.is_file():
+                    ini_path.unlink(missing_ok=True)
 
             attempts.append(
                 OptimizationAttempt(

@@ -399,7 +399,13 @@ class DeleteGameDialog(QDialog):
         layout.addWidget(folders_box)
 
         # Typing confirmation prompt
-        prompt_lbl = QLabel(f"Type the project name <font color='{tokens.TEXT_PRIMARY}'><b>{game.name}</b></font> to confirm:", self)
+        prompt_text = f"Type the project name <font color='{tokens.TEXT_PRIMARY}'><b>{game.name}</b></font> to confirm:"
+        if game.title and game.title.strip().lower() != game.name.strip().lower():
+            prompt_text = (
+                f"Type the project name <font color='{tokens.TEXT_PRIMARY}'><b>{game.name}</b></font> "
+                f"(or <font color='{tokens.TEXT_PRIMARY}'><b>{game.title}</b></font>) to confirm:"
+            )
+        prompt_lbl = QLabel(prompt_text, self)
         prompt_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
         layout.addWidget(prompt_lbl)
 
@@ -418,6 +424,7 @@ class DeleteGameDialog(QDialog):
             f"}}"
         )
         self._confirm_input.textChanged.connect(self._on_text_changed)
+        self._confirm_input.returnPressed.connect(self._on_return_pressed)
         layout.addWidget(self._confirm_input)
 
         # Button row
@@ -462,7 +469,16 @@ class DeleteGameDialog(QDialog):
 
     @Slot(str)
     def _on_text_changed(self, text: str) -> None:
-        self._btn_delete.setEnabled(text.strip() == self.game.name)
+        clean = text.strip().lower()
+        valid_names = {self.game.name.strip().lower()}
+        if self.game.title:
+            valid_names.add(self.game.title.strip().lower())
+        self._btn_delete.setEnabled(clean in valid_names and len(clean) > 0)
+
+    @Slot()
+    def _on_return_pressed(self) -> None:
+        if self._btn_delete.isEnabled():
+            self.accept()
 
 
 class GamesView(QWidget):
@@ -471,6 +487,10 @@ class GamesView(QWidget):
     openGameRequested = Signal(str)     # (project_name) -> open in Design
     playGameRequested = Signal(str)     # (project_name) -> Play view / launch
     buildGameRequested = Signal(str)    # (project_name) -> Build view
+    newProjectRequested = Signal(str, Path)   # (project_name, project_dir)
+    openProjectRequested = Signal(Path)       # (project_dir)
+    gameDeleted = Signal(str, Path)           # (project_name, project_dir)
+    _delete_finished = Signal(bool, str, str, Path)  # (success, project_name, error_msg, project_dir)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -479,6 +499,7 @@ class GamesView(QWidget):
 
         self._model = GamesListModel(self)
         self._job_manager = default_job_manager()
+        self._delete_finished.connect(self._on_delete_finished)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(24, 20, 24, 20)
@@ -591,6 +612,43 @@ class GamesView(QWidget):
         self._btn_refresh.clicked.connect(self.refresh_games)
         tb_layout.addWidget(self._btn_refresh)
 
+        # Open Project button
+        self._btn_open = QPushButton("Open…", self)
+        self._btn_open.setObjectName("gamesBtnOpenProject")
+        self._btn_open.setAccessibleName("Open existing project directory")
+        self._btn_open.setCursor(Qt.PointingHandCursor)
+        self._btn_open.setStyleSheet(
+            f"QPushButton#{self._btn_open.objectName()} {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_MD}px;"
+            f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+        )
+        self._btn_open.clicked.connect(self._on_open_project_clicked)
+        tb_layout.addWidget(self._btn_open)
+
+        # New Project button
+        self._btn_new = QPushButton("+ New Project…", self)
+        self._btn_new.setObjectName("gamesBtnNewProject")
+        self._btn_new.setAccessibleName("Create new project at user-selected directory")
+        self._btn_new.setCursor(Qt.PointingHandCursor)
+        self._btn_new.setStyleSheet(
+            f"QPushButton#{self._btn_new.objectName()} {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: none;"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px {tokens.SPACE_MD}px;"
+            f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"  font-weight: 600;"
+            f"}}"
+        )
+        self._btn_new.clicked.connect(self._on_new_project_clicked)
+        tb_layout.addWidget(self._btn_new)
+
         main_layout.addLayout(tb_layout)
 
         # ── List / Grid View ──────────────────────────────────────────────────
@@ -657,6 +715,23 @@ class GamesView(QWidget):
             "Unbuilt": "unbuilt",
         }
         self._model.set_status_filter(mapping.get(text, "all"))
+
+    @Slot()
+    def _on_new_project_clicked(self) -> None:
+        from ..dialogs.new_project_dialog import NewProjectDialog
+        dlg = NewProjectDialog(self)
+        if dlg.exec():
+            name, pdir = dlg.get_resolved_project_dir()
+            self.newProjectRequested.emit(name, pdir)
+
+    @Slot()
+    def _on_open_project_clicked(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        from ...core.settings import get_settings
+        start_dir = str(get_settings().projects_root or Path.home() / "Documents" / "GameForge" / "Projects")
+        chosen = QFileDialog.getExistingDirectory(self, "Select Existing Project Directory", start_dir)
+        if chosen:
+            self.openProjectRequested.emit(Path(chosen).resolve())
 
     @Slot(int)
     def _on_sort_changed(self, index: int) -> None:
@@ -726,7 +801,12 @@ class GamesView(QWidget):
         try:
             from src.gameforge_ide.backend.tools.game_tools import GameTools
             for link in GameTools.all_links():
-                if getattr(link, "project_name", "") == game.name:
+                link_name = getattr(link, "project_name", "")
+                if link_name and (
+                    link_name == game.name
+                    or link_name == game.title
+                    or link_name == game.project_dir.name
+                ):
                     QMessageBox.warning(
                         self,
                         "Cannot Delete Project",
@@ -738,18 +818,37 @@ class GamesView(QWidget):
 
         dlg = DeleteGameDialog(game, self)
         if dlg.exec() == QDialog.Accepted:
-            self._execute_delete(game.name)
+            self._execute_delete(game.name, game.project_dir)
 
-    def _execute_delete(self, project_name: str) -> None:
+    def _execute_delete(self, project_name: str, project_dir: Optional[Path] = None) -> None:
+        pdir = project_dir or resolve_project_dir(project_name)
+
         def work() -> bool:
-            return delete_project(project_name)
+            success = delete_project(project_name, project_dir=pdir)
+            if not success:
+                raise RuntimeError(f"Could not delete directory for project '{project_name}' at {pdir}.")
+            return True
 
         def done(handle: JobHandle) -> None:
-            if handle.status == "DONE":
-                from PySide6.QtCore import QMetaObject, Qt
-                QMetaObject.invokeMethod(self, "refresh_games", Qt.QueuedConnection)
-            elif handle.status == "FAILED":
-                logger.error(f"Failed to delete project {project_name}: {handle.error}")
+            if handle.status == "DONE" and handle.result():
+                self._delete_finished.emit(True, project_name, "", pdir or Path())
+            else:
+                err_msg = str(handle.error) if handle.error else f"Failed to delete project '{project_name}'."
+                self._delete_finished.emit(False, project_name, err_msg, pdir or Path())
 
         handle = self._job_manager.submit(work, name=f"Delete Project {project_name}")
         handle.add_done_callback(done)
+
+    @Slot(bool, str, str, Path)
+    def _on_delete_finished(self, success: bool, project_name: str, error_msg: str, project_dir: Path) -> None:
+        self.refresh_games()
+        if success:
+            logger.info("Project '%s' at %s successfully deleted.", project_name, project_dir)
+            self.gameDeleted.emit(project_name, project_dir)
+        else:
+            logger.error("Failed to delete project '%s': %s", project_name, error_msg)
+            QMessageBox.warning(
+                self,
+                "Delete Failed",
+                f"Failed to delete project '{project_name}':\n\n{error_msg}\n\nPlease check file permissions or close any open applications accessing this folder.",
+            )

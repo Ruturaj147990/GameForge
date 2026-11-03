@@ -67,7 +67,10 @@ def gamedef_write(args):
         cls = getattr(unreal, "GameForgeGameDefinition", None)
         if cls is None:
             return _envelope("gamedef_write", False, errors=["GameForgeGameDefinition class not available in engine"])
-        factory.data_asset_class = cls
+        if hasattr(factory, "set_editor_property"):
+            factory.set_editor_property("data_asset_class", cls)
+        elif hasattr(factory, "data_asset_class"):
+            factory.data_asset_class = cls
         asset = asset_tools.create_asset(asset_name, pkg_path, cls, factory)
 
     if not asset:

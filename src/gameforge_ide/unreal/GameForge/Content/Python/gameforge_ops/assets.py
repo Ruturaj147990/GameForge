@@ -137,6 +137,14 @@ def delete_asset(args):
         gone = not unreal.EditorAssetLibrary.does_directory_exist(path) or not unreal.EditorAssetLibrary.list_assets(path)
         return _envelope("delete_asset", bool(ok) and gone, {"asset_path": path, "deleted": gone, "directory": True},
                          affected=[path], reversibility="snapshot-only")
+    try:
+        world = unreal.EditorLevelLibrary.get_editor_world() if hasattr(unreal, "EditorLevelLibrary") else None
+        curr_path = world.get_path_name() if world else ""
+        if curr_path and (path in curr_path or curr_path.startswith(path)):
+            if hasattr(unreal, "EditorLoadingAndSavingUtils"):
+                unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
+    except Exception:
+        pass
     ok = unreal.EditorAssetLibrary.delete_asset(path)
     gone = not unreal.EditorAssetLibrary.does_asset_exist(path)
     return _envelope("delete_asset", bool(ok) and gone, {"asset_path": path, "deleted": gone},

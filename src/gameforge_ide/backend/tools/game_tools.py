@@ -249,10 +249,12 @@ class GameTools:
         return rec
 
     def create_game_freeform(self, prompt: str, title: Optional[str] = None,
+                             project_dir: Optional[Union[str, Path]] = None,
                              on_event: Optional[Callable[[str, Dict], None]] = None, cancel_event=None) -> Dict[str, Any]:
         from ...pipeline.freeform import FreeformGamePipeline
         self.release_llm_vram()
-        return FreeformGamePipeline(self.workspace_root, self.projects_root, self.engine_root,
+        proj_root = Path(project_dir).parent if project_dir else self.projects_root
+        return FreeformGamePipeline(self.workspace_root, proj_root, self.engine_root,
                                     on_event=on_event, cancel_event=cancel_event).run(prompt, title)
 
     # ── T3 create game ─────────────────────────────────────────────────────
@@ -321,7 +323,15 @@ class GameTools:
                 from ...forge.model import RunState, StepStatus
                 from ...core.events import default_bus
 
-                pdir = self.projects_root / gds.meta.project_name
+                explicit_pdir = (
+                    kwargs.get("project_dir")
+                    or (gds_or_params.get("project_dir") if isinstance(gds_or_params, dict) else None)
+                    or getattr(gds.meta, "project_dir", None)
+                )
+                if explicit_pdir:
+                    pdir = Path(explicit_pdir).resolve()
+                else:
+                    pdir = self.projects_root / gds.meta.project_name
                 pdir.mkdir(parents=True, exist_ok=True)
                 design_store.save(pdir, gds)
 
@@ -396,6 +406,13 @@ class GameTools:
                 report_path = pdir / "Saved" / "GameForge" / "pipeline_report.json"
                 first_failed = next((sid for sid, r in state.records.items() if r.status == StepStatus.FAILED), None)
 
+                err_msg = None
+                if not ok:
+                    if first_failed and state.records[first_failed].errors:
+                        err_msg = "; ".join(state.records[first_failed].errors)
+                    else:
+                        err_msg = f"Run status: {state.status}"
+
                 out = {
                     "status": "SUCCESS" if ok else state.status,
                     "ok": ok,
@@ -403,7 +420,7 @@ class GameTools:
                     "run_id": state.run.run_id,
                     "report_path": str(report_path) if report_path.is_file() else None,
                     "failed_stage": first_failed,
-                    "error": state.error if not ok else None,
+                    "error": err_msg,
                 }
                 if exe_path.is_file():
                     out["exe"] = str(exe_path)

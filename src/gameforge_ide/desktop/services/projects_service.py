@@ -204,23 +204,126 @@ def list_games(
     return games
 
 
-def delete_project(project_name: str, projects_root: Optional[Union[str, Path]] = None) -> bool:
-    """Delete a project folder after checking that it is not locked in an active editor link."""
+def delete_project(
+    project_name: str,
+    projects_root: Optional[Union[str, Path]] = None,
+    project_dir: Optional[Union[str, Path]] = None,
+) -> bool:
+    """Delete a project folder after checking that it is not locked in an active editor link.
+    
+    Handles Windows read-only file attributes (e.g. .git/objects and binaries),
+    purges associated runs from runs_index.json, and cleans SQLite project indexes.
+    """
+    import stat
+    import sys
+
+    # 1. Resolve candidate directory first so link checks and path checks have authoritative pdir
+    if project_dir:
+        pdir = Path(project_dir).resolve()
+    else:
+        pdir = resolve_project_dir(project_name, projects_root)
+
+    if not pdir or not pdir.is_dir():
+        logger.warning(f"Cannot delete project '{project_name}': directory '{pdir}' does not exist.")
+        return False
+
+    # 2. Check active Unreal Editor link
     try:
         from src.gameforge_ide.backend.tools.game_tools import GameTools
         for link in GameTools.all_links():
-            if getattr(link, "project_name", "") == project_name:
+            link_name = getattr(link, "project_name", "")
+            if link_name and (link_name == project_name or link_name == pdir.name):
                 raise RuntimeError(
                     f"Cannot delete project '{project_name}': an active Unreal Editor link is connected."
                 )
     except ImportError:
         pass
 
-    pdir = resolve_project_dir(project_name, projects_root)
-    if not pdir or not pdir.is_dir():
-        return False
+    # 3. Windows read-only file handler for shutil.rmtree
+    def _handle_rmtree_error(func, path, exc_info_or_exc):
+        try:
+            os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+            func(path)
+        except Exception as err:
+            logger.warning("Could not force-remove %s: %s", path, err)
 
-    shutil.rmtree(pdir)
+    # Retry up to 3 times in case of transient locks
+    for attempt in range(3):
+        try:
+            if sys.version_info >= (3, 12):
+                shutil.rmtree(pdir, onexc=_handle_rmtree_error)
+            else:
+                shutil.rmtree(pdir, onerror=_handle_rmtree_error)
+            break
+        except Exception as err:
+            if attempt == 2:
+                logger.error("Failed to delete directory %s: %s", pdir, err)
+                raise
+            time.sleep(0.2)
+
+    if pdir.exists():
+        try:
+            os.rmdir(pdir)
+        except OSError:
+            remaining = list(pdir.iterdir())
+            if remaining:
+                raise OSError(
+                    f"Failed to completely delete directory '{pdir}': {len(remaining)} items remain (files may be locked by another process)."
+                )
+
+    # 4. Clean up entries from runs_index.json across candidate locations
+    try:
+        paths_to_clean = []
+        if projects_root:
+            paths_to_clean.append(Path(projects_root) / ".gameforge" / "runs_index.json")
+        s = get_settings()
+        if s.projects_root:
+            paths_to_clean.append(Path(s.projects_root) / ".gameforge" / "runs_index.json")
+        paths_to_clean.append(Path.cwd() / ".gameforge" / "runs_index.json")
+        if s.default_workspace:
+            paths_to_clean.append(Path(s.default_workspace) / ".gameforge" / "runs_index.json")
+
+        norm_target_pdir = str(pdir.resolve()).lower()
+        norm_name = project_name.lower()
+
+        for idx_file in set(paths_to_clean):
+            if idx_file.is_file():
+                try:
+                    data = json.loads(idx_file.read_text(encoding="utf-8"))
+                    if isinstance(data, list):
+                        new_data = [
+                            item for item in data
+                            if str(Path(item.get("project_dir", "")).resolve()).lower() != norm_target_pdir
+                            and (item.get("project_name", "") or "").lower() != norm_name
+                        ]
+                        if len(new_data) != len(data):
+                            idx_file.write_text(json.dumps(new_data, indent=2), encoding="utf-8")
+                except Exception as e:
+                    logger.warning("Could not update runs index %s: %s", idx_file, e)
+    except Exception as e:
+        logger.warning("Error cleaning runs_index for %s: %s", project_name, e)
+
+    # 5. Purge index SQLite database for this project
+    try:
+        import hashlib
+        proj_key = hashlib.sha1(str(pdir.resolve()).encode("utf-8")).hexdigest()
+        candidate_ws = [pdir.parent, Path.cwd()]
+        s = get_settings()
+        if s.default_workspace:
+            candidate_ws.append(Path(s.default_workspace))
+        for ws in candidate_ws:
+            if ws and Path(ws).is_dir():
+                idx_db = Path(ws) / ".gameforge" / "index" / f"{proj_key}.db"
+                for ext in ["", "-wal", "-shm"]:
+                    f = Path(str(idx_db) + ext)
+                    if f.is_file():
+                        try:
+                            f.unlink()
+                        except Exception:
+                            pass
+    except Exception as e:
+        logger.warning("Error cleaning index database for %s: %s", project_name, e)
+
     return True
 
 
@@ -258,17 +361,21 @@ class ProjectsService(QObject):
         handle = self._job_manager.submit(work, name="Scan Projects")
         handle.add_done_callback(done)
 
-    def delete_game(self, project_name: str) -> None:
+    def delete_game(self, project_name: str, project_dir: Optional[Union[str, Path]] = None) -> None:
         """Delete a project asynchronously on JobManager."""
         def work() -> bool:
-            return delete_project(project_name, self._projects_root)
+            success = delete_project(project_name, self._projects_root, project_dir=project_dir)
+            if not success:
+                raise RuntimeError(f"Could not delete project '{project_name}'.")
+            return True
 
         def done(handle):
-            if handle.status == "DONE":
+            if handle.status == "DONE" and handle.result():
                 self.gameDeleted.emit(project_name)
                 self.refresh()
-            elif handle.status == "FAILED":
-                self.operationFailed.emit(str(handle.error))
+            else:
+                err_msg = str(handle.error) if handle.error else f"Could not remove project '{project_name}'."
+                self.operationFailed.emit(err_msg)
 
         handle = self._job_manager.submit(work, name=f"Delete Project {project_name}")
         handle.add_done_callback(done)

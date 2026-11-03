@@ -265,7 +265,17 @@ class AgentRuntime:
             "ok", "okay", "got it", "noted", "cool", "great", "nice", "continue",
         )
         for prefix in greeting_prefixes:
-            if p == prefix or p.startswith(prefix + " ") or p.startswith(prefix + ","):
+            if p == prefix or p.rstrip("!.,") == prefix:
+                return True
+            if p.startswith(prefix + " ") or p.startswith(prefix + ","):
+                rest = p[len(prefix):].strip(" ,!.")
+                if not rest:
+                    return True
+                if any(k in rest for k in ("create", "build", "make", "fix", "add", "remove", "update", "game", "shoot", "run", "check", "speed")):
+                    break
+                rest_words = re.findall(r"\b[a-z0-9_]+\b", rest)
+                if set(rest_words).intersection(action_keywords):
+                    break
                 return True
 
         qa_prefixes = (
@@ -344,7 +354,8 @@ class AgentRuntime:
                     )
                 )
 
-        if not predicates and self._is_actionable_task(user_prompt, ""):
+        is_inspect_only = bool(re.search(r"\b(find|search|list|inspect|check|query|read|status|view|show|where|who)\b", user_prompt, re.I)) and not bool(re.search(r"\b(modify|change|edit|fix|create|write|add|delete|remove|refactor|update)\b", user_prompt, re.I))
+        if not predicates and self._is_actionable_task(user_prompt, "") and not is_inspect_only:
             # Fallback baseline: an actionable mutate task requires at least one file change
             predicates.append(
                 TaskAcceptancePredicate(
@@ -476,16 +487,18 @@ class AgentRuntime:
                     re.I,
                 ))
 
-                if is_question or is_code_request:
+                if is_code_request:
                     is_create = False
+                    is_change = False
+                elif is_question and not is_create:
                     is_change = False
                 else:
                     is_change = bool(re.search(
-                        r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease|more|less|replace|enhance|fix|improve)\b",
+                        r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|ad|remove|tweak|increase|decrease|more|mor|less|replace|enhance|fix|improve|switch|set|turn|double|halve|insert|make|spawn)\b",
                         user_prompt,
                         re.I,
                     )) and bool(re.search(
-                        r"\b(game|project|level|scene|weapon|weapons?|gun|pistol|rifle|knife|bot|bots|enemy|enemies|combat|spawner|hazard|speed|health|damage|rules?|arena|box)\b",
+                        r"\b(game|project|level|leavl|scene|weapon|weapons?|wepon|gun|shotgun|shotgn|pistol|rifle|knife|bot|bots|enemy|enemies|enemiez|combat|spawner|hazard|speed|health|damage|rules?|arena|box|camera|view|perspective|jump|height|boss|lighting|pickups?|collectibles?|checkpoint|checkpoints|obstacles?|doors?|keys?|bombs?|defus\w*|tactical)\b",
                         user_prompt,
                         re.I,
                     )) and not is_create
@@ -926,14 +939,13 @@ class AgentRuntime:
                 continuation_nudge = (
                     f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
                     "You now have the required workspace/engine information. "
-                    "Proceed to create or edit the project files using `propose_edit`. "
+                    "Proceed with the next appropriate tool call to complete the task, or synthesize your final response. "
                     "Do not call discovery tools again unless you need a specific piece of information not yet retrieved."
                 )
             else:
                 continuation_nudge = (
                     f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
-                    "Continue the task. If you need to create or edit project files, invoke `propose_edit` using the JSON format. "
-                    "If you need more information, invoke another tool. Otherwise synthesize the final answer."
+                    "Review the observation above and proceed with the next appropriate tool call or synthesize your final response."
                 )
 
             conversation_history.append({"role": "assistant", "content": full_response})

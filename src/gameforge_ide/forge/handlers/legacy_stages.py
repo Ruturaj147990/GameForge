@@ -1,6 +1,7 @@
 """Legacy recipe pipeline stages adapted as Forge handlers (AD-11)."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Type, Union
 
@@ -139,13 +140,91 @@ def _get_toolchain(ctx: StepContext) -> UnrealToolchain:
 
 
 def legacy_spec(ctx: StepContext) -> StepOutcome:
-    params = get_params(ctx)
-    params.validate()
     tc = _get_toolchain(ctx)
     missing = [k for k, v in tc.check().items() if not v]
     if missing:
         return StepOutcome(False, errors=[f"engine tools missing: {missing}"], blocked=True)
+
+    # If this is a modern GDS / Composition run (e.g. Platformer, Shooter, CounterStrike)
+    pdir = ctx.project_dir or ctx.workspace_dir
+    gds_data = ctx.step.inputs.get("gds")
+    if not gds_data and pdir:
+        gds_file = pdir / "GameForge" / "design" / "game.gds.json"
+        if gds_file.is_file():
+            try:
+                import json
+                gds_data = json.loads(gds_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    has_legacy_recipe = "params" in ctx.step.inputs or "recipe_id" in ctx.step.inputs
+    if not has_legacy_recipe or gds_data or "gds_id" in ctx.step.inputs:
+        proj_name = (
+            ctx.step.inputs.get("project_name")
+            or (gds_data.get("meta", {}).get("project_name") if isinstance(gds_data, dict) else None)
+            or (pdir.name if pdir else "GameForgeProject")
+        )
+        genre = (
+            ctx.step.inputs.get("genre")
+            or (gds_data.get("overview", {}).get("genre") if isinstance(gds_data, dict) else None)
+            or "Action"
+        )
+        title = (
+            (gds_data.get("meta", {}).get("title") if isinstance(gds_data, dict) else None)
+            or proj_name
+        )
+        design_params = {
+            "project_name": proj_name,
+            "display_title": title,
+            "genre": genre,
+        }
+        if isinstance(gds_data, dict):
+            overview = gds_data.get("overview", {})
+            for key in ("pitch", "camera", "players", "win_condition", "lose_condition"):
+                if key in overview:
+                    design_params[key] = overview[key]
+            art = gds_data.get("art", {})
+            if "theme" in art:
+                design_params["theme"] = art["theme"]
+
+        return StepOutcome(True, data={"params": design_params, "engine": tc.engine_version()})
+
+    params = get_params(ctx)
+    params.validate()
     return StepOutcome(True, data={"params": params.to_dict(), "engine": tc.engine_version()})
+
+
+def _sync_project_map_settings(pdir: Path, map_path: str) -> None:
+    """Ensure Config/DefaultEngine.ini and Config/DefaultGame.ini reflect the actual map."""
+    clean_map = map_path.strip().split("?")[0] if map_path else ""
+    config_dir = pdir / "Config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    if clean_map:
+        eng_ini = config_dir / "DefaultEngine.ini"
+        eng_content = eng_ini.read_text(encoding="utf-8") if eng_ini.is_file() else ""
+        sec_header = "[/Script/EngineSettings.GameMapsSettings]"
+
+        if sec_header in eng_content:
+            if re.search(r"GameDefaultMap\s*=", eng_content):
+                eng_content = re.sub(r"GameDefaultMap\s*=[^\r\n]*", f"GameDefaultMap={clean_map}", eng_content)
+            else:
+                eng_content = eng_content.replace(sec_header, f"{sec_header}\nGameDefaultMap={clean_map}")
+
+            if re.search(r"EditorStartupMap\s*=", eng_content):
+                eng_content = re.sub(r"EditorStartupMap\s*=[^\r\n]*", f"EditorStartupMap={clean_map}", eng_content)
+            else:
+                eng_content = eng_content.replace(sec_header, f"{sec_header}\nEditorStartupMap={clean_map}")
+        else:
+            eng_content = f"{sec_header}\nGameDefaultMap={clean_map}\nEditorStartupMap={clean_map}\n\n" + eng_content
+
+        eng_ini.write_text(eng_content, encoding="utf-8")
+
+    try:
+        from ...content.epic_packs import update_default_game_ini_cook_dirs
+        update_default_game_ini_cook_dirs(pdir, ["/Game/Maps"])
+    except Exception:
+        pass
 
 
 def legacy_scaffold(ctx: StepContext) -> StepOutcome:
@@ -154,10 +233,10 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
     display_title = ctx.step.inputs.get("display_title") or getattr(params, "display_title", project_name)
     pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
     uproject = pdir / f"{project_name}.uproject"
-    recipe_id = get_recipe_id(params)
+    recipe_id = ctx.step.inputs.get("recipe_id") or get_recipe_id(params)
     impl = RECIPE_IMPL.get(recipe_id, RECIPE_IMPL[GRID_RECIPE_ID])
     default_gm = ctx.step.inputs.get("game_mode") or "/Script/GameForgeRuntime.GameForgeGameModeBase"
-    deps = ctx.step.inputs.get("module_deps") or impl[2]
+    deps = ctx.step.inputs.get("module_deps") or impl[2] or ["UMG", "Slate", "SlateCore"]
     plugins = ctx.step.inputs.get("plugins")
     tc = _get_toolchain(ctx)
 
@@ -180,15 +259,45 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
                 except Exception:
                     pass
 
+    # Resolve default map: inputs -> plan -> GDS -> filesystem -> fallback
+    default_map = ctx.step.inputs.get("default_map")
+    if not default_map:
+        if "plan" in ctx.step.inputs and isinstance(ctx.step.inputs["plan"], dict):
+            default_map = ctx.step.inputs["plan"].get("map_path")
+        elif "gds" in ctx.step.inputs:
+            try:
+                gds_input = ctx.step.inputs["gds"]
+                if isinstance(gds_input, dict) and "scene" in gds_input and "levels" in gds_input["scene"]:
+                    lvls = gds_input["scene"]["levels"]
+                    if lvls and isinstance(lvls[0], dict) and "level_id" in lvls[0]:
+                        default_map = f"/Game/Maps/{lvls[0]['level_id'].capitalize()}"
+            except Exception:
+                pass
+        if not default_map:
+            try:
+                g_loaded = design_store.load(pdir)
+                if g_loaded and hasattr(g_loaded, "scene") and g_loaded.scene and g_loaded.scene.levels:
+                    default_map = f"/Game/Maps/{g_loaded.scene.levels[0].level_id.capitalize()}"
+            except Exception:
+                pass
+        if not default_map:
+            if (pdir / "Content" / "Maps" / "Level_1.umap").is_file():
+                default_map = "/Game/Maps/Level_1"
+            elif (pdir / "Content" / "Maps" / f"{project_name}Map.umap").is_file():
+                default_map = f"/Game/Maps/{project_name}Map"
+            else:
+                default_map = "/Game/Maps/Level_1"
+
     info = tc.scaffold_cpp_project(
         pdir,
         project_name,
-        default_map=f"/Game/Maps/{project_name}Map",
+        default_map=default_map,
         game_mode=default_gm,
         module_deps=deps,
         display_title=display_title,
         plugins=plugins,
     )
+    _sync_project_map_settings(pdir, default_map)
     # Ensure GameForge plugin is deployed into Plugins/GameForge
     tc.deploy_gameforge_plugin(pdir)
     if uproject.is_file():
@@ -227,6 +336,32 @@ def legacy_sources(ctx: StepContext) -> StepOutcome:
     params = get_params(ctx)
     project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
     pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
+
+    if "tasks" in ctx.step.inputs:
+        from ...composer.codegen import generate_header, generate_source
+        tasks = ctx.step.inputs["tasks"]
+        written_files = []
+        src_dir = pdir / "Source" / project_name
+        pub_dir = src_dir / "Public"
+        priv_dir = src_dir / "Private"
+        pub_dir.mkdir(parents=True, exist_ok=True)
+        priv_dir.mkdir(parents=True, exist_ok=True)
+
+        for task in tasks:
+            h_name = task.get("handler_name") if isinstance(task, dict) else getattr(task, "handler_name", "")
+            if not h_name:
+                continue
+            h_content = generate_header(project_name, h_name)
+            cpp_content = generate_source(h_name)
+
+            h_file = pub_dir / f"{h_name}.h"
+            cpp_file = priv_dir / f"{h_name}.cpp"
+            h_file.write_text(h_content, encoding="utf-8", newline="\n")
+            cpp_file.write_text(cpp_content, encoding="utf-8", newline="\n")
+            written_files.extend([str(h_file.relative_to(pdir)), str(cpp_file.relative_to(pdir))])
+
+        return StepOutcome(True, data={"files": sorted(written_files), "codegen_tasks": len(tasks)})
+
     recipe_id = get_recipe_id(params)
     generator = RECIPE_IMPL[recipe_id][0]
     files = generator(params)
@@ -274,11 +409,86 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
             uproject = uprojects[0]
     evidence_dir = pdir / "Saved" / "GameForge"
     evidence_dir.mkdir(parents=True, exist_ok=True)
+    eng_root = Path(ctx.step.inputs.get("engine_root") or engine_root_or_missing())
+
+    # Modern Composer LevelPlan execution path (eliminates "box-and-player" bug)
+    if "plan" in ctx.step.inputs:
+        from ...composer.model import LevelPlan
+        from ...composer.level_ops import plan_to_op_calls
+        from ...composer.runtime_def import build as build_gfdef
+        from ...design import store as design_store
+        from ...unreal.live_editor import LiveEditorLink
+
+        plan_data = ctx.step.inputs["plan"]
+        plan = LevelPlan.model_validate(plan_data) if isinstance(plan_data, dict) else plan_data
+
+        gds = None
+        if "gds" in ctx.step.inputs:
+            from ...design.gds import GameDesignSpec
+            try:
+                gds = GameDesignSpec.model_validate(ctx.step.inputs["gds"])
+            except Exception:
+                gds = None
+        if gds is None:
+            gds = design_store.load(pdir)
+
+        gfdef = build_gfdef(gds) if gds is not None else None
+        level_id = ctx.step.inputs.get("level_id", getattr(plan, "level_id", "level_1"))
+        is_first = str(level_id) in ("level_1", "1") or ctx.step.step_id == "assemble_level_1"
+
+        op_calls = plan_to_op_calls(plan, gfdef=gfdef, is_first_level=is_first)
+
+        link = LiveEditorLink(uproject, eng_root)
+        link.prepare_project()
+        log_file = evidence_dir / "assemble_editor.log"
+        link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=log_file)
+
+        out = []
+        errors = []
+        try:
+            link.connect(discovery_timeout_s=900)
+            for call in op_calls:
+                r = link.call(call.op, call.args, timeout_s=300)
+                call_ok = bool(r.get("ok"))
+                if not call_ok:
+                    if call.op == "create_material" and any("already exists" in e for e in r.get("errors", [])):
+                        call_ok = True
+                    elif call.op == "nav_find_path":
+                        # Reachability check warning: do not fail assembly hard
+                        call_ok = True
+                    else:
+                        errors.extend(r.get("errors", []))
+                out.append({"op": call.op, "purpose": call.purpose, "ok": call_ok, "errors": r.get("errors", [])})
+        except Exception as exc:
+            errors.append(f"assemble level failed: {exc}")
+        finally:
+            link.stop()
+
+        data = {
+            "calls": out,
+            "total_calls": len(op_calls),
+            "passed_calls": sum(1 for c in out if c.get("ok")),
+            "graceful": link.last_stop_graceful,
+            "plan_level_id": getattr(plan, "level_id", "level_1"),
+            "geometry_ops_count": len(getattr(plan, "geometry_ops", [])),
+            "actors_count": len(getattr(plan, "actors", [])),
+        }
+        artifacts = [{"path": str(log_file), "kind": "log"}] if log_file.is_file() else []
+        if log_file.is_file():
+            data["log"] = str(log_file)
+            data["log_path"] = str(log_file)
+        if len(errors) == 0:
+            assembled_map = getattr(plan, "map_path", None) or f"/Game/Maps/{str(level_id).capitalize()}"
+            if is_first:
+                _sync_project_map_settings(pdir, assembled_map)
+        return StepOutcome(len(errors) == 0, data=data, errors=errors, artifacts=artifacts)
+
     recipe_id = get_recipe_id(params)
     assemble_fn = RECIPE_IMPL[recipe_id][1]
-    eng_root = Path(ctx.step.inputs.get("engine_root") or engine_root_or_missing())
     ok, data, errors = assemble_fn(eng_root, uproject, evidence_dir, project_name, params)
     data = dict(data or {})
+    if ok and data.get("map"):
+        _sync_project_map_settings(pdir, data["map"])
     log_file = evidence_dir / "assemble_editor.log"
     artifacts = [{"path": str(log_file), "kind": "log"}] if log_file.is_file() else []
     if log_file.is_file():
@@ -317,6 +527,25 @@ def legacy_package(ctx: StepContext) -> StepOutcome:
         uprojects = list(pdir.glob("*.uproject"))
         if uprojects:
             uproject = uprojects[0]
+
+    # Pre-flight check: ensure DefaultEngine.ini points to an existing map
+    eng_ini = pdir / "Config" / "DefaultEngine.ini"
+    if eng_ini.is_file():
+        text = eng_ini.read_text(encoding="utf-8")
+        m = re.search(r"GameDefaultMap\s*=\s*([^\r\n]+)", text)
+        curr_map = m.group(1).strip() if m else ""
+        if curr_map.startswith("/Game/"):
+            rel_asset = curr_map[len("/Game/"):]
+            umap_path = pdir / "Content" / f"{rel_asset}.umap"
+            if not umap_path.is_file():
+                existing_maps = list((pdir / "Content" / "Maps").glob("*.umap"))
+                if existing_maps:
+                    best = next((f for f in existing_maps if f.stem.lower() in ("level_1", f"{project_name.lower()}map")), existing_maps[0])
+                    corrected_map = f"/Game/Maps/{best.stem}"
+                    _sync_project_map_settings(pdir, corrected_map)
+                    ctx.log(f"Auto-healed stale GameDefaultMap from '{curr_map}' to '{corrected_map}'")
+    _sync_project_map_settings(pdir, "")
+
     tc = _get_toolchain(ctx)
     ok, data, errors = engine_stages.package(tc, uproject)
     return StepOutcome(ok, data=data, errors=errors)

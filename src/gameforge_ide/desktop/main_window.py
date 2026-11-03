@@ -557,6 +557,7 @@ class MainWindow(QMainWindow):
         self._diff_panel = DiffPanel(self._tools, parent=self)
         self._diff_panel.diff_approved.connect(self._on_diff_applied)
         self._diff_panel.diff_rejected.connect(self._on_diff_rejected)
+        self._diff_panel.diff_rolled_back.connect(self._on_diff_rolled_back)
         self._dock_diff = self._make_dock("Diff Review", self._diff_panel, Qt.RightDockWidgetArea)
         self.tabifyDockWidget(self._dock_unreal, self._dock_diff)
         self._dock_diff.hide()  # Hidden until a diff is pending
@@ -914,6 +915,10 @@ class MainWindow(QMainWindow):
         if session_id and hasattr(self, "_agent"):
             self._agent.resume_after_diff(session_id, diff_id, approved=False)
 
+    @Slot(str)
+    def _on_diff_rolled_back(self, diff_id: str) -> None:
+        self.statusBar().showMessage(f"↩️ Diff {diff_id} rolled back.", 4000)
+
     def _on_create_game_from_unreal(self) -> None:
         if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer"):
             self._chat_panel._composer.setText("/game ")
@@ -987,10 +992,13 @@ class MainWindow(QMainWindow):
             ("Toggle Unreal Panel", lambda: self._dock_unreal.setVisible(not self._dock_unreal.isVisible())),
             ("Toggle Diff Review", lambda: self._dock_diff.setVisible(not self._dock_diff.isVisible())),
             ("Toggle Terminal", lambda: self._dock_terminal.setVisible(not self._dock_terminal.isVisible())),
-            ("View: Explorer", lambda: self._on_rail_action_clicked(0)),
-            ("View: Games & Mission Control", lambda: self._on_rail_action_clicked(1)),
-            ("View: Execution Plans", lambda: self._on_rail_action_clicked(2)),
-            ("View: Asset Registry", lambda: self._on_rail_action_clicked(3)),
+            ("View: Home", lambda: self._switch_studio_view("home")),
+            ("View: Games Catalog", lambda: self._switch_studio_view("games")),
+            ("View: Design", lambda: self._switch_studio_view("design")),
+            ("View: Build", lambda: self._switch_studio_view("build")),
+            ("View: Play", lambda: self._switch_studio_view("play")),
+            ("View: Evidence", lambda: self._switch_studio_view("evidence")),
+            ("View: Settings", lambda: self._switch_studio_view("settings")),
             ("Unreal: Run Staged Build", self._unreal_panel._on_build),
             ("Unreal: Refresh Engine Status", self._unreal_panel._refresh),
             ("About GameForge IDE", self._show_about),
@@ -1000,55 +1008,6 @@ class MainWindow(QMainWindow):
     def _open_command_palette(self) -> None:
         palette = CommandPalette(self._command_palette_commands(), self)
         palette.exec()
-        return
-        dialog = QDialog(self)
-
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        search = QLineEdit(dialog)
-        search.setObjectName("command_palette_search")
-        search.setPlaceholderText("Type a command…")
-        layout.addWidget(search)
-
-        commands = QListWidget(dialog)
-        commands.setObjectName("command_palette_commands")
-        layout.addWidget(commands)
-
-        for label, callback in self._command_palette_commands():
-            from PySide6.QtWidgets import QListWidgetItem
-            item = QListWidgetItem(label)
-            item.setData(Qt.UserRole, callback)
-            commands.addItem(item)
-
-        def filter_commands(query: str) -> None:
-            normalized = query.strip().casefold()
-            first_visible = -1
-            for index in range(commands.count()):
-                item = commands.item(index)
-                visible = normalized in item.text().casefold()
-                item.setHidden(not visible)
-                if visible and first_visible < 0:
-                    first_visible = index
-            commands.setCurrentRow(first_visible)
-
-        def activate_current() -> None:
-            item = commands.currentItem()
-            if item is None or item.isHidden():
-                return
-            callback = item.data(Qt.UserRole)
-            dialog.accept()
-            callback()
-
-        search.textChanged.connect(filter_commands)
-        commands.itemActivated.connect(lambda _item: activate_current())
-        search.installEventFilter(self)
-        search.setProperty("commandPaletteList", commands)
-        search.setProperty("commandPaletteDialog", dialog)
-        filter_commands("")
-        search.setFocus()
-        dialog.exec()
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802
         if watched.objectName() == "command_palette_search" and event.type() == QEvent.KeyPress:
@@ -1201,6 +1160,7 @@ class MainWindow(QMainWindow):
             view.projectSelected.connect(self._on_games_open_requested)
             view.designReady.connect(self._on_home_design_ready)
             view.fixActionRequested.connect(self._handle_fix_action)
+            view.openAssistantRequested.connect(lambda: self._set_assistant_visible(True))
             return view
 
         def create_games_view() -> GamesView:
@@ -1208,6 +1168,9 @@ class MainWindow(QMainWindow):
             view.openGameRequested.connect(self._on_games_open_requested)
             view.playGameRequested.connect(self._on_games_play_requested)
             view.buildGameRequested.connect(self._on_games_build_requested)
+            view.newProjectRequested.connect(self._on_new_project_requested)
+            view.openProjectRequested.connect(self._on_open_project_directory_requested)
+            view.gameDeleted.connect(self._on_game_deleted)
             return view
 
         self._view_host.register("home", create_home_view)
@@ -1260,6 +1223,7 @@ class MainWindow(QMainWindow):
                 workspace_root=self._workspace,
                 parent=self,
             )
+            view.openFileRequested.connect(lambda p: self._switch_studio_view("code"))
             if self._current_project:
                 view.set_project(self._current_project)
             return view
@@ -1381,6 +1345,22 @@ class MainWindow(QMainWindow):
             if hv and hasattr(hv, "refresh_recent_games"):
                 hv.refresh_recent_games()
 
+    @Slot(str, Path)
+    def _on_game_deleted(self, project_name: str, project_dir: Path) -> None:
+        norm_del = str(project_dir.resolve()).lower() if project_dir and project_dir != Path() else None
+        curr_del = str(self._current_project_dir.resolve()).lower() if self._current_project_dir else None
+
+        if self._current_project == project_name or (norm_del and curr_del == norm_del):
+            self._current_project = None
+            self._current_project_dir = None
+            self.refresh_projects(None)
+            self._switch_studio_view("games")
+        else:
+            self.refresh_projects(None)
+
+        if hasattr(self, "_toasts"):
+            self._toasts.info("Project Deleted", f"Project '{project_name}' has been permanently deleted.")
+
     def _on_project_selected(self, project_name: str) -> None:
         self._current_project = project_name
         p_dir = self._resolve_project_dir(project_name)
@@ -1460,14 +1440,57 @@ class MainWindow(QMainWindow):
                 fn()
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
-        if gds and hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
-            p_name = gds.meta.project_name
+        p_dir = None
+        if gds and hasattr(gds, "meta"):
+            p_name = getattr(gds.meta, "project_name", None) or getattr(gds.meta, "title", "MyGame")
+            p_dir_str = getattr(gds.meta, "project_dir", None)
+            if p_dir_str:
+                p_dir = Path(p_dir_str).resolve()
+            else:
+                p_dir = self._resolve_project_dir(p_name)
+            self._current_project = p_name
+            self._current_project_dir = p_dir
             self.refresh_projects(select_project=p_name)
             self._on_project_selected(p_name)
         self._switch_studio_view("design")
         design_view = self._view_host.get_view_widget("design")
         if design_view and hasattr(design_view, "open_draft"):
-            design_view.open_draft(gds, questions)
+            design_view.open_draft(gds, questions, project_dir=p_dir)
+
+    def _on_new_project_requested(self, project_name: str, project_dir: Path) -> None:
+        pdir = Path(project_dir).resolve()
+        self._current_project = project_name
+        self._current_project_dir = pdir
+        self.refresh_projects(select_project=project_name)
+        self._switch_studio_view("design")
+        dv = self._view_host.get_view_widget("design")
+        if dv and hasattr(dv, "load_project"):
+            if not dv.load_project(project_name, project_dir=pdir):
+                from ..design.gds import GameDesignSpec, Meta, Overview, TechSpec
+                spec = GameDesignSpec(
+                    meta=Meta(title=project_name, project_name=project_name, project_dir=str(pdir)),
+                    overview=Overview(genre="action", pitch=f"{project_name} project"),
+                    tech=TechSpec(),
+                )
+                dv.open_draft(spec, project_dir=pdir)
+
+    def _on_open_project_directory_requested(self, project_dir: Path) -> None:
+        pdir = Path(project_dir).resolve()
+        name = pdir.name
+        self._current_project = name
+        self._current_project_dir = pdir
+        self.refresh_projects(select_project=name)
+        self._switch_studio_view("design")
+        dv = self._view_host.get_view_widget("design")
+        if dv and hasattr(dv, "load_project"):
+            if not dv.load_project(name, project_dir=pdir):
+                from ..design.gds import GameDesignSpec, Meta, Overview, TechSpec
+                spec = GameDesignSpec(
+                    meta=Meta(title=name, project_name=name, project_dir=str(pdir)),
+                    overview=Overview(genre="action", pitch=f"{name} project"),
+                    tech=TechSpec(),
+                )
+                dv.open_draft(spec, project_dir=pdir)
 
     def _on_games_open_requested(self, project_name: str) -> None:
         self._on_project_selected(project_name)

@@ -1,0 +1,839 @@
+{
+  "total_prompts": 2000,
+  "intent_correct": 1905,
+  "tool_route_correct": 1905,
+  "hallucinated_actions": 0,
+  "clarification_appropriate": 0,
+  "by_category": {
+    "phrasing_variants": {
+      "total": 188,
+      "intent_correct": 174,
+      "route_correct": 174
+    },
+    "informal_and_spelling": {
+      "total": 195,
+      "intent_correct": 153,
+      "route_correct": 153
+    },
+    "questions_and_explanations": {
+      "total": 233,
+      "intent_correct": 233,
+      "route_correct": 233
+    },
+    "complex_multipart": {
+      "total": 147,
+      "intent_correct": 147,
+      "route_correct": 147
+    },
+    "game_design_requests": {
+      "total": 62,
+      "intent_correct": 54,
+      "route_correct": 54
+    },
+    "game_generation_requests": {
+      "total": 239,
+      "intent_correct": 239,
+      "route_correct": 239
+    },
+    "project_modifications": {
+      "total": 192,
+      "intent_correct": 192,
+      "route_correct": 192
+    },
+    "debugging_error_resolution": {
+      "total": 145,
+      "intent_correct": 145,
+      "route_correct": 145
+    },
+    "asset_gameplay_unreal": {
+      "total": 155,
+      "intent_correct": 155,
+      "route_correct": 155
+    },
+    "multiturn_followups": {
+      "total": 147,
+      "intent_correct": 116,
+      "route_correct": 116
+    },
+    "ambiguous_incomplete": {
+      "total": 93,
+      "intent_correct": 93,
+      "route_correct": 93
+    },
+    "context_dependent": {
+      "total": 103,
+      "intent_correct": 103,
+      "route_correct": 103
+    },
+    "unsupported_impossible": {
+      "total": 101,
+      "intent_correct": 101,
+      "route_correct": 101
+    }
+  },
+  "sample_evaluations": [
+    {
+      "id": "P0161",
+      "category": "phrasing_variants",
+      "prompt": "Generate for me first person shooter with zombie bots right now",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1594",
+      "category": "asset_gameplay_unreal",
+      "prompt": "Show details for lighting setups in the current project 6",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1087",
+      "category": "game_generation_requests",
+      "prompt": "Build a stealth action where the player fights shadow ninjas using a plasma rifle with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1862",
+      "category": "ambiguous_incomplete",
+      "prompt": "build 7",
+      "expected_intent": "AMBIGUOUS",
+      "actual_intent": "AMBIGUOUS",
+      "expected_route": "clarification_or_fallback",
+      "actual_route": "clarification_or_fallback",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1562",
+      "category": "asset_gameplay_unreal",
+      "prompt": "Show details for audio cues in the current project 6",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1454",
+      "category": "asset_gameplay_unreal",
+      "prompt": "List all available static mesh assets in the current project 2",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1039",
+      "category": "game_generation_requests",
+      "prompt": "Build a dungeon crawler where the player fights mutant spiders using a plasma rifle with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0230",
+      "category": "informal_and_spelling",
+      "prompt": "can u cod a top dwn shtr wit 5 enemys ???",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0471",
+      "category": "questions_and_explanations",
+      "prompt": "Can you explain Bridson Poisson-disk layout generator? in detail?",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0159",
+      "category": "phrasing_variants",
+      "prompt": "Can you develop first person shooter with zombie bots for testing",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1191",
+      "category": "project_modifications",
+      "prompt": "In the current game, please switch the camera to first-person mode.",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1084",
+      "category": "game_generation_requests",
+      "prompt": "Build a stealth action where the player fights alien drones using a laser pistol with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0431",
+      "category": "questions_and_explanations",
+      "prompt": "Where is Game Definition Spec schema configured? with examples?",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1645",
+      "category": "multiturn_followups",
+      "prompt": "Also add 2 more bots (step 16)",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0121",
+      "category": "phrasing_variants",
+      "prompt": "Help me build 3x3 tic tac toe game right now",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0458",
+      "category": "questions_and_explanations",
+      "prompt": "What are the best practices for Character movement component parameters? with examples?",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1144",
+      "category": "project_modifications",
+      "prompt": "In the current game, please add 3 more waves to the spawner right now",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0447",
+      "category": "questions_and_explanations",
+      "prompt": "Can you explain Character movement component parameters? in detail?",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0228",
+      "category": "informal_and_spelling",
+      "prompt": "can u cod a top dwn shtr wit 5 enemys ???",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1585",
+      "category": "asset_gameplay_unreal",
+      "prompt": "List all available lighting setups in the current project 5",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1304",
+      "category": "debugging_error_resolution",
+      "prompt": "The player is falling through the floor on spawn in level 1 (case 2)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "direct_chat",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1222",
+      "category": "project_modifications",
+      "prompt": "In the current game, please change the goal condition to collecting 10 relics right now",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1423",
+      "category": "debugging_error_resolution",
+      "prompt": "Inspect Source/GameForgeRuntime/Private/GameForgePlayer.cpp and fix the missing binding (case 1)",
+      "expected_intent": "CODE_EDIT",
+      "actual_intent": "CODE_EDIT",
+      "expected_route": "agent_tools",
+      "actual_route": "agent_tools",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0261",
+      "category": "informal_and_spelling",
+      "prompt": "yo build me a counter strik clone fast pls",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1148",
+      "category": "project_modifications",
+      "prompt": "In the current game, please add 3 more waves to the spawner right now",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0235",
+      "category": "informal_and_spelling",
+      "prompt": "wanna brawler game wit 4 wavs of gladiatorz pls",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0043",
+      "category": "phrasing_variants",
+      "prompt": "Deploy a new top down arena combat game for testing",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0708",
+      "category": "complex_multipart",
+      "prompt": "Create a arena brawler set in a cyberpunk alley featuring laser pistol combat, time slow locomotion mechanics, 4 progressive enemy waves, and a 180-second extraction timer.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P2057",
+      "category": "unsupported_impossible",
+      "prompt": "Book a flight from London to New York (9)",
+      "expected_intent": "UNSUPPORTED",
+      "actual_intent": "UNSUPPORTED",
+      "expected_route": "direct_chat_rejection",
+      "actual_route": "direct_chat_rejection",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1077",
+      "category": "game_generation_requests",
+      "prompt": "Build a stealth action where the player fights cyborg soldiers using a combat knife with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0832",
+      "category": "game_design_requests",
+      "prompt": "Design the core gameplay loop and progression curve for a dungeon crawler set in a medieval castle.",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0979",
+      "category": "game_generation_requests",
+      "prompt": "Build a card battler where the player fights cyborg soldiers using a plasma rifle with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1388",
+      "category": "debugging_error_resolution",
+      "prompt": "Why does the enemy bot freeze after reaching the player? (case 26)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0254",
+      "category": "informal_and_spelling",
+      "prompt": "yo build me a counter strik clone fast bro",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1106",
+      "category": "project_modifications",
+      "prompt": "In the current game, please increase player move speed to 1200 right now",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1784",
+      "category": "ambiguous_incomplete",
+      "prompt": "something cool 9",
+      "expected_intent": "AMBIGUOUS",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "clarification_or_fallback",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1274",
+      "category": "project_modifications",
+      "prompt": "In the current game, please add a rocket launcher weapon to the player inventory right now",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1016",
+      "category": "game_generation_requests",
+      "prompt": "Build a survival horror where the player fights skeletons using a laser pistol with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1790",
+      "category": "ambiguous_incomplete",
+      "prompt": "game 5",
+      "expected_intent": "AMBIGUOUS",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "clarification_or_fallback",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1271",
+      "category": "project_modifications",
+      "prompt": "In the current game, please add a rocket launcher weapon to the player inventory.",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0740",
+      "category": "complex_multipart",
+      "prompt": "Create a turn-based board game set in a cyberpunk alley featuring combat knife combat, time slow locomotion mechanics, 4 progressive enemy waves, and a 180-second extraction timer.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0214",
+      "category": "informal_and_spelling",
+      "prompt": "can u cod a top dwn shtr wit 5 enemys thx",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0349",
+      "category": "informal_and_spelling",
+      "prompt": "ad 10 mor enemiez to the leavl asap",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1501",
+      "category": "asset_gameplay_unreal",
+      "prompt": "Search workspace for character animations in the current project 1",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1658",
+      "category": "multiturn_followups",
+      "prompt": "What about the camera angle? (step 12)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0009",
+      "category": "phrasing_variants",
+      "prompt": "I want to make top down arena combat game right now",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0998",
+      "category": "game_generation_requests",
+      "prompt": "Build a card battler where the player fights zombie hordes using a shotgun with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1458",
+      "category": "asset_gameplay_unreal",
+      "prompt": "List all available static mesh assets in the current project 6",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1697",
+      "category": "multiturn_followups",
+      "prompt": "Why did the test fail? (step 17)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P2070",
+      "category": "unsupported_impossible",
+      "prompt": "Predict tomorrow's stock market prices (9)",
+      "expected_intent": "UNSUPPORTED",
+      "actual_intent": "UNSUPPORTED",
+      "expected_route": "direct_chat_rejection",
+      "actual_route": "direct_chat_rejection",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0760",
+      "category": "complex_multipart",
+      "prompt": "Create a card battler set in a medieval castle featuring plasma rifle combat, time slow locomotion mechanics, 4 progressive enemy waves, and a 180-second extraction timer.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0897",
+      "category": "game_generation_requests",
+      "prompt": "Build a platformer where the player fights shadow ninjas using a combat knife with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1322",
+      "category": "debugging_error_resolution",
+      "prompt": "The player is falling through the floor on spawn in level 1 (case 20)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "direct_chat",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0499",
+      "category": "questions_and_explanations",
+      "prompt": "Why do we use World Partition streaming distance in GameForge? briefly?",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0733",
+      "category": "complex_multipart",
+      "prompt": "Create a turn-based board game set in a medieval castle featuring combat knife combat, double jump locomotion mechanics, 4 progressive enemy waves, and a 180-second extraction timer.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1155",
+      "category": "project_modifications",
+      "prompt": "In the current game, please add 3 more waves to the spawner.",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1215",
+      "category": "project_modifications",
+      "prompt": "In the current game, please change the goal condition to collecting 10 relics.",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0681",
+      "category": "complex_multipart",
+      "prompt": "Create a platformer set in a desert oasis featuring plasma rifle combat, double jump locomotion mechanics, 4 progressive enemy waves, and a 180-second extraction timer.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1410",
+      "category": "debugging_error_resolution",
+      "prompt": "Modify GameForgePlayer.h to include projectile attack declarations (case 18)",
+      "expected_intent": "CODE_EDIT",
+      "actual_intent": "CODE_EDIT",
+      "expected_route": "agent_tools",
+      "actual_route": "agent_tools",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1365",
+      "category": "debugging_error_resolution",
+      "prompt": "Why does the enemy bot freeze after reaching the player? (case 3)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P2037",
+      "category": "unsupported_impossible",
+      "prompt": "Send an email to my boss (2)",
+      "expected_intent": "UNSUPPORTED",
+      "actual_intent": "UNSUPPORTED",
+      "expected_route": "direct_chat_rejection",
+      "actual_route": "direct_chat_rejection",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1986",
+      "category": "unsupported_impossible",
+      "prompt": "Hack into the central bank database (3)",
+      "expected_intent": "UNSUPPORTED",
+      "actual_intent": "UNSUPPORTED",
+      "expected_route": "direct_chat_rejection",
+      "actual_route": "direct_chat_rejection",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0850",
+      "category": "game_generation_requests",
+      "prompt": "Build a FPS shooter where the player fights mutant spiders using a shotgun with 100 max health and 3 lives.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0781",
+      "category": "complex_multipart",
+      "prompt": "Create a card battler set in a cursed dungeon featuring combat knife combat, double jump locomotion mechanics, 4 progressive enemy waves, and a 180-second extraction timer.",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1380",
+      "category": "debugging_error_resolution",
+      "prompt": "Why does the enemy bot freeze after reaching the player? (case 18)",
+      "expected_intent": "INFORMATIONAL_QA",
+      "actual_intent": "INFORMATIONAL_QA",
+      "expected_route": "direct_chat",
+      "actual_route": "direct_chat",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P0251",
+      "category": "informal_and_spelling",
+      "prompt": "wanna brawler game wit 4 wavs of gladiatorz bro",
+      "expected_intent": "GAME_CREATION",
+      "actual_intent": "GAME_CREATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1103",
+      "category": "project_modifications",
+      "prompt": "In the current game, please increase player move speed to 1200.",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P1171",
+      "category": "project_modifications",
+      "prompt": "In the current game, please decrease enemy attack damage to 15.",
+      "expected_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_MUTATION",
+      "expected_route": "open_design",
+      "actual_route": "open_design",
+      "intent_match": true,
+      "route_match": true
+    },
+    {
+      "id": "P2004",
+      "category": "unsupported_impossible",
+      "prompt": "Mine cryptocurrency on my GPU right now (8)",
+      "expected_intent": "UNSUPPORTED",
+      "actual_intent": "UNSUPPORTED",
+      "expected_route": "direct_chat_rejection",
+      "actual_route": "direct_chat_rejection",
+      "intent_match": true,
+      "route_match": true
+    }
+  ],
+  "duration_s": 0.0935215950012207,
+  "intent_accuracy_pct": 95.25,
+  "tool_route_accuracy_pct": 95.25,
+  "hallucination_rate_pct": 0.0
+}

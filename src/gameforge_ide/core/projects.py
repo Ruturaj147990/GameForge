@@ -115,6 +115,11 @@ def resolve_project_dir(
     env_extra = os.environ.get("GAMEFORGE_EXTRA_PROJECTS_ROOT")
     if env_extra:
         extra_roots.append(Path(env_extra))
+    hp_proj = s.host_profile.get("projects_root") if hasattr(s, "host_profile") and isinstance(s.host_profile, dict) else None
+    if hp_proj:
+        extra_roots.append(Path(hp_proj))
+    if s.artifacts_root:
+        extra_roots.append(Path(s.artifacts_root) / "projects")
     if s.validation_root:
         val_proj = Path(s.validation_root).parent / "projects"
         if val_proj.is_dir():
@@ -144,6 +149,11 @@ def resolve_project_dir(
         if p_dir.is_dir():
             return p_dir.resolve()
 
+    # Third pass: check all discovered projects across all roots
+    all_discovered = list_all_project_dirs(workspace_dir)
+    if name in all_discovered:
+        return all_discovered[name]
+
     # Fall back to projects_root / name (even if not yet on disk)
     if s.projects_root:
         return (Path(s.projects_root).resolve() / name)
@@ -166,6 +176,44 @@ def list_all_project_dirs(
     if s.projects_root and Path(s.projects_root).is_dir():
         roots_to_scan.append(Path(s.projects_root).resolve())
 
+    # Host profile projects root
+    hp_proj = s.host_profile.get("projects_root") if hasattr(s, "host_profile") and isinstance(s.host_profile, dict) else None
+    if hp_proj and Path(hp_proj).is_dir():
+        cand = Path(hp_proj).resolve()
+        if cand not in roots_to_scan:
+            roots_to_scan.append(cand)
+
+    # Artifacts root projects subdirectory
+    if s.artifacts_root:
+        art_proj = Path(s.artifacts_root).resolve() / "projects"
+        if art_proj.is_dir() and art_proj not in roots_to_scan:
+            roots_to_scan.append(art_proj)
+
+    # Validation root parent projects
+    if s.validation_root:
+        val_proj = Path(s.validation_root).parent / "projects"
+        if val_proj.is_dir() and val_proj not in roots_to_scan:
+            roots_to_scan.append(val_proj.resolve())
+
+    # Developer host profiles in repository configs
+    try:
+        from .settings import REPO_ROOT
+        cfg_dir = REPO_ROOT / "configs" / "host_profiles"
+        if cfg_dir.is_dir():
+            for p_file in cfg_dir.glob("*.json"):
+                try:
+                    import json
+                    p_data = json.loads(p_file.read_text(encoding="utf-8"))
+                    p_root = p_data.get("projects_root")
+                    if p_root and Path(p_root).is_dir():
+                        cand = Path(p_root).resolve()
+                        if cand not in roots_to_scan:
+                            roots_to_scan.append(cand)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     ws_path = Path(workspace_dir).resolve() if workspace_dir else None
     if ws_path and ws_path.is_dir():
         if include_workspace_self and is_gameforge_project(ws_path):
@@ -177,12 +225,22 @@ def list_all_project_dirs(
             roots_to_scan.append(ws_proj)
 
     env_extra = os.environ.get("GAMEFORGE_EXTRA_PROJECTS_ROOT")
-    if env_extra and Path(env_extra).is_dir() and Path(env_extra) not in roots_to_scan:
-        roots_to_scan.append(Path(env_extra).resolve())
-    if s.validation_root:
-        val_proj = Path(s.validation_root).parent / "projects"
-        if val_proj.is_dir() and val_proj not in roots_to_scan:
-            roots_to_scan.append(val_proj.resolve())
+    if env_extra and Path(env_extra).is_dir():
+        cand = Path(env_extra).resolve()
+        if cand not in roots_to_scan:
+            roots_to_scan.append(cand)
+
+    # Default workspace projects
+    if s.default_workspace:
+        def_ws = Path(s.default_workspace).resolve()
+        def_proj = def_ws / "Projects"
+        if def_proj.is_dir() and def_proj not in roots_to_scan:
+            roots_to_scan.append(def_proj)
+
+    # User Documents default location
+    doc_proj = Path.home() / "Documents" / "GameForge" / "Projects"
+    if doc_proj.is_dir() and doc_proj not in roots_to_scan:
+        roots_to_scan.append(doc_proj.resolve())
 
     for root in roots_to_scan:
         try:

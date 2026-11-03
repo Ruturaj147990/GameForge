@@ -281,12 +281,19 @@ class UnrealToolchain:
                                           f"IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, {name}, \"{name}\");\n"),
             "Config/DefaultGame.ini": (f"[/Script/EngineSettings.GeneralProjectSettings]\nProjectName={name}\n"
                                        f"ProjectDisplayedTitle=NSLOCTEXT(\"[/Script/EngineSettings]\", "
-                                       f"\"GameForgeTitle\", \"{title}\")\n"),
+                                       f"\"GameForgeTitle\", \"{title}\")\n\n"
+                                       f"[/Script/GameForgeRuntime.GameForgeRuntimeSettings]\n"
+                                       f"GameDefinition=/Game/GameForge/GD_Main.GD_Main\n\n"
+                                       f"[/Script/UnrealEd.ProjectPackagingSettings]\n"
+                                       f"+DirectoriesToAlwaysCook=(Path=\"/Game/Maps\")\n"
+                                       f"+DirectoriesToAlwaysCook=(Path=\"/Game/Characters\")\n"
+                                       f"+DirectoriesToAlwaysCook=(Path=\"/Game/LevelPrototyping\")\n"
+                                       f"+DirectoriesToAlwaysCook=(Path=\"/Game/GameForge\")\n"),
             "Config/DefaultInput.ini": input_ini,
         }
+        effective_map = default_map or "/Game/Maps/Level_1"
         engine_ini = ["[/Script/EngineSettings.GameMapsSettings]"]
-        if default_map:
-            engine_ini += [f"GameDefaultMap={default_map}", f"EditorStartupMap={default_map}"]
+        engine_ini += [f"GameDefaultMap={effective_map}", f"EditorStartupMap={effective_map}"]
         if game_mode:
             engine_ini.append(f"GlobalDefaultGameMode={game_mode}")
         engine_ini += ["", "[/Script/Engine.RendererSettings]",
@@ -315,6 +322,21 @@ class UnrealToolchain:
         """Ensure GameForge plugin is deployed into <project_dir>/Plugins/GameForge."""
         project_dir = Path(project_dir)
         target = project_dir / "Plugins" / "GameForge"
+        # Always synchronize latest Python ops and C++ sources from repository if target plugin exists
+        repo_python_ops = Path(__file__).resolve().parent / "GameForge" / "Content" / "Python" / "gameforge_ops"
+        if repo_python_ops.is_dir() and (target / "Content" / "Python" / "gameforge_ops").is_dir():
+            try:
+                shutil.copytree(repo_python_ops, target / "Content" / "Python" / "gameforge_ops", dirs_exist_ok=True)
+            except Exception as exc:
+                logger.warning("Could not sync Python ops to %s: %s", target, exc)
+
+        repo_source = Path(__file__).resolve().parent / "GameForge" / "Source"
+        if repo_source.is_dir() and (target / "Source").is_dir():
+            try:
+                shutil.copytree(repo_source, target / "Source", dirs_exist_ok=True)
+            except Exception as exc:
+                logger.warning("Could not sync C++ source to %s: %s", target, exc)
+
         if (target / "GameForge.uplugin").is_file() and (target / "Binaries" / "Win64").is_dir():
             return target
 
@@ -404,9 +426,8 @@ class UnrealToolchain:
             game_ini = uproject.parent / "Config" / "DefaultGame.ini"
             if game_ini.exists():
                 text = game_ini.read_text(encoding="utf-8")
-                if "[/Script/UnrealEd.ProjectPackagingSettings]" not in text:
-                    packaging_settings = (
-                        "\n[/Script/UnrealEd.ProjectPackagingSettings]\n"
+                if "PakFileCompressionFormats=Oodle" not in text:
+                    oodle_lines = (
                         "BuildConfiguration=PPBC_Shipping\n"
                         "bCompressed=True\n"
                         "PakFileCompressionFormats=Oodle\n"
@@ -415,7 +436,12 @@ class UnrealToolchain:
                         "IncludePrerequisites=False\n"
                         "+DirectoriesToNeverCook=(Path=\"/Game/GameForge/Debug\")\n"
                     )
-                    game_ini.write_text(text + packaging_settings, encoding="utf-8")
+                    header = "[/Script/UnrealEd.ProjectPackagingSettings]"
+                    if header in text:
+                        text = text.replace(header, f"{header}\n{oodle_lines}")
+                    else:
+                        text = f"{text}\n\n{header}\n{oodle_lines}"
+                    game_ini.write_text(text, encoding="utf-8")
 
         log = uproject.parent / "Saved" / "GameForge" / "logs" / f"package_{platform}_{configuration}.log"
         argv = [str(self.uat), "BuildCookRun", f"-project={uproject}", "-noP4", f"-platform={platform}",

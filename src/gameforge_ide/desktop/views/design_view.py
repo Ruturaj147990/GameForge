@@ -345,6 +345,37 @@ class DesignView(QWidget):
 
         main_layout.addLayout(header_layout)
 
+        # Authoritative Project Directory Banner (Two-Location Storage Architecture)
+        self._dir_banner = QFrame(self)
+        self._dir_banner.setObjectName("designProjectDirBanner")
+        self._dir_banner.setStyleSheet(
+            f"background-color: {tokens.BG_PANEL}; border: 1px solid {tokens.BORDER}; "
+            f"border-radius: {tokens.RADIUS}px; padding: 4px 10px;"
+        )
+        dir_banner_layout = QHBoxLayout(self._dir_banner)
+        dir_banner_layout.setContentsMargins(6, 4, 6, 4)
+        dir_banner_layout.setSpacing(tokens.SPACE_SM)
+
+        self._lbl_project_dir = QLabel("Authoritative Project Root: Not set", self._dir_banner)
+        self._lbl_project_dir.setStyleSheet(
+            f"color: {tokens.TEXT_SECONDARY}; font-family: monospace; font-size: {tokens.FONT_BODY_SM}px;"
+        )
+        btn_change_dir = QPushButton("Change Folder…", self._dir_banner)
+        btn_change_dir.setCursor(Qt.PointingHandCursor)
+        btn_change_dir.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 2px 8px; font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+        btn_change_dir.clicked.connect(self._on_change_project_dir_clicked)
+
+        dir_banner_layout.addWidget(self._lbl_project_dir, 1)
+        dir_banner_layout.addWidget(btn_change_dir)
+        main_layout.addWidget(self._dir_banner)
+
         # ── 2. Questions Panel ────────────────────────────────────────────────
         self._questions_panel = QFrame(self)
         self._questions_panel.setObjectName("designQuestionsPanel")
@@ -481,12 +512,32 @@ class DesignView(QWidget):
         self._shortcut_save = QShortcut(QKeySequence("Ctrl+S"), self)
         self._shortcut_save.activated.connect(self.save_spec)
 
+    @Slot()
+    def _on_change_project_dir_clicked(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        start_dir = str(getattr(self, "_current_project_dir", None) or Path.home())
+        chosen = QFileDialog.getExistingDirectory(self, "Select Authoritative Project Directory", start_dir)
+        if chosen:
+            pdir = Path(chosen).resolve()
+            self._current_project_dir = pdir
+            self._lbl_project_dir.setText(f"Authoritative Project Root: {pdir}")
+            self._is_dirty = True
+            self._lbl_dirty.setVisible(True)
+
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def open_draft(self, gds: GameDesignSpec, questions: Optional[List[str]] = None) -> None:
+    def open_draft(self, gds: GameDesignSpec, questions: Optional[List[str]] = None, project_dir: Optional[Path] = None) -> None:
         """Open an in-memory draft (e.g. from Home's prompt_to_gds)."""
         self._current_spec = gds
         self._current_project = gds.meta.project_name or gds.meta.title
+        pdir_meta = getattr(gds.meta, "project_dir", None)
+        if project_dir:
+            self._current_project_dir = Path(project_dir).resolve()
+        elif pdir_meta:
+            self._current_project_dir = Path(pdir_meta).resolve()
+        else:
+            self._current_project_dir = resolve_project_dir(self._current_project)
+        self._lbl_project_dir.setText(f"Authoritative Project Root: {self._current_project_dir}")
         self._is_dirty = True
         self._lbl_dirty.setVisible(True)
 
@@ -513,7 +564,9 @@ class DesignView(QWidget):
             return False
 
         self._current_project = project_name
+        self.projectChanged.emit(project_name)
         self._current_project_dir = p_dir
+        self._lbl_project_dir.setText(f"Authoritative Project Root: {p_dir}")
         self._current_spec = loaded
         self._is_dirty = False
         self._lbl_dirty.setVisible(False)

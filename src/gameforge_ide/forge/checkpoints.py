@@ -12,7 +12,10 @@ Intermediate/
 Saved/
 DerivedDataCache/
 Packaged/
-Plugins/
+Plugins/*
+!Plugins/GameForge/
+Plugins/GameForge/Binaries/
+Plugins/GameForge/Intermediate/
 .vs/
 *.sln
 *.VC.db

@@ -5,6 +5,8 @@
 #include "GameForgeGameDefinition.h"
 #include "GameForgeKitActors.h"
 #include "GameForgeKitBoard.h"
+#include "GameForgeKitUI.h"
+#include "Blueprint/UserWidget.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -34,6 +36,11 @@ AGameForgeCharacter::AGameForgeCharacter()
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(CameraBoom);
 
+	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
+	WeaponMesh->SetupAttachment(Camera);
+	WeaponMesh->SetCollisionProfileName(TEXT("NoCollision"));
+	WeaponMesh->SetCastShadow(false);
+
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
@@ -57,6 +64,15 @@ void AGameForgeCharacter::BeginPlay()
 	GetCharacterMovement()->MaxWalkSpeed = MoveSpeed;
 	GetCharacterMovement()->JumpZVelocity = JumpVelocity;
 	ApplyCameraMode();
+
+	if (WeaponMesh && WeaponMesh->GetStaticMesh() == nullptr)
+	{
+		if (UStaticMesh* DefaultGunMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+		{
+			WeaponMesh->SetStaticMesh(DefaultGunMesh);
+		}
+	}
+
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PlayerSpawned, GetName(), TEXT("{}"));
 }
 
@@ -78,21 +94,110 @@ void AGameForgeCharacter::ApplyCameraMode()
 		CameraBoom->bUsePawnControlRotation = false;
 		CameraBoom->SetRelativeRotation(FRotator(-60.f, 0.f, 0.f));
 		CameraBoom->bInheritYaw = false;
+		CameraBoom->bDoCollisionTest = true;
+		if (GetMesh())
+		{
+			GetMesh()->SetOwnerNoSee(false);
+		}
+		if (WeaponMesh)
+		{
+			WeaponMesh->SetVisibility(false);
+		}
 		break;
 	case EGameForgeCameraMode::FirstPerson:
 		CameraBoom->TargetArmLength = 0.f;
-		CameraBoom->SetRelativeLocation(FVector(0, 0, 64.f));
+		CameraBoom->bDoCollisionTest = false;
+		CameraBoom->SetRelativeLocation(FVector(0, 0, 68.f));
 		bUseControllerRotationYaw = true;
 		GetCharacterMovement()->bOrientRotationToMovement = false;
+		if (GetMesh())
+		{
+			GetMesh()->SetOwnerNoSee(true);
+		}
+		if (WeaponMesh)
+		{
+			WeaponMesh->AttachToComponent(Camera, FAttachmentTransformRules::SnapToTargetIncludingScale);
+			WeaponMesh->SetRelativeLocation(FVector(35.f, 15.f, -12.f));
+			WeaponMesh->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+			WeaponMesh->SetRelativeScale3D(FVector(0.12f, 0.45f, 0.15f));
+			WeaponMesh->SetOwnerNoSee(false);
+			WeaponMesh->SetVisibility(true);
+		}
 		break;
 	case EGameForgeCameraMode::SideScroller:
 		CameraBoom->TargetArmLength = 1200.f;
 		CameraBoom->bUsePawnControlRotation = false;
 		CameraBoom->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 		CameraBoom->bInheritYaw = false;
+		CameraBoom->bDoCollisionTest = true;
+		if (GetMesh())
+		{
+			GetMesh()->SetOwnerNoSee(false);
+		}
+		if (WeaponMesh)
+		{
+			WeaponMesh->SetVisibility(false);
+		}
 		break;
 	default:
-		break; // ThirdPerson: constructor defaults
+		CameraBoom->TargetArmLength = 400.f;
+		CameraBoom->bDoCollisionTest = true;
+		CameraBoom->bUsePawnControlRotation = true;
+		CameraBoom->SetRelativeLocation(FVector::ZeroVector);
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+		if (GetMesh())
+		{
+			GetMesh()->SetOwnerNoSee(false);
+			if (WeaponMesh)
+			{
+				WeaponMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, FName(TEXT("hand_rSocket")));
+				WeaponMesh->SetRelativeLocation(FVector::ZeroVector);
+				WeaponMesh->SetRelativeRotation(FRotator::ZeroRotator);
+				WeaponMesh->SetRelativeScale3D(FVector(0.12f, 0.45f, 0.15f));
+				WeaponMesh->SetOwnerNoSee(false);
+				WeaponMesh->SetVisibility(true);
+			}
+		}
+		break;
+	}
+}
+
+void AGameForgeCharacter::PerformAttack()
+{
+	if (bProjectileAttack || CameraMode == EGameForgeCameraMode::FirstPerson)
+	{
+		PerformRangedAttack();
+	}
+	else
+	{
+		PerformMeleeAttack();
+	}
+}
+
+void AGameForgeCharacter::PerformRangedAttack()
+{
+	float CurTime = GetWorld()->GetTimeSeconds();
+	if (CurTime - LastAttackTime < AttackCooldown)
+	{
+		return;
+	}
+	LastAttackTime = CurTime;
+
+	FVector SpawnLoc = Camera ? (Camera->GetComponentLocation() + Camera->GetForwardVector() * 80.f)
+	                          : (GetActorLocation() + GetActorForwardVector() * 80.f);
+	FRotator SpawnRot = Camera ? Camera->GetComponentRotation() : GetActorRotation();
+
+	FActorSpawnParameters Params;
+	Params.Instigator = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AGameForgeProjectile* Proj = GetWorld()->SpawnActor<AGameForgeProjectile>(
+		AGameForgeProjectile::StaticClass(), SpawnLoc, SpawnRot, Params);
+	if (Proj)
+	{
+		Proj->Damage = AttackDamage;
+		Proj->Movement->InitialSpeed = ProjectileSpeed;
+		Proj->Movement->MaxSpeed = ProjectileSpeed;
 	}
 }
 
@@ -182,6 +287,7 @@ void AGameForgePlayerController::BuildDefaultInput()
 	UInputAction* Jump = Make(TEXT("IA_Jump"), EInputActionValueType::Boolean);
 	UInputAction* Select = Make(TEXT("IA_Select"), EInputActionValueType::Boolean);
 	UInputAction* Attack = Make(TEXT("IA_Attack"), EInputActionValueType::Boolean);
+	UInputAction* Fire = Make(TEXT("IA_Fire"), EInputActionValueType::Boolean);
 	UInputAction* Interact = Make(TEXT("IA_Interact"), EInputActionValueType::Boolean);
 
 	auto Swizzle = [this]() { return NewObject<UInputModifierSwizzleAxis>(MappingContext); };
@@ -196,6 +302,7 @@ void AGameForgePlayerController::BuildDefaultInput()
 	MappingContext->MapKey(Jump, EKeys::SpaceBar);
 	MappingContext->MapKey(Select, EKeys::LeftMouseButton);
 	MappingContext->MapKey(Attack, EKeys::LeftMouseButton);
+	MappingContext->MapKey(Fire, EKeys::LeftMouseButton);
 	MappingContext->MapKey(Interact, EKeys::E);
 }
 
@@ -211,6 +318,7 @@ void AGameForgePlayerController::SetupInputComponent()
 		EIC->BindAction(FindAction(TEXT("IA_Jump")), ETriggerEvent::Completed, this, &AGameForgePlayerController::HandleJumpCompleted);
 		EIC->BindAction(FindAction(TEXT("IA_Select")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSelect);
 		EIC->BindAction(FindAction(TEXT("IA_Attack")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
+		EIC->BindAction(FindAction(TEXT("IA_Fire")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
 		EIC->BindAction(FindAction(TEXT("IA_Interact")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleInteract);
 	}
 }
@@ -225,6 +333,14 @@ void AGameForgePlayerController::BeginPlay()
 		{
 			Sub->AddMappingContext(MappingContext, 0);
 			bContextAdded = true;
+		}
+	}
+	if (IsLocalController())
+	{
+		UGameForgeHUDWidget* HUD = CreateWidget<UGameForgeHUDWidget>(this, UGameForgeHUDWidget::StaticClass());
+		if (HUD)
+		{
+			HUD->AddToViewport(0);
 		}
 	}
 }
@@ -277,7 +393,7 @@ void AGameForgePlayerController::HandleAttack(const FInputActionValue& Value)
 {
 	if (AGameForgeCharacter* C = Cast<AGameForgeCharacter>(GetPawn()))
 	{
-		C->PerformMeleeAttack();
+		C->PerformAttack();
 	}
 }
 
@@ -337,38 +453,104 @@ void AGameForgeGameMode::StartPlay()
 
 	// Read player parameters from definition
 	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
-	if (Settings && !Settings->GameDefinition.IsNull())
+	UGameForgeGameDefinition* DefAsset = (Settings && !Settings->GameDefinition.IsNull())
+		? Settings->GameDefinition.LoadSynchronous()
+		: nullptr;
+	if (!DefAsset)
 	{
-		if (UGameForgeGameDefinition* DefAsset = Settings->GameDefinition.LoadSynchronous())
+		DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main.GD_Main"));
+	}
+	if (!DefAsset)
+	{
+		DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main"));
+	}
+
+	if (DefAsset)
+	{
+		TSharedPtr<FJsonObject> Def = DefAsset->GetParsed();
+		if (Def.IsValid())
 		{
-			TSharedPtr<FJsonObject> Def = DefAsset->GetParsed();
-			if (Def.IsValid())
+			APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+			AGameForgeCharacter* Char = PC ? Cast<AGameForgeCharacter>(PC->GetPawn()) : nullptr;
+			if (Char)
 			{
+				// 1. Camera mode parsing
+				FString CamModeStr;
 				const TSharedPtr<FJsonObject>* PlayerObj = nullptr;
 				if (Def->TryGetObjectField(TEXT("player"), PlayerObj) && PlayerObj)
 				{
-					APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-					if (AGameForgeCharacter* Char = PC ? Cast<AGameForgeCharacter>(PC->GetPawn()) : nullptr)
+					(*PlayerObj)->TryGetStringField(TEXT("camera"), CamModeStr);
+				}
+				if (CamModeStr.IsEmpty())
+				{
+					Def->TryGetStringField(TEXT("camera"), CamModeStr);
+				}
+
+				if (CamModeStr.Equals(TEXT("first_person"), ESearchCase::IgnoreCase) ||
+					CamModeStr.Equals(TEXT("fps"), ESearchCase::IgnoreCase) ||
+					CamModeStr.Equals(TEXT("FirstPerson"), ESearchCase::IgnoreCase))
+				{
+					Char->CameraMode = EGameForgeCameraMode::FirstPerson;
+					Char->bProjectileAttack = true;
+				}
+				else if (CamModeStr.Equals(TEXT("top_down"), ESearchCase::IgnoreCase) ||
+						 CamModeStr.Equals(TEXT("TopDown"), ESearchCase::IgnoreCase))
+				{
+					Char->CameraMode = EGameForgeCameraMode::TopDown;
+				}
+				else if (CamModeStr.Equals(TEXT("side_scroller"), ESearchCase::IgnoreCase) ||
+						 CamModeStr.Equals(TEXT("SideScroller"), ESearchCase::IgnoreCase))
+				{
+					Char->CameraMode = EGameForgeCameraMode::SideScroller;
+				}
+				else if (CamModeStr.Equals(TEXT("third_person"), ESearchCase::IgnoreCase) ||
+						 CamModeStr.Equals(TEXT("ThirdPerson"), ESearchCase::IgnoreCase))
+				{
+					Char->CameraMode = EGameForgeCameraMode::ThirdPerson;
+				}
+				Char->ApplyCameraMode();
+
+				// 2. Player attributes
+				if (PlayerObj && *PlayerObj)
+				{
+					double Speed = 600.0, JumpZ = 650.0, MaxHP = 100.0;
+					int32 LivesVal = 0;
+					(*PlayerObj)->TryGetNumberField(TEXT("move_speed"), Speed);
+					(*PlayerObj)->TryGetNumberField(TEXT("jump_velocity"), JumpZ);
+					(*PlayerObj)->TryGetNumberField(TEXT("max_health"), MaxHP);
+					(*PlayerObj)->TryGetNumberField(TEXT("lives"), LivesVal);
+
+					FString AttackMode;
+					if ((*PlayerObj)->TryGetStringField(TEXT("attack_mode"), AttackMode))
 					{
-						double Speed = 600.0, JumpZ = 650.0, MaxHP = 100.0;
-						int32 LivesVal = 0;
-						(*PlayerObj)->TryGetNumberField(TEXT("move_speed"), Speed);
-						(*PlayerObj)->TryGetNumberField(TEXT("jump_velocity"), JumpZ);
-						(*PlayerObj)->TryGetNumberField(TEXT("max_health"), MaxHP);
-						(*PlayerObj)->TryGetNumberField(TEXT("lives"), LivesVal);
-
-						Char->MoveSpeed = static_cast<float>(Speed);
-						Char->JumpVelocity = static_cast<float>(JumpZ);
-						Char->MaxHealth = static_cast<float>(MaxHP);
-						Char->Lives = LivesVal;
-
-						Char->GetCharacterMovement()->MaxWalkSpeed = Char->MoveSpeed;
-						Char->GetCharacterMovement()->JumpZVelocity = Char->JumpVelocity;
-						if (Char->AttributeSet)
+						if (AttackMode.Equals(TEXT("projectile"), ESearchCase::IgnoreCase) ||
+							AttackMode.Equals(TEXT("ranged"), ESearchCase::IgnoreCase))
 						{
-							Char->AttributeSet->SetMaxHealth(Char->MaxHealth);
-							Char->AttributeSet->SetHealth(Char->MaxHealth);
+							Char->bProjectileAttack = true;
 						}
+					}
+					double AtkDamage = 0.0;
+					if ((*PlayerObj)->TryGetNumberField(TEXT("attack_damage"), AtkDamage) && AtkDamage > 0.0)
+					{
+						Char->AttackDamage = static_cast<float>(AtkDamage);
+					}
+					double ProjSpeed = 0.0;
+					if ((*PlayerObj)->TryGetNumberField(TEXT("projectile_speed"), ProjSpeed) && ProjSpeed > 0.0)
+					{
+						Char->ProjectileSpeed = static_cast<float>(ProjSpeed);
+					}
+
+					Char->MoveSpeed = static_cast<float>(Speed);
+					Char->JumpVelocity = static_cast<float>(JumpZ);
+					Char->MaxHealth = static_cast<float>(MaxHP);
+					Char->Lives = LivesVal;
+
+					Char->GetCharacterMovement()->MaxWalkSpeed = Char->MoveSpeed;
+					Char->GetCharacterMovement()->JumpZVelocity = Char->JumpVelocity;
+					if (Char->AttributeSet)
+					{
+						Char->AttributeSet->SetMaxHealth(Char->MaxHealth);
+						Char->AttributeSet->SetHealth(Char->MaxHealth);
 					}
 				}
 			}

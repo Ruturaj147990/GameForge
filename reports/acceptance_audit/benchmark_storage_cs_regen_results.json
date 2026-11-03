@@ -1,0 +1,41 @@
+{
+  "engine_discovery": {
+    "status": "PASS",
+    "engine_root": "E:\\UE\\UE_5.7",
+    "version": "5.7.4",
+    "changelist": 51494982,
+    "source": "epic_manifest_item",
+    "is_compatible": true
+  },
+  "counter_strike_regeneration": {
+    "status": "PASS",
+    "project_dir": "E:\\GameForge\\projects\\CS_Regeneration",
+    "geometry_ops_count": 93,
+    "total_op_calls": 105,
+    "camera": "first_person",
+    "round_timer_seconds": 120,
+    "rooms_layout": true,
+    "combat_bots_present": true,
+    "bomb_site_present": true,
+    "nav_mesh_present": true,
+    "build_status": "DONE",
+    "duration_seconds": 37.01
+  },
+  "prompt_diversity": {
+    "status": "PASS",
+    "project_dir": "E:\\GameForge\\projects\\Platformer_Diversity",
+    "genre": "platformer",
+    "camera": "third_person",
+    "layout": "course",
+    "has_platforms": true,
+    "has_checkpoints": true,
+    "has_relics": true,
+    "build_status": "DONE"
+  },
+  "two_location_storage": {
+    "status": "PASS",
+    "location_1_sessions_only": true,
+    "location_2_self_contained": true,
+    "zero_duplicate_copies": true
+  }
+}

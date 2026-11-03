@@ -58,15 +58,16 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     task_idx = 0
     if hasattr(gds, "rules") and gds.rules:
         for rule in gds.rules:
+            r_id = getattr(rule, "rule_id", getattr(rule, "id", f"rule_{task_idx}"))
             for eff in rule.effects:
                 if eff.kind == "custom_code" or getattr(eff, "custom_code", None):
                     h_name = f"Custom{task_idx}Rule"
-                    desc = getattr(eff, "description", rule.description or f"Custom rule {rule.id}")
+                    desc = getattr(eff, "description", rule.description or f"Custom rule {r_id}")
                     codegen_tasks.append(
                         CodegenTask(
                             handler_name=h_name,
                             description=desc,
-                            rule_id=rule.id,
+                            rule_id=r_id,
                         )
                     )
                     task_idx += 1
@@ -78,11 +79,37 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     # Fallback default level if none specified
     if not levels:
         from ..design.gds import LevelSpec
-        layout_name = "board" if gds.overview.genre.value in ("board", "card") else "arena"
+        genre_val = gds.overview.genre.value if hasattr(gds.overview.genre, "value") else str(gds.overview.genre)
+        cam_val = getattr(gds.overview.camera, "value", str(gds.overview.camera)) if hasattr(gds.overview, "camera") else ""
+        meta_title = getattr(gds.meta, "title", "") if hasattr(gds, "meta") else ""
+        meta_proj = getattr(gds.meta, "project_name", "") if hasattr(gds, "meta") else ""
+        meta_prompt = getattr(gds.meta, "source_prompt", "") if hasattr(gds, "meta") else ""
+        overview_pitch = getattr(gds.overview, "pitch", "") if hasattr(gds, "overview") else ""
+        title_pitch = f"{meta_title} {meta_proj} {meta_prompt} {overview_pitch}".lower()
+
+        if "counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or (cam_val == "first_person" and "shoot" in title_pitch):
+            layout_name = "tactical_fps"
+        elif genre_val in ("board", "card"):
+            layout_name = "board"
+        elif genre_val == "dungeon_crawler":
+            layout_name = "rooms"
+        elif genre_val in ("exploration", "action_adventure"):
+            layout_name = "open_world"
+        elif genre_val == "platformer":
+            layout_name = "course"
+        else:
+            layout_name = "arena"
         levels = [LevelSpec(level_id="level_1", layout=layout_name, seed=2026)]
 
     for level in levels:
         layout_name = level.layout.value if hasattr(level.layout, "value") else str(level.layout)
+        meta_title = getattr(gds.meta, "title", "") if hasattr(gds, "meta") else ""
+        meta_proj = getattr(gds.meta, "project_name", "") if hasattr(gds, "meta") else ""
+        meta_prompt = getattr(gds.meta, "source_prompt", "") if hasattr(gds, "meta") else ""
+        overview_pitch = getattr(gds.overview, "pitch", "") if hasattr(gds, "overview") else ""
+        title_pitch = f"{meta_title} {meta_proj} {meta_prompt} {overview_pitch}".lower()
+        if layout_name == "arena" and ("counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or "fps" in title_pitch):
+            layout_name = "tactical_fps"
         if layout_name not in LAYOUTS:
             problems.append(f"layout {layout_name!r} not found in LAYOUTS; supported: {sorted(LAYOUTS.keys())}")
             continue

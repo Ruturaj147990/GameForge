@@ -135,11 +135,23 @@ def _actor_record(actor):
 def _load_class(class_path):
     if "." not in class_path and "/" not in class_path:
         cls = getattr(unreal, class_path, None)
+        if cls is None and class_path.startswith("A"):
+            cls = getattr(unreal, class_path[1:], None)
         if cls is not None:
             # Python wrapper types must be converted to the reflected UClass.
             return cls.static_class() if hasattr(cls, "static_class") else cls
+        # Check GameForgeRuntime module
+        cand_name = class_path[1:] if class_path.startswith("A") and len(class_path) > 1 else class_path
+        gf_cls = unreal.load_class(None, f"/Script/GameForgeRuntime.{cand_name}")
+        if gf_cls is not None:
+            return gf_cls
         class_path = "/Script/Engine." + class_path
     cls = unreal.load_class(None, class_path)
+    if cls is None and "/Script/GameForgeRuntime." not in class_path:
+        stem = class_path.split("/")[-1].split(".")[-1]
+        if stem.startswith("A") and len(stem) > 1:
+            stem = stem[1:]
+        cls = unreal.load_class(None, f"/Script/GameForgeRuntime.{stem}")
     if cls is None:
         bp = unreal.EditorAssetLibrary.load_blueprint_class(class_path)
         cls = bp

@@ -24,7 +24,7 @@ from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
 from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
 from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 
-_CREATE = re.compile(r"\b(create|make|build|generate|develop|design|give me|i want|write|complete|finish|expand|build out|author|code|implement)\b", re.I)
+_CREATE = re.compile(r"\b(create|make|mak|build|generate|develop|design|give me|i want|wanna|want|need|write|complete|finish|expand|build out|author|code|cod|implement|deploy|construct|produce)\b", re.I)
 
 
 @dataclass
@@ -125,13 +125,13 @@ class GameSpec:
                 "reasons": self.reasons, "acceptance": self.acceptance, "summary": self.summary()}
 
 
-_GAME_WORD = re.compile(r"(?<![\w/\\.])games?(?![\w/\\.])", re.I)
+_GAME_WORD = re.compile(r"(?<![\w/\\.])(?:games?|gem|gaem|shtr|brawler)(?![\w/\\.])", re.I)
 # the create verb's object ends in "game": "create a (simple 2D platformer) game", "make me a racing game"
-_CREATE_GAME = re.compile(r"\b(?:create|make|build|generate|develop|design|write|give me|complete|finish|expand|build out|author|code|implement)\s+(?:me\s+)?"
-                          r"(?:[\w\-']+\s+){0,8}?games?\b(?!\s*(?:mode|state|instance|play|object)\b)", re.I)
+_CREATE_GAME = re.compile(r"\b(?:create|make|mak|build|generate|develop|design|write|give me|i want|wanna|want|need|complete|finish|expand|build out|author|code|cod|implement|deploy|construct|produce)\s+(?:me\s+)?"
+                          r"(?:[\w\-\']+\s+){0,8}?(?:games?|gem|gaem)\b(?!\s*(?:mode|state|instance|play|object)\b)", re.I)
 
 
-_NOUN_GAME = re.compile(r"^(?:(?:a|an|the)\s+)?(?:[\w\-']+\s+){0,8}games?(?:\s+(?:with|where|featuring|set in|having)\b.*)?$", re.I)
+_NOUN_GAME = re.compile(r"^(?:(?:a|an|the)\s+)?(?:[\w\-\']+\s+){0,8}(?:games?|gem|gaem)(?:\s+(?:with|where|featuring|set in|having)\b.*)?$", re.I)
 
 
 def is_game_creation_request(prompt: str) -> bool:
@@ -147,7 +147,7 @@ def is_game_creation_request(prompt: str) -> bool:
         return False
     if re.search(r"^(?:my|your|our|their|his|her|its)\b", text):
         return False
-    if re.search(r"\b(?:analysis|essay|article|overview|document|lore|story|script|breakdown|history|historical)\b", text):
+    if re.search(r"\b(?:analysis|essay|article|overview|document|lore|story|script|breakdown|history|historical|gameplay loop|progression curve)\b", text):
         return False
     # "... for my game", "in the game", "to our game": work inside an existing game, not a new one.
     if re.search(r"\b(?:for|in|into|inside|of|to)\s+(?:my|the|this|our|your)\s+games?\b", text):
@@ -156,8 +156,8 @@ def is_game_creation_request(prompt: str) -> bool:
         return True
     if _NOUN_GAME.match(text):
         return True
-    if re.search(r"\b(?:clone|shooter|fps|platformer|adventure|rpg|roguelike|counterstrike|counter-strike)\b", text):
-        if _CREATE.search(text) or text.startswith(("a ", "an ", "the ")) or ":" in text:
+    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|counterstrike|counter-strike|brawler|stealth\s+action|dungeon\s+crawler|survival\s+horror|arena\s+combat|card\s+battler|board\s+game)\b", text):
+        if _CREATE.search(text) or text.startswith(("a ", "an ", "the ", "deploy ", "construct ")) or ":" in text:
             return True
     if not _CREATE.search(text):
         return False

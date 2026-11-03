@@ -448,12 +448,20 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         if weapons and "weapons" not in p_props:
             ops.append({"op": "add", "path": f"/entities/{player_idx}/props/weapons", "value": weapons})
 
-    # 3. Upgrade level layout to arena for combat/shooter games
+    # 3. Upgrade level layout to arena for combat/shooter games (composer routes tactical/CS to tactical_fps)
+    target_layout = "arena"
     if gds.scene.levels:
         cur_layout = getattr(gds.scene.levels[0], "layout", None)
         layout_val = cur_layout.value if hasattr(cur_layout, "value") else str(cur_layout)
-        if layout_val != "arena":
-            ops.append({"op": "replace", "path": "/scene/levels/0/layout", "value": "arena"})
+        if layout_val != target_layout:
+            ops.append({"op": "replace", "path": "/scene/levels/0/layout", "value": target_layout})
+
+    # Set camera mode to first_person if requested or Counter-Strike
+    if any(w in req.lower() for w in ("first person", "first-person", "fps", "counter", "strike", "tactical")):
+        cur_cam = getattr(gds.overview, "camera", None)
+        cam_val = cur_cam.value if hasattr(cur_cam, "value") else str(cur_cam)
+        if cam_val != "first_person":
+            ops.append({"op": "replace", "path": "/overview/camera", "value": "first_person"})
 
     # 4. Add wave cleared tracking rule if missing
     has_wave_rule = any("wave.cleared" in getattr(r.when, "event", "") for r in gds.rules)

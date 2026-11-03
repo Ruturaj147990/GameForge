@@ -29,9 +29,16 @@ def composition_to_run_spec(
             title="Design: save GDS revision and composition",
             depends_on=[],
             engine_lock=False,
-            inputs={"gds_id": comp.gds_id, "gds_revision": comp.gds_revision},
+            inputs={
+                "project_name": comp.project_name,
+                "genre": comp.gfdef.get("genre", "Platformer") if isinstance(comp.gfdef, dict) else "Platformer",
+                "gds_id": comp.gds_id,
+                "gds_revision": comp.gds_revision,
+            },
         )
     )
+
+    primary_map = comp.levels[0].map_path if comp.levels else "/Game/Maps/Level_1"
 
     # 2. Scaffold step
     steps.append(
@@ -45,6 +52,7 @@ def composition_to_run_spec(
                 "project_name": comp.project_name,
                 "plugins": comp.plugins,
                 "module_deps": comp.module_deps,
+                "default_map": primary_map,
             },
         )
     )
@@ -156,7 +164,7 @@ def composition_to_run_spec(
             title="Execute packaged QA scenarios",
             depends_on=["package", "scenario_gen"],
             engine_lock=True,
-            inputs={"scenarios": comp.scenarios},
+            inputs={"scenarios": comp.scenarios, "map_path": primary_map},
         )
     )
 

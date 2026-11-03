@@ -34,6 +34,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             args={
                 "actor_class": "StaticMeshActor",
                 "label": "GF_Arena_Floor",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Gray",
                 "location": {"x": 0.0, "y": 0.0, "z": -5.0},
                 "scale": {"x": floor_scale_x, "y": floor_scale_y, "z": 0.1},
             },
@@ -51,6 +53,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             args={
                 "actor_class": "StaticMeshActor",
                 "label": "GF_Wall_North",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
                 "location": {"x": half_x_cm + wall_thick / 2.0, "y": 0.0, "z": wall_h / 2.0},
                 "scale": {"x": wall_thick / 100.0, "y": floor_scale_y, "z": wall_h / 100.0},
             },
@@ -64,6 +68,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             args={
                 "actor_class": "StaticMeshActor",
                 "label": "GF_Wall_South",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
                 "location": {"x": -half_x_cm - wall_thick / 2.0, "y": 0.0, "z": wall_h / 2.0},
                 "scale": {"x": wall_thick / 100.0, "y": floor_scale_y, "z": wall_h / 100.0},
             },
@@ -77,6 +83,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             args={
                 "actor_class": "StaticMeshActor",
                 "label": "GF_Wall_East",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
                 "location": {"x": 0.0, "y": half_y_cm + wall_thick / 2.0, "z": wall_h / 2.0},
                 "scale": {"x": floor_scale_x, "y": wall_thick / 100.0, "z": wall_h / 100.0},
             },
@@ -90,6 +98,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             args={
                 "actor_class": "StaticMeshActor",
                 "label": "GF_Wall_West",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
                 "location": {"x": 0.0, "y": -half_y_cm - wall_thick / 2.0, "z": wall_h / 2.0},
                 "scale": {"x": floor_scale_x, "y": wall_thick / 100.0, "z": wall_h / 100.0},
             },
@@ -115,6 +125,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                     args={
                         "actor_class": "StaticMeshActor",
                         "label": f"GF_Cover_{i}",
+                        "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                        "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
                         "location": {"x": cx, "y": cy, "z": 100.0},
                         "scale": {"x": 2.0, "y": 2.0, "z": 2.0},
                     },

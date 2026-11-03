@@ -74,6 +74,40 @@ class ApprovalCard(QFrame):
         lay.addWidget(consequence)
         self._consequence = consequence
 
+        # Authoritative Project Root row (Two-Location Storage Architecture)
+        args = approval.get("args", {})
+        proj_dir = args.get("project_dir") or args.get("project_root")
+        if not proj_dir and approval.get("tool") in ("create_game", "create_game_freeform"):
+            from ...core.settings import get_settings
+            from ...core.projects import resolve_project_dir
+            proj_name = args.get("project_name") or args.get("title") or "MyGame"
+            proj_dir = resolve_project_dir(proj_name) or (get_settings().projects_root / proj_name)
+            args["project_dir"] = str(proj_dir)
+
+        if proj_dir:
+            dir_row = QHBoxLayout()
+            self._lbl_card_dir = QLabel(f"<b>Project Root:</b> <code>{proj_dir}</code>")
+            self._lbl_card_dir.setTextFormat(Qt.RichText)
+            self._lbl_card_dir.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+
+            btn_change_card_dir = QPushButton("Change Folder…")
+            btn_change_card_dir.setFlat(True)
+            btn_change_card_dir.setCursor(Qt.PointingHandCursor)
+            btn_change_card_dir.setStyleSheet("color: #a78bfa; font-size: 11px; padding: 0 4px;")
+
+            def _change_card_dir():
+                from PySide6.QtWidgets import QFileDialog
+                chosen = QFileDialog.getExistingDirectory(self, "Choose Project Directory", str(proj_dir))
+                if chosen:
+                    chosen_p = Path(chosen).resolve()
+                    approval["args"]["project_dir"] = str(chosen_p)
+                    self._lbl_card_dir.setText(f"<b>Project Root:</b> <code>{chosen_p}</code>")
+
+            btn_change_card_dir.clicked.connect(_change_card_dir)
+            dir_row.addWidget(self._lbl_card_dir, 1)
+            dir_row.addWidget(btn_change_card_dir)
+            lay.addLayout(dir_row)
+
         scope = approval.get("args", {}).get("scope") or approval.get("scope")
         if isinstance(scope, dict):
             scope_lines = []

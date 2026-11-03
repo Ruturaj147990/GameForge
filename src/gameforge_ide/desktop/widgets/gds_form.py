@@ -491,6 +491,38 @@ class GdsForm(QWidget):
         except Exception:
             pass
 
+        try:
+            win_txt = self._edit_win.text().strip()
+            if win_txt:
+                parsed_win = []
+                for part in win_txt.split(","):
+                    p = part.strip()
+                    m = re.match(r"^([a-z0-9_.]+)\s*(>=|<=|>|<|==|!=)\s*([0-9.]+)$", p)
+                    if m:
+                        from ...design.gds import StatCompare
+                        stat_name, op, val = m.group(1), m.group(2), float(m.group(3))
+                        parsed_win.append(StatCompare(stat=stat_name, op=op, value=val))
+                if parsed_win:
+                    self._spec.goals.win = parsed_win
+        except Exception as exc:
+            logger.debug("Could not parse win conditions: %s", exc)
+
+        try:
+            lose_txt = self._edit_lose.text().strip()
+            if lose_txt:
+                parsed_lose = []
+                for part in lose_txt.split(","):
+                    p = part.strip()
+                    m = re.match(r"^([a-z0-9_.]+)\s*(>=|<=|>|<|==|!=)\s*([0-9.]+)$", p)
+                    if m:
+                        from ...design.gds import StatCompare
+                        stat_name, op, val = m.group(1), m.group(2), float(m.group(3))
+                        parsed_lose.append(StatCompare(stat=stat_name, op=op, value=val))
+                if parsed_lose:
+                    self._spec.goals.lose = parsed_lose
+        except Exception as exc:
+            logger.debug("Could not parse lose conditions: %s", exc)
+
     @Slot()
     def _on_field_changed(self) -> None:
         if self._is_populating:

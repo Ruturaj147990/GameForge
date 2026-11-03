@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -143,11 +144,33 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
     errors: List[str] = []
     all_passed = True
 
+    # Resolve target map path
+    target_map = ctx.step.inputs.get("map_path")
+    if not target_map:
+        for k, v in ctx.shared.items():
+            if k.startswith("assemble_") and isinstance(v, dict) and v.get("map"):
+                target_map = v["map"]
+                break
+    if not target_map and manifests:
+        target_map = manifests[0].map
+    if not target_map:
+        eng_ini = base_dir / "Config" / "DefaultEngine.ini"
+        if eng_ini.is_file():
+            text = eng_ini.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"GameDefaultMap\s*=\s*([^\r\n]+)", text)
+            if m:
+                target_map = m.group(1).strip()
+    if not target_map:
+        if (base_dir / "Content" / "Maps" / "Level_1.umap").is_file():
+            target_map = "/Game/Maps/Level_1"
+        elif (base_dir / "Content" / "Maps" / f"{p_name}Map.umap").is_file():
+            target_map = f"/Game/Maps/{p_name}Map"
+
     for sc in scenarios:
         if ctx.cancel.is_set():
             return StepOutcome(False, errors=["Cancelled by user"])
 
-        res = run_packaged(exe_path, sc, out_dir=out_dir, timeout_s=sc.timeout_s)
+        res = run_packaged(exe_path, sc, out_dir=out_dir, timeout_s=sc.timeout_s, map_path=target_map)
         res_file = out_dir / f"{sc.scenario_id}_result.json"
         if res_file.is_file():
             artifacts.append(res_file)
