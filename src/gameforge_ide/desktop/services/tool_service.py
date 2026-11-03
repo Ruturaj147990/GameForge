@@ -14,16 +14,33 @@ class _ToolRunnable(QRunnable):
     class _Signals(QObject):
         finished = Signal(str, dict)  # (tool_name, result)
 
-    def __init__(self, gateway, name: str, arguments: Dict[str, Any], parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        gateway,
+        name: str,
+        arguments: Dict[str, Any],
+        *,
+        approval_granted: bool = False,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__()
         self.signals = _ToolRunnable._Signals(parent)
         self._gateway = gateway
         self._name = name
         self._arguments = arguments
+        self._approval_granted = approval_granted
 
     @Slot()
     def run(self) -> None:
-        result = self._gateway.execute_tool(self._name, self._arguments)
+        try:
+            result = self._gateway.execute_tool(
+                self._name, self._arguments, approval_granted=self._approval_granted
+            )
+        except Exception as exc:
+            result = {
+                "status": "ERROR",
+                "error": f"Asynchronous tool execution failed: {exc}",
+            }
         self.signals.finished.emit(self._name, result)
 
 
@@ -54,10 +71,18 @@ class ToolService(QObject):
         from ...backend.tools.gateway import ToolGateway
         self._gateway = ToolGateway(self.workspace_root)
 
-    def execute(self, name: str, arguments: Dict[str, Any] | None = None) -> None:
+    def execute(
+        self,
+        name: str,
+        arguments: Dict[str, Any] | None = None,
+        *,
+        approval_granted: bool = False,
+    ) -> None:
         """Execute a tool asynchronously; result emitted via tool_result signal."""
         self._ensure_gateway()
-        runnable = _ToolRunnable(self._gateway, name, arguments or {}, parent=self)
+        runnable = _ToolRunnable(
+            self._gateway, name, arguments or {}, approval_granted=approval_granted, parent=self
+        )
         runnable.signals.finished.connect(self.tool_result)
         self._pool.start(runnable)
 

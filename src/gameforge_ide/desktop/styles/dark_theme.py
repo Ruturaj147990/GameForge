@@ -785,6 +785,11 @@ def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
     app.setStyle("Fusion")
     app.setStyleSheet(GAMEFORGE_LIGHT_QSS if theme == "light" else GAMEFORGE_DARK_QSS)
     app.setProperty("gameforgeTheme", theme)
+    try:
+        from ..icons import clear_icon_cache
+        clear_icon_cache()
+    except Exception:
+        pass
     mapping = _DARK_TO_LIGHT if theme == "light" else _LIGHT_TO_DARK
     for widget in QApplication.allWidgets():
         previous = widget.property("gameforgeTheme") or "dark"

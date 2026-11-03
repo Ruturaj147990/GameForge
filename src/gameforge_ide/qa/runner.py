@@ -76,9 +76,9 @@ def run_packaged(
 
     if map_path:
         clean_map = map_path.strip().split("?")[0]
-        url = f"{clean_map}?game=/Script/GameForgeRuntime.GameForgeGameModeBase"
+        url = f"{clean_map}?game=/Script/GameForgeRuntime.GameForgeGameMode"
     else:
-        url = "?game=/Script/GameForgeRuntime.GameForgeGameModeBase"
+        url = "?game=/Script/GameForgeRuntime.GameForgeGameMode"
 
     argv: List[str] = [
         str(exe),
@@ -172,7 +172,7 @@ def run_editor_game(
     ]
     if map_path:
         clean_map = map_path.strip().split("?")[0]
-        argv.append(f"{clean_map}?game=/Script/GameForgeRuntime.GameForgeGameModeBase")
+        argv.append(f"{clean_map}?game=/Script/GameForgeRuntime.GameForgeGameMode")
     argv.extend([
         "-game",
         f"-GFScenario={scenario_path.resolve()}",

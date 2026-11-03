@@ -176,6 +176,7 @@ class PlayView(QWidget):
             f"}}"
         )
         self._results_table.clicked.connect(self._on_result_selected)
+        self._results_table.itemSelectionChanged.connect(self._on_result_selected)
         left_layout.addWidget(self._results_table, 1)
         splitter.addWidget(left_widget)
 

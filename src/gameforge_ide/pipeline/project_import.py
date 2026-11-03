@@ -196,8 +196,8 @@ def enable_gameforge_management(
         except Exception:
             pass
 
-    if src_plugin.is_dir() and not target_plugin.is_dir():
-        shutil.copytree(src_plugin, target_plugin, ignore=shutil.ignore_patterns("Intermediate", "Binaries"))
+    if src_plugin.is_dir():
+        shutil.copytree(src_plugin, target_plugin, dirs_exist_ok=True, ignore=shutil.ignore_patterns("Intermediate", "Binaries"))
 
     # 2. Checkpoints & Git
     warning = ""

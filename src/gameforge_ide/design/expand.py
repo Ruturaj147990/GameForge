@@ -414,7 +414,33 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
         )
 
     # 4. Input
-    actions = tmpl.get("actions", [IA_MOVE, IA_LOOK])
+    actions = list(tmpl.get("actions", [IA_MOVE, IA_LOOK]))
+    action_ids = {a.action_id for a in actions}
+
+    if draft.camera in (CameraKind.FIRST_PERSON, CameraKind.THIRD_PERSON):
+        if IA_MOVE.action_id not in action_ids:
+            actions.append(IA_MOVE)
+            action_ids.add(IA_MOVE.action_id)
+        if IA_LOOK.action_id not in action_ids:
+            actions.append(IA_LOOK)
+            action_ids.add(IA_LOOK.action_id)
+
+    has_combat_elements = has_enemy or has_spawner or any(
+        getattr(e, "kind", None) in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY, EntityKind.SPAWNER)
+        for e in entities
+    ) or any(
+        "shoot" in cr.lower() or "attack" in cr.lower() or "gun" in cr.lower() or "weapon" in cr.lower()
+        for cr in draft.custom_rules
+    )
+
+    if has_combat_elements:
+        if IA_FIRE.action_id not in action_ids and IA_ATTACK.action_id not in action_ids:
+            if draft.camera in (CameraKind.FIRST_PERSON, CameraKind.TOP_DOWN):
+                actions.append(IA_FIRE)
+            else:
+                actions.append(IA_ATTACK)
+            action_ids.add(actions[-1].action_id)
+
     input_spec = InputSpec(actions=actions)
 
     # 5. UI & HUD
@@ -468,11 +494,24 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
         source_prompt=draft.pitch,
         generator="user",
     )
+    players = 1
+    for e in entities:
+        if "players" in e.props:
+            try:
+                p_val = int(e.props["players"])
+                if p_val >= 2:
+                    players = p_val
+                    break
+            except (ValueError, TypeError):
+                pass
+    if players == 1 and draft.genre == Genre.GRID_BOARD:
+        players = 2
+
     overview = Overview(
         genre=draft.genre,
         pitch=draft.pitch,
         camera=draft.camera,
-        players=1,
+        players=players,
         session_minutes=10,
     )
     art = ArtDirection(

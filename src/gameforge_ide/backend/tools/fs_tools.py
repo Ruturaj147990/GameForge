@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -94,15 +95,24 @@ def tool_read_file(
     if not target_file.is_file():
         return {"error": f"Path is not a file: {subpath}"}
 
-    try:
-        with open(target_file, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except Exception as e:
-        return {"error": f"Failed to read file: {e}"}
+    lines = None
+    last_err = None
+    for attempt in range(3):
+        try:
+            with open(target_file, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+            last_err = None
+            break
+        except (PermissionError, OSError) as e:
+            last_err = e
+            time.sleep(0.05 * (attempt + 1))
+
+    if lines is None:
+        return {"error": f"Failed to read file: {last_err}"}
 
     total_lines = len(lines)
     s_idx = max(0, start_line - 1)
-    e_idx = min(total_lines, end_line) if end_line is not None else total_lines
+    e_idx = max(s_idx, min(total_lines, end_line)) if end_line is not None else total_lines
 
     selected = lines[s_idx:e_idx]
     numbered = [f"{i + s_idx + 1:4d} | {line}" for i, line in enumerate(selected)]
@@ -132,12 +142,21 @@ def tool_search_code(
         return {"error": f"Directory not found: {subpath}"}
 
     matches = []
-    flags = 0 if case_sensitive else re.IGNORECASE
-    pattern = re.compile(query if is_regex else re.escape(query), flags)
+    try:
+        flags = 0 if case_sensitive else re.IGNORECASE
+        pattern = re.compile(query if is_regex else re.escape(query), flags)
+    except re.error as e:
+        return {"error": f"Invalid regular expression '{query}': {e}"}
 
     for root, dirs, files in os.walk(target_dir):
         # Ignore git, cache, build dirs
-        dirs[:] = [d for d in dirs if d not in [".git", "__pycache__", "Intermediate", "Binaries", "Saved", ".pytest_cache"]]
+        dirs[:] = [
+            d for d in dirs
+            if d not in [
+                ".git", "__pycache__", "Intermediate", "Binaries", "Saved",
+                ".pytest_cache", ".gameforge", "DerivedDataCache", "Build", "node_modules", "scratch",
+            ]
+        ]
 
         for f in files:
             if f.endswith((".pyc", ".pyd", ".dll", ".exe", ".pdb", ".bin", ".gguf")):

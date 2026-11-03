@@ -46,19 +46,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         )
     )
 
-    # Lighting rig from biomes
+    # Lighting preset is recorded on LevelPlan and emitted by level_ops.py
     lighting_preset = getattr(level, "lighting", "day")
-    # map to biomes.LIGHTING key if needed
-    biome_light_key = "day_clear" if lighting_preset == "day" else lighting_preset
-    if biome_light_key in biomes.LIGHTING:
-        for light_actor in biomes.lighting_rig(biome_light_key):
-            geometry_ops.append(
-                OpCall(
-                    op="spawn_actor",
-                    args=light_actor,
-                    purpose=f"Spawn lighting {light_actor.get('label', '')}",
-                )
-            )
 
     # Player start near one edge
     player_start = (-half_x_cm * 0.75, 0.0, 100.0)

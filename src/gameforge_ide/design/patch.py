@@ -202,7 +202,7 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
         val = op.get("value")
 
         # Speed scaling summary
-        m_speed = re.search(r"/entities/(\d+)/props/(move_speed|patrol_speed|speed)", path)
+        m_speed = re.search(r"/entities/(\d+)/props/(player_speed|move_speed|patrol_speed|speed)", path)
         if m_speed:
             idx = int(m_speed.group(1))
             prop = m_speed.group(2)
@@ -213,9 +213,11 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
                 continue
 
         # Lighting
-        if path == "/scene/lighting":
-            old_light = gds.scene.lighting.value if hasattr(gds.scene.lighting, "value") else str(gds.scene.lighting)
-            sentences.append(f"Lighting: changed from {old_light} to {val}")
+        if path == "/scene/lighting" or path.endswith("/lighting"):
+            level_0 = gds.scene.levels[0] if (hasattr(gds, "scene") and hasattr(gds.scene, "levels") and gds.scene.levels) else None
+            old_light = getattr(level_0, "lighting", "default") if level_0 else "default"
+            old_val = old_light.value if hasattr(old_light, "value") else str(old_light)
+            sentences.append(f"Lighting: changed from {old_val} to {val}")
             continue
 
         # Title
@@ -302,7 +304,15 @@ def propose_patch(
         resp_str = None
         try:
             resp_str = model_caller("design", prompt)
-            parsed = json.loads(resp_str)
+            clean_str = resp_str.strip()
+            if clean_str.startswith("```"):
+                clean_str = re.sub(r"^```(?:json)?\s*", "", clean_str, flags=re.I)
+                clean_str = re.sub(r"\s*```$", "", clean_str)
+            s_idx = clean_str.find("{")
+            e_idx = clean_str.rfind("}")
+            if s_idx != -1 and e_idx != -1 and e_idx > s_idx:
+                clean_str = clean_str[s_idx : e_idx + 1]
+            parsed = json.loads(clean_str)
             ops = parsed.get("ops", [])
             summary = parsed.get("summary", "")
             questions = parsed.get("questions", [])
@@ -319,7 +329,15 @@ def propose_patch(
                 )
                 try:
                     repair_resp = model_caller("design", repair_prompt)
-                    parsed2 = json.loads(repair_resp)
+                    clean_str2 = repair_resp.strip()
+                    if clean_str2.startswith("```"):
+                        clean_str2 = re.sub(r"^```(?:json)?\s*", "", clean_str2, flags=re.I)
+                        clean_str2 = re.sub(r"\s*```$", "", clean_str2)
+                    s_idx = clean_str2.find("{")
+                    e_idx = clean_str2.rfind("}")
+                    if s_idx != -1 and e_idx != -1 and e_idx > s_idx:
+                        clean_str2 = clean_str2[s_idx : e_idx + 1]
+                    parsed2 = json.loads(clean_str2)
                     ops2 = parsed2.get("ops", [])
                     summary2 = parsed2.get("summary", "")
                     questions2 = parsed2.get("questions", [])
@@ -350,6 +368,21 @@ def propose_patch(
     )
 
 
+def _compact_entities_list(entities_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Trim large coordinate lists from placement to conserve model context tokens."""
+    compact = []
+    for ent in entities_list:
+        e_copy = dict(ent)
+        if "placement" in e_copy and isinstance(e_copy["placement"], dict):
+            p = dict(e_copy["placement"])
+            pts = p.get("points_m")
+            if isinstance(pts, list) and len(pts) > 2:
+                p["points_m"] = pts[:2]
+            e_copy["placement"] = p
+        compact.append(e_copy)
+    return compact
+
+
 def _select_relevant_sections(gds: GameDesignSpec, request: str) -> Dict[str, Any]:
     """Trim GDS to sections relevant to keywords in the user request."""
     req_lower = request.lower()
@@ -357,7 +390,7 @@ def _select_relevant_sections(gds: GameDesignSpec, request: str) -> Dict[str, An
     result: Dict[str, Any] = {"meta": full.get("meta", {})}
 
     if any(k in req_lower for k in ("guard", "speed", "enemy", "pickup", "relic", "player", "actor", "entity", "hazard", "door", "key")):
-        result["entities"] = full.get("entities", [])
+        result["entities"] = _compact_entities_list(full.get("entities", []))
         result["rules"] = full.get("rules", [])
         result["goals"] = full.get("goals", {})
 
@@ -371,6 +404,6 @@ def _select_relevant_sections(gds: GameDesignSpec, request: str) -> Dict[str, An
     if len(result) == 1:
         # Default compact overview + entities
         result["overview"] = full.get("overview", {})
-        result["entities"] = full.get("entities", [])
+        result["entities"] = _compact_entities_list(full.get("entities", []))
 
     return result

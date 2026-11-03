@@ -33,11 +33,31 @@ CUSTOM_DETAIL_KEYWORDS: Set[str] = {
     "escape", "facility", "burning", "arctic", "desert", "crystal", "crystals", "sail",
     "pirate", "monsters", "slaying", "asteroid", "meteor", "mars", "space", "cyber",
     "defending", "defend", "survive", "survival", "bullet", "shooting", "shooter",
+    "spooky", "haunted", "mansion", "ninja", "cyberpunk", "neon", "volcano", "lava",
+    "ice", "snow", "underwater", "aquatic", "ocean", "cosmic", "galaxy", "gothic",
+    "western", "cowboy", "samurai", "wizard", "witch", "speedrun", "endless", "runner",
+    "racing", "racer", "flight", "glider", "gravity", "stealthy", "tactical", "castle",
+    "knight", "dragon", "dwarf", "elf", "sci-fi", "scifi", "futuristic", "post-apocalyptic",
+    "apocalypse", "glitch", "arcade", "horror", "creepy", "shadow",
 }
 
 DRAFT_SYSTEM_PROMPT = """You turn a game idea into a JSON object that matches the given schema exactly.
 Rules:
 - Choose the closest genre and camera. Prefer simple, playable designs a small team could build in a day.
+Genre guidance:
+- grid_board: for board games played on a grid — tic-tac-toe, chess, checkers, snakes and ladders, monopoly, ludo, connect four, draughts
+- platformer: for 3D/2D obstacle course games with jumping and running
+- arena_combat: for wave-based combat arenas
+- top_down_shooter: for top-down shooting games
+- card_battler: for card/deck games
+- exploration: for open-world exploration
+- dungeon_crawler: for dungeon room exploration
+- puzzle: for logic puzzle games
+- custom: for everything else
+
+For board games with dice, tokens, snakes/ladders, or path-based movement, ALWAYS use genre=grid_board with camera=fixed_board and players>=2.
+For first-person shooters or tactical combat, use camera=first_person with enemies, combat spawner, weapons, and clear win condition.
+
 - entities: list what the player meets (pickups, enemies, guards, npcs, doors, hazards, checkpoints, goal). Counts must be small (1-20).
 - win: 1-3 conditions the game can check (collect_all, reach_goal, defeat_all, survive_seconds, score_at_least, board_win, match_win).
 - lose: conditions such as health_zero or timer_runs_out. Use [] if the player cannot lose.
@@ -49,6 +69,7 @@ PRESET_TITLES = [
     "Tic-Tac-Toe",
     "Connect Four",
     "Gomoku",
+    "Snakes and Ladders",
     "3D Platformer",
     "Arena Combat",
     "Card Battler",
@@ -92,7 +113,22 @@ def prompt_to_gds(
     # 2. Preset path: keyword match (only for direct preset requests without custom narrative/mechanics)
     text = " " + prompt.lower().replace("’", "'") + " "
     words = set(re.findall(r"\b\w+\b", text))
-    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS))
+    preset_words = {w for kws in PRESET_KEYWORDS.values() for kw in kws for w in kw.split()}
+    stop_words = {
+        "a", "an", "the", "in", "on", "at", "to", "for", "with", "and", "or", "of", "is", "are",
+        "you", "where", "game", "make", "create", "build", "called", "named", "titled", "against",
+        "friend", "ai", "easy", "medium", "hard", "vs", "versus", "i", "want", "please",
+    }
+    override_words = {
+        "coin", "coins", "pickups", "pickup", "collectibles", "collectible", "gems", "gem",
+        "points", "point", "stars", "star", "ring", "rings", "target", "targets", "waves",
+        "wave", "health", "hp", "seed", "size", "board", "grid", "rows", "columns",
+    }
+    m_title = re.search(r'\b(?:called|named|titled)\s+["\']?([^"\',.!?\n]+)["\']?', prompt, re.I)
+    title_words = set(re.findall(r"\b\w+\b", m_title.group(1).lower())) if m_title else set()
+
+    custom_words = words - preset_words - stop_words - override_words - title_words
+    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS)) or len(custom_words) >= 2
 
     best_preset: Optional[str] = None
     best_kw: str = ""

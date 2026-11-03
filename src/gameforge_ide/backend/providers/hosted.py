@@ -183,8 +183,17 @@ class SpendLedger:
     def _entries(self) -> Iterator[Dict]:
         if not self.path.is_file():
             return iter(())
+        entries = []
         with open(self.path, encoding="utf-8") as fh:
-            return iter([json.loads(l) for l in fh if l.strip()])
+            for l in fh:
+                line = l.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except (json.JSONDecodeError, ValueError):
+                    continue  # Gracefully skip corrupted or partial lines from crashed processes
+        return iter(entries)
 
     def spent(self, provider_id: str, task_id: Optional[str] = None, day: Optional[str] = None) -> float:
         day = day or time.strftime("%Y-%m-%d")

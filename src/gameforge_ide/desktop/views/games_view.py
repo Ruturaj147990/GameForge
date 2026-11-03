@@ -731,6 +731,7 @@ class GamesView(QWidget):
         self._list_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list_view.customContextMenuRequested.connect(self._show_context_menu)
         self._list_view.doubleClicked.connect(self._on_item_double_clicked)
+        self._list_view.installEventFilter(self)
         self._list_view.setStyleSheet(
             f"QListView#{self._list_view.objectName()} {{"
             f"  background-color: transparent;"
@@ -746,6 +747,22 @@ class GamesView(QWidget):
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
         self.refresh_games()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self._list_view and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                index = self._list_view.currentIndex()
+                if index.isValid():
+                    self._on_item_double_clicked(index)
+                    return True
+            elif event.key() == Qt.Key_Delete:
+                index = self._list_view.currentIndex()
+                if index.isValid():
+                    game = self._model.get_game(index.row())
+                    if game:
+                        self._confirm_delete(game)
+                    return True
+        return super().eventFilter(watched, event)
 
     # ── Slots & Logic ────────────────────────────────────────────────────────
 

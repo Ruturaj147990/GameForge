@@ -57,6 +57,7 @@ if sys.platform == "win32":
     _k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
     _k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD)
     _k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    _k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
 
 
 def _job():
@@ -84,6 +85,19 @@ def adopt(proc: subprocess.Popen) -> bool:
     try:
         handle = wintypes.HANDLE(int(proc._handle))
         return bool(_k32.AssignProcessToJobObject(job, handle))
+    except Exception:
+        return False
+
+
+def terminate_all_children(exit_code: int = 1) -> bool:
+    """Terminate all child processes running in the IDE job object."""
+    if sys.platform != "win32":
+        return False
+    job = _job()
+    if job is None:
+        return False
+    try:
+        return bool(_k32.TerminateJobObject(job, exit_code))
     except Exception:
         return False
 
@@ -175,5 +189,5 @@ def default_job_manager() -> JobManager:
     global _DEFAULT_MANAGER
     with _MGR_LOCK:
         if _DEFAULT_MANAGER is None:
-            _DEFAULT_MANAGER = JobManager(max_workers=2)
+            _DEFAULT_MANAGER = JobManager(max_workers=4)
         return _DEFAULT_MANAGER

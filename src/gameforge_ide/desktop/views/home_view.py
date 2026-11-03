@@ -554,6 +554,7 @@ class HomeView(QWidget):
         self._status_lbl.setText("Drafting a design…")
         self._status_lbl.setVisible(True)
         self._btn_cancel.setVisible(True)
+        self._btn_cancel.setEnabled(True)
 
         def work():
             from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds

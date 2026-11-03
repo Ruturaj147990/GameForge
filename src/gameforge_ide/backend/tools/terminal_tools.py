@@ -110,21 +110,24 @@ class TerminalTools:
 
         t0 = time.time()
         try:
-            proc = subprocess.run(
+            from ...core import jobs
+            proc = jobs.spawn(
                 args,
                 cwd=str(working_dir),
-                shell=False,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout_seconds,
+                encoding="utf-8",
+                errors="replace",
             )
+            stdout, stderr = proc.communicate(timeout=timeout_seconds)
             duration = round(time.time() - t0, 3)
             return {
                 "status": "SUCCESS" if proc.returncode == 0 else "FAILED",
                 "exit_code": proc.returncode,
-                "stdout": proc.stdout,
-                "stderr": proc.stderr,
-                "output": proc.stdout,
+                "stdout": stdout,
+                "stderr": stderr,
+                "output": stdout,
                 "duration_seconds": duration,
                 "command": command,
                 "argv": args,

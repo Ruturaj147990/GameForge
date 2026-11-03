@@ -347,6 +347,48 @@ def preset_top_down_shooter(title: Optional[str] = None, **overrides) -> GameDes
     return gds
 
 
+def preset_snake_and_ladders(title: Optional[str] = None, **overrides) -> GameDesignSpec:
+    t = title or "Snakes and Ladders"
+    draft = DesignDraft(
+        title=t,
+        genre=Genre.GRID_BOARD,
+        camera=CameraKind.FIXED_BOARD,
+        pitch="Snakes and ladders dice board game: roll 1-6, climb ladders, slide down snakes, reach cell 100 to win",
+        win=[DraftWin(type="board_win")],
+        lose=[DraftLose(type="board_loss")],
+    )
+    gds = expand_draft(draft)
+    gds.overview.players = 2
+    gds.meta.generator = "preset:snake_and_ladders"
+    board = _find_entity(gds, EntityKind.BOARD)
+    if board:
+        board.props = {
+            "board_size": 100,
+            "snakes": 8,
+            "ladders": 8,
+            "dice_sides": 6,
+            "players": 2,
+            "cell_size_cm": 100,
+        }
+        board.props.update(overrides.get("board_props", {}))
+        for k in ("board_size", "snakes", "ladders", "dice_sides", "players", "cell_size_cm"):
+            if k in overrides:
+                board.props[k] = overrides[k]
+        gds.overview.players = int(board.props.get("players", 2))
+    else:
+        gds.overview.players = 2
+
+    gds.acceptance.extra_checks = [
+        "Board structure (10x10 = 100 cells)",
+        "Dice rolling (1-6 outcomes)",
+        "Player token placement and movement",
+        "Snake transitions (land on snake head → move to tail)",
+        "Ladder transitions (land on ladder bottom → climb to top)",
+        "Win condition (player reaches cell 100)",
+    ]
+    return gds
+
+
 PRESETS: Dict[str, Callable[..., GameDesignSpec]] = {
     "tic_tac_toe": preset_tic_tac_toe,
     "connect_four": preset_connect_four,
@@ -357,9 +399,17 @@ PRESETS: Dict[str, Callable[..., GameDesignSpec]] = {
     "procedural_world": preset_procedural_world,
     "relic_hunt": preset_relic_hunt,
     "top_down_shooter": preset_top_down_shooter,
+    "snake_and_ladders": preset_snake_and_ladders,
+    "board_game": preset_snake_and_ladders,
+    "dice_board": preset_snake_and_ladders,
 }
 
 PRESET_KEYWORDS: Dict[str, List[str]] = {
+    "snake_and_ladders": [
+        "snake and ladders", "snakes and ladders", "snake & ladders", "snakes & ladders",
+        "ludo", "parcheesi", "chutes and ladders", "dice board game", "roll and move",
+        "board game",
+    ],
     "tic_tac_toe": [
         "tic tac toe", "tic-tac-toe", "tictactoe", "noughts and crosses",
         "naughts and crosses", "xs and os", "x and o", "x's and o's",
@@ -448,6 +498,9 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
         m = _DENSITY.search(prompt)
         if m:
             overrides["foliage_density"] = float(m.group(1))
+    elif preset_id in ("snake_and_ladders", "board_game", "dice_board"):
+        if _HOTSEAT.search(prompt):
+            overrides["players"] = 2
 
     return overrides
 
@@ -464,6 +517,9 @@ def get_preset_spec(name: str) -> GameDesignSpec:
         "tic_tac_toe": preset_tic_tac_toe,
         "connect_four": preset_connect_four,
         "gomoku": preset_gomoku,
+        "snake_and_ladders": preset_snake_and_ladders,
+        "board_game": preset_snake_and_ladders,
+        "dice_board": preset_snake_and_ladders,
     }
     factory = factories.get(name)
     if factory is None:

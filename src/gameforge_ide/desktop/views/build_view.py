@@ -267,6 +267,8 @@ class BuildView(QWidget):
         self._timeline_delegate = StepRowDelegate(self._timeline_view)
         self._timeline_view.setItemDelegate(self._timeline_delegate)
         self._timeline_view.clicked.connect(self._on_step_selected)
+        if self._timeline_view.selectionModel():
+            self._timeline_view.selectionModel().currentChanged.connect(lambda cur, prev: self._on_step_selected(cur))
         self._timeline_view.setStyleSheet(
             f"QListView#{self._timeline_view.objectName()} {{"
             f"  background-color: {tokens.BG_PANEL};"

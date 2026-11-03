@@ -82,6 +82,7 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         ctx.workspace_dir / "GameForge" / "gds.json",
     ]
     scenarios: List[Scenario] = []
+    gds = None
 
     for g_path in gds_candidates:
         if g_path.is_file():
@@ -92,6 +93,30 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
                 break
             except Exception:
                 pass
+
+    if gds is None and "gds" in ctx.step.inputs:
+        try:
+            gds_input = ctx.step.inputs["gds"]
+            gds = GameDesignSpec.model_validate(gds_input) if isinstance(gds_input, dict) else gds_input
+        except Exception:
+            pass
+
+    # Load game-specific acceptance tests driven by GDS
+    if gds is not None:
+        try:
+            from ...qa.game_spec_tests import (
+                acceptance_tests_to_scenarios,
+                generate_acceptance_tests,
+            )
+            spec_tests = generate_acceptance_tests(gds)
+            spec_scs = acceptance_tests_to_scenarios(spec_tests)
+            existing_ids = {s.scenario_id for s in scenarios}
+            for s in spec_scs:
+                if s.scenario_id not in existing_ids:
+                    scenarios.append(s)
+                    existing_ids.add(s.scenario_id)
+        except Exception:
+            pass
 
     # Also load hand-written scenarios from GameForge/scenarios/*.json
     sc_dirs = [
@@ -113,7 +138,14 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         scenarios = [s for s in scenarios if s.scenario_id in scenario_ids]
     elif input_scenarios and isinstance(input_scenarios, list):
         if all(isinstance(x, str) for x in input_scenarios):
-            filtered = [s for s in scenarios if s.scenario_id in input_scenarios]
+            allowed = set(input_scenarios)
+            if gds is not None:
+                try:
+                    from ...qa.game_spec_tests import generate_acceptance_tests
+                    allowed.update(st.test_id for st in generate_acceptance_tests(gds))
+                except Exception:
+                    pass
+            filtered = [s for s in scenarios if s.scenario_id in allowed]
             if filtered:
                 scenarios = filtered
         elif all(isinstance(x, dict) for x in input_scenarios):
@@ -190,9 +222,20 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
             all_passed = False
             errors.extend([f"Scenario {sc.scenario_id} failed: {f}" for f in res.failures])
 
+    stage_data = {"results": results, "configuration": cfg}
+    if all_passed and gds is not None:
+        try:
+            from ..validation import validate_stage_output
+            stage_ok, stage_issues = validate_stage_output("scenarios", stage_data, gds)
+            if not stage_ok:
+                all_passed = False
+                errors.extend([f"Scenario validation: {issue}" for issue in stage_issues])
+        except Exception:
+            pass
+
     return StepOutcome(
         ok=all_passed,
-        data={"results": results, "configuration": cfg},
+        data=stage_data,
         artifacts=[{"path": str(a), "kind": "scenario_result"} for a in artifacts],
         errors=errors,
     )

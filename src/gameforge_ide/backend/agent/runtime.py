@@ -75,6 +75,17 @@ class AgentRuntime:
             pass
         self._active_tasks: Dict[str, TaskState] = {}
 
+    def set_workspace(self, new_workspace: Path | str) -> None:
+        """Switch the agent runtime active workspace and re-initialize path-dependent subsystems."""
+        self.workspace_root = Path(new_workspace).resolve()
+        self.tool_gateway = ToolGateway(self.workspace_root)
+        self.context_manager = ContextManager(self.workspace_root)
+        self.tasks_dir = self.workspace_root / ".gameforge" / "tasks"
+        try:
+            self.tasks_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
     def _native_tool_schemas(self) -> List[Dict[str, Any]]:
         """Provider-neutral tool schemas {name, description, parameters} from the gateway."""
         out = []
@@ -181,64 +192,80 @@ class AgentRuntime:
         }
 
     def _extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
-        """Extracts structured tool invocation from model output."""
-        # 1. Match ```json {"tool": "name", "args": {...}} ```
-        pattern = re.compile(r"```(?:json)?\s*(\{\s*\"tool\"\s*:\s*\"[^\"]+\".*?\})\s*```", re.DOTALL)
-        m = pattern.search(text)
-        if m:
+        """Extracts structured tool invocation from model output supporting multiple standard schemas."""
+        def _normalize_tool_data(data: Any) -> Optional[Dict[str, Any]]:
+            if not isinstance(data, dict):
+                return None
+            if "tool" in data and "args" in data:
+                return {"name": data["tool"], "arguments": data["args"] if isinstance(data["args"], dict) else {}}
+            if "name" in data and "arguments" in data:
+                return {"name": data["name"], "arguments": data["arguments"] if isinstance(data["arguments"], dict) else {}}
+            if "function" in data and "arguments" in data:
+                return {"name": data["function"], "arguments": data["arguments"] if isinstance(data["arguments"], dict) else {}}
+            if "tool_name" in data and "parameters" in data:
+                return {"name": data["tool_name"], "arguments": data["parameters"] if isinstance(data["parameters"], dict) else {}}
+            return None
+
+        # 1. Match ```json {...} ``` code blocks
+        for m in re.finditer(r"```(?:json)?\s*(\{\s*.*?\})\s*```", text, re.DOTALL):
             try:
                 data = json.loads(m.group(1))
-                if "tool" in data and "args" in data:
-                    return {"name": data["tool"], "arguments": data["args"]}
+                norm = _normalize_tool_data(data)
+                if norm:
+                    return norm
             except Exception:
                 pass
 
-        # 2. Match single or multi-line {"tool": "...", "args": {...}} with brace balancing
-        start_pos = 0
-        while True:
-            idx = text.find('"tool"', start_pos)
-            if idx == -1:
-                break
-            brace_idx = text.rfind('{', 0, idx)
-            if brace_idx != -1:
-                brace_count = 0
-                in_str = False
-                escape = False
-                for j in range(brace_idx, len(text)):
-                    ch = text[j]
-                    if escape:
-                        escape = False
-                        continue
-                    if ch == '\\':
-                        escape = True
-                        continue
-                    if ch == '"':
-                        in_str = not in_str
-                        continue
-                    if not in_str:
-                        if ch == '{':
-                            brace_count += 1
-                        elif ch == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                candidate = text[brace_idx : j + 1]
-                                try:
-                                    data = json.loads(candidate)
-                                    if "tool" in data and "args" in data:
-                                        return {"name": data["tool"], "arguments": data["args"]}
-                                except Exception:
-                                    pass
-                                break
-                # Fallback if text was truncated right before the final closing brace
-                if brace_count == 1 and not in_str:
-                    candidate = text[brace_idx:].strip() + "}"
-                    try:
-                        data = json.loads(candidate)
-                        if "tool" in data and "args" in data:
-                            return {"name": data["tool"], "arguments": data["args"]}
-                    except Exception:
-                        pass
-            start_pos = idx + 6
+        # 2. Match single or multi-line tool invocation with brace balancing
+        markers = ('"tool"', '"name"', '"function"', '"tool_name"')
+        for marker in markers:
+            start_pos = 0
+            while True:
+                idx = text.find(marker, start_pos)
+                if idx == -1:
+                    break
+                brace_idx = text.rfind('{', 0, idx)
+                if brace_idx != -1:
+                    brace_count = 0
+                    in_str = False
+                    escape = False
+                    for j in range(brace_idx, len(text)):
+                        ch = text[j]
+                        if escape:
+                            escape = False
+                            continue
+                        if ch == '\\':
+                            escape = True
+                            continue
+                        if ch == '"':
+                            in_str = not in_str
+                            continue
+                        if not in_str:
+                            if ch == '{':
+                                brace_count += 1
+                            elif ch == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    candidate = text[brace_idx : j + 1]
+                                    try:
+                                        data = json.loads(candidate)
+                                        norm = _normalize_tool_data(data)
+                                        if norm:
+                                            return norm
+                                    except Exception:
+                                        pass
+                                    break
+                    # Fallback if text was truncated right before the final closing brace
+                    if brace_count == 1 and not in_str:
+                        candidate = text[brace_idx:].strip() + "}"
+                        try:
+                            data = json.loads(candidate)
+                            norm = _normalize_tool_data(data)
+                            if norm:
+                                return norm
+                        except Exception:
+                            pass
+                start_pos = idx + len(marker)
 
         return None
 
@@ -487,18 +514,21 @@ class AgentRuntime:
                     re.I,
                 ))
 
+                is_modal_request = bool(re.search(r"^(can|could|would)\s+you\b|^please\b", user_prompt.strip(), re.I))
+                is_explanation = bool(re.search(r"\b(can you explain|tell me about|what is|how does|why does)\b", user_prompt, re.I))
+
                 if is_code_request:
                     is_create = False
                     is_change = False
-                elif is_question and not is_create:
+                elif is_question and not is_create and not (is_modal_request and not is_explanation):
                     is_change = False
                 else:
                     is_change = bool(re.search(
-                        r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|ad|remove|tweak|increase|decrease|more|mor|less|replace|enhance|fix|improve|switch|set|turn|double|halve|insert|make|spawn)\b",
+                        r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|ad|remove|tweak|increase|decrease|more|mor|less|replace|enhance|fix|improve|switch|set|turn|double|halve|insert|make|spawn|give|equip|grant|provide|place|put|attach|drop|include|enable|disable|raise|lower|boost|scale|cut)\b",
                         user_prompt,
                         re.I,
                     )) and bool(re.search(
-                        r"\b(game|project|level|leavl|scene|weapon|weapons?|wepon|gun|shotgun|shotgn|pistol|rifle|knife|bot|bots|enemy|enemies|enemiez|combat|spawner|hazard|speed|health|damage|rules?|arena|box|camera|view|perspective|jump|height|boss|lighting|pickups?|collectibles?|checkpoint|checkpoints|obstacles?|doors?|keys?|bombs?|defus\w*|tactical)\b",
+                        r"\b(game|project|level|leavl|scene|player|players|character|characters|hero|weapon|weapons?|wepon|gun|shotgun|shotgn|pistol|rifle|knife|bot|bots|enemy|enemies|enemiez|combat|spawner|hazard|speed|health|damage|rules?|arena|box|camera|view|perspective|jump|height|boss|lighting|pickups?|collectibles?|checkpoint|checkpoints|obstacles?|doors?|keys?|bombs?|defus\w*|tactical|coins?|gems?|potions?|chests?|traps?|turrets?|shields?|armor|ammo|bullets?|flags?|platforms?|switches?|gates?|walls?|goals?|objectives?|timers?|scores?|difficulty|gravity|art|style|music|audio|biome|theme|fog|dark|skybox|cards?|decks?|dice|board|grid)\b",
                         user_prompt,
                         re.I,
                     )) and not is_create

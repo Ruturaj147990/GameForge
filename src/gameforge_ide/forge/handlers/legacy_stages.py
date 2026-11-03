@@ -187,7 +187,18 @@ def legacy_spec(ctx: StepContext) -> StepOutcome:
             if "theme" in art:
                 design_params["theme"] = art["theme"]
 
-        return StepOutcome(True, data={"params": design_params, "engine": tc.engine_version()})
+        outcome_data = {"params": design_params, "engine": tc.engine_version()}
+        if isinstance(gds_data, dict):
+            try:
+                from ...design.gds import GameDesignSpec
+                from ..validation import validate_stage_output
+                gds_obj = GameDesignSpec.model_validate(gds_data)
+                valid, issues = validate_stage_output("design", outcome_data, gds_obj)
+                if not valid:
+                    return StepOutcome(False, data=outcome_data, errors=issues)
+            except Exception:
+                pass
+        return StepOutcome(True, data=outcome_data)
 
     params = get_params(ctx)
     params.validate()
@@ -235,7 +246,7 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
     uproject = pdir / f"{project_name}.uproject"
     recipe_id = ctx.step.inputs.get("recipe_id") or get_recipe_id(params)
     impl = RECIPE_IMPL.get(recipe_id, RECIPE_IMPL[GRID_RECIPE_ID])
-    default_gm = ctx.step.inputs.get("game_mode") or "/Script/GameForgeRuntime.GameForgeGameModeBase"
+    default_gm = ctx.step.inputs.get("game_mode") or "/Script/GameForgeRuntime.GameForgeGameMode"
     deps = ctx.step.inputs.get("module_deps") or impl[2] or ["UMG", "Slate", "SlateCore"]
     plugins = ctx.step.inputs.get("plugins")
     tc = _get_toolchain(ctx)
@@ -256,8 +267,8 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
                     if old_src_dir.exists():
                         import shutil
                         shutil.rmtree(old_src_dir, ignore_errors=True)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    errors.append(f"Assemble validation error: {exc}")
 
     # Resolve default map: inputs -> plan -> GDS -> filesystem -> fallback
     default_map = ctx.step.inputs.get("default_map")
@@ -445,6 +456,8 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
 
         out = []
         errors = []
+        spawned_actors = {}
+        readback_warnings = []
         try:
             link.connect(discovery_timeout_s=900)
             for call in op_calls:
@@ -458,7 +471,18 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
                         call_ok = True
                     else:
                         errors.extend(r.get("errors", []))
+                if call.op == "spawn_actor" and call_ok:
+                    r_data = r.get("data") or {}
+                    lbl = call.args.get("label") or r_data.get("label")
+                    if lbl and "location" in r_data:
+                        spawned_actors[lbl] = r_data
                 out.append({"op": call.op, "purpose": call.purpose, "ok": call_ok, "errors": r.get("errors", [])})
+
+            # Read-back verification: verify spawned actor transforms match plan within tolerance
+            from ...composer.level_ops import verify_placed_actor_transforms
+            readback_warnings = verify_placed_actor_transforms(plan, spawned_actors, tolerance_cm=50.0)
+            for w in readback_warnings:
+                ctx.log(f"[WARNING] {w}")
         except Exception as exc:
             errors.append(f"assemble level failed: {exc}")
         finally:
@@ -468,10 +492,13 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
             "calls": out,
             "total_calls": len(op_calls),
             "passed_calls": sum(1 for c in out if c.get("ok")),
+            "readback_warnings": readback_warnings,
             "graceful": link.last_stop_graceful,
             "plan_level_id": getattr(plan, "level_id", "level_1"),
             "geometry_ops_count": len(getattr(plan, "geometry_ops", [])),
             "actors_count": len(getattr(plan, "actors", [])),
+            "spawned_actors": spawned_actors,
+            "actors": [a.model_dump() if hasattr(a, "model_dump") else a for a in getattr(plan, "actors", [])],
         }
         artifacts = [{"path": str(log_file), "kind": "log"}] if log_file.is_file() else []
         if log_file.is_file():
@@ -481,6 +508,15 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
             assembled_map = getattr(plan, "map_path", None) or f"/Game/Maps/{str(level_id).capitalize()}"
             if is_first:
                 _sync_project_map_settings(pdir, assembled_map)
+            # Output evidence verification for assemble stage
+            if gds is not None:
+                try:
+                    from ..validation import validate_stage_output
+                    stage_ok, stage_issues = validate_stage_output("assemble", data, gds)
+                    if not stage_ok:
+                        errors.extend([f"Assemble validation: {issue}" for issue in stage_issues])
+                except Exception as exc:
+                    errors.append(f"Assemble validation error: {exc}")
         return StepOutcome(len(errors) == 0, data=data, errors=errors, artifacts=artifacts)
 
     recipe_id = get_recipe_id(params)

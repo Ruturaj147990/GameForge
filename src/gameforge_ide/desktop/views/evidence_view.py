@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import QModelIndex, QSize, Qt, Signal, Slot
+from PySide6.QtCore import QEvent, QModelIndex, QObject, QSize, Qt, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -174,6 +174,7 @@ class EvidenceView(QWidget):
         )
         self._gallery.currentItemChanged.connect(self._on_item_selected)
         self._gallery.itemDoubleClicked.connect(self._on_item_double_clicked)
+        self._gallery.installEventFilter(self)
         splitter.addWidget(self._gallery)
 
         # Right: detail pane
@@ -374,6 +375,15 @@ class EvidenceView(QWidget):
         if path_str:
             self.openFileRequested.emit(str(path_str))
             open_folder_in_file_manager(Path(path_str))
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self._gallery and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                item = self._gallery.currentItem()
+                if item:
+                    self._on_item_double_clicked(item)
+                    return True
+        return super().eventFilter(watched, event)
 
     @Slot()
     def _on_item_selected(self, current: Optional[QListWidgetItem] = None, previous: Optional[QListWidgetItem] = None) -> None:

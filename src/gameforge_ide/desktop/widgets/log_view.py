@@ -88,6 +88,9 @@ class LogView(QWidget):
         )
         layout.addWidget(self._edit, 1)
 
+        self._scrollbar = self._edit.verticalScrollBar()
+        self._scrollbar.valueChanged.connect(self._on_scroll_value_changed)
+
         # 100 ms flush timer
         self._flush_timer = QTimer(self)
         self._flush_timer.setInterval(100)
@@ -130,7 +133,45 @@ class LogView(QWidget):
         if self._auto_scroll:
             self._scroll_to_bottom()
 
+    @Slot(int)
+    def _on_scroll_value_changed(self, value: int) -> None:
+        max_val = self._scrollbar.maximum()
+        if max_val > 0 and value < max_val - 20:
+            if self._auto_scroll:
+                self._auto_scroll = False
+                self._btn_scroll.setText("⤓ Resume Auto-Scroll")
+                self._btn_scroll.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_WARNING};
+                        border: 1px solid {tokens.ACCENT_WARNING}; border-radius: 3px;
+                        padding: 1px 6px; font-size: {tokens.FONT_BODY_SM}px; font-weight: bold;
+                    }}
+                    QPushButton:hover {{ color: {tokens.TEXT_PRIMARY}; }}
+                """)
+        elif value >= max_val - 5:
+            if not self._auto_scroll:
+                self._auto_scroll = True
+                self._btn_scroll.setText("⤓ Bottom")
+                self._btn_scroll.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};
+                        border: 1px solid {tokens.BORDER}; border-radius: 3px;
+                        padding: 1px 6px; font-size: {tokens.FONT_BODY_SM}px;
+                    }}
+                    QPushButton:hover {{ color: {tokens.TEXT_PRIMARY}; }}
+                """)
+
     @Slot()
     def _scroll_to_bottom(self) -> None:
+        self._auto_scroll = True
+        self._btn_scroll.setText("⤓ Bottom")
+        self._btn_scroll.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};
+                border: 1px solid {tokens.BORDER}; border-radius: 3px;
+                padding: 1px 6px; font-size: {tokens.FONT_BODY_SM}px;
+            }}
+            QPushButton:hover {{ color: {tokens.TEXT_PRIMARY}; }}
+        """)
         scrollbar = self._edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())

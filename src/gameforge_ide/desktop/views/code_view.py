@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import (
     QDockWidget,
     QMainWindow,
@@ -56,7 +56,7 @@ class CodeView(QMainWindow):
         self._asset_panel = AssetPanel(self._workspace, parent=self)
         self._design_panel = DesignPanel(self._workspace, parent=self)
         self._unreal_panel = UnrealPanel(self._tools, self._workspace, parent=self)
-        self._diff_panel = DiffPanel(self._workspace, parent=self)
+        self._diff_panel = DiffPanel(self._tools, parent=self)
         self._terminal = TerminalPanel(self._workspace, parent=self)
 
         # Docks
@@ -71,6 +71,7 @@ class CodeView(QMainWindow):
 
         self.tabifyDockWidget(self._dock_unreal, self._dock_diff)
         self._dock_unreal.raise_()
+        self._default_dock_layout = self.saveState()
 
     def _create_dock(self, title: str, obj_name: str, widget: QWidget, area: Qt.DockWidgetArea) -> QDockWidget:
         dock = QDockWidget(title, self)
@@ -79,3 +80,19 @@ class CodeView(QMainWindow):
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable | QDockWidget.DockWidgetFloatable)
         self.addDockWidget(area, dock)
         return dock
+
+    def save_dock_state(self, settings: QSettings) -> None:
+        """Persist dock positions and sizes."""
+        settings.setValue("studio/code_view_layout", self.saveState())
+
+    def restore_dock_state(self, settings: QSettings) -> bool:
+        """Restore dock positions and sizes if saved."""
+        saved = settings.value("studio/code_view_layout")
+        if saved:
+            return self.restoreState(saved)
+        return False
+
+    def reset_dock_layout(self) -> None:
+        """Reset docks back to default layout."""
+        if hasattr(self, "_default_dock_layout"):
+            self.restoreState(self._default_dock_layout)

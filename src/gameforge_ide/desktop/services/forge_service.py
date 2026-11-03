@@ -41,6 +41,11 @@ class ForgeService(QObject):
     def recent_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
         return self.store.get_runs_index()[:limit]
 
+    def cancel_run(self, run_id: str) -> bool:
+        """Cancel an active Forge run by run_id."""
+        from ...forge.executor import ForgeExecutor
+        return ForgeExecutor.cancel_run(run_id)
+
     def close(self) -> None:
         if self._unsub:
             self._unsub()

@@ -106,7 +106,7 @@ def propose_assistant_fix(
     line_no = int(first_diag.get("line", 0))
 
     file_excerpt = ""
-    target_path = project_dir / file_rel if file_rel else None
+    target_path = Path(file_rel) if file_rel and Path(file_rel).is_absolute() else (project_dir / file_rel if file_rel else None)
     if target_path and target_path.is_file():
         try:
             lines = target_path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -137,13 +137,18 @@ def propose_assistant_fix(
         )
         try:
             diff_text = model_caller("codegen", prompt)
+            clean_diff = diff_text.strip()
+            if clean_diff.startswith("```"):
+                import re
+                clean_diff = re.sub(r"^```(?:diff)?\s*", "", clean_diff, flags=re.I)
+                clean_diff = re.sub(r"\s*```$", "", clean_diff)
             return {
                 "status": "PROPOSED",
                 "attempt": attempt,
                 "max_attempts": max_attempts,
                 "target_file": file_rel,
                 "line": line_no,
-                "diff": diff_text,
+                "diff": clean_diff,
                 "diagnostics_addressed": len(top_diags),
             }
         except Exception as exc:

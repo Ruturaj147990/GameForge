@@ -434,8 +434,8 @@ class GdsForm(QWidget):
                 self._table_rules.setCellWidget(r, 1, btn_edit)
 
             # Goals
-            win_texts = [c.stat if hasattr(c, "stat") else str(c) for c in spec.goals.win]
-            lose_texts = [c.stat if hasattr(c, "stat") else str(c) for c in spec.goals.lose]
+            win_texts = [self._format_condition(c) for c in spec.goals.win]
+            lose_texts = [self._format_condition(c) for c in spec.goals.lose]
             self._edit_win.setText(", ".join(win_texts) if win_texts else "relics.collected >= 5")
             self._edit_lose.setText(", ".join(lose_texts) if lose_texts else "player.health <= 0")
 
@@ -459,6 +459,51 @@ class GdsForm(QWidget):
         except Exception as exc:
             logger.warning("Failed to apply form inputs to spec: %s", exc)
         return copy.deepcopy(self._spec)
+
+    @staticmethod
+    def _format_condition(c: Any) -> str:
+        if hasattr(c, "stat") and hasattr(c, "op") and hasattr(c, "value"):
+            v = int(c.value) if getattr(c, "value", None) is not None and float(c.value).is_integer() else c.value
+            return f"{c.stat} {c.op} {v}"
+        if hasattr(c, "event"):
+            return f"event={c.event}"
+        if hasattr(c, "seconds"):
+            return f"time >= {c.seconds}"
+        return str(c)
+
+    @classmethod
+    def _parse_conditions_text(cls, text: str, existing_conditions: List[Any]) -> List[Any]:
+        existing_map = {cls._format_condition(c): c for c in existing_conditions}
+        existing_map_repr = {str(c): c for c in existing_conditions}
+        parsed = []
+        for part in text.split(","):
+            p = part.strip()
+            if not p:
+                continue
+            if p in existing_map:
+                parsed.append(existing_map[p])
+                continue
+            if p in existing_map_repr:
+                parsed.append(existing_map_repr[p])
+                continue
+            m = re.match(r"^([a-z0-9_.]+)\s*(>=|<=|>|<|==|!=)\s*([0-9.]+)$", p)
+            if m:
+                from ...design.gds import StatCompare
+                stat_name, op, val = m.group(1), m.group(2), float(m.group(3))
+                parsed.append(StatCompare(stat=stat_name, op=op, value=val))
+                continue
+            m_ev = re.match(r"^event[=:]\s*([a-z0-9_.]+)$", p, re.IGNORECASE)
+            if m_ev:
+                from ...design.gds import EventOccurred
+                parsed.append(EventOccurred(kind="event", event=m_ev.group(1)))
+                continue
+            m_time = re.match(r"^time\s*(>=|>|==)\s*([0-9.]+)$", p, re.IGNORECASE)
+            if m_time:
+                from ...design.gds import TimerElapsed
+                parsed.append(TimerElapsed(kind="timer", seconds=float(m_time.group(2))))
+                continue
+            raise ValueError(f"Invalid condition syntax: '{p}' (expected format: stat op value)")
+        return parsed
 
     def _apply_inputs_to_spec(self) -> None:
         if not self._spec:
@@ -491,37 +536,17 @@ class GdsForm(QWidget):
         except Exception:
             pass
 
-        try:
-            win_txt = self._edit_win.text().strip()
-            if win_txt:
-                parsed_win = []
-                for part in win_txt.split(","):
-                    p = part.strip()
-                    m = re.match(r"^([a-z0-9_.]+)\s*(>=|<=|>|<|==|!=)\s*([0-9.]+)$", p)
-                    if m:
-                        from ...design.gds import StatCompare
-                        stat_name, op, val = m.group(1), m.group(2), float(m.group(3))
-                        parsed_win.append(StatCompare(stat=stat_name, op=op, value=val))
-                if parsed_win:
-                    self._spec.goals.win = parsed_win
-        except Exception as exc:
-            logger.debug("Could not parse win conditions: %s", exc)
+        win_txt = self._edit_win.text().strip()
+        if win_txt:
+            self._spec.goals.win = self._parse_conditions_text(win_txt, self._spec.goals.win)
+        else:
+            self._spec.goals.win = []
 
-        try:
-            lose_txt = self._edit_lose.text().strip()
-            if lose_txt:
-                parsed_lose = []
-                for part in lose_txt.split(","):
-                    p = part.strip()
-                    m = re.match(r"^([a-z0-9_.]+)\s*(>=|<=|>|<|==|!=)\s*([0-9.]+)$", p)
-                    if m:
-                        from ...design.gds import StatCompare
-                        stat_name, op, val = m.group(1), m.group(2), float(m.group(3))
-                        parsed_lose.append(StatCompare(stat=stat_name, op=op, value=val))
-                if parsed_lose:
-                    self._spec.goals.lose = parsed_lose
-        except Exception as exc:
-            logger.debug("Could not parse lose conditions: %s", exc)
+        lose_txt = self._edit_lose.text().strip()
+        if lose_txt:
+            self._spec.goals.lose = self._parse_conditions_text(lose_txt, self._spec.goals.lose)
+        else:
+            self._spec.goals.lose = []
 
     @Slot()
     def _on_field_changed(self) -> None:

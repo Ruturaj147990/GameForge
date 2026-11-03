@@ -183,9 +183,13 @@ class TopBar(QWidget):
         self.project_combo.addItem("Open project folder…", userData="__open_folder__")
 
         if current and current in projects:
+            self._current_project = current
             self.project_combo.setCurrentText(current)
         elif projects:
+            self._current_project = projects[0]
             self.project_combo.setCurrentIndex(0)
+        else:
+            self._current_project = ""
 
         completer = QCompleter(projects, self.project_combo)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
@@ -196,8 +200,13 @@ class TopBar(QWidget):
     def _on_combo_index_changed(self, index: int) -> None:
         data = self.project_combo.itemData(index)
         if data == "__open_folder__":
+            prev_idx = self.project_combo.findText(self._current_project) if hasattr(self, "_current_project") and self._current_project else 0
+            self.project_combo.blockSignals(True)
+            self.project_combo.setCurrentIndex(max(0, prev_idx))
+            self.project_combo.blockSignals(False)
             self.openFolderRequested.emit()
         elif data:
+            self._current_project = str(data)
             self.projectSelected.emit(str(data))
 
     def update_run_chip(self, active: bool, game_name: str = "", done: int = 0, total: int = 0,
@@ -268,6 +277,13 @@ class TopBar(QWidget):
             }}
         """)
 
+    def refresh_icons(self) -> None:
+        """Refresh toolbar icons to match active theme."""
+        self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
+        self.palette_btn.setIcon(icon("search", role="secondary", size=18))
+
+    update_theme = refresh_icons
+
     def _add_system_menu_item(self, row: SystemRow) -> None:
         dot = "●" if row.state == "ok" else "▲" if row.state == "degraded" else "■"
         title = f"{dot} {row.key.capitalize()}: {row.summary}"
@@ -275,5 +291,18 @@ class TopBar(QWidget):
         if row.fix_action:
             fix_title = f"   ↳ Action: {row.fix_action.replace('_', ' ').capitalize()}"
             fix_act = self.systems_menu.addAction(fix_title)
-            action_key = row.fix_action
-            fix_act.triggered.connect(lambda: self.fixActionRequested.emit(action_key))
+            action_key = str(row.fix_action)
+            fix_act.triggered.connect(lambda checked=False, k=action_key: self.fixActionRequested.emit(k))
+
+    def update_theme(self) -> None:
+        """Repaint top bar background and tool button icons with active theme tokens."""
+        self.setStyleSheet(f"""
+            QWidget#studioTopBar {{
+                background: {tokens.BG_ROOT};
+                border-bottom: 1px solid {tokens.BORDER};
+            }}
+        """)
+        if hasattr(self, "assistant_btn"):
+            self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
+        if hasattr(self, "palette_btn"):
+            self.palette_btn.setIcon(icon("search", role="secondary", size=18))

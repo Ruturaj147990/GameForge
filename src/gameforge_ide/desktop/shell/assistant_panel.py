@@ -158,3 +158,10 @@ class AssistantPanel(QWidget):
     def _on_clear_chat(self) -> None:
         if hasattr(self.chat_panel, "_clear_chat"):
             self.chat_panel._clear_chat()
+
+    def refresh_icons(self) -> None:
+        """Refresh header button icons on theme change."""
+        self.new_btn.setIcon(icon("build", role="secondary", size=14))
+        self.clear_btn.setIcon(icon("cancel", role="secondary", size=14))
+
+    update_theme = refresh_icons

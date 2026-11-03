@@ -288,6 +288,8 @@ void AGameForgePlayerController::BuildDefaultInput()
 	UInputAction* Select = Make(TEXT("IA_Select"), EInputActionValueType::Boolean);
 	UInputAction* Attack = Make(TEXT("IA_Attack"), EInputActionValueType::Boolean);
 	UInputAction* Fire = Make(TEXT("IA_Fire"), EInputActionValueType::Boolean);
+	UInputAction* PrimaryAttack = Make(TEXT("IA_PrimaryAttack"), EInputActionValueType::Boolean);
+	UInputAction* RollDice = Make(TEXT("IA_RollDice"), EInputActionValueType::Boolean);
 	UInputAction* Interact = Make(TEXT("IA_Interact"), EInputActionValueType::Boolean);
 
 	auto Swizzle = [this]() { return NewObject<UInputModifierSwizzleAxis>(MappingContext); };
@@ -303,6 +305,8 @@ void AGameForgePlayerController::BuildDefaultInput()
 	MappingContext->MapKey(Select, EKeys::LeftMouseButton);
 	MappingContext->MapKey(Attack, EKeys::LeftMouseButton);
 	MappingContext->MapKey(Fire, EKeys::LeftMouseButton);
+	MappingContext->MapKey(PrimaryAttack, EKeys::LeftMouseButton);
+	MappingContext->MapKey(RollDice, EKeys::LeftMouseButton);
 	MappingContext->MapKey(Interact, EKeys::E);
 }
 
@@ -319,6 +323,8 @@ void AGameForgePlayerController::SetupInputComponent()
 		EIC->BindAction(FindAction(TEXT("IA_Select")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSelect);
 		EIC->BindAction(FindAction(TEXT("IA_Attack")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
 		EIC->BindAction(FindAction(TEXT("IA_Fire")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
+		EIC->BindAction(FindAction(TEXT("IA_PrimaryAttack")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
+		EIC->BindAction(FindAction(TEXT("IA_RollDice")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSelect);
 		EIC->BindAction(FindAction(TEXT("IA_Interact")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleInteract);
 	}
 }
@@ -437,19 +443,6 @@ AGameForgeGameModeBase::AGameForgeGameModeBase()
 void AGameForgeGameModeBase::StartPlay()
 {
 	Super::StartPlay();
-	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GameStarted, GetName(), TEXT("{}"));
-}
-
-AGameForgeGameMode::AGameForgeGameMode()
-{
-	DefaultPawnClass = AGameForgeCharacter::StaticClass();
-	PlayerControllerClass = AGameForgePlayerController::StaticClass();
-	GameStateClass = AGameForgeGameState::StaticClass();
-}
-
-void AGameForgeGameMode::StartPlay()
-{
-	Super::StartPlay();
 
 	// Read player parameters from definition
 	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
@@ -556,6 +549,20 @@ void AGameForgeGameMode::StartPlay()
 			}
 		}
 	}
+
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GameStarted, GetName(), TEXT("{}"));
+}
+
+AGameForgeGameMode::AGameForgeGameMode()
+{
+	DefaultPawnClass = AGameForgeCharacter::StaticClass();
+	PlayerControllerClass = AGameForgePlayerController::StaticClass();
+	GameStateClass = AGameForgeGameState::StaticClass();
+}
+
+void AGameForgeGameMode::StartPlay()
+{
+	Super::StartPlay();
 
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{

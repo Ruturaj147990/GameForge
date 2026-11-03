@@ -51,21 +51,28 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     gravity_scale = 1.2
     if hasattr(gds, "entities"):
         for ent in gds.entities:
-            if ent.kind == "player" or ent.entity_id == "player":
-                move_speed = float(ent.props.get("move_speed", 600.0))
+            if ent.kind in ("player", "character", "hero") or ent.entity_id == "player":
+                move_speed = float(ent.props.get("move_speed", ent.props.get("player_speed", 600.0)))
                 jump_velocity = float(ent.props.get("jump_velocity", 650.0))
                 gravity_scale = float(ent.props.get("gravity_scale", 1.2))
 
     geometry_ops: List[OpCall] = []
     actors: List[PlacedActor] = []
 
-    # Number of platforms: max(7, pickups + 3)
+    # Number of platforms: ensure enough platforms for all pickups + checkpoint + goal
     num_pickups = 3
+    pickup_entity_id = "pickups"
     if hasattr(gds, "entities"):
         for ent in gds.entities:
-            if ent.kind == "pickup":
-                num_pickups = max(num_pickups, int(ent.props.get("count", 3)))
-    num_platforms = max(7, num_pickups + 3)
+            if (
+                ent.kind in ("pickup", "collectible")
+                or "pickup" in ent.entity_id.lower()
+                or getattr(ent, "module", "") == "kit.pickup"
+            ):
+                c = getattr(ent, "count", None) or ent.props.get("count", 3)
+                num_pickups = max(num_pickups, int(c))
+                pickup_entity_id = ent.entity_id
+    num_platforms = max(7, num_pickups + 4)
 
     # 1. Start pad at origin
     start_pos = (0.0, 0.0, 0.0)
@@ -152,11 +159,11 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         pos = platform_tops[idx]
         pickup_actor = PlacedActor(
             actor_id=f"pickup_{p_i}",
-            entity_id="pickup",
+            entity_id=pickup_entity_id,
             runtime_class="/Script/GameForgeRuntime.GameForgePickup",
             location=(pos[0], pos[1], pos[2] + 60.0),
             yaw=0.0,
-            tags=["GF_E_pickup", "GF_Owned", f"GF_Pickup_{p_i + 1}"],
+            tags=[f"GF_E_{pickup_entity_id}", "GF_Owned", f"GF_Pickup_{p_i + 1}"],
             properties={},
         )
         actors.append(pickup_actor)

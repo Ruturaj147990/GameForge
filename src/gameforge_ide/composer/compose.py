@@ -78,7 +78,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
 
     # Fallback default level if none specified
     if not levels:
-        from ..design.gds import LevelSpec
+        from ..design.gds import LevelSpec, Vec2
         genre_val = gds.overview.genre.value if hasattr(gds.overview.genre, "value") else str(gds.overview.genre)
         cam_val = getattr(gds.overview.camera, "value", str(gds.overview.camera)) if hasattr(gds.overview, "camera") else ""
         meta_title = getattr(gds.meta, "title", "") if hasattr(gds, "meta") else ""
@@ -89,7 +89,11 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
 
         if "counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or (cam_val == "first_person" and "shoot" in title_pitch):
             layout_name = "tactical_fps"
-        elif genre_val in ("board", "card"):
+        elif genre_val in ("grid_board", "board"):
+            layout_name = "board"
+        elif genre_val in ("card_battler", "card"):
+            layout_name = "lanes"
+        elif genre_val == "puzzle":
             layout_name = "board"
         elif genre_val == "dungeon_crawler":
             layout_name = "rooms"
@@ -99,7 +103,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             layout_name = "course"
         else:
             layout_name = "arena"
-        levels = [LevelSpec(level_id="level_1", layout=layout_name, seed=2026)]
+        levels = [LevelSpec(level_id="level_1", layout=layout_name, size_m=Vec2(x=60.0, y=60.0), seed=2026)]
 
     for level in levels:
         layout_name = level.layout.value if hasattr(level.layout, "value") else str(level.layout)
@@ -119,8 +123,19 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
 
         # Place entities that are not yet placed by the layout
         already_placed_entities = {a.entity_id for a in layout_plan.actors if a.entity_id}
+        if "card_table" in already_placed_entities or "cards" in already_placed_entities:
+            already_placed_entities.update({"card_table", "cards"})
+        if "board" in already_placed_entities or "grid_board" in already_placed_entities:
+            already_placed_entities.update({"board", "grid_board"})
+        if "pickup" in already_placed_entities or "pickups" in already_placed_entities:
+            already_placed_entities.update({"pickup", "pickups"})
 
-        unplaced = [e for e in gds.entities if e.entity_id not in already_placed_entities and e.kind != "player"]
+        unplaced = [
+            e for e in gds.entities
+            if e.entity_id not in already_placed_entities
+            and e.kind not in ("player", "character", "hero")
+            and e.module != "kit.player_character"
+        ]
 
         # Gather layout free-area polygon from nav_bounds
         center, extent = layout_plan.nav_bounds
@@ -144,7 +159,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         total_to_place = 0
         entity_scatter_requests: List[Tuple[Any, int]] = []
         for e in unplaced:
-            count = int(e.props.get("count", 1))
+            count = int(getattr(e, "count", None) or e.props.get("count", 1))
             total_to_place += count
             entity_scatter_requests.append((e, count))
 
@@ -158,6 +173,15 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         if scatter_warn:
             warnings.append(scatter_warn)
 
+        # For platformer courses, find available platforms to place entities securely
+        platform_locs = [
+            op.args["location"]
+            for op in layout_plan.geometry_ops
+            if op.args.get("actor_class") == "StaticMeshActor"
+            and "Platform" in op.args.get("label", "")
+            and "location" in op.args
+        ]
+
         pt_idx = 0
         placed_actors = list(layout_plan.actors)
         for e, count in entity_scatter_requests:
@@ -165,11 +189,20 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             for c_i in range(count):
                 if pt_idx < len(scattered_points):
                     pos_2d = scattered_points[pt_idx]
-                    loc = (pos_2d[0], pos_2d[1], 100.0)
+                    if layout_name == "course" and platform_locs:
+                        nearest_p = min(platform_locs, key=lambda p: abs(float(p.get("x", 0.0)) - pos_2d[0]))
+                        loc = (float(nearest_p.get("x", 0.0)), float(nearest_p.get("y", 0.0)), float(nearest_p.get("z", 0.0)) + 75.0)
+                    else:
+                        loc = (pos_2d[0], pos_2d[1], 100.0)
                     pt_idx += 1
                 else:
                     # Fallback offset
-                    loc = (center[0] + c_i * 200.0, center[1] + c_i * 200.0, 100.0)
+                    if layout_name == "course" and platform_locs:
+                        p_idx = min(c_i, len(platform_locs) - 1)
+                        p_loc = platform_locs[p_idx]
+                        loc = (float(p_loc.get("x", 0.0)), float(p_loc.get("y", 0.0)), float(p_loc.get("z", 0.0)) + 75.0)
+                    else:
+                        loc = (center[0] + c_i * 200.0, center[1] + c_i * 200.0, 100.0)
 
                 actor_id = f"{e.entity_id}_{c_i}"
                 tags = [f"GF_E_{e.entity_id}", "GF_Owned", f"GF_{e.kind}_{c_i + 1}"]
@@ -202,6 +235,15 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     scenarios: List[str] = []
     if hasattr(gds, "acceptance") and hasattr(gds.acceptance, "scenarios"):
         scenarios = [s.scenario_id for s in gds.acceptance.scenarios]
+
+    # Include game-specific acceptance scenarios derived from GDS
+    try:
+        from ..qa.game_spec_tests import generate_acceptance_tests
+        for spec_test in generate_acceptance_tests(gds):
+            if spec_test.test_id not in scenarios:
+                scenarios.append(spec_test.test_id)
+    except Exception:
+        pass
 
     # 6. Content requests
     content_requests: List[Dict[str, Any]] = []

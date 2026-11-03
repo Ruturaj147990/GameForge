@@ -7,10 +7,12 @@ import difflib
 import hashlib
 import json
 import os
+import stat
 import tempfile
+import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
 
@@ -78,7 +80,24 @@ class EditTools:
                 handle.write(content)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary_name, target_file)
+
+            last_exc: Optional[Exception] = None
+            for attempt in range(5):
+                try:
+                    os.replace(temporary_name, target_file)
+                    last_exc = None
+                    break
+                except (PermissionError, OSError) as exc:
+                    last_exc = exc
+                    if target_file.exists():
+                        try:
+                            os.chmod(target_file, stat.S_IWRITE | stat.S_IREAD)
+                        except Exception:
+                            pass
+                    time.sleep(0.05 * (attempt + 1))
+
+            if last_exc is not None:
+                raise last_exc
         except Exception:
             try:
                 os.unlink(temporary_name)
@@ -98,10 +117,28 @@ class EditTools:
         effective_path = subpath or file_path
         target_file = self.boundary.validate_path(effective_path, allow_write=True)
 
+        if target_file.exists() and target_file.is_dir():
+            return {
+                "status": "ERROR",
+                "error": f"Target path is a directory, not a file: {effective_path}",
+            }
+
         original_bytes = target_file.read_bytes() if target_file.exists() else b""
         original_text = original_bytes.decode("utf-8", errors="replace")
 
+        if original_text and target_content and target_content == replacement_content:
+            return {
+                "status": "NOOP",
+                "message": f"No changes proposed: replacement_content is identical to target_content for {effective_path}.",
+            }
+
         # Check if target_content is present in file (if not creating fresh file)
+        if original_text and not target_content:
+            return {
+                "status": "ERROR",
+                "error": f"target_content cannot be empty when editing existing file: {subpath}. Provide the exact code block to replace.",
+            }
+
         if original_text and target_content not in original_text:
             norm_orig = original_text.replace("\r\n", "\n")
             norm_target = target_content.replace("\r\n", "\n")
@@ -264,3 +301,159 @@ class EditTools:
 
         except Exception as e:
             return {"status": "ERROR", "error": f"Rollback failed: {e}"}
+
+    def apply_batch(self, diff_ids: List[str]) -> Dict[str, Any]:
+        """Atomically applies a batch of approved diffs across multiple files.
+        
+        Performs pre-validation on all diffs and hashes first; if any diff is stale
+        or invalid, the transaction aborts with zero filesystem modifications.
+        If a write failure occurs mid-batch, previously applied diffs in the batch
+        are rolled back automatically to preserve workspace consistency.
+        """
+        if not diff_ids:
+            return {"status": "NOOP", "applied_diff_ids": [], "files": []}
+
+        # Phase 1: Pre-validation (dry run)
+        validated_records: List[Dict[str, Any]] = []
+        for diff_id in diff_ids:
+            if diff_id not in self.pending_diffs:
+                loaded = self._load_diff_from_disk(diff_id)
+                if loaded and loaded.get("status") == "PENDING_APPROVAL":
+                    self.pending_diffs[diff_id] = loaded
+                else:
+                    return {
+                        "status": "ERROR",
+                        "error": f"Pending diff {diff_id} not found for batch application.",
+                        "failed_diff_id": diff_id,
+                    }
+
+            rec = self.pending_diffs[diff_id]
+            target_file = Path(rec["target_file"])
+            try:
+                self.boundary.validate_path(target_file, allow_write=True)
+            except SecurityViolationError as e:
+                return {
+                    "status": "BLOCKED",
+                    "error": f"Security boundary violation for {rec['file_path']}: {e}",
+                    "failed_diff_id": diff_id,
+                }
+
+            current_bytes = target_file.read_bytes() if target_file.exists() else b""
+            if self._digest(current_bytes) != rec["original_sha256"]:
+                return {
+                    "status": "STALE",
+                    "failed_diff_id": diff_id,
+                    "file_path": rec["file_path"],
+                    "error": f"File {rec['file_path']} changed after diff {diff_id} was proposed; batch aborted.",
+                }
+            validated_records.append(rec)
+
+        # Phase 2: Staged execution with automatic rollback on error
+        applied_now: List[str] = []
+        applied_files: List[str] = []
+        try:
+            for rec in validated_records:
+                diff_id = rec["diff_id"]
+                target_file = Path(rec["target_file"])
+                self._atomic_write(target_file, rec["new_bytes"])
+
+                rec["status"] = "APPLIED"
+                self.applied_diffs[diff_id] = rec
+                self.pending_diffs.pop(diff_id, None)
+                self._save_diff_to_disk(rec)
+
+                applied_now.append(diff_id)
+                applied_files.append(rec["file_path"])
+
+            return {
+                "status": "SUCCESS",
+                "applied_diff_ids": applied_now,
+                "files": applied_files,
+                "message": f"Successfully applied batch of {len(applied_now)} diffs.",
+            }
+        except Exception as exc:
+            # Transaction rollback: revert all diffs applied in this batch so far
+            rollback_errors = []
+            for rb_id in reversed(applied_now):
+                rb_res = self.rollback_diff(rb_id)
+                if rb_res.get("status") != "SUCCESS":
+                    rollback_errors.append(f"{rb_id}: {rb_res.get('error')}")
+
+            err_msg = f"Batch application failed during write: {exc}."
+            if rollback_errors:
+                err_msg += f" Note: transaction rollback encountered issues: {'; '.join(rollback_errors)}"
+            else:
+                err_msg += " All previously applied files in batch were successfully rolled back."
+
+            return {
+                "status": "ERROR",
+                "error": err_msg,
+                "applied_diff_ids": [],
+            }
+
+    def rollback_batch(self, diff_ids: List[str]) -> Dict[str, Any]:
+        """Rolls back a batch of applied diffs in reverse order.
+        
+        Validates freshness for all files first. If any file has been modified
+        after the diff was applied, aborts without modifying files.
+        """
+        if not diff_ids:
+            return {"status": "NOOP", "rolled_back_diff_ids": [], "files": []}
+
+        # Pre-validate all diffs
+        validated_records: List[Dict[str, Any]] = []
+        for diff_id in diff_ids:
+            if diff_id not in self.applied_diffs:
+                loaded = self._load_diff_from_disk(diff_id)
+                if loaded and loaded.get("status") == "APPLIED":
+                    self.applied_diffs[diff_id] = loaded
+                else:
+                    return {
+                        "status": "ERROR",
+                        "error": f"Applied diff {diff_id} not found for batch rollback.",
+                        "failed_diff_id": diff_id,
+                    }
+
+            rec = self.applied_diffs[diff_id]
+            target_file = Path(rec["target_file"])
+            try:
+                self.boundary.validate_path(target_file, allow_write=True)
+            except SecurityViolationError as e:
+                return {
+                    "status": "BLOCKED",
+                    "error": f"Security boundary violation for {rec['file_path']}: {e}",
+                    "failed_diff_id": diff_id,
+                }
+
+            current_bytes = target_file.read_bytes() if target_file.exists() else b""
+            if self._digest(current_bytes) != rec["new_sha256"]:
+                return {
+                    "status": "STALE",
+                    "failed_diff_id": diff_id,
+                    "file_path": rec["file_path"],
+                    "error": f"File {rec['file_path']} changed after diff was applied; batch rollback aborted.",
+                }
+            validated_records.append(rec)
+
+        # Roll back in reverse order
+        rolled_back_ids: List[str] = []
+        rolled_back_files: List[str] = []
+        for rec in reversed(validated_records):
+            diff_id = rec["diff_id"]
+            rb_res = self.rollback_diff(diff_id)
+            if rb_res.get("status") == "SUCCESS":
+                rolled_back_ids.append(diff_id)
+                rolled_back_files.append(rec["file_path"])
+            else:
+                return {
+                    "status": "ERROR",
+                    "error": f"Batch rollback failed on {diff_id}: {rb_res.get('error')}",
+                    "rolled_back_diff_ids": rolled_back_ids,
+                }
+
+        return {
+            "status": "SUCCESS",
+            "rolled_back_diff_ids": rolled_back_ids,
+            "files": rolled_back_files,
+            "message": f"Successfully rolled back batch of {len(rolled_back_ids)} diffs.",
+        }

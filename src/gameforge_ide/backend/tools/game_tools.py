@@ -63,19 +63,29 @@ class ApprovalStore:
         path = self.root / f"{approval_id}.json"
         if not path.is_file():
             return None
-        return json.loads(path.read_text(encoding="utf-8"))
+        for attempt in range(3):
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                if attempt == 2:
+                    return None
+                time.sleep(0.05 * (attempt + 1))
+        return None
 
     def list_pending(self) -> List[Dict[str, Any]]:
         if not self.root.is_dir():
             return []
         out = []
         for p in sorted(self.root.glob("apr_*.json")):
-            try:
-                rec = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if rec.get("status") == "PENDING":
-                out.append(rec)
+            for attempt in range(3):
+                try:
+                    rec = json.loads(p.read_text(encoding="utf-8"))
+                    if rec.get("status") == "PENDING":
+                        out.append(rec)
+                    break
+                except (OSError, json.JSONDecodeError):
+                    if attempt < 2:
+                        time.sleep(0.05 * (attempt + 1))
         return out
 
     def transition(self, approval_id: str, status: str, result: Optional[Dict] = None) -> Optional[Dict]:
@@ -93,9 +103,24 @@ class ApprovalStore:
 
     def _write(self, rec: Dict) -> None:
         path = self.root / f"{rec['approval_id']}.json"
-        tmp = path.with_suffix(".tmp")
+        tmp = path.with_suffix(f".tmp_{secrets.token_hex(4)}")
         tmp.write_text(json.dumps(rec, indent=1, default=str), encoding="utf-8")
-        os.replace(tmp, path)  # atomic
+        last_exc = None
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)  # atomic
+                last_exc = None
+                break
+            except (PermissionError, OSError) as exc:
+                last_exc = exc
+                time.sleep(0.05 * (attempt + 1))
+        if last_exc is not None:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except Exception:
+                    pass
+            raise last_exc
 
 
 class GameTools:

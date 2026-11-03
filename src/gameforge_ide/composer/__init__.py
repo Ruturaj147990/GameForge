@@ -14,7 +14,7 @@ from .model import (
     PlacedActor,
 )
 from .compose import compose
-from .level_ops import plan_to_op_calls
+from .level_ops import plan_to_op_calls, verify_placed_actor_transforms
 from .plan import composition_to_run_spec
 from .runtime_def import build as build_gfdef
 
@@ -27,6 +27,7 @@ __all__ = [
     "PlacedActor",
     "compose",
     "plan_to_op_calls",
+    "verify_placed_actor_transforms",
     "composition_to_run_spec",
     "build_gfdef",
 ]

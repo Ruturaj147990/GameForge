@@ -174,12 +174,11 @@ void UGameForgeScenarioSubsystem::Tick(float DeltaTime)
 
 	APlayerController* PC = World->GetFirstPlayerController();
 	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 
 	if (!bStarted)
 	{
 		StartDelayTimer += DeltaTime;
-		if (PC && Pawn && NavSys)
+		if (PC && Pawn)
 		{
 			bStarted = true;
 			StartDelaySeconds = StartDelayTimer;
@@ -189,7 +188,7 @@ void UGameForgeScenarioSubsystem::Tick(float DeltaTime)
 		}
 		else if (StartDelayTimer > 30.0f)
 		{
-			FailCurrentStep(TEXT("NO_NAVMESH_OR_PAWN"));
+			FailCurrentStep(TEXT("NO_PAWN"));
 			FinishScenario();
 		}
 		return;

@@ -54,15 +54,15 @@ def find_project_thumbnail(project_dir: Path) -> Optional[Path]:
     # 1. Look in evidence/**
     evidence_dir = saved_gf / "evidence"
     if evidence_dir.is_dir():
-        evidence_pngs = list(evidence_dir.glob("**/*.png"))
+        evidence_pngs = [p for p in evidence_dir.glob("**/*.png") if p.is_file()]
         if evidence_pngs:
-            evidence_pngs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            evidence_pngs.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0.0), reverse=True)
             return evidence_pngs[0]
 
     # 2. Look in Saved/GameForge/*.png
-    root_pngs = list(saved_gf.glob("*.png"))
+    root_pngs = [p for p in saved_gf.glob("*.png") if p.is_file()]
     if root_pngs:
-        root_pngs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        root_pngs.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0.0), reverse=True)
         return root_pngs[0]
 
     return None

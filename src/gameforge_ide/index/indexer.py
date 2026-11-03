@@ -27,8 +27,8 @@ RE_UPROPERTY = re.compile(r"UPROPERTY\s*\([^)]*\)", re.MULTILINE)
 RE_CLASS_DECL = re.compile(r"\bclass\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Z][A-Za-z0-9_]*)(?:\s*:\s*public\s+([A-Za-z0-9_]+))?", re.MULTILINE)
 RE_STRUCT_DECL = re.compile(r"\bstruct\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Z][A-Za-z0-9_]*)", re.MULTILINE)
 RE_ENUM_DECL = re.compile(r"\benum\s+(?:class\s+)?([A-Za-z0-9_]+)", re.MULTILINE)
-RE_FUNC_DECL = re.compile(r"(?:virtual\s+|static\s+)?(?:[\w:<>&*~]+\s+)+([A-Za-z0-9_]+)\s*\([^;{}]*\)\s*(?:const\s*)?(?:override\s*)?(?:final\s*)?[;{]", re.MULTILINE)
-RE_PROP_DECL = re.compile(r"(?:[\w:<>&*]+\s+)+([A-Za-z0-9_]+)\s*(?:=\s*[^;]+)?;", re.MULTILINE)
+RE_FUNC_DECL = re.compile(r"(?:virtual\s+|static\s+)?(?:[\w:<>&*~]+\s+)+([^\W\d]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:override\s*)?(?:final\s*)?[;{]", re.MULTILINE | re.UNICODE)
+RE_PROP_DECL = re.compile(r"(?:[\w:<>&*]+\s+)+([^\W\d]\w*)\s*(?:=\s*[^;]+)?;", re.MULTILINE | re.UNICODE)
 
 
 class ProjectIndex:
@@ -42,6 +42,7 @@ class ProjectIndex:
         index_dir = self.workspace_dir / ".gameforge" / "index"
         index_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = index_dir / f"{self.project_key}.db"
+        self._has_fts_triggers = False
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -70,6 +71,7 @@ class ProjectIndex:
                 );
                 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
                 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file);
+                CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 
                 CREATE TABLE IF NOT EXISTS config (
                     file TEXT,
@@ -91,7 +93,7 @@ class ProjectIndex:
                 );
                 """
             )
-            # Create FTS5 virtual table for symbols
+            # Create FTS5 virtual table for symbols with sync triggers
             try:
                 conn.execute(
                     """
@@ -103,8 +105,31 @@ class ProjectIndex:
                     );
                     """
                 )
+                conn.execute(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
+                        INSERT INTO symbols_fts(rowid, name, file) VALUES (new.id, new.name, new.file);
+                    END;
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS symbols_ad AFTER DELETE ON symbols BEGIN
+                        INSERT INTO symbols_fts(symbols_fts, rowid, name, file) VALUES('delete', old.id, old.name, old.file);
+                    END;
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
+                        INSERT INTO symbols_fts(symbols_fts, rowid, name, file) VALUES('delete', old.id, old.name, old.file);
+                        INSERT INTO symbols_fts(rowid, name, file) VALUES (new.id, new.name, new.file);
+                    END;
+                    """
+                )
+                self._has_fts_triggers = True
             except sqlite3.OperationalError:
-                pass
+                self._has_fts_triggers = False
 
     def index_project(self, force: bool = False) -> Dict[str, Any]:
         """Scan project tree and update database incrementally."""
@@ -291,7 +316,7 @@ class ProjectIndex:
                 continue
 
             # UFUNCTION declaration
-            if i > 1 and "UFUNCTION" in lines[i - 2]:
+            if has_macro("UFUNCTION", i - 6, i):
                 m_fn = RE_FUNC_DECL.search(line)
                 if m_fn:
                     fn_name = m_fn.group(1)
@@ -307,7 +332,7 @@ class ProjectIndex:
                     continue
 
             # UPROPERTY declaration
-            if i > 1 and "UPROPERTY" in lines[i - 2]:
+            if has_macro("UPROPERTY", i - 6, i):
                 m_prop = RE_PROP_DECL.search(line)
                 if m_prop:
                     prop_name = m_prop.group(1)
@@ -384,54 +409,71 @@ class ProjectIndex:
 
         conn = self._get_connection()
         try:
-            params: List[Any] = []
-            where_clauses = []
+            clean_q = re.sub(r"[^A-Za-z0-9_*]", "", query).strip()
+            use_fts = bool(re.search(r"[A-Za-z0-9]", clean_q))
 
-            # Try FTS search if query is an alphanumeric identifier
-            clean_q = re.sub(r"[^A-Za-z0-9_*]", "", query)
+            results = []
+            total = 0
             fts_worked = False
-            if clean_q:
+
+            if use_fts:
                 try:
                     q_fts = f"{clean_q}*" if not clean_q.endswith("*") else clean_q
-                    fts_sql = "SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH ?"
-                    matched_ids = [r[0] for r in conn.execute(fts_sql, (q_fts,)).fetchall()]
-                    if matched_ids:
-                        placeholders = ",".join("?" for _ in matched_ids)
-                        where_clauses.append(f"id IN ({placeholders})")
-                        params.extend(matched_ids)
-                        fts_worked = True
+                    where_clauses = ["symbols_fts MATCH ?"]
+                    params: List[Any] = [q_fts]
+                    if kind:
+                        where_clauses.append("s.kind = ?")
+                        params.append(kind)
+                    where_str = f"WHERE {' AND '.join(where_clauses)}"
+
+                    count_sql = f"SELECT COUNT(*) FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid {where_str}"
+                    total = conn.execute(count_sql, params).fetchone()[0]
+
+                    select_sql = (
+                        f"SELECT s.kind, s.name, s.file, s.line, s.parent "
+                        f"FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid "
+                        f"{where_str} ORDER BY s.name ASC LIMIT ? OFFSET ?"
+                    )
+                    params.extend([limit, offset])
+                    rows = conn.execute(select_sql, params).fetchall()
+                    results = [
+                        {
+                            "kind": r[0],
+                            "name": r[1],
+                            "file": r[2],
+                            "line": r[3],
+                            "parent": r[4],
+                        }
+                        for r in rows
+                    ]
+                    fts_worked = True
                 except Exception:
-                    pass
+                    fts_worked = False
 
             if not fts_worked:
-                where_clauses.append("name LIKE ?")
-                params.append(f"%{query}%")
+                where_clauses = ["name LIKE ?"]
+                params = [f"%{query}%"]
+                if kind:
+                    where_clauses.append("kind = ?")
+                    params.append(kind)
+                where_str = f"WHERE {' AND '.join(where_clauses)}"
 
-            if kind:
-                where_clauses.append("kind = ?")
-                params.append(kind)
+                count_sql = f"SELECT COUNT(*) FROM symbols {where_str}"
+                total = conn.execute(count_sql, params).fetchone()[0]
 
-            where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-
-            # Count total
-            count_sql = f"SELECT COUNT(*) FROM symbols {where_str}"
-            total = conn.execute(count_sql, params).fetchone()[0]
-
-            # Fetch paged results
-            select_sql = f"SELECT kind, name, file, line, parent FROM symbols {where_str} ORDER BY name ASC LIMIT ? OFFSET ?"
-            params.extend([limit, offset])
-
-            rows = conn.execute(select_sql, params).fetchall()
-            results = [
-                {
-                    "kind": r[0],
-                    "name": r[1],
-                    "file": r[2],
-                    "line": r[3],
-                    "parent": r[4],
-                }
-                for r in rows
-            ]
+                select_sql = f"SELECT kind, name, file, line, parent FROM symbols {where_str} ORDER BY name ASC LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
+                rows = conn.execute(select_sql, params).fetchall()
+                results = [
+                    {
+                        "kind": r[0],
+                        "name": r[1],
+                        "file": r[2],
+                        "line": r[3],
+                        "parent": r[4],
+                    }
+                    for r in rows
+                ]
 
             return {
                 "total": total,

@@ -48,6 +48,12 @@ RECIPES: List[RecipeEntry] = [
                 "7x7 grid, pieces drop down, four in a row", {"board_size": 7, "win_length": 4,
                                                               "display_title": "Four in a Row",
                                                               "project_name": "FourInARow", "gravity": True}),
+    RecipeEntry("grid_board_game", "Snakes and Ladders",
+                ["snake and ladders", "snakes and ladders", "snake & ladders", "snakes & ladders",
+                 "chutes and ladders", "ludo", "parcheesi", "roll and move", "monopoly"],
+                "100-cell grid board with snakes, ladders, and dice rolling",
+                {"board_size": 100, "win_length": 100, "display_title": "Snakes and Ladders",
+                 "project_name": "SnakesAndLadders"}),
     RecipeEntry("grid_board_game", "N-in-a-row board game", ["in a row", "grid game", "board game"],
                 "configurable grid and line length", {"board_size": 5, "win_length": 4,
                                                       "display_title": "Line Up", "project_name": "LineUp"}),
@@ -158,7 +164,10 @@ def is_game_creation_request(prompt: str) -> bool:
         return True
     if ":" in text and _GAME_WORD.search(text):
         return True
-    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|counterstrike|counter-strike|brawler|stealth|dungeon|survival|horror|arena|card\s+battler|board\s+game|tactical)\b", text):
+    clean_text = text.replace("-", " ").strip()
+    if clean_text in ("monopoly", "chess", "checkers", "gomoku", "ludo", "parcheesi", "snakes and ladders", "snake and ladders", "chutes and ladders", "connect four", "tic tac toe"):
+        return True
+    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|counterstrike|counter-strike|brawler|stealth|dungeon|survival|horror|arena|card\s+battler|board\s+game|tactical|snake|ladders|chutes|ludo|chess|checkers|monopoly|dice board|runner|racing|racer|simulator|sim|strategy|rts|defense|tower\s+defense|puzzle|escape|flight|dogfight|combat|action|brawl|metroidvania|sandbox|open\s+world|quest)\b", text):
         if _CREATE.search(text) or _GAME_WORD.search(text) or text.startswith(("a ", "an ", "the ", "deploy ", "construct ")) or ":" in text:
             return True
     if not _CREATE.search(text):
@@ -167,6 +176,12 @@ def is_game_creation_request(prompt: str) -> bool:
         return False
     if any(k in text for r in RECIPES for k in r.keywords):
         return True
+    try:
+        from src.gameforge_ide.design.presets import PRESET_KEYWORDS
+        if any(k in text for kws in PRESET_KEYWORDS.values() for k in kws):
+            return True
+    except ImportError:
+        pass
     if not _GAME_WORD.search(text):
         return False
     return bool(_CREATE_GAME.search(text))

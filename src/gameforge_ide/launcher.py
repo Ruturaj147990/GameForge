@@ -112,6 +112,14 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose:
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import Qt
 
+    # Set explicit Windows application user model ID for taskbar grouping & icon
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("GameForge.Studio.IDE.1.0")
+        except Exception:
+            pass
+
     # High-DPI: let Qt handle scaling on Windows
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough

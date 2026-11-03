@@ -27,6 +27,7 @@ class PlayerCharacterParams(BaseModel):
     lives: Optional[int] = Field(0, ge=0, le=99)
     kill_z: Optional[float] = Field(-2000.0, le=0.0)
     attack_mode: Optional[str] = Field("melee")
+    weapons: Optional[List[str]] = Field(default_factory=list)
 
 
 register(
@@ -499,12 +500,16 @@ register(
 # 17. Grid Board
 class GridBoardParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    board_size: int = Field(3, ge=3, le=20)
-    win_length: int = Field(3, ge=3, le=20)
+    board_size: int = Field(3, ge=3, le=100)
+    win_length: Optional[int] = Field(3, ge=1, le=100)
     gravity: bool = False
     vs_ai: bool = True
     ai_level: str = Field("random", pattern=r"^(random|greedy|minimax|perfect)$")
     cell_size_cm: float = Field(120.0, ge=20.0, le=1000.0)
+    snakes: Optional[int] = Field(None, ge=0, le=100)
+    ladders: Optional[int] = Field(None, ge=0, le=100)
+    dice_sides: Optional[int] = Field(None, ge=1, le=100)
+    players: Optional[int] = Field(None, ge=1, le=8)
 
 
 register(
@@ -512,7 +517,7 @@ register(
         module_id="kit.grid_board",
         version="2.0.0",
         runtime_class="/Script/GameForgeRuntime.GameForgeGridBoard",
-        entity_kinds=frozenset(["board", "grid", "tictactoe", "connect_four", "gomoku"]),
+        entity_kinds=frozenset(["board", "grid", "tictactoe", "connect_four", "gomoku", "snakes_and_ladders", "board_game"]),
         params_model=GridBoardParams,
         property_map={
             "board_size": "BoardSize",
@@ -520,6 +525,10 @@ register(
             "gravity": "bGravity",
             "vs_ai": "bVsAI",
             "cell_size_cm": "CellSizeCm",
+            "snakes": "Snakes",
+            "ladders": "Ladders",
+            "dice_sides": "DiceSides",
+            "players": "Players",
         },
         emits=("board.move", "board.win", "board.draw", "turn.ended"),
         automation_tests=("GameForge.Kit.GridBoard",),

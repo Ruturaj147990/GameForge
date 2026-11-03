@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, QSize, Qt, Signal, Slot
+from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, QObject, QSize, Qt, Signal, Slot
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -232,6 +232,9 @@ class AssetsView(QWidget):
             f"}}"
         )
         self._table.clicked.connect(self._on_asset_selected)
+        if self._table.selectionModel():
+            self._table.selectionModel().currentChanged.connect(lambda cur, prev: self._on_asset_selected(cur))
+        self._table.installEventFilter(self)
         splitter.addWidget(self._table)
 
         # Detail Drawer
@@ -268,6 +271,15 @@ class AssetsView(QWidget):
         self.refresh_assets()
 
     # ── Public API ───────────────────────────────────────────────────────────
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self._table and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                index = self._table.currentIndex()
+                if index.isValid():
+                    self._on_asset_selected(index)
+                    return True
+        return super().eventFilter(watched, event)
 
     @Slot()
     def refresh_assets(self) -> None:

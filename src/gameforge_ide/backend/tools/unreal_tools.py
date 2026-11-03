@@ -204,15 +204,19 @@ class UnrealEngineTools:
 
         t0 = time.time()
         try:
-            proc = subprocess.run(
+            from ...core import jobs
+            proc = jobs.spawn(
                 ubt_cmd,
                 cwd=str(self.workspace_root),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout_seconds,
+                encoding="utf-8",
+                errors="replace",
             )
+            stdout, stderr = proc.communicate(timeout=timeout_seconds)
             duration = round(time.time() - t0, 2)
-            log = proc.stdout + "\n" + proc.stderr
+            log = stdout + "\n" + stderr
             errors = self.parse_compiler_errors(log)
 
             return {

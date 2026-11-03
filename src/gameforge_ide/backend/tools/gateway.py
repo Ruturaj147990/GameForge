@@ -151,6 +151,18 @@ class ToolGateway:
                 requires_approval=True,
             ),
             ToolDefinition(
+                name="apply_batch",
+                description="Atomically apply a list of approved diff IDs across multiple files.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "diff_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["diff_ids"],
+                },
+                requires_approval=True,
+            ),
+            ToolDefinition(
                 name="rollback_edit",
                 description="Revert an applied diff back to pre-edit state.",
                 parameters={
@@ -159,6 +171,18 @@ class ToolGateway:
                         "diff_id": {"type": "string"},
                     },
                     "required": ["diff_id"],
+                },
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="rollback_batch",
+                description="Atomically roll back a list of applied diff IDs in reverse order.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "diff_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["diff_ids"],
                 },
                 requires_approval=True,
             ),
@@ -325,7 +349,10 @@ class ToolGateway:
         try:
             if name == "search_index":
                 from ...index.indexer import ProjectIndex
-                idx = ProjectIndex(self.workspace_root)
+                from ...core.projects import resolve_project_dir
+                proj_name = arguments.get("project") or arguments.get("project_name")
+                proj_dir = resolve_project_dir(proj_name, self.workspace_root) if proj_name else self.workspace_root
+                idx = ProjectIndex(proj_dir)
                 res = idx.search_symbols(
                     query=arguments.get("query", ""),
                     kind=arguments.get("kind"),
@@ -342,10 +369,14 @@ class ToolGateway:
                 res = self.edit_tools.propose_edit(**arguments)
             elif name in ("apply_edit", "apply_diff"):
                 res = self.edit_tools.apply_diff(**arguments)
+            elif name in ("apply_batch", "apply_diffs_batch"):
+                res = self.edit_tools.apply_batch(**arguments)
             elif name in ("reject_edit", "reject_diff"):
                 res = self.edit_tools.reject_diff(**arguments)
             elif name in ("rollback_edit", "rollback_diff"):
                 res = self.edit_tools.rollback_diff(**arguments)
+            elif name in ("rollback_batch", "rollback_diffs_batch"):
+                res = self.edit_tools.rollback_batch(**arguments)
             elif name == "run_command":
                 res = self.terminal_tools.run_command(**arguments)
             elif name == "git_status":

@@ -19,6 +19,15 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 | **DEF-018** | High | Project Storage | Project storage fragmentation and silent hardcoded placement | Projects were silently created in default folders rather than prompting user for authoritative root | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/dialogs/new_project_dialog.py`, `backend/tools/game_tools.py` |
 | **DEF-019** | Medium | Desktop Views | Missing "New Project" and "Open Project" directory controls in GamesView & HomeView | Users had no UI buttons to initiate clean project root directory selection | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/games_view.py`, `home_view.py` |
 | **DEF-020** | Medium | Design / GDS | Pydantic validation failure when GDS declared `Meta.project_dir` | `Meta` model had `extra="forbid"` and lacked `project_dir: Optional[str]` | `VERIFIED_LIVE` | `src/gameforge_ide/design/gds.py` |
+| **DEF-067** | High | Composer / Layouts | Duplicate Biome Lighting Rig Spawn in Open World Layout | `open_world.py` appended lighting rig while `level_ops.py` already emitted it | `VERIFIED_LIVE` | `src/gameforge_ide/composer/layouts/open_world.py` |
+| **DEF-068** | Critical | Composer / Layouts | Missing Ground Floor Geometry in Board and Lanes Layouts causing void falls | `layouts/board.py` and `lanes.py` had empty `geometry_ops` | `VERIFIED_LIVE` | `src/gameforge_ide/composer/layouts/board.py`, `lanes.py` |
+| **DEF-069** | High | Composer | Platformer Course Scattered Entity Float Hazard | `compose.py` scattered unplaced entities in generic bounding polygon at Z=100 | `VERIFIED_LIVE` | `src/gameforge_ide/composer/compose.py` |
+| **DEF-070** | High | Composer / QA | QA Scenario Filter Dropping Game-Specific Acceptance Scenarios | `compose.py` extracted only generic acceptance scenarios | `VERIFIED_LIVE` | `src/gameforge_ide/composer/compose.py`, `forge/handlers/scenario.py` |
+| **DEF-071** | High | QA / Spec Tests | Passive Wait Steps in Game-Specific Acceptance Scenarios | `game_spec_tests.py` generated passive WaitSteps instead of action navigation/input | `VERIFIED_LIVE` | `src/gameforge_ide/qa/game_spec_tests.py` |
+| **DEF-072** | Critical | Unreal Runtime | GameForgeGameModeBase Bypassing GameDefinition Initialization | `GameDefinition` parsing logic lived solely in `AGameForgeGameMode::StartPlay()` | `VERIFIED_LIVE` | `src/gameforge_ide/unreal/GameForge/Source/GameForgeRuntime/Private/GameForgePlayer.cpp`, `runner.py` |
+| **DEF-073** | Medium | Unreal / Import | Project Import Stale Plugin Copy skipping updates | `project_import.py` used `if not target_plugin.is_dir():` skipping update | `VERIFIED_LIVE` | `src/gameforge_ide/pipeline/project_import.py` |
+| **DEF-074** | High | Composer / Codegen | Missing Gameplay Includes in Custom Rule Codegen | `generate_source()` omitted `GameForgeAttributes.h` and `GameplayStatics.h` | `VERIFIED_LIVE` | `src/gameforge_ide/composer/codegen.py` |
+| **DEF-075** | Medium | Composer / LevelOps | Level Ops Actor Transform Verification Severity Gap | Single 50cm tolerance threshold without differentiating critical failures | `VERIFIED_LIVE` | `src/gameforge_ide/composer/level_ops.py` |
 
 ---
 
@@ -201,6 +210,247 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
   3. Enhanced `delete_project()` in `projects_service.py` to use `psutil` to detect and terminate any lingering child processes with CWD or open files inside `project_dir`, pre-emptively remove read-only attributes on all files/subdirectories, and retry `shutil.rmtree()` up to 5 times with exponential backoff.
   4. Enhanced `DeleteGameDialog` with a 1-click `[Fill name]` button, auto-focus on input, space/punctuation/hyphen-normalized matching (`counter strike`, `counter-strike`, `cs regeneration`), and dynamic visual validation text.
   5. Added 3 new unit tests in `tests/unit/test_delete_game_regression.py`.
+
+### DEF-033: unreal_editor and Backend Tools Reject Project Name with "uproject not found"
+- **Symptom:** Approving an `unreal_editor` action (e.g. `nav_rebuild on SnakeAndLadders`) failed with `✖ Not complete: uproject not found: SnakeAndLadders`, even though the project folder exists and contains `SnakeAndLadders.uproject`.
+- **Root Cause:**
+  1. `GameTools.unreal_editor(uproject, op, args)` evaluated `if not Path(uproject).is_file(): return {"status": "ERROR", "error": f"uproject not found: {uproject}"}`.
+  2. The LLM tool call emits `uproject: "SnakeAndLadders"` (the project name). `Path("SnakeAndLadders").is_file()` evaluated to `False` in the IDE working directory (`E:\gameforge_step1`).
+  3. `GameTools._link()`, `unreal_run_tests()`, `unreal_package()`, and `UnrealEngineTools.run_staged_build()` lacked resolution logic for project names, folder paths, and relative paths.
+- **Fix:**
+  1. Implemented canonical `GameTools._resolve_uproject(uproject)`:
+     - Direct file path check (`.uproject`)
+     - Direct folder check (`find_uproject(folder)`)
+     - Relative path checks against `self.workspace_root` and `self.projects_root`
+     - Project name stem lookup in `self.projects_root` and `self.workspace_root`
+     - Global candidate roots lookup via `resolve_project_dir()` and `list_all_project_dirs()`
+  2. Updated `GameTools.unreal_editor()`, `_link()`, `unreal_run_tests()`, and `unreal_package()` to resolve `uproject` via `_resolve_uproject()`.
+  3. Updated `UnrealEngineTools.run_staged_build()` to resolve `uproject_rel_path` via `_resolve_uproject_path()`.
+  4. Added regression tests in `tests/unit/test_uproject_resolution.py`.
+
+### DEF-034: Snake and Ladders Misclassified as Platformer in Prompt-to-GDS Pipeline
+- **Symptom:** Submitting `"make a snake and ladders game"` produced a GDS with `genre: Platformer`, `camera: top_down`, and platform obstacle course semantics.
+- **Root Cause:**
+  1. `PRESET_KEYWORDS` in `presets.py` lacked keyword entries for board games like `snake and ladders`, `ludo`, `chutes and ladders`.
+  2. `DRAFT_SYSTEM_PROMPT` in `prompt_to_gds.py` lacked explicit definitions of the valid `Genre` enum values, leading local models to associate the word "snake/ladders" with jumping/platforms.
+- **Fix:**
+  1. Added `preset_snake_and_ladders` to `presets.py` generating 100-cell grid boards with 8 snakes, 8 ladders, 6-sided dice rolling, and 2 player tokens under `Genre.GRID_BOARD`.
+  2. Registered comprehensive board game keywords in `PRESET_KEYWORDS`.
+  3. Overhauled `DRAFT_SYSTEM_PROMPT` to explicitly define all genres, instructing models that board games must use `grid_board` and `fixed_board`.
+  4. Added unit tests in `tests/unit/test_genre_classification.py`.
+
+### DEF-035: Hardcoded Single-Player Expansion in expand.py
+- **Symptom:** All expanded games were assigned `Overview.players = 1`, preventing multiplayer board games from declaring 2+ players.
+- **Root Cause:** `expand.py` line 475 hardcoded `players=1` regardless of `draft.genre` or entity properties.
+- **Fix:** Updated `expand_draft()` to extract player counts dynamically from board properties or entity declarations, defaulting to 2 players for `Genre.GRID_BOARD` and `Genre.CARD_BATTLER`.
+
+### DEF-036: Compose Layout Fallback Misroutes Grid Board to Arena
+- **Symptom:** Modern Composer routed `Genre.GRID_BOARD` games to the generic `arena` layout instead of `board` layout.
+- **Root Cause:** `compose.py` checked `elif genre_val in ("board", "card")`. Because `Genre.GRID_BOARD.value == "grid_board"` and `Genre.CARD_BATTLER.value == "card_battler"`, string matching failed.
+- **Fix:** Updated conditions to `elif genre_val in ("grid_board", "board", "puzzle"): layout_name = "board"` and `elif genre_val in ("card_battler", "card"): layout_name = "lanes"`.
+
+### DEF-037: Duplicate PlayerStart Actor Spawning in Level Ops
+- **Symptom:** Level generation logs reported spawning `PlayerStart` multiple times in succession.
+- **Root Cause:** `level_ops.py` step 1b emitted `spawn_actor(PlayerStart)` unconditionally. When `plan.actors` also declared a player or start actor, a second `PlayerStart` was emitted.
+- **Fix:** Guarded step 1b in `level_ops.py` to check if `plan.actors` already contains an actor of class `PlayerStart` or label `GF_PlayerStart`.
+
+### DEF-038: GameForgeGridBoard Transform Discrepancy & Property Loss
+- **Symptom:** Log reported adding board at `(340, 710, 430)` but Unreal read-back reported `(0, 0, 50)`, and grid properties were not configured.
+- **Root Cause:**
+  1. `layouts/board.py` placed `board_0` at `(0, 0, 50)` with empty `properties={}`.
+  2. Mismatched entity IDs caused `compose.py` to treat the GDS board as unplaced and scatter a duplicate board at `(340, 710, 430)`.
+- **Fix:**
+  1. Updated `layouts/board.py` to extract `board_size`, `cell_size_cm`, `snakes`, `ladders` from `gds.entities` into `board_actor.properties`.
+  2. Synchronized entity IDs and prevented secondary scattering of board entities.
+
+### DEF-039: False PASS Results from Generic Automation Tests
+- **Symptom:** Automation test runs reported green passes by discovering only `CountAtLeast`, `NestingAndDepth`, `StatOperators`, without testing actual game mechanics.
+- **Root Cause:** Default test filter was pinned to `GameForge.Kit`. No dynamic test specification was derived from the GDS.
+- **Fix:**
+  1. Implemented `src/gameforge_ide/qa/game_spec_tests.py` generating game-specific acceptance tests (board structure, dice mechanics, token movement, snake/ladder transitions, win conditions).
+  2. Implemented `semantic_validate_gds()` to prevent prompt-GDS semantic drift.
+
+### DEF-040: Unverified Pipeline Stage Completion
+- **Symptom:** Pipeline stages reported `StepOutcome(True)` without reading back or verifying actual on-disk engine state.
+- **Root Cause:** Stage handlers trusted helper function returns rather than validating generated files and actor read-backs.
+- **Fix:** Implemented stage output validation in Forge stage handlers: design validates GDS semantics, assemble validates actor read-backs, scenario validates game-specific event logs, and package validates executable existence.
+
+### DEF-041: Template Hijacking on Custom Creative Prompts
+- **Symptom:** Creative natural-language game prompts (e.g. "Cat Furniture Climb") containing platformer-like words were hijacked into preset overrides rather than routing to model draft expansion.
+- **Root Cause:** `prompt_to_gds.py` treated any custom prompt with fewer than 3 extra words as a preset override.
+- **Fix:** Differentiated creative narrative title/pitch prompts from parameter-only preset overrides (`called Sky Hop with 8 coins`), ensuring creative games generate authentic custom designs.
+
+### DEF-042: Unplaced Entity Count Truncation in Composer
+- **Symptom:** Non-placement entities (e.g., 5 relics, 3 guards) specified in GDS were truncated to 1 when placed into the level.
+- **Root Cause:** `compose.py` did not check `e.count` or `e.props["count"]` when building the scatter list.
+- **Fix:** Added `getattr(e, "count", None) or e.props.get("count", 1)` ensuring all requested entities are placed.
+
+### DEF-043: Duplicate Card Table & Entity ID Mismatch in Lanes Layout
+- **Symptom:** Card battler games placed duplicate card tables at different coordinates.
+- **Root Cause:** `layouts/lanes.py` hardcoded `cards_0` with entity ID `cards`, while GDS defined `card_table`.
+- **Fix:** Dynamically matched card table entity ID from GDS and added alias deduplication (`card_table`/`cards`).
+
+### DEF-044: Platformer Course Pickup Drop Bug
+- **Symptom:** Platformer course levels with 5 pickups only placed 1 or 2 pickups because platforms ran out.
+- **Root Cause:** `layouts/course.py` used a fixed 7 platforms without scaling for pickup counts.
+- **Fix:** Set `num_platforms = max(7, num_pickups + 4)` ensuring all collectibles, checkpoints, and goal actors have valid platform placements.
+
+### DEF-045: Agent Runtime Missing "Player" as Mutation Target
+- **Symptom:** Prompts like "make the player faster" failed to trigger a game modification patch.
+- **Root Cause:** Target nouns regex in `runtime.py` omitted `player|players|character|characters|hero`.
+- **Fix:** Added player nouns to `is_change` regex.
+
+### DEF-046: Polite Modal Modification Requests Blocked as Q&A
+- **Symptom:** "Could you make the player jump higher?" was classified as an informational question and answered with text instead of proposing a patch.
+- **Root Cause:** Question detection in `runtime.py` matched leading modal verbs without checking if the prompt was an imperative request.
+- **Fix:** Filtered polite modal openers ("can you", "could you", "would you", "please") from question classification when followed by action verbs.
+
+### DEF-047: Combat Patch Rule Checked Nonexistent "guard" instead of "spawner"
+- **Symptom:** Proposing a combat patch on a game that already had guards failed with status ERROR.
+- **Root Cause:** `patch_rules.py` checked for any entity containing `"guard"` instead of checking for a kit spawner entity.
+- **Fix:** Updated combat check to verify actual `kit.spawner` presence.
+
+### DEF-048: Speed Patch Rule Skipped `player_speed` Property
+- **Symptom:** "make player faster" failed when the entity used property name `player_speed`.
+- **Root Cause:** `patch_rules.py` only matched `move_speed` and `speed`.
+- **Fix:** Added `player_speed` to regex match and GDS patch rules.
+
+### DEF-049: Lighting Patch Path Query on Nonexistent Attribute
+- **Symptom:** Changing lighting crashed patch summarizer with `AttributeError: 'Scene' object has no attribute 'lighting'`.
+- **Root Cause:** `patch.py` queried `gds.scene.lighting` instead of `gds.scene.levels[0].lighting`.
+- **Fix:** Corrected path traversal to `gds.scene.levels[0].lighting`.
+
+### DEF-050: Hyphenated Game Titles Blocked in Creation Regex
+- **Symptom:** "Tic-tac-toe" or "snake-and-ladders" were rejected by `is_game_creation_request`.
+- **Root Cause:** Regex in `spec_from_prompt.py` did not allow hyphens in title matching.
+- **Fix:** Added `-` to allowed title characters.
+
+### DEF-051: ToolGateway Project Context Mismatch
+- **Symptom:** Calling `search_index` via `ToolGateway` resolved to workspace root rather than active project.
+- **Root Cause:** `gateway.py` did not check if workspace root was already a project directory.
+- **Fix:** Added self-contained project check and dynamic project directory resolution.
+
+### DEF-052: Spend Ledger Crashing on Truncated JSONL
+- **Symptom:** Corrupted or partially-written ledger line caused unhandled `JSONDecodeError`.
+- **Root Cause:** `SpendLedger._entries()` did not catch deserialization errors.
+- **Fix:** Added `try...except json.JSONDecodeError` to skip malformed lines gracefully.
+
+### DEF-053: C++ Macro Parser Missing Multi-Line Lookback
+- **Symptom:** Multi-line `UFUNCTION(...)` and `UPROPERTY(...)` declarations were missed by C++ symbol indexer.
+- **Root Cause:** `indexer.py` only checked the immediate preceding line.
+- **Fix:** Added 5-line lookback window for macro detection and `re.UNICODE` support.
+
+### DEF-054: GDS Store Missing Windows File Lock Retry
+- **Symptom:** Intermittent `PermissionError` [WinError 5] when saving GDS revisions under Windows NTFS file locking.
+- **Root Cause:** Atomic replace lacked retry loop under Windows file locking contention.
+- **Fix:** Added 5-attempt retry loop with exponential backoff on `PermissionError`.
+
+### DEF-055: Terminal and UBT Tools Bypassing Windows Job Object
+- **Symptom:** Subprocesses spawned by terminal or build tools risked leaking on unexpected exit.
+- **Root Cause:** Process creation used raw `subprocess.Popen` instead of `jobs.spawn()`.
+- **Fix:** Wired process creation to `jobs.spawn()` adopting processes into Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`).
+
+### DEF-056: Empty Target Content Silently Prepended to Files
+- **Symptom:** Calling edit tool with empty `target_content=""` prepended replacement to file instead of returning error.
+- **Root Cause:** `edit_tools.py` permitted empty target string on existing files.
+- **Fix:** Prohibited empty target on existing files with explicit `status: ERROR`.
+
+### DEF-057: MainWindow Cancel Active Run Did Not Cancel Forge Run
+- **Symptom:** Pressing `Ctrl+.` or clicking Cancel Active Run showed toast but Forge execution continued.
+- **Root Cause:** `MainWindow._cancel_active_run()` lacked call to `ForgeExecutor.cancel_run`.
+- **Fix:** Added `cancel_run()` to `ForgeService` and invoked `ForgeExecutor.cancel_run` and `request_cancel` in `MainWindow`.
+
+### DEF-058: CodeView DiffPanel Initialized with Workspace Path Instead of ToolService
+- **Symptom:** Clicking "Approve & Apply" in developer mode crashed with `AttributeError: 'WindowsPath' object has no attribute 'execute_approved_sync'`.
+- **Root Cause:** `CodeView.__init__` passed `self._workspace` to `DiffPanel` instead of `self._tools`.
+- **Fix:** Changed parameter to `self._tools`.
+
+### DEF-059: HomeView Design Cancel Button Permanently Disabled After First Cancel
+- **Symptom:** Cancelling a design draft left the cancel button permanently disabled on subsequent draft requests.
+- **Root Cause:** `_on_design_it_clicked()` restored visibility but omitted `setEnabled(True)`.
+- **Fix:** Added `self._btn_cancel.setEnabled(True)` in `_on_design_it_clicked()`.
+
+### DEF-060: TopBar Project Combo Stuck on "Open project folder..."
+- **Symptom:** Selecting "Open project folder..." and cancelling the folder picker left the combo permanently selected on that item.
+- **Root Cause:** Combo index was not reverted prior to emitting `openFolderRequested`.
+- **Fix:** Reverted combo index to previous active project.
+
+### DEF-061: Detail Panes in PlayView/AssetsView/BuildView Ignored Keyboard Selection
+- **Symptom:** Arrow key navigation in tables/lists moved visual focus but did not update the detail inspection pane.
+- **Root Cause:** Views only connected `.clicked` signal, which only fires on mouse clicks.
+- **Fix:** Connected `itemSelectionChanged` and selection model `currentChanged` to selection handlers.
+
+### DEF-062: GDS Form Silently Swallowed Unparseable Win/Lose Condition Syntax
+- **Symptom:** Malformed win/lose condition text was silently skipped, emitting false valid status and losing edits.
+- **Root Cause:** Condition parsing was wrapped in `try...except` that swallowed syntax errors.
+- **Fix:** Raised informative `ValueError` on syntax mismatch and updated condition formatter to support all Condition types (`StatCompare`, `EventOccurred`, `TimerElapsed`).
+
+### DEF-063: Pipeline Resume Failed to Reset Failed/Cancelled Steps
+- **Symptom:** Resuming a cancelled or failed pipeline run skipped the failed steps instead of re-attempting them.
+- **Root Cause:** `game_pipeline.py::resume()` only reset `SKIPPED` steps to `PENDING`.
+- **Fix:** Reset `SKIPPED`, `FAILED`, `CANCELLED`, and `BLOCKED` steps to `PENDING` with cleared errors and outcome status.
+
+### DEF-064: Assemble Validation Swallowed Errors and Fallback to Planned Actors
+- **Symptom:** Assemble stage reported `ok=True` even when engine failed to spawn actors.
+- **Root Cause:** `validation.py` checked planned `plan.actors` and `legacy_stages.py` swallowed validation exceptions with `pass`.
+- **Fix:** Checked actual `spawned_actors` read-backs and recorded validation failures as step errors.
+
+### DEF-065: Missing Input Action Mappings in C++ Runtime
+- **Symptom:** Actions `IA_PrimaryAttack` and `IA_RollDice` emitted in QA acceptance scenarios were unbound in C++ `AGameForgePlayerController`.
+- **Root Cause:** Player controller only declared `IA_Attack` and `IA_Select`.
+- **Fix:** Bound `IA_PrimaryAttack` and `IA_RollDice` aliases in `GameForgePlayer.cpp` Enhanced Input Mapping Context.
+
+### DEF-066: GameForgeScenario NavSys Pre-condition Caused 30s Timeout on Board Games
+- **Symptom:** Board games and non-navmesh worlds waited 30 seconds and failed with `NO_NAVMESH_OR_PAWN`.
+- **Root Cause:** `GameForgeScenario.cpp` required `NavSys != nullptr` to start scenario execution.
+- **Fix:** Removed strict NavSys requirement, starting scenarios as soon as `PC && Pawn` are valid.
+
+### DEF-067: Duplicate Biome Lighting Rig Spawn in Open World Layout
+- **Symptom:** Open world levels spawned duplicate `GF_Sun`, `GF_SkyLight`, `GF_SkyAtmosphere`, `GF_Fog`, and `GF_Clouds` actors, resulting in blown-out exposure and shadow cascade conflicts.
+- **Root Cause:** `composer/layouts/open_world.py` appended the lighting rig to `geometry_ops`, while `level_ops.py` already emitted the lighting rig in step 2.
+- **Fix:** Removed redundant lighting rig emission from `open_world.py`, leaving authoritative emission to `level_ops.py`.
+
+### DEF-068: Missing Ground Floor Geometry in Board and Lanes Layouts
+- **Symptom:** Launching turn-based grid board or card battler games caused the player character and table to spawn over the empty void, falling to -2000 KillZ and triggering `player.died`.
+- **Root Cause:** `layouts/board.py` and `layouts/lanes.py` left `geometry_ops = []`.
+- **Fix:** Added `GF_Board_Floor` and `GF_Lanes_Floor` static mesh actors with collision and grid materials in `geometry_ops`.
+
+### DEF-069: Platformer Course Scattered Entity Float Hazard
+- **Symptom:** Non-placement entities (hazards, extra collectibles, enemies) scattered into platformer courses spawned at fixed Z=100 off the narrow platforms into empty air.
+- **Root Cause:** `compose.py` scattered unplaced entities in a generic bounding polygon with hardcoded `Z=100.0`.
+- **Fix:** Added platform-snapping logic in `compose.py` for `course` layout, aligning scattered entities to the nearest platform X, setting Y=0, and resting on platform tops (Z+75).
+
+### DEF-070: QA Scenario Filter Dropping Game-Specific Acceptance Scenarios
+- **Symptom:** Modern GDS games executing QA scenarios failed stage validation because only generic smoke tests ran.
+- **Root Cause:** `compose.py` extracted only `gds.acceptance.scenarios` (which often had only `smoke`). `scenario_handler` filtered against `input_scenarios`, dropping GDS-derived game-specific acceptance scenarios.
+- **Fix:** Included `generate_acceptance_tests(gds)` test IDs in `comp.scenarios` during composition and preserved them when filtering in `scenario_handler`.
+
+### DEF-071: Passive Wait Steps in Game-Specific Acceptance Scenarios
+- **Symptom:** Acceptance scenarios for `win_on_collect_all` and `win_on_defeat_all` failed to trigger game objectives because they only waited passively.
+- **Root Cause:** `_spec_to_scenario()` in `game_spec_tests.py` generated only `WaitStep(3.0)` and `WaitStep(5.0)` without movement or attack input.
+- **Fix:** Updated `_spec_to_scenario()` to emit concrete action steps: `NavigateToStep` to pickup targets and `InjectStep` for `IA_PrimaryAttack` and `IA_RollDice`.
+
+### DEF-072: GameForgeGameModeBase Stub Bypassing GameDefinition Initialization
+- **Symptom:** Running packaged scenarios or launching games with default game mode did not apply first-person camera mode, player attributes, weapon meshes, or win/lose event listeners.
+- **Root Cause:** `runner.py` passed `?game=/Script/GameForgeRuntime.GameForgeGameModeBase`, but all `GameDefinition` parsing logic lived solely in `AGameForgeGameMode::StartPlay()`.
+- **Fix:** Moved `GameDefinition` parsing and player attribute application to `AGameForgeGameModeBase::StartPlay()` so all game modes benefit, and updated `runner.py` and `legacy_stages.py` to default to `GameForgeGameMode`.
+
+### DEF-073: Project Import Stale Plugin Copy
+- **Symptom:** Importing an existing project with a preexisting `Plugins/GameForge` directory skipped updating C++ runtime sources and Python ops.
+- **Root Cause:** `enable_gameforge_management()` in `project_import.py` used `if not target_plugin.is_dir():`.
+- **Fix:** Updated `enable_gameforge_management()` to use `shutil.copytree(..., dirs_exist_ok=True)`.
+
+### DEF-074: Missing Gameplay Includes in Custom Rule Codegen
+- **Symptom:** Custom rule C++ codegen failed compilation when model code referenced attributes or gameplay statics.
+- **Root Cause:** `generate_source()` in `codegen.py` only included `GameForgeGameState.h` and `GameForgeEvents.h`.
+- **Fix:** Added `#include "GameForgeAttributes.h"` and `#include "Kismet/GameplayStatics.h"` to `generate_source()`.
+
+### DEF-075: Level Ops Actor Transform Verification Severity Gap
+- **Symptom:** Severe actor placement anomalies (> 500cm delta) were treated as minor sub-meter jitter warnings.
+- **Root Cause:** `verify_placed_actor_transforms()` in `level_ops.py` used a single 50cm tolerance threshold without differentiating critical failures.
+- **Fix:** Added `severe_tolerance_cm=500.0` threshold adding `CRITICAL:` prefix for severe mismatches.
+
+
 
 
 

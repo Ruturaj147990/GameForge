@@ -46,7 +46,9 @@ class RailButton(QToolButton):
         self.setIcon(icon(view_id, role="secondary", size=22))
         self.setFocusPolicy(Qt.NoFocus)
         self.setToolTip(f"{label} ({shortcut})" if shortcut else label)
+        self._apply_style()
 
+    def _apply_style(self) -> None:
         self.setStyleSheet(f"""
             QToolButton {{
                 background: transparent;
@@ -66,6 +68,10 @@ class RailButton(QToolButton):
                 opacity: 0.35;
             }}
         """)
+
+    def update_theme(self) -> None:
+        self.setIcon(icon(self.view_id, role="secondary", size=22))
+        self._apply_style()
 
 
 class Rail(QWidget):
@@ -131,3 +137,33 @@ class Rail(QWidget):
 
     def button(self, view_id: str) -> Optional[RailButton]:
         return self._buttons.get(view_id)
+
+    def refresh_icons(self) -> None:
+        """Refresh all rail button icons to match the active theme."""
+        for vid, btn in self._buttons.items():
+            btn.setIcon(icon(vid, role="secondary", size=22))
+
+    update_theme = refresh_icons
+
+    def set_running(self, view_id: str, is_running: bool) -> None:
+        """Show active running status on a rail button."""
+        btn = self._buttons.get(view_id)
+        if btn is not None:
+            if is_running:
+                btn.setIcon(icon(view_id, role="warning", size=22))
+                btn.setToolTip(f"{btn.label} (Building...)")
+            else:
+                btn.setIcon(icon(view_id, role="secondary", size=22))
+                base_tip = f"{btn.label} ({btn.shortcut_text})" if btn.shortcut_text else btn.label
+                btn.setToolTip(base_tip)
+
+    def update_theme(self) -> None:
+        """Repaint rail background and all rail button icons/styles with active theme tokens."""
+        self.setStyleSheet(f"""
+            QWidget#studioRail {{
+                background: {tokens.BG_ROOT};
+                border-right: 1px solid {tokens.BORDER};
+            }}
+        """)
+        for btn in self._buttons.values():
+            btn.update_theme()

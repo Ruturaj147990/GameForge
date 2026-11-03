@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Callable, List, Optional, Tuple
 
 from PySide6.QtCore import QEvent, Qt
@@ -87,11 +88,36 @@ class CommandPalette(QDialog):
         self.search.setFocus()
 
     def _filter_commands(self, query: str) -> None:
-        normalized = query.strip().casefold()
+        q = query.strip().casefold()
         first_visible = -1
+        tokens_list = q.split()
         for index in range(self.list_widget.count()):
             item = self.list_widget.item(index)
-            visible = normalized in item.text().casefold()
+            target = item.text().casefold()
+            if not q:
+                visible = True
+            elif q in target:
+                visible = True
+            elif all(t in target for t in tokens_list):
+                visible = True
+            else:
+                # Acronym matching e.g. "vd" for "View: Design"
+                words = [w for w in re.split(r"[\s:_\-]+", target) if w]
+                acronym = "".join(w[0] for w in words)
+                q_compact = "".join(tokens_list)
+                if q_compact in acronym:
+                    visible = True
+                else:
+                    # Subsequence matching
+                    t_idx = 0
+                    matched = True
+                    for ch in q_compact:
+                        t_idx = target.find(ch, t_idx)
+                        if t_idx == -1:
+                            matched = False
+                            break
+                        t_idx += 1
+                    visible = matched
             item.setHidden(not visible)
             if visible and first_visible < 0:
                 first_visible = index

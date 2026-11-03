@@ -8,6 +8,7 @@ called in-process via AgentService and ToolService.
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -773,12 +774,20 @@ class MainWindow(QMainWindow):
         apply_theme(QApplication.instance(), self._theme)
         self._settings.setValue("appearance/theme", self._theme)
         self._settings.sync()
+        if hasattr(self, "_rail") and hasattr(self._rail, "update_theme"):
+            self._rail.update_theme()
+        if hasattr(self, "_top_bar") and hasattr(self._top_bar, "update_theme"):
+            self._top_bar.update_theme()
+        if hasattr(self, "_assistant_panel") and hasattr(self._assistant_panel, "update_theme"):
+            self._assistant_panel.update_theme()
         from .styles.dark_theme import get_theme_display_name
         self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
 
     @Slot()
     def _reset_layout(self) -> None:
         self.restoreState(self._default_layout)
+        if hasattr(self, "_code_view") and self._code_view:
+            self._code_view.reset_dock_layout()
         self.resize(1600, 960)
         self.statusBar().showMessage("Default panel layout restored.", 3000)
 
@@ -998,7 +1007,11 @@ class MainWindow(QMainWindow):
             ("View: Build", lambda: self._switch_studio_view("build")),
             ("View: Play", lambda: self._switch_studio_view("play")),
             ("View: Evidence", lambda: self._switch_studio_view("evidence")),
+            ("View: Assets Registry", lambda: self._switch_studio_view("assets")),
+            ("View: Code Developer", lambda: self._switch_studio_view("code")),
             ("View: Settings", lambda: self._switch_studio_view("settings")),
+            ("Forge: Cancel Active Run", self._cancel_active_run),
+            ("View: Toggle Assistant", self._toggle_assistant),
             ("Unreal: Run Staged Build", self._unreal_panel._on_build),
             ("Unreal: Refresh Engine Status", self._unreal_panel._refresh),
             ("About GameForge IDE", self._show_about),
@@ -1066,6 +1079,8 @@ class MainWindow(QMainWindow):
         self._top_bar.openFolderRequested.connect(self._open_folder)
         self._top_bar.fixActionRequested.connect(self._handle_fix_action)
         self._systems_service.snapshotChanged.connect(self._top_bar.update_systems)
+        self._forge_service.runEvent.connect(self._on_forge_run_event)
+        self._forge_service.runListChanged.connect(self._on_forge_run_list_changed)
 
         # Activity rail (56px)
         self._rail = Rail(self)
@@ -1144,6 +1159,7 @@ class MainWindow(QMainWindow):
             self._asset_panel = self._code_view._asset_panel
             self._design_panel = self._code_view._design_panel
             self._explorer.open_folder_requested.connect(self._open_folder)
+            self._code_view.restore_dock_state(self._settings)
         return self._code_view
 
     def _register_studio_views(self) -> None:
@@ -1561,6 +1577,12 @@ class MainWindow(QMainWindow):
         if new_theme != self._theme:
             self._theme = new_theme
             apply_theme(QApplication.instance(), self._theme)
+            if hasattr(self, "_rail") and hasattr(self._rail, "update_theme"):
+                self._rail.update_theme()
+            if hasattr(self, "_top_bar") and hasattr(self._top_bar, "update_theme"):
+                self._top_bar.update_theme()
+            if hasattr(self, "_assistant_panel") and hasattr(self._assistant_panel, "update_theme"):
+                self._assistant_panel.update_theme()
             from .styles.dark_theme import get_theme_display_name
             self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
 
@@ -1611,8 +1633,56 @@ class MainWindow(QMainWindow):
             )
             if reply != QMessageBox.Yes:
                 return
+        if hasattr(self, "_forge_service"):
+            self._forge_service.cancel_run(run_id)
+        from src.gameforge_ide.forge.executor import ForgeExecutor
+        ForgeExecutor.request_cancel(run_id)
         if hasattr(self, "_toasts"):
             self._toasts.warning("Run Cancelled", f"Cancelled run {run_id}")
+
+    @Slot(dict)
+    def _on_forge_run_event(self, event: dict) -> None:
+        kind = event.get("kind")
+        pname = event.get("project_name", "") or self._current_project or "Game"
+        if kind == "run_finished":
+            status = event.get("status", "")
+            if status == "DONE":
+                if hasattr(self, "_toasts"):
+                    self._toasts.success("Build Complete", f"Successfully built '{pname}'!")
+                self.statusBar().showMessage(f"Build complete for '{pname}'.", 5000)
+            elif status in ("FAILED", "FAIL"):
+                err = event.get("error", "") or event.get("step_id", "build step")
+                if hasattr(self, "_toasts"):
+                    self._toasts.error("Build Failed", f"Build failed at {err}")
+                self.statusBar().showMessage(f"Build failed for '{pname}': {err}", 5000)
+            self._on_forge_run_list_changed()
+        elif kind == "step_started":
+            step_id = event.get("step_id", "")
+            self.statusBar().showMessage(f"Building '{pname}' — {step_id.replace('_', ' ').capitalize()}…", 3000)
+        elif kind == "approval_needed":
+            if hasattr(self, "_toasts"):
+                self._toasts.warning("Approval Needed", f"Build requires approval for {event.get('step_id', 'mutation')}")
+
+    @Slot()
+    def _on_forge_run_list_changed(self) -> None:
+        if not hasattr(self, "_forge_service") or not hasattr(self, "_top_bar"):
+            return
+        active = self._forge_service.active_runs()
+        if active:
+            r = active[0]
+            game_name = r.get("project_name", "") or getattr(self, "_current_project", "") or "Game"
+            done = r.get("done_steps", 0)
+            total = r.get("total_steps", 0)
+            started = float(r.get("started_at", time.time()))
+            elapsed = max(0.0, time.time() - started)
+            waiting = r.get("status") == "WAITING_APPROVAL"
+            self._top_bar.update_run_chip(True, game_name, done, total, elapsed, waiting)
+            if hasattr(self, "_rail"):
+                self._rail.set_running("build", True)
+        else:
+            self._top_bar.update_run_chip(False)
+            if hasattr(self, "_rail"):
+                self._rail.set_running("build", False)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         chat = getattr(self, "_chat_panel", None)
@@ -1641,6 +1711,8 @@ class MainWindow(QMainWindow):
         self._settings.setValue("appearance/theme", self._theme)
         self._settings.setValue("window/geometry", self.saveGeometry())
         self._settings.setValue("window/layout", self.saveState())
+        if hasattr(self, "_code_view") and self._code_view:
+            self._code_view.save_dock_state(self._settings)
         self._settings.sync()
         chat = getattr(self, "_chat_panel", None)
         if chat is not None and hasattr(chat, "_runner"):

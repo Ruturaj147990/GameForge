@@ -81,6 +81,36 @@ def match_deterministic_rule(gds: GameDesignSpec, request: str) -> Optional[Prop
     if patch:
         return patch
 
+    # Rule 13: Player / enemy health
+    patch = _match_health(gds, req)
+    if patch:
+        return patch
+
+    # Rule 14: Jump velocity / force
+    patch = _match_jump(gds, req)
+    if patch:
+        return patch
+
+    # Rule 15: Progression difficulty
+    patch = _match_difficulty(gds, req)
+    if patch:
+        return patch
+
+    # Rule 16: Art style
+    patch = _match_art_style(gds, req)
+    if patch:
+        return patch
+
+    # Rule 17: Camera perspective
+    patch = _match_camera(gds, req)
+    if patch:
+        return patch
+
+    # Rule 18: Lose timer duration
+    patch = _match_timer(gds, req)
+    if patch:
+        return patch
+
     return None
 
 
@@ -125,11 +155,15 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
     ent = gds.entities[idx]
     props = ent.props if isinstance(ent.props, dict) else ent.props.model_dump()
-    speed_prop = next((k for k in ("move_speed", "patrol_speed", "speed") if k in props), None)
+    speed_prop = next((k for k in ("player_speed", "move_speed", "patrol_speed", "speed") if k in props), None)
     if not speed_prop:
-        return None
+        speed_prop = "player_speed" if ("player" in ent.entity_id.lower() or getattr(ent, "kind", "") == "player") else "move_speed"
+        old_val = 600.0
+        op_type = "add"
+    else:
+        old_val = float(props[speed_prop])
+        op_type = "replace"
 
-    old_val = float(props[speed_prop])
     if explicit_val is not None:
         new_val = explicit_val
     else:
@@ -142,7 +176,7 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
     ops = [
         {
-            "op": "replace",
+            "op": op_type,
             "path": f"/entities/{idx}/props/{speed_prop}",
             "value": new_val,
         }
@@ -223,6 +257,51 @@ def _match_add_n(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
             summary=f"Increased {ent.entity_id} count by {num} ({ent.count} -> {new_count})",
             status="OK",
         )
+
+    # If entity does not exist yet, instantiate a new one with the specified count
+    target_clean = target.rstrip("s")
+    kind_map = {
+        "hazard": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 25.0, "shape_extent": 150.0}),
+        "obstacle": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 25.0, "shape_extent": 150.0}),
+        "trap": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 25.0, "shape_extent": 150.0}),
+        "guard": (EntityKind.GUARD, "kit.guard", {"patrol_speed": 400.0, "detection_radius": 800.0}),
+        "enemy": (EntityKind.ENEMY, "kit.enemy", {"enemy_speed": 350.0, "health": 100}),
+        "bot": (EntityKind.ENEMY, "kit.enemy", {"enemy_speed": 350.0, "health": 100}),
+        "pickup": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
+        "coin": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
+        "relic": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
+        "gem": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
+        "checkpoint": (EntityKind.CHECKPOINT, "kit.checkpoint", {"activate_once": True}),
+        "spawner": (EntityKind.SPAWNER, "kit.spawner", {"wave_count": 3, "enemies_per_wave": 5}),
+        "prop": (EntityKind.PROP, "kit.prop", {}),
+        "landmark": (EntityKind.LANDMARK, "kit.landmark", {}),
+        "door": (EntityKind.DOOR, "kit.door", {}),
+        "platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {}),
+        "moving_platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {}),
+    }
+
+    if target_clean in kind_map:
+        kind, module, default_props = kind_map[target_clean]
+        existing_kind = [e for e in gds.entities if e.kind == kind]
+        ent_id = f"{kind.value}_{len(existing_kind) + 1}" if existing_kind else (f"{kind.value}s" if num > 1 else kind.value)
+        level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
+        new_entity = {
+            "entity_id": ent_id,
+            "kind": kind.value,
+            "module": module,
+            "level_id": level_id,
+            "count": num,
+            "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
+            "tags": ["GF_Owned"],
+            "props": dict(default_props),
+        }
+        ops = [{"op": "add", "path": "/entities/-", "value": new_entity}]
+        return ProposedPatch(
+            ops=ops,
+            summary=f"Added {num} {kind.value} ('{ent_id}')",
+            status="OK",
+        )
+
     return None
 
 
@@ -248,13 +327,17 @@ def _match_add_pickup(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
 
 def _match_lighting(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    m = re.search(r"(?i)\b(night|dusk|day|indoor)\s*(?:lighting|light)?\b", req)
+    m = re.search(r"(?i)\b(night|dusk|day|indoor|sunset|dark)\s*(?:lighting|light)?\b", req)
     if not m:
-        m = re.search(r"(?i)\bmake\s+it\s+(night|dusk|day|indoor)\b", req)
+        m = re.search(r"(?i)\bmake\s+it\s+(night|dusk|day|indoor|sunset|dark)\b", req)
         if not m:
-            return None
+            m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?lighting\s+(?:to\s+)?(night|dusk|day|indoor|sunset|dark)\b", req)
+            if not m:
+                return None
 
-    val = m.group(1).lower()
+    raw_val = m.group(1).lower()
+    val_map = {"sunset": "dusk", "dark": "night"}
+    val = val_map.get(raw_val, raw_val)
     ops = [{"op": "replace", "path": "/scene/levels/0/lighting", "value": val}]
     return ProposedPatch(ops=ops, summary=f"Scene lighting set to {val}", status="OK")
 
@@ -372,11 +455,11 @@ def _match_rename_title(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch
 
 
 def _match_remove_entity(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    m = re.search(r"(?i)\bremove\s+(?:the\s+)?([a-z0-9_]+)", req)
+    m = re.search(r"(?i)\b(remove|delete|destroy|eliminate|clear)\s+(?:the\s+|all\s+)?([a-z0-9_]+)", req)
     if not m:
         return None
 
-    target = m.group(1).lower()
+    target = m.group(2).lower()
     idx = _find_entity_idx(gds, target)
     if idx is None:
         return None
@@ -429,8 +512,8 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
     ops = []
     level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
 
-    # 1. Add enemy wave spawner if no spawner or hostile entity exists
-    has_spawner = any(e.kind == EntityKind.SPAWNER or "enemy" in e.entity_id.lower() or "guard" in e.entity_id.lower() for e in gds.entities)
+    # 1. Add enemy wave spawner if no kit.spawner entity exists
+    has_spawner = any(e.kind == EntityKind.SPAWNER or getattr(e, "module", "") == "kit.spawner" or "spawner" in e.entity_id.lower() for e in gds.entities)
     if not has_spawner:
         spawner_ent = {
             "entity_id": "spawner",
@@ -525,4 +608,140 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         summary="Completed game design: Added enemy wave spawner with 5 combat bots, enabled projectile shooting mechanics for player, updated level layout to arena with cover, and configured wave-cleared win condition.",
         status="OK",
     )
+
+
+def _match_health(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to set or scale health / HP for player or enemies."""
+    m = re.search(r"(?i)\b(?:set|make|give|increase|change|adjust)\s+(?:the\s+)?(player|enemy|enemies|guards?)(?:'s)?\s+(?:health|hp|max\s+health)\s+(?:to\s+)?(\d+(?:\.\d+)?)\b", req)
+    if not m:
+        m = re.search(r"(?i)\b(double|halve)\s+(?:the\s+)?(player|enemy|enemies|guards?)(?:'s)?\s+(?:health|hp|max\s+health)\b", req)
+        if not m:
+            return None
+        action = m.group(1).lower()
+        target = m.group(2).lower()
+        explicit_val = None
+    else:
+        target = m.group(1).lower()
+        explicit_val = float(m.group(2))
+        action = "set"
+
+    target_clean = "player" if "player" in target else ("enemy" if "enem" in target else "guard")
+    idx = _find_entity_idx(gds, target_clean)
+    if idx is None:
+        return None
+
+    ent = gds.entities[idx]
+    props = ent.props if isinstance(ent.props, dict) else ent.props.model_dump()
+    prop_key = next((k for k in ("player_max_health", "enemy_max_health", "health", "max_health") if k in props), None)
+    if not prop_key:
+        prop_key = "player_max_health" if target_clean == "player" else ("enemy_max_health" if target_clean == "enemy" else "health")
+        old_val = 100.0
+        op_type = "add"
+    else:
+        old_val = float(props[prop_key])
+        op_type = "replace"
+
+    if explicit_val is not None:
+        new_val = explicit_val
+    elif action == "double":
+        new_val = old_val * 2.0
+    else:
+        new_val = max(1.0, old_val * 0.5)
+
+    ops = [{"op": op_type, "path": f"/entities/{idx}/props/{prop_key}", "value": new_val}]
+    return ProposedPatch(ops=ops, summary=f"{ent.entity_id.capitalize()}: {prop_key} {old_val} -> {new_val}", status="OK")
+
+
+def _match_jump(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to adjust jump height, velocity, or force."""
+    m = re.search(r"(?i)\b(?:set|increase|change|adjust)\s+(?:the\s+)?jump\s+(?:velocity|height|force)\s+(?:to\s+)?(\d+(?:\.\d+)?)\b", req)
+    if not m:
+        m = re.search(r"(?i)\b(double|increase)\s+(?:the\s+)?jump\s+(?:velocity|height|force)\b", req)
+        if not m:
+            m = re.search(r"(?i)\bmake\s+(?:the\s+)?player\s+jump\s+higher\b", req)
+            if not m:
+                return None
+            action = "increase"
+            explicit_val = None
+        else:
+            action = m.group(1).lower()
+            explicit_val = None
+    else:
+        explicit_val = float(m.group(1))
+        action = "set"
+
+    player_idx = next((i for i, e in enumerate(gds.entities) if e.kind == EntityKind.PLAYER), None)
+    if player_idx is None:
+        return None
+
+    ent = gds.entities[player_idx]
+    props = ent.props if isinstance(ent.props, dict) else ent.props.model_dump()
+    old_val = float(props.get("jump_velocity", 600.0))
+    op_type = "replace" if "jump_velocity" in props else "add"
+
+    if explicit_val is not None:
+        new_val = explicit_val
+    elif action == "double":
+        new_val = old_val * 2.0
+    else:
+        new_val = round(old_val * 1.3, 1)
+
+    ops = [{"op": op_type, "path": f"/entities/{player_idx}/props/jump_velocity", "value": new_val}]
+    return ProposedPatch(ops=ops, summary=f"Player: jump_velocity {old_val} -> {new_val}", status="OK")
+
+
+def _match_difficulty(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to change progression difficulty."""
+    m = re.search(r"(?i)\b(?:set|change|make)\s+(?:the\s+)?(?:difficulty\s+(?:to\s+)?)?(easy|normal|hard)\b", req)
+    if not m:
+        return None
+    val = m.group(1).lower()
+    ops = [{"op": "replace", "path": "/progression/difficulty", "value": val}]
+    return ProposedPatch(ops=ops, summary=f"Progression difficulty set to '{val}'", status="OK")
+
+
+def _match_art_style(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to change visual art style."""
+    m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?art\s+style\s+(?:to\s+)?(stylized|realistic|low_poly|low\s+poly|toon)\b", req)
+    if not m:
+        m = re.search(r"(?i)\bmake\s+(?:it|the\s+style)\s+(stylized|realistic|low_poly|low\s+poly|toon)\b", req)
+        if not m:
+            return None
+    val = m.group(1).lower().replace(" ", "_")
+    ops = [{"op": "replace", "path": "/art/style", "value": val}]
+    return ProposedPatch(ops=ops, summary=f"Art style set to '{val}'", status="OK")
+
+
+def _match_camera(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to change camera perspective."""
+    m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?camera(?:\s+mode|\s+view)?\s+(?:to\s+)?(first[- ]person|third[- ]person|top[- ]down|side[- ]scroller|fixed[- ]board)\b", req)
+    if not m:
+        return None
+    cam_str = m.group(1).lower().replace(" ", "_").replace("-", "_")
+    ops = [{"op": "replace", "path": "/overview/camera", "value": cam_str}]
+    return ProposedPatch(ops=ops, summary=f"Camera mode set to '{cam_str}'", status="OK")
+
+
+def _match_timer(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to set or add lose timer condition."""
+    m = re.search(r"(?i)\b(?:set|change)\s+(?:the\s+)?(?:time\s+limit|timer)\s+(?:to\s+)?(\d+)\s*(?:s|sec|seconds?)?\b", req)
+    if not m:
+        m = re.search(r"(?i)\badd\s+(?:a\s+)?(\d+)\s*(?:s|sec|seconds?)\s+timer\b", req)
+        if not m:
+            return None
+    seconds = float(m.group(1))
+
+    timer_idx = None
+    for idx, cond in enumerate(gds.goals.lose):
+        if getattr(cond, "kind", "") == "timer":
+            timer_idx = idx
+            break
+
+    if timer_idx is not None:
+        ops = [{"op": "replace", "path": f"/goals/lose/{timer_idx}/seconds", "value": seconds}]
+    else:
+        timer_cond = {"kind": "timer", "seconds": seconds}
+        ops = [{"op": "add", "path": "/goals/lose/-", "value": timer_cond}]
+
+    return ProposedPatch(ops=ops, summary=f"Set game lose timer to {int(seconds)} seconds", status="OK")
 

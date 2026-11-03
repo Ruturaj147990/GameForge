@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import stat
 import threading
 import time
 from pathlib import Path
@@ -42,9 +43,14 @@ class RunStore:
                 os.replace(tmp_path, target)
                 last_err = None
                 break
-            except PermissionError as exc:
+            except (PermissionError, OSError) as exc:
                 last_err = exc
-                time.sleep(0.1)
+                if target.exists():
+                    try:
+                        os.chmod(target, stat.S_IWRITE | stat.S_IREAD)
+                    except Exception:
+                        pass
+                time.sleep(0.05 * (attempt + 1))
 
         if last_err is not None:
             if tmp_path.exists():
@@ -79,10 +85,14 @@ class RunStore:
                 target = fallback
             else:
                 return None
-        try:
-            return RunState.model_validate_json(target.read_text(encoding="utf-8"))
-        except Exception:
-            return None
+        for attempt in range(3):
+            try:
+                return RunState.model_validate_json(target.read_text(encoding="utf-8"))
+            except (PermissionError, OSError):
+                time.sleep(0.05 * (attempt + 1))
+            except Exception:
+                return None
+        return None
 
     def load_events(self, run_id: str) -> List[Dict[str, Any]]:
         """Load all events recorded for a run."""
@@ -166,9 +176,22 @@ class RunStore:
 
             tmp_idx = idx_dir / f"runs_index.json.tmp_{secrets.token_hex(4)}"
             tmp_idx.write_text(json.dumps(runs, indent=1), encoding="utf-8")
-            for _ in range(5):
+            replaced = False
+            for attempt in range(5):
                 try:
                     os.replace(tmp_idx, idx_file)
+                    replaced = True
                     break
-                except PermissionError:
-                    time.sleep(0.1)
+                except (PermissionError, OSError):
+                    if idx_file.exists():
+                        try:
+                            os.chmod(idx_file, stat.S_IWRITE | stat.S_IREAD)
+                        except Exception:
+                            pass
+                    time.sleep(0.05 * (attempt + 1))
+
+            if not replaced and tmp_idx.exists():
+                try:
+                    tmp_idx.unlink()
+                except Exception:
+                    pass

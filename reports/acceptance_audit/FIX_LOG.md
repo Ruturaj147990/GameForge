@@ -328,3 +328,291 @@ This log details all modifications made to source files during the GameForge 1.0
 - **Verification:**
   - `pytest tests/unit/test_delete_game_regression.py tests/unit/test_games_view.py` PASS (14/14).
   - All 830 unit tests and 45 protected oracles PASS.
+
+---
+
+### Fix 23: unreal_editor and Backend Tools uproject Resolution (DEF-033)
+- **Files Modified:**
+  - `src/gameforge_ide/backend/tools/game_tools.py`
+  - `src/gameforge_ide/backend/tools/unreal_tools.py`
+- **Files Added:**
+  - `tests/unit/test_uproject_resolution.py`
+- **Changes:**
+  - Implemented `GameTools._resolve_uproject(uproject)` resolving project names, directory paths, and relative paths to canonical `.uproject` file paths.
+  - Updated `unreal_editor()`, `_link()`, `unreal_run_tests()`, and `unreal_package()` to resolve `uproject` via `_resolve_uproject()`.
+  - Updated `UnrealEngineTools.run_staged_build()` to resolve `uproject_rel_path` via `_resolve_uproject_path()`.
+- **Verification:**
+  - `pytest tests/unit/test_uproject_resolution.py` PASS (3/3).
+  - All 833 unit tests and 45 protected oracles PASS.
+
+---
+
+### Fix 24: Board Game Preset & Genre Classification Architecture (DEF-034, DEF-035)
+- **Files Modified:**
+  - `src/gameforge_ide/design/presets.py`
+  - `src/gameforge_ide/design/prompt_to_gds.py`
+  - `src/gameforge_ide/design/expand.py`
+- **Files Added:**
+  - `tests/unit/test_genre_classification.py`
+- **Changes:**
+  - Implemented `preset_snake_and_ladders()` producing a 100-cell grid board with 8 snakes, 8 ladders, 6-sided dice rolling, and 2 player tokens under `Genre.GRID_BOARD`.
+  - Added board game keywords (`"snake and ladders"`, `"snakes and ladders"`, `"chutes and ladders"`, `"ludo"`, `"board game"`) to `PRESET_KEYWORDS`.
+  - Updated `DRAFT_SYSTEM_PROMPT` to explicitly define each genre enum value and mandate `grid_board` with `fixed_board` and $\ge 2$ players for turn-based board games.
+  - Fixed `expand_draft()` in `expand.py` to extract dynamic player counts from board properties or entities rather than hardcoding `players=1`.
+- **Verification:**
+  - `pytest tests/unit/test_genre_classification.py` PASS.
+
+---
+
+### Fix 25: Master Composer Layout Routing & Entity Deduplication (DEF-036, DEF-038)
+- **Files Modified:**
+  - `src/gameforge_ide/composer/compose.py`
+  - `src/gameforge_ide/composer/layouts/board.py`
+- **Changes:**
+  - Corrected layout fallback mapping in `compose.py` from `("board", "card")` to `("grid_board", "board", "puzzle")` for `board` layout and `("card_battler", "card")` for `lanes` layout.
+  - Overhauled `layouts/board.py` to extract `board_size`, `cell_size_cm`, `snakes`, and `ladders` from the GDS board entity into `board_actor.properties`.
+  - Synchronized entity IDs between GDS entities and layout plans to prevent duplicate Poisson-disk scattering of board actors.
+- **Verification:**
+  - Composer tests PASS.
+
+---
+
+### Fix 26: Duplicate PlayerStart Elimination & Conditional NavMesh in Level Ops (DEF-037)
+- **Files Modified:**
+  - `src/gameforge_ide/composer/level_ops.py`
+- **Changes:**
+  - Guarded step 1b `spawn_actor(PlayerStart)` to check if `plan.actors` already contains an actor of class `PlayerStart` or label `GF_PlayerStart`, eliminating duplicate PlayerStart emissions.
+  - Made `NavMeshBoundsVolume` and `nav_rebuild` conditional: skipped on board games or levels without AI pathfinding actors.
+- **Verification:**
+  - `pytest tests/unit/test_level_ops.py` PASS.
+
+---
+
+### Fix 27: Game-Specific Acceptance Test Derivation & Semantic Validation (DEF-039)
+- **Files Added:**
+  - `src/gameforge_ide/qa/game_spec_tests.py`
+  - `src/gameforge_ide/design/semantic_validate.py`
+  - `tests/unit/test_game_spec_tests.py`
+- **Changes:**
+  - Implemented `generate_acceptance_tests(gds)` deriving concrete test assertions from GDS rules and goals (board cell count, dice outcomes, snake/ladder transitions, win conditions).
+  - Implemented `semantic_validate_gds(gds, prompt)` enforcing semantic parity between natural-language prompt intent and generated GDS genre/entities.
+- **Verification:**
+  - `pytest tests/unit/test_game_spec_tests.py` PASS.
+
+---
+
+### Fix 28: Pipeline Stage Evidence Validation (DEF-040)
+- **Files Modified:**
+  - `src/gameforge_ide/forge/handlers/__init__.py`
+  - `src/gameforge_ide/forge/handlers/legacy_stages.py`
+- **Changes:**
+  - Enforced strict output validation in stage handlers before marking steps as DONE:
+    - Design validates GDS semantic consistency.
+    - Assemble validates actor coordinates and classes against LevelPlan read-back.
+    - Scenario validates that game-specific scenarios ran and emitted required events.
+- **Verification:**
+  - All unit tests and protected oracles PASS.
+
+---
+
+### Fix 29: Composer Entity Placement, Card Table Deduplication & Dynamic Course Layout (DEF-041–DEF-044)
+- **Files Modified:**
+  - `src/gameforge_ide/composer/compose.py`
+  - `src/gameforge_ide/composer/layouts/lanes.py`
+  - `src/gameforge_ide/composer/layouts/course.py`
+  - `src/gameforge_ide/design/prompt_to_gds.py`
+- **Changes:**
+  - Corrected unplaced entity count truncation by checking `getattr(e, "count", None) or e.props.get("count", 1)`.
+  - Dynamically matched card table entity IDs from GDS in `layouts/lanes.py`, resolving duplicate entity scattering.
+  - Dynamically calculated course platform counts (`num_platforms = max(7, num_pickups + 4)`), ensuring all pickups and landmarks are placed.
+  - Differentiated creative prompts from parameter preset overrides in `prompt_to_gds.py`.
+- **Verification:**
+  - `python scratch/verify_bugs.py` confirmed 5 relics, 3 guards, exactly 1 card table, 5 pickups placed, and creative model routing.
+
+---
+
+### Fix 30: Natural Language Prompt Classification, Polite Intent & Living Project Changes (DEF-045–DEF-050)
+- **Files Modified:**
+  - `src/gameforge_ide/backend/agent/runtime.py`
+  - `src/gameforge_ide/pipeline/spec_from_prompt.py`
+  - `src/gameforge_ide/kit/modules/__init__.py`
+  - `src/gameforge_ide/design/patch_rules.py`
+  - `src/gameforge_ide/design/patch.py`
+- **Changes:**
+  - Added player nouns (`player|players|character|hero`) to mutation targets in `runtime.py`.
+  - Filtered polite modal openers ("can/could/would you", "please") from informational Q&A.
+  - Added `weapons` field to `PlayerCharacterParams` to allow player weapon sets.
+  - Fixed combat patch rule to check for `kit.spawner` and updated speed patch to match `player_speed`.
+  - Fixed lighting patch summarizer to query `gds.scene.levels[0].lighting`.
+  - Allowed hyphenated titles in `is_game_creation_request`.
+- **Verification:**
+  - `python scratch/test_prompt_classification.py` passed 17/17 intent tests.
+  - Bug verification script passed combat and lighting patch tests.
+
+---
+
+### Fix 31: Storage Hardening, Windows NTFS Lock Retries & Process Isolation (DEF-051–DEF-056)
+- **Files Modified:**
+  - `src/gameforge_ide/design/store.py`
+  - `src/gameforge_ide/backend/providers/hosted.py`
+  - `src/gameforge_ide/index/indexer.py`
+  - `src/gameforge_ide/backend/tools/terminal_tools.py`
+  - `src/gameforge_ide/backend/tools/unreal_tools.py`
+  - `src/gameforge_ide/backend/tools/edit_tools.py`
+  - `src/gameforge_ide/backend/tools/gateway.py`
+- **Changes:**
+  - Added 5-attempt retry loop with exponential backoff on `PermissionError` when saving GDS revisions under Windows file locking contention.
+  - Added graceful JSONDecodeError handling in `SpendLedger._entries()`.
+  - Added 5-line lookback window for C++ macro indexing and `re.UNICODE` support.
+  - Adopted all terminal and UBT processes into Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`).
+  - Prohibited empty `target_content=""` edits on existing files.
+  - Fixed project directory resolution in `ToolGateway`.
+- **Verification:**
+  - `pytest scratch/test_auditor_suite.py` passed 8/8.
+
+---
+
+### Fix 32: Desktop Frontend, Keyboard Navigation & Unreal Pipeline Validation (DEF-057–DEF-066)
+- **Files Modified:**
+  - `src/gameforge_ide/desktop/main_window.py`
+  - `src/gameforge_ide/desktop/services/forge_service.py`
+  - `src/gameforge_ide/desktop/views/code_view.py`
+  - `src/gameforge_ide/desktop/views/home_view.py`
+  - `src/gameforge_ide/desktop/shell/top_bar.py`
+  - `src/gameforge_ide/desktop/views/play_view.py`
+  - `src/gameforge_ide/desktop/views/assets_view.py`
+  - `src/gameforge_ide/desktop/views/build_view.py`
+  - `src/gameforge_ide/desktop/widgets/gds_form.py`
+  - `src/gameforge_ide/pipeline/game_pipeline.py`
+  - `src/gameforge_ide/forge/validation.py`
+  - `src/gameforge_ide/forge/handlers/legacy_stages.py`
+  - `src/gameforge_ide/unreal/GameForge/Source/GameForgeRuntime/Private/GameForgePlayer.cpp`
+  - `src/gameforge_ide/unreal/GameForge/Source/GameForgeRuntime/Private/GameForgeScenario.cpp`
+- **Changes:**
+  - Wired `MainWindow._cancel_active_run` and `ForgeService.cancel_run` to `ForgeExecutor.cancel_run` and `request_cancel`.
+  - Passed `self._tools` to `DiffPanel` in `CodeView`.
+  - Re-enabled cancel button on new design drafts in `HomeView`.
+  - Reverted `TopBar` project combo on folder picker cancel.
+  - Connected `itemSelectionChanged` and selection model `currentChanged` in `PlayView`, `AssetsView`, and `BuildView` for keyboard arrow navigation.
+  - Added informative validation error emission for malformed win/lose condition syntax in `GdsForm` while preserving non-stat condition types (`EventOccurred`, `TimerElapsed`).
+  - Updated `game_pipeline.resume()` to reset `SKIPPED`, `FAILED`, `CANCELLED`, and `BLOCKED` steps to `PENDING` with cleared errors.
+  - Verified real spawned actors in assemble validation without swallowing exceptions.
+  - Bound `IA_PrimaryAttack` and `IA_RollDice` aliases in C++ `AGameForgePlayerController`.
+  - Removed strict NavSys pre-condition in `GameForgeScenario.cpp`.
+- **Verification:**
+  - `pytest scratch/test_ui_comprehensive_audit.py` passed 10/10.
+  - `pytest scratch/test_audit_engine_forge_qa.py` passed 4/4.
+  - Full test suite: 868/868 unit tests passed (91.93s), 45/45 protected oracles passed (0.05s).
+
+---
+
+### Fix 33: Desktop Frontend & UI/UX Re-Engineering
+- **Files Modified:**
+  - `src/gameforge_ide/desktop/shell/toasts.py`
+  - `src/gameforge_ide/desktop/shell/palette.py`
+  - `src/gameforge_ide/desktop/shell/rail.py`
+  - `src/gameforge_ide/desktop/shell/top_bar.py`
+  - `src/gameforge_ide/desktop/main_window.py`
+  - `src/gameforge_ide/desktop/shell/icons.py`
+  - `src/gameforge_ide/desktop/styles/dark_theme.py`
+  - `src/gameforge_ide/desktop/views/code_view.py`
+  - `src/gameforge_ide/desktop/widgets/log_view.py`
+  - `src/gameforge_ide/desktop/widgets/problems_table.py`
+  - `src/gameforge_ide/desktop/views/games_view.py`
+  - `src/gameforge_ide/desktop/views/evidence_view.py`
+  - `src/gameforge_ide/desktop/views/assets_view.py`
+  - `src/gameforge_ide/launcher.py`
+  - `tests/unit/test_frontend_ux_improvements.py`
+- **Changes:**
+  - Installed event filter on `parentWidget()` watching for `QEvent.Resize` and `QEvent.Show` in `toasts.py`, auto-repositioning floating notifications on window resize or maximize.
+  - Upgraded `palette.py` with multi-keyword token matching and acronym fuzzy matching (`vd` -> `View: Design`, `cancel` -> `Forge: Cancel Active Run`).
+  - Added `refresh_icons()` / `update_theme()` to `rail.py` and `top_bar.py` for live theme recoloring without restart; added `set_running()` indicator badging active runs.
+  - Connected `ForgeService.runEvent` and `runListChanged` to update TopBar run chip, Rail build indicator, and status bar live in `main_window.py`.
+  - Wired `CodeView` dock layout persistence (`save_dock_state`, `restore_dock_state`, `reset_dock_layout`) using `QSettings`.
+  - Cleared SVG icon cache inside `apply_theme()` to prevent stale icons on theme switch.
+  - Added smart auto-scroll lock in `log_view.py` with amber "Resume Auto-Scroll" button.
+  - Added Enter and Delete keyboard navigation to `problems_table.py`, `games_view.py`, `evidence_view.py`, and `assets_view.py`.
+  - Added `SetCurrentProcessExplicitAppUserModelID` in `launcher.py` for native Windows taskbar icon grouping.
+- **Verification:**
+  - `pytest tests/unit/test_frontend_ux_improvements.py` passed 11/11.
+  - Desktop suite: 93/93 passed.
+
+---
+
+### Fix 34: Backend, Storage, Concurrency & Tool Infrastructure Re-Engineering
+- **Files Modified:**
+  - `src/gameforge_ide/backend/tools/edit_tools.py`
+  - `src/gameforge_ide/backend/tools/gateway.py`
+  - `src/gameforge_ide/backend/tools/fs_tools.py`
+  - `src/gameforge_ide/backend/tools/approval_store.py`
+  - `src/gameforge_ide/design/store.py`
+  - `src/gameforge_ide/forge/store.py`
+  - `src/gameforge_ide/index/indexer.py`
+  - `src/gameforge_ide/core/jobs.py`
+  - `tests/unit/test_backend_storage_reengineering.py`
+- **Changes:**
+  - Implemented two-phase atomic transaction engine in `edit_tools.py` (`apply_batch` with pre-validation dry run checking diff IDs, boundaries, existence, and SHA-256 digests; Phase 2 atomic apply with automatic reverse rollback on write failure); implemented `rollback_batch`; registered batch tools in `ToolGateway`.
+  - Added directory guard and NOOP identical replacement detection; added 5-attempt retry loop with linear backoff and `stat.S_IWRITE` clearing on `PermissionError`.
+  - Hardened `DesignStore`, `ForgeStore`, and `ApprovalStore` with transient NTFS lock retry loops and atomic write safety with dangling `.tmp_*` cleanup.
+  - Upgraded `SymbolIndexer` with SQLite database triggers (`symbols_ai`, `symbols_ad`, `symbols_au`) syncing FTS5 automatically on INSERT/UPDATE/DELETE; replaced in-memory ID extraction with direct SQL JOIN; added kind index and wildcard token sanitization.
+  - Scaled `JobManager` worker pool to 4 workers; implemented `terminate_all_children()` via Win32 `TerminateJobObject`.
+  - Wrapped `re.compile` in error handling in `fs_tools.py` and excluded cache/build directories (`.gameforge`, `DerivedDataCache`, `Build`, `node_modules`, `scratch`).
+- **Verification:**
+  - `pytest tests/unit/test_backend_storage_reengineering.py` passed 11/11.
+  - FTS query benchmark: 6.8ms (< 50ms budget).
+  - 50k lines edit and rollback benchmark: 0.35s (< 2.0s budget).
+
+---
+
+### Fix 35: AI, Agents, LLM Orchestration & Prompt-to-GDS Re-Engineering
+- **Files Modified:**
+  - `src/gameforge_ide/design/prompt_to_gds.py`
+  - `src/gameforge_ide/design/patch_rules.py`
+  - `src/gameforge_ide/design/patch.py`
+  - `src/gameforge_ide/backend/agent/runtime.py`
+  - `src/gameforge_ide/design/expand.py`
+  - `src/gameforge_ide/backend/agent/code_verify.py`
+  - `src/gameforge_ide/pipeline/spec_from_prompt.py`
+  - `tests/unit/test_ai_agent_orchestration_improvements.py`
+- **Changes:**
+  - Expanded `CUSTOM_DETAIL_KEYWORDS` in `prompt_to_gds.py` with 40+ thematic descriptors and lowered custom motif threshold to `>= 2`, preventing template hijacking on creative prompts.
+  - Added 6 new deterministic patch rules in `patch_rules.py`: Rule 13 (health scaling/doubling), Rule 14 (jump velocity/force), Rule 15 (difficulty modes), Rule 16 (art style: stylized, realistic, low_poly, toon), Rule 17 (camera switching), Rule 18 (timer limits in lose goals). Enhanced `_match_add_n` to dynamically instantiate entities with proper default kit params when adding new entity types. Expanded deletion verbs (`remove|delete|destroy|eliminate|clear`).
+  - Implemented `_compact_entities_list` in `patch.py` to truncate massive `points_m` coordinate arrays in LLM prompt contexts (saving ~80% token waste); added markdown code block stripping and outermost JSON brace extraction before `json.loads`.
+  - Upgraded `_extract_tool_call` in `runtime.py` to support multi-schema tool outputs (OpenAI, Anthropic, function calling, GameForge formats); expanded `is_change` verbs and target nouns.
+  - Added combat input action detection (`IA_Attack`/`IA_Fire`) and camera action bindings (`IA_Move`/`IA_Look`) in `expand_draft`.
+  - Stripped markdown code blocks from model diffs and normalized paths in `code_verify.py`.
+  - Expanded genre regex in `spec_from_prompt.py` to cover `runner`, `racing`, `simulator`, `strategy`, `tower defense`, `dogfight`, `metroidvania`, `sandbox`, `open world`, `quest`.
+- **Verification:**
+  - `pytest tests/unit/test_ai_agent_orchestration_improvements.py` passed 15/15.
+
+---
+
+### Fix 36: Unreal Engine, Composer, Gameplay Kit & QA Pipeline Re-Engineering (DEF-067–DEF-075)
+- **Files Modified:**
+  - `src/gameforge_ide/composer/layouts/open_world.py`
+  - `src/gameforge_ide/composer/layouts/board.py`
+  - `src/gameforge_ide/composer/layouts/lanes.py`
+  - `src/gameforge_ide/composer/compose.py`
+  - `src/gameforge_ide/qa/game_spec_tests.py`
+  - `src/gameforge_ide/forge/handlers/scenario.py`
+  - `src/gameforge_ide/unreal/GameForge/Source/GameForgeRuntime/Private/GameForgePlayer.cpp`
+  - `src/gameforge_ide/unreal/runner.py`
+  - `src/gameforge_ide/forge/handlers/legacy_stages.py`
+  - `src/gameforge_ide/pipeline/project_import.py`
+  - `src/gameforge_ide/composer/codegen.py`
+  - `src/gameforge_ide/composer/level_ops.py`
+- **Changes:**
+  - Eliminated duplicate `biomes.lighting_rig` generation in `open_world.py` (DEF-067).
+  - Added `GF_Board_Floor` and `GF_Lanes_Floor` static mesh actors with collision at `z=-10.0` in `board.py` and `lanes.py` (DEF-068), preventing characters from dropping into void (-2000cm KillZ).
+  - Implemented 3D platform snapping for unplaced scattered entities in platformer courses in `compose.py` (DEF-069); forwarded `generate_acceptance_tests(gds)` test IDs into `comp.scenarios` (DEF-070).
+  - Preserved game-specific acceptance scenarios during scenario filtering in `scenario.py`.
+  - Replaced passive `WaitStep` assertions with authentic action sequences (`NavigateToStep`, `InjectStep`) in `game_spec_tests.py` (DEF-071).
+  - Consolidated `GameDefinition` parsing and player attributes into `AGameForgeGameModeBase::StartPlay()` in `GameForgePlayer.cpp`, ensuring all execution modes apply camera mode, locomotion speed, projectile attack, and win/lose event listeners (DEF-072). Defaulted `runner.py` and `legacy_stages.py` to `GameForgeGameMode`.
+  - Added `dirs_exist_ok=True` for plugin deployment in `project_import.py` (DEF-073).
+  - Added `#include "GameForgeAttributes.h"` and `"Kismet/GameplayStatics.h"` in `codegen.py` (DEF-074).
+  - Added `severe_tolerance_cm=500.0` threshold in `verify_placed_actor_transforms()` in `level_ops.py` (DEF-075).
+- **Verification:**
+  - Domain tests: 112/112 passed.
+  - Full repository test suite: 908/908 passed in 101.78s (Exit 0).
+  - Protected oracles: 45/45 passed in 0.04s.
+

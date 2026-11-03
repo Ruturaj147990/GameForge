@@ -59,6 +59,8 @@ def generate_source(handler_name: str, on_event_body: str = "", tick_body: str =
 #include "{handler_name}.h"
 #include "GameForgeGameState.h"
 #include "GameForgeEvents.h"
+#include "GameForgeAttributes.h"
+#include "Kismet/GameplayStatics.h"
 
 void U{handler_name}::OnEvent(const FGameForgeEvent& Event)
 {{

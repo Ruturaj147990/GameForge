@@ -31,6 +31,10 @@ def spawn_actor(args):
             return _envelope("spawn_actor", False, errors=["spawn_actor_from_class returned None"])
         if label:
             actor.set_actor_label(label)
+        if "location" in args:
+            actor.set_actor_location(_vec(args["location"]), False, False)
+        if "rotation" in args:
+            actor.set_actor_rotation(_rot(args["rotation"]), False)
         mesh_path = args.get("static_mesh")
         if not mesh_path and isinstance(actor, unreal.StaticMeshActor):
             mesh_path = "/Engine/BasicShapes/Cube.Cube"
@@ -53,10 +57,21 @@ def spawn_actor(args):
             mat = unreal.EditorAssetLibrary.load_asset(material)
             if mat:
                 actor.static_mesh_component.set_material(0, mat)
-    readback = _find_actor(actor.get_actor_label())
-    if readback is None:
-        return _envelope("spawn_actor", False, errors=["read-back failed: actor not found after spawn"])
-    return _envelope("spawn_actor", True, _actor_record(readback), reversibility="transactional")
+    # Direct readback from the spawned actor instance
+    rec = _actor_record(actor)
+    warnings = []
+    if "location" in args:
+        req = args["location"]
+        act_loc = rec.get("location", {})
+        dx = abs(act_loc.get("x", 0.0) - float(req.get("x", 0.0)))
+        dy = abs(act_loc.get("y", 0.0) - float(req.get("y", 0.0)))
+        dz = abs(act_loc.get("z", 0.0) - float(req.get("z", 0.0)))
+        if dx > 10.0 or dy > 10.0 or dz > 10.0:
+            warnings.append(
+                f"spawn_actor location discrepancy: requested ({req.get('x')}, {req.get('y')}, {req.get('z')}) "
+                f"vs confirmed ({act_loc.get('x'):.1f}, {act_loc.get('y'):.1f}, {act_loc.get('z'):.1f})"
+            )
+    return _envelope("spawn_actor", True, rec, warnings=warnings, reversibility="transactional")
 
 
 @op("delete_actor", mutates=True, reversibility="transactional")
@@ -167,6 +182,11 @@ def new_level(args):
                              reversibility="snapshot-only", errors=[] if ok else ["load_level failed"])
     partitioned = bool(args.get("partitioned", False))
     ok = _level_sub().new_level(path, partitioned) if partitioned else _level_sub().new_level(path)
+    if ok:
+        try:
+            _level_sub().save_current_level()
+        except Exception:
+            pass
     exists = unreal.EditorAssetLibrary.does_asset_exist(path)
     is_partitioned = _world_is_partitioned()
     if partitioned and not is_partitioned:
@@ -178,7 +198,17 @@ def new_level(args):
 
 @op("load_level", mutates=False)
 def load_level(args):
-    ok = _level_sub().load_level(args["level_path"])
+    path = args["level_path"]
+    if not unreal.EditorAssetLibrary.does_asset_exist(path):
+        ok = _level_sub().new_level(path)
+        if ok:
+            try:
+                _level_sub().save_current_level()
+            except Exception:
+                pass
+        return _envelope("load_level", bool(ok), {"level_path": path, "auto_created": True},
+                         warnings=["level did not exist on disk; created before loading"])
+    ok = _level_sub().load_level(path)
     return _envelope("load_level", bool(ok), {"level_path": args["level_path"]})
 
 

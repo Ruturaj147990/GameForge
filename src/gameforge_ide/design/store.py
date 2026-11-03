@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import stat
+import time
 from typing import Any, List, Optional
 
 from .gds import GameDesignSpec
@@ -38,15 +40,43 @@ def save(project_dir: Path, gds: GameDesignSpec) -> Path:
     json_text = gds.to_json()
     rev_file = history_dir / f"r{rev:04d}.gds.json"
 
-    # Write history revision file atomically
+    # Write history revision file atomically with retry loop for Windows locks
     tmp_rev = history_dir / f".tmp_{secrets.token_hex(4)}.json"
     tmp_rev.write_text(json_text, encoding="utf-8")
-    os.replace(tmp_rev, rev_file)
+    for attempt in range(5):
+        try:
+            os.replace(tmp_rev, rev_file)
+            break
+        except (PermissionError, OSError):
+            if rev_file.exists():
+                try:
+                    os.chmod(rev_file, stat.S_IWRITE | stat.S_IREAD)
+                except Exception:
+                    pass
+            if attempt == 4:
+                if tmp_rev.exists():
+                    tmp_rev.unlink(missing_ok=True)
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
-    # Write main game.gds.json atomically
+    # Write main game.gds.json atomically with retry loop for Windows locks
     tmp_main = target_dir / f".tmp_{secrets.token_hex(4)}.json"
     tmp_main.write_text(json_text, encoding="utf-8")
-    os.replace(tmp_main, main_file)
+    for attempt in range(5):
+        try:
+            os.replace(tmp_main, main_file)
+            break
+        except (PermissionError, OSError):
+            if main_file.exists():
+                try:
+                    os.chmod(main_file, stat.S_IWRITE | stat.S_IREAD)
+                except Exception:
+                    pass
+            if attempt == 4:
+                if tmp_main.exists():
+                    tmp_main.unlink(missing_ok=True)
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
     return main_file
 
@@ -56,21 +86,29 @@ def load(project_dir: Path) -> Optional[GameDesignSpec]:
     main_file = Path(project_dir) / DESIGN_DIR / "game.gds.json"
     if not main_file.is_file():
         return None
-    try:
-        text = main_file.read_text(encoding="utf-8")
-        return GameDesignSpec.model_validate_json(text)
-    except Exception:
-        return None
+    for attempt in range(3):
+        try:
+            text = main_file.read_text(encoding="utf-8")
+            return GameDesignSpec.model_validate_json(text)
+        except (PermissionError, OSError):
+            time.sleep(0.05 * (attempt + 1))
+        except Exception:
+            return None
+    return None
 
 
 def load_revision(project_dir: Path, rev: int) -> Optional[GameDesignSpec]:
     rev_file = Path(project_dir) / DESIGN_DIR / "history" / f"r{rev:04d}.gds.json"
     if not rev_file.is_file():
         return None
-    try:
-        return GameDesignSpec.model_validate_json(rev_file.read_text(encoding="utf-8"))
-    except Exception:
-        return None
+    for attempt in range(3):
+        try:
+            return GameDesignSpec.model_validate_json(rev_file.read_text(encoding="utf-8"))
+        except (PermissionError, OSError):
+            time.sleep(0.05 * (attempt + 1))
+        except Exception:
+            return None
+    return None
 
 
 def history(project_dir: Path) -> List[int]:

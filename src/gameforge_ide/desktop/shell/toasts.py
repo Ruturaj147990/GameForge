@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional
 
-from PySide6.QtCore import QPoint, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -135,7 +135,14 @@ class ToastOverlay(QWidget):
         self._layout.setAlignment(Qt.AlignBottom | Qt.AlignRight)
 
         self._toasts: List[ToastCard] = []
+        if parent:
+            parent.installEventFilter(self)
         self._reposition()
+
+    def eventFilter(self, watched, event) -> bool:
+        if watched == self.parentWidget() and event.type() in (QEvent.Resize, QEvent.Show):
+            self._reposition()
+        return super().eventFilter(watched, event)
 
     def show_toast(
         self,

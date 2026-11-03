@@ -75,3 +75,12 @@ class ProblemsTable(QTableWidget):
                 file_path, line = data
                 if file_path:
                     self.openLocationRequested.emit(file_path, line)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            index = self.currentIndex()
+            if index.isValid():
+                self._on_row_double_clicked(index)
+                event.accept()
+                return
+        super().keyPressEvent(event)

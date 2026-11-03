@@ -279,8 +279,10 @@ class GamePipeline:
             raise RuntimeError(f"No previous Forge run found in {pdir}")
 
         for rec in state.records.values():
-            if rec.status == StepStatus.SKIPPED:
+            if rec.status in (StepStatus.SKIPPED, StepStatus.FAILED, StepStatus.CANCELLED, StepStatus.BLOCKED):
                 rec.status = StepStatus.PENDING
+                rec.ok = None
+                rec.errors = []
 
         pipe = cls(projects_root=proot, engine_root=engine_root, on_event=on_event)
 
