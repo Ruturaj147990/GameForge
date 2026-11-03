@@ -239,7 +239,39 @@ def delete_project(
     except ImportError:
         pass
 
-    # 3. Windows read-only file handler for shutil.rmtree
+    # 3. Release any child process locks (e.g. terminal shell or subprocesses whose CWD is pdir)
+    try:
+        import psutil
+        curr_proc = psutil.Process()
+        norm_pdir = str(pdir.resolve()).lower()
+        for child in curr_proc.children(recursive=True):
+            try:
+                if not child.is_running():
+                    continue
+                child_cwd = str(Path(child.cwd()).resolve()).lower()
+                if child_cwd == norm_pdir or child_cwd.startswith(norm_pdir + os.sep) or child_cwd.startswith(norm_pdir + "/"):
+                    logger.info("Terminating child process %d (%s) holding lock on %s", child.pid, child.name(), pdir)
+                    child.terminate()
+                    child.wait(timeout=1.0)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.debug("psutil child process check skipped: %s", e)
+
+    # 4. Pre-emptively clear read-only attributes on all files and subdirectories
+    for root, dirs, files in os.walk(pdir):
+        for f in files:
+            try:
+                os.chmod(os.path.join(root, f), stat.S_IWRITE | stat.S_IREAD)
+            except Exception:
+                pass
+        for d in dirs:
+            try:
+                os.chmod(os.path.join(root, d), stat.S_IWRITE | stat.S_IREAD | stat.S_IEXEC)
+            except Exception:
+                pass
+
+    # 5. Windows read-only file handler for shutil.rmtree
     def _handle_rmtree_error(func, path, exc_info_or_exc):
         try:
             os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
@@ -247,19 +279,20 @@ def delete_project(
         except Exception as err:
             logger.warning("Could not force-remove %s: %s", path, err)
 
-    # Retry up to 3 times in case of transient locks
-    for attempt in range(3):
+    # Retry up to 5 times in case of transient locks or NTFS delete latency
+    for attempt in range(5):
         try:
             if sys.version_info >= (3, 12):
                 shutil.rmtree(pdir, onexc=_handle_rmtree_error)
             else:
                 shutil.rmtree(pdir, onerror=_handle_rmtree_error)
-            break
+            if not pdir.exists():
+                break
         except Exception as err:
-            if attempt == 2:
+            if attempt == 4:
                 logger.error("Failed to delete directory %s: %s", pdir, err)
                 raise
-            time.sleep(0.2)
+        time.sleep(0.1 * (attempt + 1))
 
     if pdir.exists():
         try:

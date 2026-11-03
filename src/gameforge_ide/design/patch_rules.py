@@ -95,17 +95,29 @@ def _find_entity_idx(gds: GameDesignSpec, term: str) -> Optional[int]:
 
 
 def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    # Skip if compound request
+    if any(k in req.lower() for k in (" and ", " with ", " also ", "plus")):
+        return None
+
     m = re.search(r"(?i)\b(faster|slower|speed\s+up|slow\s+down)\b\s+(?:the\s+)?([a-z0-9_]+)", req)
     if not m:
-        m = re.search(r"(?i)\bmake\s+(?:the\s+)?([a-z0-9_]+)\s+(faster|slower)\b", req)
+        m = re.search(r"(?i)\b(?:make|set|increase|decrease)\s+(?:the\s+)?([a-z0-9_]+)(?:'s)?\s+(?:move\s+)?speed\s+(?:to\s+)?(\d+(?:\.\d+)?)\b", req)
         if m:
-            direction = m.group(2).lower()
             target = m.group(1).lower()
+            explicit_val = float(m.group(2))
+            direction = "faster"
         else:
-            return None
+            m = re.search(r"(?i)\bmake\s+(?:the\s+)?([a-z0-9_]+)\s+(faster|slower)\b", req)
+            if m:
+                direction = m.group(2).lower()
+                target = m.group(1).lower()
+                explicit_val = None
+            else:
+                return None
     else:
         direction = m.group(1).lower()
         target = m.group(2).lower()
+        explicit_val = None
 
     idx = _find_entity_idx(gds, target)
     if idx is None:
@@ -117,9 +129,16 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     if not speed_prop:
         return None
 
-    factor = 1.25 if direction in ("faster", "speed up") else 0.8
     old_val = float(props[speed_prop])
-    new_val = round(old_val * factor, 1)
+    if explicit_val is not None:
+        new_val = explicit_val
+    else:
+        m_num = re.search(r"\bto\s+(\d+(?:\.\d+)?)\b", req, re.I)
+        if m_num:
+            new_val = float(m_num.group(1))
+        else:
+            factor = 1.25 if direction in ("faster", "speed up") else 0.8
+            new_val = round(old_val * factor, 1)
 
     ops = [
         {
@@ -133,12 +152,21 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
 
 def _match_count_adjustment(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    # Skip compound requests and property changes
+    if any(k in req.lower() for k in ("speed", "health", "hp", "damage", "jump", "gravity", "size", "time", "timer", "seconds", " and ", " with ", " also ", "plus")):
+        return None
+
     m = re.search(r"(?i)\b(more|fewer|less|increase|decrease)\b\s+(?:the\s+)?([a-z0-9_]+)", req)
     if not m:
         return None
 
     direction = m.group(1).lower()
     target = m.group(2).lower()
+
+    # Never adjust player count via generic count adjustment
+    if target in ("player", "character", "hero"):
+        return None
+
     idx = _find_entity_idx(gds, target)
     if idx is None:
         return None

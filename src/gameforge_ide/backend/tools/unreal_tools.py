@@ -138,6 +138,37 @@ class UnrealEngineTools:
 
         return errors
 
+    def _resolve_uproject_path(self, uproject_rel_path: str) -> Optional[Path]:
+        from ...core.projects import find_uproject, resolve_project_dir, list_all_project_dirs
+        raw = Path(uproject_rel_path)
+        if raw.is_file() and raw.suffix.lower() == ".uproject":
+            return raw.resolve()
+        if raw.is_dir():
+            found = find_uproject(raw)
+            if found and found.is_file():
+                return found.resolve()
+        ws_cand = (self.workspace_root / raw).resolve()
+        if ws_cand.is_file() and ws_cand.suffix.lower() == ".uproject":
+            return ws_cand
+        if ws_cand.is_dir():
+            found = find_uproject(ws_cand)
+            if found and found.is_file():
+                return found.resolve()
+        name = raw.stem if raw.suffix.lower() == ".uproject" else str(uproject_rel_path).strip()
+        pdir = resolve_project_dir(name, workspace_dir=self.workspace_root)
+        if pdir:
+            found = find_uproject(pdir)
+            if found and found.is_file():
+                return found.resolve()
+        all_dirs = list_all_project_dirs(self.workspace_root)
+        norm_name = name.lower()
+        for cand_name, cand_dir in all_dirs.items():
+            if cand_name.lower() == norm_name or cand_dir.name.lower() == norm_name:
+                found = find_uproject(cand_dir)
+                if found and found.is_file():
+                    return found.resolve()
+        return None
+
     def run_staged_build(
         self,
         uproject_rel_path: str,
@@ -147,8 +178,8 @@ class UnrealEngineTools:
         timeout_seconds: int = 180,
     ) -> Dict[str, Any]:
         """Executes a memory-safe staged build of an Unreal project target."""
-        uproject_path = (self.workspace_root / uproject_rel_path).resolve()
-        if not uproject_path.exists():
+        uproject_path = self._resolve_uproject_path(uproject_rel_path)
+        if not uproject_path or not uproject_path.exists():
             return {"status": "ERROR", "error": f"Project file not found: {uproject_rel_path}"}
 
         if not target_name:

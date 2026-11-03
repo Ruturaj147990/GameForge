@@ -409,6 +409,10 @@ class DeleteGameDialog(QDialog):
         prompt_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
         layout.addWidget(prompt_lbl)
 
+        # Input row with Fill name action button
+        input_layout = QHBoxLayout()
+        input_layout.setSpacing(tokens.SPACE_SM)
+
         self._confirm_input = QLineEdit(self)
         self._confirm_input.setObjectName("deleteConfirmInput")
         self._confirm_input.setAccessibleName("Type project name to confirm deletion")
@@ -425,7 +429,37 @@ class DeleteGameDialog(QDialog):
         )
         self._confirm_input.textChanged.connect(self._on_text_changed)
         self._confirm_input.returnPressed.connect(self._on_return_pressed)
-        layout.addWidget(self._confirm_input)
+        input_layout.addWidget(self._confirm_input, 1)
+
+        self._btn_fill = QPushButton("Fill name", self)
+        self._btn_fill.setObjectName("btnFillDeleteName")
+        self._btn_fill.setAccessibleName("Fill project name automatically")
+        self._btn_fill.setToolTip(f"Auto-fill '{game.name}'")
+        self._btn_fill.setStyleSheet(
+            f"QPushButton#{self._btn_fill.objectName()} {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  color: {tokens.ACCENT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_MD}px;"
+            f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"  font-weight: 600;"
+            f"}}"
+            f"QPushButton#{self._btn_fill.objectName()}:hover {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  border-color: {tokens.ACCENT_PRIMARY};"
+            f"}}"
+        )
+        self._btn_fill.clicked.connect(lambda: self._confirm_input.setText(game.name))
+        input_layout.addWidget(self._btn_fill)
+
+        layout.addLayout(input_layout)
+
+        # Dynamic status helper
+        self._status_lbl = QLabel("Type the name above or click 'Fill name' to confirm.", self)
+        self._status_lbl.setObjectName("lblDeleteStatus")
+        self._status_lbl.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+        layout.addWidget(self._status_lbl)
 
         # Button row
         btn_layout = QHBoxLayout()
@@ -467,13 +501,44 @@ class DeleteGameDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-    @Slot(str)
-    def _on_text_changed(self, text: str) -> None:
+    def _is_name_match(self, text: str) -> bool:
         clean = text.strip().lower()
+        if not clean:
+            return False
+
+        def simplify(s: str) -> str:
+            return "".join(c for c in s.lower() if c.isalnum())
+
         valid_names = {self.game.name.strip().lower()}
         if self.game.title:
             valid_names.add(self.game.title.strip().lower())
-        self._btn_delete.setEnabled(clean in valid_names and len(clean) > 0)
+
+        if clean in valid_names:
+            return True
+
+        clean_simple = simplify(clean)
+        for vn in valid_names:
+            if clean_simple == simplify(vn) and len(clean_simple) > 0:
+                return True
+
+        return False
+
+    @Slot(str)
+    def _on_text_changed(self, text: str) -> None:
+        matched = self._is_name_match(text)
+        self._btn_delete.setEnabled(matched)
+        if matched:
+            self._status_lbl.setText("✓ Project name confirmed. Click 'Delete permanently' or press Enter.")
+            self._status_lbl.setStyleSheet(
+                f"color: {tokens.ACCENT_SUCCESS}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;"
+            )
+        else:
+            self._status_lbl.setText("Type the project name above or click 'Fill name' to confirm.")
+            self._status_lbl.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._confirm_input.setFocus()
 
     @Slot()
     def _on_return_pressed(self) -> None:
@@ -489,6 +554,7 @@ class GamesView(QWidget):
     buildGameRequested = Signal(str)    # (project_name) -> Build view
     newProjectRequested = Signal(str, Path)   # (project_name, project_dir)
     openProjectRequested = Signal(Path)       # (project_dir)
+    beforeGameDeleted = Signal(str, Path)     # (project_name, project_dir)
     gameDeleted = Signal(str, Path)           # (project_name, project_dir)
     _delete_finished = Signal(bool, str, str, Path)  # (success, project_name, error_msg, project_dir)
 
@@ -818,6 +884,7 @@ class GamesView(QWidget):
 
         dlg = DeleteGameDialog(game, self)
         if dlg.exec() == QDialog.Accepted:
+            self.beforeGameDeleted.emit(game.name, game.project_dir)
             self._execute_delete(game.name, game.project_dir)
 
     def _execute_delete(self, project_name: str, project_dir: Optional[Path] = None) -> None:

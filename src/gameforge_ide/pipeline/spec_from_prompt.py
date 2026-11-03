@@ -156,10 +156,14 @@ def is_game_creation_request(prompt: str) -> bool:
         return True
     if _NOUN_GAME.match(text):
         return True
-    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|counterstrike|counter-strike|brawler|stealth\s+action|dungeon\s+crawler|survival\s+horror|arena\s+combat|card\s+battler|board\s+game)\b", text):
-        if _CREATE.search(text) or text.startswith(("a ", "an ", "the ", "deploy ", "construct ")) or ":" in text:
+    if ":" in text and _GAME_WORD.search(text):
+        return True
+    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|counterstrike|counter-strike|brawler|stealth|dungeon|survival|horror|arena|card\s+battler|board\s+game|tactical)\b", text):
+        if _CREATE.search(text) or _GAME_WORD.search(text) or text.startswith(("a ", "an ", "the ", "deploy ", "construct ")) or ":" in text:
             return True
     if not _CREATE.search(text):
+        if _GAME_WORD.search(text) and any(w in text for w in ("play", "player", "win", "lose", "level", "enemies", "goal")):
+            return True
         return False
     if any(k in text for r in RECIPES for k in r.keywords):
         return True

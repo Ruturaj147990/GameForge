@@ -174,3 +174,33 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Root Cause:** Rigid string check failed to append packaging keys under existing header.
 - **Fix:** Appended Oodle settings directly under the existing section header.
 
+### DEF-031: GamesView Delete Game Option Fails to Delete Project
+- **Symptom:** Clicking "Delete Game..." in the GamesView card context menu and confirming deletion closed the dialog but left the project folder completely intact on disk, with no visible error message.
+- **Root Cause:**
+  1. `delete_project(project_name)` in `projects_service.py` relied on `shutil.rmtree(pdir)`. On Windows, Git repositories create read-only files (e.g. `.git/objects/*` pack files and binaries). Standard `shutil.rmtree` raises `PermissionError: [WinError 5] Access is denied` on the first read-only file, aborting deletion.
+  2. `GamesView._execute_delete` only passed `game.name` (a string) without passing `game.project_dir`. For projects where folder name differed from display title (e.g. `CS_Regeneration` vs `CounterStrikeLite`), `resolve_project_dir("CounterStrikeLite")` returned `None`, failing silently.
+  3. `DeleteGameDialog` required typing exact `game.name`. If a user typed the display title seen on the card (`game.title`) or used different case, the delete button remained disabled.
+  4. In `GamesView._execute_delete`, if the background job failed or returned `False`, only a background `logger.error` was logged; the UI never displayed an error message or notified the user.
+  5. `MainWindow` was not connected to project deletion signals, leaving stale active project references and unrefreshed recent lists.
+- **Fix:**
+  1. Updated `delete_project` to accept `project_dir` directly and implemented a Windows read-only file handler (`stat.S_IWRITE` via `onexc`/`onerror`) with a retry loop.
+  2. Updated `delete_project` to purge deleted project entries from `runs_index.json` across candidate locations and remove SQLite index files (`<workspace>/.gameforge/index/<key>.db`).
+  3. Updated `DeleteGameDialog` to accept both `game.name` and `game.title` (case-insensitively) and added Return key submission.
+  4. Updated `GamesView` to pass `game.project_dir`, notify the user with `QMessageBox.warning` on failure, and emit `gameDeleted(name, pdir)`.
+  5. Wired `GamesView.gameDeleted` to `MainWindow._on_game_deleted` to deselect deleted projects, refresh `TopBar` and `HomeView`, and display an informative toast.
+  6. Added 6 comprehensive regression tests in `tests/unit/test_delete_game_regression.py`.
+
+### DEF-032: GamesView Delete Game Blocked by Active Terminal Shell Lock & Rigid Confirmation UI
+- **Symptom:** Selecting "Delete Game..." from the GamesView card context menu failed to delete the game when the project was currently active, or failed silently if the user could not satisfy the exact typed name barrier.
+- **Root Cause:**
+  1. **Active Terminal CWD Lock:** When a project was selected in GameForge Studio, `MainWindow._on_project_selected()` synchronized the workspace to `terminal_panel`, launching an interactive `powershell.exe` process whose Current Working Directory (`CWD`) was set to `game.project_dir`. On Windows, the operating system locks any folder that serves as the CWD of an active process (`[WinError 32] The process cannot access the file because it is being used by another process`). Because `MainWindow` only cleaned up *after* `_execute_delete` succeeded (`gameDeleted` signal), the directory remained locked during `shutil.rmtree()`, causing deletion to fail.
+  2. **Confirmation Barrier:** `DeleteGameDialog` kept the "Delete permanently" button disabled until the user typed the exact name into an empty input box. When project cards ellipsize the title or when title differs from directory name (e.g. `CS_Regeneration` vs `CounterStrikeLite`), typing what appeared on the card failed to enable the button. Users had no 1-click option to auto-fill the confirmation.
+- **Fix:**
+  1. Added `beforeGameDeleted = Signal(str, Path)` to `GamesView` and emitted it immediately upon confirmation, prior to submitting the delete job.
+  2. Implemented `MainWindow._on_before_game_deleted()` to stop the active terminal shell (`_stop_shell()`) and redirect all panel workspaces (`explorer`, `chat_panel`, `agent`, `tools`, `unreal_panel`, `design_panel`, `asset_panel`) back to `self._workspace`, completely releasing all directory and file locks before deletion begins.
+  3. Enhanced `delete_project()` in `projects_service.py` to use `psutil` to detect and terminate any lingering child processes with CWD or open files inside `project_dir`, pre-emptively remove read-only attributes on all files/subdirectories, and retry `shutil.rmtree()` up to 5 times with exponential backoff.
+  4. Enhanced `DeleteGameDialog` with a 1-click `[Fill name]` button, auto-focus on input, space/punctuation/hyphen-normalized matching (`counter strike`, `counter-strike`, `cs regeneration`), and dynamic visual validation text.
+  5. Added 3 new unit tests in `tests/unit/test_delete_game_regression.py`.
+
+
+

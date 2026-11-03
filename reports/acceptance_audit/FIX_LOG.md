@@ -289,3 +289,42 @@ This log details all modifications made to source files during the GameForge 1.0
   - Fixed CRLF vs LF line ending mismatch in `propose_edit`.
   - Fixed `RunState` error reporting in `game_tools.py`.
 - **Verification:** Evaluated 2,000-prompt chatbot corpus (`scripts/eval_chatbot_2000.py`): 95.25% overall intent accuracy (1,905/2,000 PASS), 0.00% hallucination rate.
+
+---
+
+### Fix 21: GamesView Delete Game Option Fix and Robust File Deletion (DEF-031)
+- **Files Modified:**
+  - `src/gameforge_ide/desktop/services/projects_service.py`
+  - `src/gameforge_ide/desktop/views/games_view.py`
+  - `src/gameforge_ide/desktop/main_window.py`
+- **Files Added:**
+  - `tests/unit/test_delete_game_regression.py`
+- **Changes:**
+  - Fixed Windows `PermissionError: [WinError 5]` in `delete_project()` by adding an `onexc`/`onerror` handler clearing `stat.S_IWRITE` on read-only files (e.g. `.git/objects/*` pack files and binaries) with a retry loop.
+  - Added support for explicit `project_dir` parameter in `delete_project()`, eliminating directory resolution failures when the folder name differs from the game title.
+  - Updated `DeleteGameDialog` to accept both `game.name` and `game.title` (case-insensitively) and added Return-key confirmation.
+  - Overhauled `GamesView._execute_delete` to pass authoritative `game.project_dir`, show a `QMessageBox.warning` on failure, and emit `gameDeleted(name, pdir)`.
+  - Wired `GamesView.gameDeleted` to `MainWindow._on_game_deleted` to deselect active project, refresh `TopBar` and `HomeView`, and display an informative toast.
+  - Purged deleted project runs from `runs_index.json` across all candidate paths and deleted SQLite index files.
+- **Verification:**
+  - `pytest tests/unit/test_delete_game_regression.py` PASS (6/6).
+  - Real-world on-disk project deletion test with read-only files PASS.
+  - All 827 unit tests and 45 protected oracles PASS.
+
+---
+
+### Fix 22: GamesView Active Terminal Shell Lock Release & Delete Confirmation Usability (DEF-032)
+- **Files Modified:**
+  - `src/gameforge_ide/desktop/views/games_view.py`
+  - `src/gameforge_ide/desktop/services/projects_service.py`
+  - `src/gameforge_ide/desktop/main_window.py`
+  - `tests/unit/test_delete_game_regression.py`
+- **Changes:**
+  - Added `beforeGameDeleted` signal to `GamesView` and connected it to `MainWindow._on_before_game_deleted`.
+  - In `_on_before_game_deleted`, stopped the terminal shell process (`_stop_shell()`) and redirected all panels back to the root workspace before deletion, releasing the OS directory lock (`[WinError 32]`).
+  - Added `psutil` child process termination in `delete_project()` to ensure any sub-processes holding project paths are cleaned up.
+  - Pre-emptively stripped read-only attributes on all files and subdirectories with a 5-attempt exponential backoff retry in `delete_project()`.
+  - Added a 1-click `[Fill name]` button in `DeleteGameDialog`, auto-focused the input, added space/hyphen/punctuation normalization, and added dynamic visual status confirmation.
+- **Verification:**
+  - `pytest tests/unit/test_delete_game_regression.py tests/unit/test_games_view.py` PASS (14/14).
+  - All 830 unit tests and 45 protected oracles PASS.

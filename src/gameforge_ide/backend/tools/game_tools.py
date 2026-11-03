@@ -467,12 +467,97 @@ class GameTools:
         return out
 
     # ── live editor ────────────────────────────────────────────────────────
-    def _link(self, uproject: str) -> LiveEditorLink:
-        key = str(Path(uproject).resolve()).lower()
+    def _resolve_uproject(self, uproject: Optional[Union[str, Path]] = None) -> Optional[Path]:
+        """Resolve a .uproject file path from a project name, directory, relative path, or .uproject file."""
+        from ...core.projects import find_uproject, resolve_project_dir, list_all_project_dirs
+
+        if not uproject:
+            found = find_uproject(self.workspace_root)
+            return found if found and found.is_file() else None
+
+        raw = Path(uproject)
+        # 1. Direct file path to .uproject
+        if raw.is_file() and raw.suffix.lower() == ".uproject":
+            return raw.resolve()
+
+        # 2. Direct folder path containing .uproject
+        if raw.is_dir():
+            found = find_uproject(raw)
+            if found and found.is_file():
+                return found.resolve()
+
+        # 3. Path relative to workspace_root
+        ws_cand = (self.workspace_root / raw).resolve()
+        if ws_cand.is_file() and ws_cand.suffix.lower() == ".uproject":
+            return ws_cand
+        if ws_cand.is_dir():
+            found = find_uproject(ws_cand)
+            if found and found.is_file():
+                return found.resolve()
+
+        # 4. Path relative to projects_root
+        pr_cand = (self.projects_root / raw).resolve()
+        if pr_cand.is_file() and pr_cand.suffix.lower() == ".uproject":
+            return pr_cand
+        if pr_cand.is_dir():
+            found = find_uproject(pr_cand)
+            if found and found.is_file():
+                return found.resolve()
+
+        # 5. Project name or stem under self.projects_root or self.workspace_root
+        name = raw.stem if raw.suffix.lower() == ".uproject" else str(uproject).strip()
+        if (self.projects_root / name).is_dir():
+            found = find_uproject(self.projects_root / name)
+            if found and found.is_file():
+                return found.resolve()
+
+        if (self.workspace_root / name).is_dir():
+            found = find_uproject(self.workspace_root / name)
+            if found and found.is_file():
+                return found.resolve()
+
+        # Check case-insensitively in self.projects_root
+        try:
+            for d in self.projects_root.iterdir():
+                if d.is_dir() and d.name.lower() == name.lower():
+                    found = find_uproject(d)
+                    if found and found.is_file():
+                        return found.resolve()
+        except OSError:
+            pass
+
+        # Check global candidate roots via resolve_project_dir
+        pdir = resolve_project_dir(name, workspace_dir=self.workspace_root)
+        if pdir:
+            found = find_uproject(pdir)
+            if found and found.is_file():
+                return found.resolve()
+
+        # 6. Search across all known projects across candidate roots
+        all_dirs = list_all_project_dirs(self.workspace_root)
+        norm_name = name.lower()
+        for cand_name, cand_dir in all_dirs.items():
+            if cand_name.lower() == norm_name or cand_dir.name.lower() == norm_name:
+                found = find_uproject(cand_dir)
+                if found and found.is_file():
+                    return found.resolve()
+
+        # 7. Fallback to workspace root if it contains a uproject
+        found = find_uproject(self.workspace_root)
+        if found and found.is_file():
+            return found.resolve()
+
+        return None
+
+    def _link(self, uproject: Union[str, Path]) -> LiveEditorLink:
+        up_path = self._resolve_uproject(uproject)
+        if not up_path or not up_path.is_file():
+            raise FileNotFoundError(f"uproject not found: {uproject}")
+        key = str(up_path.resolve()).lower()
         with self._lock:
             link = self._links.get(key)
             if link is None or not link.is_running():
-                link = LiveEditorLink(Path(uproject), self.engine_root)
+                link = LiveEditorLink(up_path, self.engine_root)
                 link.prepare_project()
                 link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"])
                 link.connect(discovery_timeout_s=900)
@@ -504,7 +589,8 @@ class GameTools:
                     return
 
     def unreal_editor(self, uproject: str, op: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        if not Path(uproject).is_file():
+        up_path = self._resolve_uproject(uproject)
+        if not up_path or not up_path.is_file():
             return {"status": "ERROR", "error": f"uproject not found: {uproject}"}
         if op not in AGENT_EDITOR_OPS:
             # Fail closed before touching the editor: unknown (e.g. model-invented), diagnostic or legacy op.
@@ -513,7 +599,7 @@ class GameTools:
         clean, errs = op_schemas.validate_args(op, args or {}, strict=True)
         if errs:  # fail before touching the editor (AD-14)
             return {"status": "ERROR", "error": "invalid args for op", "op": op, "details": errs}
-        res = self._link(uproject).call(op, clean)
+        res = self._link(up_path).call(op, clean)
         return {"status": "SUCCESS" if res.get("ok") else "ERROR", "result": res}
 
     def close_editors(self) -> List[Optional[int]]:
@@ -523,12 +609,17 @@ class GameTools:
         return codes
 
     def unreal_run_tests(self, uproject: str, test_filter: str = "GameForge") -> Dict[str, Any]:
-        r = UnrealToolchain(self.engine_root).run_automation_tests(Path(uproject), test_filter)
+        up_path = self._resolve_uproject(uproject)
+        if not up_path or not up_path.is_file():
+            return {"status": "ERROR", "error": f"uproject not found: {uproject}"}
+        r = UnrealToolchain(self.engine_root).run_automation_tests(up_path, test_filter)
         return {"status": "SUCCESS" if r.ok else "FAILED", **r.to_dict()}
 
     def unreal_package(self, uproject: str) -> Dict[str, Any]:
-        up = Path(uproject)
-        r = UnrealToolchain(self.engine_root).package(up, up.parent / "Packaged")
+        up_path = self._resolve_uproject(uproject)
+        if not up_path or not up_path.is_file():
+            return {"status": "ERROR", "error": f"uproject not found: {uproject}"}
+        r = UnrealToolchain(self.engine_root).package(up_path, up_path.parent / "Packaged")
         return {"status": "SUCCESS" if r.ok else "FAILED", **r.to_dict()}
 
     def play_game(self, exe: str) -> Dict[str, Any]:

@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import re
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
 
 from .gds import GameDesignSpec
+
+logger = logging.getLogger(__name__)
 
 PROTECTED_PATHS = {
     "/meta/gds_id",
@@ -163,6 +166,23 @@ def apply_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> GameDesignSpe
     data["meta"]["revision"] = curr_rev + 1
     data["meta"]["generator"] = "patch"
 
+    # Normalize dot-separated event strings if emitted with single underscore
+    def _normalize_events(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            res = {}
+            for k, v in obj.items():
+                if k == "event" and isinstance(v, str) and "." not in v and "_" in v:
+                    parts = v.split("_", 1)
+                    res[k] = f"{parts[0]}.{parts[1]}"
+                else:
+                    res[k] = _normalize_events(v)
+            return res
+        elif isinstance(obj, list):
+            return [_normalize_events(x) for x in obj]
+        return obj
+
+    data = _normalize_events(data)
+
     try:
         patched = GameDesignSpec.model_validate(data)
     except Exception as exc:
@@ -237,15 +257,80 @@ def propose_patch(
 ) -> ProposedPatch:
     """Propose a patch from a user request.
 
-    Tries deterministic rules first. If no rule matches and a model caller is
-    provided, delegates to the model with dry-run verification.
+    Prefers model intelligence for compound, detailed, or narrative requests when
+    a model caller is available, with dry-run verification and automatic repair.
+    Falls back to deterministic shortcut rules when no model caller is present or
+    for simple single-attribute phrasing.
     """
     from .patch_rules import match_deterministic_rule
 
-    # 1. Deterministic shortcuts
+    req_lower = request.lower().strip()
+    is_compound = any(k in req_lower for k in (" and ", " with ", " also ", ",", " plus ", ";"))
+    has_custom_numbers = bool(re.search(r"\b\d+\b", request))
+    word_count = len(re.findall(r"\b\w+\b", request))
+
+    # 1. Simple atomic shortcuts only when phrasing is short and non-compound
+    if not is_compound and word_count <= 6 and not has_custom_numbers:
+        shortcut = match_deterministic_rule(gds, request)
+        if shortcut is not None:
+            try:
+                apply_patch(gds, shortcut.ops)
+                return shortcut
+            except PatchError:
+                pass
+
+    # 2. Model delegation if available
+    if model_caller is not None:
+        trimmed_gds = _select_relevant_sections(gds, request)
+        guidelines = (
+            "GDS RFC 6902 Patch Rules:\n"
+            "- Valid lighting values: 'day', 'dusk', 'night', 'indoor' at path '/scene/levels/0/lighting'.\n"
+            "- Existing entity props: '/entities/<idx>/props/<prop_name>' (e.g. move_speed, player_max_health, attack_mode, enemies_per_wave).\n"
+            "- New entity schema at '/entities/-': {'entity_id': str, 'kind': 'hazard'|'pickup'|'enemy'|'guard'|'spawner'|'door'|'key'|'checkpoint'|'goal', 'module': 'kit.<kind>', 'count': int, 'level_id': 'level_1', 'placement': {'strategy': 'scatter'}, 'tags': ['GF_Owned'], 'props': {}}.\n"
+            "- Goals: '/goals/win' or '/goals/lose'. Valid condition objects: {'kind': 'timer', 'seconds': float}, {'kind': 'event', 'event': 'goal.reached'}, {'kind': 'count', 'event': 'pickup.collected', 'n': int}. Multiple alternative conditions can use {'kind': 'any', 'items': [...]}.\n"
+            "- Event names must be dot-separated (e.g. 'goal.reached', 'wave.cleared', 'pickup.collected', 'player.died').\n"
+            "- Rules: '/rules/-' with {'rule_id': str, 'when': {'event': str, 'source': None}, 'conditions': [], 'effects': [{'kind': 'add_stat'|'end_game', ...}], 'description': str}."
+        )
+        prompt = (
+            f"Current GDS section:\n{json.dumps(trimmed_gds, indent=2)}\n\n"
+            f"User request: {request}\n\n"
+            f"{guidelines}\n\n"
+            "Return JSON format matching the schema exactly:\n"
+            '{"ops": [{"op": "add|remove|replace", "path": "/...", "value": ...}], "summary": "...", "questions": []}'
+        )
+
+        resp_str = None
+        try:
+            resp_str = model_caller("design", prompt)
+            parsed = json.loads(resp_str)
+            ops = parsed.get("ops", [])
+            summary = parsed.get("summary", "")
+            questions = parsed.get("questions", [])
+            apply_patch(gds, ops)
+            return ProposedPatch(ops=ops, summary=summary, questions=questions, status="OK")
+        except Exception as exc:
+            # Attempt 2: One structured repair call with the verification error
+            if resp_str:
+                repair_prompt = (
+                    f"{prompt}\n\n"
+                    f"Previous invalid output:\n{resp_str[:1200]}\n\n"
+                    f"Patch verification error:\n{exc}\n\n"
+                    f"Please correct the RFC 6902 JSON patch ops and return valid JSON with ops and summary only."
+                )
+                try:
+                    repair_resp = model_caller("design", repair_prompt)
+                    parsed2 = json.loads(repair_resp)
+                    ops2 = parsed2.get("ops", [])
+                    summary2 = parsed2.get("summary", "")
+                    questions2 = parsed2.get("questions", [])
+                    apply_patch(gds, ops2)
+                    return ProposedPatch(ops=ops2, summary=summary2, questions=questions2, status="OK")
+                except Exception as exc2:
+                    logger.debug("Model patch repair failed: %s", exc2)
+
+    # 3. Fall back to deterministic rules if model was not available or failed
     shortcut = match_deterministic_rule(gds, request)
     if shortcut is not None:
-        # Dry-run apply
         try:
             apply_patch(gds, shortcut.ops)
             return shortcut
@@ -254,32 +339,6 @@ def propose_patch(
                 ops=[],
                 summary=f"Rule generated invalid patch: {pe}",
                 questions=["Please specify the exact parameters for this change."],
-                status="NEEDS_INPUT",
-            )
-
-    # 2. Model delegation if available
-    if model_caller is not None:
-        trimmed_gds = _select_relevant_sections(gds, request)
-        prompt = (
-            f"Current GDS section:\n{json.dumps(trimmed_gds, indent=2)}\n\n"
-            f"User request: {request}\n"
-            "Return JSON format:\n"
-            '{"ops": [{"op": "add|remove|replace", "path": "/...", "value": ...}], "summary": "...", "questions": []}'
-        )
-        try:
-            resp_str = model_caller("design", prompt)
-            parsed = json.loads(resp_str)
-            ops = parsed.get("ops", [])
-            summary = parsed.get("summary", "")
-            questions = parsed.get("questions", [])
-            # Dry-run apply
-            apply_patch(gds, ops)
-            return ProposedPatch(ops=ops, summary=summary, questions=questions, status="OK")
-        except Exception as exc:
-            return ProposedPatch(
-                ops=[],
-                summary=f"Model proposed patch failed verification: {exc}",
-                questions=["Could not apply the requested change safely. Please refine your request."],
                 status="NEEDS_INPUT",
             )
 

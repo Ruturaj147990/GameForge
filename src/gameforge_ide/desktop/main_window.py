@@ -1170,6 +1170,7 @@ class MainWindow(QMainWindow):
             view.buildGameRequested.connect(self._on_games_build_requested)
             view.newProjectRequested.connect(self._on_new_project_requested)
             view.openProjectRequested.connect(self._on_open_project_directory_requested)
+            view.beforeGameDeleted.connect(self._on_before_game_deleted)
             view.gameDeleted.connect(self._on_game_deleted)
             return view
 
@@ -1344,6 +1345,51 @@ class MainWindow(QMainWindow):
             hv = self._view_host.get_view_widget("home")
             if hv and hasattr(hv, "refresh_recent_games"):
                 hv.refresh_recent_games()
+
+    @Slot(str, Path)
+    def _on_before_game_deleted(self, project_name: str, project_dir: Path) -> None:
+        """Release all workspace locks, terminals, and panels before project deletion."""
+        norm_target = str(project_dir.resolve()).lower() if project_dir and project_dir != Path() else ""
+        norm_curr = str(self._current_project_dir.resolve()).lower() if self._current_project_dir else ""
+
+        if self._current_project == project_name or (norm_target and norm_curr == norm_target):
+            logger.info("Releasing active project '%s' and workspace locks before deletion...", project_name)
+            self._current_project = None
+            self._current_project_dir = None
+
+            # Stop or redirect terminal shell so child PowerShell releases the working directory lock
+            if hasattr(self, "_terminal") and self._terminal:
+                if hasattr(self._terminal, "_stop_shell"):
+                    self._terminal._stop_shell()
+                elif hasattr(self._terminal, "set_workspace"):
+                    self._terminal.set_workspace(self._workspace)
+
+            # Redirect panels back to main workspace
+            if hasattr(self, "_explorer") and self._explorer:
+                self._explorer.set_workspace(self._workspace, getattr(self, "_tools", None))
+            if hasattr(self, "_chat_panel") and self._chat_panel:
+                self._chat_panel.set_workspace(self._agent, self._workspace)
+            if hasattr(self, "_agent") and self._agent:
+                self._agent.set_workspace(self._workspace)
+            if hasattr(self, "_tools") and self._tools:
+                self._tools.set_workspace(self._workspace)
+            if hasattr(self, "_unreal_panel") and hasattr(self._unreal_panel, "set_workspace"):
+                self._unreal_panel.set_workspace(getattr(self, "_tools", None), self._workspace)
+            if hasattr(self, "_design_panel") and hasattr(self._design_panel, "set_workspace"):
+                self._design_panel.set_workspace(self._workspace)
+            if hasattr(self, "_asset_panel") and hasattr(self._asset_panel, "set_workspace"):
+                self._asset_panel.set_workspace(self._workspace)
+
+            # Clear project in Studio views
+            if hasattr(self, "_view_host"):
+                dv = self._view_host.get_view_widget("design")
+                if dv and hasattr(dv, "clear_project"):
+                    dv.clear_project()
+                bv = self._view_host.get_view_widget("build")
+                if bv and hasattr(bv, "clear_project"):
+                    bv.clear_project()
+
+            self.refresh_projects(None)
 
     @Slot(str, Path)
     def _on_game_deleted(self, project_name: str, project_dir: Path) -> None:

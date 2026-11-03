@@ -1,0 +1,300 @@
+{
+  "meta": {
+    "schema_version": "gds/1.1",
+    "gds_id": "gds_5646a2db695e",
+    "revision": 5,
+    "project_name": "CyberOrbit",
+    "title": "Cyber Orbit",
+    "source_prompt": "",
+    "generator": "patch",
+    "created_at": "2026-11-03T18:42:56+0530",
+    "updated_at": "2026-11-03T18:42:56+0530",
+    "project_dir": null
+  },
+  "overview": {
+    "genre": "top_down_shooter",
+    "pitch": "",
+    "camera": "top_down",
+    "players": 1,
+    "session_minutes": 10
+  },
+  "scene": {
+    "levels": [
+      {
+        "level_id": "level_1",
+        "layout": "arena",
+        "size_m": {
+          "x": 60.0,
+          "y": 60.0
+        },
+        "biome": "none",
+        "lighting": "night",
+        "seed": 2026,
+        "layout_params": {}
+      }
+    ],
+    "start_level": "level_1"
+  },
+  "entities": [
+    {
+      "entity_id": "player",
+      "kind": "player",
+      "module": "kit.player_character",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "slot",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": "player_start"
+      },
+      "props": {
+        "move_speed": 1250,
+        "player_max_health": 300
+      },
+      "tags": []
+    },
+    {
+      "entity_id": "spawner",
+      "kind": "spawner",
+      "module": "kit.spawner",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": []
+    },
+    {
+      "entity_id": "acid_hazard_1",
+      "kind": "hazard",
+      "module": "kit.hazard",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": [
+        "GF_Owned"
+      ]
+    },
+    {
+      "entity_id": "acid_hazard_2",
+      "kind": "hazard",
+      "module": "kit.hazard",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": [
+        "GF_Owned"
+      ]
+    },
+    {
+      "entity_id": "acid_hazard_3",
+      "kind": "hazard",
+      "module": "kit.hazard",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": [
+        "GF_Owned"
+      ]
+    },
+    {
+      "entity_id": "acid_hazard_4",
+      "kind": "hazard",
+      "module": "kit.hazard",
+      "level_id": "level_1",
+      "count": 1,
+      "placement": {
+        "strategy": "scatter",
+        "points_m": [],
+        "min_spacing_m": 2.0,
+        "slot": null
+      },
+      "props": {},
+      "tags": [
+        "GF_Owned"
+      ]
+    }
+  ],
+  "input": {
+    "actions": [
+      {
+        "action_id": "IA_Move",
+        "value_type": "axis2d",
+        "bindings": [
+          "W",
+          "S:negate",
+          "A:swizzle_negate",
+          "D:swizzle"
+        ],
+        "purpose": "Move forward/backward and left/right"
+      },
+      {
+        "action_id": "IA_Look",
+        "value_type": "axis2d",
+        "bindings": [
+          "Mouse2D"
+        ],
+        "purpose": "Camera orientation"
+      },
+      {
+        "action_id": "IA_Fire",
+        "value_type": "bool",
+        "bindings": [
+          "LeftMouseButton"
+        ],
+        "purpose": "Fire projectile"
+      }
+    ]
+  },
+  "rules": [],
+  "progression": {
+    "phases": [],
+    "difficulty": "normal",
+    "difficulty_params": {}
+  },
+  "goals": {
+    "win": [
+      {
+        "kind": "timer",
+        "seconds": 90.0
+      }
+    ],
+    "lose": [
+      {
+        "kind": "stat",
+        "stat": "player.health",
+        "op": "<=",
+        "value": 0.0
+      }
+    ],
+    "score": {
+      "stat": "game.score",
+      "show_in_hud": true
+    },
+    "sandbox": false
+  },
+  "feedback": [
+    {
+      "on": {
+        "event": "player.damaged",
+        "source": null
+      },
+      "vfx": "vfx.hit_flash",
+      "sfx": "sfx.impact",
+      "camera_shake": 0.0,
+      "ui_message": null
+    },
+    {
+      "on": {
+        "event": "game.won",
+        "source": null
+      },
+      "vfx": "vfx.confetti",
+      "sfx": "sfx.fanfare",
+      "camera_shake": 0.0,
+      "ui_message": null
+    }
+  ],
+  "ui": {
+    "hud": [
+      {
+        "element_id": "hud_health",
+        "kind": "bar",
+        "binds": "player.health",
+        "label": "Health"
+      },
+      {
+        "element_id": "hud_timer",
+        "kind": "timer",
+        "binds": "game.time_s",
+        "label": "Time"
+      },
+      {
+        "element_id": "hud_score",
+        "kind": "counter",
+        "binds": "game.score",
+        "label": "Score"
+      }
+    ],
+    "main_menu": true,
+    "pause_menu": true,
+    "end_screen": true
+  },
+  "art": {
+    "style": "stylized",
+    "palette": [
+      "#2E3440",
+      "#88C0D0",
+      "#EBCB8B",
+      "#BF616A"
+    ],
+    "material_theme": "default",
+    "character_source": "mannequin",
+    "placeholder_ok": false
+  },
+  "audio": {
+    "music_mood": "none",
+    "ambience": "none",
+    "sfx_set": "default"
+  },
+  "presentation": {
+    "intro": {
+      "enabled": false,
+      "seconds": 8.0,
+      "focus": [
+        "landmark",
+        "goal"
+      ]
+    }
+  },
+  "tech": {
+    "target_fps": 60,
+    "max_frame_ms": 16.6,
+    "max_package_mb": 400,
+    "multiplayer": "none"
+  },
+  "acceptance": {
+    "scenarios": [
+      {
+        "scenario_id": "win_1",
+        "derived_from": "goals.win[0]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "lose_1",
+        "derived_from": "goals.lose[0]",
+        "must_pass": true
+      },
+      {
+        "scenario_id": "smoke",
+        "derived_from": "smoke",
+        "must_pass": true
+      }
+    ],
+    "vision_rubric_min": 0.0,
+    "extra_checks": []
+  }
+}

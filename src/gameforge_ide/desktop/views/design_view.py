@@ -903,7 +903,7 @@ class DesignView(QWidget):
                 sys_prompt = (
                     "You are a GameForge GDS patch assistant. Generate RFC 6902 JSON patch ops "
                     "to update the GameDesignSpec based on the user request. "
-                    "Return a JSON object with keys: ops (array of {op, path, value}), summary (string), questions (array of string)."
+                    "Return a JSON object with keys: ops (array of {op, path, value}), summary (concise description under 15 words without preamble or reasoning), questions (array of string)."
                 )
                 raw_json = provider.complete_json(
                     model,
