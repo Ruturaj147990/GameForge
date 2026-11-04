@@ -145,6 +145,8 @@ class HostedSettingsDialog(QDialog):
             self._egress.allow(prof.provider_id)
         else:
             self._egress.revoke(prof.provider_id)
+        if self._key.text().strip() and self._current:
+            self._save_key()
         return True
 
     def _save_key(self) -> None:
@@ -165,6 +167,7 @@ class HostedSettingsDialog(QDialog):
         if self._commit_form():
             path = save_user_profiles(self._profiles)
             QMessageBox.information(self, "Hosted Models", f"Saved (no secrets) to {path}")
+            self.accept()
 
     def _test(self) -> None:
         if not self._commit_form():

@@ -10,6 +10,42 @@ from typing import Any, Dict, List, Optional
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
 
+BINARY_EXTENSIONS = (
+    ".pyc", ".pyd", ".dll", ".exe", ".pdb", ".bin", ".gguf",
+    ".uasset", ".umap", ".ubulk", ".uptnl",
+    ".png", ".jpg", ".jpeg", ".tga", ".exr", ".dds", ".hdr", ".ico",
+    ".wav", ".mp3", ".ogg", ".flac",
+    ".fbx", ".obj", ".blend", ".gltf", ".glb",
+    ".zip", ".tar", ".gz", ".7z", ".rar", ".pak", ".iso",
+)
+
+
+def _detect_file_encoding(file_path: Path) -> str:
+    """Detect file encoding from BOM or byte inspection: UTF-8-BOM, UTF-16-LE, UTF-16-BE, UTF-8."""
+    try:
+        with open(file_path, "rb") as handle:
+            header = handle.read(4)
+        if header.startswith(b"\xef\xbb\xbf"):
+            return "utf-8-sig"
+        if header.startswith(b"\xff\xfe"):
+            return "utf-16-le"
+        if header.startswith(b"\xfe\xff"):
+            return "utf-16-be"
+
+        with open(file_path, "rb") as handle:
+            chunk = handle.read(8192)
+        try:
+            chunk.decode("utf-8")
+            return "utf-8"
+        except UnicodeDecodeError:
+            try:
+                chunk.decode("utf-16")
+                return "utf-16"
+            except UnicodeDecodeError:
+                return "utf-8"
+    except Exception:
+        return "utf-8"
+
 
 def tool_list_dir(
     boundary: BoundaryManager,
@@ -18,7 +54,11 @@ def tool_list_dir(
     include_hidden: bool = False,
 ) -> Dict[str, Any]:
     """Lists files and directories under subpath with safety checks."""
-    target_dir = boundary.validate_path(subpath, allow_write=False)
+    try:
+        target_dir = boundary.validate_path(subpath, allow_write=False)
+    except (SecurityViolationError, ValueError) as exc:
+        return {"error": f"Security violation: {exc}"}
+
     if not target_dir.exists():
         clean_sub = subpath.replace("\\", "/").strip("/")
         parts = clean_sub.split("/")
@@ -36,7 +76,6 @@ def tool_list_dir(
         return {"error": f"Path is not a directory: {subpath}"}
 
     results = []
-    base_parts = len(target_dir.parts)
 
     for root, dirs, files in os.walk(target_dir):
         rel_root = Path(root).relative_to(target_dir)
@@ -78,7 +117,11 @@ def tool_read_file(
     end_line: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Reads line-numbered content from a file inside the workspace."""
-    target_file = boundary.validate_path(subpath, allow_write=False)
+    try:
+        target_file = boundary.validate_path(subpath, allow_write=False)
+    except (SecurityViolationError, ValueError) as exc:
+        return {"error": f"Security violation: {exc}"}
+
     if not target_file.exists():
         clean_sub = subpath.replace("\\", "/").strip("/")
         parts = clean_sub.split("/")
@@ -95,11 +138,12 @@ def tool_read_file(
     if not target_file.is_file():
         return {"error": f"Path is not a file: {subpath}"}
 
+    encoding = _detect_file_encoding(target_file)
     lines = None
     last_err = None
     for attempt in range(3):
         try:
-            with open(target_file, "r", encoding="utf-8", errors="replace") as f:
+            with open(target_file, "r", encoding=encoding, errors="replace") as f:
                 lines = f.readlines()
             last_err = None
             break
@@ -112,12 +156,22 @@ def tool_read_file(
 
     total_lines = len(lines)
     s_idx = max(0, start_line - 1)
-    e_idx = max(s_idx, min(total_lines, end_line)) if end_line is not None else total_lines
+    truncated = False
+
+    if end_line is not None:
+        e_idx = max(s_idx, min(total_lines, end_line))
+    else:
+        # Default safety ceiling for large files (> 2,000 lines) to prevent runaway memory
+        if total_lines - s_idx > 2000:
+            e_idx = min(total_lines, s_idx + 2000)
+            truncated = True
+        else:
+            e_idx = total_lines
 
     selected = lines[s_idx:e_idx]
     numbered = [f"{i + s_idx + 1:4d} | {line}" for i, line in enumerate(selected)]
 
-    return {
+    response: Dict[str, Any] = {
         "status": "SUCCESS",
         "file_path": str(target_file.relative_to(boundary.workspace_root).as_posix()),
         "total_lines": total_lines,
@@ -125,7 +179,16 @@ def tool_read_file(
         "end_line": e_idx,
         "content": "".join(selected),
         "formatted": "".join(numbered),
+        "encoding": encoding,
     }
+    if truncated:
+        response["truncated"] = True
+        response["message"] = (
+            f"Displaying lines {start_line} through {e_idx} of {total_lines}. "
+            "Specify start_line and end_line for subsequent ranges."
+        )
+
+    return response
 
 
 def tool_search_code(
@@ -137,7 +200,26 @@ def tool_search_code(
     max_results: int = 50,
 ) -> Dict[str, Any]:
     """Searches workspace files for code patterns."""
-    target_dir = boundary.validate_path(subpath, allow_write=False)
+    if not is_regex and (not query or not query.strip()):
+        return {"status": "SUCCESS", "matches": [], "truncated": False}
+
+    try:
+        target_dir = boundary.validate_path(subpath, allow_write=False)
+    except (SecurityViolationError, ValueError) as exc:
+        return {"error": f"Security violation: {exc}"}
+
+    if not target_dir.exists():
+        clean_sub = subpath.replace("\\", "/").strip("/")
+        parts = clean_sub.split("/")
+        if parts and parts[0].lower() == boundary.workspace_root.name.lower():
+            remapped = "/".join(parts[1:]) or "."
+            try:
+                remapped_dir = boundary.validate_path(remapped, allow_write=False)
+                if remapped_dir.exists():
+                    target_dir = remapped_dir
+            except Exception:
+                pass
+
     if not target_dir.exists():
         return {"error": f"Directory not found: {subpath}"}
 
@@ -159,17 +241,18 @@ def tool_search_code(
         ]
 
         for f in files:
-            if f.endswith((".pyc", ".pyd", ".dll", ".exe", ".pdb", ".bin", ".gguf")):
+            if f.endswith(BINARY_EXTENSIONS):
                 continue
             file_path = Path(root) / f
+            encoding = _detect_file_encoding(file_path)
             try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as handle:
+                with open(file_path, "r", encoding=encoding, errors="ignore") as handle:
                     for line_idx, line in enumerate(handle, 1):
                         if pattern.search(line):
                             matches.append({
                                 "file": str(file_path.relative_to(boundary.workspace_root).as_posix()),
                                 "line": line_idx,
-                                "content": line.strip(),
+                                "content": line.strip()[:500],
                             })
                             if len(matches) >= max_results:
                                 return {"status": "SUCCESS", "matches": matches, "truncated": True}

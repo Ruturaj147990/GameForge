@@ -217,40 +217,26 @@ class TaskPlan(BaseModel):
 
     def save(self, workspace_root: Path) -> Path:
         """Persists the plan atomically to <workspace>/.gameforge/plans/{plan_id}.json."""
-        plans_dir = Path(workspace_root) / ".gameforge" / "plans"
-        plans_dir.mkdir(parents=True, exist_ok=True)
-        target_path = plans_dir / f"{self.plan_id}.json"
-        temp_path = target_path.with_suffix(".tmp")
-        self.updated_at = time.time()
-        temp_path.write_text(self.model_dump_json(indent=2), encoding="utf-8")
-        os.replace(temp_path, target_path)
-        return target_path
+        from ...storage.task_store import TaskStore
+        return TaskStore(workspace_root).save_plan(self)
 
     @classmethod
     def load(cls, file_path: Path) -> TaskPlan:
-        """Loads a persisted TaskPlan from disk."""
-        data = json.loads(Path(file_path).read_text(encoding="utf-8"))
+        """Loads a persisted TaskPlan from disk with automatic backup recovery."""
+        from ...storage.atomic import safe_read_json
+        data, _ = safe_read_json(file_path, fallback_backup=True)
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid or corrupted task plan file: {file_path}")
         return cls(**data)
 
     @classmethod
     def load_by_id(cls, workspace_root: Path, plan_id: str) -> Optional[TaskPlan]:
         """Loads a plan by ID from <workspace>/.gameforge/plans/{plan_id}.json."""
-        target = Path(workspace_root) / ".gameforge" / "plans" / f"{plan_id}.json"
-        if not target.is_file():
-            return None
-        return cls.load(target)
+        from ...storage.task_store import TaskStore
+        return TaskStore(workspace_root).load_plan(plan_id)
 
     @classmethod
     def list_plans(cls, workspace_root: Path) -> List[TaskPlan]:
         """Returns all persisted plans in descending order of update time."""
-        plans_dir = Path(workspace_root) / ".gameforge" / "plans"
-        if not plans_dir.is_dir():
-            return []
-        plans: List[TaskPlan] = []
-        for p in plans_dir.glob("plan_*.json"):
-            try:
-                plans.append(cls.load(p))
-            except Exception:
-                continue
-        plans.sort(key=lambda x: x.updated_at, reverse=True)
-        return plans
+        from ...storage.task_store import TaskStore
+        return TaskStore(workspace_root).list_plans()

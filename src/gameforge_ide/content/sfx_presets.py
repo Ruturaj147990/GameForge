@@ -58,8 +58,9 @@ def synthesize_sfx_preset(
     out_path: Path,
     style: str = "default",
     seed: int = 42,
+    sample_rate: int = 44100,
 ) -> Path:
-    """Synthesize a named SFX preset to a 16-bit PCM WAV file."""
+    """Synthesize a named SFX preset to a 16-bit PCM WAV file with sample-rate support."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sfx_set = SFX_SETS.get(style, SFX_SETS["default"])
@@ -73,5 +74,34 @@ def synthesize_sfx_preset(
         gain=preset.gain,
     )
     samples = synthesize(spec)
-    write_wav(out_path, samples)
+
+    # If requested sample rate differs from synth native 44.1kHz, resample cleanly
+    if sample_rate != 44100 and len(samples) > 1:
+        import numpy as np
+        num_target = int(len(samples) * sample_rate / 44100)
+        orig_indices = np.linspace(0.0, 1.0, len(samples), endpoint=False)
+        target_indices = np.linspace(0.0, 1.0, num_target, endpoint=False)
+        samples = np.interp(target_indices, orig_indices, samples)
+
+    import numpy as np
+    import wave
+    pcm = np.clip(np.rint(samples * 32767.0), -32768, 32767).astype("<i2")
+    with wave.open(str(out_path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(pcm.tobytes())
+
     return out_path
+
+
+def get_sfx_preset(preset_name: str, style: str = "default") -> Optional[SFXPreset]:
+    """Retrieve an SFXPreset definition by name and style."""
+    sfx_set = SFX_SETS.get(style, SFX_SETS["default"])
+    return sfx_set.get(preset_name)
+
+
+def list_sfx_presets(style: str = "default") -> List[str]:
+    """List all available preset names for a given style."""
+    sfx_set = SFX_SETS.get(style, SFX_SETS["default"])
+    return list(sfx_set.keys())

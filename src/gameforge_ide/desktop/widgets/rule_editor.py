@@ -161,6 +161,24 @@ class RuleEditorDialog(QDialog):
         effect_layout.addWidget(self._delta_spin)
         layout.addLayout(effect_layout)
 
+        # Restore existing effect state if rule provided
+        if rule and rule.effects:
+            eff0 = rule.effects[0]
+            if isinstance(eff0, EndGame) or getattr(eff0, "kind", "") == "end_game":
+                outcome = getattr(eff0, "outcome", "win")
+                self._effect_type_combo.setCurrentText("End Game (Win)" if outcome == "win" else "End Game (Lose)")
+                self._delta_spin.setVisible(False)
+            elif isinstance(eff0, AddStat) or getattr(eff0, "kind", "") == "add_stat":
+                self._effect_type_combo.setCurrentText("Add Score / Stat")
+                self._delta_spin.setValue(int(getattr(eff0, "delta", 10)))
+                self._delta_spin.setVisible(True)
+        else:
+            self._delta_spin.setVisible(True)
+
+        self._effect_type_combo.currentTextChanged.connect(
+            lambda t: self._delta_spin.setVisible(t == "Add Score / Stat")
+        )
+
         # Description
         desc_layout = QHBoxLayout()
         lbl_desc = QLabel("Description:", self)
@@ -226,17 +244,18 @@ class RuleEditorDialog(QDialog):
 
         eff_type = self._effect_type_combo.currentText()
         if eff_type == "End Game (Win)":
-            effect = EndGame(kind="end_game", outcome="win", reason="Goal achieved")
+            effect = EndGame(kind="end_game", outcome="win")
         elif eff_type == "End Game (Lose)":
-            effect = EndGame(kind="end_game", outcome="lose", reason="Game over")
+            effect = EndGame(kind="end_game", outcome="lose")
         else:
             effect = AddStat(kind="add_stat", stat="game.score", delta=float(self._delta_spin.value()))
 
         desc = self._desc_input.text().strip()
+        existing_conds = self._rule.conditions if self._rule and hasattr(self._rule, "conditions") else []
         return RuleSpec(
             rule_id=rid,
             when=EventRef(event=ev, source=src),
-            conditions=[],
+            conditions=existing_conds,
             effects=[effect],
             description=desc,
         )

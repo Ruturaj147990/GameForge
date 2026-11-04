@@ -1218,18 +1218,47 @@ class ChatPanel(QWidget):
         except Exception as exc:
             self._add_error_message(f"could not launch game: {exc}")
 
+    @staticmethod
+    def _is_raw_tool_json(text: str) -> bool:
+        t = text.strip()
+        if not t:
+            return False
+        if t.startswith("```json") and t.endswith("```"):
+            t = t[7:-3].strip()
+        elif t.startswith("```") and t.endswith("```"):
+            t = t[3:-3].strip()
+        if t.startswith("{") and (t.endswith("}") or '"tool"' in t or '"tool_name"' in t):
+            for key in ('"tool"', '"tool_name"', '"function"', '"name"'):
+                if key in t:
+                    return True
+        if t.startswith("<tool_call>") or t.startswith("[TOOL_CALL]"):
+            return True
+        return False
+
+    def _remove_bubble(self, bubble: _MessageBubble) -> None:
+        if bubble is not None:
+            self._msg_layout.removeWidget(bubble)
+            bubble.setVisible(False)
+            bubble.deleteLater()
+
     @Slot(str, dict)
     def _on_status(self, status: str, _meta: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
         if status == "WAITING_APPROVAL" and isinstance(_meta.get("approval"), dict):
-            if self._active_bubble and self._active_bubble.has_tokens():
-                self._active_bubble.finalise()
+            if self._active_bubble:
+                if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                    self._remove_bubble(self._active_bubble)
+                else:
+                    self._active_bubble.finalise()
                 self._active_bubble = None
             self._add_approval_card(_meta["approval"])
         elif status == "READY" and isinstance(_meta.get("card"), dict):
-            if self._active_bubble and self._active_bubble.has_tokens():
-                self._active_bubble.finalise()
+            if self._active_bubble:
+                if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                    self._remove_bubble(self._active_bubble)
+                else:
+                    self._active_bubble.finalise()
                 self._active_bubble = None
             if _meta["card"].get("type") == "open_design":
                 self._add_open_design_card(_meta["card"])
@@ -1248,8 +1277,11 @@ class ChatPanel(QWidget):
     def _on_tool_called(self, tool_name: str, args: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
-        if self._active_bubble and self._active_bubble.has_tokens():
-            self._active_bubble.finalise()
+        if self._active_bubble:
+            if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                self._remove_bubble(self._active_bubble)
+            else:
+                self._active_bubble.finalise()
             self._active_bubble = None
         summary = f"🔧 **Tool Call:** `{tool_name}`"
         if args:
@@ -1314,13 +1346,16 @@ class ChatPanel(QWidget):
         if self._active_bubble:
             if not self._active_bubble.has_tokens() and _full_text and not self._tokens_streamed_in_turn:
                 clean_text = _full_text.strip()
-                if not (clean_text.startswith('{"tool"') or clean_text.startswith('```json\n{"tool"')):
+                if not self._is_raw_tool_json(clean_text):
                     self._active_bubble.append_token(_full_text)
-            self._active_bubble.finalise()
+            if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                self._remove_bubble(self._active_bubble)
+            else:
+                self._active_bubble.finalise()
             self._active_bubble = None
         elif _full_text and not self._tokens_streamed_in_turn:
             clean_text = _full_text.strip()
-            if not (clean_text.startswith('{"tool"') or clean_text.startswith('```json\n{"tool"')):
+            if not self._is_raw_tool_json(clean_text):
                 b = self._add_bubble("assistant", _full_text)
                 b.finalise()
         self._tokens_streamed_in_turn = False

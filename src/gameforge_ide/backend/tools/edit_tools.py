@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import difflib
 import hashlib
+import itertools
 import json
 import os
 import stat
@@ -15,6 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
+from ...storage.atomic import atomic_write, atomic_write_json
+from ...storage.diff_store import DiffStore
 
 
 class EditTools:
@@ -24,87 +27,57 @@ class EditTools:
         self.boundary = boundary
         self.pending_diffs: Dict[str, Dict[str, Any]] = {}
         self.applied_diffs: Dict[str, Dict[str, Any]] = {}
-        self.diffs_dir = self.boundary.workspace_root / ".gameforge" / "diffs"
-        try:
-            self.diffs_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
+        self.diff_store = DiffStore(self.boundary.workspace_root)
+        self.diffs_dir = self.diff_store.diffs_dir
 
     def _save_diff_to_disk(self, rec: Dict[str, Any]) -> None:
         try:
-            self.diffs_dir.mkdir(parents=True, exist_ok=True)
-            diff_id = rec["diff_id"]
-            data = {
-                "diff_id": diff_id,
-                "file_path": rec.get("file_path", ""),
-                "target_file": rec.get("target_file", ""),
-                "original_text": rec.get("original_text", ""),
-                "new_text": rec.get("new_text", ""),
-                "original_bytes_b64": base64.b64encode(rec.get("original_bytes", b"")).decode("ascii"),
-                "new_bytes_b64": base64.b64encode(rec.get("new_bytes", b"")).decode("ascii"),
-                "original_sha256": rec.get("original_sha256", ""),
-                "new_sha256": rec.get("new_sha256", ""),
-                "diff_patch": rec.get("diff_patch", ""),
-                "status": rec.get("status", "PENDING_APPROVAL"),
-            }
-            target_path = self.diffs_dir / f"{diff_id}.json"
-            target_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            self.diff_store.save_diff(rec["diff_id"], rec)
         except Exception:
             pass
 
     def _load_diff_from_disk(self, diff_id: str) -> Optional[Dict[str, Any]]:
-        target_path = self.diffs_dir / f"{diff_id}.json"
-        if not target_path.exists():
-            return None
-        try:
-            data = json.loads(target_path.read_text(encoding="utf-8"))
-            data["original_bytes"] = base64.b64decode(data.get("original_bytes_b64", ""))
-            data["new_bytes"] = base64.b64decode(data.get("new_bytes_b64", ""))
-            return data
-        except Exception:
-            return None
+        data = self.diff_store.load_diff(diff_id)
+        if data:
+            if not data.get("target_file") and data.get("file_path"):
+                data["target_file"] = str(self.boundary.workspace_root / data["file_path"])
+            if not data.get("diff_patch") and data.get("diff_text"):
+                data["diff_patch"] = data["diff_text"]
+            if "file_existed" not in data:
+                data["file_existed"] = bool(data.get("original_bytes"))
+            if "encoding" not in data:
+                data["encoding"] = "utf-8"
+        return data
 
     @staticmethod
     def _digest(content: bytes) -> str:
         return hashlib.sha256(content).hexdigest()
 
     @staticmethod
+    def _detect_encoding(data: bytes) -> str:
+        """Detect encoding from byte BOM or content: UTF-8-BOM, UTF-16-LE, UTF-16-BE, UTF-8."""
+        if not data:
+            return "utf-8"
+        if data.startswith(b"\xef\xbb\xbf"):
+            return "utf-8-sig"
+        if data.startswith(b"\xff\xfe"):
+            return "utf-16-le"
+        if data.startswith(b"\xfe\xff"):
+            return "utf-16-be"
+        try:
+            data.decode("utf-8")
+            return "utf-8"
+        except UnicodeDecodeError:
+            try:
+                data.decode("utf-16")
+                return "utf-16"
+            except UnicodeDecodeError:
+                return "utf-8"
+
+    @staticmethod
     def _atomic_write(target_file: Path, content: bytes) -> None:
         """Write content atomically so an interrupted apply cannot truncate a file."""
-        target_file.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{target_file.name}.", suffix=".tmp", dir=str(target_file.parent)
-        )
-        try:
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(content)
-                handle.flush()
-                os.fsync(handle.fileno())
-
-            last_exc: Optional[Exception] = None
-            for attempt in range(5):
-                try:
-                    os.replace(temporary_name, target_file)
-                    last_exc = None
-                    break
-                except (PermissionError, OSError) as exc:
-                    last_exc = exc
-                    if target_file.exists():
-                        try:
-                            os.chmod(target_file, stat.S_IWRITE | stat.S_IREAD)
-                        except Exception:
-                            pass
-                    time.sleep(0.05 * (attempt + 1))
-
-            if last_exc is not None:
-                raise last_exc
-        except Exception:
-            try:
-                os.unlink(temporary_name)
-            except FileNotFoundError:
-                pass
-            raise
-
+        atomic_write(target_path=target_file, content=content)
 
     def propose_edit(
         self,
@@ -115,7 +88,35 @@ class EditTools:
     ) -> Dict[str, Any]:
         """Proposes a code change, verifies path, and generates a unified diff for review."""
         effective_path = subpath or file_path
-        target_file = self.boundary.validate_path(effective_path, allow_write=True)
+
+        # Strip accidental markdown code block fences if replacement_content is wrapped in ```
+        if replacement_content:
+            stripped_rc = replacement_content.strip()
+            if stripped_rc.startswith("```") and stripped_rc.endswith("```"):
+                rc_lines = stripped_rc.splitlines()
+                if len(rc_lines) >= 2 and rc_lines[0].startswith("```") and rc_lines[-1].strip() == "```":
+                    replacement_content = "\n".join(rc_lines[1:-1])
+                    if replacement_content and not replacement_content.endswith("\n"):
+                        replacement_content += "\n"
+        try:
+            target_file = self.boundary.validate_path(effective_path, allow_write=True)
+        except (SecurityViolationError, ValueError) as exc:
+            return {
+                "status": "BLOCKED",
+                "error": f"Security boundary violation: {exc}",
+            }
+
+        if not target_file.exists():
+            clean_sub = effective_path.replace("\\", "/").strip("/")
+            parts = clean_sub.split("/")
+            if parts and parts[0].lower() == self.boundary.workspace_root.name.lower():
+                remapped = "/".join(parts[1:])
+                try:
+                    remapped_file = self.boundary.validate_path(remapped, allow_write=True)
+                    if remapped_file.exists():
+                        target_file = remapped_file
+                except Exception:
+                    pass
 
         if target_file.exists() and target_file.is_dir():
             return {
@@ -123,8 +124,10 @@ class EditTools:
                 "error": f"Target path is a directory, not a file: {effective_path}",
             }
 
+        file_existed = target_file.is_file()
         original_bytes = target_file.read_bytes() if target_file.exists() else b""
-        original_text = original_bytes.decode("utf-8", errors="replace")
+        encoding = self._detect_encoding(original_bytes) if original_bytes else "utf-8"
+        original_text = original_bytes.decode(encoding, errors="replace") if original_bytes else ""
 
         if original_text and target_content and target_content == replacement_content:
             return {
@@ -139,27 +142,52 @@ class EditTools:
                 "error": f"target_content cannot be empty when editing existing file: {subpath}. Provide the exact code block to replace.",
             }
 
-        if original_text and target_content not in original_text:
-            norm_orig = original_text.replace("\r\n", "\n")
-            norm_target = target_content.replace("\r\n", "\n")
-            if norm_target in norm_orig:
-                if "\r\n" in original_text:
-                    target_content = norm_target.replace("\n", "\r\n")
-                    replacement_content = replacement_content.replace("\r\n", "\n").replace("\n", "\r\n")
-                else:
-                    target_content = norm_target
-                    replacement_content = replacement_content.replace("\r\n", "\n")
+        new_text = original_text
+        if original_text:
+            if target_content in original_text:
+                new_text = original_text.replace(target_content, replacement_content, 1)
             else:
+                # Robust normalized matching across CRLF and LF line endings
+                norm_orig = original_text.replace("\r\n", "\n")
+                norm_target = target_content.replace("\r\n", "\n")
+                norm_repl = replacement_content.replace("\r\n", "\n")
+
+                if norm_target in norm_orig:
+                    pos = norm_orig.find(norm_target)
+                    end_pos = pos + len(norm_target)
+
+                    orig_lines = original_text.splitlines(keepends=True)
+                    cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
+
+                    line_idx = norm_orig[:pos].count("\n")
+                    last_nl = norm_orig[:pos].rfind("\n")
+                    col_idx = pos - (last_nl + 1) if last_nl != -1 else pos
+                    o_start = cum_lengths[line_idx] + col_idx if line_idx < len(cum_lengths) else len(original_text)
+
+                    end_line_idx = norm_orig[:end_pos].count("\n")
+                    end_last_nl = norm_orig[:end_pos].rfind("\n")
+                    end_col_idx = end_pos - (end_last_nl + 1) if end_last_nl != -1 else end_pos
+                    o_end = cum_lengths[end_line_idx] + end_col_idx if end_line_idx < len(cum_lengths) else len(original_text)
+
+                    matched_block = original_text[o_start:o_end]
+                    line_ending = "\r\n" if "\r\n" in matched_block else ("\r\n" if "\r\n" in original_text else "\n")
+                    adjusted_repl = norm_repl.replace("\n", line_ending)
+                    new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
+                else:
+                    return {
+                        "status": "ERROR",
+                        "error": f"Target content block not found in file: {subpath}",
+                    }
+
+            if new_text == original_text:
                 return {
                     "status": "ERROR",
-                    "error": f"Target content block not found in file: {subpath}",
+                    "error": f"Failed to apply replacement in file: {effective_path}. Replacement did not produce any changes.",
                 }
-
-        if original_text:
-            new_text = original_text.replace(target_content, replacement_content, 1)
         else:
             new_text = replacement_content
-        new_bytes = new_text.encode("utf-8")
+
+        new_bytes = new_text.encode(encoding)
 
         # Generate unified diff
         orig_lines = original_text.splitlines(keepends=True)
@@ -180,6 +208,9 @@ class EditTools:
             "diff_id": diff_id,
             "file_path": rel_path,
             "target_file": str(target_file),
+            "file_existed": file_existed,
+            "target_content": target_content,
+            "replacement_content": replacement_content,
             "original_text": original_text,
             "new_text": new_text,
             "original_bytes": original_bytes,
@@ -187,6 +218,8 @@ class EditTools:
             "original_sha256": self._digest(original_bytes),
             "new_sha256": self._digest(new_bytes),
             "diff_patch": diff_patch,
+            "diff_text": diff_patch,
+            "encoding": encoding,
             "status": "PENDING_APPROVAL",
         }
         self.pending_diffs[diff_id] = diff_record
@@ -213,7 +246,22 @@ class EditTools:
         target_file = Path(rec["target_file"])
 
         # Re-validate security boundary
-        self.boundary.validate_path(target_file, allow_write=True)
+        try:
+            self.boundary.validate_path(target_file, allow_write=True)
+        except (SecurityViolationError, ValueError) as exc:
+            return {
+                "status": "BLOCKED",
+                "error": f"Security boundary violation for {rec.get('file_path', '')}: {exc}",
+            }
+
+        # Check for external file creation or deletion
+        if rec.get("file_existed") is not None and rec["file_existed"] != target_file.is_file():
+            return {
+                "status": "STALE",
+                "diff_id": diff_id,
+                "file_path": rec["file_path"],
+                "error": "File existence state changed after this diff was proposed; review a newly generated diff before applying.",
+            }
 
         current_bytes = target_file.read_bytes() if target_file.exists() else b""
         if self._digest(current_bytes) != rec["original_sha256"]:
@@ -271,7 +319,13 @@ class EditTools:
 
         rec = self.applied_diffs[diff_id]
         target_file = Path(rec["target_file"])
-        self.boundary.validate_path(target_file, allow_write=True)
+        try:
+            self.boundary.validate_path(target_file, allow_write=True)
+        except (SecurityViolationError, ValueError) as exc:
+            return {
+                "status": "BLOCKED",
+                "error": f"Security boundary violation for {rec.get('file_path', '')}: {exc}",
+            }
 
         current_bytes = target_file.read_bytes() if target_file.exists() else b""
         if self._digest(current_bytes) != rec["new_sha256"]:
@@ -283,10 +337,43 @@ class EditTools:
             }
 
         try:
-            if rec["original_bytes"] == b"":
-                # File was newly created, delete it
+            file_existed = rec.get("file_existed")
+            if file_existed is None:
+                file_existed = True if rec.get("original_bytes") else False
+
+            if not file_existed:
+                # File was newly created by this edit, delete it with read-only clearance & retry
                 if target_file.exists():
-                    target_file.unlink()
+                    try:
+                        os.chmod(target_file, stat.S_IWRITE | stat.S_IREAD)
+                    except Exception:
+                        pass
+                    deleted = False
+                    for attempt in range(5):
+                        try:
+                            target_file.unlink()
+                            deleted = True
+                            break
+                        except (PermissionError, OSError):
+                            time.sleep(0.05 * (2 ** attempt))
+                            try:
+                                os.chmod(target_file, stat.S_IWRITE | stat.S_IREAD)
+                            except Exception:
+                                pass
+                    if not deleted and target_file.exists():
+                        target_file.unlink()
+
+                    # Clean up empty parent directories up to workspace root
+                    try:
+                        parent = target_file.parent
+                        while parent != self.boundary.workspace_root and parent.is_relative_to(self.boundary.workspace_root):
+                            if not any(parent.iterdir()):
+                                parent.rmdir()
+                                parent = parent.parent
+                            else:
+                                break
+                    except Exception:
+                        pass
             else:
                 self._atomic_write(target_file, rec["original_bytes"])
 
@@ -308,13 +395,14 @@ class EditTools:
         Performs pre-validation on all diffs and hashes first; if any diff is stale
         or invalid, the transaction aborts with zero filesystem modifications.
         If a write failure occurs mid-batch, previously applied diffs in the batch
-        are rolled back automatically to preserve workspace consistency.
+        are rolled back automatically and restored to PENDING_APPROVAL.
         """
         if not diff_ids:
             return {"status": "NOOP", "applied_diff_ids": [], "files": []}
 
         # Phase 1: Pre-validation (dry run)
         validated_records: List[Dict[str, Any]] = []
+        seen_targets: set[str] = set()
         for diff_id in diff_ids:
             if diff_id not in self.pending_diffs:
                 loaded = self._load_diff_from_disk(diff_id)
@@ -331,11 +419,28 @@ class EditTools:
             target_file = Path(rec["target_file"])
             try:
                 self.boundary.validate_path(target_file, allow_write=True)
-            except SecurityViolationError as e:
+            except (SecurityViolationError, ValueError) as e:
                 return {
                     "status": "BLOCKED",
                     "error": f"Security boundary violation for {rec['file_path']}: {e}",
                     "failed_diff_id": diff_id,
+                }
+
+            norm_target = str(target_file.resolve()).lower()
+            if norm_target in seen_targets:
+                return {
+                    "status": "ERROR",
+                    "error": f"Duplicate target file in batch: '{rec['file_path']}' is targeted by multiple diffs. Consolidate changes into a single diff per file.",
+                    "failed_diff_id": diff_id,
+                }
+            seen_targets.add(norm_target)
+
+            if rec.get("file_existed") is not None and rec["file_existed"] != target_file.is_file():
+                return {
+                    "status": "STALE",
+                    "failed_diff_id": diff_id,
+                    "file_path": rec["file_path"],
+                    "error": f"File {rec['file_path']} existence changed after diff was proposed; batch aborted.",
                 }
 
             current_bytes = target_file.read_bytes() if target_file.exists() else b""
@@ -378,12 +483,19 @@ class EditTools:
                 rb_res = self.rollback_diff(rb_id)
                 if rb_res.get("status") != "SUCCESS":
                     rollback_errors.append(f"{rb_id}: {rb_res.get('error')}")
+                else:
+                    # Restore diff record back to PENDING_APPROVAL so transaction state is atomic
+                    rec_rb = self.applied_diffs.pop(rb_id, None)
+                    if rec_rb:
+                        rec_rb["status"] = "PENDING_APPROVAL"
+                        self.pending_diffs[rb_id] = rec_rb
+                        self._save_diff_to_disk(rec_rb)
 
             err_msg = f"Batch application failed during write: {exc}."
             if rollback_errors:
                 err_msg += f" Note: transaction rollback encountered issues: {'; '.join(rollback_errors)}"
             else:
-                err_msg += " All previously applied files in batch were successfully rolled back."
+                err_msg += " All previously applied files in batch were successfully rolled back and restored to pending state."
 
             return {
                 "status": "ERROR",
@@ -418,7 +530,7 @@ class EditTools:
             target_file = Path(rec["target_file"])
             try:
                 self.boundary.validate_path(target_file, allow_write=True)
-            except SecurityViolationError as e:
+            except (SecurityViolationError, ValueError) as e:
                 return {
                     "status": "BLOCKED",
                     "error": f"Security boundary violation for {rec['file_path']}: {e}",

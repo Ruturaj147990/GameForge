@@ -9,7 +9,7 @@ from typing import Callable, List, Literal, Optional, Set
 
 from pydantic import ValidationError
 
-from src.gameforge_ide.pipeline.spec_from_prompt import is_game_creation_request
+from .spec_from_prompt import is_game_creation_request
 from .draft import DesignDraft
 from .expand import ExpandError, expand_draft
 from .gds import GameDesignSpec
@@ -24,11 +24,11 @@ CUSTOM_DETAIL_KEYWORDS: Set[str] = {
     "robot", "robots", "invader", "invaders", "zombie", "zombies", "vampire", "vampires",
     "drone", "drones", "ship", "ships", "spaceship", "spaceships", "core", "energy",
     "temple", "altar", "cage", "cages", "villager", "villagers", "chalice", "island", "islands",
-    "dungeon", "dungeons", "boss", "skeleton", "skeletons", "portal", "portals",
+    "dungeon", "dungeons", "boss", "bosses", "skeleton", "skeletons", "portal", "portals",
     "terminal", "terminals", "hack", "hacking", "bomb", "bombs", "defuse", "defusing",
     "counter-strike", "counter strike", "terrorist", "terrorists", "ct", "t", "swat",
     "police", "gun", "guns", "rifle", "rifles", "pistol", "pistols", "sniper", "grenade",
-    "knife", "knives", "stealth", "infiltrate", "infiltration", "magic", "spell", "potion",
+    "knife", "knives", "stealth", "infiltrate", "infiltration", "magic", "spell", "spells", "potion",
     "quest", "dialogue", "npc", "npcs", "hermit", "cursed", "loot", "treasure",
     "escape", "facility", "burning", "arctic", "desert", "crystal", "crystals", "sail",
     "pirate", "monsters", "slaying", "asteroid", "meteor", "mars", "space", "cyber",
@@ -36,9 +36,20 @@ CUSTOM_DETAIL_KEYWORDS: Set[str] = {
     "spooky", "haunted", "mansion", "ninja", "cyberpunk", "neon", "volcano", "lava",
     "ice", "snow", "underwater", "aquatic", "ocean", "cosmic", "galaxy", "gothic",
     "western", "cowboy", "samurai", "wizard", "witch", "speedrun", "endless", "runner",
-    "racing", "racer", "flight", "glider", "gravity", "stealthy", "tactical", "castle",
+    "racing", "racer", "flight", "glider", "glide", "gliding", "gravity", "stealthy", "tactical", "castle",
     "knight", "dragon", "dwarf", "elf", "sci-fi", "scifi", "futuristic", "post-apocalyptic",
     "apocalypse", "glitch", "arcade", "horror", "creepy", "shadow",
+    # Core gameplay mechanics
+    "dash", "grapple", "grappling", "hookshot", "jetpack", "slide", "sliding",
+    "walljump", "wall-jump", "climb", "climbing", "swim", "swimming", "fly", "flying",
+    "sprint", "sprinting", "crouch", "crouching", "sneak", "sneaking",
+    "shield", "shields", "mana", "stamina", "skill", "skills", "ability", "abilities",
+    "perk", "perks", "talent", "talents", "combo", "parry", "parrying", "dodge", "dodging",
+    "roll", "rolling", "block", "blocking", "bow", "arrow", "arrows", "quiver",
+    "sword", "swords", "blade", "axe", "hammer", "spear", "dagger",
+    "inventory", "craft", "crafting", "forge", "shop", "merchant", "upgrade", "upgrades",
+    "xp", "experience", "minion", "minions", "trap", "traps", "hazard", "riddle",
+    "checkpoint", "timer", "countdown", "permadeath", "rogue", "roguelike", "roguelite",
 }
 
 DRAFT_SYSTEM_PROMPT = """You turn a game idea into a JSON object that matches the given schema exactly.
@@ -74,6 +85,8 @@ PRESET_TITLES = [
     "Arena Combat",
     "Card Battler",
     "Procedural World",
+    "Top-Down Shooter",
+    "Relic Hunt",
 ]
 
 
@@ -127,8 +140,12 @@ def prompt_to_gds(
     m_title = re.search(r'\b(?:called|named|titled)\s+["\']?([^"\',.!?\n]+)["\']?', prompt, re.I)
     title_words = set(re.findall(r"\b\w+\b", m_title.group(1).lower())) if m_title else set()
 
-    custom_words = words - preset_words - stop_words - override_words - title_words
-    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS)) or len(custom_words) >= 2
+    custom_words = {
+        w
+        for w in (words - preset_words - stop_words - override_words - title_words)
+        if not w.isdigit()
+    }
+    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS)) or len(custom_words) >= 1
 
     best_preset: Optional[str] = None
     best_kw: str = ""

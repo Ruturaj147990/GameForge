@@ -5,6 +5,7 @@ Composition with level plans, actor placements, gfdef, and Forge run specs.
 """
 from __future__ import annotations
 
+import math
 import random
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -159,7 +160,11 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         total_to_place = 0
         entity_scatter_requests: List[Tuple[Any, int]] = []
         for e in unplaced:
-            count = int(getattr(e, "count", None) or e.props.get("count", 1))
+            count = 1
+            if getattr(e, "count", None) and int(e.count) > 1:
+                count = int(e.count)
+            elif "count" in getattr(e, "props", {}) and int(e.props["count"]) > 1:
+                count = int(e.props["count"])
             total_to_place += count
             entity_scatter_requests.append((e, count))
 
@@ -182,36 +187,70 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             and "location" in op.args
         ]
 
+        # For dungeon rooms, find floor pieces to avoid mid-air voids
+        room_floor_locs = [
+            op.args["location"]
+            for op in layout_plan.geometry_ops
+            if op.args.get("actor_class") == "StaticMeshActor"
+            and "Dungeon_Floor" in op.args.get("label", "")
+            and "location" in op.args
+        ]
+
+        is_course_layout = layout_name in ("course", "platformer")
         pt_idx = 0
         placed_actors = list(layout_plan.actors)
         for e, count in entity_scatter_requests:
             mod = get_module(e.module)
             for c_i in range(count):
+                spread_offset = ((c_i % 3) - 1) * 60.0
                 if pt_idx < len(scattered_points):
                     pos_2d = scattered_points[pt_idx]
-                    if layout_name == "course" and platform_locs:
-                        nearest_p = min(platform_locs, key=lambda p: abs(float(p.get("x", 0.0)) - pos_2d[0]))
-                        loc = (float(nearest_p.get("x", 0.0)), float(nearest_p.get("y", 0.0)), float(nearest_p.get("z", 0.0)) + 75.0)
+                    if is_course_layout and platform_locs:
+                        # 2D Euclidean distance matching across 3D course platforms
+                        nearest_p = min(
+                            platform_locs,
+                            key=lambda p: math.hypot(float(p.get("x", 0.0)) - pos_2d[0], float(p.get("y", 0.0)) - pos_2d[1])
+                        )
+                        loc = (float(nearest_p.get("x", 0.0)) + spread_offset, float(nearest_p.get("y", 0.0)), float(nearest_p.get("z", 0.0)) + 75.0)
+                    elif layout_name == "rooms" and room_floor_locs:
+                        nearest_rf = min(
+                            room_floor_locs,
+                            key=lambda rf: math.hypot(float(rf.get("x", 0.0)) - pos_2d[0], float(rf.get("y", 0.0)) - pos_2d[1])
+                        )
+                        loc = (float(nearest_rf.get("x", 0.0)) + spread_offset, float(nearest_rf.get("y", 0.0)), 50.0)
                     else:
                         loc = (pos_2d[0], pos_2d[1], 100.0)
                     pt_idx += 1
                 else:
                     # Fallback offset
-                    if layout_name == "course" and platform_locs:
+                    if is_course_layout and platform_locs:
                         p_idx = min(c_i, len(platform_locs) - 1)
                         p_loc = platform_locs[p_idx]
-                        loc = (float(p_loc.get("x", 0.0)), float(p_loc.get("y", 0.0)), float(p_loc.get("z", 0.0)) + 75.0)
+                        loc = (float(p_loc.get("x", 0.0)) + spread_offset, float(p_loc.get("y", 0.0)), float(p_loc.get("z", 0.0)) + 75.0)
+                    elif layout_name == "rooms" and room_floor_locs:
+                        rf_idx = min(c_i, len(room_floor_locs) - 1)
+                        rf_loc = room_floor_locs[rf_idx]
+                        loc = (float(rf_loc.get("x", 0.0)) + spread_offset, float(rf_loc.get("y", 0.0)), 50.0)
                     else:
                         loc = (center[0] + c_i * 200.0, center[1] + c_i * 200.0, 100.0)
 
                 actor_id = f"{e.entity_id}_{c_i}"
                 tags = [f"GF_E_{e.entity_id}", "GF_Owned", f"GF_{e.kind}_{c_i + 1}"]
 
-                # Map props
+                # Map props: support aliases, direct PascalCase overrides, and nested property_overrides
                 props: Dict[str, Any] = {}
                 for gds_p, unreal_p in mod.property_map.items():
                     if gds_p in e.props:
                         props[unreal_p] = e.props[gds_p]
+                    elif unreal_p in e.props:
+                        props[unreal_p] = e.props[unreal_p]
+
+                for p_key, p_val in e.props.items():
+                    if p_key == "property_overrides" and isinstance(p_val, dict):
+                        for sub_k, sub_v in p_val.items():
+                            props[sub_k] = sub_v
+                    elif p_key not in mod.property_map and p_key not in mod.property_map.values():
+                        props[p_key] = p_val
 
                 placed_actors.append(
                     PlacedActor(
@@ -254,7 +293,12 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             if getattr(fb, "sfx", None):
                 content_requests.append({"kind": "sfx", "preset": fb.sfx})
 
-    project_name = gds.meta.title.replace(" ", "").replace("-", "_") if hasattr(gds, "meta") else "GameForgeGame"
+    if hasattr(gds, "meta") and getattr(gds.meta, "project_name", None):
+        project_name = gds.meta.project_name
+    elif hasattr(gds, "meta") and getattr(gds.meta, "title", None):
+        project_name = gds.meta.title.replace(" ", "").replace("-", "_")
+    else:
+        project_name = "GameForgeGame"
 
     # Temporary composition object for gfdef builder
     prelim_comp = Composition(

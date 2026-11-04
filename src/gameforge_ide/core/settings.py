@@ -16,11 +16,13 @@ import os
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+import threading
 from typing import Any, Dict, List, Optional
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]          # src/gameforge_ide
 REPO_ROOT = PACKAGE_ROOT.parents[1]                          # repository root (source checkouts only, dev-only)
 PINNED_ENGINE = "5.7"
+NEXT_ENGINE = "5.8"
 DEFAULT_BRIDGE_PORT = 47815
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 MODEL_ROUTING_FILE = PACKAGE_ROOT / "config" / "model_routing.json"
@@ -85,13 +87,37 @@ class Settings:
 
 
 def _read_json(path: Optional[Path]) -> Dict[str, Any]:
-    if path is None or not path.is_file():
+    if path is None:
+        return {}
+    p = Path(path)
+    if not p.is_file():
+        bak = p.with_suffix(p.suffix + ".bak")
+        if bak.is_file():
+            try:
+                data = json.loads(bak.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
     except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        bak = p.with_suffix(p.suffix + ".bak")
+        if bak.is_file():
+            try:
+                data = json.loads(bak.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    try:
+                        p.write_text(bak.read_text(encoding="utf-8"), encoding="utf-8")
+                    except Exception:
+                        pass
+                    return data
+            except Exception:
+                pass
+    return {}
 
 
 def user_settings_path() -> Optional[Path]:
@@ -118,7 +144,7 @@ def _install(root: Path, source: str) -> Optional[EngineInstall]:
     return EngineInstall(root=root, version=ver[0], changelist=ver[1], source=source)
 
 
-def discover_engines() -> List[EngineInstall]:
+def discover_engines(target_minor: str = PINNED_ENGINE) -> List[EngineInstall]:
     """Installed engines: Epic launcher manifests (*.item and dat), registry, and drive scanning. Only verified roots are returned."""
     found: List[EngineInstall] = []
 
@@ -135,7 +161,7 @@ def discover_engines() -> List[EngineInstall]:
     # 2. Comprehensive multi-source Unreal Engine discovery
     try:
         from ..unreal.discovery import discover_all_engines
-        discovered = discover_all_engines(pinned_minor=PINNED_ENGINE)
+        discovered = discover_all_engines(pinned_minor=target_minor)
         for d in discovered:
             if all(i.root != d.root for i in found):
                 found.append(EngineInstall(root=d.root, version=d.version, changelist=d.changelist, source=d.source))
@@ -163,11 +189,46 @@ def discover_engines() -> List[EngineInstall]:
     return found
 
 
-def _pick_engine(explicit: Optional[str], source: str) -> Optional[EngineInstall]:
+def _pick_engine(explicit: Optional[str], source: str, channel: str = "pinned") -> Optional[EngineInstall]:
     if explicit:
         return _install(Path(explicit), source)  # an explicit path that is not an engine resolves to None (fail closed)
-    pinned = [e for e in discover_engines() if e.version.startswith(PINNED_ENGINE + ".")]
-    return max(pinned, key=lambda e: e.changelist) if pinned else None
+    target_minor = NEXT_ENGINE if channel == "next" else PINNED_ENGINE
+    engines = discover_engines(target_minor=target_minor)
+    matching = [e for e in engines if e.version.startswith(target_minor + ".")]
+    if matching:
+        return max(matching, key=lambda e: e.changelist)
+    if channel == "next":
+        # Fall back gracefully to pinned engine if next engine is not installed
+        pinned = [e for e in engines if e.version.startswith(PINNED_ENGINE + ".")]
+        if pinned:
+            return max(pinned, key=lambda e: e.changelist)
+    return None
+
+
+def resolve_host_profile_path(raw: Optional[Any]) -> Optional[Path]:
+    """Resolve a host profile path or name across CWD, REPO_ROOT configs, and PACKAGE_ROOT config."""
+    if not raw:
+        return None
+    p = Path(str(raw))
+    if p.is_file():
+        return p.resolve()
+    # Check relative to REPO_ROOT
+    if REPO_ROOT and REPO_ROOT.is_dir():
+        cand = REPO_ROOT / p
+        if cand.is_file():
+            return cand.resolve()
+        cand = REPO_ROOT / "configs" / "host_profiles" / p
+        if cand.is_file():
+            return cand.resolve()
+        if not p.name.endswith(".json"):
+            cand = REPO_ROOT / "configs" / "host_profiles" / f"{p.name}.json"
+            if cand.is_file():
+                return cand.resolve()
+    # Check relative to PACKAGE_ROOT
+    cand = PACKAGE_ROOT / "config" / p
+    if cand.is_file():
+        return cand.resolve()
+    return None
 
 
 def _path(value: Any) -> Optional[Path]:
@@ -183,20 +244,26 @@ def _load_models() -> Dict[str, str]:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     user = _read_json(user_settings_path())
-    profile_path = _path(os.environ.get("GAMEFORGE_HOST_PROFILE") or user.get("host_profile"))
+    raw_profile = os.environ.get("GAMEFORGE_HOST_PROFILE") or user.get("host_profile")
+    profile_path = resolve_host_profile_path(raw_profile)
     profile = _read_json(profile_path)
 
     def pick(env: str, key: str) -> Optional[Any]:
         return os.environ.get(env) or user.get(key) or profile.get(key)
 
+    channel = str(pick("GAMEFORGE_ENGINE_CHANNEL", "engine_channel") or "pinned")
     engine_explicit = pick("GAMEFORGE_ENGINE_ROOT", "engine_root")
     engine_source = ("env" if os.environ.get("GAMEFORGE_ENGINE_ROOT") else
                      "settings" if user.get("engine_root") else "host_profile")
     home = Path.home()
     models = _load_models()
-    models.update({str(k): str(v) for k, v in (user.get("models") or {}).items()})
+    if isinstance(profile.get("models"), dict):
+        models.update({str(k): str(v) for k, v in profile["models"].items()})
+    if isinstance(user.get("models"), dict):
+        models.update({str(k): str(v) for k, v in user["models"].items()})
+
     return Settings(
-        engine=_pick_engine(engine_explicit, engine_source),
+        engine=_pick_engine(engine_explicit, engine_source, channel=channel),
         projects_root=_path(pick("GAMEFORGE_PROJECTS_ROOT", "projects_root")) or home / "Documents" / "GameForge" / "Projects",
         artifacts_root=_path(pick("GAMEFORGE_ARTIFACTS_ROOT", "artifacts_root")) or home / "Documents" / "GameForge",
         default_workspace=_path(pick("GAMEFORGE_WORKSPACE", "default_workspace")) or home / "Documents" / "GameForge",
@@ -208,13 +275,70 @@ def get_settings() -> Settings:
         plugin_build=_path(profile.get("plugin_build")),
         host_profile=profile,
         host_profile_path=profile_path if profile else None,
-        engine_channel=str(pick("GAMEFORGE_ENGINE_CHANNEL", "engine_channel") or "pinned"),
+        engine_channel=channel,
     )
+
+
+_SETTINGS_LOCK = threading.Lock()
+
+# DEF-133 FIX: Thread-safe initialisation guard for get_settings().
+# lru_cache is NOT thread-safe during initial population: multiple threads can
+# enter the function body simultaneously before the cache entry is set.
+# In tests, 4 gameforge-job threads concurrently instantiate CapabilityRegistry,
+# each calling get_settings() → scan_filesystem_drives() → glob.scandir(), causing
+# a Windows fatal access violation.  We use double-checked locking to serialize
+# only the first (expensive) computation; subsequent calls hit the lru_cache.
+_GET_SETTINGS_INIT_LOCK = threading.Lock()
+_settings_initialized = False
+
+
+def get_settings_safe() -> "Settings":
+    """Thread-safe entry point: delegates to get_settings() with init-time serialization."""
+    global _settings_initialized
+    if _settings_initialized:
+        return get_settings()          # fast-path: cache is warm, no lock needed
+    with _GET_SETTINGS_INIT_LOCK:
+        if not _settings_initialized:  # double-checked locking
+            result = get_settings()
+            _settings_initialized = True
+            return result
+        return get_settings()
+
+
+def save_user_settings(data: Dict[str, Any]) -> Path:
+    """Atomically and safely persist user settings to %APPDATA%/GameForge/settings.json.
+    
+    Uses thread-safe locking, two-phase atomic write, automatic .bak backup,
+    fsync durability, Windows NTFS lock retries, and cache invalidation.
+    """
+    with _SETTINGS_LOCK:
+        cfg_path = user_settings_path()
+        if not cfg_path:
+            raise RuntimeError("User settings path could not be determined; APPDATA is not set.")
+
+        cfg_path = Path(cfg_path).resolve()
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        existing: Dict[str, Any] = _read_json(cfg_path)
+        existing.update(data)
+
+        from ..storage.atomic import atomic_write_json
+        atomic_write_json(cfg_path, existing, indent=2, sync=True, backup=True)
+        reset_settings_cache()
+        return cfg_path
 
 
 def reset_settings_cache() -> None:
     """Tests and the Settings view call this after changing the environment or settings.json."""
+    global _settings_initialized
     get_settings.cache_clear()
+    _settings_initialized = False
+    # Also invalidate the engine discovery cache so the next get_settings() call
+    # re-discovers engines (e.g. after the user changes engine_root in tests).
+    try:
+        from ..unreal.discovery import invalidate_discovery_cache
+        invalidate_discovery_cache()
+    except Exception:
+        pass
 
 
 MISSING_ENGINE = Path("UNREAL_ENGINE_NOT_CONFIGURED")

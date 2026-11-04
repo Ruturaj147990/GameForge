@@ -47,8 +47,10 @@ class ProjectIndex:
 
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.isolation_level = None  # Autocommit mode allows explicit BEGIN IMMEDIATE transactions
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
         return conn
 
     def _init_db(self) -> None:
@@ -185,58 +187,78 @@ class ProjectIndex:
             # 3. Detect deleted files
             deleted = set(cached.keys()) - found_paths
             if deleted:
-                conn.execute("BEGIN TRANSACTION;")
-                for rel_str in deleted:
-                    conn.execute("DELETE FROM files WHERE path = ?", (rel_str,))
-                    conn.execute("DELETE FROM symbols WHERE file = ?", (rel_str,))
-                    conn.execute("DELETE FROM config WHERE file = ?", (rel_str,))
-                conn.commit()
+                conn.execute("BEGIN IMMEDIATE;")
+                try:
+                    for rel_str in deleted:
+                        conn.execute("DELETE FROM files WHERE path = ?", (rel_str,))
+                        conn.execute("DELETE FROM symbols WHERE file = ?", (rel_str,))
+                        conn.execute("DELETE FROM config WHERE file = ?", (rel_str,))
+                        if not self._has_fts_triggers:
+                            try:
+                                conn.execute("DELETE FROM symbols_fts WHERE file = ?", (rel_str,))
+                            except Exception:
+                                pass
+                    conn.execute("COMMIT;")
+                except Exception:
+                    conn.execute("ROLLBACK;")
+                    raise
 
             # 4. Index new / modified files
             indexed_count = len(files_to_index)
             if files_to_index:
-                conn.execute("BEGIN TRANSACTION;")
-                for p in files_to_index:
-                    rel_str = str(p.relative_to(self.project_dir)).replace("\\", "/")
-                    try:
-                        st = p.stat()
-                        content_bytes = p.read_bytes()
-                        sha1_hash = hashlib.sha1(content_bytes).hexdigest()
-                        conn.execute(
-                            "INSERT OR REPLACE INTO files (path, size, mtime, sha1) VALUES (?, ?, ?, ?)",
-                            (rel_str, st.st_size, st.st_mtime, sha1_hash),
-                        )
+                conn.execute("BEGIN IMMEDIATE;")
+                try:
+                    for p in files_to_index:
+                        rel_str = str(p.relative_to(self.project_dir)).replace("\\", "/")
+                        try:
+                            st = p.stat()
+                            content_bytes = p.read_bytes()
+                            sha1_hash = hashlib.sha1(content_bytes).hexdigest()
+                            conn.execute(
+                                "INSERT OR REPLACE INTO files (path, size, mtime, sha1) VALUES (?, ?, ?, ?)",
+                                (rel_str, st.st_size, st.st_mtime, sha1_hash),
+                            )
 
-                        # Delete old symbols / config for this file
-                        conn.execute("DELETE FROM symbols WHERE file = ?", (rel_str,))
-                        conn.execute("DELETE FROM config WHERE file = ?", (rel_str,))
-
-                        ext = p.suffix.lower()
-                        if ext in (".h", ".hpp", ".cpp", ".cxx", ".inl"):
-                            symbols = self._parse_cpp_file(p, rel_str, content_bytes)
-                            for sym in symbols:
-                                cur = conn.execute(
-                                    "INSERT INTO symbols (kind, name, file, line, parent) VALUES (?, ?, ?, ?, ?)",
-                                    (sym["kind"], sym["name"], sym["file"], sym["line"], sym["parent"]),
-                                )
+                            # Delete old symbols / config for this file
+                            conn.execute("DELETE FROM symbols WHERE file = ?", (rel_str,))
+                            conn.execute("DELETE FROM config WHERE file = ?", (rel_str,))
+                            if not self._has_fts_triggers:
                                 try:
-                                    conn.execute(
-                                        "INSERT INTO symbols_fts (rowid, name, file) VALUES (?, ?, ?)",
-                                        (cur.lastrowid, sym["name"], sym["file"]),
-                                    )
+                                    conn.execute("DELETE FROM symbols_fts WHERE file = ?", (rel_str,))
                                 except Exception:
                                     pass
 
-                        elif ext == ".ini":
-                            config_items = self._parse_ini_file(p, rel_str, content_bytes)
-                            for cfg in config_items:
-                                conn.execute(
-                                    "INSERT INTO config (file, section, key, value) VALUES (?, ?, ?, ?)",
-                                    (cfg["file"], cfg["section"], cfg["key"], cfg["value"]),
-                                )
-                    except Exception:
-                        pass
-                conn.commit()
+                            ext = p.suffix.lower()
+                            if ext in (".h", ".hpp", ".cpp", ".cxx", ".inl"):
+                                symbols = self._parse_cpp_file(p, rel_str, content_bytes)
+                                for sym in symbols:
+                                    cur = conn.execute(
+                                        "INSERT INTO symbols (kind, name, file, line, parent) VALUES (?, ?, ?, ?, ?)",
+                                        (sym["kind"], sym["name"], sym["file"], sym["line"], sym["parent"]),
+                                    )
+                                    # Only insert manually if triggers were not created
+                                    if not self._has_fts_triggers:
+                                        try:
+                                            conn.execute(
+                                                "INSERT INTO symbols_fts (rowid, name, file) VALUES (?, ?, ?)",
+                                                (cur.lastrowid, sym["name"], sym["file"]),
+                                            )
+                                        except Exception:
+                                            pass
+
+                            elif ext == ".ini":
+                                config_items = self._parse_ini_file(p, rel_str, content_bytes)
+                                for cfg in config_items:
+                                    conn.execute(
+                                        "INSERT INTO config (file, section, key, value) VALUES (?, ?, ?, ?)",
+                                        (cfg["file"], cfg["section"], cfg["key"], cfg["value"]),
+                                    )
+                        except Exception:
+                            pass
+                    conn.execute("COMMIT;")
+                except Exception:
+                    conn.execute("ROLLBACK;")
+                    raise
 
             duration = round(time.time() - t0, 3)
             conn.execute(
@@ -377,21 +399,25 @@ class ProjectIndex:
         """Populate assets table from list_assets output."""
         conn = self._get_connection()
         try:
-            conn.execute("BEGIN TRANSACTION;")
-            conn.execute("DELETE FROM assets;")
-            for a in assets_list:
-                path = a.get("path") or a.get("asset_path", "")
-                cls_name = a.get("class") or a.get("asset_class", "")
-                deps = a.get("dependencies", [])
+            conn.execute("BEGIN IMMEDIATE;")
+            try:
+                conn.execute("DELETE FROM assets;")
+                for a in assets_list:
+                    path = a.get("path") or a.get("asset_path", "")
+                    cls_name = a.get("class") or a.get("asset_class", "")
+                    deps = a.get("dependencies", [])
+                    conn.execute(
+                        "INSERT OR REPLACE INTO assets (path, class, deps_json) VALUES (?, ?, ?)",
+                        (path, cls_name, str(deps)),
+                    )
                 conn.execute(
-                    "INSERT OR REPLACE INTO assets (path, class, deps_json) VALUES (?, ?, ?)",
-                    (path, cls_name, str(deps)),
+                    "INSERT OR REPLACE INTO meta (key, value) VALUES ('assets_indexed_at', ?)",
+                    (time.strftime("%Y-%m-%dT%H:%M:%SZ"),),
                 )
-            conn.execute(
-                "INSERT OR REPLACE INTO meta (key, value) VALUES ('assets_indexed_at', ?)",
-                (time.strftime("%Y-%m-%dT%H:%M:%SZ"),),
-            )
-            conn.commit()
+                conn.execute("COMMIT;")
+            except Exception:
+                conn.execute("ROLLBACK;")
+                raise
             return len(assets_list)
         finally:
             conn.close()

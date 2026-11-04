@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import concurrent.futures
 import ctypes
+import logging
 import subprocess
 import sys
 import threading
+import time
 from ctypes import wintypes
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence, Set, Union
+
+logger = logging.getLogger(__name__)
 
 _JOB = None
 _LOCK = threading.Lock()
+_ACTIVE_PROCESSES: Set[subprocess.Popen] = set()
+_PROC_LOCK = threading.Lock()
 ENGINE_LOCK = threading.RLock()  # serialises every engine-mutating job and Forge step (design rule 6)
 
 if sys.platform == "win32":
@@ -58,6 +64,8 @@ if sys.platform == "win32":
     _k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD)
     _k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
     _k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    _k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    _k32.CloseHandle.restype = wintypes.BOOL
 
 
 def _job():
@@ -72,6 +80,7 @@ def _job():
             info = _EXT()
             info.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
             if not _k32.SetInformationJobObject(h, 9, ctypes.byref(info), ctypes.sizeof(info)):
+                _k32.CloseHandle(h)
                 raise ctypes.WinError(ctypes.get_last_error())
             _JOB = h
         return _JOB
@@ -79,34 +88,98 @@ def _job():
 
 def adopt(proc: subprocess.Popen) -> bool:
     """Put an already-started child into the IDE job. Returns False (and logs) if Windows refuses."""
+    with _PROC_LOCK:
+        _ACTIVE_PROCESSES.add(proc)
+        # Prune terminated processes
+        dead = [p for p in _ACTIVE_PROCESSES if p.poll() is not None]
+        for p in dead:
+            _ACTIVE_PROCESSES.discard(p)
+
     job = _job()
     if job is None:
         return False
     try:
         handle = wintypes.HANDLE(int(proc._handle))
-        return bool(_k32.AssignProcessToJobObject(job, handle))
-    except Exception:
+        ok = bool(_k32.AssignProcessToJobObject(job, handle))
+        if not ok:
+            err = ctypes.get_last_error()
+            logger.warning(
+                "AssignProcessToJobObject failed for PID %s (error %s); tracked in fallback registry",
+                getattr(proc, "pid", "?"),
+                err,
+            )
+        return ok
+    except Exception as exc:
+        logger.warning(
+            "AssignProcessToJobObject exception for PID %s: %s; tracked in fallback registry",
+            getattr(proc, "pid", "?"),
+            exc,
+        )
         return False
 
 
 def terminate_all_children(exit_code: int = 1) -> bool:
-    """Terminate all child processes running in the IDE job object."""
-    if sys.platform != "win32":
-        return False
-    job = _job()
-    if job is None:
-        return False
-    try:
-        return bool(_k32.TerminateJobObject(job, exit_code))
-    except Exception:
-        return False
+    """Terminate all child processes running in the IDE job object and fallback registry."""
+    terminated_job = False
+    global _JOB
+    if sys.platform == "win32":
+        with _LOCK:
+            if _JOB is not None:
+                try:
+                    terminated_job = bool(_k32.TerminateJobObject(_JOB, exit_code))
+                except Exception as exc:
+                    logger.warning("TerminateJobObject failed: %s", exc)
+                finally:
+                    try:
+                        _k32.CloseHandle(_JOB)
+                    except Exception:
+                        pass
+                    _JOB = None
+
+    # Terminate all processes tracked in fallback registry
+    with _PROC_LOCK:
+        procs = list(_ACTIVE_PROCESSES)
+        _ACTIVE_PROCESSES.clear()
+
+    for p in procs:
+        try:
+            if p.poll() is None:
+                p.terminate()
+        except Exception:
+            pass
+
+    t_end = time.time() + 0.3
+    for p in procs:
+        rem = max(0.01, t_end - time.time())
+        try:
+            p.wait(timeout=rem)
+        except Exception:
+            pass
+
+    for p in procs:
+        try:
+            if p.poll() is None:
+                p.kill()
+        except Exception:
+            pass
+
+    return terminated_job or bool(procs)
 
 
-def spawn(argv: Sequence[str], **popen_kwargs) -> subprocess.Popen:
+def get_active_children() -> List[subprocess.Popen]:
+    """Return a list of currently running child processes tracked by the system."""
+    with _PROC_LOCK:
+        active = [p for p in _ACTIVE_PROCESSES if p.poll() is None]
+        _ACTIVE_PROCESSES.intersection_update(active)
+        return list(active)
+
+
+def spawn(argv: Union[Sequence[str], str], **popen_kwargs) -> subprocess.Popen:
     """The only way product code starts child processes (editor, UBT, UAT, games, Ollama helpers)."""
     if popen_kwargs.get("shell"):
         raise ValueError("shell=True is forbidden")
-    proc = subprocess.Popen(list(argv), **popen_kwargs)
+    args = argv if isinstance(argv, str) else list(argv)
+    proc = subprocess.Popen(args, **popen_kwargs)
     adopt(proc)
     return proc
 
@@ -119,8 +192,28 @@ class JobHandle:
         cancel_event: Optional[threading.Event] = None,
     ):
         self._future = future
-        self.name = name
+        self.name = name or f"job_{id(self)}"
         self.cancel_event = cancel_event
+
+        # Ensure unhandled background exceptions are logged and published to event bus
+        def _on_future_done(fut: concurrent.futures.Future) -> None:
+            if not fut.cancelled():
+                try:
+                    exc = fut.exception()
+                    if exc is not None:
+                        logger.error("Job %r failed with unhandled exception: %s", self.name, exc, exc_info=exc)
+                        try:
+                            from .events import default_bus
+                            default_bus().publish(
+                                "job.failed",
+                                {"job_name": self.name, "error": str(exc), "type": type(exc).__name__},
+                            )
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+        self._future.add_done_callback(_on_future_done)
 
     def cancel(self) -> bool:
         if self.cancel_event is not None:
@@ -160,11 +253,15 @@ class JobManager:
     def instance(cls) -> JobManager:
         return default_job_manager()
 
-    def __init__(self, max_workers: int = 2):
+    def __init__(self, max_workers: int = 4):
+        self._max_workers = max_workers
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix="gameforge-job",
         )
+        self._jobs_lock = threading.Lock()
+        self._jobs: Dict[str, JobHandle] = {}
+        self._failed_jobs: List[Tuple[str, BaseException]] = []
 
     def submit(
         self,
@@ -175,10 +272,51 @@ class JobManager:
         **kwargs: Any,
     ) -> JobHandle:
         future = self._executor.submit(fn, *args, **kwargs)
-        return JobHandle(future, name=name, cancel_event=cancel_event)
+        job_name = name or f"job_{time.time_ns()}"
+        handle = JobHandle(future, name=job_name, cancel_event=cancel_event)
 
-    def shutdown(self, wait: bool = True) -> None:
-        self._executor.shutdown(wait=wait)
+        with self._jobs_lock:
+            self._jobs[job_name] = handle
+
+        def _track_completion(jh: JobHandle) -> None:
+            with self._jobs_lock:
+                err = jh.error
+                if err is not None:
+                    self._failed_jobs.append((jh.name, err))
+                    if len(self._failed_jobs) > 50:
+                        self._failed_jobs.pop(0)
+
+        handle.add_done_callback(_track_completion)
+        return handle
+
+    def active_jobs(self) -> List[JobHandle]:
+        """Return list of currently pending or running jobs."""
+        with self._jobs_lock:
+            active = [h for h in self._jobs.values() if not h.done()]
+            # Prune completed jobs from dictionary
+            self._jobs = {h.name: h for h in self._jobs.values() if not h.done()}
+            return active
+
+    def failed_jobs(self) -> List[Tuple[str, BaseException]]:
+        """Return recently recorded failed jobs and their exceptions."""
+        with self._jobs_lock:
+            return list(self._failed_jobs)
+
+    def cancel_all(self) -> int:
+        """Cancel all pending/running jobs."""
+        cancelled_count = 0
+        for h in self.active_jobs():
+            if h.cancel():
+                cancelled_count += 1
+        return cancelled_count
+
+    def shutdown(self, wait: bool = True, cancel_futures: bool = True) -> None:
+        """Shut down the thread pool and optionally cancel queued tasks."""
+        self.cancel_all()
+        try:
+            self._executor.shutdown(wait=wait, cancel_futures=cancel_futures)
+        except TypeError:
+            self._executor.shutdown(wait=wait)
 
 
 _DEFAULT_MANAGER: Optional[JobManager] = None
@@ -191,3 +329,16 @@ def default_job_manager() -> JobManager:
         if _DEFAULT_MANAGER is None:
             _DEFAULT_MANAGER = JobManager(max_workers=4)
         return _DEFAULT_MANAGER
+
+
+def reset_default_job_manager(wait: bool = False) -> None:
+    """Reset the default job manager instance for clean shutdown or test isolation."""
+    global _DEFAULT_MANAGER
+    with _MGR_LOCK:
+        if _DEFAULT_MANAGER is not None:
+            try:
+                _DEFAULT_MANAGER.shutdown(wait=wait, cancel_futures=True)
+            except Exception:
+                pass
+            _DEFAULT_MANAGER = None
+

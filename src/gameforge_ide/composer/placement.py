@@ -12,6 +12,8 @@ from typing import List, Optional, Tuple
 
 def is_point_in_polygon(point: Tuple[float, float], polygon: List[Tuple[float, float]]) -> bool:
     """Ray-casting algorithm for point-in-polygon check."""
+    if not polygon or len(polygon) < 3:
+        return False
     x, y = point
     n = len(polygon)
     inside = False
@@ -44,6 +46,8 @@ def scatter(
     """
     if n <= 0:
         return [], None
+    if not area_polygon or len(area_polygon) < 3:
+        return [], "area_polygon must contain at least 3 points"
 
     avoid = avoid or []
 

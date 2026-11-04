@@ -133,7 +133,8 @@ class AgentRuntime:
         safety_tokens: int = 128,
         pinned_message: Optional[Dict[str, str]] = None,
     ) -> tuple[List[Dict[str, str]], Dict[str, int]]:
-        """Keep whole messages within an estimated input budget, pinning this task's prompt."""
+        """Keep whole messages within an estimated input budget, pinning this task's prompt,
+        enforcing contiguous chronological history, and compacting omitted turns into a summary."""
         input_budget = max(0, max_context - output_tokens - safety_tokens)
         system_tokens = cls.estimate_tokens(system_prompt)
         if system_tokens > input_budget:
@@ -142,7 +143,9 @@ class AgentRuntime:
                 f"above the {input_budget}-token input budget for this model."
             )
         remaining = input_budget - system_tokens
-        selected_indices: set[int] = set()
+
+        # Handle pinned message (active user prompt)
+        selected_indices: List[int] = []
         pinned_index = None
         if pinned_message is not None:
             for index in range(len(messages) - 1, -1, -1):
@@ -158,28 +161,61 @@ class AgentRuntime:
                     f"but only {remaining} input tokens remain after system context. "
                     "Shorten the prompt or reduce project context; no prompt text was truncated."
                 )
-            selected_indices.add(pinned_index)
+            selected_indices.append(pinned_index)
             remaining -= pinned_tokens
 
-        # Also prioritize the newest active turn (the latest user prompt/observation)
-        latest_index = len(messages) - 1
-        if latest_index >= 0 and latest_index not in selected_indices:
-            latest_tokens = cls.estimate_tokens(messages[latest_index].get("content", ""))
-            if latest_tokens <= remaining:
-                selected_indices.add(latest_index)
-                remaining -= latest_tokens
-
+        # Select contiguous history backwards from the latest message
+        idx = len(messages) - 1
         omitted = 0
-        for index in range(len(messages) - 1, -1, -1):
-            if index in selected_indices:
+        while idx >= 0:
+            if idx == pinned_index:
+                idx -= 1
                 continue
-            message_tokens = cls.estimate_tokens(messages[index].get("content", ""))
-            if message_tokens <= remaining:
-                selected_indices.add(index)
-                remaining -= message_tokens
+            msg = messages[idx]
+            msg_tokens = cls.estimate_tokens(msg.get("content", ""))
+            if msg_tokens <= remaining:
+                selected_indices.append(idx)
+                remaining -= msg_tokens
+                idx -= 1
             else:
-                omitted += 1
-        selected = [message for index, message in enumerate(messages) if index in selected_indices]
+                omitted = idx + 1
+                break
+
+        selected_indices.sort()
+        selected = [messages[i] for i in selected_indices]
+
+        # If messages were omitted, synthesize a compact summary of older turns
+        if omitted > 0:
+            omitted_msgs = messages[:omitted]
+            summary_snippets = []
+            for m in omitted_msgs:
+                r = m.get("role", "user")
+                c = m.get("content", "").strip()
+                if not c:
+                    continue
+                first_line = c.splitlines()[0] if c else ""
+                if len(first_line) > 70:
+                    first_line = first_line[:67] + "..."
+                summary_snippets.append(f"{r}: {first_line}")
+            if summary_snippets:
+                compact_summary_text = "[Earlier conversation compacted: " + " | ".join(summary_snippets[:4]) + "]"
+                selected.insert(0, {"role": "user", "content": compact_summary_text})
+                if len(selected) > 1 and selected[1].get("role") == "user":
+                    merged_content = f"{selected[0]['content']}\n\n{selected[1]['content']}"
+                    selected[1]["content"] = merged_content
+                    selected.pop(0)
+
+        # Enforce alternating roles (merge adjacent turns of same role)
+        merged_turns: List[Dict[str, str]] = []
+        for m in selected:
+            if not merged_turns:
+                merged_turns.append(dict(m))
+            elif merged_turns[-1]["role"] == m["role"]:
+                merged_turns[-1]["content"] += "\n\n" + m.get("content", "")
+            else:
+                merged_turns.append(dict(m))
+        selected = merged_turns
+
         # Invariant: Multi-turn LLM chat prompts must end with a user turn so the model knows to respond.
         while len(selected) > 1 and selected[-1].get("role") == "assistant":
             selected.pop()
@@ -192,32 +228,152 @@ class AgentRuntime:
         }
 
     def _extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
-        """Extracts structured tool invocation from model output supporting multiple standard schemas."""
+        """Extracts structured tool invocation from model output supporting multiple standard schemas
+        (OpenAI, Anthropic, ReAct, XML tags, string-serialized arguments, and balanced JSON)."""
+        def _parse_arguments(args: Any) -> Dict[str, Any]:
+            if isinstance(args, dict):
+                return args
+            if isinstance(args, str):
+                s = args.strip()
+                if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+                    try:
+                        parsed = json.loads(s)
+                        if isinstance(parsed, dict):
+                            return parsed
+                    except Exception:
+                        pass
+            return {}
+
         def _normalize_tool_data(data: Any) -> Optional[Dict[str, Any]]:
             if not isinstance(data, dict):
+                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                    return _normalize_tool_data(data[0])
                 return None
-            if "tool" in data and "args" in data:
-                return {"name": data["tool"], "arguments": data["args"] if isinstance(data["args"], dict) else {}}
-            if "name" in data and "arguments" in data:
-                return {"name": data["name"], "arguments": data["arguments"] if isinstance(data["arguments"], dict) else {}}
-            if "function" in data and "arguments" in data:
-                return {"name": data["function"], "arguments": data["arguments"] if isinstance(data["arguments"], dict) else {}}
-            if "tool_name" in data and "parameters" in data:
-                return {"name": data["tool_name"], "arguments": data["parameters"] if isinstance(data["parameters"], dict) else {}}
+
+            # OpenAI format with top-level tool_calls array
+            if "tool_calls" in data and isinstance(data["tool_calls"], list) and len(data["tool_calls"]) > 0:
+                first = data["tool_calls"][0]
+                if isinstance(first, dict):
+                    return _normalize_tool_data(first)
+
+            # OpenAI single function call: {"type": "function", "function": {"name": ..., "arguments": ...}}
+            if "function" in data and isinstance(data["function"], dict):
+                fn = data["function"]
+                name = fn.get("name")
+                if name and isinstance(name, str):
+                    return {"name": name, "arguments": _parse_arguments(fn.get("arguments", {}))}
+
+            # Anthropic tool_use format: {"type": "tool_use", "name": ..., "input": ...}
+            if data.get("type") == "tool_use" and "name" in data:
+                return {"name": str(data["name"]), "arguments": _parse_arguments(data.get("input", {}))}
+
+            # GameForge native format: {"tool": "...", "args": {...}}
+            if "tool" in data and ("args" in data or "parameters" in data or "arguments" in data):
+                args_val = data.get("args") or data.get("parameters") or data.get("arguments")
+                return {"name": str(data["tool"]), "arguments": _parse_arguments(args_val)}
+
+            # Standard format: {"name": "...", "arguments": {...}}
+            if "name" in data and ("arguments" in data or "args" in data or "parameters" in data or "input" in data):
+                args_val = data.get("arguments") or data.get("args") or data.get("parameters") or data.get("input")
+                return {"name": str(data["name"]), "arguments": _parse_arguments(args_val)}
+
+            # ReAct / LangChain: {"action": "...", "action_input": {...}}
+            if "action" in data and ("action_input" in data or "action_args" in data or "args" in data):
+                args_val = data.get("action_input") or data.get("action_args") or data.get("args")
+                return {"name": str(data["action"]), "arguments": _parse_arguments(args_val)}
+
+            # Parameter aliases: tool_name + parameters
+            if "tool_name" in data and ("parameters" in data or "args" in data or "arguments" in data):
+                args_val = data.get("parameters") or data.get("args") or data.get("arguments")
+                return {"name": str(data["tool_name"]), "arguments": _parse_arguments(args_val)}
+
+            # Call / Command aliases: call + args
+            if ("call" in data or "command" in data) and ("args" in data or "arguments" in data):
+                name = data.get("call") or data.get("command")
+                args_val = data.get("args") or data.get("arguments")
+                return {"name": str(name), "arguments": _parse_arguments(args_val)}
+
+            # Function string: {"function": "tool_name", "arguments": {...}}
+            if "function" in data and isinstance(data["function"], str) and ("arguments" in data or "args" in data):
+                args_val = data.get("arguments") or data.get("args")
+                return {"name": data["function"], "arguments": _parse_arguments(args_val)}
+
             return None
 
-        # 1. Match ```json {...} ``` code blocks
-        for m in re.finditer(r"```(?:json)?\s*(\{\s*.*?\})\s*```", text, re.DOTALL):
+        # 0. Match XML-style tool calls (<tool_use>, <tool_call>, <function_call>, <invoke>)
+        xml_tool_use = re.search(r"<tool_use>\s*<name>([^<]+)</name>\s*<(?:input|arguments|args)>(.*?)</(?:input|arguments|args)>\s*</tool_use>", text, re.DOTALL | re.IGNORECASE)
+        if xml_tool_use:
+            name = xml_tool_use.group(1).strip()
+            args_str = xml_tool_use.group(2).strip()
+            return {"name": name, "arguments": _parse_arguments(args_str)}
+
+        xml_invoke = re.search(r"<invoke\s+name=[\"']([^\"']+)[\"']\s*>(.*?)</invoke>", text, re.DOTALL | re.IGNORECASE)
+        if xml_invoke:
+            name = xml_invoke.group(1).strip()
+            args_body = xml_invoke.group(2).strip()
+            # Check for <parameter name="k">v</parameter>
+            params = {}
+            for pm in re.finditer(r"<parameter\s+name=[\"']([^\"']+)[\"']\s*>(.*?)</parameter>", args_body, re.DOTALL | re.IGNORECASE):
+                params[pm.group(1).strip()] = pm.group(2).strip()
+            if not params and args_body:
+                params = _parse_arguments(args_body)
+            return {"name": name, "arguments": params}
+
+        xml_generic = re.search(r"<(?:tool_call|function_call)>\s*(.*?)\s*</(?:tool_call|function_call)>", text, re.DOTALL | re.IGNORECASE)
+        if xml_generic:
             try:
-                data = json.loads(m.group(1))
+                data = json.loads(xml_generic.group(1).strip())
                 norm = _normalize_tool_data(data)
                 if norm:
                     return norm
             except Exception:
                 pass
 
+        # 1. Match ```json {...} ``` code blocks with balanced brace extraction
+        for m in re.finditer(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL):
+            block = m.group(1).strip()
+            try:
+                data = json.loads(block)
+                norm = _normalize_tool_data(data)
+                if norm:
+                    return norm
+            except Exception:
+                pass
+            # If full block isn't raw JSON, find first balanced object inside block
+            b_start = block.find("{")
+            if b_start != -1:
+                brace_count = 0
+                in_str = False
+                escape = False
+                for j in range(b_start, len(block)):
+                    ch = block[j]
+                    if escape:
+                        escape = False
+                        continue
+                    if ch == '\\':
+                        escape = True
+                        continue
+                    if ch == '"':
+                        in_str = not in_str
+                        continue
+                    if not in_str:
+                        if ch == '{':
+                            brace_count += 1
+                        elif ch == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                candidate = block[b_start : j + 1]
+                                try:
+                                    data = json.loads(candidate)
+                                    norm = _normalize_tool_data(data)
+                                    if norm:
+                                        return norm
+                                except Exception:
+                                    pass
+                                break
+
         # 2. Match single or multi-line tool invocation with brace balancing
-        markers = ('"tool"', '"name"', '"function"', '"tool_name"')
+        markers = ('"tool"', '"name"', '"function"', '"tool_name"', '"action"', '"tool_use"', '"type": "function"')
         for marker in markers:
             start_pos = 0
             while True:
@@ -255,7 +411,6 @@ class AgentRuntime:
                                     except Exception:
                                         pass
                                     break
-                    # Fallback if text was truncated right before the final closing brace
                     if brace_count == 1 and not in_str:
                         candidate = text[brace_idx:].strip() + "}"
                         try:
@@ -268,6 +423,48 @@ class AgentRuntime:
                 start_pos = idx + len(marker)
 
         return None
+
+    @staticmethod
+    def _is_tool_call_start(text: str) -> bool:
+        """Determines if the text begins or contains a raw tool invocation block."""
+        stripped = text.strip()
+        tool_prefixes = (
+            '{"tool"', '{"name"', '{"function"', '{"tool_name"', '{"action"', '{"type": "tool_use"',
+            '{"type":"tool_use"', '{"tool_calls"', '{"call"',
+            '{\n  "tool"', '{\n  "name"', '{\n  "function"', '{\n  "action"',
+            '{\n "tool"', '{\n "name"', '{\n "function"', '{\n "action"',
+            '```json\n{"tool"', '```json\n{"name"', '```json\n{"function"', '```json\n{"action"',
+            '```json\n{\n  "tool"', '```json\n{\n  "name"', '```json\n{\n  "function"',
+            '```\n{"tool"', '```\n{"name"', '```\n{"function"', '```\n{"action"',
+            '```\n{\n  "tool"', '```\n{\n  "name"',
+            '<tool_call>', '<tool_use>', '<invoke', '<function_call>',
+        )
+        if any(stripped.startswith(pfx) for pfx in tool_prefixes):
+            return True
+        if re.search(r"```(?:json)?\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"", stripped):
+            return True
+        return False
+
+    @staticmethod
+    def _clean_narrative_text(text: str) -> str:
+        """Removes raw tool invocation blocks from model response, leaving clean narrative prose."""
+        if not text:
+            return ""
+        cleaned = re.sub(
+            r"```(?:json)?\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\".*?\}\s*```",
+            "",
+            text,
+            flags=re.DOTALL,
+        )
+        cleaned = re.sub(
+            r"<(?:tool_call|tool_use|function_call|invoke(?:\s+name=[^>]+)?)>.*?</(?:tool_call|tool_use|function_call|invoke)>",
+            "",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        cleaned = re.sub(r"\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"\s*:.*?\}\s*$", "", cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r"^\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"\s*:.*?\}\s*", "", cleaned, flags=re.DOTALL)
+        return cleaned.strip()
 
     @staticmethod
     def _is_conversational(user_prompt: str) -> bool:
@@ -606,8 +803,7 @@ class AgentRuntime:
                 if chunk.token:
                     full_response += chunk.token
                     # Suppress streaming tokens if model output is an internal JSON tool call
-                    stripped = full_response.strip()
-                    if not (stripped.startswith('{"tool"') or stripped.startswith('```json\n{"tool"') or stripped.startswith('```\n{"tool"')):
+                    if not self._is_tool_call_start(full_response):
                         yield AgentEvent(event_type="token", content=chunk.token)
             self.session_manager.append_message(session_id, "assistant", full_response)
             task_state.terminal_status = "COMPLETED"
@@ -694,7 +890,8 @@ class AgentRuntime:
                     return
                 if chunk.token:
                     full_response += chunk.token
-                    yield AgentEvent(event_type="token", content=chunk.token)
+                    if not self._is_tool_call_start(full_response):
+                        yield AgentEvent(event_type="token", content=chunk.token)
 
             # Check for tool call in response
             tool_call = native_call or self._extract_tool_call(full_response)
@@ -903,10 +1100,13 @@ class AgentRuntime:
                         "diff_patch": tool_result.get("diff_patch"),
                     },
                 )
+                clean_narrative = self._clean_narrative_text(full_response)
+                diff_note = f"[Diff proposed: {diff_id}. Waiting for user review.]"
+                assistant_msg = f"{clean_narrative}\n\n{diff_note}".strip() if clean_narrative else diff_note
                 self.session_manager.append_message(
                     session_id,
                     "assistant",
-                    f"{full_response}\n\n[Diff proposed: {diff_id}. Waiting for user review.]",
+                    assistant_msg,
                 )
                 yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"diff_id": diff_id})
                 return
@@ -977,6 +1177,15 @@ class AgentRuntime:
                     f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
                     "Review the observation above and proceed with the next appropriate tool call or synthesize your final response."
                 )
+
+            # Compact older tool observations in history to avoid multi-turn context overflow
+            if len(conversation_history) > 4:
+                for hist_idx in range(len(conversation_history) - 2):
+                    h_msg = conversation_history[hist_idx]
+                    if h_msg.get("role") == "user" and "[Observation for `" in h_msg.get("content", ""):
+                        m_tool = re.search(r"\[Observation for `([^`]+)`\]", h_msg["content"])
+                        t_lbl = m_tool.group(1) if m_tool else "tool"
+                        h_msg["content"] = f"[Observation for `{t_lbl}`: completed (compacted)]"
 
             conversation_history.append({"role": "assistant", "content": full_response})
             conversation_history.append({"role": "user", "content": continuation_nudge})

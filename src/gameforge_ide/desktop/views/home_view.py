@@ -116,6 +116,7 @@ class RecentGameCard(QFrame):
         self.setObjectName(f"recentGameCard_{game.name}")
         self.setAccessibleName(f"Recent game {game.title}")
         self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setFixedSize(140, 150)
         self.setStyleSheet(
             f"QFrame#{self.objectName()} {{"
@@ -123,7 +124,7 @@ class RecentGameCard(QFrame):
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
             f"}}"
-            f"QFrame#{self.objectName()}:hover {{"
+            f"QFrame#{self.objectName()}:hover, QFrame#{self.objectName()}:focus {{"
             f"  border-color: {tokens.ACCENT_PRIMARY};"
             f"  background-color: {tokens.BG_HOVER};"
             f"}}"
@@ -145,7 +146,9 @@ class RecentGameCard(QFrame):
         layout.addWidget(self._thumb_lbl)
 
         # Title
-        title_lbl = QLabel(game.title, self)
+        title_text = game.title or game.name or "Untitled"
+        title_lbl = QLabel(title_text, self)
+        title_lbl.setToolTip(title_text)
         title_lbl.setStyleSheet(
             f"color: {tokens.TEXT_PRIMARY};"
             f"font-size: {tokens.FONT_BODY}px;"
@@ -166,21 +169,27 @@ class RecentGameCard(QFrame):
 
     def _load_thumbnail(self, path: Optional[Any]) -> None:
         if path and str(path):
-            pm = QPixmap(str(path))
-            if not pm.isNull():
-                scaled = pm.scaled(126, 78, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                self._thumb_lbl.setPixmap(scaled)
-                return
+            try:
+                pm = QPixmap(str(path))
+                if not pm.isNull():
+                    scaled = pm.scaled(126, 78, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                    self._thumb_lbl.setPixmap(scaled)
+                    return
+            except Exception:
+                pass
         # Placeholder
         self._thumb_lbl.setText("🎮")
 
     def _format_status(self, game: GameSummary) -> str:
         status_part = game.last_run_status or "—"
-        if status_part == "DONE":
+        if status_part in ("DONE", "PASS"):
             status_part = "PASS"
+        elif status_part in ("FAILED", "FAIL"):
+            status_part = "FAIL"
         time_part = ""
-        if game.updated_at > 0:
-            diff_s = max(0.0, time.time() - game.updated_at)
+        up_at = getattr(game, "updated_at", 0.0) or 0.0
+        if up_at > 0:
+            diff_s = max(0.0, time.time() - up_at)
             if diff_s < 3600:
                 time_part = f"{int(diff_s // 60)}m"
             elif diff_s < 86400:
@@ -191,10 +200,19 @@ class RecentGameCard(QFrame):
 
     def mousePressEvent(self, event: Any) -> None:
         if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.game.name)
+            if self.game and getattr(self.game, "name", None):
+                self.clicked.emit(self.game.name)
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            if self.game and getattr(self.game, "name", None):
+                self.clicked.emit(self.game.name)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class ReadinessRowWidget(QWidget):
@@ -220,15 +238,17 @@ class ReadinessRowWidget(QWidget):
         layout.addWidget(dot_lbl)
 
         # Key title + summary
-        label_text = f"{row.key.capitalize()}: {row.summary}"
-        if row.key == "engine":
-            label_text = f"Unreal Engine {row.summary}"
-        elif row.key == "ollama":
-            label_text = f"Ollama · {row.summary}"
-        elif row.key == "disk":
-            label_text = f"Disk {row.summary}"
-        elif row.key == "hosted":
-            label_text = f"Hosted models: {row.summary}"
+        r_key = str(getattr(row, "key", "") or "")
+        r_summary = str(getattr(row, "summary", "") or "Unknown")
+        label_text = f"{r_key.capitalize()}: {r_summary}"
+        if r_key == "engine":
+            label_text = f"Unreal Engine {r_summary}"
+        elif r_key == "ollama":
+            label_text = f"Ollama · {r_summary}"
+        elif r_key == "disk":
+            label_text = f"Disk {r_summary}"
+        elif r_key == "hosted":
+            label_text = f"Hosted models: {r_summary}"
 
         text_lbl = QLabel(label_text, self)
         text_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
@@ -272,6 +292,7 @@ class HomeView(QWidget):
 
         self._active_job: Optional[JobHandle] = None
         self._job_manager = default_job_manager()
+        self._scan_generation: int = 0
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(32, 28, 32, 28)
@@ -337,11 +358,11 @@ class HomeView(QWidget):
         from src.gameforge_ide.core.settings import get_settings
         s = get_settings()
         default_root = s.projects_root
-        if not (default_root and default_root.is_dir()):
+        if not default_root:
             hp_root = s.host_profile.get("projects_root") if hasattr(s, "host_profile") and isinstance(s.host_profile, dict) else None
-            if hp_root and Path(hp_root).is_dir():
+            if hp_root:
                 default_root = Path(hp_root)
-            elif s.artifacts_root and (Path(s.artifacts_root) / "projects").is_dir():
+            elif s.artifacts_root:
                 default_root = Path(s.artifacts_root) / "projects"
             else:
                 default_root = Path.home() / "Documents" / "GameForge" / "Projects"
@@ -544,6 +565,8 @@ class HomeView(QWidget):
 
     @Slot()
     def _on_design_it_clicked(self) -> None:
+        if self._active_job and not self._active_job.done:
+            return
         prompt_text = self._prompt_input.toPlainText().strip()
         if not prompt_text:
             return
@@ -582,8 +605,8 @@ class HomeView(QWidget):
         handle.add_done_callback(self._on_design_job_done)
 
     def _on_design_job_done(self, handle: JobHandle) -> None:
-        # Deliver to UI thread via invokeMethod or direct Qt call if already UI thread
-        from PySide6.QtCore import QMetaObject, Qt, Q_ARG
+        # Deliver to UI thread via invokeMethod
+        from PySide6.QtCore import QMetaObject, Qt
         QMetaObject.invokeMethod(self, "_handle_design_result", Qt.QueuedConnection)
 
     @Slot()
@@ -607,26 +630,50 @@ class HomeView(QWidget):
             self._notice_lbl.setVisible(True)
             return
 
-        result = handle.result()
-        pname = getattr(result.gds.meta, 'project_name', '') if getattr(result, 'gds', None) and hasattr(result.gds, 'meta') else ''
+        try:
+            result = handle.result()
+        except Exception as exc:
+            self._notice_lbl.setText(f"Error drafting design: {exc}")
+            self._notice_lbl.setVisible(True)
+            return
+
+        if not result:
+            self._notice_lbl.setText("Design drafting failed: no result returned.")
+            self._notice_lbl.setVisible(True)
+            return
+
+        gds = getattr(result, "gds", None)
+        pname = getattr(gds.meta, 'project_name', '') if gds and hasattr(gds, 'meta') else ''
         q_count = len(result.questions) if getattr(result, 'questions', None) else 0
 
         # Attach authoritative user-selected project directory (Two-Location Storage Architecture)
         pdir_text = self._edit_project_dir.text().strip()
-        if pdir_text and getattr(result, "gds", None) and hasattr(result.gds, "meta"):
+        if pdir_text and gds and hasattr(gds, "meta"):
             base_dir = Path(pdir_text).resolve()
-            proj_name = result.gds.meta.project_name or "MyGame"
+            proj_name = getattr(gds.meta, "project_name", None) or "MyGame"
             if base_dir.name.lower() == proj_name.lower():
                 target_pdir = base_dir
             else:
                 target_pdir = base_dir / proj_name
-            setattr(result.gds.meta, "project_dir", str(target_pdir))
+            setattr(gds.meta, "project_dir", str(target_pdir))
 
         print(f"[GameForge Studio] Design draft status: {result.status}" + (f" (Project: '{pname}')" if pname else "") + (f" | {q_count} questions" if q_count else ""), flush=True)
         if result.status == "OK":
-            self.designReady.emit(result.gds, [])
+            if gds:
+                self.designReady.emit(gds, [])
+            else:
+                self._notice_lbl.setText("Design generated without a valid specification.")
+                self._notice_lbl.setVisible(True)
         elif result.status == "NEEDS_INPUT":
-            self.designReady.emit(result.gds, result.questions)
+            if gds:
+                self.designReady.emit(gds, result.questions or [])
+            else:
+                # Model transport error or clarification required before GDS can be built
+                q_text = "\n".join(result.questions) if getattr(result, "questions", None) else ""
+                err_text = "; ".join(result.errors) if getattr(result, "errors", None) else ""
+                msg = q_text or err_text or "Could not generate design spec. Please ensure Ollama is running and try again."
+                self._notice_lbl.setText(msg)
+                self._notice_lbl.setVisible(True)
         elif result.status == "UNSUPPORTED":
             self._notice_lbl.setText("That doesn't look like a game request. Try the Assistant.")
             self._notice_lbl.setVisible(True)
@@ -643,25 +690,35 @@ class HomeView(QWidget):
         self._status_lbl.setText("Cancelling…")
         self._btn_cancel.setEnabled(False)
 
+    def set_project_directory(self, path: Path | str) -> None:
+        """Programmatically update authoritative project directory and refresh games."""
+        resolved = Path(path).resolve()
+        if hasattr(self, "_edit_project_dir"):
+            self._edit_project_dir.setText(str(resolved))
+        self.refresh_recent_games()
+
     def refresh_recent_games(self) -> None:
         """Scan recent games off the UI thread and render cards."""
+        self._scan_generation += 1
+        current_gen = self._scan_generation
         pdir = self._edit_project_dir.text().strip() if hasattr(self, "_edit_project_dir") else ""
 
         def work():
             if pdir and Path(pdir).is_dir():
-                custom_games = list_games(projects_root=pdir)
-                if custom_games:
-                    return custom_games
+                return list_games(projects_root=pdir)
             return list_games()
 
         def done(handle: JobHandle):
+            if current_gen != self._scan_generation:
+                return
+            from PySide6.QtCore import QMetaObject, Qt
             if handle.status == "DONE":
-                from PySide6.QtCore import QMetaObject, Qt
                 res = handle.result()
                 self._latest_games = res[:6] if res else []
-                QMetaObject.invokeMethod(self, "_render_recent_games", Qt.QueuedConnection)
             else:
                 logger.error("Scan Recent Games failed: %s", handle.error)
+                self._latest_games = []
+            QMetaObject.invokeMethod(self, "_render_recent_games", Qt.QueuedConnection)
 
         handle = self._job_manager.submit(work, name="Scan Recent Games")
         handle.add_done_callback(done)
@@ -695,10 +752,13 @@ class HomeView(QWidget):
             return probe_all(get_settings())
 
         def done(handle: JobHandle):
+            from PySide6.QtCore import QMetaObject, Qt
             if handle.status == "DONE":
-                from PySide6.QtCore import QMetaObject, Qt
                 self._latest_snapshot = handle.result()
-                QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)
+            else:
+                logger.error("Readiness probe failed: %s", handle.error)
+                self._latest_snapshot = None
+            QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)
 
         handle = self._job_manager.submit(work, name="Probe Readiness")
         handle.add_done_callback(done)
@@ -712,7 +772,11 @@ class HomeView(QWidget):
                 w.deleteLater()
 
         snap: Optional[SystemsSnapshot] = getattr(self, "_latest_snapshot", None)
-        if not snap:
+        if not snap or not getattr(snap, "rows", None):
+            lbl = QLabel("System status unavailable or probing failed.", self._readiness_section)
+            lbl.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+            self._readiness_rows_layout.addWidget(lbl)
+            self._readiness_rows_layout.addStretch(1)
             return
 
         for row in snap.rows:
@@ -730,5 +794,8 @@ class HomeView(QWidget):
         """Connect to SystemsService to receive live snapshot updates."""
         def on_snapshot(snap: SystemsSnapshot):
             self._latest_snapshot = snap
-            self._render_readiness()
+            from PySide6.QtCore import QMetaObject, Qt
+            QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)
+
+        self._systems_snapshot_slot = on_snapshot
         service.snapshotChanged.connect(on_snapshot)

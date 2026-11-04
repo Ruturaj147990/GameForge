@@ -22,6 +22,7 @@ class StandalonePackager:
     """Packages GameForge IDE as a standalone deployable bundle outside the source tree."""
 
     VERSION = "1.0.0"
+    MAX_PACKAGE_SIZE_MB = 400.0
 
     FORBIDDEN_PATTERNS = [
         "models/blobs",
@@ -31,6 +32,9 @@ class StandalonePackager:
         "__pycache__",
         "*.pyc",
         "*.gguf",
+        "*.log",
+        "*.tmp",
+        "pytest_os_temp",
     ]
 
     def __init__(self, repo_root: Path, dist_root: Optional[Path] = None):
@@ -102,21 +106,31 @@ class StandalonePackager:
         )
         py_launcher.write_text(py_content, encoding="utf-8")
 
-        # 4. Generate manifest with SHA-256 hashes of all packaged files
+        # 4. Write portable marker
+        (self.dist_root / ".portable").write_text("portable=1\n", encoding="utf-8")
+
+        # 5. Generate manifest with SHA-256 hashes and total size calculation
+        total_bytes = 0
         file_hashes: Dict[str, str] = {}
         for root, _, files in os.walk(self.dist_root):
             for f in files:
                 p = Path(root) / f
                 if p.name == "manifest.json":
                     continue
+                sz = p.stat().st_size
+                total_bytes += sz
                 rel_path = p.relative_to(self.dist_root).as_posix()
                 file_hashes[rel_path] = self._compute_sha256(p)
 
+        total_mb = total_bytes / (1024.0 * 1024.0)
         manifest = {
             "app_name": "GameForge Native IDE",
             "version": self.VERSION,
             "target_unreal_engine": "5.7.4",
             "entry_point": "src.gameforge_ide.launcher",
+            "max_allowed_footprint_mb": self.MAX_PACKAGE_SIZE_MB,
+            "total_size_bytes": total_bytes,
+            "total_size_mb": round(total_mb, 2),
             "file_count": len(file_hashes),
             "files": file_hashes,
         }
@@ -126,16 +140,17 @@ class StandalonePackager:
             json.dump(manifest, f, indent=2)
 
         return {
-            "ok": True,
+            "ok": total_mb <= self.MAX_PACKAGE_SIZE_MB,
             "dist_root": str(self.dist_root),
             "manifest_file": str(manifest_path),
             "file_count": len(file_hashes),
+            "total_size_mb": round(total_mb, 2),
             "launcher_bat": str(bat_launcher),
             "launcher_py": str(py_launcher),
         }
 
     def verify_bundle(self) -> Tuple[bool, List[str]]:
-        """Validates that packaged bundle is self-contained and free of forbidden artifacts."""
+        """Validates that packaged bundle is self-contained, <= 400 MB, and free of forbidden artifacts."""
         errors: List[str] = []
         if not self.dist_root.exists():
             return False, ["Distribution directory does not exist"]
@@ -152,15 +167,23 @@ class StandalonePackager:
         if not py_launcher.exists():
             errors.append("Launcher python entry wrapper missing")
 
-        # Verify no model weights or protected graders in bundle
+        # Verify no model weights or protected graders in bundle, and check total size <= 400MB
+        total_bytes = 0
         for root, _, files in os.walk(self.dist_root):
             for f in files:
                 p = Path(root) / f
+                total_bytes += p.stat().st_size
                 name_lower = p.name.lower()
                 if name_lower.endswith(".gguf") or name_lower.endswith(".bin"):
                     errors.append(f"Model weight binary mistakenly bundled: {p}")
                 if "protected" in str(p).lower():
                     errors.append(f"Protected grader mistakenly bundled: {p}")
+
+        total_mb = total_bytes / (1024.0 * 1024.0)
+        if total_mb > self.MAX_PACKAGE_SIZE_MB:
+            errors.append(
+                f"Package footprint {total_mb:.2f} MB exceeds maximum limit of {self.MAX_PACKAGE_SIZE_MB} MB"
+            )
 
         return len(errors) == 0, errors
 

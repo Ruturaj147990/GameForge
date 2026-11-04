@@ -88,11 +88,16 @@ def content_handler(ctx: StepContext) -> StepOutcome:
 
     ctx.log(f"Content step completed: installed packs={installed_packs}, generated {len(artifacts)} audio/ini artifacts")
 
+    outcome_data = {
+        "installed_packs": installed_packs,
+        "cook_dirs": cook_dirs,
+        "artifacts_count": len(artifacts),
+    }
+    from ..validation import validate_stage_output
+    valid, issues = validate_stage_output("content", outcome_data, project_dir=project_dir)
+
     return StepOutcome(
-        ok=True,
-        data={
-            "installed_packs": installed_packs,
-            "cook_dirs": cook_dirs,
-            "artifacts_count": len(artifacts),
-        },
+        ok=valid,
+        data=outcome_data,
+        errors=issues if not valid else [],
     )

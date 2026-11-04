@@ -85,7 +85,11 @@ def check_ollama_status(url: str = "http://127.0.0.1:11434", timeout_s: float = 
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             if resp.status == 200:
                 data = json.loads(resp.read().decode("utf-8"))
-                models = [m.get("name", "") for m in data.get("models", [])]
+                models = [
+                    m.get("name", "")
+                    for m in (data.get("models") or [])
+                    if isinstance(m, dict) and m.get("name")
+                ]
                 return True, models
     except Exception:
         pass
@@ -390,3 +394,18 @@ class OllamaSetupDialog(QDialog):
     @Slot()
     def _on_download_clicked(self) -> None:
         QDesktopServices.openUrl(QUrl("https://ollama.com/download"))
+
+    def reject(self) -> None:
+        if hasattr(self, "_poll_timer") and self._poll_timer.isActive():
+            self._poll_timer.stop()
+        super().reject()
+
+    def accept(self) -> None:
+        if hasattr(self, "_poll_timer") and self._poll_timer.isActive():
+            self._poll_timer.stop()
+        super().accept()
+
+    def closeEvent(self, event) -> None:
+        if hasattr(self, "_poll_timer") and self._poll_timer.isActive():
+            self._poll_timer.stop()
+        super().closeEvent(event)

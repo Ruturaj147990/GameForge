@@ -29,6 +29,7 @@ class SystemsService(QObject):
         self._last_snapshot: Optional[SystemsSnapshot] = None
         self._window_visible: bool = True
         self._window_minimized: bool = False
+        self._is_probing: bool = False
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh_now)
@@ -54,6 +55,9 @@ class SystemsService(QObject):
 
     def refresh_now(self) -> None:
         """Trigger an asynchronous systems probe via JobManager."""
+        if self._is_probing:
+            return
+        self._is_probing = True
         ws = self.workspace_root
 
         def _do_probe() -> SystemsSnapshot:
@@ -63,10 +67,12 @@ class SystemsService(QObject):
         handle.add_done_callback(self._on_probe_complete)
 
     def _on_probe_complete(self, handle: JobHandle) -> None:
+        self._is_probing = False
         try:
             snapshot = handle.result()
-            self._last_snapshot = snapshot
-            self.snapshotChanged.emit(snapshot)
+            if snapshot is not None:
+                self._last_snapshot = snapshot
+                self.snapshotChanged.emit(snapshot)
         except Exception:
             pass
 

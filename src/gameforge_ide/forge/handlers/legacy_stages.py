@@ -340,7 +340,12 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
             except Exception as exc:
                 return StepOutcome(False, errors=[f"on_project_dir_ready failed: {exc}"])
 
-    return StepOutcome(uproject.is_file(), data=info, errors=[] if uproject.is_file() else ["uproject not found"])
+    if not uproject.is_file():
+        return StepOutcome(False, data=info, errors=["uproject not found"])
+
+    from ..validation import validate_stage_output
+    valid, issues = validate_stage_output("scaffold", info, project_dir=pdir)
+    return StepOutcome(valid, data=info, errors=issues if not valid else [])
 
 
 def legacy_sources(ctx: StepContext) -> StepOutcome:
@@ -371,7 +376,10 @@ def legacy_sources(ctx: StepContext) -> StepOutcome:
             cpp_file.write_text(cpp_content, encoding="utf-8", newline="\n")
             written_files.extend([str(h_file.relative_to(pdir)), str(cpp_file.relative_to(pdir))])
 
-        return StepOutcome(True, data={"files": sorted(written_files), "codegen_tasks": len(tasks)})
+        outcome_data = {"files": sorted(written_files), "codegen_tasks": len(tasks)}
+        from ..validation import validate_stage_output
+        valid, issues = validate_stage_output("codegen", outcome_data, project_dir=pdir)
+        return StepOutcome(valid, data=outcome_data, errors=issues if not valid else [])
 
     recipe_id = get_recipe_id(params)
     generator = RECIPE_IMPL[recipe_id][0]
@@ -380,7 +388,10 @@ def legacy_sources(ctx: StepContext) -> StepOutcome:
         path = pdir / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8", newline="\n")
-    return StepOutcome(True, data={"files": sorted(files)})
+    outcome_data = {"files": sorted(files)}
+    from ..validation import validate_stage_output
+    valid, issues = validate_stage_output("codegen", outcome_data, project_dir=pdir)
+    return StepOutcome(valid, data=outcome_data, errors=issues if not valid else [])
 
 
 def legacy_build(ctx: StepContext) -> StepOutcome:
@@ -406,7 +417,13 @@ def legacy_build(ctx: StepContext) -> StepOutcome:
         "diagnostics": [x.__dict__ for x in r.diagnostics[:20]],
     }
     artifacts = [{"path": str(r.log_path), "kind": "log"}] if r.log_path else []
-    return StepOutcome(r.ok, data=data, errors=r.errors, artifacts=artifacts)
+    errors = list(r.errors)
+    if r.ok:
+        from ..validation import validate_stage_output
+        valid, issues = validate_stage_output("build", data, project_dir=pdir)
+        if not valid:
+            errors.extend([f"Build validation: {issue}" for issue in issues])
+    return StepOutcome(r.ok and len(errors) == 0, data=data, errors=errors, artifacts=artifacts)
 
 
 def legacy_assemble(ctx: StepContext) -> StepOutcome:
@@ -551,7 +568,13 @@ def legacy_tests(ctx: StepContext) -> StepOutcome:
     r = tc.run_automation_tests(uproject, test_filter)
     data = {"exit_code": r.exit_code, "log": r.log_path, "log_path": r.log_path, **r.data}
     artifacts = [{"path": str(r.log_path), "kind": "log"}] if r.log_path else []
-    return StepOutcome(r.ok, data=data, errors=r.errors, artifacts=artifacts)
+    errors = list(r.errors)
+    if r.ok:
+        from ..validation import validate_stage_output
+        valid, issues = validate_stage_output("automation", data, project_dir=pdir)
+        if not valid:
+            errors.extend([f"Automation validation: {issue}" for issue in issues])
+    return StepOutcome(r.ok and len(errors) == 0, data=data, errors=errors, artifacts=artifacts)
 
 
 def legacy_package(ctx: StepContext) -> StepOutcome:
@@ -584,6 +607,13 @@ def legacy_package(ctx: StepContext) -> StepOutcome:
 
     tc = _get_toolchain(ctx)
     ok, data, errors = engine_stages.package(tc, uproject)
+    data = dict(data or {})
+    if ok:
+        from ..validation import validate_stage_output
+        valid, issues = validate_stage_output("package", data, project_dir=pdir)
+        if not valid:
+            ok = False
+            errors = list(errors or []) + issues
     return StepOutcome(ok, data=data, errors=errors)
 
 

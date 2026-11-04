@@ -223,6 +223,8 @@ class GdsForm(QWidget):
         self._table_levels.setColumnCount(4)
         self._table_levels.setHorizontalHeaderLabels(["Level ID", "Layout", "Size (m)", "Lighting"])
         self._table_levels.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._table_levels.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table_levels.setSelectionBehavior(QTableWidget.SelectRows)
         self._table_levels.setFixedHeight(120)
         self._table_levels.setStyleSheet(
             f"QTableWidget {{"
@@ -246,6 +248,8 @@ class GdsForm(QWidget):
         self._table_entities.setColumnCount(5)
         self._table_entities.setHorizontalHeaderLabels(["Entity ID", "Kind", "Count", "Module", "Placement"])
         self._table_entities.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._table_entities.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table_entities.setSelectionBehavior(QTableWidget.SelectRows)
         self._table_entities.setFixedHeight(160)
         self._table_entities.setStyleSheet(
             f"QTableWidget {{"
@@ -274,6 +278,8 @@ class GdsForm(QWidget):
         self._table_rules.setHorizontalHeaderLabels(["Rule Description / Sentence", "Action"])
         self._table_rules.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._table_rules.setColumnWidth(1, 90)
+        self._table_rules.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table_rules.setSelectionBehavior(QTableWidget.SelectRows)
         self._table_rules.setFixedHeight(120)
         self._table_rules.setStyleSheet(
             f"QTableWidget {{"
@@ -401,30 +407,42 @@ class GdsForm(QWidget):
             # Levels
             self._table_levels.setRowCount(len(spec.scene.levels))
             for r, lvl in enumerate(spec.scene.levels):
-                self._table_levels.setItem(r, 0, QTableWidgetItem(lvl.level_id))
-                layout_str = lvl.layout.value if hasattr(lvl.layout, "value") else str(lvl.layout)
-                self._table_levels.setItem(r, 1, QTableWidgetItem(layout_str))
-                sz = f"{lvl.size_m.x}x{lvl.size_m.y}" if lvl.size_m else "—"
-                self._table_levels.setItem(r, 2, QTableWidgetItem(sz))
-                lighting_str = lvl.lighting.value if hasattr(lvl.lighting, "value") else str(lvl.lighting or "day")
-                self._table_levels.setItem(r, 3, QTableWidgetItem(lighting_str))
+                for col_idx, text_val in enumerate([
+                    lvl.level_id,
+                    lvl.layout.value if hasattr(lvl.layout, "value") else str(lvl.layout),
+                    f"{lvl.size_m.x}x{lvl.size_m.y}" if lvl.size_m else "—",
+                    lvl.lighting.value if hasattr(lvl.lighting, "value") else str(lvl.lighting or "day"),
+                ]):
+                    it = QTableWidgetItem(text_val)
+                    it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                    self._table_levels.setItem(r, col_idx, it)
 
             # Entities
             self._table_entities.setRowCount(len(spec.entities))
             for r, ent in enumerate(spec.entities):
-                self._table_entities.setItem(r, 0, QTableWidgetItem(ent.entity_id))
                 kind_str = ent.kind.value if hasattr(ent.kind, "value") else str(ent.kind)
-                self._table_entities.setItem(r, 1, QTableWidgetItem(kind_str))
-                self._table_entities.setItem(r, 2, QTableWidgetItem(str(ent.count)))
-                self._table_entities.setItem(r, 3, QTableWidgetItem(ent.module or "kit"))
                 plc = ent.placement.strategy if ent.placement else "default"
-                self._table_entities.setItem(r, 4, QTableWidgetItem(str(plc)))
+                for col_idx, text_val in enumerate([
+                    ent.entity_id,
+                    kind_str,
+                    str(ent.count),
+                    ent.module or "kit",
+                    str(plc),
+                ]):
+                    it = QTableWidgetItem(text_val)
+                    it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                    self._table_entities.setItem(r, col_idx, it)
 
             # Rules
             self._table_rules.setRowCount(len(spec.rules))
             for r, rule in enumerate(spec.rules):
-                s_text = sentence(rule) if rule else ""
-                self._table_rules.setItem(r, 0, QTableWidgetItem(s_text))
+                try:
+                    s_text = sentence(rule) if rule else ""
+                except Exception:
+                    s_text = str(getattr(rule, "description", getattr(rule, "rule_id", "rule")))
+                it_rule = QTableWidgetItem(s_text)
+                it_rule.setFlags(it_rule.flags() & ~Qt.ItemIsEditable)
+                self._table_rules.setItem(r, 0, it_rule)
                 btn_edit = QPushButton("Edit", self._table_rules)
                 btn_edit.setStyleSheet(
                     f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
@@ -436,7 +454,7 @@ class GdsForm(QWidget):
             # Goals
             win_texts = [self._format_condition(c) for c in spec.goals.win]
             lose_texts = [self._format_condition(c) for c in spec.goals.lose]
-            self._edit_win.setText(", ".join(win_texts) if win_texts else "relics.collected >= 5")
+            self._edit_win.setText(", ".join(win_texts) if win_texts else "entity.relics.collected >= 5")
             self._edit_lose.setText(", ".join(lose_texts) if lose_texts else "player.health <= 0")
 
             # Scenarios
@@ -462,8 +480,26 @@ class GdsForm(QWidget):
 
     @staticmethod
     def _format_condition(c: Any) -> str:
+        if isinstance(c, dict):
+            stat = c.get("stat")
+            op = c.get("op")
+            val = c.get("value")
+            if stat and op and val is not None:
+                try:
+                    v = int(val) if float(val).is_integer() else val
+                except (ValueError, TypeError):
+                    v = val
+                return f"{stat} {op} {v}"
+            if "event" in c:
+                return f"event={c['event']}"
+            if "seconds" in c:
+                return f"time >= {c['seconds']}"
+            return str(c)
         if hasattr(c, "stat") and hasattr(c, "op") and hasattr(c, "value"):
-            v = int(c.value) if getattr(c, "value", None) is not None and float(c.value).is_integer() else c.value
+            try:
+                v = int(c.value) if getattr(c, "value", None) is not None and float(c.value).is_integer() else c.value
+            except (ValueError, TypeError):
+                v = c.value
             return f"{c.stat} {c.op} {v}"
         if hasattr(c, "event"):
             return f"event={c.event}"
@@ -486,16 +522,24 @@ class GdsForm(QWidget):
             if p in existing_map_repr:
                 parsed.append(existing_map_repr[p])
                 continue
-            m = re.match(r"^([a-z0-9_.]+)\s*(>=|<=|>|<|==|!=)\s*([0-9.]+)$", p)
+            m = re.match(r"^([A-Za-z0-9_.]+)\s*(>=|<=|>|<|==)\s*([0-9.]+)$", p)
             if m:
                 from ...design.gds import StatCompare
-                stat_name, op, val = m.group(1), m.group(2), float(m.group(3))
+                stat_name, op, val = m.group(1).lower(), m.group(2), float(m.group(3))
+                # Normalize common shorthand stats
+                if stat_name in ("health", "lives", "stamina", "max_health"):
+                    stat_name = f"player.{stat_name}"
+                elif stat_name in ("score", "time_s"):
+                    stat_name = f"game.{stat_name}"
+                elif not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
+                    if any(stat_name.endswith(sfx) for sfx in (".collected", ".remaining", ".killed")):
+                        stat_name = f"entity.{stat_name}"
                 parsed.append(StatCompare(stat=stat_name, op=op, value=val))
                 continue
-            m_ev = re.match(r"^event[=:]\s*([a-z0-9_.]+)$", p, re.IGNORECASE)
+            m_ev = re.match(r"^event[=:]\s*([A-Za-z0-9_.]+)$", p, re.IGNORECASE)
             if m_ev:
                 from ...design.gds import EventOccurred
-                parsed.append(EventOccurred(kind="event", event=m_ev.group(1)))
+                parsed.append(EventOccurred(kind="event", event=m_ev.group(1).lower()))
                 continue
             m_time = re.match(r"^time\s*(>=|>|==)\s*([0-9.]+)$", p, re.IGNORECASE)
             if m_time:
@@ -573,6 +617,7 @@ class GdsForm(QWidget):
 
     @Slot()
     def _on_add_rule_clicked(self) -> None:
+        self._apply_inputs_to_spec()
         entity_ids = [e.entity_id for e in self._spec.entities] if self._spec else []
         dlg = RuleEditorDialog(entity_ids=entity_ids, parent=self)
         if dlg.exec() == RuleEditorDialog.Accepted:
@@ -585,6 +630,7 @@ class GdsForm(QWidget):
     def _on_edit_rule_clicked(self, row: int) -> None:
         if not self._spec or not (0 <= row < len(self._spec.rules)):
             return
+        self._apply_inputs_to_spec()
         rule = self._spec.rules[row]
         entity_ids = [e.entity_id for e in self._spec.entities]
         dlg = RuleEditorDialog(rule=rule, entity_ids=entity_ids, parent=self)

@@ -530,6 +530,7 @@ class DesignView(QWidget):
         """Open an in-memory draft (e.g. from Home's prompt_to_gds)."""
         self._current_spec = gds
         self._current_project = gds.meta.project_name or gds.meta.title
+        self.projectChanged.emit(self._current_project)
         pdir_meta = getattr(gds.meta, "project_dir", None)
         if project_dir:
             self._current_project_dir = Path(project_dir).resolve()
@@ -597,7 +598,8 @@ class DesignView(QWidget):
             return False
         p_dir.mkdir(parents=True, exist_ok=True)
 
-        spec.meta.revision += 1
+        prev_rev = spec.meta.revision or 1
+        spec.meta.revision = prev_rev + 1
         try:
             gds_store.save(p_dir, spec)
             self._current_spec = spec
@@ -607,6 +609,7 @@ class DesignView(QWidget):
             self._update_header_status(is_valid=True, errors=[])
             return True
         except gds_store.RevisionConflict as exc:
+            spec.meta.revision = prev_rev
             reply = QMessageBox.question(
                 self,
                 "Revision Conflict",
@@ -618,6 +621,7 @@ class DesignView(QWidget):
                 self.load_project(self._current_project, p_dir)
             return False
         except Exception as exc:
+            spec.meta.revision = prev_rev
             QMessageBox.critical(self, "Save Error", f"Failed to save design spec:\n{exc}")
             return False
 
@@ -967,12 +971,12 @@ class DesignView(QWidget):
             self._diff_preview_box.setVisible(True)
 
     @Slot()
-    def _on_apply_change(self) -> None:
+    def _on_apply_change(self) -> bool:
         if not self._pending_change_ops:
-            return
+            return False
         curr_spec = self._form.get_spec() or self._current_spec
         if not curr_spec:
-            return
+            return False
         try:
             patched = apply_patch(curr_spec, self._pending_change_ops)
             self._current_spec = patched
@@ -984,13 +988,16 @@ class DesignView(QWidget):
                 if p_dir:
                     p_dir.mkdir(parents=True, exist_ok=True)
                     gds_store.save(p_dir, patched)
+            self._update_header_status(is_valid=True, errors=[])
             self._diff_preview_box.setVisible(False)
             self._txt_change.clear()
             self._pending_change_ops = []
+            return True
         except Exception as exc:
             QMessageBox.warning(self, "Patch Error", f"Could not apply patch: {exc}")
+            return False
 
     @Slot()
     def _on_rebuild_changes(self) -> None:
-        self._on_apply_change()
-        self.build_game()
+        if self._on_apply_change():
+            self.build_game()

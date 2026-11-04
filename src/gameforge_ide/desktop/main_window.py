@@ -977,16 +977,9 @@ class MainWindow(QMainWindow):
 
 
     def _show_about(self) -> None:
-        QMessageBox.about(
-            self,
-            "About GameForge IDE",
-            "<h3>GameForge IDE v1.0.0</h3>"
-            "<p>Agentic game-development environment powered by<br>"
-            "local Ollama models (gameforge-qwen3.5-9b, gameforge-qwen3.5-4b, gameforge-27b-sft, llama3.1:8b) "
-            "or an opt-in hosted provider.</p>"
-            "<p>Supports Unreal Engine 5.7, Unity 6, Godot 4.3.</p>"
-            "<p>© 2026 GameForge Project — Windows 11 Native PySide6 Desktop</p>",
-        )
+        from .dialogs.about_dialog import AboutDialog
+        dlg = AboutDialog(self)
+        dlg.exec()
 
     def _command_palette_commands(self):
         """Return only currently implemented user-facing commands."""
@@ -1212,7 +1205,9 @@ class MainWindow(QMainWindow):
                 parent=self,
             )
             view.playRequested.connect(self._on_games_play_requested)
-            view.openCodeRequested.connect(lambda f, l: self._switch_studio_view("code"))
+            view.openCodeRequested.connect(
+                lambda f, l: (self._switch_studio_view("code"), self._get_or_create_code_view().open_file(f, l))
+            )
             if self._current_project:
                 view.set_project(self._current_project)
             return view
@@ -1225,6 +1220,7 @@ class MainWindow(QMainWindow):
                 parent=self,
             )
             view.launchRequested.connect(self._on_launch_game)
+            view.buildRequested.connect(lambda p: self._on_games_build_requested(p))
             if self._current_project:
                 view.set_project(self._current_project)
             return view
@@ -1240,7 +1236,9 @@ class MainWindow(QMainWindow):
                 workspace_root=self._workspace,
                 parent=self,
             )
-            view.openFileRequested.connect(lambda p: self._switch_studio_view("code"))
+            view.openFileRequested.connect(
+                lambda p: (self._switch_studio_view("code"), self._get_or_create_code_view().open_file(p))
+            )
             if self._current_project:
                 view.set_project(self._current_project)
             return view
@@ -1686,7 +1684,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         chat = getattr(self, "_chat_panel", None)
-        building = bool(chat is not None and getattr(getattr(chat, "_runner", None), "_threads", None))
+        legacy_building = bool(chat is not None and getattr(getattr(chat, "_runner", None), "_threads", None))
+        forge_service = getattr(self, "_forge_service", None)
+        forge_building = bool(forge_service is not None and hasattr(forge_service, "active_runs") and forge_service.active_runs())
+        building = legacy_building or forge_building
         busy = building or bool(getattr(self._agent, "is_busy", False))
         if getattr(self, "confirm_on_close", True) and busy:
             reply = QMessageBox.question(
@@ -1700,6 +1701,18 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.Yes:
                 event.ignore()
                 return
+
+        # Cancel any active forge runs to prevent orphaned background compiler / Unreal processes
+        if forge_service is not None and hasattr(forge_service, "active_runs"):
+            for r in forge_service.active_runs():
+                run_id = r.get("run_id")
+                if run_id:
+                    try:
+                        forge_service.cancel_run(run_id)
+                        from src.gameforge_ide.forge.executor import ForgeExecutor
+                        ForgeExecutor.request_cancel(run_id)
+                    except Exception as exc:
+                        pass
 
         if hasattr(self, "_health_timer") and self._health_timer is not None:
             self._health_timer.stop()

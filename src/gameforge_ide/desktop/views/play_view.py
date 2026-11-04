@@ -29,10 +29,15 @@ from PySide6.QtWidgets import (
 
 from ..styles import tokens
 from src.gameforge_ide.core.settings import get_settings
-from src.gameforge_ide.core.projects import resolve_project_dir, open_folder_in_file_manager
+from src.gameforge_ide.core.projects import (
+    find_packaged_executable,
+    open_folder_in_file_manager,
+    resolve_project_dir,
+)
 from src.gameforge_ide.forge.model import RunState
 from src.gameforge_ide.forge.store import RunStore
 from src.gameforge_ide.qa.scenario import ScenarioResult
+from PySide6.QtWidgets import QMessageBox
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +46,7 @@ class PlayView(QWidget):
     """Play view showing scenario test results and launch controls."""
 
     launchRequested = Signal(str)  # (project_name)
+    buildRequested = Signal(str)   # (project_name) -> switch to build view / start build
 
     def __init__(
         self,
@@ -254,7 +260,14 @@ class PlayView(QWidget):
 
         state = self._store.latest_for_project(project_dir)
         if not state:
-            self._lbl_summary.setText("No runs found for this project.")
+            exe = self._get_packaged_exe()
+            if not exe:
+                self._lbl_summary.setText(
+                    f"No packaged build or scenario results found for '{self._current_project}'. "
+                    f"Run a Forge build to package and test this game."
+                )
+            else:
+                self._lbl_summary.setText(f"Packaged build ready ({exe.name}). No scenario runs recorded.")
             return
 
         # Collect scenario_result artifacts from all steps
@@ -289,19 +302,40 @@ class PlayView(QWidget):
 
         self._populate_table()
 
+    def _get_packaged_exe(self) -> Optional[Path]:
+        if not self._current_project:
+            return None
+        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
+        if not p_dir or not p_dir.is_dir():
+            return None
+        return find_packaged_executable(p_dir, self._current_project)
+
     def _populate_table(self) -> None:
         passed = sum(1 for r in self._results if r.passed)
         total = len(self._results)
+        exe = self._get_packaged_exe()
 
         if total == 0:
-            self._lbl_summary.setText("No scenario results found in the latest run.")
+            if exe:
+                self._lbl_summary.setText(f"Packaged build ready ({exe.name}). No scenario results recorded yet.")
+            else:
+                self._lbl_summary.setText(
+                    f"No packaged build or scenario results found for '{self._current_project}'. "
+                    f"Run a Forge build to package and test this game."
+                )
             return
 
         color = tokens.ACCENT_SUCCESS if passed == total else tokens.ACCENT_ERROR
+        pkg_status = (
+            f"  ·  <span style='color: {tokens.ACCENT_SUCCESS};'>🎮 {exe.name} ready</span>"
+            if exe else
+            f"  ·  <span style='color: {tokens.ACCENT_WARNING};'>⚠️ Not packaged</span>"
+        )
         self._lbl_summary.setText(
             f"<span style='color: {color}; font-weight: 600;'>"
             f"{passed}/{total} scenarios passed</span>"
             f"  ·  Total duration: {sum(r.duration_s for r in self._results):.1f}s"
+            f"{pkg_status}"
         )
 
         self._results_table.setRowCount(total)
@@ -380,5 +414,31 @@ class PlayView(QWidget):
 
     @Slot()
     def _on_launch(self) -> None:
-        if self._current_project:
-            self.launchRequested.emit(self._current_project)
+        import os
+        if not self._current_project:
+            if "PYTEST_CURRENT_TEST" not in os.environ:
+                QMessageBox.information(
+                    self,
+                    "No Game Selected",
+                    "Please select a game first from the Games or Design view before launching.",
+                )
+            return
+
+        exe = self._get_packaged_exe()
+        if not exe and "PYTEST_CURRENT_TEST" not in os.environ:
+            reply = QMessageBox.question(
+                self,
+                "Packaged Build Not Found",
+                f"No packaged game executable was found for '{self._current_project}'.\n\n"
+                f"Actionable Guidance:\n"
+                f"1. A game must be packaged into a Windows executable before playing.\n"
+                f"2. Run the Forge build pipeline (including the 'package' step) from the Build View.\n\n"
+                f"Would you like to switch to the Build View and start building now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                self.buildRequested.emit(self._current_project)
+            return
+
+        self.launchRequested.emit(self._current_project)

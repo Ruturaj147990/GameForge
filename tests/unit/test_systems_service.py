@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 import pytest
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 
 from src.gameforge_ide.core.systems import (
     SystemRow,
@@ -22,11 +23,12 @@ from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.desktop.services.systems_service import SystemsService
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def qapp():
-    app = QCoreApplication.instance()
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    app = QApplication.instance()
     if app is None:
-        app = QCoreApplication([])
+        app = QApplication(["-platform", "offscreen"])
     return app
 
 

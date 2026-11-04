@@ -39,6 +39,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             args={
                 "actor_class": "StaticMeshActor",
                 "label": "GF_OpenWorld_Ground",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Gray",
                 "location": {"x": 0.0, "y": 0.0, "z": -10.0},
                 "scale": {"x": floor_scale_x, "y": floor_scale_y, "z": 0.2},
             },

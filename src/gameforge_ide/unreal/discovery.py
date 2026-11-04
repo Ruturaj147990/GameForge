@@ -22,11 +22,29 @@ import logging
 import os
 from pathlib import Path
 import sys
+import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PINNED_VERSION = "5.7"
+
+# DEF-134 FIX: Module-level locks for thread-safe engine discovery.
+# Python 3.14's Path.glob() / glob.scandir() crashes with Windows access violations
+# when called from multiple threads concurrently (or even from a single background
+# thread while Qt's main thread iterates allWidgets()). Two complementary guards:
+#   1. _DRIVE_SCAN_LOCK   – serialises all drive filesystem scans.
+#   2. _DISCOVERY_LOCK    – serialises the entire discover_all_engines() body.
+#   3. _discovery_cache   – caches the result so subsequent calls are instant.
+_DRIVE_SCAN_LOCK = threading.Lock()
+_DISCOVERY_LOCK = threading.Lock()
+_discovery_cache: "Optional[List[DiscoveredEngine]]" = None
+
+
+def invalidate_discovery_cache() -> None:
+    """Call when the engine environment changes (e.g. after reset_settings_cache())."""
+    global _discovery_cache
+    _discovery_cache = None
 
 
 @dataclass
@@ -101,8 +119,13 @@ def validate_engine_root(root: Path, source: str, pinned_minor: str = DEFAULT_PI
         diagnostics.append("UnrealBuildTool binary not found")
 
     # 3. Python remote execution
-    remote_exec = root / "Engine" / "Plugins" / "Experimental" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py"
-    has_remote_exec = remote_exec.is_file()
+    remote_exec_candidates = [
+        root / "Engine" / "Plugins" / "Experimental" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+        root / "Engine" / "Plugins" / "Developer" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+        root / "Engine" / "Plugins" / "ScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+        root / "Engine" / "Plugins" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+    ]
+    has_remote_exec = any(cand.is_file() for cand in remote_exec_candidates)
     if not has_remote_exec:
         diagnostics.append("PythonScriptPlugin remote_execution.py not found")
 
@@ -126,6 +149,23 @@ def validate_engine_root(root: Path, source: str, pinned_minor: str = DEFAULT_PI
     )
 
 
+def _safe_read_json(path: Path, retries: int = 3, delay: float = 0.05) -> Optional[Any]:
+    """Read a JSON file safely with UTF-8 BOM stripping and retry loop for locked files."""
+    for attempt in range(retries):
+        try:
+            raw = path.read_text(encoding="utf-8-sig")
+            return json.loads(raw)
+        except (PermissionError, OSError):
+            if attempt < retries - 1:
+                import time
+                time.sleep(delay * (attempt + 1))
+            else:
+                pass
+        except Exception:
+            return None
+    return None
+
+
 def scan_manifest_items() -> List[Path]:
     """Scan Epic Games Launcher *.item manifests in %ProgramData%\\Epic\\EpicGamesLauncher\\Data\\Manifests."""
     roots: List[Path] = []
@@ -139,16 +179,14 @@ def scan_manifest_items() -> List[Path]:
 
     try:
         for item_file in manifest_dir.glob("*.item"):
-            try:
-                data = json.loads(item_file.read_text(encoding="utf-8"))
+            data = _safe_read_json(item_file)
+            if isinstance(data, dict):
                 app_name = str(data.get("AppName", ""))
                 location = data.get("InstallLocation")
                 if app_name.startswith("UE_") and location:
                     p = Path(location)
                     if p.is_dir() and p not in roots:
                         roots.append(p)
-            except Exception:
-                pass
     except OSError:
         pass
     return roots
@@ -165,8 +203,8 @@ def scan_launcher_installed_dat() -> List[Path]:
     if not dat_file.is_file():
         return roots
 
-    try:
-        data = json.loads(dat_file.read_text(encoding="utf-8"))
+    data = _safe_read_json(dat_file)
+    if isinstance(data, dict):
         for item in data.get("InstallationList", []):
             app_name = str(item.get("AppName", ""))
             location = item.get("InstallLocation")
@@ -174,8 +212,6 @@ def scan_launcher_installed_dat() -> List[Path]:
                 p = Path(location)
                 if p.is_dir() and p not in roots:
                     roots.append(p)
-    except Exception:
-        pass
     return roots
 
 
@@ -196,73 +232,167 @@ def scan_windows_registry() -> List[Path]:
             (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Epic Games\Unreal Engine\Builds"),
         ]
 
+        # Probe both 64-bit and 32-bit registry views
+        access_flags = [winreg.KEY_READ]
+        if hasattr(winreg, "KEY_WOW64_64KEY"):
+            access_flags.append(winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+        if hasattr(winreg, "KEY_WOW64_32KEY"):
+            access_flags.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+
         for hive, subkey_path in key_specs:
-            try:
-                with winreg.OpenKey(hive, subkey_path) as base:
-                    num_subkeys, num_values, _ = winreg.QueryInfoKey(base)
-                    # Check subkeys
-                    for i in range(num_subkeys):
-                        try:
-                            subkey_name = winreg.EnumKey(base, i)
-                            with winreg.OpenKey(base, subkey_name) as subkey:
-                                try:
-                                    dir_val, _ = winreg.QueryValueEx(subkey, "InstalledDirectory")
-                                    p = Path(dir_val)
-                                    if p.is_dir() and p not in roots:
+            for access in access_flags:
+                try:
+                    with winreg.OpenKey(hive, subkey_path, 0, access) as base:
+                        num_subkeys, num_values, _ = winreg.QueryInfoKey(base)
+                        # Check subkeys
+                        for i in range(num_subkeys):
+                            try:
+                                subkey_name = winreg.EnumKey(base, i)
+                                with winreg.OpenKey(base, subkey_name, 0, access) as subkey:
+                                    try:
+                                        dir_val, _ = winreg.QueryValueEx(subkey, "InstalledDirectory")
+                                        p = Path(dir_val)
+                                        if p.is_dir() and p not in roots:
+                                            roots.append(p)
+                                    except OSError:
+                                        pass
+                            except OSError:
+                                continue
+                        # Check values (like in Builds key)
+                        for j in range(num_values):
+                            try:
+                                val_name, val_data, _ = winreg.EnumValue(base, j)
+                                if isinstance(val_data, str):
+                                    p = Path(val_data)
+                                    if p.is_dir() and (p / "Engine" / "Binaries").is_dir() and p not in roots:
                                         roots.append(p)
-                                except OSError:
-                                    pass
-                        except OSError:
-                            continue
-                    # Check values (like in Builds key)
-                    for j in range(num_values):
-                        try:
-                            val_name, val_data, _ = winreg.EnumValue(base, j)
-                            if isinstance(val_data, str):
-                                p = Path(val_data)
-                                if p.is_dir() and (p / "Engine" / "Binaries").is_dir() and p not in roots:
-                                    roots.append(p)
-                        except OSError:
-                            continue
-            except OSError:
-                continue
+                            except OSError:
+                                continue
+                except OSError:
+                    continue
     except Exception:
         pass
     return roots
 
 
 def scan_filesystem_drives() -> List[Path]:
-    """Probe standard Unreal Engine paths across all available drive letters."""
+    """Probe standard Unreal Engine paths across all available drive letters without modal hangs.
+    
+    Thread-safe: serialized with _DRIVE_SCAN_LOCK to prevent concurrent glob.scandir()
+    calls from multiple threads, which causes Windows access violations on Python 3.14.
+    """
+    # Only one thread runs the glob scan at a time (DEF-134).
+    with _DRIVE_SCAN_LOCK:
+        return _scan_filesystem_drives_impl()
+
+
+def _scan_filesystem_drives_impl() -> List[Path]:
+    """Internal implementation of filesystem drive scanning (called under lock).
+    
+    Uses os.scandir() directly instead of Path.glob() to avoid Python 3.14's
+    new glob internals which crash with access violations when called from
+    background threads concurrently with Qt widget operations.
+    """
     roots: List[Path] = []
     if sys.platform == "win32":
-        # Get active drive letters
-        import string
-        drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+        drives: List[str] = []
+        try:
+            import ctypes
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            mask = k32.GetLogicalDrives()
+            # Only scan Fixed (3) and RAMDisk (6) drives — skip Remote/Network (4)
+            # which can hang or corrupt state when scanned from background threads.
+            for i in range(26):
+                if (mask >> i) & 1:
+                    drive_letter = chr(ord('A') + i)
+                    drive_root = f"{drive_letter}:\\"
+                    dtype = k32.GetDriveTypeW(drive_root)
+                    if dtype in (3, 6):  # Fixed and RAMDisk only (NOT network)
+                        drives.append(drive_root)
+        except Exception:
+            import string
+            drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
     else:
         drives = ["/opt", "/home"]
 
-    candidate_patterns = [
-        "UE/UE_*",
-        "Program Files/Epic Games/UE_*",
-        "Epic Games/UE_*",
-        "UnrealEngine/UE_*",
-        "Unreal Engine/UE_*",
+    # Candidate subdirectory structures: (parent_subpath, name_prefix)
+    # Using direct os.scandir() instead of Path.glob() to avoid Python 3.14 glob bugs.
+    candidate_parents: List[tuple] = [
+        ("",),                          # drive root: UE_*, UE5*
+        ("UE",),                        # UE/UE_*, UE/UE5*
+        ("Program Files", "Epic Games"),
+        ("Program Files (x86)", "Epic Games"),
+        ("Epic Games",),
+        ("Epic Games", "Unreal Engine"),
+        ("Unreal",),
+        ("UnrealEngine",),
+        ("Unreal Engine",),
     ]
+
+    def _check_dir_for_ue(parent: Path) -> None:
+        try:
+            with os.scandir(parent) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False) and (
+                            entry.name.startswith("UE_") or entry.name.startswith("UE5")
+                        ):
+                            p = Path(entry.path)
+                            if p not in roots:
+                                roots.append(p)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
 
     for drive in drives:
         drive_path = Path(drive)
-        for pattern in candidate_patterns:
-            try:
-                for match in drive_path.glob(pattern):
-                    if match.is_dir() and match not in roots:
-                        roots.append(match)
-            except OSError:
-                pass
+        for parts in candidate_parents:
+            parent = drive_path.joinpath(*parts)
+            _check_dir_for_ue(parent)
+
     return roots
 
 
-def discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION) -> List[DiscoveredEngine]:
-    """Discover all Unreal Engine installations across all detection sources, deduplicated."""
+def discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION, use_cache: bool = True) -> List["DiscoveredEngine"]:
+    """Discover all Unreal Engine installations across all detection sources, deduplicated.
+
+    Thread-safety contract (DEF-133/134 fix):
+    - Full discovery (manifest scanning, registry reads, drive glob) only runs on the
+      MAIN THREAD.  Python 3.14's pathlib.read_text / glob.scandir cause Windows
+      access violations when a background thread does file I/O while the main thread
+      is concurrently running QApplication.allWidgets() (Python 3.14 + PySide6 ABI).
+    - Background threads return an empty list if the cache is not yet warm, or the
+      cached result if the main thread has already populated it.
+    - Once the main thread populates _discovery_cache, every thread gets the result.
+    - When running unit tests (PYTEST_CURRENT_TEST set), caching is bypassed so tests
+      can configure different mock engine roots and environment variables safely.
+    """
+    global _discovery_cache
+    is_pytest = bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    if not is_pytest and use_cache and _discovery_cache is not None:
+        return _discovery_cache
+
+    with _DISCOVERY_LOCK:
+        if not is_pytest and use_cache and _discovery_cache is not None:   # double-checked locking
+            return _discovery_cache
+            return _discovery_cache
+
+        # Only run expensive filesystem I/O from the main thread to avoid Python 3.14
+        # pathlib/glob ABI crashes when Qt C++ and Python file I/O run concurrently.
+        if threading.current_thread() is not threading.main_thread():
+            # Background thread: return empty list safely. Engine will be None in
+            # the resulting Settings object, which is acceptable for CapabilityRegistry
+            # (it only needs artifacts_root, not engine info).
+            return []
+
+        result = _do_discover_all_engines(pinned_minor)
+        _discovery_cache = result
+        return result
+
+
+def _do_discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION) -> List["DiscoveredEngine"]:
+    """Internal: performs the actual multi-source engine discovery (called under _DISCOVERY_LOCK)."""
     found: List[DiscoveredEngine] = []
     seen_roots: set = set()
 

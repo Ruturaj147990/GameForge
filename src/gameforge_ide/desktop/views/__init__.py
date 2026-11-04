@@ -50,4 +50,5 @@ from .assets_view import AssetsView
 from .code_view import CodeView
 from .settings_view import SettingsView
 from .onboarding import OnboardingWizard
+from .onboarding_view import OnboardingView
 

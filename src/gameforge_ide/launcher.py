@@ -104,7 +104,47 @@ def _setup_terminal_event_listener() -> None:
         _safe_print(f"[GameForge Warning] Failed to attach terminal event listener: {exc}")
 
 
-def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose: bool = False) -> None:
+def _is_portable_mode() -> bool:
+    """Check if GameForge is running in portable / isolated mode."""
+    if os.environ.get("GAMEFORGE_PORTABLE", "").strip().lower() in ("1", "true", "yes"):
+        return True
+    marker_candidates = [
+        Path(__file__).resolve().parent / ".portable",
+        Path(__file__).resolve().parents[1] / ".portable",
+        Path(__file__).resolve().parents[2] / ".portable",
+        Path.cwd() / ".portable",
+    ]
+    return any(p.is_file() for p in marker_candidates)
+
+
+def _resolve_workspace(workspace_arg: Optional[Path | str] = None, portable: bool = False) -> Path:
+    """Resolve active workspace directory with resilient portable and repo-free fallbacks."""
+    if workspace_arg:
+        ws = Path(workspace_arg).resolve()
+        ws.mkdir(parents=True, exist_ok=True)
+        return ws
+
+    if portable or _is_portable_mode():
+        # In portable mode, use a self-contained local workspace folder
+        app_root = Path(__file__).resolve().parents[2]
+        portable_ws = app_root / "workspace"
+        try:
+            portable_ws.mkdir(parents=True, exist_ok=True)
+            return portable_ws.resolve()
+        except Exception:
+            pass
+
+    try:
+        ws = get_settings().default_workspace
+        ws.mkdir(parents=True, exist_ok=True)
+        return ws.resolve()
+    except Exception:
+        local_ws = Path.cwd() / "workspace"
+        local_ws.mkdir(parents=True, exist_ok=True)
+        return local_ws.resolve()
+
+
+def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose: bool = False, portable: bool = False) -> None:
     """Launch the genuine native PySide6 QMainWindow desktop application."""
     _configure_terminal_logging(verbose=verbose)
     _setup_terminal_event_listener()
@@ -136,9 +176,7 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose:
     from .desktop.styles.dark_theme import apply_theme
     apply_theme(app, "dark")
 
-    target_ws = Path(workspace_path).resolve() if workspace_path else get_settings().default_workspace
-    if not target_ws.exists():
-        target_ws.mkdir(parents=True, exist_ok=True)
+    target_ws = _resolve_workspace(workspace_path, portable=portable)
 
     print(f"[GameForge] Launching GameForge IDE desktop [workspace: {target_ws}]...", flush=True)
     from .desktop.main_window import MainWindow
@@ -172,13 +210,18 @@ def _is_loopback_host(host: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="GameForge IDE — Agentic Game Development Environment"
+        description="GameForge IDE - Agentic Game Development Environment"
     )
     parser.add_argument(
         "workspace",
         nargs="?",
         default=None,
-        help="Optional workspace folder to open (default: E:\\gameforge_step1).",
+        help="Optional workspace folder to open (default: configured default_workspace or local workspace).",
+    )
+    parser.add_argument(
+        "--portable",
+        action="store_true",
+        help="Run in self-contained portable mode (storing workspace and data locally in the application folder).",
     )
     parser.add_argument(
         "--serve",
@@ -205,7 +248,7 @@ def main() -> None:
         _launch_server(args.host, args.port)
     else:
         # Native desktop is the default
-        _launch_native_desktop(args.workspace, verbose=args.verbose)
+        _launch_native_desktop(args.workspace, verbose=args.verbose, portable=args.portable)
 
 
 if __name__ == "__main__":

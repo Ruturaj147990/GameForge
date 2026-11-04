@@ -473,9 +473,16 @@ class BuildView(QWidget):
 
         self._runs_combo.blockSignals(False)
 
+        target_idx = 0
+        if self._current_run_id:
+            for i in range(self._runs_combo.count()):
+                if self._runs_combo.itemData(i) == self._current_run_id:
+                    target_idx = i
+                    break
+
         if self._runs_combo.count() > 0:
-            self._runs_combo.setCurrentIndex(0)
-            self._load_run_by_id(str(self._runs_combo.currentData()))
+            self._runs_combo.setCurrentIndex(target_idx)
+            self._load_run_by_id(str(self._runs_combo.itemData(target_idx)))
         else:
             self._clear_run_view()
 
@@ -768,11 +775,20 @@ class BuildView(QWidget):
                 return
 
         # Request cancel through forge executor
+        cancelled = False
         try:
             from src.gameforge_ide.forge.executor import ForgeExecutor
-            ForgeExecutor.request_cancel(self._current_run_id)
+            cancelled = ForgeExecutor.cancel_run(self._current_run_id)
         except Exception:
             pass
+        if not cancelled:
+            # If not running in memory (e.g. orphaned from crash or previous session),
+            # mark as CANCELLED directly in store so run does not remain stuck.
+            state = self._store.load(self._current_run_id)
+            if state and state.status in ("RUNNING", "WAITING_APPROVAL", "PENDING"):
+                state.status = "CANCELLED"
+                self._store.save(state)
+        self.refresh_runs()
 
     @Slot()
     def _on_resume_clicked(self) -> None:
@@ -848,9 +864,12 @@ class BuildView(QWidget):
     def _confirm_rollback(self, project_dir: Path, commit_sha: str, step_id: str) -> None:
         repo = ProjectRepo(project_dir)
         changed_files = repo.changed_since(commit_sha)
-        files_preview = "\n".join(f"• {f}" for f in changed_files[:8])
-        if len(changed_files) > 8:
-            files_preview += f"\n... and {len(changed_files) - 8} more"
+        if changed_files:
+            files_preview = "\n".join(f"• {f}" for f in changed_files[:8])
+            if len(changed_files) > 8:
+                files_preview += f"\n... and {len(changed_files) - 8} more"
+        else:
+            files_preview = "• (No files modified since this checkpoint)"
 
         msg = (
             f"Roll back project to checkpoint after '{step_id}' ({commit_sha[:7]})?\n\n"
@@ -860,6 +879,10 @@ class BuildView(QWidget):
         )
         reply = QMessageBox.question(self, "Confirm Roll Back", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            repo.reset_to(commit_sha)
-            QMessageBox.information(self, "Roll Back Complete", f"Project state restored to checkpoint {commit_sha[:7]}.")
-            self.refresh_runs()
+            try:
+                repo.reset_to(commit_sha)
+                QMessageBox.information(self, "Roll Back Complete", f"Project state restored to checkpoint {commit_sha[:7]}.")
+                self.refresh_runs()
+            except Exception as exc:
+                logger.error("Rollback failed: %s", exc)
+                QMessageBox.critical(self, "Roll Back Failed", f"Could not roll back to checkpoint {commit_sha[:7]}:\n{exc}")

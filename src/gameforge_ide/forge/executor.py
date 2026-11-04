@@ -83,8 +83,21 @@ class ForgeExecutor:
         ev = self._step_cancel
         if ev is not None:
             ev.set()
+        try:
+            from ..core.jobs import terminate_all_children
+            terminate_all_children()
+        except Exception:
+            pass
 
     # -- public -------------------------------------------------------------------------------
+    def resume(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
+        """Resume a failed, cancelled or interrupted run, unblocking failed/cancelled/blocked steps."""
+        for rec in state.records.values():
+            if rec.status in (StepStatus.FAILED, StepStatus.CANCELLED, StepStatus.BLOCKED):
+                rec.status = StepStatus.PENDING
+                rec.errors = []
+        return self.run(state, store, editor_running)
+
     def run(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
         """Execute until DONE, FAILED, CANCELLED, BLOCKED or WAITING_APPROVAL. Safe to call again to resume."""
         ForgeExecutor._active_executors[state.run.run_id] = self
@@ -102,8 +115,20 @@ class ForgeExecutor:
         self._persist(state, store, {"kind": "run_started"})
         if self._needs_run_approval(state):
             return self._suspend(state, store, "run")
+
+        try:
+            steps_order = run.topo_order()
+        except (ValueError, Exception) as exc:
+            state.status = "FAILED"
+            for rec in state.records.values():
+                if rec.status in (StepStatus.PENDING, StepStatus.RUNNING):
+                    rec.status = StepStatus.BLOCKED
+                    rec.errors = [f"DAG topology error: {exc}"]
+            self._persist(state, store, {"kind": "run_finished", "status": "FAILED", "error": str(exc)})
+            return state
+
         eff: Dict[str, str] = {}  # effective hash = own inputs + dependencies' effective hashes
-        for step in run.topo_order():
+        for step in steps_order:
             eff[step.step_id] = canonical_hash(
                 {"self": step.input_hash, "deps": [eff[d] for d in sorted(step.depends_on)]}
             )
@@ -112,6 +137,14 @@ class ForgeExecutor:
                 return self._finish(state, store, "CANCELLED")
             if rec.status == StepStatus.DONE and rec.input_hash == eff[step.step_id]:
                 continue  # resume / incremental: unchanged work is skipped
+
+            # If step was previously marked BLOCKED, check if its dependencies are now all DONE:
+            if rec.status == StepStatus.BLOCKED and all(
+                state.records[d].status == StepStatus.DONE for d in step.depends_on
+            ):
+                rec.status = StepStatus.PENDING
+                rec.errors = []
+
             if rec.status in TERMINAL and rec.status != StepStatus.DONE:
                 continue  # FAILED/BLOCKED/SKIPPED stay until the run is re-planned
             if any(state.records[d].status != StepStatus.DONE for d in step.depends_on):
@@ -185,11 +218,36 @@ class ForgeExecutor:
                     pass
             rec.artifacts = valid_artifacts
             if out.ok:
+                from .validation import validate_stage_output
+                gds_obj = None
+                if "gds" in ctx.step.inputs:
+                    try:
+                        from ..design.gds import GameDesignSpec
+                        g_raw = ctx.step.inputs["gds"]
+                        gds_obj = GameDesignSpec.model_validate(g_raw) if isinstance(g_raw, dict) else g_raw
+                    except Exception:
+                        pass
+                # Strictly validate outputs when project context or stage outputs are present
+                if ctx.project_dir is not None or gds_obj is not None or any(
+                    k in out.data for k in ("params", "recipe", "files", "exe", "report_path", "mesh_audit", "spawned_actors", "read_back_actors")
+                ):
+                    stage_ok, validation_issues = validate_stage_output(
+                        step.kind.value,
+                        out.data,
+                        gds=gds_obj,
+                        project_dir=ctx.project_dir,
+                        artifacts=out.artifacts,
+                    )
+                    if not stage_ok:
+                        out.ok = False
+                        out.errors.extend([f"Validation: {issue}" for issue in validation_issues])
+
+            if out.ok:
                 if repo is not None and step.checkpoint and repo.available:
                     try:
                         repo.ensure()
                         rec.checkpoint = repo.commit(f"forge: {step.step_id} ({state.run.run_id})")
-                    except CheckpointError as exc:
+                    except (CheckpointError, Exception) as exc:
                         rec.data = {**rec.data, "checkpoint_warning": str(exc)}
                 rec.status = StepStatus.DONE
                 self._persist(
@@ -234,7 +292,7 @@ class ForgeExecutor:
             return
 
     def _with_timeout(self, handler: Handler, ctx: StepContext, timeout_s: float) -> StepOutcome:
-        """Handlers must poll ctx.cancel; on timeout we set cancel and wait up to 60 s for the handler to return."""
+        """Handlers must poll ctx.cancel; on timeout or cancel we signal cancel and wait up to 2 s."""
         box: Dict[str, Any] = {}
 
         def target() -> None:
@@ -246,11 +304,32 @@ class ForgeExecutor:
 
         t = threading.Thread(target=target, daemon=True, name=f"forge-{ctx.step.step_id}")
         t.start()
-        t.join(timeout_s)
-        if t.is_alive():
-            ctx.cancel.set()  # stops this step only; the run then records the step as FAILED (TIMEOUT)
-            t.join(60)
-            return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
+
+        start_time = time.time()
+        deadline = start_time + timeout_s
+        timed_out = False
+
+        while t.is_alive():
+            t.join(timeout=0.05)
+            if self._run_cancel.is_set():
+                break
+            if time.time() >= deadline:
+                timed_out = True
+                ctx.cancel.set()
+                break
+
+        if timed_out or t.is_alive():
+            ctx.cancel.set()
+            try:
+                from ..core.jobs import terminate_all_children
+                terminate_all_children()
+            except Exception:
+                pass
+            t.join(timeout=2.0)
+            if timed_out or t.is_alive():
+                return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
+            if self._run_cancel.is_set():
+                return StepOutcome(False, errors=["Cancelled by user"])
         if "exc" in box:
             return StepOutcome(False, errors=[box["exc"], box["tb"]])
         return box.get("out") or StepOutcome(False, errors=["handler returned nothing"])

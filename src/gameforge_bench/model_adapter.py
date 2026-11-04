@@ -289,6 +289,7 @@ def invoke_candidate(
         host = candidate_config.get("deployment", {}).get("host", "127.0.0.1:11434")
         url = f"http://{host}/api/generate"
 
+        effective_ctx = getattr(request, "max_context", None) or 4096
         payload = {
             "model": model_name,
             "prompt": request.prompt,
@@ -297,7 +298,9 @@ def invoke_candidate(
             "options": {
                 "temperature": request.temperature,
                 "num_predict": request.max_tokens,
+                "num_ctx": effective_ctx,
             },
+            "think": False,
         }
 
         body_bytes = json.dumps(payload).encode("utf-8")

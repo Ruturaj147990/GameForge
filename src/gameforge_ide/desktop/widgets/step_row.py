@@ -55,7 +55,7 @@ class StepRowDelegate(QStyledItemDelegate):
         painter.drawRoundedRect(r, tokens.RADIUS, tokens.RADIUS)
 
         # Status icon
-        st = step.status
+        st = (step.status or "").upper()
         icon_symbol, icon_color = self._get_status_icon(st)
         painter.setPen(QColor(icon_color))
         font = painter.font()
@@ -63,14 +63,6 @@ class StepRowDelegate(QStyledItemDelegate):
         font.setBold(True)
         painter.setFont(font)
         painter.drawText(QRect(r.x() + 8, r.y(), 20, r.height()), Qt.AlignCenter, icon_symbol)
-
-        # Step ID / Title
-        font.setBold(False)
-        painter.setFont(font)
-        text_color = tokens.TEXT_PRIMARY if st in ("DONE", "RUNNING") else tokens.TEXT_MUTED
-        painter.setPen(QColor(text_color))
-        title_text = step.step_id.replace("_", " ").capitalize()
-        painter.drawText(QRect(r.x() + 32, r.y(), r.width() - 120, r.height()), Qt.AlignLeft | Qt.AlignVCenter, title_text)
 
         # Duration & Checkpoint Badge
         right_x = r.right() - 8
@@ -91,8 +83,22 @@ class StepRowDelegate(QStyledItemDelegate):
             right_x -= (ckpt_w + 6)
 
         if dur_str:
+            dur_w = max(60, painter.fontMetrics().horizontalAdvance(dur_str) + 8)
             painter.setPen(QColor(tokens.TEXT_MUTED))
-            painter.drawText(QRect(right_x - 60, r.y(), 60, r.height()), Qt.AlignRight | Qt.AlignVCenter, dur_str)
+            painter.drawText(QRect(right_x - dur_w, r.y(), dur_w, r.height()), Qt.AlignRight | Qt.AlignVCenter, dur_str)
+            right_x -= (dur_w + 8)
+
+        # Step ID / Title (elided cleanly into remaining space)
+        font.setPointSize(tokens.FONT_BODY)
+        font.setBold(False)
+        painter.setFont(font)
+        text_color = tokens.TEXT_PRIMARY if st in ("DONE", "RUNNING", "FAILED", "FAIL", "CANCELLED", "CANCELED") else tokens.TEXT_MUTED
+        painter.setPen(QColor(text_color))
+        title_text = step.step_id.replace("_", " ").capitalize()
+        title_left = r.x() + 32
+        avail_w = max(30, right_x - title_left - 8)
+        elided_title = painter.fontMetrics().elidedText(title_text, Qt.ElideRight, avail_w)
+        painter.drawText(QRect(title_left, r.y(), avail_w, r.height()), Qt.AlignLeft | Qt.AlignVCenter, elided_title)
 
         painter.restore()
 
@@ -105,6 +111,8 @@ class StepRowDelegate(QStyledItemDelegate):
             return "○", tokens.TEXT_MUTED
         elif status in ("FAILED", "FAIL"):
             return "✕", tokens.ACCENT_ERROR
+        elif status in ("CANCELLED", "CANCELED"):
+            return "⏹", tokens.ACCENT_WARNING
         elif status == "WAITING_APPROVAL":
             return "⏸", tokens.ACCENT_WARNING
         elif status == "BLOCKED":

@@ -191,7 +191,7 @@ class OptimizationLoop:
         return self._append_engine_ini("r.Shadow.DistanceScale", "0.75")
 
     def _apply_enable_nanite(self, gds: GameDesignSpec) -> bool:
-        return self._append_engine_ini("r.Nanite.ProjectEnabled", "1")
+        return self._append_engine_ini("r.Nanite", "1")
 
     def _apply_screen_pct(self, gds: GameDesignSpec) -> bool:
         return self._append_engine_ini("r.ScreenPercentage", "85")
@@ -202,16 +202,33 @@ class OptimizationLoop:
     def _apply_disable_clouds(self, gds: GameDesignSpec) -> bool:
         return self._append_engine_ini("r.VolumetricCloud", "0")
 
-    def _append_engine_ini(self, key: str, value: str) -> bool:
+    def _append_engine_ini(self, key: str, value: str, section: str = "SystemSettings") -> bool:
+        import re
         ini_path = self.project_dir / "Config" / "DefaultEngine.ini"
         try:
             ini_path.parent.mkdir(parents=True, exist_ok=True)
-            text = ini_path.read_text(encoding="utf-8") if ini_path.is_file() else "[/Script/Engine.RendererSettings]\n"
-            if key in text:
-                return False
-            if "[/Script/Engine.RendererSettings]" not in text:
-                text += "\n[/Script/Engine.RendererSettings]\n"
-            text += f"{key}={value}\n"
+            text = ini_path.read_text(encoding="utf-8") if ini_path.is_file() else f"[{section}]\n"
+            
+            # Check if key already has the requested value
+            pattern = re.compile(rf"^{re.escape(key)}\s*=\s*(.*)$", re.MULTILINE)
+            m = pattern.search(text)
+            if m:
+                if m.group(1).strip() == value:
+                    return False
+                # Replace with new value
+                new_text = pattern.sub(f"{key}={value}", text, count=1)
+                ini_path.write_text(new_text, encoding="utf-8")
+                return True
+
+            sec_header = f"[{section}]"
+            if sec_header not in text:
+                text += f"\n{sec_header}\n"
+                text += f"{key}={value}\n"
+            else:
+                # Insert key right after section header
+                idx = text.find(sec_header) + len(sec_header)
+                text = text[:idx] + f"\n{key}={value}" + text[idx:]
+
             ini_path.write_text(text, encoding="utf-8")
             return True
         except Exception:

@@ -91,13 +91,16 @@ def generate_ambience_loop(
     else:
         audio = _filtered_noise(duration_s, sample_rate=sample_rate)
 
-    # Fade edges for seamless looping
-    fade_len = int(0.1 * sample_rate)
+    # True seamless circular crossfade: blend tail into head and truncate overlapped tail
+    fade_len = int(0.25 * sample_rate)
     if len(audio) > 2 * fade_len:
-        audio[:fade_len] *= np.linspace(0.0, 1.0, fade_len)
-        audio[-fade_len:] *= np.linspace(1.0, 0.0, fade_len)
+        ramp = np.linspace(0.0, 1.0, fade_len)
+        head = audio[:fade_len].copy()
+        tail = audio[-fade_len:].copy()
+        audio[:fade_len] = head * ramp + tail * (1.0 - ramp)
+        audio = audio[:-fade_len]
 
-    # Normalize
+    # Normalize with headroom
     peak = np.max(np.abs(audio))
     if peak > 0:
         audio = (audio / peak) * 0.82
@@ -111,3 +114,21 @@ def generate_ambience_loop(
         wf.writeframes(pcm16.tobytes())
 
     return out_path
+
+
+def analyze_ambience_loop(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> Dict[str, Any]:
+    """Analyze quality and loop seamlessness of an ambient audio buffer."""
+    peak = float(np.max(np.abs(audio))) if len(audio) > 0 else 0.0
+    rms = float(np.sqrt(np.mean(audio ** 2))) if len(audio) > 0 else 0.0
+    seam_discontinuity = float(abs(audio[0] - audio[-1])) if len(audio) > 1 else 0.0
+    seam_ratio = seam_discontinuity / max(rms, 1e-6)
+    return {
+        "duration_s": round(len(audio) / sample_rate, 3),
+        "sample_rate": sample_rate,
+        "samples": len(audio),
+        "peak": round(peak, 4),
+        "rms": round(rms, 4),
+        "seam_discontinuity": round(seam_discontinuity, 5),
+        "seam_ratio": round(seam_ratio, 3),
+        "looping_smooth": seam_ratio < 2.0 and peak <= 0.98,
+    }

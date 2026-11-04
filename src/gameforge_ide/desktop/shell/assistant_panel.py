@@ -164,4 +164,29 @@ class AssistantPanel(QWidget):
         self.new_btn.setIcon(icon("build", role="secondary", size=14))
         self.clear_btn.setIcon(icon("cancel", role="secondary", size=14))
 
-    update_theme = refresh_icons
+    def update_theme(self) -> None:
+        self.setStyleSheet(f"""
+            QWidget#studioAssistantPanel {{
+                background: {tokens.BG_PANEL};
+                border-left: 1px solid {tokens.BORDER};
+            }}
+        """)
+        header = self.findChild(QWidget, "assistantHeader")
+        if header:
+            header.setStyleSheet(f"""
+                QWidget#assistantHeader {{
+                    background: {tokens.BG_SURFACE};
+                    border-bottom: 1px solid {tokens.BORDER};
+                }}
+                QToolButton {{
+                    background: transparent;
+                    border: none;
+                    border-radius: 4px;
+                    color: {tokens.TEXT_SECONDARY};
+                }}
+                QToolButton:hover {{
+                    background: {tokens.BG_HOVER};
+                    color: {tokens.TEXT_PRIMARY};
+                }}
+            """)
+        self.refresh_icons()

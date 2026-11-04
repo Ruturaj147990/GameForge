@@ -176,45 +176,87 @@ class SpendCapExceeded(RuntimeError):
 
 
 class SpendLedger:
+    _GLOBAL_LOCK = threading.RLock()
+    _in_flight: Dict[Tuple[str, Optional[str]], float] = {}
+
     def __init__(self, workspace_root: Path):
         self.path = Path(workspace_root) / ".gameforge" / "spend.jsonl"
-        self._lock = threading.Lock()
+        self._lock = SpendLedger._GLOBAL_LOCK
 
     def _entries(self) -> Iterator[Dict]:
-        if not self.path.is_file():
-            return iter(())
-        entries = []
-        with open(self.path, encoding="utf-8") as fh:
-            for l in fh:
-                line = l.strip()
-                if not line:
-                    continue
+        with self._lock:
+            if not self.path.is_file():
+                return iter(())
+            entries = []
+            for attempt in range(3):
                 try:
-                    entries.append(json.loads(line))
-                except (json.JSONDecodeError, ValueError):
-                    continue  # Gracefully skip corrupted or partial lines from crashed processes
-        return iter(entries)
+                    with open(self.path, encoding="utf-8", errors="replace") as fh:
+                        for l in fh:
+                            line = l.strip()
+                            if not line:
+                                continue
+                            try:
+                                parsed = json.loads(line)
+                                if isinstance(parsed, dict):
+                                    entries.append(parsed)
+                            except (json.JSONDecodeError, ValueError):
+                                continue  # Gracefully skip corrupted or partial lines from crashed processes
+                    break
+                except (PermissionError, FileNotFoundError, OSError):
+                    time.sleep(0.05 * (attempt + 1))
+            return iter(entries)
 
     def spent(self, provider_id: str, task_id: Optional[str] = None, day: Optional[str] = None) -> float:
         day = day or time.strftime("%Y-%m-%d")
         total = 0.0
         for e in self._entries():
-            if e["provider_id"] != provider_id:
+            if not isinstance(e, dict):
+                continue
+            if e.get("provider_id") != provider_id:
                 continue
             if task_id is not None and e.get("task_id") != task_id:
                 continue
-            if task_id is None and e["day"] != day:
+            if task_id is None and e.get("day") != day:
                 continue
-            total += e["usd"]
+            try:
+                total += float(e.get("usd", 0.0))
+            except (ValueError, TypeError):
+                continue
         return total
 
+    def _in_flight_spent(self, provider_id: str, task_id: Optional[str] = None) -> float:
+        with self._lock:
+            total = 0.0
+            for (p_id, t_id), amt in self._in_flight.items():
+                if p_id != provider_id:
+                    continue
+                if task_id is not None and t_id != task_id:
+                    continue
+                total += amt
+            return total
+
+    def reserve(self, profile: HostedProfile, task_id: Optional[str], estimate_usd: float) -> None:
+        with self._lock:
+            key = (profile.provider_id, task_id)
+            self._in_flight[key] = self._in_flight.get(key, 0.0) + estimate_usd
+
+    def release_reservation(self, profile: HostedProfile, task_id: Optional[str], estimate_usd: float) -> None:
+        with self._lock:
+            key = (profile.provider_id, task_id)
+            cur = self._in_flight.get(key, 0.0)
+            new_val = max(0.0, cur - estimate_usd)
+            if new_val == 0.0:
+                self._in_flight.pop(key, None)
+            else:
+                self._in_flight[key] = new_val
+
     def check(self, profile: HostedProfile, task_id: Optional[str], estimate_usd: float) -> None:
-        day_spent = self.spent(profile.provider_id)
+        day_spent = self.spent(profile.provider_id) + self._in_flight_spent(profile.provider_id)
         if day_spent + estimate_usd > profile.per_day_usd_cap:
             raise SpendCapExceeded(f"daily cap ${profile.per_day_usd_cap:.2f} for {profile.provider_id} "
                                    f"would be exceeded (spent ${day_spent:.4f})")
         if task_id:
-            task_spent = self.spent(profile.provider_id, task_id=task_id)
+            task_spent = self.spent(profile.provider_id, task_id=task_id) + self._in_flight_spent(profile.provider_id, task_id=task_id)
             if task_spent + estimate_usd > profile.per_task_usd_cap:
                 raise SpendCapExceeded(f"per-task cap ${profile.per_task_usd_cap:.2f} would be exceeded "
                                        f"(task spent ${task_spent:.4f})")
@@ -227,18 +269,42 @@ class SpendLedger:
                  "usd": round(usd, 6)}
         with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.path, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(entry) + "\n")
+            for attempt in range(5):
+                try:
+                    with open(self.path, "a", encoding="utf-8") as fh:
+                        fh.write(json.dumps(entry) + "\n")
+                        fh.flush()
+                    break
+                except (PermissionError, OSError):
+                    time.sleep(0.05 * (attempt + 1))
         return usd
 
 
 # ── HTTP helpers ────────────────────────────────────────────────────────────
 
 def _post_json(url: str, headers: Dict[str, str], body: Dict, timeout: float) -> Dict:
-    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
-                                 headers={"Content-Type": "application/json", **headers}, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+                                         headers={"Content-Type": "application/json", **headers}, method="POST")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_err = exc
+            if exc.code in (429, 502, 503, 504) and attempt < 2:
+                time.sleep(0.3 * (2 ** attempt))
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_err = exc
+            if attempt < 2:
+                time.sleep(0.3 * (2 ** attempt))
+                continue
+            raise
+    if last_err:
+        raise last_err
+    return {}
 
 
 def _sse_lines(url: str, headers: Dict[str, str], body: Dict, timeout: float) -> Iterator[Dict]:
@@ -358,6 +424,43 @@ class OpenAICompatibleHostedProvider(_HostedBase):
                             finish_reason=choice.get("finish_reason", "stop"), usage=usage,
                             metadata={"tool_calls": choice["message"].get("tool_calls") or []})
 
+    def chat_with_tools(self, model_id, messages, tools, num_ctx=8192, temperature=0.0, max_tokens=1024, **kw):
+        url = self.profile.base_url.rstrip("/") + "/chat/completions"
+        openai_tools = [{"type": "function", "function": t} for t in tools]
+        data = _post_json(
+            url,
+            self._headers(),
+            {
+                "model": model_id,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False,
+                "tools": openai_tools,
+            },
+            self.profile.timeout_s,
+        )
+        choice = data.get("choices", [{}])[0]
+        msg = choice.get("message", {})
+        calls = []
+        for tc in msg.get("tool_calls", []):
+            fn = tc.get("function", {})
+            name = fn.get("name")
+            args = fn.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {"_raw": args}
+            if name:
+                calls.append({"name": name, "arguments": args})
+        usage = {
+            "prompt_tokens": data.get("usage", {}).get("prompt_tokens", 0),
+            "completion_tokens": data.get("usage", {}).get("completion_tokens", 0),
+        }
+        self.last_usage = usage
+        return {"content": msg.get("content") or "", "tool_calls": calls, "usage": usage}
+
 
 class AnthropicProvider(_HostedBase):
     API_VERSION = "2023-06-01"
@@ -419,6 +522,47 @@ class AnthropicProvider(_HostedBase):
         return ChatResponse(content=text, model=model_id, finish_reason=data.get("stop_reason", "end_turn"),
                             usage=usage, metadata={"tool_calls": calls})
 
+    def chat_with_tools(self, model_id, messages, tools, num_ctx=8192, temperature=0.0, max_tokens=1024, **kw):
+        url = self.profile.base_url.rstrip("/") + "/messages"
+        anthropic_tools = [
+            {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "input_schema": t.get("parameters", {"type": "object"}),
+            }
+            for t in tools
+        ]
+        sys_prompt = None
+        conv_msgs = []
+        for m in messages:
+            if m.get("role") == "system":
+                sys_prompt = m.get("content", "")
+            else:
+                conv_msgs.append(m)
+        body = {
+            "model": model_id,
+            "max_tokens": max_tokens,
+            "messages": self._convert(conv_msgs),
+            "temperature": temperature,
+            "stream": False,
+            "tools": anthropic_tools,
+        }
+        if sys_prompt:
+            body["system"] = sys_prompt
+        data = _post_json(url, self._headers(), body, self.profile.timeout_s)
+        content_text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        calls = [
+            {"name": b["name"], "arguments": b.get("input", {})}
+            for b in data.get("content", [])
+            if b.get("type") == "tool_use"
+        ]
+        usage = {
+            "prompt_tokens": data.get("usage", {}).get("input_tokens", 0),
+            "completion_tokens": data.get("usage", {}).get("output_tokens", 0),
+        }
+        self.last_usage = usage
+        return {"content": content_text, "tool_calls": calls, "usage": usage}
+
 
 PROVIDER_KINDS = {"openai_compatible": OpenAICompatibleHostedProvider, "gameforge_gateway": OpenAICompatibleHostedProvider,
                   "anthropic": AnthropicProvider}
@@ -472,11 +616,14 @@ class GuardedProvider(ModelProvider):
         except (EgressBlocked, SpendCapExceeded) as exc:
             yield StreamChunk(token="", is_final=True, error=f"HOSTED_BLOCKED: {exc}")
             return
+        task_id = self.task_id_getter()
+        est_usd = est_in / 1e6 * model.usd_per_mtok_in + max_tokens / 1e6 * model.usd_per_mtok_out
+        self.ledger.reserve(self.profile, task_id, est_usd)
         try:
             async for chunk in self.inner.stream_chat(model_id, messages, system_prompt, temperature, max_tokens, **kw):
                 if chunk.is_final and chunk.metadata.get("usage"):
                     u = chunk.metadata["usage"]
-                    usd = self.ledger.record(self.profile, model, self.task_id_getter(),
+                    usd = self.ledger.record(self.profile, model, task_id,
                                              u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
                     chunk.metadata["usd"] = round(usd, 6)
                 yield chunk
@@ -487,14 +634,53 @@ class GuardedProvider(ModelProvider):
                               error=redact(f"HOSTED_HTTP_{exc.code}: {body}", self.inner.credentials.get(self.profile)))
         except Exception as exc:
             yield StreamChunk(token="", is_final=True, error=f"HOSTED_ERROR: {type(exc).__name__}: {exc}")
+        finally:
+            self.ledger.release_reservation(self.profile, task_id, est_usd)
 
     def complete(self, model_id, prompt, system_prompt=None, temperature=0.2, max_tokens=2048, **kw) -> ChatResponse:
-        model = self.preflight(model_id, len(prompt) // 3 + len(system_prompt or "") // 3, max_tokens)
-        resp = self.inner.complete(model_id, prompt, system_prompt, temperature, max_tokens, **kw)
-        usd = self.ledger.record(self.profile, model, self.task_id_getter(),
-                                 resp.usage.get("prompt_tokens", 0), resp.usage.get("completion_tokens", 0))
-        resp.metadata["usd"] = round(usd, 6)
-        return resp
+        est_in = len(prompt) // 3 + len(system_prompt or "") // 3
+        model = self.preflight(model_id, est_in, max_tokens)
+        task_id = self.task_id_getter()
+        est_usd = est_in / 1e6 * model.usd_per_mtok_in + max_tokens / 1e6 * model.usd_per_mtok_out
+        self.ledger.reserve(self.profile, task_id, est_usd)
+        try:
+            resp = self.inner.complete(model_id, prompt, system_prompt, temperature, max_tokens, **kw)
+            usd = self.ledger.record(self.profile, model, task_id,
+                                     resp.usage.get("prompt_tokens", 0), resp.usage.get("completion_tokens", 0))
+            resp.metadata["usd"] = round(usd, 6)
+            return resp
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "replace")[:400] if hasattr(exc, "read") else ""
+            msg = redact(f"HOSTED_HTTP_{exc.code}: {body}", self.inner.credentials.get(self.profile))
+            raise RuntimeError(msg) from None
+        except Exception as exc:
+            msg = redact(f"HOSTED_ERROR: {type(exc).__name__}: {exc}", self.inner.credentials.get(self.profile))
+            raise RuntimeError(msg) from None
+        finally:
+            self.ledger.release_reservation(self.profile, task_id, est_usd)
+
+    def chat_with_tools(self, model_id, messages, tools, num_ctx=8192, temperature=0.0, max_tokens=1024, **kw):
+        est_in = sum(len(m.get("content", "")) for m in messages) // 3
+        model = self.preflight(model_id, est_in, max_tokens)
+        task_id = self.task_id_getter()
+        est_usd = est_in / 1e6 * model.usd_per_mtok_in + max_tokens / 1e6 * model.usd_per_mtok_out
+        self.ledger.reserve(self.profile, task_id, est_usd)
+        try:
+            res = self.inner.chat_with_tools(model_id, messages, tools, num_ctx, temperature, max_tokens, **kw)
+            u = res.get("usage", {})
+            usd = self.ledger.record(self.profile, model, task_id,
+                                     u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+            res["usd"] = round(usd, 6)
+            return res
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "replace")[:400] if hasattr(exc, "read") else ""
+            msg = redact(f"HOSTED_HTTP_{exc.code}: {body}", self.inner.credentials.get(self.profile))
+            raise RuntimeError(msg) from None
+        except Exception as exc:
+            msg = redact(f"HOSTED_ERROR: {type(exc).__name__}: {exc}", self.inner.credentials.get(self.profile))
+            raise RuntimeError(msg) from None
+        finally:
+            self.ledger.release_reservation(self.profile, task_id, est_usd)
 
 
 def build_guarded_providers(workspace_root: Path, profiles: Optional[Dict[str, HostedProfile]] = None) -> Dict[str, GuardedProvider]:

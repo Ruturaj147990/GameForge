@@ -57,10 +57,16 @@ def generate_source(handler_name: str, on_event_body: str = "", tick_body: str =
 
     return f"""// Copyright 2026 GameForge Systems. Generated custom rule handler.
 #include "{handler_name}.h"
+#include "Engine/World.h"
 #include "GameForgeGameState.h"
 #include "GameForgeEvents.h"
+#include "GameForgeEventNames.h"
 #include "GameForgeAttributes.h"
+#include "GameForgePlayer.h"
+#include "GameForgeKitActors.h"
+#include "GameForgeObjectives.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 void U{handler_name}::OnEvent(const FGameForgeEvent& Event)
 {{

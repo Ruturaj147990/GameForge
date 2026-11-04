@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
-from ...core.settings import get_settings
+from ...core.settings import get_settings_safe as get_settings
 
 
 DataEgressClass = Literal["local_only", "authorized_cloud"]

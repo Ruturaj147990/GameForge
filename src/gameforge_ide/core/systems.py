@@ -33,9 +33,15 @@ class SystemsSnapshot:
         row_dict = {r.key: r.state for r in self.rows}
         if row_dict.get("engine") == "offline" or row_dict.get("ollama") == "offline":
             return "offline"
-        if all(r.state == "ok" for r in self.rows):
-            return "ok"
-        return "degraded"
+        # Core local operational dependencies
+        core_keys = {"ollama", "engine", "ram", "disk"}
+        core_states = [r.state for r in self.rows if r.key in core_keys]
+        if any(s == "offline" for s in core_states):
+            return "offline"
+        if any(s in ("degraded", "unknown") for s in core_states):
+            return "degraded"
+        # If all core services are ok, system is overall ok (hosted is optional opt-in)
+        return "ok"
 
     def row(self, key: str) -> Optional[SystemRow]:
         for r in self.rows:
@@ -58,7 +64,7 @@ def probe_ollama(settings: Settings, timeout_s: float = 3.0) -> SystemRow:
             req_ps = urllib.request.Request(f"{url}/api/ps", headers={"User-Agent": "GameForge-IDE"})
             with urllib.request.urlopen(req_ps, timeout=timeout_s) as resp_ps:
                 ps_data = json.loads(resp_ps.read().decode("utf-8"))
-            vram_bytes = sum(m.get("size_vram", 0) for m in ps_data.get("models", []))
+            vram_bytes = sum(((m.get("size_vram") or 0) if isinstance(m, dict) else 0) for m in ps_data.get("models", []))
         except Exception:
             pass
 
@@ -70,19 +76,36 @@ def probe_ollama(settings: Settings, timeout_s: float = 3.0) -> SystemRow:
                 ver_data = json.loads(resp_ver.read().decode("utf-8"))
             live_ver = ver_data.get("version")
             if live_ver:
-                # Check latest eval report in reports/P9
-                rep_dir = Path("reports/P9")
-                if rep_dir.is_dir():
-                    for rep_file in rep_dir.glob("eval_*.json"):
-                        rep_data = json.loads(rep_file.read_text(encoding="utf-8"))
-                        rep_ver = rep_data.get("version_info")
-                        if rep_ver and rep_ver != "unknown" and rep_ver != live_ver:
-                            version_changed = True
+                # Check latest eval report in reports/P9 relative to repo or cwd
+                candidate_rep_dirs = [
+                    Path(__file__).resolve().parents[2] / "reports" / "P9",
+                    Path("reports/P9"),
+                ]
+                for rep_dir in candidate_rep_dirs:
+                    if rep_dir.is_dir():
+                        for rep_file in rep_dir.glob("eval_*.json"):
+                            try:
+                                rep_data = json.loads(rep_file.read_text(encoding="utf-8"))
+                                rep_ver = rep_data.get("version_info")
+                                if rep_ver and rep_ver != "unknown" and rep_ver != live_ver:
+                                    version_changed = True
+                                    break
+                            except Exception:
+                                pass
+                        if version_changed:
                             break
         except Exception:
             pass
 
         vram_gb = vram_bytes / (1024 ** 3)
+        if len(models) == 0:
+            return SystemRow(
+                key="ollama",
+                state="degraded",
+                summary="0 models installed (pull model in Settings)",
+                fix_action="pull_models",
+            )
+
         if vram_gb > 0:
             summary = f"{len(models)} models · {vram_gb:.1f} GB VRAM in use"
         else:
@@ -99,9 +122,12 @@ def probe_ollama(settings: Settings, timeout_s: float = 3.0) -> SystemRow:
 def probe_engine(settings: Settings) -> SystemRow:
     engine = getattr(settings, "engine", None)
     if engine is not None:
-        exe = engine.root / "Engine" / "Binaries" / "Win64" / "UnrealEditor.exe"
-        if exe.is_file():
-            return SystemRow(key="engine", state="ok", summary=f"UE {engine.version} installed", fix_action=None)
+        try:
+            exe = engine.root / "Engine" / "Binaries" / "Win64" / "UnrealEditor.exe"
+            if exe.is_file():
+                return SystemRow(key="engine", state="ok", summary=f"UE {engine.version} installed", fix_action=None)
+        except Exception:
+            pass
     return SystemRow(key="engine", state="offline", summary="Engine not found", fix_action="set_engine")
 
 
@@ -119,17 +145,30 @@ def probe_editor() -> SystemRow:
 
 def probe_ram() -> SystemRow:
     try:
-        pct = psutil.virtual_memory().percent
+        vm = psutil.virtual_memory()
+        pct = vm.percent
+        used_gb = (vm.total - vm.available) / (1024 ** 3)
+        total_gb = vm.total / (1024 ** 3)
         state = "degraded" if pct > 85.0 else "ok"
-        summary = f"{pct:.1f}% used" + (" (> 85%)" if pct > 85.0 else "")
+        summary = f"{used_gb:.1f}/{total_gb:.1f} GB ({pct:.0f}% used)" + (" (> 85%)" if pct > 85.0 else "")
         return SystemRow(key="ram", state=state, summary=summary, fix_action=None)
     except Exception:
         return SystemRow(key="ram", state="unknown", summary="RAM probe error", fix_action=None)
 
 
 def probe_disk(settings: Settings) -> SystemRow:
-    p_root = getattr(settings, "projects_root", None)
-    if not p_root or not Path(p_root).exists():
+    p_root: Optional[Path] = None
+    try:
+        configured = getattr(settings, "projects_root", None)
+        if configured:
+            p_cand = Path(configured)
+            if p_cand.is_dir():
+                p_root = p_cand
+            elif p_cand.anchor and Path(p_cand.anchor).is_dir():
+                p_root = Path(p_cand.anchor)
+    except Exception:
+        pass
+    if p_root is None:
         p_root = Path.cwd()
     try:
         usage = shutil.disk_usage(p_root)

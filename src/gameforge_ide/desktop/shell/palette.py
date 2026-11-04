@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Callable, List, Optional, Tuple
 
@@ -16,6 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+
+logger = logging.getLogger(__name__)
 
 
 class CommandPalette(QDialog):
@@ -127,7 +130,10 @@ class CommandPalette(QDialog):
         callback = item.data(Qt.UserRole)
         self.accept()
         if callable(callback):
-            callback()
+            try:
+                callback()
+            except Exception as exc:
+                logger.exception("Error executing command '%s': %s", item.text(), exc)
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802
         if watched == self.search and event.type() == QEvent.KeyPress:
@@ -137,12 +143,13 @@ class CommandPalette(QDialog):
                 ]
                 if visible_rows:
                     current = self.list_widget.currentRow()
-                    try:
+                    if current in visible_rows:
                         position = visible_rows.index(current)
-                    except ValueError:
-                        position = 0
-                    step = 1 if event.key() == Qt.Key_Down else -1
-                    self.list_widget.setCurrentRow(visible_rows[(position + step) % len(visible_rows)])
+                        step = 1 if event.key() == Qt.Key_Down else -1
+                        new_pos = (position + step) % len(visible_rows)
+                    else:
+                        new_pos = 0 if event.key() == Qt.Key_Down else len(visible_rows) - 1
+                    self.list_widget.setCurrentRow(visible_rows[new_pos])
                 return True
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 item = self.list_widget.currentItem()

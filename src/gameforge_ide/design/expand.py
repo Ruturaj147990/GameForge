@@ -5,10 +5,11 @@ P5 maps them to UInputModifierNegate and UInputModifierSwizzleAxis(YXZ).
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.gameforge_ide.pipeline.spec_from_prompt import _pascal
-from .events_catalog import DEFAULT_MODULE
+from .events_catalog import DEFAULT_MODULE, MODULE_EVENTS
 from .draft import DesignDraft, DraftEntity, DraftLose, DraftWin
 from .gds import (
     Acceptance,
@@ -136,7 +137,7 @@ GENRE_TEMPLATES: Dict[Genre, Dict[str, Any]] = {
     Genre.ARENA_COMBAT: {
         "layout": LayoutKind.ARENA,
         "camera": CameraKind.TOP_DOWN,
-        "actions": [IA_MOVE, IA_LOOK, IA_ATTACK, IA_RESTART],
+        "actions": [IA_MOVE, IA_LOOK, IA_ATTACK, IA_JUMP, IA_RESTART],
         "always_entities": [(EntityKind.PLAYER, 1, "player_start"), (EntityKind.SPAWNER, 1, "scatter")],
     },
     Genre.CARD_BATTLER: {
@@ -160,13 +161,13 @@ GENRE_TEMPLATES: Dict[Genre, Dict[str, Any]] = {
     Genre.TOP_DOWN_SHOOTER: {
         "layout": LayoutKind.ARENA,
         "camera": CameraKind.TOP_DOWN,
-        "actions": [IA_MOVE, IA_LOOK, IA_FIRE],
+        "actions": [IA_MOVE, IA_LOOK, IA_FIRE, IA_JUMP],
         "always_entities": [(EntityKind.PLAYER, 1, "player_start"), (EntityKind.SPAWNER, 1, "scatter")],
     },
     Genre.DUNGEON_CRAWLER: {
         "layout": LayoutKind.ROOMS,
         "camera": CameraKind.THIRD_PERSON,
-        "actions": [IA_MOVE, IA_LOOK, IA_INTERACT, IA_ATTACK],
+        "actions": [IA_MOVE, IA_LOOK, IA_JUMP, IA_INTERACT, IA_ATTACK],
         "always_entities": [(EntityKind.PLAYER, 1, "player_start")],
     },
     Genre.PUZZLE: {
@@ -191,6 +192,138 @@ FEEDBACK_CATALOG = [
     ("checkpoint.reached", "vfx.ring", "sfx.chime_low"),
 ]
 
+KIT_DEFAULT_PROPS: Dict[EntityKind, Dict[str, Any]] = {
+    EntityKind.PLAYER: {
+        "move_speed": 600.0,
+        "jump_velocity": 600.0,
+        "max_health": 100.0,
+        "attack_mode": "melee",
+    },
+    EntityKind.PICKUP: {
+        "value": 1,
+        "respawns": False,
+        "respawn_seconds": 10.0,
+    },
+    EntityKind.CHECKPOINT: {
+        "activate_once": True,
+    },
+    EntityKind.GOAL: {
+        "required_value": 0.0,
+    },
+    EntityKind.HAZARD: {
+        "damage_per_second": 20.0,
+        "instant_kill": False,
+        "shape_extent": 100.0,
+    },
+    EntityKind.ENEMY: {
+        "attack_damage": 15.0,
+        "attack_range": 180.0,
+        "attack_cooldown": 1.0,
+        "move_speed": 350.0,
+        "aggro_range": 800.0,
+        "max_health": 50.0,
+    },
+    EntityKind.RANGED_ENEMY: {
+        "attack_damage": 10.0,
+        "attack_range": 900.0,
+        "attack_cooldown": 1.5,
+        "move_speed": 280.0,
+        "aggro_range": 1200.0,
+        "projectile_speed": 1500.0,
+        "max_health": 35.0,
+    },
+    EntityKind.SPAWNER: {
+        "enemy_entity_id": "enemy",
+        "wave_count": 3,
+        "enemies_per_wave": 4,
+        "seconds_between_waves": 5.0,
+        "spawn_radius": 400.0,
+    },
+    EntityKind.GUARD: {
+        "patrol_radius": 1000.0,
+        "aggro_radius": 600.0,
+        "move_speed": 300.0,
+    },
+    EntityKind.NPC: {
+        "objective_id": "main_quest",
+        "objective_title": "Main Quest",
+        "objective_target": 1,
+        "talk_on_overlap": True,
+    },
+    EntityKind.DOOR: {
+        "required_value": 1.0,
+        "open_seconds": 1.0,
+    },
+    EntityKind.SWITCH: {
+        "target_tag": "",
+        "toggle": True,
+    },
+    EntityKind.MOVING_PLATFORM: {
+        "end_offset_z": 300.0,
+        "seconds": 3.0,
+        "pause_seconds": 1.0,
+    },
+    EntityKind.LANDMARK: {
+        "discover_radius": 500.0,
+    },
+    EntityKind.PROP: {
+        "mesh_path": "/Engine/BasicShapes/Cube.Cube",
+        "scale_x": 1.0,
+        "scale_y": 1.0,
+        "scale_z": 1.0,
+    },
+    EntityKind.BOARD: {
+        "board_size": 3,
+        "win_length": 3,
+        "gravity": False,
+        "vs_ai": True,
+        "ai_level": "random",
+        "cell_size_cm": 120.0,
+    },
+    EntityKind.CARD_TABLE: {
+        "deck_size": 20,
+        "hand_size": 4,
+        "energy_per_turn": 3,
+    },
+}
+
+_CSG_PROP_RECIPES = {
+    "crate", "barrel", "rock", "pillar", "fence",
+    "tree", "stylized_tree", "bush", "torch", "chest", "altar",
+}
+
+
+def _extract_note_props(kind: EntityKind, note: str) -> Dict[str, Any]:
+    """Parse custom user entity parameters and tags from draft entity note."""
+    props: Dict[str, Any] = {}
+    if not note:
+        return props
+
+    note_lower = note.lower()
+
+    # CSG Procedural Prop Recipes
+    for recipe in _CSG_PROP_RECIPES:
+        if recipe in note_lower:
+            props["recipe"] = "stylized_tree" if recipe == "tree" else recipe
+            break
+
+    # Parse key-value parameters: "speed: 400", "health: 120", "damage: 25"
+    kv_matches = re.findall(r"([a-z_]+)\s*[:=]\s*(\d+(?:\.\d+)?)", note_lower)
+    for k, v in kv_matches:
+        num_val = float(v) if "." in v else int(v)
+        if k in ("speed", "move_speed", "player_speed"):
+            props["move_speed"] = float(num_val)
+        elif k in ("health", "hp", "max_health", "player_max_health"):
+            props["max_health"] = float(num_val)
+        elif k in ("damage", "attack_damage"):
+            props["attack_damage"] = float(num_val)
+        elif k in ("value", "score", "points"):
+            props["value"] = int(num_val)
+        elif k in ("extent", "radius", "size"):
+            props["shape_extent"] = float(num_val)
+
+    return props
+
 
 def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     """Deterministically expand a DesignDraft into a validated GameDesignSpec."""
@@ -213,70 +346,81 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     # 2. Collect Entities
     # Start with always-added entities for the genre
     existing_kinds: Set[EntityKind] = set()
-    raw_entities: List[Tuple[EntityKind, int, str]] = []
+    raw_entities: List[Tuple[EntityKind, int, str, Dict[str, Any], List[str], str]] = []
 
     for kind, count, slot_or_strat in tmpl["always_entities"]:
         existing_kinds.add(kind)
-        raw_entities.append((kind, count, slot_or_strat))
+        raw_entities.append((kind, count, slot_or_strat, {}, [], ""))
 
-    # Add entities from draft
+    # Add entities from draft, preserving user entity properties and tags
     for de in draft.entities:
         if de.kind in (EntityKind.PLAYER, EntityKind.BOARD, EntityKind.CARD_TABLE) and de.kind in existing_kinds:
+            # Merge props onto existing mandatory entity if user provided custom parameters
+            idx = next(i for i, (k, _, _, _, _, _) in enumerate(raw_entities) if k == de.kind)
+            cur_k, cur_cnt, cur_strat, cur_props, cur_tags, cur_note = raw_entities[idx]
+            merged_props = dict(cur_props)
+            merged_props.update(_extract_note_props(de.kind, de.note))
+            merged_props.update(de.props)
+            raw_entities[idx] = (cur_k, cur_cnt, cur_strat, merged_props, list(set(cur_tags + de.tags)), de.note or cur_note)
             continue
+
         existing_kinds.add(de.kind)
         slot_or_strat = "scatter"
         if de.kind == EntityKind.GOAL:
             slot_or_strat = "goal"
         elif de.kind == EntityKind.LANDMARK:
             slot_or_strat = "landmark"
-        raw_entities.append((de.kind, de.count, slot_or_strat))
+
+        custom_props = _extract_note_props(de.kind, de.note)
+        custom_props.update(de.props)
+        raw_entities.append((de.kind, de.count, slot_or_strat, custom_props, list(de.tags), de.note))
 
     # Check Win & Lose conditions to see if additional entities must be injected
-    has_spawner = any(k == EntityKind.SPAWNER for k, _, _ in raw_entities)
-    has_enemy = any(k in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY) for k, _, _ in raw_entities)
-    has_pickup = any(k == EntityKind.PICKUP for k, _, _ in raw_entities)
-    has_goal = any(k == EntityKind.GOAL for k, _, _ in raw_entities)
-    has_guard = any(k == EntityKind.GUARD for k, _, _ in raw_entities)
-    has_board = any(k == EntityKind.BOARD for k, _, _ in raw_entities)
-    has_card = any(k == EntityKind.CARD_TABLE for k, _, _ in raw_entities)
-    has_player = any(k == EntityKind.PLAYER for k, _, _ in raw_entities)
+    has_spawner = any(k == EntityKind.SPAWNER for k, _, _, _, _, _ in raw_entities)
+    has_enemy = any(k in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY) for k, _, _, _, _, _ in raw_entities)
+    has_pickup = any(k == EntityKind.PICKUP for k, _, _, _, _, _ in raw_entities)
+    has_goal = any(k == EntityKind.GOAL for k, _, _, _, _, _ in raw_entities)
+    has_guard = any(k == EntityKind.GUARD for k, _, _, _, _, _ in raw_entities)
+    has_board = any(k == EntityKind.BOARD for k, _, _, _, _, _ in raw_entities)
+    has_card = any(k == EntityKind.CARD_TABLE for k, _, _, _, _, _ in raw_entities)
+    has_player = any(k == EntityKind.PLAYER for k, _, _, _, _, _ in raw_entities)
 
     for w in draft.win:
         if w.type == "collect_all" and not has_pickup:
-            raw_entities.append((EntityKind.PICKUP, w.target or 5, "scatter"))
+            raw_entities.append((EntityKind.PICKUP, w.target or 5, "scatter", {}, [], ""))
             has_pickup = True
         elif w.type == "reach_goal" and not has_goal:
-            raw_entities.append((EntityKind.GOAL, 1, "goal"))
+            raw_entities.append((EntityKind.GOAL, 1, "goal", {}, [], ""))
             has_goal = True
         elif w.type == "defeat_all" and not has_enemy and not has_spawner:
-            raw_entities.append((EntityKind.ENEMY, w.target or 5, "scatter"))
+            raw_entities.append((EntityKind.ENEMY, w.target or 5, "scatter", {}, [], ""))
             has_enemy = True
         elif w.type == "board_win" and not has_board:
-            raw_entities.append((EntityKind.BOARD, 1, "board"))
+            raw_entities.append((EntityKind.BOARD, 1, "board", {}, [], ""))
             has_board = True
         elif w.type == "match_win" and not has_card:
-            raw_entities.append((EntityKind.CARD_TABLE, 1, "board"))
+            raw_entities.append((EntityKind.CARD_TABLE, 1, "board", {}, [], ""))
             has_card = True
 
     for l in draft.lose:
         if l.type == "caught_by_guard" and not has_guard:
-            raw_entities.append((EntityKind.GUARD, 1, "scatter"))
+            raw_entities.append((EntityKind.GUARD, 1, "scatter", {}, [], ""))
             has_guard = True
         elif l.type == "board_loss" and not has_board:
-            raw_entities.append((EntityKind.BOARD, 1, "board"))
+            raw_entities.append((EntityKind.BOARD, 1, "board", {}, [], ""))
             has_board = True
         elif l.type == "match_loss" and not has_card:
-            raw_entities.append((EntityKind.CARD_TABLE, 1, "board"))
+            raw_entities.append((EntityKind.CARD_TABLE, 1, "board", {}, [], ""))
             has_card = True
         elif l.type in ("fall_off", "health_zero") and not has_player:
-            raw_entities.append((EntityKind.PLAYER, 1, "player_start"))
+            raw_entities.append((EntityKind.PLAYER, 1, "player_start", {}, [], ""))
             has_player = True
 
-    # Build EntitySpec instances with deduplicated entity_ids
+    # Build EntitySpec instances with deduplicated entity_ids and validated default properties
     entities: List[EntitySpec] = []
     used_ids: Set[str] = set()
 
-    for kind, count, placement_strat in raw_entities:
+    for kind, count, placement_strat, user_props, user_tags, note_str in raw_entities:
         base_id = f"{kind.value}s" if count > 1 else kind.value
         candidate_id = base_id
         suffix = 2
@@ -290,6 +434,17 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
         else:
             placement = Placement(strategy="scatter")
 
+        # Merge kit default properties with custom user properties
+        final_props = dict(KIT_DEFAULT_PROPS.get(kind, {}))
+        if kind == EntityKind.PICKUP and "objective_id" not in user_props:
+            final_props["objective_id"] = candidate_id
+        final_props.update(user_props)
+
+        tags = ["GF_Owned"]
+        for t in user_tags:
+            if t not in tags and len(tags) < 8:
+                tags.append(t)
+
         entities.append(
             EntitySpec(
                 entity_id=candidate_id,
@@ -298,6 +453,8 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
                 level_id="level_1",
                 count=count,
                 placement=placement,
+                props=final_props,
+                tags=tags,
             )
         )
 
@@ -322,12 +479,17 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
         rule_idx += 1
 
     if enemy_ent:
+        enemy_effects: List[Effect] = [AddStat(stat="game.score", delta=25.0)]
+        # Track enemy kill remaining stat if defeat_all without spawner is in win conditions
+        if any(w.type == "defeat_all" for w in draft.win) and not has_spawner:
+            enemy_effects.append(AddStat(stat=f"entity.{enemy_ent.entity_id}.remaining", delta=-1.0))
+
         rules.append(
             RuleSpec(
                 rule_id=f"rule_{rule_idx}",
                 when=EventRef(event="enemy.killed"),
-                effects=[AddStat(stat="game.score", delta=25.0)],
-                description="Award points on enemy defeat",
+                effects=enemy_effects,
+                description="Award points and update enemy count on defeat",
             )
         )
         rule_idx += 1
@@ -413,10 +575,11 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
             )
         )
 
-    # 4. Input
+    # 4. Input - Ensure comprehensive camera orientation, movement and jump bindings
     actions = list(tmpl.get("actions", [IA_MOVE, IA_LOOK]))
     action_ids = {a.action_id for a in actions}
 
+    # Bindings for 3D and dynamic cameras
     if draft.camera in (CameraKind.FIRST_PERSON, CameraKind.THIRD_PERSON):
         if IA_MOVE.action_id not in action_ids:
             actions.append(IA_MOVE)
@@ -424,7 +587,27 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
         if IA_LOOK.action_id not in action_ids:
             actions.append(IA_LOOK)
             action_ids.add(IA_LOOK.action_id)
+        if IA_JUMP.action_id not in action_ids:
+            actions.append(IA_JUMP)
+            action_ids.add(IA_JUMP.action_id)
 
+    elif draft.camera == CameraKind.SIDE_SCROLLER:
+        if IA_MOVE.action_id not in action_ids:
+            actions.append(IA_MOVE)
+            action_ids.add(IA_MOVE.action_id)
+        if IA_JUMP.action_id not in action_ids:
+            actions.append(IA_JUMP)
+            action_ids.add(IA_JUMP.action_id)
+
+    elif draft.camera == CameraKind.TOP_DOWN:
+        if IA_MOVE.action_id not in action_ids:
+            actions.append(IA_MOVE)
+            action_ids.add(IA_MOVE.action_id)
+        if IA_LOOK.action_id not in action_ids:
+            actions.append(IA_LOOK)
+            action_ids.add(IA_LOOK.action_id)
+
+    # Combat action injection
     has_combat_elements = has_enemy or has_spawner or any(
         getattr(e, "kind", None) in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY, EntityKind.SPAWNER)
         for e in entities
@@ -456,11 +639,6 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     ui_spec = UISpec(hud=hud_elements, main_menu=True, pause_menu=True, end_screen=True)
 
     # 6. Feedback rows (only for events declared by modules/rules)
-    declared_events = set()
-    for e in entities:
-        declared_events.update(e.module and e.module in DEFAULT_MODULE.values() and [ev for ev in e.module])  # placeholder
-    # Use real declared_events logic
-    from .events_catalog import MODULE_EVENTS
     game_events = {"game.started", "game.won", "game.lost", "game.restarted", "game.paused", "game.resumed"}
     allowed_events = set(game_events)
     for e in entities:

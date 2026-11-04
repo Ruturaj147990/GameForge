@@ -52,10 +52,17 @@ class ViewHost(QStackedWidget):
             return False
 
         if view_id not in self._widgets:
-            widget = self._factories[view_id]()
-            widget.setObjectName(f"studioView_{view_id}")
-            self.addWidget(widget)
-            self._widgets[view_id] = widget
+            try:
+                widget = self._factories[view_id]()
+                if widget is None:
+                    return False
+                widget.setObjectName(f"studioView_{view_id}")
+                self.addWidget(widget)
+                self._widgets[view_id] = widget
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).exception("Failed to instantiate view '%s': %s", view_id, exc)
+                return False
 
         widget = self._widgets[view_id]
         self.setCurrentWidget(widget)

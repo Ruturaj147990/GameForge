@@ -59,6 +59,10 @@ def test_legacy_package_auto_heals_stale_map(tmp_path: Path):
         encoding="utf-8",
     )
 
+    # Create a real (non-empty) fake exe so validate_stage_output("package") passes
+    fake_exe = tmp_path / "fake.exe"
+    fake_exe.write_bytes(b"\x4d\x5a")  # Minimal PE header marker (non-empty)
+
     ctx = MagicMock()
     ctx.project_dir = pdir
     ctx.workspace_dir = tmp_path
@@ -66,7 +70,7 @@ def test_legacy_package_auto_heals_stale_map(tmp_path: Path):
     ctx.shared = {}
     ctx.log = MagicMock()
 
-    with patch("src.gameforge_ide.pipeline.stages.package", return_value=(True, {"exe": "fake.exe"}, [])):
+    with patch("src.gameforge_ide.pipeline.stages.package", return_value=(True, {"exe": str(fake_exe)}, [])):
         res = legacy_package(ctx)
 
     assert res.ok is True

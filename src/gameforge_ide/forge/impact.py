@@ -91,20 +91,29 @@ def impact(
     rerun: List[str] = []
     skip: List[str] = []
     new: List[str] = []
+    invalidated_deps: set[str] = set()
     descs: Dict[str, str] = {s.step_id: s.title for s in new_spec.steps}
 
     for step in new_spec.topo_order():
         sid = step.step_id
         eff_hash = new_eff[sid]
+        dep_invalidated = any(d in invalidated_deps for d in step.depends_on)
         if sid not in prev_records:
             new.append(sid)
+            invalidated_deps.add(sid)
         else:
             prev_rec = prev_records[sid]
-            # Must be DONE, have succeeded (ok is True), and have matching effective hash
-            if prev_rec.status == StepStatus.DONE and prev_rec.ok is True and prev_rec.input_hash == eff_hash:
+            # Must not have invalidated dependencies, must be DONE, have succeeded (ok is True), and matching effective hash
+            if (
+                not dep_invalidated
+                and prev_rec.status == StepStatus.DONE
+                and prev_rec.ok is True
+                and prev_rec.input_hash == eff_hash
+            ):
                 skip.append(sid)
             else:
                 rerun.append(sid)
+                invalidated_deps.add(sid)
 
     # Steps in previous run no longer in new spec
     new_ids = {s.step_id for s in new_spec.steps}
@@ -147,7 +156,9 @@ def prepare_incremental_state(
 
     if previous_state is not None:
         for sid in report.skip:
-            old_rec = previous_state.records[sid]
+            old_rec = previous_state.records.get(sid)
+            if old_rec is None:
+                continue
             # Keep as DONE with effective input_hash and preserved data/artifacts
             state.records[sid] = StepRecord(
                 step_id=sid,

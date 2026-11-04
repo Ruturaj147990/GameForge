@@ -88,7 +88,7 @@ class EvidenceView(QWidget):
         self._filter_combo = QComboBox(self)
         self._filter_combo.setObjectName("evidenceFilterCombo")
         self._filter_combo.setAccessibleName("Filter artifacts by type")
-        self._filter_combo.addItems(["All", "Images", "JSON", "Logs", "Other"])
+        self._filter_combo.addItems(["All", "Images", "JSON", "Reports / Docs", "Logs", "Other"])
         self._filter_combo.setStyleSheet(
             f"QComboBox#{self._filter_combo.objectName()} {{"
             f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
@@ -308,10 +308,15 @@ class EvidenceView(QWidget):
                         self._artifact_paths.append(full_path)
 
         # Also scan common evidence directories
-        for evidence_dir in (
+        candidate_dirs = [
             project_dir / "Saved" / "GameForge" / "evidence",
             project_dir / "Saved" / "GameForge",
-        ):
+            project_dir / "reports",
+        ]
+        if self._workspace and (self._workspace / "reports").is_dir():
+            candidate_dirs.append(self._workspace / "reports")
+
+        for evidence_dir in candidate_dirs:
             if evidence_dir.is_dir():
                 for f in sorted(evidence_dir.rglob("*")):
                     if f.is_file() and str(f) not in seen_paths:
@@ -357,11 +362,13 @@ class EvidenceView(QWidget):
             return [p for p in paths if p.suffix.lower() in IMAGE_EXTS]
         elif filter_text == "JSON":
             return [p for p in paths if p.suffix.lower() in JSON_EXTS]
+        elif filter_text == "Reports / Docs":
+            return [p for p in paths if p.suffix.lower() in MARKDOWN_EXTS]
         elif filter_text == "Logs":
             return [p for p in paths if p.suffix.lower() in TEXT_EXTS]
         else:
-            other_exts = IMAGE_EXTS | JSON_EXTS | TEXT_EXTS | MARKDOWN_EXTS
-            return [p for p in paths if p.suffix.lower() not in other_exts]
+            standard_exts = IMAGE_EXTS | JSON_EXTS | TEXT_EXTS | MARKDOWN_EXTS
+            return [p for p in paths if p.suffix.lower() not in standard_exts]
 
     @Slot(int)
     def _apply_filter(self, _index: int = 0) -> None:
@@ -406,16 +413,28 @@ class EvidenceView(QWidget):
         else:
             self._show_text(path)
 
-    def _show_image(self, path: Path) -> None:
-        pix = QPixmap(str(path))
-        if not pix.isNull():
-            # Fit to scroll area
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "_viewer_stack") and self._viewer_stack.currentIndex() == 0:
+            self._rescale_image()
+
+    def _rescale_image(self) -> None:
+        pix = getattr(self, "_current_pixmap", None)
+        if pix and not pix.isNull():
             available = self._image_scroll.size()
+            target_w = max(300, available.width() - 20)
+            target_h = max(200, available.height() - 20)
             scaled = pix.scaled(
-                available.width() - 20, available.height() - 20,
+                target_w, target_h,
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,
             )
             self._image_label.setPixmap(scaled)
+
+    def _show_image(self, path: Path) -> None:
+        pix = QPixmap(str(path))
+        self._current_pixmap = pix
+        if not pix.isNull():
+            self._rescale_image()
         else:
             self._image_label.setText("Unable to load image.")
         self._viewer_stack.setCurrentIndex(0)

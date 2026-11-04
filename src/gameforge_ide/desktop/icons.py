@@ -32,12 +32,14 @@ def _pixmap(name: str, colour: str, size: int, dpr: float) -> QPixmap:
         raise FileNotFoundError(f"Icon not found: {name}.svg at {svg_path}")
     svg = svg_path.read_text(encoding="utf-8").replace("currentColor", colour)
     renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
-    pm = QPixmap(int(size * dpr), int(size * dpr))
+    safe_dpr = max(1.0, float(dpr))
+    px = max(1, int(size * safe_dpr))
+    pm = QPixmap(px, px)
     pm.fill(Qt.transparent)
     painter = QPainter(pm)
     renderer.render(painter)
     painter.end()
-    pm.setDevicePixelRatio(dpr)
+    pm.setDevicePixelRatio(safe_dpr)
     return pm
 
 
@@ -50,14 +52,22 @@ def icon(name: str, role: str = "secondary", size: int = 20) -> QIcon:
     """Return a styled QIcon with active theme tokens."""
     screen = QGuiApplication.primaryScreen()
     dpr = screen.devicePixelRatio() if screen else 1.0
+    safe_dpr = max(1.0, float(dpr))
+    safe_size = max(1, int(size))
     ic = QIcon()
 
-    base_color = ROLE_COLOURS.get(role, tokens.TEXT_SECONDARY)
+    if role.startswith("#"):
+        base_color = role
+    else:
+        base_color = ROLE_COLOURS.get(role, tokens.TEXT_SECONDARY)
     normal_color = theme_color(base_color)
     accent_color = theme_color(ROLE_COLOURS["accent"])
     disabled_color = theme_color(tokens.TEXT_SECONDARY)
 
-    ic.addPixmap(_pixmap(name, normal_color, size, dpr), QIcon.Normal, QIcon.Off)
-    ic.addPixmap(_pixmap(name, accent_color, size, dpr), QIcon.Normal, QIcon.On)
-    ic.addPixmap(_pixmap(name, disabled_color, size, dpr), QIcon.Disabled, QIcon.Off)
+    try:
+        ic.addPixmap(_pixmap(name, normal_color, safe_size, safe_dpr), QIcon.Normal, QIcon.Off)
+        ic.addPixmap(_pixmap(name, accent_color, safe_size, safe_dpr), QIcon.Normal, QIcon.On)
+        ic.addPixmap(_pixmap(name, disabled_color, safe_size, safe_dpr), QIcon.Disabled, QIcon.Off)
+    except FileNotFoundError:
+        return ic
     return ic

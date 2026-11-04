@@ -111,10 +111,10 @@ class RunSpec(BaseModel):
             if missing or s.step_id in s.depends_on:
                 raise ValueError(f"step {s.step_id}: bad dependencies {missing or [s.step_id]}")
         # Kahn cycle check
-        indeg = {s.step_id: len(s.depends_on) for s in steps}
+        indeg = {s.step_id: len(set(s.depends_on)) for s in steps}
         children: Dict[str, List[str]] = {i: [] for i in ids}
         for s in steps:
-            for d in s.depends_on:
+            for d in set(s.depends_on):
                 children[d].append(s.step_id)
         queue = [i for i, n in indeg.items() if n == 0]
         seen = 0
@@ -135,12 +135,17 @@ class RunSpec(BaseModel):
         order: List[StepSpec] = []
         pending = list(self.steps)
         while pending:
+            found = False
             for s in pending:
                 if all(d in done for d in s.depends_on):
                     order.append(s)
                     done.add(s.step_id)
                     pending.remove(s)
+                    found = True
                     break
+            if not found:
+                remaining = [s.step_id for s in pending]
+                raise ValueError(f"dependency cycle or unresolvable dependencies: {remaining}")
         return order
 
 

@@ -104,7 +104,13 @@ class EnginePage(QWizardPage):
             self._custom_path.setText(data)
 
     def _validate_path(self) -> None:
-        p = Path(self._custom_path.text().strip())
+        txt = self._custom_path.text().strip()
+        if not txt:
+            self._lbl_validation.setText(
+                f"<span style='color: {tokens.TEXT_MUTED};'>Select or browse to an Unreal Engine root.</span>"
+            )
+            return
+        p = Path(txt)
         if not p.is_dir():
             self._lbl_validation.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>Directory does not exist.</span>")
             return
@@ -243,23 +249,28 @@ class OnboardingWizard(QWizard):
         """Save settings to user_settings_path()."""
         cfg_path = user_settings_path()
         if cfg_path:
-            cfg_path.parent.mkdir(parents=True, exist_ok=True)
-            data = {}
-            if cfg_path.is_file():
-                try:
-                    data = json.loads(cfg_path.read_text(encoding="utf-8"))
-                except Exception:
-                    data = {}
+            try:
+                cfg_path.parent.mkdir(parents=True, exist_ok=True)
+                data = {}
+                if cfg_path.is_file():
+                    try:
+                        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        data = {}
 
-            eng = self.engine_page.get_engine_root()
-            if eng:
-                data["engine_root"] = eng
+                eng = self.engine_page.get_engine_root()
+                if eng:
+                    data["engine_root"] = eng
 
-            proj = self.paths_page.get_projects_root()
-            if proj:
-                data["projects_root"] = proj
+                proj = self.paths_page.get_projects_root()
+                if proj:
+                    data["projects_root"] = proj
 
-            cfg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            reset_settings_cache()
+                tmp_path = cfg_path.with_suffix(".tmp")
+                tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                tmp_path.replace(cfg_path)
+                reset_settings_cache()
+            except Exception as exc:
+                logger.error("Failed writing onboarding settings to %s: %s", cfg_path, exc)
 
         super().accept()

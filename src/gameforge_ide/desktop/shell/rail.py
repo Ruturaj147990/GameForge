@@ -90,6 +90,7 @@ class Rail(QWidget):
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
         self._buttons: Dict[str, RailButton] = {}
+        self._separators: List[QFrame] = []
 
         for item in RAIL_ITEMS:
             view_id, label, shortcut = item
@@ -100,6 +101,7 @@ class Rail(QWidget):
                 sep.setFixedWidth(36)
                 sep.setStyleSheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;")
                 layout.addWidget(sep, alignment=Qt.AlignCenter)
+                self._separators.append(sep)
                 continue
 
             btn = RailButton(view_id, label, shortcut, self)
@@ -167,3 +169,5 @@ class Rail(QWidget):
         """)
         for btn in self._buttons.values():
             btn.update_theme()
+        for sep in getattr(self, "_separators", []):
+            sep.setStyleSheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;")

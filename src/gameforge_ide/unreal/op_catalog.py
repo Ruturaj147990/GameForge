@@ -14,9 +14,12 @@ from pathlib import Path
 OPS_SOURCE = Path(__file__).parent / "GameForge" / "Content" / "Python" / "gameforge_ops"
 
 
-def op_sources(root: Path = OPS_SOURCE) -> list[Path]:
+def op_sources(root: Path | str = OPS_SOURCE) -> list[Path]:
     """The op package's module files (a single file is accepted for older layouts)."""
-    return [root] if root.is_file() else sorted(root.glob("*.py"))
+    p = Path(root)
+    if not p.exists():
+        return []
+    return [p] if p.is_file() else sorted(p.glob("*.py"))
 
 # effect: "read" (no state change), "artifact" (writes a file outside the project, e.g. a screenshot),
 # "view" (editor camera only), "lifecycle" (editor session), "runtime" (PIE/session state),
@@ -186,9 +189,9 @@ def describe_for_agent() -> str:
     return "; ".join(f"{d}: {', '.join(ops)}" for d, ops in sorted(domains.items()))
 
 
-def discover_ops(source: Path = OPS_SOURCE) -> list[str]:
+def discover_ops(source: Path | str = OPS_SOURCE) -> list[str]:
     """Names of all ``@op("...")`` functions declared in the editor dispatcher."""
-    return [n for f in op_sources(source) for n in re.findall(r'@op\("([^"]+)"', f.read_text(encoding="utf-8"))]
+    return [n for f in op_sources(source) for n in re.findall(r'@op\("([^"]+)"', f.read_text(encoding="utf-8", errors="replace"))]
 
 
 def catalog_problems(discovered: list[str] | None = None) -> list[str]:

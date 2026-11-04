@@ -22,6 +22,7 @@ from ..design.expand import expand_draft
 from ..design.gds import GameDesignSpec, Genre, CameraKind, LevelSpec, LayoutKind, Scene, Vec2
 from ..forge.project_graph import ProjectGraph
 from ..index.indexer import ProjectIndex
+from ..core.projects import find_uproject
 
 
 class ProjectInspection(BaseModel):
@@ -38,14 +39,14 @@ class ProjectInspection(BaseModel):
 
 
 def inspect_project(project_dir: Path) -> ProjectInspection:
-    """Inspect an existing Unreal project folder in read-only mode."""
+    """Inspect an existing Unreal project folder in read-only mode, supporting nested structures."""
     p_dir = project_dir.resolve()
-    uprojects = list(p_dir.glob("*.uproject"))
-    if not uprojects:
+    uproject = find_uproject(p_dir)
+    if not uproject:
         raise FileNotFoundError(f"No .uproject found in {p_dir}")
 
-    uproject = uprojects[0]
     p_name = uproject.stem
+    actual_project_dir = uproject.parent
 
     # Read descriptor
     engine_assoc = ""
@@ -65,7 +66,7 @@ def inspect_project(project_dir: Path) -> ProjectInspection:
 
     # Discover levels from Content
     levels = []
-    content_dir = p_dir / "Content"
+    content_dir = actual_project_dir / "Content"
     if content_dir.is_dir():
         for root, _, files in os.walk(content_dir):
             for f in files:
@@ -78,7 +79,7 @@ def inspect_project(project_dir: Path) -> ProjectInspection:
 
     # Discover input actions from Config/DefaultInput.ini
     input_actions = []
-    input_ini = p_dir / "Config" / "DefaultInput.ini"
+    input_ini = actual_project_dir / "Config" / "DefaultInput.ini"
     if input_ini.is_file():
         for line in input_ini.read_text(encoding="utf-8", errors="replace").splitlines():
             line_str = line.strip()
@@ -89,8 +90,8 @@ def inspect_project(project_dir: Path) -> ProjectInspection:
                     if act_name not in input_actions:
                         input_actions.append(act_name)
 
-    is_managed = (p_dir / "Plugins" / "GameForge").is_dir()
-    has_git = (p_dir / ".git").is_dir()
+    is_managed = (actual_project_dir / "Plugins" / "GameForge").is_dir()
+    has_git = (p_dir / ".git").is_dir() or (actual_project_dir / ".git").is_dir()
 
     return ProjectInspection(
         project_name=p_name,
@@ -176,12 +177,14 @@ def enable_gameforge_management(
     plugin_source_dir: Optional[Path] = None,
     git_strategy: Literal["disabled", "worktree"] = "disabled",
 ) -> Dict[str, Any]:
-    """Enable GameForge management on an existing project."""
+    """Enable GameForge management on an existing project, locating the .uproject directory."""
     p_dir = project_dir.resolve()
-    target_plugin = p_dir / "Plugins" / "GameForge"
+    uproject = find_uproject(p_dir)
+    target_root = uproject.parent if uproject else p_dir
+    target_plugin = target_root / "Plugins" / "GameForge"
     target_plugin.parent.mkdir(parents=True, exist_ok=True)
 
-    # 1. Copy plugin
+    # 1. Copy plugin (including precompiled Binaries if present)
     src_plugin = plugin_source_dir or (Path(__file__).resolve().parents[1] / "unreal" / "GameForge")
     if not src_plugin.is_dir():
         try:
@@ -197,7 +200,7 @@ def enable_gameforge_management(
             pass
 
     if src_plugin.is_dir():
-        shutil.copytree(src_plugin, target_plugin, dirs_exist_ok=True, ignore=shutil.ignore_patterns("Intermediate", "Binaries"))
+        shutil.copytree(src_plugin, target_plugin, dirs_exist_ok=True, ignore=shutil.ignore_patterns("Intermediate"))
 
     # 2. Checkpoints & Git
     warning = ""

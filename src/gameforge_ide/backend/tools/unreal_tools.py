@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from ...core.settings import discover_engines
+from ...core import projects
 
 
 class UnrealEngineTools:
@@ -45,14 +46,35 @@ class UnrealEngineTools:
                 "editor_cmd_path": None,
             }
 
-        ubt_path = self.engine_root / "Engine" / "Build" / "BatchFiles" / "Build.bat"
-        uat_path = self.engine_root / "Engine" / "Build" / "BatchFiles" / "RunUAT.bat"
+        ubt_candidates = [
+            self.engine_root / "Engine" / "Build" / "BatchFiles" / "Build.bat",
+            self.engine_root / "Engine" / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool.exe",
+            self.engine_root / "Engine" / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool.dll",
+            self.engine_root / "Engine" / "Binaries" / "DotNET" / "UnrealBuildTool.exe",
+        ]
+        ubt_path = next((c for c in ubt_candidates if c.is_file()), ubt_candidates[0])
+
+        uat_candidates = [
+            self.engine_root / "Engine" / "Build" / "BatchFiles" / "RunUAT.bat",
+            self.engine_root / "Engine" / "Binaries" / "DotNET" / "AutomationTool" / "AutomationTool.exe",
+            self.engine_root / "Engine" / "Binaries" / "DotNET" / "AutomationTool.exe",
+        ]
+        uat_path = next((c for c in uat_candidates if c.is_file()), uat_candidates[0])
         editor_cmd = self.engine_root / "Engine" / "Binaries" / "Win64" / "UnrealEditor-Cmd.exe"
+
+        version = "5.7.4"
+        ver_file = self.engine_root / "Engine" / "Build" / "Build.version"
+        if ver_file.is_file():
+            try:
+                vdata = json.loads(ver_file.read_text(encoding="utf-8"))
+                version = f"{vdata.get('MajorVersion')}.{vdata.get('MinorVersion')}.{vdata.get('PatchVersion', 0)}"
+            except Exception:
+                pass
 
         engine_root_str = str(self.engine_root)
         return {
             "installed": True,
-            "version": "5.7.4",
+            "version": version,
             "engine_root": engine_root_str,
             "install_path": engine_root_str,
             "ubt_available": ubt_path.exists(),
@@ -139,32 +161,59 @@ class UnrealEngineTools:
         return errors
 
     def _resolve_uproject_path(self, uproject_rel_path: str) -> Optional[Path]:
-        from ...core.projects import find_uproject, resolve_project_dir, list_all_project_dirs
         raw = Path(uproject_rel_path)
         if raw.is_file() and raw.suffix.lower() == ".uproject":
             return raw.resolve()
         if raw.is_dir():
-            found = find_uproject(raw)
+            found = projects.find_uproject(raw)
             if found and found.is_file():
                 return found.resolve()
         ws_cand = (self.workspace_root / raw).resolve()
         if ws_cand.is_file() and ws_cand.suffix.lower() == ".uproject":
             return ws_cand
         if ws_cand.is_dir():
-            found = find_uproject(ws_cand)
+            found = projects.find_uproject(ws_cand)
             if found and found.is_file():
                 return found.resolve()
+
+        # Check configured projects_root
+        try:
+            proot = Path(projects.get_settings().projects_root)
+            pr_cand = (proot / raw).resolve()
+            if pr_cand.is_file() and pr_cand.suffix.lower() == ".uproject":
+                return pr_cand
+            if pr_cand.is_dir():
+                found = projects.find_uproject(pr_cand)
+                if found and found.is_file():
+                    return found.resolve()
+        except Exception:
+            proot = None
+
         name = raw.stem if raw.suffix.lower() == ".uproject" else str(uproject_rel_path).strip()
-        pdir = resolve_project_dir(name, workspace_dir=self.workspace_root)
+        if proot:
+            if (proot / name).is_dir():
+                found = projects.find_uproject(proot / name)
+                if found and found.is_file():
+                    return found.resolve()
+            try:
+                for d in proot.iterdir():
+                    if d.is_dir() and d.name.lower() == name.lower():
+                        found = projects.find_uproject(d)
+                        if found and found.is_file():
+                            return found.resolve()
+            except OSError:
+                pass
+
+        pdir = projects.resolve_project_dir(name, workspace_dir=self.workspace_root)
         if pdir:
-            found = find_uproject(pdir)
+            found = projects.find_uproject(pdir)
             if found and found.is_file():
                 return found.resolve()
-        all_dirs = list_all_project_dirs(self.workspace_root)
+        all_dirs = projects.list_all_project_dirs(self.workspace_root)
         norm_name = name.lower()
         for cand_name, cand_dir in all_dirs.items():
             if cand_name.lower() == norm_name or cand_dir.name.lower() == norm_name:
-                found = find_uproject(cand_dir)
+                found = projects.find_uproject(cand_dir)
                 if found and found.is_file():
                     return found.resolve()
         return None

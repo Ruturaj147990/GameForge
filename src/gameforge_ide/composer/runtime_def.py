@@ -30,4 +30,8 @@ def build(gds: Any, comp: Optional[Any] = None) -> Dict[str, Any]:
             )
         gfdef["custom_rules"] = custom_rules
 
+    errors = validate_runtime_def(gfdef)
+    if errors:
+        raise ValueError(f"gfdef schema validation failed: {errors}")
+
     return gfdef

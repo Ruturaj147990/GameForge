@@ -48,7 +48,13 @@ class LiveEditorError(RuntimeError):
 
 def load_engine_remote_execution(engine_root: Path):
     """Import remote_execution.py from the pinned engine install."""
-    path = Path(engine_root) / "Engine" / "Plugins" / "Experimental" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py"
+    candidates = [
+        Path(engine_root) / "Engine" / "Plugins" / "Experimental" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+        Path(engine_root) / "Engine" / "Plugins" / "Developer" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+        Path(engine_root) / "Engine" / "Plugins" / "ScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+        Path(engine_root) / "Engine" / "Plugins" / "PythonScriptPlugin" / "Content" / "Python" / "remote_execution.py",
+    ]
+    path = next((c for c in candidates if c.is_file()), candidates[0])
     if not path.is_file():
         raise LiveEditorError(f"engine remote_execution.py not found at {path}")
     spec = importlib.util.spec_from_file_location("ue_remote_execution", path)
@@ -116,19 +122,34 @@ class LiveEditorLink:
         if stale.exists():
             stale.unlink()
         dest = py_dir / "gameforge_ops"
-        if dest.exists():
-            shutil.rmtree(dest)
-        shutil.copytree(OPS_LIBRARY_SOURCE, dest, ignore=shutil.ignore_patterns("__pycache__"))
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(OPS_LIBRARY_SOURCE, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
 
         # Deploy GameForge native plugin if binaries exist
-        plugin_src = Path(__file__).parent / "GameForge"
-        plugin_bin = plugin_src / "Binaries" / "Win64"
+        candidates = [
+            Path(__file__).parent / "GameForge",
+            Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
+        ]
+        try:
+            from ..core.settings import get_settings
+            s = get_settings()
+            if s.plugin_build and s.plugin_build.is_dir():
+                candidates.insert(0, s.plugin_build)
+            if s.validation_root:
+                candidates.insert(1, s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+        except Exception:
+            pass
+
+        plugin_src = None
+        for c in candidates:
+            if c.is_dir() and (c / "Binaries" / "Win64").is_dir():
+                plugin_src = c
+                break
+
         plugin_dest = self.project_dir / "Plugins" / "GameForge"
-        if plugin_bin.is_dir() and not (plugin_dest / "Binaries" / "Win64").is_dir():
+        if plugin_src and not (plugin_dest / "Binaries" / "Win64").is_dir():
             plugin_dest.parent.mkdir(parents=True, exist_ok=True)
-            if plugin_dest.exists():
-                shutil.rmtree(plugin_dest)
-            shutil.copytree(plugin_src, plugin_dest)
+            shutil.copytree(plugin_src, plugin_dest, dirs_exist_ok=True)
 
         self._token = secrets.token_hex(32)
         self.token_file.parent.mkdir(parents=True, exist_ok=True)
@@ -184,8 +205,10 @@ class LiveEditorLink:
             try:
                 self._process.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=10)
+                pass
+            if self._process.poll() is None:
+                from .toolchain import UnrealToolchain
+                UnrealToolchain.kill_tree(self._process)
         return self._process.returncode
 
     # ── connection ─────────────────────────────────────────────────────────
@@ -283,6 +306,8 @@ class LiveEditorLink:
             worker.join(timeout_s or self.call_timeout_s)
             elapsed = round(time.monotonic() - started, 3)
         if worker.is_alive():
+            # A hung call leaves the command connection in a poisoned/blocked state; disconnect cleanly.
+            self.disconnect()
             return {"ok": False, "op": op_name, "errors": ["EDITOR_CALL_TIMEOUT"], "elapsed_s": elapsed}
         if "error" in box:
             # A dropped socket is either a crash or a lost link; either way the channel is dead.

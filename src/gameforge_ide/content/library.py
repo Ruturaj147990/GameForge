@@ -18,7 +18,37 @@ from typing import Any, Dict, List, Optional
 from ..backend.assets.registry import AssetRecord, AssetRegistry, sha256_file
 
 
-VALID_LICENCE_CLASSES = ("EPIC_CONTENT", "FAB_STANDARD", "CC0", "CC_BY", "CUSTOM")
+VALID_LICENCE_CLASSES = (
+    "EPIC_CONTENT",
+    "FAB_STANDARD",
+    "CC0",
+    "CC_BY",
+    "CUSTOM",
+    "LOCAL",
+    "PROPRIETARY",
+    "PUBLIC_DOMAIN",
+)
+
+LICENCE_ALIASES: Dict[str, str] = {
+    "CC-0": "CC0",
+    "CC_0": "CC0",
+    "PUBLIC_DOMAIN": "PUBLIC_DOMAIN",
+    "PUBLICDOMAIN": "PUBLIC_DOMAIN",
+    "CC-BY": "CC_BY",
+    "FAB-STANDARD": "FAB_STANDARD",
+    "FAB": "FAB_STANDARD",
+    "EPIC-CONTENT": "EPIC_CONTENT",
+    "EPIC": "EPIC_CONTENT",
+    "PROJECT": "LOCAL",
+    "INTERNAL": "LOCAL",
+    "ORIGINAL": "LOCAL",
+    "SELF": "LOCAL",
+    "MIT": "CUSTOM",
+    "APACHE-2.0": "CUSTOM",
+    "APACHE_2_0": "CUSTOM",
+    "APACHE": "CUSTOM",
+    "BSD": "CUSTOM",
+}
 
 
 @dataclass
@@ -27,7 +57,13 @@ class LicenceDecl:
     attribution_text: str = ""
     user_confirmed_rights: bool = False
 
+    def __post_init__(self) -> None:
+        raw = str(self.licence_class or "").strip().upper().replace(" ", "_")
+        self.licence_class = LICENCE_ALIASES.get(raw, raw)
+
     def validate(self) -> None:
+        raw = str(self.licence_class or "").strip().upper().replace(" ", "_")
+        self.licence_class = LICENCE_ALIASES.get(raw, raw)
         if self.licence_class not in VALID_LICENCE_CLASSES:
             raise ValueError(f"Invalid licence class: {self.licence_class!r}. Must be one of {VALID_LICENCE_CLASSES}")
         if not self.user_confirmed_rights:
@@ -36,6 +72,27 @@ class LicenceDecl:
             raise ValueError("CC_BY requires attribution text.")
         if self.licence_class == "CUSTOM" and not self.attribution_text.strip():
             raise ValueError("CUSTOM licence requires licence text.")
+
+
+def infer_asset_type_from_path(p: Path) -> str:
+    """Infer asset registry asset_type from filename and path markers."""
+    stem = p.stem.lower()
+    posix = p.as_posix().lower()
+    if stem.startswith("skm_") or stem.startswith("sk_") or "skeletal" in posix:
+        return "skeletal_mesh"
+    if stem.startswith("sm_") or "staticmesh" in posix:
+        return "mesh"
+    if stem.startswith("m_") or stem.startswith("mi_") or "materials" in posix:
+        return "material"
+    if stem.startswith("t_") or "textures" in posix:
+        return "texture"
+    if stem.startswith("a_") or stem.startswith("abp_") or stem.startswith("bs_") or "anim" in posix:
+        return "animation"
+    if stem.startswith("s_") or stem.startswith("sfx_") or "sound" in posix or "audio" in posix:
+        return "sound"
+    if stem.startswith("ns_") or stem.startswith("vfx_") or "niagara" in posix or "vfx" in posix:
+        return "vfx"
+    return "mesh"
 
 
 _ROLE_PATTERNS = [
@@ -162,16 +219,17 @@ class ContentLibrary:
                             p = Path(root) / f
                             rel = p.relative_to(dst_dir).as_posix()
                             mount_path = f"/Game/Library/{pack_name}/{rel[:-7]}"
+                            asset_type = infer_asset_type_from_path(p)
                             rec = AssetRecord(
                                 name=p.stem,
-                                asset_type="mesh",
+                                asset_type=asset_type,
                                 purpose=f"Imported library pack ({pack_name})",
                                 provenance="LIBRARY",
                                 backend="user-library",
                                 backend_version="1.0.0",
                                 license=f"{licence_class}: {attribution}".strip(": "),
                                 spec={"pack": pack_name, "rel_path": rel, "uasset_sha256": sha256_file(p)},
-                                tags=["library", pack_name],
+                                tags=["library", pack_name, asset_type],
                             )
                             aid = registry.register(rec)
                             registry.advance(aid, "GENERATE", True, artifact_path=str(p))

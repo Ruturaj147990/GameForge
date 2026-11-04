@@ -6,10 +6,24 @@ without calling a model, with strict bounds and schema validation.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
+from .events_catalog import MODULE_EVENTS
 from .gds import EntityKind, GameDesignSpec
 from .patch import ProposedPatch
+
+_WORD_NUMBERS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
 
 
 def match_deterministic_rule(gds: GameDesignSpec, request: str) -> Optional[ProposedPatch]:
@@ -115,11 +129,14 @@ def match_deterministic_rule(gds: GameDesignSpec, request: str) -> Optional[Prop
 
 
 def _find_entity_idx(gds: GameDesignSpec, term: str) -> Optional[int]:
-    term = term.lower().rstrip("s")  # singularize e.g. "guards" -> "guard"
+    term = term.lower()
+    term_clean = term[:-3] + "y" if term.endswith("ies") else term.rstrip("s")
     for idx, e in enumerate(gds.entities):
-        eid = e.entity_id.lower().rstrip("s")
-        kind_str = e.kind.value.lower().rstrip("s")
-        if term == eid or term == kind_str or term in eid:
+        eid = e.entity_id.lower()
+        eid_clean = eid[:-3] + "y" if eid.endswith("ies") else eid.rstrip("s")
+        kind_str = e.kind.value.lower()
+        kind_clean = kind_str[:-3] + "y" if kind_str.endswith("ies") else kind_str.rstrip("s")
+        if term == eid or term_clean == eid_clean or term_clean == kind_clean or term_clean in eid:
             return idx
     return None
 
@@ -129,25 +146,37 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     if any(k in req.lower() for k in (" and ", " with ", " also ", "plus")):
         return None
 
+    direction = None
+    target = None
+    explicit_val = None
+
+    # Patterns like: "faster guards", "slower player", "speed up the guards", "slow down player"
     m = re.search(r"(?i)\b(faster|slower|speed\s+up|slow\s+down)\b\s+(?:the\s+)?([a-z0-9_]+)", req)
-    if not m:
-        m = re.search(r"(?i)\b(?:make|set|increase|decrease)\s+(?:the\s+)?([a-z0-9_]+)(?:'s)?\s+(?:move\s+)?speed\s+(?:to\s+)?(\d+(?:\.\d+)?)\b", req)
-        if m:
-            target = m.group(1).lower()
-            explicit_val = float(m.group(2))
-            direction = "faster"
-        else:
-            m = re.search(r"(?i)\bmake\s+(?:the\s+)?([a-z0-9_]+)\s+(faster|slower)\b", req)
-            if m:
-                direction = m.group(2).lower()
-                target = m.group(1).lower()
-                explicit_val = None
-            else:
-                return None
-    else:
+    if m:
         direction = m.group(1).lower()
         target = m.group(2).lower()
-        explicit_val = None
+    else:
+        # Patterns like: "make player faster", "make the guards slower"
+        m = re.search(r"(?i)\bmake\s+(?:the\s+)?([a-z0-9_]+)\s+(faster|slower)\b", req)
+        if m:
+            target = m.group(1).lower()
+            direction = m.group(2).lower()
+        else:
+            # Patterns like: "make the player move faster", "make guards move slower"
+            m = re.search(r"(?i)\bmake\s+(?:the\s+)?([a-z0-9_]+)\s+move\s+(faster|slower)\b", req)
+            if m:
+                target = m.group(1).lower()
+                direction = m.group(2).lower()
+            else:
+                # Patterns like: "increase player speed to 800", "set guard speed to 450", "increase the guard speed"
+                m = re.search(r"(?i)\b(?:make|set|increase|decrease|boost|raise|lower)\s+(?:the\s+)?([a-z0-9_]+)(?:'s)?\s+(?:move\s+)?speed(?:\s+(?:to\s+)?(\d+(?:\.\d+)?))?\b", req)
+                if m:
+                    target = m.group(1).lower()
+                    explicit_val = float(m.group(2)) if m.group(2) else None
+                    verb = req.split()[0].lower()
+                    direction = "slower" if verb in ("decrease", "lower") else "faster"
+                else:
+                    return None
 
     idx = _find_entity_idx(gds, target)
     if idx is None:
@@ -158,7 +187,7 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     speed_prop = next((k for k in ("player_speed", "move_speed", "patrol_speed", "speed") if k in props), None)
     if not speed_prop:
         speed_prop = "player_speed" if ("player" in ent.entity_id.lower() or getattr(ent, "kind", "") == "player") else "move_speed"
-        old_val = 600.0
+        old_val = 600.0 if ("player" in ent.entity_id.lower() or getattr(ent, "kind", "") == "player") else 300.0
         op_type = "add"
     else:
         old_val = float(props[speed_prop])
@@ -173,6 +202,12 @@ def _match_speed(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
         else:
             factor = 1.25 if direction in ("faster", "speed up") else 0.8
             new_val = round(old_val * factor, 1)
+
+    # Clamp bounds according to kit schemas (guard max 1200, player max 2000, min 50)
+    is_player = "player" in ent.entity_id.lower() or getattr(ent, "kind", "") == "player"
+    min_bound = 100.0 if is_player else 50.0
+    max_bound = 2000.0 if is_player else (1200.0 if getattr(ent, "kind", "") == EntityKind.GUARD else 1500.0)
+    new_val = max(min_bound, min(max_bound, new_val))
 
     ops = [
         {
@@ -190,7 +225,8 @@ def _match_count_adjustment(gds: GameDesignSpec, req: str) -> Optional[ProposedP
     if any(k in req.lower() for k in ("speed", "health", "hp", "damage", "jump", "gravity", "size", "time", "timer", "seconds", " and ", " with ", " also ", "plus")):
         return None
 
-    m = re.search(r"(?i)\b(more|fewer|less|increase|decrease)\b\s+(?:the\s+)?([a-z0-9_]+)", req)
+    # Handle phrases like "more relics", "fewer hazards", "increase the number of coins"
+    m = re.search(r"(?i)\b(more|fewer|less|increase|decrease)\b\s+(?:the\s+)?(?:number|count)?\s*(?:of\s+)?(?:the\s+)?([a-z0-9_]+)", req)
     if not m:
         return None
 
@@ -222,8 +258,9 @@ def _match_count_adjustment(gds: GameDesignSpec, req: str) -> Optional[ProposedP
         }
     ]
 
-    # Also update goal required_value if this entity is the objective
     summary = f"{ent.entity_id.capitalize()}: count {cur_count} -> {new_count}"
+
+    # Also update goal required_value if this entity is the objective
     goal_idx = next((i for i, e in enumerate(gds.entities) if e.kind == EntityKind.GOAL), None)
     if goal_idx is not None:
         gprops = gds.entities[goal_idx].props
@@ -237,16 +274,35 @@ def _match_count_adjustment(gds: GameDesignSpec, req: str) -> Optional[ProposedP
             )
             summary += f", updated goal requirement to {new_count}"
 
+    # If count decreased, inspect goals.win for any CountAtLeast condition that requires > new_count
+    for w_idx, win_c in enumerate(gds.goals.win):
+        if getattr(win_c, "kind", "") == "count_at_least":
+            c_event = getattr(win_c, "event", "")
+            c_source = getattr(win_c, "source", None)
+            if (c_event == "pickup.collected" and ent.kind == EntityKind.PICKUP) or c_source == ent.entity_id:
+                if win_c.n > new_count:
+                    ops.append(
+                        {
+                            "op": "replace",
+                            "path": f"/goals/win/{w_idx}/n",
+                            "value": new_count,
+                        }
+                    )
+                    summary += f", adjusted win requirement to {new_count}"
+
     return ProposedPatch(ops=ops, summary=summary, status="OK")
 
 
 def _match_add_n(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    m = re.search(r"(?i)\badd\s+(\d+)\s+([a-z0-9_]+)", req)
+    # Match patterns like: "add 5 coins", "add three guards", "spawn 2 enemies", "add 4 more relics"
+    m = re.search(r"(?i)\b(?:add|spawn|create)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:more\s+|new\s+)?([a-z0-9_]+)", req)
     if not m:
         return None
 
-    num = int(m.group(1))
+    raw_num = m.group(1).lower()
+    num = _WORD_NUMBERS.get(raw_num) if raw_num in _WORD_NUMBERS else int(raw_num)
     target = m.group(2).lower()
+
     idx = _find_entity_idx(gds, target)
     if idx is not None:
         ent = gds.entities[idx]
@@ -258,26 +314,33 @@ def _match_add_n(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
             status="OK",
         )
 
-    # If entity does not exist yet, instantiate a new one with the specified count
-    target_clean = target.rstrip("s")
+    # If entity does not exist yet, instantiate a new one with valid schema kit parameters
+    target_clean = target[:-3] + "y" if target.endswith("ies") else target.rstrip("s")
     kind_map = {
         "hazard": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 25.0, "shape_extent": 150.0}),
         "obstacle": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 25.0, "shape_extent": 150.0}),
         "trap": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 25.0, "shape_extent": 150.0}),
-        "guard": (EntityKind.GUARD, "kit.guard", {"patrol_speed": 400.0, "detection_radius": 800.0}),
-        "enemy": (EntityKind.ENEMY, "kit.enemy", {"enemy_speed": 350.0, "health": 100}),
-        "bot": (EntityKind.ENEMY, "kit.enemy", {"enemy_speed": 350.0, "health": 100}),
+        "spikes": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 30.0, "shape_extent": 100.0}),
+        "lava": (EntityKind.HAZARD, "kit.hazard", {"damage_per_second": 40.0, "shape_extent": 200.0}),
+        "guard": (EntityKind.GUARD, "kit.guard", {"move_speed": 300.0, "patrol_radius": 1000.0, "aggro_radius": 600.0}),
+        "enemy": (EntityKind.ENEMY, "kit.enemy_melee", {"move_speed": 350.0, "max_health": 50.0, "attack_damage": 15.0, "attack_range": 180.0, "attack_cooldown": 1.0, "aggro_range": 800.0}),
+        "bot": (EntityKind.ENEMY, "kit.enemy_melee", {"move_speed": 350.0, "max_health": 50.0, "attack_damage": 15.0, "attack_range": 180.0, "attack_cooldown": 1.0, "aggro_range": 800.0}),
+        "grunt": (EntityKind.ENEMY, "kit.enemy_melee", {"move_speed": 350.0, "max_health": 50.0, "attack_damage": 15.0, "attack_range": 180.0, "attack_cooldown": 1.0, "aggro_range": 800.0}),
+        "archer": (EntityKind.RANGED_ENEMY, "kit.enemy_ranged", {"move_speed": 280.0, "max_health": 35.0, "attack_damage": 10.0, "attack_range": 900.0, "attack_cooldown": 1.5, "aggro_range": 1200.0, "projectile_speed": 1500.0}),
+        "turret": (EntityKind.RANGED_ENEMY, "kit.enemy_ranged", {"move_speed": 0.0, "max_health": 60.0, "attack_damage": 15.0, "attack_range": 1000.0, "attack_cooldown": 1.0, "aggro_range": 1200.0, "projectile_speed": 2000.0}),
         "pickup": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
         "coin": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
         "relic": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
         "gem": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
+        "collectible": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
+        "key": (EntityKind.PICKUP, "kit.pickup", {"value": 1}),
         "checkpoint": (EntityKind.CHECKPOINT, "kit.checkpoint", {"activate_once": True}),
-        "spawner": (EntityKind.SPAWNER, "kit.spawner", {"wave_count": 3, "enemies_per_wave": 5}),
-        "prop": (EntityKind.PROP, "kit.prop", {}),
-        "landmark": (EntityKind.LANDMARK, "kit.landmark", {}),
-        "door": (EntityKind.DOOR, "kit.door", {}),
-        "platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {}),
-        "moving_platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {}),
+        "spawner": (EntityKind.SPAWNER, "kit.spawner", {"wave_count": 3, "enemies_per_wave": 5, "enemy_entity_id": "enemy", "seconds_between_waves": 5.0, "spawn_radius": 400.0}),
+        "prop": (EntityKind.PROP, "kit.prop", {"mesh_path": "/Engine/BasicShapes/Cube.Cube"}),
+        "landmark": (EntityKind.LANDMARK, "kit.landmark", {"discover_radius": 500.0}),
+        "door": (EntityKind.DOOR, "kit.door", {"open_seconds": 1.0, "required_value": 1.0}),
+        "platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {"end_offset_z": 300.0, "seconds": 3.0, "pause_seconds": 1.0}),
+        "moving_platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {"end_offset_z": 300.0, "seconds": 3.0, "pause_seconds": 1.0}),
     }
 
     if target_clean in kind_map:
@@ -306,7 +369,7 @@ def _match_add_n(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
 
 def _match_add_pickup(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    if not re.search(r"(?i)\badd\s+(?:1\s+|one\s+|a\s+)?(?:kit\s+)?(pickup|relic|coin)\b", req):
+    if not re.search(r"(?i)\b(?:add|create|place)\s+(?:1\s+|one\s+|a\s+)?(?:kit\s+)?(pickup|relic|coin|gem|collectible|key)\b", req):
         return None
 
     level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
@@ -327,23 +390,31 @@ def _match_add_pickup(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
 
 def _match_lighting(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    m = re.search(r"(?i)\b(night|dusk|day|indoor|sunset|dark)\s*(?:lighting|light)?\b", req)
+    # Match patterns like: "make it night", "night lighting", "change lighting to dusk", "daytime lighting"
+    m = re.search(r"(?i)\b(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn)\s*(?:lighting|light)?\b", req)
     if not m:
-        m = re.search(r"(?i)\bmake\s+it\s+(night|dusk|day|indoor|sunset|dark)\b", req)
+        m = re.search(r"(?i)\bmake\s+it\s+(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn)\b", req)
         if not m:
-            m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?lighting\s+(?:to\s+)?(night|dusk|day|indoor|sunset|dark)\b", req)
+            m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?lighting\s+(?:to\s+)?(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn)\b", req)
             if not m:
                 return None
 
     raw_val = m.group(1).lower()
-    val_map = {"sunset": "dusk", "dark": "night"}
+    val_map = {
+        "sunset": "dusk",
+        "dark": "night",
+        "nighttime": "night",
+        "daytime": "day",
+        "morning": "day",
+        "dawn": "dusk",
+    }
     val = val_map.get(raw_val, raw_val)
     ops = [{"op": "replace", "path": "/scene/levels/0/lighting", "value": val}]
     return ProposedPatch(ops=ops, summary=f"Scene lighting set to {val}", status="OK")
 
 
 def _match_add_checkpoint(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    if not re.search(r"(?i)\badd\s+(?:a\s+)?checkpoint\b", req):
+    if not re.search(r"(?i)\b(?:add|create|place)\s+(?:a\s+)?(?:checkpoint|respawn\s+point)\b", req):
         return None
 
     level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
@@ -365,7 +436,7 @@ def _match_add_checkpoint(gds: GameDesignSpec, req: str) -> Optional[ProposedPat
 
 
 def _match_add_hazard(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    if not re.search(r"(?i)\badd\s+(?:a\s+)?hazard(?:\s+area)?\b", req):
+    if not re.search(r"(?i)\b(?:add|create|place)\s+(?:a\s+)?(?:hazard|trap|spikes?|lava)(?:\s+(?:area|zone))?\b", req):
         return None
 
     level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
@@ -387,27 +458,33 @@ def _match_add_hazard(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
 
 def _match_add_second_level(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    if not re.search(r"(?i)\badd\s+(?:a\s+)?(?:second\s+level|level\s+2)\b", req):
+    if not re.search(r"(?i)\b(?:add|create)\s+(?:a\s+)?(?:second\s+level|level\s+2|another\s+level|new\s+level)\b", req):
         return None
 
+    next_lvl_num = len(gds.scene.levels) + 1
+    lvl_id = f"level_{next_lvl_num}"
     new_level = {
-        "level_id": "level_2",
+        "level_id": lvl_id,
         "layout": "arena",
         "size_m": {"x": 100.0, "y": 100.0},
         "biome": "dungeon",
         "lighting": "dusk",
-        "seed": 2026,
+        "seed": 2026 + next_lvl_num,
         "layout_params": {},
     }
     ops = [{"op": "add", "path": "/scene/levels/-", "value": new_level}]
-    return ProposedPatch(ops=ops, summary="Added second level 'level_2'", status="OK")
+    return ProposedPatch(ops=ops, summary=f"Added level '{lvl_id}'", status="OK")
 
 
 def _match_reach_gate_win(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    if not re.search(r"(?i)\b(?:reach(?:ing)?\s+(?:the\s+)?gate|require\s+reaching\s+the\s+gate|win\s+to\s+also\s+require)\b", req):
+    if not re.search(r"(?i)\b(?:reach(?:ing)?\s+(?:the\s+)?(?:gate|goal|exit|portal)|require\s+reaching\s+(?:the\s+)?(?:gate|goal|exit|portal)|win\s+to\s+also\s+require)\b", req):
         return None
 
-    # Check if goal entity exists, otherwise add it
+    # Check if goal.reached win condition is already present
+    already_present = any(getattr(c, "event", None) == "goal.reached" for c in gds.goals.win)
+    if already_present:
+        return ProposedPatch(ops=[], summary="Win goal already requires reaching the gate/goal", status="OK")
+
     goal_ent = next((e for e in gds.entities if e.kind == EntityKind.GOAL or e.entity_id == "goal"), None)
     ops = []
     level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
@@ -445,9 +522,11 @@ def _match_reach_gate_win(gds: GameDesignSpec, req: str) -> Optional[ProposedPat
 
 
 def _match_rename_title(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    m = re.search(r"(?i)\brename\s+(?:the\s+)?title\s+(?:to\s+)?[\"']?([^\"'\n]+)[\"']?", req)
+    m = re.search(r"(?i)\b(?:rename|change|set)\s+(?:the\s+)?(?:game\s+)?title\s+(?:to\s+)?[\"']?([^\"'\n]+)[\"']?", req)
     if not m:
-        return None
+        m = re.search(r"(?i)\brename\s+(?:the\s+)?game\s+(?:to\s+)?[\"']?([^\"'\n]+)[\"']?", req)
+        if not m:
+            return None
 
     new_title = m.group(1).strip()
     ops = [{"op": "replace", "path": "/meta/title", "value": new_title}]
@@ -465,40 +544,93 @@ def _match_remove_entity(gds: GameDesignSpec, req: str) -> Optional[ProposedPatc
         return None
 
     ent = gds.entities[idx]
-    ops = [{"op": "remove", "path": f"/entities/{idx}"}]
+    ent_id = ent.entity_id
+
+    # Check which events this entity's module emits that are unique to this entity
+    module_id = ent.module
+    other_entities_with_module = [e for i, e in enumerate(gds.entities) if i != idx and e.module == module_id]
+    orphaned_events: Set[str] = set()
+    if not other_entities_with_module and module_id in MODULE_EVENTS:
+        orphaned_events = set(MODULE_EVENTS[module_id])
+
+    ops: List[Dict[str, Any]] = []
+
+    # 1. Clean up feedback referencing orphaned events (in reverse order)
+    for f_idx in range(len(gds.feedback) - 1, -1, -1):
+        f = gds.feedback[f_idx]
+        if f.on.event in orphaned_events:
+            ops.append({"op": "remove", "path": f"/feedback/{f_idx}"})
+
+    # 2. Clean up rules referencing this entity or orphaned events (in reverse order)
+    for r_idx in range(len(gds.rules) - 1, -1, -1):
+        r = gds.rules[r_idx]
+        if r.when.event in orphaned_events or r.when.source == ent_id:
+            ops.append({"op": "remove", "path": f"/rules/{r_idx}"})
+            continue
+        has_ref = any(getattr(c, "source", None) == ent_id or (getattr(c, "stat", "") or "").startswith(f"entity.{ent_id}.") for c in r.conditions)
+        if has_ref:
+            ops.append({"op": "remove", "path": f"/rules/{r_idx}"})
+
+    # 3. Clean up goals.lose referencing this entity or orphaned events
+    for l_idx in range(len(gds.goals.lose) - 1, -1, -1):
+        l_cond = gds.goals.lose[l_idx]
+        if getattr(l_cond, "event", None) in orphaned_events or getattr(l_cond, "source", None) == ent_id:
+            ops.append({"op": "remove", "path": f"/goals/lose/{l_idx}"})
+
+    # 4. Clean up goals.win referencing this entity or orphaned events
+    for w_idx in range(len(gds.goals.win) - 1, -1, -1):
+        w_cond = gds.goals.win[w_idx]
+        if getattr(w_cond, "event", None) in orphaned_events or getattr(w_cond, "source", None) == ent_id:
+            ops.append({"op": "remove", "path": f"/goals/win/{w_idx}"})
+
+    # 5. Clean up HUD elements binding to this entity
+    for h_idx in range(len(gds.ui.hud) - 1, -1, -1):
+        h_elem = gds.ui.hud[h_idx]
+        if (h_elem.binds or "").startswith(f"entity.{ent_id}."):
+            ops.append({"op": "remove", "path": f"/ui/hud/{h_idx}"})
+
+    # 6. Remove the entity itself
+    ops.append({"op": "remove", "path": f"/entities/{idx}"})
+
     return ProposedPatch(ops=ops, summary=f"Removed {ent.kind.value} '{ent.entity_id}'", status="OK")
 
 
 def _match_add_door_key(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    if not re.search(r"(?i)\badd\s+(?:a\s+)?door\s+with\s+(?:a\s+)?key\b", req):
+    if not re.search(r"(?i)\b(?:add|create|place)\s+(?:a\s+)?(?:locked\s+)?(?:door|gate)\s+(?:with|and)\s+(?:a\s+)?key\b", req):
         return None
 
     level_id = gds.scene.levels[0].level_id if gds.scene.levels else "level_1"
+    existing_keys = [e for e in gds.entities if "key" in e.entity_id.lower()]
+    existing_doors = [e for e in gds.entities if e.kind == EntityKind.DOOR or "door" in e.entity_id.lower()]
+
+    key_id = f"key_bronze_{len(existing_keys) + 1}" if existing_keys else "key_bronze"
+    door_id = f"door_gate_{len(existing_doors) + 1}" if existing_doors else "door_gate"
+
     key_ent = {
-        "entity_id": "key_bronze",
+        "entity_id": key_id,
         "kind": "pickup",
         "module": "kit.pickup",
         "level_id": level_id,
         "count": 1,
         "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
         "tags": ["GF_Owned"],
-        "props": {"value": 1, "objective_id": "key_bronze"},
+        "props": {"value": 1, "objective_id": key_id},
     }
     door_ent = {
-        "entity_id": "door_gate",
+        "entity_id": door_id,
         "kind": "door",
         "module": "kit.door",
         "level_id": level_id,
         "count": 1,
         "placement": {"strategy": "scatter", "points_m": [], "min_spacing_m": 2.0},
         "tags": ["GF_Owned"],
-        "props": {"required_stat": "entity.key_bronze.collected", "required_value": 1.0, "open_seconds": 1.0},
+        "props": {"required_stat": f"entity.{key_id}.collected", "required_value": 1.0, "open_seconds": 1.0},
     }
     ops = [
         {"op": "add", "path": "/entities/-", "value": key_ent},
         {"op": "add", "path": "/entities/-", "value": door_ent},
     ]
-    return ProposedPatch(ops=ops, summary="Added door 'door_gate' with key 'key_bronze'", status="OK")
+    return ProposedPatch(ops=ops, summary=f"Added door '{door_id}' with key '{key_id}'", status="OK")
 
 
 def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
@@ -525,6 +657,7 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
             "props": {
                 "wave_count": 3,
                 "enemies_per_wave": 5,
+                "enemy_entity_id": "enemy",
                 "enemy_max_health": 100,
                 "enemy_attack_damage": 20,
                 "enemy_speed": 350.0,
@@ -542,11 +675,11 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         if not isinstance(p_props, dict):
             p_props = p_props.model_dump()
         if p_props.get("attack_mode") != "projectile":
-            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/attack_mode", "value": "projectile"})
+            ops.append({"op": "replace" if "attack_mode" in p_props else "add", "path": f"/entities/{player_idx}/props/attack_mode", "value": "projectile"})
         if "move_speed" not in p_props or float(p_props["move_speed"]) < 600:
-            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/move_speed", "value": 650.0})
+            ops.append({"op": "replace" if "move_speed" in p_props else "add", "path": f"/entities/{player_idx}/props/move_speed", "value": 650.0})
         if "player_max_health" not in p_props:
-            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/player_max_health", "value": 100})
+            ops.append({"op": "add", "path": f"/entities/{player_idx}/props/player_max_health", "value": 100.0})
 
         # Configure weapons if mentioned in request
         weapons = []
@@ -559,7 +692,18 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         if weapons and "weapons" not in p_props:
             ops.append({"op": "add", "path": f"/entities/{player_idx}/props/weapons", "value": weapons})
 
-    # 3. Upgrade level layout to arena for combat/shooter games (composer routes tactical/CS to tactical_fps)
+    # Ensure IA_Fire or IA_Attack action is present in InputSpec
+    action_ids = {a.action_id for a in gds.input.actions}
+    if "IA_Fire" not in action_ids and "IA_Attack" not in action_ids:
+        fire_action = {
+            "action_id": "IA_Fire",
+            "value_type": "bool",
+            "bindings": ["LeftMouseButton"],
+            "purpose": "Fire projectile",
+        }
+        ops.append({"op": "add", "path": "/input/actions/-", "value": fire_action})
+
+    # 3. Upgrade level layout to arena for combat/shooter games
     target_layout = "arena"
     if gds.scene.levels:
         cur_layout = getattr(gds.scene.levels[0], "layout", None)
@@ -605,7 +749,7 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
 
     return ProposedPatch(
         ops=ops,
-        summary="Completed game design: Added enemy wave spawner with 5 combat bots, enabled projectile shooting mechanics for player, updated level layout to arena with cover, and configured wave-cleared win condition.",
+        summary="Completed game design: Added enemy wave spawner with combat bots, enabled projectile shooting mechanics with IA_Fire action, updated level layout to arena, and configured wave-cleared win condition.",
         status="OK",
     )
 
@@ -616,10 +760,16 @@ def _match_health(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     if not m:
         m = re.search(r"(?i)\b(double|halve)\s+(?:the\s+)?(player|enemy|enemies|guards?)(?:'s)?\s+(?:health|hp|max\s+health)\b", req)
         if not m:
-            return None
-        action = m.group(1).lower()
-        target = m.group(2).lower()
-        explicit_val = None
+            m = re.search(r"(?i)\b(?:give|grant)\s+(?:the\s+)?(player|enemy|enemies|guards?)\s+(?:more\s+)?(?:health|hp)\b", req)
+            if not m:
+                return None
+            action = "increase"
+            target = m.group(1).lower()
+            explicit_val = None
+        else:
+            action = m.group(1).lower()
+            target = m.group(2).lower()
+            explicit_val = None
     else:
         target = m.group(1).lower()
         explicit_val = float(m.group(2))
@@ -634,7 +784,7 @@ def _match_health(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     props = ent.props if isinstance(ent.props, dict) else ent.props.model_dump()
     prop_key = next((k for k in ("player_max_health", "enemy_max_health", "health", "max_health") if k in props), None)
     if not prop_key:
-        prop_key = "player_max_health" if target_clean == "player" else ("enemy_max_health" if target_clean == "enemy" else "health")
+        prop_key = "player_max_health" if target_clean == "player" else ("max_health" if target_clean == "enemy" else "health")
         old_val = 100.0
         op_type = "add"
     else:
@@ -645,8 +795,12 @@ def _match_health(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
         new_val = explicit_val
     elif action == "double":
         new_val = old_val * 2.0
+    elif action == "increase":
+        new_val = old_val + 50.0
     else:
         new_val = max(1.0, old_val * 0.5)
+
+    new_val = max(1.0, min(10000.0, new_val))
 
     ops = [{"op": op_type, "path": f"/entities/{idx}/props/{prop_key}", "value": new_val}]
     return ProposedPatch(ops=ops, summary=f"{ent.entity_id.capitalize()}: {prop_key} {old_val} -> {new_val}", status="OK")
@@ -658,7 +812,7 @@ def _match_jump(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     if not m:
         m = re.search(r"(?i)\b(double|increase)\s+(?:the\s+)?jump\s+(?:velocity|height|force)\b", req)
         if not m:
-            m = re.search(r"(?i)\bmake\s+(?:the\s+)?player\s+jump\s+higher\b", req)
+            m = re.search(r"(?i)\b(?:make\s+(?:the\s+)?player\s+jump\s+higher|higher\s+jump|jump\s+higher|boost\s+jump)\b", req)
             if not m:
                 return None
             action = "increase"
@@ -686,39 +840,100 @@ def _match_jump(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     else:
         new_val = round(old_val * 1.3, 1)
 
+    new_val = max(0.0, min(2000.0, new_val))
+
     ops = [{"op": op_type, "path": f"/entities/{player_idx}/props/jump_velocity", "value": new_val}]
+
+    # Ensure IA_Jump is present in input.actions
+    action_ids = {a.action_id for a in gds.input.actions}
+    if "IA_Jump" not in action_ids:
+        jump_action = {
+            "action_id": "IA_Jump",
+            "value_type": "bool",
+            "bindings": ["SpaceBar"],
+            "purpose": "Jump",
+        }
+        ops.append({"op": "add", "path": "/input/actions/-", "value": jump_action})
+
     return ProposedPatch(ops=ops, summary=f"Player: jump_velocity {old_val} -> {new_val}", status="OK")
 
 
 def _match_difficulty(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     """Matches requests to change progression difficulty."""
-    m = re.search(r"(?i)\b(?:set|change|make)\s+(?:the\s+)?(?:difficulty\s+(?:to\s+)?)?(easy|normal|hard)\b", req)
+    m = re.search(r"(?i)\b(?:set|change|make)\s+(?:the\s+)?(?:game\s+)?(?:difficulty\s+(?:to\s+)?)?(easy|normal|hard|harder|easier)\b", req)
     if not m:
-        return None
-    val = m.group(1).lower()
+        m = re.search(r"(?i)\b(easy|hard)\s+mode\b", req)
+        if not m:
+            return None
+        raw_val = m.group(1).lower()
+    else:
+        raw_val = m.group(1).lower()
+
+    val_map = {"harder": "hard", "easier": "easy"}
+    val = val_map.get(raw_val, raw_val)
     ops = [{"op": "replace", "path": "/progression/difficulty", "value": val}]
     return ProposedPatch(ops=ops, summary=f"Progression difficulty set to '{val}'", status="OK")
 
 
 def _match_art_style(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     """Matches requests to change visual art style."""
-    m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?art\s+style\s+(?:to\s+)?(stylized|realistic|low_poly|low\s+poly|toon)\b", req)
+    m = re.search(r"(?i)\b(?:set|change|switch|make)\s+(?:the\s+)?(?:art\s+)?style\s+(?:to\s+)?(stylized|realistic|low_poly|low\s+poly|toon|cartoon|cartoonish|photorealistic)\b", req)
     if not m:
-        m = re.search(r"(?i)\bmake\s+(?:it|the\s+style)\s+(stylized|realistic|low_poly|low\s+poly|toon)\b", req)
+        m = re.search(r"(?i)\bmake\s+(?:it|the\s+style|style)\s+(stylized|realistic|low_poly|low\s+poly|toon|cartoon|cartoonish|photorealistic)\b", req)
         if not m:
             return None
-    val = m.group(1).lower().replace(" ", "_")
+
+    raw_val = m.group(1).lower().replace(" ", "_")
+    val_map = {
+        "cartoon": "toon",
+        "cartoonish": "toon",
+        "photorealistic": "realistic",
+    }
+    val = val_map.get(raw_val, raw_val)
     ops = [{"op": "replace", "path": "/art/style", "value": val}]
     return ProposedPatch(ops=ops, summary=f"Art style set to '{val}'", status="OK")
 
 
 def _match_camera(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     """Matches requests to change camera perspective."""
-    m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?camera(?:\s+mode|\s+view)?\s+(?:to\s+)?(first[- ]person|third[- ]person|top[- ]down|side[- ]scroller|fixed[- ]board)\b", req)
+    m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?(?:camera(?:\s+mode|\s+view)?\s+)?(?:to\s+)?(first[- ]person|third[- ]person|top[- ]down|side[- ]scroller|fixed[- ]board)(?:\s+(?:camera|view|mode))?\b", req)
     if not m:
-        return None
-    cam_str = m.group(1).lower().replace(" ", "_").replace("-", "_")
+        m = re.search(r"(?i)\b(?:fps|first\s+person)\s+(?:view|camera|mode)\b", req)
+        if m:
+            cam_str = "first_person"
+        else:
+            return None
+    else:
+        cam_str = m.group(1).lower().replace(" ", "_").replace("-", "_")
+
     ops = [{"op": "replace", "path": "/overview/camera", "value": cam_str}]
+
+    # Ensure IA_Move and IA_Look exist for first/third person cameras
+    if cam_str in ("first_person", "third_person"):
+        action_ids = {a.action_id for a in gds.input.actions}
+        if "IA_Move" not in action_ids:
+            ops.append({
+                "op": "add",
+                "path": "/input/actions/-",
+                "value": {
+                    "action_id": "IA_Move",
+                    "value_type": "axis2d",
+                    "bindings": ["W", "S:negate", "A:swizzle_negate", "D:swizzle"],
+                    "purpose": "Move forward/backward and left/right",
+                },
+            })
+        if "IA_Look" not in action_ids:
+            ops.append({
+                "op": "add",
+                "path": "/input/actions/-",
+                "value": {
+                    "action_id": "IA_Look",
+                    "value_type": "axis2d",
+                    "bindings": ["Mouse2D"],
+                    "purpose": "Camera orientation",
+                },
+            })
+
     return ProposedPatch(ops=ops, summary=f"Camera mode set to '{cam_str}'", status="OK")
 
 
@@ -728,7 +943,9 @@ def _match_timer(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
     if not m:
         m = re.search(r"(?i)\badd\s+(?:a\s+)?(\d+)\s*(?:s|sec|seconds?)\s+timer\b", req)
         if not m:
-            return None
+            m = re.search(r"(?i)\b(?:give\s+player\s+|timer\s+of\s+)(\d+)\s*(?:s|sec|seconds?)\b", req)
+            if not m:
+                return None
     seconds = float(m.group(1))
 
     timer_idx = None
@@ -744,4 +961,3 @@ def _match_timer(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
         ops = [{"op": "add", "path": "/goals/lose/-", "value": timer_cond}]
 
     return ProposedPatch(ops=ops, summary=f"Set game lose timer to {int(seconds)} seconds", status="OK")
-

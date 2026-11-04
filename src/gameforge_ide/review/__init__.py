@@ -5,10 +5,24 @@ from .vision_rubric import (
     evaluate_vision_rubric,
     run_mesh_audit,
 )
+from .reconciliation import (
+    ActorConflict,
+    AssetConflict,
+    ReconciliationPlan,
+    plan_reconciliation,
+    apply_resolutions,
+    audit_reconciliation_review,
+)
 
 __all__ = [
     "VisionRubricScore",
     "MeshAuditResult",
     "evaluate_vision_rubric",
     "run_mesh_audit",
+    "ActorConflict",
+    "AssetConflict",
+    "ReconciliationPlan",
+    "plan_reconciliation",
+    "apply_resolutions",
+    "audit_reconciliation_review",
 ]

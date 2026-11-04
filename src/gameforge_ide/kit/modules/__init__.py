@@ -478,6 +478,8 @@ class PropParams(BaseModel):
     scale_x: float = Field(1.0, ge=0.01, le=100.0)
     scale_y: float = Field(1.0, ge=0.01, le=100.0)
     scale_z: float = Field(1.0, ge=0.01, le=100.0)
+    # CSG procedural prop recipe (e.g. "chest", "barrel", "crate") — extracted from draft notes
+    recipe: Optional[str] = Field(None, max_length=64)
 
 
 register(

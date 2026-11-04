@@ -71,13 +71,13 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
         target = int(spec.params.get("pickup_count", 3))
         steps = [
             NavigateToStep(navigate_to=NavigateToArgs(tag=f"GF_Pickup_{i}"))
-            for i in range(1, min(target + 1, 4))
+            for i in range(1, target + 1)
         ]
         steps.append(WaitStep(wait_s=WaitArgs(seconds=2.0)))
         return Scenario(
             scenario_id=tid,
             description=spec.description,
-            timeout_s=60.0,
+            timeout_s=max(60.0, float(target) * 15.0),
             steps=steps,
             expect=[EventExpectation(event="game.won")],
         )
@@ -87,8 +87,11 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             scenario_id=tid,
             description=spec.description,
             timeout_s=30.0,
-            steps=[WaitStep(wait_s=WaitArgs(seconds=1.0))],
-            expect=[EventCountExpectation(event_count="pickup.collected", min=0)],
+            steps=[
+                NavigateToStep(navigate_to=NavigateToArgs(tag="GF_Pickup_1")),
+                WaitStep(wait_s=WaitArgs(seconds=1.0)),
+            ],
+            expect=[EventCountExpectation(event_count="pickup.collected", min=1)],
         )
     elif tid == "combat_damages_enemies":
         return Scenario(
@@ -96,7 +99,8 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             description=spec.description,
             timeout_s=30.0,
             steps=[
-                InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.1)),
+                NavigateToStep(navigate_to=NavigateToArgs(tag="Enemy_1", accept_radius_cm=150.0)),
+                InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.2)),
                 WaitStep(wait_s=WaitArgs(seconds=1.0)),
             ],
             expect=[EventExpectation(event="enemy.damaged")],
@@ -107,6 +111,7 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             description=spec.description,
             timeout_s=60.0,
             steps=[
+                NavigateToStep(navigate_to=NavigateToArgs(tag="Enemy_1", accept_radius_cm=150.0)),
                 InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.2)),
                 WaitStep(wait_s=WaitArgs(seconds=1.5)),
                 InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.2)),
@@ -125,21 +130,17 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             ],
             expect=[EventExpectation(event="dice.rolled")],
         )
-    elif tid == "snake_transition":
+    elif tid in ("snake_transition", "ladder_transition"):
+        evt = "snake.transition" if tid == "snake_transition" else "ladder.transition"
         return Scenario(
             scenario_id=tid,
             description=spec.description,
             timeout_s=30.0,
-            steps=[WaitStep(wait_s=WaitArgs(seconds=2.0))],
-            expect=[EventExpectation(event="snake.transition")],
-        )
-    elif tid == "ladder_transition":
-        return Scenario(
-            scenario_id=tid,
-            description=spec.description,
-            timeout_s=30.0,
-            steps=[WaitStep(wait_s=WaitArgs(seconds=2.0))],
-            expect=[EventExpectation(event="ladder.transition")],
+            steps=[
+                InjectStep(inject=InjectArgs(action="IA_RollDice", value=True, hold_s=0.1)),
+                WaitStep(wait_s=WaitArgs(seconds=1.5)),
+            ],
+            expect=[EventExpectation(event=evt)],
         )
     elif tid == "win_condition":
         return Scenario(

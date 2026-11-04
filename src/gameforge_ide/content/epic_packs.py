@@ -44,17 +44,32 @@ EPIC_PACKS: Dict[str, Dict[str, Any]] = {
 
 
 def _infer_asset_type(rel_path: str) -> str:
-    lower = rel_path.lower()
-    if "meshes" in lower:
-        if "skm_" in lower or "sk_" in lower:
+    p = Path(rel_path)
+    stem_lower = p.stem.lower()
+    path_lower = rel_path.lower()
+
+    if stem_lower.startswith("skm_") or stem_lower.startswith("sk_"):
+        return "skeletal_mesh"
+    if stem_lower.startswith("sm_"):
+        return "mesh"
+    if "meshes" in path_lower:
+        if "skm_" in path_lower or "sk_" in path_lower:
             return "skeletal_mesh"
         return "mesh"
-    if "anims" in lower or "anim" in lower or "abp_" in lower or "bs_" in lower or "mm_" in lower:
+    if (
+        "anims" in path_lower
+        or "anim" in path_lower
+        or stem_lower.startswith(("abp_", "bs_", "mm_", "a_"))
+    ):
         return "animation"
-    if "materials" in lower or lower.startswith("m_") or lower.startswith("mi_"):
+    if "materials" in path_lower or stem_lower.startswith(("m_", "mi_")):
         return "material"
-    if "textures" in lower or lower.startswith("t_"):
+    if "textures" in path_lower or stem_lower.startswith("t_"):
         return "texture"
+    if "sounds" in path_lower or "audio" in path_lower or stem_lower.startswith(("s_", "sfx_")):
+        return "sound"
+    if "niagara" in path_lower or "vfx" in path_lower or stem_lower.startswith(("ns_", "ne_")):
+        return "vfx"
     return "other"
 
 
@@ -127,11 +142,11 @@ def collect_cook_directories(data: Any) -> List[str]:
 
     def _scan(val: Any) -> None:
         if isinstance(val, str):
-            if val.startswith("/Game/") and not val.startswith("/Game/GameForge/GD_"):
-                # Extract up to the first folder e.g. /Game/Characters, /Game/LevelPrototyping
-                parts = val.split("/")
-                if len(parts) >= 3:
-                    top_dir = f"/{parts[1]}/{parts[2]}"
+            clean_val = val.split(".")[0].strip()
+            if clean_val.startswith("/Game/") and not clean_val.startswith("/Game/GameForge/GD_"):
+                parts = [p for p in clean_val.split("/") if p]
+                if len(parts) >= 2:
+                    top_dir = f"/{parts[0]}/{parts[1]}"
                     found.add(top_dir)
         elif isinstance(val, dict):
             for v in val.values():
@@ -145,15 +160,19 @@ def collect_cook_directories(data: Any) -> List[str]:
 
 
 def update_default_game_ini_cook_dirs(project_dir: Path, cook_dirs: List[str]) -> Path:
-    """Ensure DirectoriesToAlwaysCook entries exist in Config/DefaultGame.ini."""
+    """Ensure DirectoriesToAlwaysCook entries exist in Config/DefaultGame.ini, preserving line endings."""
     project_dir = Path(project_dir)
     config_dir = project_dir / "Config"
     config_dir.mkdir(parents=True, exist_ok=True)
     ini_path = config_dir / "DefaultGame.ini"
 
     content = ""
+    le = "\n"
     if ini_path.is_file():
-        content = ini_path.read_text(encoding="utf-8")
+        raw_bytes = ini_path.read_bytes()
+        if b"\r\n" in raw_bytes:
+            le = "\r\n"
+        content = raw_bytes.decode("utf-8")
 
     section_header = "[/Script/UnrealEd.ProjectPackagingSettings]"
     existing_dirs = set(re.findall(r'DirectoriesToAlwaysCook=\(Path="([^"]+)"\)', content))
@@ -165,14 +184,13 @@ def update_default_game_ini_cook_dirs(project_dir: Path, cook_dirs: List[str]) -
     new_lines = [f'+DirectoriesToAlwaysCook=(Path="{d}")' for d in needed]
 
     if section_header in content:
-        # Insert after section header
         idx = content.find(section_header) + len(section_header)
-        content = content[:idx] + "\n" + "\n".join(new_lines) + content[idx:]
+        content = content[:idx] + le + le.join(new_lines) + content[idx:]
     else:
-        # Append section at end
-        if content and not content.endswith("\n"):
-            content += "\n"
-        content += f"\n{section_header}\n" + "\n".join(new_lines) + "\n"
+        if content and not content.endswith(le):
+            content += le
+        content += f"{le}{section_header}{le}" + le.join(new_lines) + le
 
-    ini_path.write_text(content, encoding="utf-8")
+    with open(ini_path, "w", encoding="utf-8", newline="") as f:
+        f.write(content)
     return ini_path

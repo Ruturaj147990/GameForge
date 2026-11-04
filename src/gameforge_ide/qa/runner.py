@@ -15,13 +15,32 @@ from .scenario import Scenario, ScenarioResult
 def _extract_crash_diagnostics(exe: Path, proc_log: Path, exit_code: Optional[int]) -> str:
     """Find crash or error clues from process stdout or game Saved/Logs."""
     clues: List[str] = []
+    tail_lines: List[str] = []
+
+    err_keywords = (
+        "Critical error",
+        "Fatal error",
+        "Unhandled Exception",
+        "Assertion failed",
+        "Ensure:",
+        "Callstack:",
+        "CrashReportClient",
+        "Failed to enter",
+        "LoadPackage: SkipPackage",
+        "Failed to load",
+        "Error:",
+        "Exception",
+    )
 
     if proc_log.is_file():
         try:
             lines = proc_log.read_text(encoding="utf-8", errors="replace").splitlines()
-            for line in lines[-50:]:
-                if any(err_word in line for err_word in ("Critical error", "Fatal error", "Unhandled Exception", "Error:", "Exception")):
-                    clues.append(line.strip())
+            for line in lines[-60:]:
+                stripped = line.strip()
+                if stripped:
+                    tail_lines.append(stripped)
+                if any(err_word in line for err_word in err_keywords):
+                    clues.append(stripped)
         except Exception:
             pass
 
@@ -34,9 +53,12 @@ def _extract_crash_diagnostics(exe: Path, proc_log: Path, exit_code: Optional[in
         if lc.is_file():
             try:
                 lines = lc.read_text(encoding="utf-8", errors="replace").splitlines()
-                for line in lines[-60:]:
-                    if any(err_word in line for err_word in ("Critical error", "Fatal error", "Unhandled Exception", "Failed to enter", "LoadPackage: SkipPackage", "Error:")):
-                        clues.append(line.strip())
+                for line in lines[-80:]:
+                    stripped = line.strip()
+                    if stripped and not tail_lines:
+                        tail_lines.append(stripped)
+                    if any(err_word in line for err_word in err_keywords):
+                        clues.append(stripped)
                 if clues:
                     break
             except Exception:
@@ -46,7 +68,10 @@ def _extract_crash_diagnostics(exe: Path, proc_log: Path, exit_code: Optional[in
         unique = list(dict.fromkeys(clues))
         return " | ".join(unique[-3:])
     if exit_code is not None and exit_code != 0:
-        return f"Process terminated with exit code {exit_code}"
+        tail = (" | Tail: " + " | ".join(tail_lines[-2:])) if tail_lines else ""
+        return f"Process terminated with exit code {exit_code}{tail}"
+    if tail_lines:
+        return "Tail: " + " | ".join(tail_lines[-3:])
     return ""
 
 
@@ -105,21 +130,41 @@ def run_packaged(
     stdout_target = plog if plog is not None else subprocess.DEVNULL
     stderr_target = plog if plog is not None else subprocess.DEVNULL
 
+    proc = None
     try:
-        proc = jobs.spawn(argv, stdout=stdout_target, stderr=stderr_target)
         try:
-            proc.wait(timeout=timeout_s)
-        except Exception as exc:
-            UnrealToolchain.kill_tree(proc)
+            proc = jobs.spawn(argv, stdout=stdout_target, stderr=stderr_target)
+        except Exception as spawn_exc:
             return ScenarioResult(
                 schema="scenario_result/1",
                 scenario_id=scenario.scenario_id,
                 passed=False,
-                failures=[f"TIMEOUT after {timeout_s}s ({exc})"],
+                failures=[f"SPAWN_FAILED: {spawn_exc}"],
+            )
+
+        try:
+            proc.wait(timeout=timeout_s)
+        except Exception as exc:
+            UnrealToolchain.kill_tree(proc)
+            if plog is not None:
+                try:
+                    plog.flush()
+                    plog.close()
+                    plog = None
+                except Exception:
+                    pass
+            diag = _extract_crash_diagnostics(exe, proc_log, getattr(proc, "returncode", None))
+            diag_str = f" | Diagnostics: {diag}" if diag else ""
+            return ScenarioResult(
+                schema="scenario_result/1",
+                scenario_id=scenario.scenario_id,
+                passed=False,
+                failures=[f"TIMEOUT after {timeout_s}s ({exc}){diag_str}"],
             )
     finally:
         if plog is not None:
             try:
+                plog.flush()
                 plog.close()
             except Exception:
                 pass
@@ -197,21 +242,41 @@ def run_editor_game(
     stdout_target = plog if plog is not None else subprocess.DEVNULL
     stderr_target = plog if plog is not None else subprocess.DEVNULL
 
+    proc = None
     try:
-        proc = jobs.spawn(argv, stdout=stdout_target, stderr=stderr_target)
         try:
-            proc.wait(timeout=timeout_s)
-        except Exception as exc:
-            UnrealToolchain.kill_tree(proc)
+            proc = jobs.spawn(argv, stdout=stdout_target, stderr=stderr_target)
+        except Exception as spawn_exc:
             return ScenarioResult(
                 schema="scenario_result/1",
                 scenario_id=scenario.scenario_id,
                 passed=False,
-                failures=[f"TIMEOUT after {timeout_s}s ({exc})"],
+                failures=[f"SPAWN_FAILED: {spawn_exc}"],
+            )
+
+        try:
+            proc.wait(timeout=timeout_s)
+        except Exception as exc:
+            UnrealToolchain.kill_tree(proc)
+            if plog is not None:
+                try:
+                    plog.flush()
+                    plog.close()
+                    plog = None
+                except Exception:
+                    pass
+            diag = _extract_crash_diagnostics(exe, proc_log, getattr(proc, "returncode", None))
+            diag_str = f" | Diagnostics: {diag}" if diag else ""
+            return ScenarioResult(
+                schema="scenario_result/1",
+                scenario_id=scenario.scenario_id,
+                passed=False,
+                failures=[f"TIMEOUT after {timeout_s}s ({exc}){diag_str}"],
             )
     finally:
         if plog is not None:
             try:
+                plog.flush()
                 plog.close()
             except Exception:
                 pass

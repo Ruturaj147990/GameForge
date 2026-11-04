@@ -309,10 +309,18 @@ class GamePipeline:
             unsub()
 
         # Reconstruct params from step 0
+        if not state.run.steps:
+            raise RuntimeError(f"No steps recorded in previous Forge run for {pdir}")
+
+        step0 = state.run.steps[0]
+        rec0 = state.records.get(step0.step_id)
+        if rec0 is None:
+            raise RuntimeError(f"Missing root step record '{step0.step_id}' in {pdir}")
+
         dummy_ctx = StepContext(
             run=state.run,
-            step=state.run.steps[0],
-            record=state.records[state.run.steps[0].step_id],
+            step=step0,
+            record=rec0,
             shared={},
             project_dir=pdir,
             workspace_dir=proot,

@@ -32,6 +32,7 @@ class ProblemsTable(QTableWidget):
         self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.setSelectionBehavior(QTableWidget.SelectRows)
         self.setSelectionMode(QTableWidget.SingleSelection)
+        self.setEditTriggers(QTableWidget.NoEditTriggers)
 
         self.setStyleSheet(
             f"QTableWidget#{self.objectName()} {{"
@@ -54,15 +55,18 @@ class ProblemsTable(QTableWidget):
             msg = str(p.get("message", ""))
 
             item_sev = QTableWidgetItem(sev)
+            item_sev.setFlags(item_sev.flags() & ~Qt.ItemIsEditable)
             col_str = tokens.ACCENT_ERROR if "ERR" in sev else tokens.ACCENT_WARNING
             item_sev.setForeground(QColor(col_str))
             self.setItem(r, 0, item_sev)
 
             item_loc = QTableWidgetItem(loc)
+            item_loc.setFlags(item_loc.flags() & ~Qt.ItemIsEditable)
             item_loc.setData(Qt.UserRole, (file_path, line_no))
             self.setItem(r, 1, item_loc)
 
             item_msg = QTableWidgetItem(msg)
+            item_msg.setFlags(item_msg.flags() & ~Qt.ItemIsEditable)
             self.setItem(r, 2, item_msg)
 
     @Slot(QModelIndex)

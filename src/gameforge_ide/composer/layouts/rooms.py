@@ -5,6 +5,7 @@ generator on a 400cm grid with floors, perimeter walls, and point lights.
 """
 from __future__ import annotations
 
+import math
 import random
 from typing import Any, Dict, List, Tuple
 from ..model import LevelPlan, OpCall, PlacedActor
@@ -24,19 +25,24 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     geometry_ops: List[OpCall] = []
 
-    # Spawn floors and walls
+    # Spawn floors and walls with correct centering and authoritative meshes
     for i, piece in enumerate(placements):
         loc = piece["location"]
-        yaw = piece["yaw"]
+        yaw = float(piece["yaw"])
         p_type = piece["piece"]
         if p_type == "Floor":
+            # Center cube on grid cell [x*grid, (x+1)*grid] x [y*grid, (y+1)*grid]
+            floor_cx = loc[0] + grid_cm / 2.0
+            floor_cy = loc[1] + grid_cm / 2.0
             geometry_ops.append(
                 OpCall(
                     op="spawn_actor",
                     args={
                         "actor_class": "StaticMeshActor",
                         "label": f"GF_Dungeon_Floor_{i}",
-                        "location": {"x": loc[0], "y": loc[1], "z": -10.0},
+                        "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                        "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Gray",
+                        "location": {"x": floor_cx, "y": floor_cy, "z": -10.0},
                         "rotation": {"pitch": 0.0, "yaw": yaw, "roll": 0.0},
                         "scale": {"x": 4.0, "y": 4.0, "z": 0.2},
                     },
@@ -44,13 +50,19 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 )
             )
         elif p_type == "Wall":
+            # Wall piece runs along local +X; center is at local grid/2 rotated by yaw
+            rad = math.radians(yaw)
+            wall_cx = loc[0] + (grid_cm / 2.0) * math.cos(rad)
+            wall_cy = loc[1] + (grid_cm / 2.0) * math.sin(rad)
             geometry_ops.append(
                 OpCall(
                     op="spawn_actor",
                     args={
                         "actor_class": "StaticMeshActor",
                         "label": f"GF_Dungeon_Wall_{i}",
-                        "location": {"x": loc[0], "y": loc[1], "z": 150.0},
+                        "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                        "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
+                        "location": {"x": wall_cx, "y": wall_cy, "z": 150.0},
                         "rotation": {"pitch": 0.0, "yaw": yaw, "roll": 0.0},
                         "scale": {"x": 4.0, "y": 0.5, "z": 3.0},
                     },
@@ -106,6 +118,22 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     min_y, max_y = min(all_y), max(all_y)
     center = ((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, 150.0)
     extent = ((max_x - min_x) / 2.0 + 400.0, (max_y - min_y) / 2.0 + 400.0, 500.0)
+
+    # Spawn dungeon safety floor covering all rooms and corridors
+    geometry_ops.append(
+        OpCall(
+            op="spawn_actor",
+            args={
+                "actor_class": "StaticMeshActor",
+                "label": "GF_Dungeon_SafetyFloor",
+                "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_DarkGray",
+                "location": {"x": center[0], "y": center[1], "z": -25.0},
+                "scale": {"x": max(10.0, (extent[0] * 2.0) / 100.0), "y": max(10.0, (extent[1] * 2.0) / 100.0), "z": 0.2},
+            },
+            purpose="Spawn dungeon safety floor preventing void fall",
+        )
+    )
 
     return LevelPlan(
         level_id=level_id,

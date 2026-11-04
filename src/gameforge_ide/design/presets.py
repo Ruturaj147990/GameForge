@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-from src.gameforge_ide.pipeline.spec_from_prompt import (
+from .spec_from_prompt import (
     _AI_EASY,
     _AI_MED,
     _DENSITY,
@@ -435,6 +435,13 @@ PRESET_KEYWORDS: Dict[str, List[str]] = {
         "procedural world", "procedural landscape", "procedural terrain",
         "terrain generation", "procedural environment", "landscape generation", "hiking trail",
     ],
+    "top_down_shooter": [
+        "top-down shooter", "top down shooter", "topdown shooter", "twin stick shooter",
+        "twin-stick shooter", "arena shooter",
+    ],
+    "relic_hunt": [
+        "relic hunt", "relic quest", "forest adventure", "collect relics",
+    ],
 }
 
 
@@ -475,6 +482,20 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
         m = _DIFF.search(prompt)
         if m:
             overrides["difficulty"] = m.group(1).lower()
+    elif preset_id == "top_down_shooter":
+        m = _WAVES.search(prompt)
+        if m:
+            overrides["wave_count"] = int(m.group(1))
+        m = _ENEMIES.search(prompt)
+        if m:
+            overrides["enemies_per_wave"] = int(m.group(1))
+        m = _DIFF.search(prompt)
+        if m:
+            overrides["difficulty"] = m.group(1).lower()
+    elif preset_id == "relic_hunt":
+        m = _TARGET.search(prompt)
+        if m:
+            overrides["relic_target"] = int(m.group(1))
     elif preset_id == "card_battler":
         m = _HP.search(prompt)
         if m:

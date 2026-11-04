@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -54,16 +55,23 @@ class TerminalTools:
         }
 
     def _parse_command(self, command: str) -> List[str]:
-        """Return safe argv or raise ValueError without ever interpreting a shell."""
+        """Return safe argv or raise ValueError without ever interpreting a shell.
+        
+        Preserves Windows backslash path separators while cleanly removing paired outer quotes.
+        """
         if not command or not command.strip():
             raise ValueError("Command is empty.")
         if self.SHELL_SYNTAX.search(command):
             raise ValueError("Shell operators, redirection, interpolation, and multiline commands are not permitted.")
         try:
-            # ``posix=True`` reliably removes paired quotes from an argv token
-            # (for example ``python -c "print('ok')"``) while subprocess still
-            # launches the parsed argument list directly on Windows.
-            args = shlex.split(command, posix=True)
+            # posix=False preserves Windows backslashes in paths like tests\unit\test_foo.py
+            raw_tokens = shlex.split(command, posix=False)
+            args = []
+            for t in raw_tokens:
+                if len(t) >= 2 and t[0] == t[-1] and t[0] in ('"', "'"):
+                    args.append(t[1:-1])
+                else:
+                    args.append(t)
         except ValueError as exc:
             raise ValueError(f"Unable to parse command: {exc}") from exc
         if not args:
@@ -78,6 +86,17 @@ class TerminalTools:
                 raise ValueError(f"Argument '{arg}' contains prohibited interpolation or traversal.")
             if arg.startswith(("/", "\\")) or (len(arg) > 1 and arg[1] == ":"):
                 raise ValueError(f"Argument '{arg}' refers to an absolute path outside workspace.")
+
+            # Check key-value separated arguments (e.g. --path=C:\..., -o=/etc/...)
+            val = ""
+            if "=" in arg:
+                val = arg.split("=", 1)[1].strip("\"'")
+            elif arg.startswith(("-o", "-I", "-L")) and len(arg) > 2:
+                val = arg[2:].strip("\"'")
+
+            if val and (val.startswith(("/", "\\")) or (len(val) > 1 and val[1] == ":")):
+                raise ValueError(f"Argument '{arg}' refers to an absolute path outside workspace.")
+
         return args
 
     def run_command(
@@ -109,6 +128,7 @@ class TerminalTools:
             return self._blocked(f"Working directory is not an existing directory: '{subpath}'.")
 
         t0 = time.time()
+        proc: Optional[subprocess.Popen] = None
         try:
             from ...core import jobs
             proc = jobs.spawn(
@@ -120,6 +140,9 @@ class TerminalTools:
                 encoding="utf-8",
                 errors="replace",
             )
+            # Explicitly guarantee process joins the IDE Windows Job Object
+            jobs.adopt(proc)
+
             stdout, stderr = proc.communicate(timeout=timeout_seconds)
             duration = round(time.time() - t0, 3)
             return {
@@ -132,13 +155,34 @@ class TerminalTools:
                 "command": command,
                 "argv": args,
             }
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            stdout_str = ""
+            stderr_str = ""
+            if proc is not None:
+                try:
+                    proc.kill()
+                    if sys.platform == "win32":
+                        try:
+                            subprocess.run(
+                                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                                capture_output=True,
+                                timeout=5,
+                            )
+                        except Exception:
+                            pass
+                    rem_out, rem_err = proc.communicate(timeout=2)
+                    stdout_str = exc.stdout or rem_out or ""
+                    stderr_str = exc.stderr or rem_err or ""
+                except Exception:
+                    stdout_str = exc.stdout or ""
+                    stderr_str = exc.stderr or ""
+
             return {
                 "status": "TIMEOUT",
                 "exit_code": -1,
                 "error": f"Command timed out after {timeout_seconds} seconds.",
-                "stdout": "",
-                "stderr": "",
+                "stdout": stdout_str if isinstance(stdout_str, str) else stdout_str.decode("utf-8", errors="replace"),
+                "stderr": stderr_str if isinstance(stderr_str, str) else stderr_str.decode("utf-8", errors="replace"),
                 "command": command,
             }
         except Exception as e:
@@ -150,3 +194,9 @@ class TerminalTools:
                 "stderr": "",
                 "command": command,
             }
+        finally:
+            if proc is not None and proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass

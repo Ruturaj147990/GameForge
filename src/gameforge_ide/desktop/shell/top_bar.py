@@ -208,6 +208,11 @@ class TopBar(QWidget):
         elif data:
             self._current_project = str(data)
             self.projectSelected.emit(str(data))
+        elif index >= 0:
+            text = self.project_combo.currentText().strip()
+            if text and "Open project folder" not in text:
+                self._current_project = text
+                self.projectSelected.emit(text)
 
     def update_run_chip(self, active: bool, game_name: str = "", done: int = 0, total: int = 0,
                         elapsed_s: float = 0.0, waiting_approval: bool = False) -> None:

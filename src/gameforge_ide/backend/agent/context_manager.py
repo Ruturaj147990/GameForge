@@ -154,6 +154,7 @@ class ContextManager:
             "```json\n"
             '{\n  "tool": "tool_name",\n  "args": {"key": "value"}\n}\n'
             "```\n"
+            "Alternative schema also accepted: {\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}\n"
             "To create a file: tool=propose_edit, args={subpath, replacement_content}.\n"
             "To list files: tool=list_dir, args={subpath}.\n"
             "To find UE projects: tool=unreal_find_projects, args={}.\n\n"
@@ -161,5 +162,6 @@ class ContextManager:
             "1. For any game dev task, invoke a tool immediately (do not narrate first).\n"
             "2. After discovering project info, proceed directly to propose_edit to create files.\n"
             "3. Never call the same tool with the same args twice in a row.\n"
-            "4. Be concise and direct."
+            "4. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
+            "5. Be concise and direct."
         )

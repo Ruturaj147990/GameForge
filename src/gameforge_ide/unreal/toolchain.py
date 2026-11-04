@@ -15,10 +15,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from ..core.settings import engine_root_or_missing
 from ..core import jobs
 
@@ -148,14 +150,63 @@ def parse_automation_report(report_dir: Path) -> Dict:
             "not_run": data.get("notRun", 0)}
 
 
+def format_unreal_cmd(argv: List[str]) -> Union[str, List[str]]:
+    """Format command arguments for Unreal Engine executables on Windows.
+    
+    Ensures switches like -Project=..., -ExecCmds=..., -ReportExportPath=..., -abslog=...
+    have whitespace before the '-' and quotes properly enclosing the value so that
+    Unreal's FCommandLine::Parse and FParse::Value extract the full path without truncating at spaces.
+    """
+    if sys.platform != "win32":
+        return argv
+
+    tokens: List[str] = []
+    for arg in argv:
+        if arg.startswith("-") and "=" in arg:
+            switch, val = arg.split("=", 1)
+            val_clean = val.strip('"')
+            # Normalize backslashes to avoid escaping issues in Windows CLI for file paths
+            val_norm = val_clean.replace("\\", "/") if ((":" in val_clean or "/" in val_clean or "\\" in val_clean) and not val_clean.startswith("Automation")) else val_clean
+            if " " in val_norm or '"' in val:
+                tokens.append(f'{switch}="{val_norm}"')
+            else:
+                tokens.append(f'{switch}={val_norm}')
+        elif arg.startswith("-"):
+            tokens.append(arg)
+        else:
+            # Positional argument (e.g. exe path or uproject path)
+            clean = arg.strip('"')
+            norm = clean.replace("\\", "/") if (":" in clean or "/" in clean or "\\" in clean) else clean
+            if " " in norm:
+                tokens.append(f'"{norm}"')
+            else:
+                tokens.append(norm)
+
+    return " ".join(tokens)
+
+
 # ── toolchain ───────────────────────────────────────────────────────────────
 
 class UnrealToolchain:
+    _DEPLOY_LOCK = threading.Lock()
+
     def __init__(self, engine_root: Optional[Path] = None, max_parallel_actions: Optional[int] = None):
         self.engine_root = Path(engine_root or engine_root_or_missing())
         e = self.engine_root / "Engine"
-        self.ubt = e / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool.exe"
-        self.uat = e / "Binaries" / "DotNET" / "AutomationTool" / "AutomationTool.exe"
+        ubt_candidates = [
+            e / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool.exe",
+            e / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool.dll",
+            e / "Binaries" / "DotNET" / "UnrealBuildTool.exe",
+            e / "Binaries" / "DotNET" / "UnrealBuildTool.dll",
+        ]
+        self.ubt = next((c for c in ubt_candidates if c.is_file()), ubt_candidates[0])
+
+        uat_candidates = [
+            e / "Binaries" / "DotNET" / "AutomationTool" / "AutomationTool.exe",
+            e / "Binaries" / "DotNET" / "AutomationTool.exe",
+            e / "Build" / "BatchFiles" / "RunUAT.bat",
+        ]
+        self.uat = next((c for c in uat_candidates if c.is_file()), uat_candidates[0])
         self.editor_cmd = e / "Binaries" / "Win64" / "UnrealEditor-Cmd.exe"
         self.max_parallel_actions = max_parallel_actions
         self.cancel_event = None  # threading.Event set by the UI to cancel the running step
@@ -210,12 +261,15 @@ class UnrealToolchain:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         started = time.monotonic()
         print(f"[Unreal Toolchain] Running step '{step}' (timeout: {timeout_s}s)...", flush=True)
+        cmd = format_unreal_cmd(argv)
         try:
             with open(log_path, "w", encoding="utf-8", errors="replace") as log:
                 log.write("ARGV: " + json.dumps(argv) + "\n")
+                if isinstance(cmd, str):
+                    log.write("CMD: " + cmd + "\n")
                 log.flush()
-                proc = jobs.spawn(argv, stdout=log, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None,
-                                        creationflags=BELOW_NORMAL | NO_WINDOW)
+                proc = jobs.spawn(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None,
+                                  creationflags=BELOW_NORMAL | NO_WINDOW)
                 try:
                     code = self._wait(proc, timeout_s)
                 except (TimeoutError, InterruptedError) as exc:
@@ -319,56 +373,85 @@ class UnrealToolchain:
         return {"uproject": str(project_dir / f"{name}.uproject"), "files": written}
 
     def deploy_gameforge_plugin(self, project_dir: Path) -> Path:
-        """Ensure GameForge plugin is deployed into <project_dir>/Plugins/GameForge."""
-        project_dir = Path(project_dir)
-        target = project_dir / "Plugins" / "GameForge"
-        # Always synchronize latest Python ops and C++ sources from repository if target plugin exists
-        repo_python_ops = Path(__file__).resolve().parent / "GameForge" / "Content" / "Python" / "gameforge_ops"
-        if repo_python_ops.is_dir() and (target / "Content" / "Python" / "gameforge_ops").is_dir():
+        """Ensure GameForge plugin is deployed and synchronized into <project_dir>/Plugins/GameForge."""
+        with self._DEPLOY_LOCK:
+            project_dir = Path(project_dir)
+            target = project_dir / "Plugins" / "GameForge"
+            repo_plugin = Path(__file__).resolve().parent / "GameForge"
+
+            # Candidates for full plugin with precompiled binaries
+            candidates = [
+                repo_plugin,
+                Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
+            ]
             try:
-                shutil.copytree(repo_python_ops, target / "Content" / "Python" / "gameforge_ops", dirs_exist_ok=True)
-            except Exception as exc:
-                logger.warning("Could not sync Python ops to %s: %s", target, exc)
+                from ..core.settings import get_settings
+                s = get_settings()
+                if s.plugin_build and s.plugin_build.is_dir():
+                    candidates.insert(0, s.plugin_build)
+                if s.validation_root:
+                    candidates.insert(1, s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+            except Exception:
+                pass
 
-        repo_source = Path(__file__).resolve().parent / "GameForge" / "Source"
-        if repo_source.is_dir() and (target / "Source").is_dir():
-            try:
-                shutil.copytree(repo_source, target / "Source", dirs_exist_ok=True)
-            except Exception as exc:
-                logger.warning("Could not sync C++ source to %s: %s", target, exc)
+            best_source = next((c for c in candidates if c.is_dir() and (c / "GameForge.uplugin").is_file()), None)
 
-        if (target / "GameForge.uplugin").is_file() and (target / "Binaries" / "Win64").is_dir():
+            # If target does not exist, do full initial deployment
+            if not target.is_dir():
+                if not best_source:
+                    logger.warning("Could not find GameForge plugin source to deploy into %s", project_dir)
+                    return target
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(best_source, target, dirs_exist_ok=True)
+                logger.info("Deployed GameForge plugin from %s to %s", best_source, target)
+                return target
+
+            # Target exists: synchronize latest Python ops, C++ sources, config, uplugin, and binaries
+            if repo_plugin.is_dir():
+                # 1. Sync gameforge_ops
+                repo_python_ops = repo_plugin / "Content" / "Python" / "gameforge_ops"
+                if repo_python_ops.is_dir():
+                    target_ops = target / "Content" / "Python" / "gameforge_ops"
+                    target_ops.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        shutil.copytree(repo_python_ops, target_ops, dirs_exist_ok=True)
+                    except Exception as exc:
+                        logger.warning("Could not sync Python ops to %s: %s", target, exc)
+
+                # 2. Sync C++ sources
+                repo_source = repo_plugin / "Source"
+                if repo_source.is_dir():
+                    try:
+                        shutil.copytree(repo_source, target / "Source", dirs_exist_ok=True)
+                    except Exception as exc:
+                        logger.warning("Could not sync C++ source to %s: %s", target, exc)
+
+                # 3. Sync GameForge.uplugin descriptor
+                repo_uplugin = repo_plugin / "GameForge.uplugin"
+                if repo_uplugin.is_file():
+                    try:
+                        shutil.copy2(repo_uplugin, target / "GameForge.uplugin")
+                    except Exception as exc:
+                        logger.warning("Could not sync GameForge.uplugin to %s: %s", target, exc)
+
+                # 4. Sync Config
+                repo_cfg = repo_plugin / "Config"
+                if repo_cfg.is_dir():
+                    try:
+                        shutil.copytree(repo_cfg, target / "Config", dirs_exist_ok=True)
+                    except Exception as exc:
+                        logger.warning("Could not sync plugin Config to %s: %s", target, exc)
+
+            # 5. Sync Binaries if missing from target but available in best source
+            if best_source and (best_source / "Binaries" / "Win64").is_dir():
+                target_bin = target / "Binaries" / "Win64"
+                if not target_bin.is_dir():
+                    try:
+                        shutil.copytree(best_source / "Binaries" / "Win64", target_bin, dirs_exist_ok=True)
+                    except Exception as exc:
+                        logger.warning("Could not sync plugin Binaries to %s: %s", target, exc)
+
             return target
-
-        # Find best plugin source
-        candidates = [
-            Path(__file__).resolve().parent / "GameForge",
-            Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
-        ]
-        try:
-            from ..core.settings import get_settings
-            s = get_settings()
-            if s.plugin_build and s.plugin_build.is_dir():
-                candidates.insert(0, s.plugin_build)
-            if s.validation_root:
-                candidates.insert(1, s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
-        except Exception:
-            pass
-
-        src = None
-        for c in candidates:
-            if c.is_dir() and (c / "GameForge.uplugin").is_file():
-                src = c
-                break
-
-        if not src:
-            logger.warning("Could not find GameForge plugin source to deploy into %s", project_dir)
-            return target
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, target, dirs_exist_ok=True)
-        logger.info("Deployed GameForge plugin from %s to %s", src, target)
-        return target
 
     # ── build ──────────────────────────────────────────────────────────────
     def build(self, uproject: Path, target: str, configuration: str = "Development", platform: str = "Win64",

@@ -46,6 +46,16 @@ class ForgeService(QObject):
         from ...forge.executor import ForgeExecutor
         return ForgeExecutor.cancel_run(run_id)
 
+    def resume_run(self, run_id: str) -> Optional[Any]:
+        """Resume a failed, cancelled, or blocked Forge run by run_id."""
+        state = self.store.load(run_id)
+        if state is None:
+            return None
+        from ...forge.executor import ForgeExecutor
+        from ...forge.handlers import HANDLERS
+        executor = ForgeExecutor(HANDLERS, bus=self.bus)
+        return executor.resume(state, self.store)
+
     def close(self) -> None:
         if self._unsub:
             self._unsub()

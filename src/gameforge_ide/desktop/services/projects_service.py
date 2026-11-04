@@ -54,16 +54,22 @@ def find_project_thumbnail(project_dir: Path) -> Optional[Path]:
     # 1. Look in evidence/**
     evidence_dir = saved_gf / "evidence"
     if evidence_dir.is_dir():
-        evidence_pngs = [p for p in evidence_dir.glob("**/*.png") if p.is_file()]
-        if evidence_pngs:
-            evidence_pngs.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0.0), reverse=True)
-            return evidence_pngs[0]
+        try:
+            evidence_pngs = [p for p in evidence_dir.glob("**/*.png") if p.is_file() and p.stat().st_size > 0]
+            if evidence_pngs:
+                evidence_pngs.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0.0), reverse=True)
+                return evidence_pngs[0]
+        except OSError:
+            pass
 
     # 2. Look in Saved/GameForge/*.png
-    root_pngs = [p for p in saved_gf.glob("*.png") if p.is_file()]
-    if root_pngs:
-        root_pngs.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0.0), reverse=True)
-        return root_pngs[0]
+    try:
+        root_pngs = [p for p in saved_gf.glob("*.png") if p.is_file() and p.stat().st_size > 0]
+        if root_pngs:
+            root_pngs.sort(key=lambda p: (p.stat().st_mtime if p.exists() else 0.0), reverse=True)
+            return root_pngs[0]
+    except OSError:
+        pass
 
     return None
 
@@ -91,6 +97,8 @@ def load_runs_index(project_root: Optional[Path] = None, workspace_dir: Optional
                 data = json.loads(p.read_text(encoding="utf-8"))
                 if isinstance(data, list):
                     for item in data:
+                        if not isinstance(item, dict):
+                            continue
                         rid = item.get("run_id")
                         if rid and rid not in seen_ids:
                             seen_ids.add(rid)
@@ -99,6 +107,16 @@ def load_runs_index(project_root: Optional[Path] = None, workspace_dir: Optional
                 pass
 
     return runs
+
+
+def _safe_timestamp(val: Any) -> float:
+    """Robust conversion of arbitrary timestamp formats (float, int, or numeric string) to float."""
+    if val is None:
+        return 0.0
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def list_games(
@@ -128,11 +146,18 @@ def list_games(
     # Map project directory string to newest run
     runs_by_proj: Dict[str, Dict[str, Any]] = {}
     for r in runs:
+        if not isinstance(r, dict):
+            continue
         pdir = r.get("project_dir")
         if pdir:
-            norm_pdir = str(Path(pdir).resolve()).lower()
+            try:
+                norm_pdir = str(Path(pdir).resolve()).lower()
+            except Exception:
+                continue
             existing = runs_by_proj.get(norm_pdir)
-            if not existing or r.get("updated_at", 0) > existing.get("updated_at", 0):
+            r_updated = _safe_timestamp(r.get("updated_at"))
+            ex_updated = _safe_timestamp(existing.get("updated_at")) if existing else -1.0
+            if not existing or r_updated > ex_updated:
                 runs_by_proj[norm_pdir] = r
 
     games: List[GameSummary] = []
@@ -173,7 +198,8 @@ def list_games(
         if last_run:
             last_run_id = last_run.get("run_id")
             last_run_status = last_run.get("status")
-            last_run_time = last_run.get("updated_at")
+            raw_time = last_run.get("updated_at")
+            last_run_time = _safe_timestamp(raw_time) if raw_time is not None else None
             if last_run_time and last_run_time > updated_at:
                 updated_at = last_run_time
 
@@ -226,6 +252,20 @@ def delete_project(
     if not pdir or not pdir.is_dir():
         logger.warning(f"Cannot delete project '{project_name}': directory '{pdir}' does not exist.")
         return False
+
+    # Guard against accidental deletion of root, repo root, or current working directory
+    resolved_cwd = Path.cwd().resolve()
+    resolved_pdir = pdir.resolve()
+    if (
+        resolved_pdir == resolved_cwd
+        or resolved_pdir in resolved_cwd.parents
+        or resolved_pdir.parent == resolved_pdir
+        or len(resolved_pdir.parts) <= 1
+    ):
+        raise PermissionError(f"Safety violation: Refusing to delete critical or root directory '{pdir}'.")
+
+    if projects_root and resolved_pdir == Path(projects_root).resolve():
+        raise PermissionError(f"Safety violation: Refusing to delete entire projects root '{pdir}'.")
 
     # 2. Check active Unreal Editor link
     try:
@@ -295,9 +335,13 @@ def delete_project(
         time.sleep(0.1 * (attempt + 1))
 
     if pdir.exists():
-        try:
-            os.rmdir(pdir)
-        except OSError:
+        for attempt in range(5):
+            try:
+                os.rmdir(pdir)
+                break
+            except OSError:
+                time.sleep(0.1 * (attempt + 1))
+        if pdir.exists():
             remaining = list(pdir.iterdir())
             if remaining:
                 raise OSError(
@@ -324,11 +368,16 @@ def delete_project(
                 try:
                     data = json.loads(idx_file.read_text(encoding="utf-8"))
                     if isinstance(data, list):
-                        new_data = [
-                            item for item in data
-                            if str(Path(item.get("project_dir", "")).resolve()).lower() != norm_target_pdir
-                            and (item.get("project_name", "") or "").lower() != norm_name
-                        ]
+                        new_data = []
+                        for item in data:
+                            if not isinstance(item, dict):
+                                continue
+                            raw_pdir = item.get("project_dir")
+                            item_pdir = str(Path(raw_pdir).resolve()).lower() if raw_pdir else ""
+                            item_name = (item.get("project_name") or "").lower()
+                            if (item_pdir and item_pdir == norm_target_pdir) or (item_name and item_name == norm_name):
+                                continue
+                            new_data.append(item)
                         if len(new_data) != len(data):
                             idx_file.write_text(json.dumps(new_data, indent=2), encoding="utf-8")
                 except Exception as e:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Callable, List, Optional
 
 from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer, Signal
@@ -18,6 +19,8 @@ from PySide6.QtWidgets import (
 from ..icons import icon
 from ..styles import tokens
 
+logger = logging.getLogger(__name__)
+
 
 class ToastCard(QFrame):
     """Single toast notification bubble."""
@@ -28,12 +31,14 @@ class ToastCard(QFrame):
         self,
         kind: str,
         title: str,
-        message: str,
+        message: str = "",
         details_cb: Optional[Callable[[], None]] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self.kind = kind
+        self._is_dismissed = False
+        self._dismiss_timer: Optional[QTimer] = None
         self.setObjectName(f"toastCard_{kind}")
         self.setFixedWidth(320)
 
@@ -80,7 +85,12 @@ class ToastCard(QFrame):
                     text-decoration: underline;
                 }}
             """)
-            btn_details.clicked.connect(details_cb)
+            def _safe_details() -> None:
+                try:
+                    details_cb()
+                except Exception as exc:
+                    logger.exception("Error in toast details callback: %s", exc)
+            btn_details.clicked.connect(_safe_details)
             col.addWidget(btn_details)
 
         layout.addLayout(col, 1)
@@ -115,9 +125,18 @@ class ToastCard(QFrame):
 
         # Auto dismiss after 6 seconds unless kind == "error"
         if kind != "error":
-            QTimer.singleShot(6000, self._dismiss)
+            self._dismiss_timer = QTimer(self)
+            self._dismiss_timer.setSingleShot(True)
+            self._dismiss_timer.timeout.connect(self._dismiss)
+            self._dismiss_timer.start(6000)
 
     def _dismiss(self) -> None:
+        if self._is_dismissed:
+            return
+        self._is_dismissed = True
+        if self._dismiss_timer is not None:
+            self._dismiss_timer.stop()
+            self._dismiss_timer = None
         self.dismissed.emit(self)
 
 
@@ -137,6 +156,7 @@ class ToastOverlay(QWidget):
         self._toasts: List[ToastCard] = []
         if parent:
             parent.installEventFilter(self)
+        self.hide()
         self._reposition()
 
     def eventFilter(self, watched, event) -> bool:
@@ -161,6 +181,7 @@ class ToastOverlay(QWidget):
         toast.dismissed.connect(self._on_toast_dismissed)
         self._toasts.append(toast)
         self._layout.addWidget(toast)
+        self.show()
         self._reposition()
         self.raise_()
         return toast
@@ -188,6 +209,10 @@ class ToastOverlay(QWidget):
         parent = self.parentWidget()
         if not parent:
             return
+        if not self._toasts:
+            self.hide()
+            return
+        self.show()
         pw = parent.width()
         ph = parent.height()
         w = 340

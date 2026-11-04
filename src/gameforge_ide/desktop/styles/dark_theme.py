@@ -792,49 +792,53 @@ def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
         pass
     mapping = _DARK_TO_LIGHT if theme == "light" else _LIGHT_TO_DARK
     for widget in QApplication.allWidgets():
-        previous = widget.property("gameforgeTheme") or "dark"
-        if previous == theme:
+        try:
+            previous = widget.property("gameforgeTheme") or "dark"
+            if previous == theme:
+                continue
+            style = widget.styleSheet()
+            for source, target in mapping.items():
+                style = style.replace(source, target)
+            if style != widget.styleSheet():
+                widget.setStyleSheet(style)
+            if isinstance(widget, (QTextEdit, QPlainTextEdit)):
+                document = widget.document()
+                document_css = widget.property("gameforgeDocumentCss")
+                if document_css:
+                    document.setDefaultStyleSheet(theme_stylesheet(document_css))
+                fragments = []
+                block = document.begin()
+                while block.isValid():
+                    iterator = block.begin()
+                    while not iterator.atEnd():
+                        fragment = iterator.fragment()
+                        if fragment.isValid():
+                            fragments.append((fragment.position(), fragment.length(), fragment.charFormat()))
+                        iterator += 1
+                    block = block.next()
+                for position, length, char_format in fragments:
+                    color_brush = char_format.foreground()
+                    background_brush = char_format.background()
+                    changed = False
+                    if color_brush.style() != Qt.NoBrush:
+                        color = color_brush.color().name().lower()
+                        if color in mapping:
+                            char_format.setForeground(QColor(mapping[color]))
+                            changed = True
+                    if background_brush.style() != Qt.NoBrush:
+                        color = background_brush.color().name().lower()
+                        if color in mapping:
+                            char_format.setBackground(QColor(mapping[color]))
+                            changed = True
+                    if changed:
+                        cursor = QTextCursor(document)
+                        cursor.setPosition(position)
+                        cursor.setPosition(position + length, QTextCursor.KeepAnchor)
+                        cursor.setCharFormat(char_format)
+            widget.setProperty("gameforgeTheme", theme)
+        except (RuntimeError, Exception):
+            # Guard against C++ widget wrapper being deleted during rapid iteration
             continue
-        style = widget.styleSheet()
-        for source, target in mapping.items():
-            style = style.replace(source, target)
-        if style != widget.styleSheet():
-            widget.setStyleSheet(style)
-        if isinstance(widget, (QTextEdit, QPlainTextEdit)):
-            document = widget.document()
-            document_css = widget.property("gameforgeDocumentCss")
-            if document_css:
-                document.setDefaultStyleSheet(theme_stylesheet(document_css))
-            fragments = []
-            block = document.begin()
-            while block.isValid():
-                iterator = block.begin()
-                while not iterator.atEnd():
-                    fragment = iterator.fragment()
-                    if fragment.isValid():
-                        fragments.append((fragment.position(), fragment.length(), fragment.charFormat()))
-                    iterator += 1
-                block = block.next()
-            for position, length, char_format in fragments:
-                color_brush = char_format.foreground()
-                background_brush = char_format.background()
-                changed = False
-                if color_brush.style() != Qt.NoBrush:
-                    color = color_brush.color().name().lower()
-                    if color in mapping:
-                        char_format.setForeground(QColor(mapping[color]))
-                        changed = True
-                if background_brush.style() != Qt.NoBrush:
-                    color = background_brush.color().name().lower()
-                    if color in mapping:
-                        char_format.setBackground(QColor(mapping[color]))
-                        changed = True
-                if changed:
-                    cursor = QTextCursor(document)
-                    cursor.setPosition(position)
-                    cursor.setPosition(position + length, QTextCursor.KeepAnchor)
-                    cursor.setCharFormat(char_format)
-        widget.setProperty("gameforgeTheme", theme)
     try:
         from ..icons import clear_icon_cache
         clear_icon_cache()

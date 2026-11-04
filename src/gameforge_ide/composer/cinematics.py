@@ -31,11 +31,13 @@ def generate_intro_cinematic(
     fps = 30
     total_frames = int(duration_s * fps)
 
-    # Shots: establishing wide shot, sweep past landmark, approach goal
+    # Shots: map to focus_kinds dynamically
+    primary_focus = focus_kinds[0] if len(focus_kinds) > 0 else "landmark"
+    secondary_focus = focus_kinds[1] if len(focus_kinds) > 1 else primary_focus
     shot_segments = [
-        {"name": "Shot_01_Establishing", "fraction": 0.35, "focus": "landmark"},
-        {"name": "Shot_02_FocusPOI", "fraction": 0.35, "focus": "landmark"},
-        {"name": "Shot_03_RevealGoal", "fraction": 0.30, "focus": "goal"},
+        {"name": f"Shot_01_Establishing_{primary_focus.capitalize()}", "fraction": 0.35, "focus": primary_focus},
+        {"name": f"Shot_02_FocusPOI_{primary_focus.capitalize()}", "fraction": 0.35, "focus": primary_focus},
+        {"name": f"Shot_03_RevealGoal_{secondary_focus.capitalize()}", "fraction": 0.30, "focus": secondary_focus},
     ]
 
     cuts = []

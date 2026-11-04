@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 import shutil
 from typing import Any, Dict, Optional
@@ -306,7 +307,11 @@ class SettingsView(QWidget):
             self._engine_path_input.setText(data)
 
     def _validate_engine_path(self) -> None:
-        p = Path(self._engine_path_input.text().strip())
+        txt = self._engine_path_input.text().strip()
+        if not txt:
+            self._lbl_engine_status.setText(f"<span style='color: {tokens.TEXT_MUTED};'>No engine path configured.</span>")
+            return
+        p = Path(txt)
         if not p.is_dir():
             self._lbl_engine_status.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>Directory does not exist.</span>")
             return
@@ -330,20 +335,36 @@ class SettingsView(QWidget):
         s = get_settings()
 
         # Engine
-        if s.engine:
-            self._engine_path_input.setText(str(s.engine.root))
-        else:
-            self._engine_path_input.setText("")
+        eng_root = str(s.engine.root) if s.engine else ""
+        self._engine_path_input.setText(eng_root)
+
+        # Sync combo with current engine
+        combo_matched = False
+        if eng_root:
+            for idx in range(self._combo_detected_engine.count()):
+                if self._combo_detected_engine.itemData(idx) == eng_root:
+                    self._combo_detected_engine.blockSignals(True)
+                    self._combo_detected_engine.setCurrentIndex(idx)
+                    self._combo_detected_engine.blockSignals(False)
+                    combo_matched = True
+                    break
+        if not combo_matched and self._combo_detected_engine.count() > 0:
+            custom_idx = self._combo_detected_engine.count() - 1
+            self._combo_detected_engine.blockSignals(True)
+            self._combo_detected_engine.setCurrentIndex(custom_idx)
+            self._combo_detected_engine.blockSignals(False)
 
         # Paths
-        self._projects_root_input.setText(str(s.projects_root))
-        self._artifacts_root_input.setText(str(s.artifacts_root))
-        self._ollama_url_input.setText(str(s.ollama_url))
+        self._projects_root_input.setText(str(s.projects_root) if s.projects_root else "")
+        self._artifacts_root_input.setText(str(s.artifacts_root) if s.artifacts_root else "")
+        self._ollama_url_input.setText(str(s.ollama_url) if s.ollama_url else "")
 
         # Models
         self._models_table.setRowCount(len(s.models))
         for row, (role, model) in enumerate(sorted(s.models.items())):
-            self._models_table.setItem(row, 0, QTableWidgetItem(role))
+            role_item = QTableWidgetItem(role)
+            role_item.setFlags(role_item.flags() & ~Qt.ItemIsEditable)
+            self._models_table.setItem(row, 0, role_item)
             self._models_table.setItem(row, 1, QTableWidgetItem(model))
 
         # Appearance
@@ -386,43 +407,60 @@ class SettingsView(QWidget):
             logger.error("user_settings_path returned None")
             return
 
-        cfg_path.parent.mkdir(parents=True, exist_ok=True)
-        data: Dict[str, Any] = {}
-        if cfg_path.is_file():
-            try:
-                data = json.loads(cfg_path.read_text(encoding="utf-8"))
-            except Exception:
-                data = {}
+        try:
+            cfg_path.parent.mkdir(parents=True, exist_ok=True)
+            data: Dict[str, Any] = {}
+            if cfg_path.is_file():
+                try:
+                    data = json.loads(cfg_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
 
-        # Update fields
-        eng = self._engine_path_input.text().strip()
-        if eng:
-            data["engine_root"] = eng
+            # Update fields (remove when cleared so settings reset reliably)
+            eng = self._engine_path_input.text().strip()
+            if eng:
+                data["engine_root"] = eng
+            elif "engine_root" in data:
+                del data["engine_root"]
 
-        proj = self._projects_root_input.text().strip()
-        if proj:
-            data["projects_root"] = proj
+            proj = self._projects_root_input.text().strip()
+            if proj:
+                data["projects_root"] = proj
+            elif "projects_root" in data:
+                del data["projects_root"]
 
-        art = self._artifacts_root_input.text().strip()
-        if art:
-            data["artifacts_root"] = art
+            art = self._artifacts_root_input.text().strip()
+            if art:
+                data["artifacts_root"] = art
+            elif "artifacts_root" in data:
+                del data["artifacts_root"]
 
-        ollama = self._ollama_url_input.text().strip()
-        if ollama:
-            data["ollama_url"] = ollama
+            ollama = self._ollama_url_input.text().strip()
+            if ollama:
+                data["ollama_url"] = ollama
+            elif "ollama_url" in data:
+                del data["ollama_url"]
 
-        # Models
-        models: Dict[str, str] = {}
-        for row in range(self._models_table.rowCount()):
-            r_item = self._models_table.item(row, 0)
-            m_item = self._models_table.item(row, 1)
-            if r_item and m_item:
-                models[r_item.text()] = m_item.text()
-        if models:
-            data["models"] = models
+            # Models
+            models: Dict[str, str] = {}
+            for row in range(self._models_table.rowCount()):
+                r_item = self._models_table.item(row, 0)
+                m_item = self._models_table.item(row, 1)
+                if r_item and m_item and r_item.text().strip():
+                    models[r_item.text().strip()] = m_item.text().strip()
+            if models:
+                data["models"] = models
 
-        cfg_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        reset_settings_cache()
+            tmp_path = cfg_path.with_suffix(".tmp")
+            tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp_path.replace(cfg_path)
+            reset_settings_cache()
+        except Exception as exc:
+            logger.error("Failed to save settings: %s", exc)
+            self._btn_save.setText("Save Failed ✗")
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(3000, lambda: self._btn_save.setText("Save Settings"))
+            return
 
         # Appearance persistence and live application
         from PySide6.QtCore import QSettings, QTimer
@@ -443,7 +481,9 @@ class SettingsView(QWidget):
         except Exception as exc:
             logger.debug("Could not write workspace ini settings: %s", exc)
 
-        apply_theme(QApplication.instance(), new_theme)
+        app_inst = QApplication.instance()
+        if app_inst and not os.environ.get("PYTEST_CURRENT_TEST"):
+            apply_theme(app_inst, new_theme)
 
         self._btn_save.setText("Saved ✓")
         QTimer.singleShot(2000, lambda: self._btn_save.setText("Save Settings"))

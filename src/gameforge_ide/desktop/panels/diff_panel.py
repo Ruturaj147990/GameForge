@@ -151,9 +151,10 @@ class DiffPanel(QWidget):
     def show_diff(self, diff_id: str, meta: dict) -> None:
         """Called when the agent proposes a diff."""
         self._current_diff_id = diff_id
+        self._current_diff_meta = meta
         self._diff_id_lbl.setText(f"ID: {diff_id}")
         self._file_bar.setText(f"  File: {meta.get('file_path', 'unknown')}")
-        patch = meta.get("diff_patch", "(No patch content available)")
+        patch = meta.get("diff_patch") or "(No patch content available)"
         self._diff_view.display_patch(patch)
         self._btn_approve.setEnabled(True)
         self._btn_reject.setEnabled(True)
@@ -161,6 +162,7 @@ class DiffPanel(QWidget):
 
     def clear(self) -> None:
         self._current_diff_id = None
+        self._current_diff_meta = {}
         self._diff_id_lbl.setText("No pending diff")
         self._file_bar.setText("")
         self._diff_view.clear()
@@ -174,42 +176,73 @@ class DiffPanel(QWidget):
     def _on_approve(self) -> None:
         if not self._current_diff_id:
             return
-        result = self._tools.execute_approved_sync(
-            "apply_edit", {"diff_id": self._current_diff_id}
-        )
+        # Atomic lock: immediately disable actions to prevent double-click / race conditions
+        self._btn_approve.setEnabled(False)
+        self._btn_reject.setEnabled(False)
+
+        diff_id = self._current_diff_id
+        is_batch = diff_id.startswith("batch_") or getattr(self, "_current_diff_meta", {}).get("is_batch", False)
+        tool_name = "apply_batch" if is_batch else "apply_edit"
+        param_key = "batch_id" if is_batch else "diff_id"
+
+        try:
+            result = self._tools.execute_approved_sync(tool_name, {param_key: diff_id})
+        except Exception as exc:
+            result = {"status": "ERROR", "error": str(exc)}
+
         if result.get("status") == "SUCCESS":
-            self._diff_view.appendPlainText(
-                "\n\n── Applied successfully ──"
-            )
+            self._diff_view.appendPlainText("\n\n── Applied successfully ──")
             self._btn_approve.setEnabled(False)
             self._btn_reject.setEnabled(False)
             self._btn_rollback.setEnabled(True)
-            self.diff_approved.emit(self._current_diff_id)
+            self.diff_approved.emit(diff_id)
         else:
-            self._diff_view.appendPlainText(
-                f"\n\n── Apply FAILED: {result.get('error', '?')} ──"
-            )
+            self._diff_view.appendPlainText(f"\n\n── Apply FAILED: {result.get('error', '?')} ──")
+            # Allow user to reject or retry if apply failed
+            self._btn_approve.setEnabled(True)
+            self._btn_reject.setEnabled(True)
 
     @Slot()
     def _on_reject(self) -> None:
         if not self._current_diff_id:
             return
-        self._tools.execute_sync("reject_edit", {"diff_id": self._current_diff_id})
-        self.diff_rejected.emit(self._current_diff_id)
+        # Atomic lock: immediately disable to prevent duplicate clicks
+        self._btn_approve.setEnabled(False)
+        self._btn_reject.setEnabled(False)
+
+        diff_id = self._current_diff_id
+        is_batch = diff_id.startswith("batch_") or getattr(self, "_current_diff_meta", {}).get("is_batch", False)
+        tool_name = "reject_batch" if is_batch else "reject_edit"
+        param_key = "batch_id" if is_batch else "diff_id"
+
+        try:
+            self._tools.execute_sync(tool_name, {param_key: diff_id})
+        except Exception as exc:
+            self._diff_view.appendPlainText(f"\n\n── Reject error: {exc} ──")
+
+        self.diff_rejected.emit(diff_id)
         self.clear()
 
     @Slot()
     def _on_rollback(self) -> None:
         if not self._current_diff_id:
             return
-        result = self._tools.execute_approved_sync(
-            "rollback_edit", {"diff_id": self._current_diff_id}
-        )
+        self._btn_rollback.setEnabled(False)
+
+        diff_id = self._current_diff_id
+        is_batch = diff_id.startswith("batch_") or getattr(self, "_current_diff_meta", {}).get("is_batch", False)
+        tool_name = "rollback_batch" if is_batch else "rollback_edit"
+        param_key = "batch_id" if is_batch else "diff_id"
+
+        try:
+            result = self._tools.execute_approved_sync(tool_name, {param_key: diff_id})
+        except Exception as exc:
+            result = {"status": "ERROR", "error": str(exc)}
+
         if result.get("status") == "SUCCESS":
             self._diff_view.appendPlainText("\n\n── Rolled back successfully ──")
             self._btn_rollback.setEnabled(False)
-            self.diff_rolled_back.emit(self._current_diff_id)
+            self.diff_rolled_back.emit(diff_id)
         else:
-            self._diff_view.appendPlainText(
-                f"\n\n── Rollback FAILED: {result.get('error', '?')} ──"
-            )
+            self._diff_view.appendPlainText(f"\n\n── Rollback FAILED: {result.get('error', '?')} ──")
+            self._btn_rollback.setEnabled(True)

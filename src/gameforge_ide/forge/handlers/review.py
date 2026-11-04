@@ -56,10 +56,15 @@ def review_handler(ctx: StepContext) -> StepOutcome:
         f"({mesh_audit.placeholder_components} placeholders), rubric overall={rubric_score.overall:.2f}"
     )
 
+    outcome_data = {
+        "mesh_audit": mesh_audit.to_dict(),
+        "vision_rubric": rubric_score.to_dict(),
+    }
+    from ..validation import validate_stage_output
+    valid, issues = validate_stage_output("review", outcome_data, project_dir=project_dir)
+
     return StepOutcome(
-        ok=mesh_audit.passed,
-        data={
-            "mesh_audit": mesh_audit.to_dict(),
-            "vision_rubric": rubric_score.to_dict(),
-        },
+        ok=mesh_audit.passed and valid,
+        data=outcome_data,
+        errors=issues if not (mesh_audit.passed and valid) else [],
     )

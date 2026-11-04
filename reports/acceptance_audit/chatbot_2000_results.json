@@ -1,19 +1,19 @@
 {
   "total_prompts": 2000,
-  "intent_correct": 1905,
-  "tool_route_correct": 1905,
+  "intent_correct": 1788,
+  "tool_route_correct": 1906,
   "hallucinated_actions": 0,
   "clarification_appropriate": 0,
   "by_category": {
     "phrasing_variants": {
       "total": 188,
-      "intent_correct": 174,
-      "route_correct": 174
+      "intent_correct": 177,
+      "route_correct": 177
     },
     "informal_and_spelling": {
       "total": 195,
-      "intent_correct": 153,
-      "route_correct": 153
+      "intent_correct": 151,
+      "route_correct": 151
     },
     "questions_and_explanations": {
       "total": 233,
@@ -37,7 +37,7 @@
     },
     "project_modifications": {
       "total": 192,
-      "intent_correct": 192,
+      "intent_correct": 74,
       "route_correct": 192
     },
     "debugging_error_resolution": {
@@ -152,7 +152,7 @@
     {
       "id": "P0230",
       "category": "informal_and_spelling",
-      "prompt": "can u cod a top dwn shtr wit 5 enemys ???",
+      "prompt": "can u cod a top dwn shtr wit 5 enemys !!",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -273,7 +273,7 @@
     {
       "id": "P0228",
       "category": "informal_and_spelling",
-      "prompt": "can u cod a top dwn shtr wit 5 enemys ???",
+      "prompt": "can u cod a top dwn shtr wit 5 enemys bro",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -308,10 +308,10 @@
       "category": "project_modifications",
       "prompt": "In the current game, please change the goal condition to collecting 10 relics right now",
       "expected_intent": "GAME_MUTATION",
-      "actual_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
       "actual_route": "open_design",
-      "intent_match": true,
+      "intent_match": false,
       "route_match": true
     },
     {
@@ -328,7 +328,7 @@
     {
       "id": "P0261",
       "category": "informal_and_spelling",
-      "prompt": "yo build me a counter strik clone fast pls",
+      "prompt": "yo build me a counter strik clone fast thx",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -350,7 +350,7 @@
     {
       "id": "P0235",
       "category": "informal_and_spelling",
-      "prompt": "wanna brawler game wit 4 wavs of gladiatorz pls",
+      "prompt": "wanna brawler game wit 4 wavs of gladiatorz ???",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -438,7 +438,7 @@
     {
       "id": "P0254",
       "category": "informal_and_spelling",
-      "prompt": "yo build me a counter strik clone fast bro",
+      "prompt": "yo build me a counter strik clone fast thx",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -451,10 +451,10 @@
       "category": "project_modifications",
       "prompt": "In the current game, please increase player move speed to 1200 right now",
       "expected_intent": "GAME_MUTATION",
-      "actual_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
       "actual_route": "open_design",
-      "intent_match": true,
+      "intent_match": false,
       "route_match": true
     },
     {
@@ -473,10 +473,10 @@
       "category": "project_modifications",
       "prompt": "In the current game, please add a rocket launcher weapon to the player inventory right now",
       "expected_intent": "GAME_MUTATION",
-      "actual_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
       "actual_route": "open_design",
-      "intent_match": true,
+      "intent_match": false,
       "route_match": true
     },
     {
@@ -506,10 +506,10 @@
       "category": "project_modifications",
       "prompt": "In the current game, please add a rocket launcher weapon to the player inventory.",
       "expected_intent": "GAME_MUTATION",
-      "actual_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
       "actual_route": "open_design",
-      "intent_match": true,
+      "intent_match": false,
       "route_match": true
     },
     {
@@ -526,7 +526,7 @@
     {
       "id": "P0214",
       "category": "informal_and_spelling",
-      "prompt": "can u cod a top dwn shtr wit 5 enemys thx",
+      "prompt": "can u cod a top dwn shtr wit 5 enemys pls",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -693,10 +693,10 @@
       "category": "project_modifications",
       "prompt": "In the current game, please change the goal condition to collecting 10 relics.",
       "expected_intent": "GAME_MUTATION",
-      "actual_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
       "actual_route": "open_design",
-      "intent_match": true,
+      "intent_match": false,
       "route_match": true
     },
     {
@@ -790,7 +790,7 @@
     {
       "id": "P0251",
       "category": "informal_and_spelling",
-      "prompt": "wanna brawler game wit 4 wavs of gladiatorz bro",
+      "prompt": "wanna brawler game wit 4 wavs of gladiatorz asap",
       "expected_intent": "GAME_CREATION",
       "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
@@ -803,10 +803,10 @@
       "category": "project_modifications",
       "prompt": "In the current game, please increase player move speed to 1200.",
       "expected_intent": "GAME_MUTATION",
-      "actual_intent": "GAME_MUTATION",
+      "actual_intent": "GAME_CREATION",
       "expected_route": "open_design",
       "actual_route": "open_design",
-      "intent_match": true,
+      "intent_match": false,
       "route_match": true
     },
     {
@@ -832,8 +832,8 @@
       "route_match": true
     }
   ],
-  "duration_s": 0.0935215950012207,
-  "intent_accuracy_pct": 95.25,
-  "tool_route_accuracy_pct": 95.25,
+  "duration_s": 0.09456634521484375,
+  "intent_accuracy_pct": 89.4,
+  "tool_route_accuracy_pct": 95.3,
   "hallucination_rate_pct": 0.0
 }

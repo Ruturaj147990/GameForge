@@ -25,6 +25,15 @@ class ToolDefinition(BaseModel):
     requires_approval: bool = False
 
 
+TOOL_ALIASES: Dict[str, str] = {
+    "apply_diff": "apply_edit",
+    "apply_diffs_batch": "apply_batch",
+    "reject_diff": "reject_edit",
+    "rollback_diff": "rollback_edit",
+    "rollback_diffs_batch": "rollback_batch",
+}
+
+
 class ToolGateway:
     """Central typed dispatcher for all tools in GameForge IDE."""
 
@@ -314,19 +323,24 @@ class ToolGateway:
             ),
         ]
 
-    def tool_requires_approval(self, name: str, arguments: Dict[str, Any]) -> bool:
+    def tool_requires_approval(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> bool:
         """True when dispatching ``name`` with ``arguments`` needs explicit user approval."""
-        definition = next((item for item in self.get_definitions() if item.name == name), None)
-        if definition is None or name == "propose_edit":
+        canonical_name = TOOL_ALIASES.get(name, name)
+        args = dict(arguments) if isinstance(arguments, dict) else {}
+        if canonical_name == "propose_edit":
             return False
-        if name == "unreal_editor" and arguments.get("op") in READ_ONLY_EDITOR_OPS:
+        if canonical_name == "unreal_editor" and args.get("op") in READ_ONLY_EDITOR_OPS:
             return False  # T0 read-back operations
+        definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
+        if definition is None:
+            # Fail closed: unrecognized tool actions require explicit approval or are rejected
+            return True
         return definition.requires_approval
 
     def execute_tool(
         self,
         name: str,
-        arguments: Dict[str, Any],
+        arguments: Optional[Dict[str, Any]] = None,
         *,
         approval_granted: bool = False,
     ) -> Dict[str, Any]:
@@ -336,75 +350,105 @@ class ToolGateway:
         agent; the subsequent apply action is separately approval-gated.
         """
         t0 = time.time()
-        definition = next((item for item in self.get_definitions() if item.name == name), None)
+        args = dict(arguments) if isinstance(arguments, dict) else {}
+        canonical_name = TOOL_ALIASES.get(name, name)
+
+        definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
         if definition is None:
             return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
-        if self.tool_requires_approval(name, arguments) and not approval_granted:
+
+        if self.tool_requires_approval(canonical_name, args) and not approval_granted:
             return {
                 "status": "PENDING_APPROVAL",
                 "tool": name,
                 "error": "This tool requires explicit user approval before execution.",
                 "execution_time_seconds": round(time.time() - t0, 3),
             }
+
+        # Validate required parameters from tool schema
+        params_schema = definition.parameters or {}
+        required_params = params_schema.get("required", [])
+        missing = [p for p in required_params if p not in args or args[p] is None]
+        if missing:
+            return {
+                "status": "ERROR",
+                "error": f"Missing required parameter(s) for tool '{name}': {', '.join(missing)}",
+                "execution_time_seconds": round(time.time() - t0, 3),
+            }
+
         try:
-            if name == "search_index":
+            if canonical_name == "search_index":
                 from ...index.indexer import ProjectIndex
                 from ...core.projects import resolve_project_dir
-                proj_name = arguments.get("project") or arguments.get("project_name")
-                proj_dir = resolve_project_dir(proj_name, self.workspace_root) if proj_name else self.workspace_root
+                proj_name = args.get("project") or args.get("project_name")
+                if proj_name:
+                    resolved_dir = resolve_project_dir(proj_name, self.workspace_root)
+                    if not resolved_dir:
+                        return {"status": "ERROR", "error": f"Project not found: '{proj_name}'"}
+                    proj_dir = self.boundary.validate_path(resolved_dir, allow_write=False)
+                else:
+                    proj_dir = self.workspace_root
+                try:
+                    limit = max(1, min(1000, int(args.get("limit", 50))))
+                except (ValueError, TypeError):
+                    limit = 50
+                try:
+                    offset = max(0, int(args.get("offset", 0)))
+                except (ValueError, TypeError):
+                    offset = 0
                 idx = ProjectIndex(proj_dir)
                 res = idx.search_symbols(
-                    query=arguments.get("query", ""),
-                    kind=arguments.get("kind"),
-                    limit=int(arguments.get("limit", 50)),
-                    offset=int(arguments.get("offset", 0)),
+                    query=str(args.get("query", "")),
+                    kind=args.get("kind"),
+                    limit=limit,
+                    offset=offset,
                 )
-            elif name == "list_dir":
-                res = tool_list_dir(self.boundary, **arguments)
-            elif name == "read_file":
-                res = tool_read_file(self.boundary, **arguments)
-            elif name == "search_code":
-                res = tool_search_code(self.boundary, **arguments)
-            elif name == "propose_edit":
-                res = self.edit_tools.propose_edit(**arguments)
-            elif name in ("apply_edit", "apply_diff"):
-                res = self.edit_tools.apply_diff(**arguments)
-            elif name in ("apply_batch", "apply_diffs_batch"):
-                res = self.edit_tools.apply_batch(**arguments)
-            elif name in ("reject_edit", "reject_diff"):
-                res = self.edit_tools.reject_diff(**arguments)
-            elif name in ("rollback_edit", "rollback_diff"):
-                res = self.edit_tools.rollback_diff(**arguments)
-            elif name in ("rollback_batch", "rollback_diffs_batch"):
-                res = self.edit_tools.rollback_batch(**arguments)
-            elif name == "run_command":
-                res = self.terminal_tools.run_command(**arguments)
-            elif name == "git_status":
+            elif canonical_name == "list_dir":
+                res = tool_list_dir(self.boundary, **args)
+            elif canonical_name == "read_file":
+                res = tool_read_file(self.boundary, **args)
+            elif canonical_name == "search_code":
+                res = tool_search_code(self.boundary, **args)
+            elif canonical_name == "propose_edit":
+                res = self.edit_tools.propose_edit(**args)
+            elif canonical_name == "apply_edit":
+                res = self.edit_tools.apply_diff(**args)
+            elif canonical_name == "apply_batch":
+                res = self.edit_tools.apply_batch(**args)
+            elif canonical_name == "reject_edit":
+                res = self.edit_tools.reject_diff(**args)
+            elif canonical_name == "rollback_edit":
+                res = self.edit_tools.rollback_diff(**args)
+            elif canonical_name == "rollback_batch":
+                res = self.edit_tools.rollback_batch(**args)
+            elif canonical_name == "run_command":
+                res = self.terminal_tools.run_command(**args)
+            elif canonical_name == "git_status":
                 res = self.git_tools.get_status()
-            elif name == "git_diff":
-                res = self.git_tools.get_diff(**arguments)
-            elif name == "unreal_engine_info":
+            elif canonical_name == "git_diff":
+                res = self.git_tools.get_diff(**args)
+            elif canonical_name == "unreal_engine_info":
                 res = self.unreal_tools.get_engine_info()
-            elif name == "unreal_find_projects":
+            elif canonical_name == "unreal_find_projects":
                 res = {"status": "SUCCESS", "projects": self.unreal_tools.find_uprojects()}
-            elif name == "unreal_build":
-                res = self.unreal_tools.run_staged_build(**arguments)
-            elif name == "plan_game":
-                res = self.game_tools.plan_game(**arguments)
-            elif name == "create_game":
-                res = self.game_tools.create_game(**arguments)
-            elif name == "create_game_freeform":
-                res = self.game_tools.create_game_freeform(**arguments)
-            elif name == "unreal_editor":
-                res = self.game_tools.unreal_editor(**arguments)
-            elif name == "unreal_run_tests":
-                res = self.game_tools.unreal_run_tests(**arguments)
-            elif name == "unreal_package":
-                res = self.game_tools.unreal_package(**arguments)
-            elif name == "play_game":
-                res = self.game_tools.play_game(**arguments)
-            elif name == "generate_3d_mesh":
-                res = self.asset_tools.generate_cube(**arguments)
+            elif canonical_name == "unreal_build":
+                res = self.unreal_tools.run_staged_build(**args)
+            elif canonical_name == "plan_game":
+                res = self.game_tools.plan_game(**args)
+            elif canonical_name == "create_game":
+                res = self.game_tools.create_game(**args)
+            elif canonical_name == "create_game_freeform":
+                res = self.game_tools.create_game_freeform(**args)
+            elif canonical_name == "unreal_editor":
+                res = self.game_tools.unreal_editor(**args)
+            elif canonical_name == "unreal_run_tests":
+                res = self.game_tools.unreal_run_tests(**args)
+            elif canonical_name == "unreal_package":
+                res = self.game_tools.unreal_package(**args)
+            elif canonical_name == "play_game":
+                res = self.game_tools.play_game(**args)
+            elif canonical_name == "generate_3d_mesh":
+                res = self.asset_tools.generate_cube(**args)
             else:
                 return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
 

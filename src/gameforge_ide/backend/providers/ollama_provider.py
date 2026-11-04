@@ -56,14 +56,18 @@ class OllamaProvider(ModelProvider):
             return []
 
     def get_capabilities(self, model_id: str) -> ProviderCapabilities:
-        # Pinned production model: 4096 context, vision attached via projector
-        is_vision = "vision" in model_id.lower() or "27b-sft" in model_id.lower()
+        # Dynamic capability resolution based on model tag/family
+        model_lower = model_id.lower()
+        is_vision = "vision" in model_lower or "27b-sft" in model_lower
+        is_27b = "27b" in model_lower
+        is_mid = "9b" in model_lower or "8b" in model_lower or "qwen" in model_lower
+        ctx = 32768 if is_27b else (16384 if is_mid else 4096)
         return ProviderCapabilities(
             supports_streaming=True,
-            supports_tools=False,  # Evaluated: reliable via structured json action formatting
+            supports_tools=True,  # Native tool calling supported via chat_with_tools (/api/chat)
             supports_images=is_vision,
             supports_reasoning=False,
-            max_context=4096,
+            max_context=ctx,
         )
 
     @staticmethod

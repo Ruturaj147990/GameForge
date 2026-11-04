@@ -118,6 +118,21 @@ class LogView(QWidget):
     def clear(self) -> None:
         self._queue.clear()
         self._edit.clear()
+        self._auto_scroll = True
+        self._btn_scroll.setText("⤓ Bottom")
+        self._btn_scroll.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};
+                border: 1px solid {tokens.BORDER}; border-radius: 3px;
+                padding: 1px 6px; font-size: {tokens.FONT_BODY_SM}px;
+            }}
+            QPushButton:hover {{ color: {tokens.TEXT_PRIMARY}; }}
+        """)
+
+    def closeEvent(self, event) -> None:
+        if hasattr(self, "_flush_timer") and self._flush_timer.isActive():
+            self._flush_timer.stop()
+        super().closeEvent(event)
 
     @Slot()
     def _flush_queue(self) -> None:

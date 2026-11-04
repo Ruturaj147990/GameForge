@@ -237,11 +237,18 @@ class NewProjectDialog(QDialog):
 
     def _on_confirm_clicked(self) -> None:
         name, pdir = self.get_resolved_project_dir()
+        if not name:
+            QMessageBox.warning(self, "Invalid Name", "Please enter a valid project name.")
+            return
+
         try:
             pdir.mkdir(parents=True, exist_ok=True)
             test_file = pdir / ".gf_write_test"
             test_file.write_text("ok", encoding="utf-8")
-            test_file.unlink()
+            try:
+                test_file.unlink(missing_ok=True)
+            except Exception:
+                pass
         except Exception as exc:
             QMessageBox.critical(self, "Directory Error", f"Cannot write to selected project directory:\n{exc}")
             return

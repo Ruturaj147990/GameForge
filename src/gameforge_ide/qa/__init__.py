@@ -1,4 +1,4 @@
-"""Scenario QA package: schemas, manifest, generator, runner, and game-specific acceptance tests."""
+"""Scenario QA package: schemas, manifest, generator, runner, game-specific acceptance tests, optimizer, and multiplayer."""
 from .game_spec_tests import (
     AcceptanceTestSpec,
     acceptance_tests_to_scenarios,
@@ -6,3 +6,5 @@ from .game_spec_tests import (
 )
 from .runner import run_editor_game, run_packaged
 from .scenario import Scenario, ScenarioResult
+from .optimize import OptimizationLoop, PerformanceProfile, OptimizationReport
+from .multiplayer import MultiplayerHarness, MultiplayerConsensusResult, NetEmulationConfig

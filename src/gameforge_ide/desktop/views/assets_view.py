@@ -99,6 +99,25 @@ class AssetsTableModel(QAbstractTableModel):
             return self._rows[row_idx]
         return None
 
+    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
+        self.beginResetModel()
+        col_key_map = {
+            0: "name",
+            1: "asset_type",
+            2: "stage",
+            3: "provenance",
+            4: "license",
+            5: "backend",
+            6: "updated_at",
+        }
+        key = col_key_map.get(column, "name")
+        reverse = (order == Qt.DescendingOrder)
+        self._rows.sort(
+            key=lambda r: str(r.get(key, "")).lower() if key != "updated_at" else (r.get(key, 0) or 0),
+            reverse=reverse,
+        )
+        self.endResetModel()
+
 
 class AssetsView(QWidget):
     """Assets view for inspecting the workspace asset registry."""
@@ -222,6 +241,7 @@ class AssetsView(QWidget):
         self._table.setModel(self._model)
         self._table.setSelectionBehavior(QTableView.SelectRows)
         self._table.setSelectionMode(QTableView.SingleSelection)
+        self._table.setSortingEnabled(True)
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for i in range(1, len(COLUMNS)):
             self._table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeToContents)
@@ -271,6 +291,25 @@ class AssetsView(QWidget):
         self.refresh_assets()
 
     # ── Public API ───────────────────────────────────────────────────────────
+
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        self.refresh_assets()
+
+    def set_workspace(self, workspace_root: Path | str) -> None:
+        """Switch workspace and re-initialize registry."""
+        self._workspace = Path(workspace_root).resolve()
+        self._registry = AssetRegistry(self._workspace)
+        self.refresh_assets()
+
+    def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
+        """Update active project context and workspace registry."""
+        self._current_project = project_name
+        p_dir = project_dir or self._workspace
+        if p_dir and Path(p_dir).is_dir():
+            self._workspace = Path(p_dir).resolve()
+            self._registry = AssetRegistry(self._workspace)
+        self.refresh_assets()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._table and event.type() == QEvent.KeyPress:

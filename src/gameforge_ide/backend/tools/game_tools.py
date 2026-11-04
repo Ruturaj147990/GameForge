@@ -40,87 +40,8 @@ from ...core.settings import engine_root_or_missing
 READ_ONLY_EDITOR_OPS = op_catalog.read_only_ops()
 AGENT_EDITOR_OPS = frozenset(op_catalog.agent_ops())
 
+from ...storage.approval_store import ApprovalStore
 
-class ApprovalStore:
-    """Persisted pending actions. Only the UI's approve path may execute them."""
-
-    def __init__(self, workspace_root: Path):
-        self.root = Path(workspace_root) / ".gameforge" / "approvals"
-
-    def create(self, tool: str, args: Dict[str, Any], summary: str, consequence: str,
-               session_id: Optional[str] = None, plan_id: Optional[str] = None) -> Dict[str, Any]:
-        """``plan_id`` marks a plan-task approval: approving it unblocks the plan, which runs the tool."""
-        self.root.mkdir(parents=True, exist_ok=True)
-        rec = {"approval_id": "apr_" + secrets.token_hex(6), "tool": tool, "args": args, "summary": summary,
-               "consequence": consequence, "session_id": session_id, "status": "PENDING",
-               "created": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
-        if plan_id:
-            rec["plan_id"] = plan_id
-        self._write(rec)
-        return rec
-
-    def get(self, approval_id: str) -> Optional[Dict[str, Any]]:
-        path = self.root / f"{approval_id}.json"
-        if not path.is_file():
-            return None
-        for attempt in range(3):
-            try:
-                return json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                if attempt == 2:
-                    return None
-                time.sleep(0.05 * (attempt + 1))
-        return None
-
-    def list_pending(self) -> List[Dict[str, Any]]:
-        if not self.root.is_dir():
-            return []
-        out = []
-        for p in sorted(self.root.glob("apr_*.json")):
-            for attempt in range(3):
-                try:
-                    rec = json.loads(p.read_text(encoding="utf-8"))
-                    if rec.get("status") == "PENDING":
-                        out.append(rec)
-                    break
-                except (OSError, json.JSONDecodeError):
-                    if attempt < 2:
-                        time.sleep(0.05 * (attempt + 1))
-        return out
-
-    def transition(self, approval_id: str, status: str, result: Optional[Dict] = None) -> Optional[Dict]:
-        """PENDING -> APPROVED/REJECTED -> DONE/FAILED. Returns None if the transition is not allowed."""
-        rec = self.get(approval_id)
-        allowed = {"PENDING": {"APPROVED", "REJECTED"}, "APPROVED": {"DONE", "FAILED"}}
-        if rec is None or status not in allowed.get(rec["status"], set()):
-            return None
-        rec["status"] = status
-        rec[f"{status.lower()}_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        if result is not None:
-            rec["result"] = result
-        self._write(rec)
-        return rec
-
-    def _write(self, rec: Dict) -> None:
-        path = self.root / f"{rec['approval_id']}.json"
-        tmp = path.with_suffix(f".tmp_{secrets.token_hex(4)}")
-        tmp.write_text(json.dumps(rec, indent=1, default=str), encoding="utf-8")
-        last_exc = None
-        for attempt in range(5):
-            try:
-                os.replace(tmp, path)  # atomic
-                last_exc = None
-                break
-            except (PermissionError, OSError) as exc:
-                last_exc = exc
-                time.sleep(0.05 * (attempt + 1))
-        if last_exc is not None:
-            if tmp.exists():
-                try:
-                    tmp.unlink()
-                except Exception:
-                    pass
-            raise last_exc
 
 
 class GameTools:

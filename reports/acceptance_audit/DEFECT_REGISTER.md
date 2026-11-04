@@ -28,6 +28,69 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 | **DEF-073** | Medium | Unreal / Import | Project Import Stale Plugin Copy skipping updates | `project_import.py` used `if not target_plugin.is_dir():` skipping update | `VERIFIED_LIVE` | `src/gameforge_ide/pipeline/project_import.py` |
 | **DEF-074** | High | Composer / Codegen | Missing Gameplay Includes in Custom Rule Codegen | `generate_source()` omitted `GameForgeAttributes.h` and `GameplayStatics.h` | `VERIFIED_LIVE` | `src/gameforge_ide/composer/codegen.py` |
 | **DEF-075** | Medium | Composer / LevelOps | Level Ops Actor Transform Verification Severity Gap | Single 50cm tolerance threshold without differentiating critical failures | `VERIFIED_LIVE` | `src/gameforge_ide/composer/level_ops.py` |
+| **DEF-076** | High | Desktop Shell / Toasts | Empty `ToastOverlay` Mouse Interception & Deleted Object Timer Collision | `ToastOverlay` was 340x60 transparent widget intercepting clicks at window corner; `ToastCard` singleShot fired on deleted C++ object | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/shell/toasts.py` |
+| **DEF-077** | Medium | Desktop Shell / Palette | CommandPalette Down Arrow Skips Index 0 & Unhandled Command Exception Crash | `position = 0` fallback when nothing selected caused `(0+1)=1` selection; unhandled callback exceptions could crash event loop | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/shell/palette.py` |
+| **DEF-078** | Critical | Desktop Widgets / RuleEditor | `RuleEditorDialog` Overwriting Existing Rule Effects with Defaults (Data Loss) & EndGame Reason Error | Dialog ignored `rule.effects`, resetting existing rules to Add Score delta 10; `EndGame` instantiated with extra forbidden field `reason` | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/widgets/rule_editor.py` |
+| **DEF-079** | Medium | Desktop Widgets / Tables | Accidental In-Place Cell Editing in ProblemsTable and GdsForm Summary Tables | Tables lacked `NoEditTriggers`, allowing users to accidentally edit diagnostics or create desynced table values | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/widgets/problems_table.py`, `gds_form.py` |
+| **DEF-080** | High | MainWindow / Lifecycle | MainWindow `closeEvent` Ignoring Active Forge Builds and Leaking Background Jobs | `closeEvent` only inspected `chat._runner._threads`, ignoring `_forge_service.active_runs()` and leaving active builds uncancelled | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/main_window.py` |
+| **DEF-081** | Medium | Desktop Dialogs / Ollama | `OllamaSetupDialog` Background Polling Timer Leaking Past Dialog Close | `_poll_timer` continued firing HTTP probes every 500ms after user cancelled or closed dialog | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/dialogs/ollama_setup.py` |
+| **DEF-082** | Medium | Desktop Dialogs / About & Aliases | Missing Dedicated Studio UX `AboutDialog` and Dialog Module Import Aliases | About used plain system message box; `ollama_setup_dialog.py` and `settings_dialog.py` modules did not exist | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/dialogs/about_dialog.py`, `ollama_setup_dialog.py`, `settings_dialog.py`, `main_window.py` |
+| **DEF-083** | Medium | Desktop Dialogs / NewProject | `NewProjectDialog` Empty Name Confirmation & Windows Antivirus Lock Failure | `_on_confirm_clicked` lacked empty name check; write-test threw critical failure if Windows antivirus locked temporary test file | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/dialogs/new_project_dialog.py` |
+| **DEF-084** | Medium | Desktop Dialogs / HostedSettings | `HostedSettingsDialog` Save Button Does Not Close Dialog and Drops Unsaved Typed Key | `_save()` saved configuration without calling `self.accept()`; typed API key in input field was dropped if user forgot to click Save Key | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/dialogs/hosted_settings.py` |
+| **DEF-085** | Low | Desktop Widgets / StepRow | `StepRowDelegate` Long Title Text Overlapping Checkpoint and Duration Badges | Title text was drawn into fixed rect without eliding or accounting for right-aligned badge space | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/widgets/step_row.py` |
+| **DEF-086** | Low | Desktop Shell / TopBar & Icons | TopBar Editable Project Combo Drops Typed Names & Direct Hex Role Fallback | `TopBar._on_combo_index_changed` dropped typed project names lacking `itemData`; `icon()` fell back to grey for direct hex colors | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/shell/top_bar.py`, `icons.py` |
+| **DEF-093** | High | Desktop Views / GamesView | Type Annotations Introspection Failure (`NameError: name 'Union' is not defined`) | `typing.Union` was used in `GamesView.__init__` and `set_projects_root` without being imported from `typing` | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/games_view.py` |
+| **DEF-094** | Critical | Desktop Views / GamesView | Unhandled NameError Crash on Project Deletion without Explicit Path | `_execute_delete` invoked `resolve_project_dir(project_name)` without importing `resolve_project_dir` | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/games_view.py` |
+| **DEF-095** | Critical | Desktop Views / HomeView | Application Crash when Ollama Offline or Spec Generation Fails (`AttributeError: 'NoneType' object has no attribute 'meta'`) | `HomeView` emitted `designReady(None, questions)` when model returned `status="NEEDS_INPUT"` and `gds=None`, crashing `design_view.py` | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/home_view.py` |
+| **DEF-096** | High | Desktop Views / HomeView | Race Condition & Duplicate Concurrent Job Spawning on Rapid Click or `Ctrl+Enter` | `_on_design_it_clicked` did not check if `self._active_job` was already running before submitting a new job | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/home_view.py` |
+| **DEF-097** | High | Desktop Views / HomeView | Thread Safety Vulnerability in Systems Snapshot Updates & Silent Freeze on Probe Failure | `attach_systems_service` called `_render_readiness` from worker thread rather than queuing to GUI thread; failure left UI stale with no error indication | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/home_view.py` |
+| **DEF-098** | Medium | Desktop Views / GamesView | Active Project Selection Stale on Complete Deletion & Missing Empty State Placeholder | Model `rowCount() == 0` failed to clear `_selected_game_name` or emit `gameSelected("")`; lacked visual indicator for empty projects list | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/games_view.py` |
+| **DEF-099** | Medium | Desktop Views / SettingsView | Settings Fields Cannot Be Cleared or Reset Across Sessions | `save_settings` only wrote non-empty inputs, preserving stale `engine_root` and directory paths in JSON; lacked atomic write protection | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/settings_view.py` |
+| **DEF-100** | Medium | Desktop Views / SettingsView | Detected Engine Combobox Out of Sync on Load & Accidental Role Key Renaming | `load_settings` never updated `_combo_detected_engine`; `_models_table` Role column had editable flags allowing corruption of role names | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/settings_view.py` |
+| **DEF-101** | Low | Desktop Views / Settings & Onboarding | False-Positive Red Error Banner on Empty Engine Path Input | Empty string passed to `Path("").is_dir()` resulted in "Directory does not exist" red error banner instead of neutral prompt | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/settings_view.py`, `onboarding.py` |
+| **DEF-102** | Low | Desktop Views / Architecture | Missing `onboarding_view.py` Module Alias & Circular Import in View Package Initialization | `onboarding_view.py` was absent from views; `storage/forge_store.py` top-level import of `forge.model` triggered circular import when package loaded | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/onboarding_view.py`, `storage/forge_store.py` |
+| **DEF-087** | Critical | Storage Subsystem | Storage subsystem missing centralized, unified storage modules | Stores were scattered across design, forge, backend tools with divergent locking, temporary file naming, and missing atomic guarantees | `VERIFIED_LIVE` | `src/gameforge_ide/storage/` (`design_store.py`, `forge_store.py`, `run_store.py`, `approval_store.py`, `task_store.py`, `diff_store.py`) |
+| **DEF-088** | High | Storage / Atomic | Corrupt JSON storage vulnerability & total data loss without backup fallback | Sudden process interruption or crash corrupted JSON files; reads failed or returned empty dict, permanently overwriting critical files | `VERIFIED_LIVE` | `src/gameforge_ide/storage/atomic.py`, `design_store.py`, `forge_store.py`, `approval_store.py`, `task_store.py`, `diff_store.py` |
+| **DEF-089** | High | Storage / NTFS | Windows NTFS concurrent file lock contention & dangling `.tmp_*` accumulation in RunStore & ApprovalStore | Raw unbuffered appends and ad-hoc replace without S_IWRITE clearing failed on Windows locks; orphaned `.tmp` files accumulated | `VERIFIED_LIVE` | `src/gameforge_ide/storage/forge_store.py`, `approval_store.py`, `atomic.py` |
+| **DEF-090** | High | Core / Jobs | Silent exception swallowing in JobManager background thread pool | Unhandled background exceptions in ThreadPoolExecutor futures were silently ignored without logging or event notification | `VERIFIED_LIVE` | `src/gameforge_ide/core/jobs.py` |
+| **DEF-091** | Medium | Core / Jobs | Dead Win32 Job Object handle after `terminate_all_children()` | Terminated job handle remained assigned to `_JOB`, preventing subsequent child process adoptions | `VERIFIED_LIVE` | `src/gameforge_ide/core/jobs.py` |
+| **DEF-092** | Medium | Core / Events | EventBus silent exception logging & missing wildcard/prefix topic matching | Listener errors logged at DEBUG level; subscriptions only matched exact strings, preventing hierarchical `run.*` patterns | `VERIFIED_LIVE` | `src/gameforge_ide/core/events.py` |
+| **DEF-093** | Medium | Core / Settings | Concurrent settings mutation race condition in `save_user_settings` | Unsynchronized reads and writes to `settings.json` allowed concurrent threads to overwrite user configuration | `VERIFIED_LIVE` | `src/gameforge_ide/core/settings.py` |
+| **DEF-103** | High | QA / Runner | Scenario runner silent timeouts, unpiped process logs, and unhandled spawn exceptions | `run_packaged` and `run_editor_game` did not pipe/flush process diagnostics on timeout, and unhandled spawn exceptions crashed callers | `VERIFIED_LIVE` | `src/gameforge_ide/qa/runner.py` |
+| **DEF-104** | Critical | QA / Spec Tests | Acceptance test generator producing unachievable assertions and capped pickup targets | `win_on_collect_all` artificially capped pickups at 3; `collectibles_exist` allowed min=0; combat tests swung at empty air without approaching enemies | `VERIFIED_LIVE` | `src/gameforge_ide/qa/game_spec_tests.py` |
+| **DEF-105** | High | QA / Optimize | Closed-loop optimizer placing CVars in wrong INI section and choosing invalid CVar names | Engine settings were written under `[/Script/Engine.RendererSettings]` instead of `[SystemSettings]`, used invalid `r.Nanite.ProjectEnabled`, and refused to update existing keys | `VERIFIED_LIVE` | `src/gameforge_ide/qa/optimize.py` |
+| **DEF-106** | Critical | Review / Vision | Vision rubric false passes on missing textures, 0-byte images, and unrendered black frames | `evaluate_vision_rubric` returned hardcoded passing scores without inspecting screenshots or checking for missing texture checkerboards | `VERIFIED_LIVE` | `src/gameforge_ide/review/vision_rubric.py` |
+| **DEF-107** | High | Review / Vision | Mesh audit gate bypassing unthemed actors with unassigned materials | Components with empty/unassigned materials were not flagged as missing/default materials when `placeholder_ok=False` | `VERIFIED_LIVE` | `src/gameforge_ide/review/vision_rubric.py` |
+| **DEF-108** | Medium | Review / Audit | Missing review-level scene reconciliation & visual diff audit module | `src/gameforge_ide/review/` lacked reconciliation module, preventing review audits of living project changes | `VERIFIED_LIVE` | `src/gameforge_ide/review/reconciliation.py`, `__init__.py` |
+| **DEF-109** | High | QA / Multiplayer | Missing QA multiplayer listen-server + client harness and consensus validator | Standalone multiplayer harness was missing from `src/gameforge_ide/qa/` (only mock script existed) | `VERIFIED_LIVE` | `src/gameforge_ide/qa/multiplayer.py`, `__init__.py` |
+| **DEF-110** | Critical | Index / Indexer | SQLite FTS5 indexer concurrency deadlocks, missing busy timeout, and trigger duplicate insertion | Deferred transactions caused deadlocks; `BEGIN TRANSACTION` failed under Python transaction manager; duplicate manual inserts into `symbols_fts` with active triggers | `VERIFIED_LIVE` | `src/gameforge_ide/index/indexer.py` |
+| **DEF-111** | Medium | Launcher / AD-15 | Hardcoded host path in launcher CLI help text violating AD-15 | `launcher.py` hardcoded `(default: E:\gameforge_step1)` in argument parser help text | `VERIFIED_LIVE` | `src/gameforge_ide/launcher.py` |
+| **DEF-112** | High | Launcher / Portable | Launcher failure on missing repository root in standalone/portable deployments | `_launch_native_desktop` failed if default workspace could not be created or repository root was missing | `VERIFIED_LIVE` | `src/gameforge_ide/launcher.py` |
+| **DEF-113** | High | Packaging / Footprint | Standalone desktop packaging omitting strict footprint enforcement against <= 400 MB budget | `StandalonePackager` did not calculate total MB or verify bundle footprint against the 400 MB requirement in `verify_bundle()` | `VERIFIED_LIVE` | `src/gameforge_ide/packaging/build_standalone.py` |
+| **DEF-114** | Critical | Terminal / Process Safety | Terminal runaway child processes and grandchildren on command timeout | `proc.communicate()` timeout caught exception without terminating `proc` or killing process tree | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/terminal_tools.py` |
+| **DEF-115** | High | Terminal / Windows Paths | Windows backslash path corruption in command parsing | `_parse_command` used `shlex.split(posix=True)` stripping backslashes from valid paths | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/terminal_tools.py` |
+| **DEF-116** | High | Terminal / Security | Absolute path security check bypass via key-value parameter flags | Argument check only tested `arg.startswith()` without inspecting values after `=` or `-o` | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/terminal_tools.py` |
+| **DEF-117** | Critical | Safe Edits / Transactions | Batch edit transaction failure leaves diff records in inconsistent split state | Mid-batch rollback popped diffs from `pending_diffs` and left them as `ROLLED_BACK`, corrupting batch state | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/edit_tools.py` |
+| **DEF-118** | High | Safe Edits / Line Endings | Silent no-op diff generation on files with mixed CRLF and LF line endings | Line ending conversion assumed whole file had CRLF if any CRLF existed, producing empty replacements | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/edit_tools.py` |
+| **DEF-119** | High | Safe Edits / Encodings | UTF-16, UTF-8-BOM, and Non-UTF-8 encoding corruption in file reading and editing | Hardcoded `utf-8` decoding polluted UTF-16 files with null bytes and corrupted re-encoded writes | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/edit_tools.py`, `fs_tools.py` |
+| **DEF-120** | Medium | Safe Edits / Rollback | Rollback deletion of existing 0-byte files & missing NTFS read-only clearance on unlink | 0-byte files evaluated `file_existed` to False; `unlink()` failed on Windows read-only attributes | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/edit_tools.py` |
+| **DEF-121** | Medium | FS Tools / Search | Binary asset bloat & missing redundant project prefix in `tool_search_code` | Engine binary assets (`.uasset`, `.umap`) opened as text; project prefixes caused false Directory Not Found | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/fs_tools.py` |
+| **DEF-122** | High | FS Tools / Security | Unhandled SecurityViolationError on directory traversal in tools | Direct tool calls outside gateway raised unhandled exceptions on `../` rather than returning structured error dict | `VERIFIED_LIVE` | `src/gameforge_ide/backend/tools/edit_tools.py`, `fs_tools.py` |
+| **DEF-123** | Medium | Desktop Widgets / GdsForm | Default Win Condition in GdsForm Fails Pydantic STAT_RE Validation | `_edit_win` default string lacked `entity.` prefix, causing validation failure on save | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/widgets/gds_form.py` |
+| **DEF-124** | High | Desktop Widgets / GdsForm | Condition Parser Rejected Valid Shorthand Stats and Case Variants & Rule Editor Overwrote Pitch/Goals | Parsing lacked prefix normalization and case insensitivity; rule editing didn't commit uncommitted pitch/goals text | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/widgets/gds_form.py` |
+| **DEF-125** | Critical | Desktop Views / DesignView | Blind Build Trigger on Failed Patch Application & Silent Revision Drift on Save Failure | `_on_rebuild_changes` proceeded to build even when patch apply failed; revision incremented on disk save error | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/design_view.py` |
+| **DEF-126** | High | Desktop Views / BuildView | Build View Active Run Selection Desync on Refresh & Uncancellable Orphaned Runs | `refresh_runs` reset combo to index 0; cancelling orphaned runs without active in-memory executor silently failed | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/build_view.py` |
+| **DEF-127** | Medium | Desktop Views / PlayView | Missing Packaged Executable Detection & Disconnected Build Request Workflow | Lacked detection of packaged game binaries and had no actionable recovery/build workflow when binary was missing | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/play_view.py`, `main_window.py` |
+| **DEF-128** | Medium | Desktop Views / EvidenceView | Incomplete Filter Classification for Markdown Reports & Frozen Preview Image Scaling | Markdown reports were dropped into 'Other' filter; preview image lacked aspect-ratio scaling on window resize | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/evidence_view.py` |
+| **DEF-129** | Medium | Desktop Views / AssetsView | Stale Asset Registry on Project Switching & Missing ShowEvent Auto-Refresh | Lacked `set_workspace`/`set_project` to update asset registry on project switch; lacked `showEvent` refresh | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/assets_view.py` |
+| **DEF-130** | Critical | Desktop Views / CodeView | Blank Placeholder Widget Lacking Editor/Highlighting & Unconnected File Signals | CodeView lacked source editor and highlighter; explorer file clicks and build/evidence jump signals were unconnected | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/code_view.py`, `main_window.py` |
+| **DEF-131** | High | Desktop Panels / DiffPanel | Non-Atomic Approval/Rejection Double-Click Race & Missing Batch Diff Support | Buttons lacked immediate re-entrancy locking; batch diff IDs were unhandled; empty patch metadata showed blank tab | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/panels/diff_panel.py` |
+| **DEF-132** | Medium | Desktop Panels / ChatPanel | Raw Tool Call JSON Leaking into Assistant Speech Bubbles & Dangling Empty Bubbles | Tool call JSON chunks streamed into assistant bubbles; empty or cancelled assistant turns left blank bubbles | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/panels/chat_panel.py` |
+| **DEF-133** | Critical | Kit / Modules | `PropParams` pydantic extra forbidden failure on `recipe` field | `PropParams` model had `extra="forbid"` and lacked `recipe: Optional[str]` field | `VERIFIED_LIVE` | `src/gameforge_ide/kit/modules/__init__.py` |
+| **DEF-134** | Medium | Backend / Models | Stale test context length expectation for 27B model architecture | Capability registry dynamically allocates 32768 tokens for 27B model | `VERIFIED_LIVE` | `tests/unit/test_gameforge_ide.py` |
+| **DEF-135** | High | Forge / Packaging | Scenario package validation failure when mock executable was missing on disk | `validate_stage_output("package")` verifies file existence on disk | `VERIFIED_LIVE` | `tests/unit/test_ide_scenario_execution.py` |
+| **DEF-136** | High | Core / Projects | Python 3.14 + PySide6 C-runtime crash on background thread project directory discovery | Direct `pathlib.Path.iterdir()` in background threads while main thread operates Qt widgets | `VERIFIED_LIVE` | `src/gameforge_ide/core/projects.py` |
+| **DEF-137** | Critical | Desktop Views / Settings | Fatal Access Violation during `save_settings()` when applying theme concurrently | `apply_theme` executed full QSS re-parsing on main thread while background worker threads were in socket/IO calls | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/settings_view.py`, `src/gameforge_ide/unreal/discovery.py` |
 
 ---
 
@@ -449,6 +512,368 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Symptom:** Severe actor placement anomalies (> 500cm delta) were treated as minor sub-meter jitter warnings.
 - **Root Cause:** `verify_placed_actor_transforms()` in `level_ops.py` used a single 50cm tolerance threshold without differentiating critical failures.
 - **Fix:** Added `severe_tolerance_cm=500.0` threshold adding `CRITICAL:` prefix for severe mismatches.
+
+### DEF-076: ToastOverlay Mouse Interception & Deleted Object Timer Collision
+- **Symptom:** Transparent 340x60 overlay intercepted mouse clicks at the bottom-right of the window even with 0 toasts active; dismissing a toast early caused `RuntimeError: Internal C++ object already deleted` when the 6-second timer fired.
+- **Root Cause:** `ToastOverlay` was not hidden when empty, and `ToastCard` used un-parented `QTimer.singleShot` without cancellation.
+- **Fix:** Hid `ToastOverlay` when `_toasts` is empty (`self.hide()`), and used explicit `_dismiss_timer = QTimer(self)` cancelled on early dismissal.
+
+### DEF-077: CommandPalette Down Arrow Skips Index 0 & Unhandled Exception Crash
+- **Symptom:** When opening CommandPalette with nothing selected and pressing Down Arrow, the dialog selected index 1 instead of index 0; unhandled callback exceptions could crash the Qt event loop.
+- **Root Cause:** `except ValueError: position = 0` fallback caused `position + 1 = 1`; `_execute_item` lacked try/except.
+- **Fix:** Handled unselected state by setting `new_pos = 0` on Down Arrow, and wrapped `callback()` execution in try/except with logging.
+
+### DEF-078: RuleEditorDialog Overwriting Existing Effects with Defaults & EndGame Reason Error
+- **Symptom:** Opening an existing rule in `RuleEditorDialog` reset its effects to "Add Score / Stat" (delta 10), losing existing win/lose outcomes; selecting End Game caused a Pydantic validation error on save.
+- **Root Cause:** Dialog `__init__` ignored `rule.effects`, resetting inputs to defaults; `EndGame` instantiation passed extra `reason` field not permitted by GDS schema.
+- **Fix:** Restored `EndGame(win/lose)` and `AddStat` from `rule.effects[0]`, dynamically toggled `_delta_spin` visibility, and removed extra `reason` argument from `EndGame`.
+
+### DEF-079: Accidental In-Place Cell Editing in ProblemsTable and GdsForm Summary Tables
+- **Symptom:** Double-clicking error rows or level/entity summaries opened cell text editors, allowing unintended modifications that desynced from underlying models.
+- **Root Cause:** `ProblemsTable`, `_table_levels`, `_table_entities`, and `_table_rules` lacked `setEditTriggers(NoEditTriggers)`.
+- **Fix:** Applied `setEditTriggers(QTableWidget.NoEditTriggers)` and cleared `ItemIsEditable` flags on all summary table items.
+
+### DEF-080: MainWindow closeEvent Ignoring Active Forge Builds and Leaking Background Jobs
+- **Symptom:** Closing MainWindow during an active Forge build or package task bypassed confirmation and left background processes running.
+- **Root Cause:** `closeEvent` only checked legacy `chat._runner._threads`, ignoring `_forge_service.active_runs()`.
+- **Fix:** Included `_forge_service.active_runs()` in `building` and `busy` checks, and cancelled active Forge runs via `cancel_run()` and `ForgeExecutor.request_cancel()` on exit.
+
+### DEF-081: OllamaSetupDialog Background Polling Timer Leaking Past Dialog Close
+- **Symptom:** Closing or cancelling OllamaSetupDialog left its 500ms HTTP poll timer running in the background, firing requests and updating deleted UI widgets.
+- **Root Cause:** `_poll_timer` was started on start button click but never stopped on `reject()`, `accept()`, or `closeEvent()`.
+- **Fix:** Overrode `reject()`, `accept()`, and `closeEvent()` to explicitly stop `_poll_timer`.
+
+### DEF-082: Missing Dedicated Studio UX AboutDialog and Dialog Module Import Aliases
+- **Symptom:** About action opened a standard `QMessageBox.about` lacking Studio UX branding; importing `ollama_setup_dialog` or `settings_dialog` failed with `ModuleNotFoundError`.
+- **Root Cause:** `AboutDialog` was not implemented; modules were named `ollama_setup.py` and `hosted_settings.py` without compatibility aliases.
+- **Fix:** Implemented Studio UX `AboutDialog` with system specs and copy button; added `ollama_setup_dialog.py` and `settings_dialog.py` alias modules; updated `dialogs/__init__.py`.
+
+### DEF-083: NewProjectDialog Empty Name Confirmation & Antivirus File Lock Collision
+- **Symptom:** Pressing Enter with an empty project name could trigger directory creation on parent directory; temporary write test failure on locked test files aborted project creation.
+- **Root Cause:** `_on_confirm_clicked` lacked validation for empty names; `test_file.unlink()` failed if Windows antivirus held a transient read lock.
+- **Fix:** Added `if not name:` validation guard with user warning; guarded `test_file.unlink(missing_ok=True)` against transient file lock exceptions.
+
+### DEF-084: HostedSettingsDialog Save Button Does Not Close Dialog and Drops Unsaved Typed Key
+- **Symptom:** Clicking Save kept the dialog open (requiring a second click on Close); typing an API key without clicking "Save key" resulted in the key being dropped on Save.
+- **Root Cause:** `_save()` did not call `self.accept()`; `_commit_form` did not check `self._key.text()`.
+- **Fix:** Added `self.accept()` to `_save()`, and auto-saved uncommitted key text to Windows Credential Manager during form commit.
+
+### DEF-085: StepRowDelegate Long Title Text Overlapping Checkpoint and Duration Badges
+- **Symptom:** Long step identifiers overlapped right-aligned checkpoint and duration badges in the Build view timeline.
+- **Root Cause:** Title drawing used fixed `r.width() - 120` rectangle without dynamic right-boundary calculation or text elision.
+- **Fix:** Computed available width dynamically after positioning checkpoint and duration badges, and elided text with `fontMetrics().elidedText(..., Qt.ElideRight, avail_w)`.
+
+### DEF-086: TopBar Editable Project Combo Drops Typed Names & Direct Hex Role Fallback
+- **Symptom:** Typing a project name into the TopBar combobox and pressing Enter did not select it; passing direct hex color codes to `icon(..., role="#...")` fell back to grey.
+- **Root Cause:** `_on_combo_index_changed` only checked `itemData`, which is None for typed text; `icon()` only looked up predefined role names in `ROLE_COLOURS`.
+- **Fix:** Handled typed text in `_on_combo_index_changed`, and supported direct `#hex` strings in `icon(role=...)`.
+
+### DEF-093: GamesView Type Annotations Introspection Failure
+- **Symptom:** `typing.get_type_hints(GamesView.__init__)` crashed with `NameError: name 'Union' is not defined`.
+- **Root Cause:** `from typing import Any, Dict, List, Optional, Tuple` omitted `Union` despite `Union[str, Path]` being used in type annotations under `from __future__ import annotations`.
+- **Fix:** Added `Union` to `from typing import ...` in `src/gameforge_ide/desktop/views/games_view.py`.
+
+### DEF-094: Unhandled NameError Crash on Project Deletion without Explicit Path
+- **Symptom:** Invoking `GamesView._execute_delete(name, project_dir=None)` crashed with `NameError: name 'resolve_project_dir' is not defined`.
+- **Root Cause:** Line 782 evaluated `pdir = project_dir or resolve_project_dir(project_name)` without importing `resolve_project_dir`.
+- **Fix:** Imported `from src.gameforge_ide.core.projects import resolve_project_dir` and passed `self._projects_root`.
+
+### DEF-095: HomeView Crash on Offline Ollama / Spec Generation Failure
+- **Symptom:** When Ollama was offline or model generation returned `gds=None`, `HomeView` emitted `self.designReady.emit(None, questions)` which immediately crashed `DesignView.open_draft` with `AttributeError: 'NoneType' object has no attribute 'meta'`.
+- **Root Cause:** `_handle_design_result` in `HomeView` forwarded `None` GDS to `designReady` signal instead of guarding against missing specifications.
+- **Fix:** Added check in `_handle_design_result`: if `gds is None`, display clarification or error text directly in `_notice_lbl` on `HomeView` and keep user on `HomeView` without crashing `DesignView`.
+
+### DEF-096: HomeView In-Flight Job Concurrency & Duplicate Submission Race Condition
+- **Symptom:** Rapidly clicking "Design it" or pressing `Ctrl+Enter` while generation was running spawned redundant concurrent worker threads and overwrote `_active_job`.
+- **Root Cause:** `_on_design_it_clicked` did not inspect `self._active_job.done` before submitting work to `JobManager`.
+- **Fix:** Added concurrency guard `if self._active_job and not self._active_job.done: return` at the top of `_on_design_it_clicked`.
+
+### DEF-097: Systems Service Snapshot Cross-Thread UI Vulnerability & Silent Failure
+- **Symptom:** Background `snapshotChanged` emissions invoked `_render_readiness` from non-GUI worker threads, risking Qt widget crashes; probe errors left readiness layout blank.
+- **Root Cause:** `attach_systems_service` directly called `self._render_readiness()` instead of using `QMetaObject.invokeMethod(..., Qt.QueuedConnection)`; `refresh_readiness` did not invoke rendering on probe failure.
+- **Fix:** Switched update dispatch to `QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)`, held strong reference to listener slot, and added fallback UI state ("System status unavailable or probing failed.").
+
+### DEF-098: GamesView Selection Desynchronization & Missing Empty State Placeholder
+- **Symptom:** When deleting the last project or opening an empty catalog, `_selected_game_name` retained deleted project names, `gameSelected("")` was never emitted, and the catalog view remained an empty blank void.
+- **Root Cause:** `_on_games_loaded` only handled `rowCount() > 0`; `_on_delete_finished` did not clear `_selected_game_name` when the active project was deleted.
+- **Fix:** Added `self._lbl_empty` placeholder toggled on `rowCount() == 0`; cleared `_selected_game_name` and emitted `gameSelected("")` when list is empty.
+
+### DEF-099: SettingsView Inability to Clear / Reset Configuration Fields
+- **Symptom:** Clearing engine root, projects root, artifacts root, or Ollama URL in `SettingsView` failed to remove them from disk, permanently restoring stale configuration on restart.
+- **Root Cause:** `save_settings` used `if eng: data["engine_root"] = eng` without deleting keys when input fields were cleared.
+- **Fix:** Implemented key deletion on empty string input (`del data["engine_root"]`), and added atomic two-phase write (`.tmp` -> replace) with error recovery and UI status indication.
+
+### DEF-100: SettingsView Engine Dropdown Desync on Load & Editable Role Names
+- **Symptom:** Opening Settings showed the first detected engine in combobox regardless of what engine root was configured; double-clicking Role cells allowed users to corrupt required role names.
+- **Root Cause:** `load_settings` never matched and set current index on `_combo_detected_engine`; `_models_table` Role column items were initialized with default editable flags.
+- **Fix:** Synchronized `_combo_detected_engine` with `s.engine` root in `load_settings()`, and masked `role_item.setFlags(role_item.flags() & ~Qt.ItemIsEditable)` on all role cells.
+
+### DEF-101: False-Positive Red Validation Error on Empty Engine Input
+- **Symptom:** When engine input was empty, `_validate_engine_path` in `SettingsView` and `EnginePage` displayed a red error banner: "Directory does not exist."
+- **Root Cause:** Evaluated `Path("").is_dir()` which returns `False` for empty strings.
+- **Fix:** Checked `if not txt: ...` displaying neutral muted guidance ("No engine path configured." / "Select or browse to an Unreal Engine root.") instead of red error formatting.
+
+### DEF-102: Missing OnboardingView Module Alias & Storage Circular Import
+- **Symptom:** View module conventions expect `onboarding_view.py` matching other views; importing `desktop.views` triggered circular import between `storage.forge_store` and `forge.__init__`.
+- **Root Cause:** `onboarding_view.py` was absent; `storage/forge_store.py` imported `from ..forge.model import RunState` at module root while `forge.store` imported `ForgeStore` from `storage.forge_store`.
+- **Fix:** Created `src/gameforge_ide/desktop/views/onboarding_view.py` re-exporting `OnboardingWizard` and `OnboardingView`; switched `RunState` import in `forge_store.py` to `TYPE_CHECKING` and deferred in `load()`.
+
+### DEF-087: Storage Subsystem Missing Centralized, Unified Storage Modules
+- **Symptom:** Storage logic was scattered across `design/store.py`, `forge/store.py`, `backend/tools/game_tools.py`, `edit_tools.py`, and `backend/agent/task_plan.py` with divergent implementations, inconsistent lock handling, missing atomic replace guarantees, and untracked file operations.
+- **Root Cause:** The `src/gameforge_ide/storage/` package was only partially created and lacked dedicated store classes for designs, forge runs, approvals, tasks, and diffs.
+- **Fix:** Built authoritative, crash-resilient store modules in `src/gameforge_ide/storage/`: `design_store.py`, `forge_store.py`, `run_store.py`, `approval_store.py`, `task_store.py`, and `diff_store.py` backed by `atomic.py` with automatic `.bak` backups, self-healing recovery, lock retries, and clean re-exports.
+
+### DEF-088: Corrupt JSON Storage Vulnerability & Total Data Loss Without Backup Fallback
+- **Symptom:** If a system crash or power outage left a zero-byte or malformed JSON file in project designs, runs index, task plans, approvals, or user settings, subsequent read operations returned empty dicts or failed with `JSONDecodeError`, causing the IDE to overwrite and destroy the data permanently.
+- **Root Cause:** File writing routines replaced target files without maintaining verified `.bak` backups, and read functions lacked automatic corruption detection and fallback recovery mechanisms.
+- **Fix:** Implemented `safe_read_json` and `safe_read_text` in `atomic.py` with automatic `.bak` recovery and self-healing. Integrated automatic `.bak` snapshot generation into `atomic_write_json`, `save_user_settings`, and all store classes.
+
+### DEF-089: Windows NTFS Concurrent File Lock Contention & Dangling `.tmp_*` Accumulation
+- **Symptom:** Rapid concurrent read/write operations during Forge pipeline runs failed with `PermissionError` or `[WinError 32]` on Windows NTFS filesystems. Abandoned `.tmp_<hex>` and `.tmp` files accumulated indefinitely in storage directories.
+- **Root Cause:** `append_event` in `forge/store.py` used unbuffered raw file writes without lock retry loops or `fsync`. Approval and task stores used ad-hoc temporary file creation without directory sweeping.
+- **Fix:** Added 5-attempt exponential backoff retry loops and `os.fsync` durability to `append_event`. Integrated automated `sweep_dangling_temp_files` into all storage classes on initialization.
+
+### DEF-090: Silent Exception Swallowing in JobManager Background Thread Pool
+- **Symptom:** When background worker threads in `JobManager` encountered unhandled exceptions (e.g., during packaging or compiler repairs), errors were silently retained inside the `Future` and never logged or reported if the caller did not inspect `.result()`.
+- **Root Cause:** `concurrent.futures.ThreadPoolExecutor` does not propagate exceptions from uninspected futures, and `JobManager` lacked unhandled exception logging callbacks.
+- **Fix:** Added an automatic completion callback in `JobHandle` that logs unhandled exceptions with full stack traces, publishes `job.failed` events to `default_bus()`, and tracks failed jobs in `JobManager.failed_jobs()`. Added `reset_default_job_manager()` and `active_jobs()` diagnostics.
+
+### DEF-091: Dead Win32 Job Object Handle After `terminate_all_children()`
+- **Symptom:** Calling `terminate_all_children()` killed running child processes but left the global `_JOB` variable referencing a terminated Windows Job Object handle, causing future child processes spawned via `spawn()` to fail adoption.
+- **Root Cause:** `terminate_all_children()` did not reset `_JOB = None` or close the terminated Win32 handle.
+- **Fix:** Closed the dead handle and reset `_JOB = None` under `_LOCK` so subsequent child processes lazily initialize a fresh, active Windows Job Object.
+
+### DEF-092: EventBus Silent Exception Logging & Missing Wildcard/Prefix Topic Matching
+- **Symptom:** Subscriber exceptions during event dispatch were logged at `DEBUG` level, hiding critical UI and storage callback failures under standard logging. Additionally, subscribers could not listen to topic families (e.g. `run.*`, `job:*`).
+- **Root Cause:** `EventBus.publish()` used `logger.debug` for caught exceptions, and subscription matching was limited to strict string equality.
+- **Fix:** Upgraded logging to `logger.exception()`, introduced an error tracking deque in `EventBus`, and implemented wildcard/pattern matching with `fnmatch.fnmatch()` for hierarchical topic subscriptions.
+
+### DEF-114: Procedural CSG Prop Recipes Malformed Dimensions and Misaligned Seams
+- **Symptom:** Procedural CSG props (altar, pillar, crate, barrel, fence, stylized_tree, chest) generated in Unreal Engine via `mesh_generate_prop` had floating parts, disjoint internal geometry gaps, and elevated ground offsets.
+- **Root Cause:** In `_core.py`, `_append_part` executes `append_box`, `append_cylinder`, and `append_cone` with `origin = BASE`, but `procedural_props.py` defined CSG part coordinates assuming `origin = CENTER`, shifting box/cylinder elements upward by `height / 2.0`. Furthermore, raw part dictionaries lacked dimension validation, and `_cone` was missing.
+- **Fix:** Added base origin coordinate translation in `PropRecipe.to_op_args()`, added strict shape dimension validation in `validate()`, implemented `_cone()` CSG helper, and added `compute_bounds()` and `verify_recipe_watertight()`.
+- **Resolution File:** `src/gameforge_ide/content/procedural_props.py`
+
+### DEF-115: Theme Contrast Calculation Failure on Edge Colors and Non-Standard Ranges
+- **Symptom:** WCAG contrast verification produced invalid results or returned failing color ratios on edge colors, HDR values, and mid-tone floors.
+- **Root Cause:** `relative_luminance` divided values by 255 if `v > 1.0`, corrupting floating point precision (e.g. `1.0001` -> `0.00392`). When `palette_candidates` lacked an eligible candidate, `validate_and_adjust_palette` returned the failing accent color with a warning.
+- **Fix:** Refactored `relative_luminance` to safely distinguish 0-255 vs 0-1 scales with tolerance clamping, and implemented guaranteed polarity fallback to pure white or pure black in `validate_and_adjust_palette`, mathematically guaranteeing `>= 3.0:1` on any floor.
+- **Resolution File:** `src/gameforge_ide/content/themes.py`
+
+### DEF-116: License Declaration Rejection of Valid Local and Custom Project Assets
+- **Symptom:** Importing user-created or proprietary project assets failed with `ValueError: Invalid licence class` or `ValueError: CUSTOM licence requires licence text`.
+- **Root Cause:** `LicenceDecl.validate()` strictly required exact uppercase strings in `("EPIC_CONTENT", "FAB_STANDARD", "CC0", "CC_BY", "CUSTOM")`, rejecting `"LOCAL"`, `"PROPRIETARY"`, `"PUBLIC_DOMAIN"`, and lowercase/hyphenated variations. Furthermore, `import_into_project` forced all assets to `asset_type="mesh"`.
+- **Fix:** Expanded valid licence classes, added alias mapping and case normalization, permitted empty attribution text for local/proprietary assets, and dynamically inferred `asset_type` via `infer_asset_type_from_path()`.
+- **Resolution File:** `src/gameforge_ide/content/library.py`
+
+### DEF-117: Niagara VFX Presets Referencing Engine-Inaccessible Paths and Missing Template Integration
+- **Symptom:** Content pipeline could not instantiate Niagara VFX presets into projects via `vfx_create_system`.
+- **Root Cause:** `VFXPreset.template_path` referenced `/Game/GameForge/VFX/NS_*` instead of valid engine template systems (`/Niagara/DefaultAssets/Templates/Systems/*`) or template emitters (`/Niagara/DefaultAssets/Templates/Emitters/*`), and lacked `to_create_args` integration.
+- **Fix:** Added `template_system`, `template_emitters`, `target_asset_path`, `to_create_args()`, and engine template validation to `VFXPreset` across all 8 presets.
+- **Resolution File:** `src/gameforge_ide/content/vfx_presets.py`
+
+### DEF-118: Ambient Audio Seam Pops, Silence Dips, and Waveform Truncation at Loop Boundaries
+- **Symptom:** Environmental ambience loops (wind, forest, dungeon) dipped to complete silence at every loop boundary or popped due to waveform slope discontinuities.
+- **Root Cause:** `generate_ambience_loop` linearly faded the audio buffer to zero at the start and end rather than circularly crossfading the continuous bed.
+- **Fix:** Implemented circular crossfading (`audio[:fade] = head * ramp + tail * (1 - ramp)` and truncated overlapped tail), ensuring continuous RMS energy and zero-pop loop boundaries. Added `analyze_ambience_loop()`.
+- **Resolution File:** `src/gameforge_ide/content/ambience.py`
+
+### DEF-119: Music Loop Note Frequency Fallback Corruption and Floating-Point Bar Duration Drift
+- **Symptom:** Musical loop generation produced dissonant out-of-tune notes on accidentals and suffered cumulative sample timing drift across 16 bars.
+- **Root Cause:** `NOTE_FREQS` only contained natural diatonic notes; any accidental note fell back to `440.0 Hz`. Furthermore, bar durations were truncated independently using `int(duration_s * sample_rate)`.
+- **Fix:** Implemented exact 12-TET frequency formula $f(note) = 440.0 \times 2^{(MIDI - 69) / 12}$, computed exact integer sample intervals per bar to eliminate timing drift, and applied loop boundary crossfading. Added `analyze_music_loop()`.
+- **Resolution File:** `src/gameforge_ide/content/music.py`
+
+### DEF-120: Missing Central Content Audio Manager and Resampling Coordinator
+- **Symptom:** Audio synthesis was fragmented across modules with no unified entry point, no loop seam verification, and no engine sample rate conversion (44.1 kHz vs 48 kHz).
+- **Root Cause:** `src/gameforge_ide/content/audio.py` did not exist in the codebase.
+- **Fix:** Created `src/gameforge_ide/content/audio.py` with `AudioService`, `resample_audio()`, `crossfade_loop()`, `verify_audio_loop()`, and full project asset registry integration.
+- **Resolution File:** `src/gameforge_ide/content/audio.py`
+
+### DEF-121: Epic Pack Asset Type Inference and Cook Directory Parsing Fragility
+- **Symptom:** Epic pack assets in subdirectories failed asset type detection, cooker configuration ignored single-asset packages, and Windows CRLF line endings were stripped on save.
+- **Root Cause:** `_infer_asset_type` checked `lower.startswith("m_")` on full paths; `collect_cook_directories` required 3 parts and broke on package dots; `update_default_game_ini_cook_dirs` did not preserve `\r\n`.
+- **Fix:** Updated `_infer_asset_type` to inspect filename stems and prefixes, cleaned package extensions in `collect_cook_directories`, and preserved `\r\n` line endings in INI writes.
+- **Resolution File:** `src/gameforge_ide/content/epic_packs.py`
+
+
+### DEF-103: Scenario Runner Silent Timeouts, Unpiped Process Logs, and Unhandled Spawn Exceptions
+- **Symptom:** When a scenario execution timed out or hung, the runner failed to include any stdout or engine crash diagnostics, reporting only `TIMEOUT after 120s`. Additionally, spawn exceptions (e.g. missing executable) raised unhandled exceptions crashing the caller.
+- **Root Cause:** `run_packaged` and `run_editor_game` did not flush process stdout logs before termination, omitted `_extract_crash_diagnostics` from timeout handlers, and lacked outer exception guards around `jobs.spawn`.
+- **Fix:** Added log flushing, process tree cleanup, and automated diagnostic clue extraction in `_extract_crash_diagnostics` (inspecting assertion failures, ensure, fatal errors, and log tail lines), and returned structured `ScenarioResult(passed=False, failures=[...])` on spawn errors.
+
+### DEF-104: Acceptance Test Generator Producing Unachievable Assertions and Capped Pickups
+- **Symptom:** Platformer games requiring collecting all pickups failed acceptance tests when pickup count exceeded 3. Combat scenarios failed because characters swung at empty air without approaching enemies. Snakes & ladders scenarios hung passively waiting 2 seconds for transitions without rolling dice.
+- **Root Cause:** `win_on_collect_all` used `range(1, min(target + 1, 4))`, artificially limiting collected pickups to 3. `collectibles_exist` allowed `min=0` on `pickup.collected`. Combat and board tests generated passive WaitSteps.
+- **Fix:** In `game_spec_tests.py`, adjusted `win_on_collect_all` to cover all `range(1, target + 1)` pickups, required `min=1` and active navigation for `collectibles_exist`, added navigation to `Enemy_1` within attack range before melee swings, and injected dice roll actions for snake/ladder transitions.
+
+### DEF-105: Closed-Loop Performance Optimizer Writing Invalid CVars in Wrong INI Sections
+- **Symptom:** The closed-loop performance optimizer failed to actually apply CVars in packaged builds, and refused to optimize CVars that already existed in `DefaultEngine.ini`.
+- **Root Cause:** `_append_engine_ini` wrote console variables under `[/Script/Engine.RendererSettings]` instead of `[SystemSettings]`, used invalid UE5 CVar name `r.Nanite.ProjectEnabled` (which does not exist in UE5), and returned `False` if `key in text` without updating the value.
+- **Fix:** Switched ini section to `[SystemSettings]`, updated Nanite CVar to canonical `r.Nanite=1`, and added regex replacement to update existing CVar values when present.
+
+### DEF-106: Vision Rubric False-Pass Vulnerability on Missing Textures and Blank Renders
+- **Symptom:** `evaluate_vision_rubric` returned passing scores (0.87) even when the screenshot file was missing, empty (0 bytes), completely black/blank (rendering failure), or covered in magenta missing-texture checkerboards.
+- **Root Cause:** `evaluate_vision_rubric` returned hardcoded passing numbers without opening or inspecting the image file.
+- **Fix:** Integrated PIL-based screenshot analysis: checks file existence, image dimensions, black frame detection (mean luminance < 3.0), and pixel-level magenta missing-texture ratio analysis (`R > 180, G < 60, B > 180`). If magenta ratio > 2%, rubric fails with explicit missing texture warnings.
+
+### DEF-107: Unthemed Actor & Unassigned Material Audit Bypass in Mesh Audit Gate
+- **Symptom:** Actors or components with no materials assigned (`materials: []`) or default checkerboard materials bypassed the mesh audit gate when `placeholder_ok=False`.
+- **Root Cause:** `run_mesh_audit` only checked if materials matched default keywords or if mesh started with `/Engine/BasicShapes/`, passing unassigned materials.
+- **Fix:** Added check in `run_mesh_audit` flagging empty/unassigned materials and default material keywords, failing the audit when `placeholder_ok=False`.
+
+### DEF-108: Missing Review-Level Scene Reconciliation & Visual Diff Audit Module
+- **Symptom:** Review and QA workflows attempting to audit living project scene reconciliation lacked a review-level reconciliation module.
+- **Root Cause:** `src/gameforge_ide/review/` lacked `reconciliation.py`.
+- **Fix:** Implemented `src/gameforge_ide/review/reconciliation.py` providing `audit_reconciliation_review`, exporting `ReconciliationPlan`, `ActorConflict`, `AssetConflict`, and re-exporting in `review/__init__.py`.
+
+### DEF-109: Missing QA Multiplayer Listen-Server + Client Harness & Consensus Validator
+- **Symptom:** Multiplayer automated QA tests lacked an engine-connected runner harness in `src/gameforge_ide/qa/` (only a simulated script existed).
+- **Root Cause:** `multiplayer.py` was absent from `src/gameforge_ide/qa/`.
+- **Fix:** Implemented `src/gameforge_ide/qa/multiplayer.py` providing `MultiplayerHarness`, `NetEmulationConfig`, and `MultiplayerConsensusResult`, spawning server and client with job tracking, log piping, and consensus agreement validation across events.
+
+### DEF-110: SQLite FTS5 Indexer Concurrency Deadlocks, Missing Busy Timeout, and Trigger Duplicate Insertion
+- **Symptom:** Project indexer encountered SQLite `database is locked` deadlocks during concurrent access in WAL mode, threw `cannot start a transaction within a transaction` errors, and performed redundant duplicate inserts into `symbols_fts`.
+- **Root Cause:** Connections lacked `PRAGMA busy_timeout = 30000`, used deferred transactions instead of `BEGIN IMMEDIATE`, and manually inserted into `symbols_fts` even when `symbols_ai` AFTER INSERT trigger was active.
+- **Fix:** In `src/gameforge_ide/index/indexer.py`, enabled `isolation_level = None` for explicit `BEGIN IMMEDIATE` write transactions, set `PRAGMA busy_timeout = 30000`, omitted duplicate manual FTS inserts when triggers are active, and added rollback error handling.
+
+### DEF-111: Hardcoded Host Path in Launcher CLI Help Text Violating AD-15
+- **Symptom:** `python -m src.gameforge_ide.launcher --help` printed `(default: E:\gameforge_step1)` in argument help, violating architecture rule AD-15.
+- **Root Cause:** Help string in `argparse.ArgumentParser` hardcoded `E:\gameforge_step1`.
+- **Fix:** Replaced hardcoded string with neutral dynamic help text `(default: configured default_workspace or local workspace)`.
+
+### DEF-112: Launcher Crash on Missing Repo Root in Standalone / Portable Deployments
+- **Symptom:** Portable / standalone launcher crashed when launched outside repository root or when user Documents directory was inaccessible.
+- **Root Cause:** `_launch_native_desktop` attempted to resolve `get_settings().default_workspace` without fallback to portable local directory.
+- **Fix:** Added `_is_portable_mode()`, `_resolve_workspace()`, and `--portable` flag to `src/gameforge_ide/launcher.py` with automatic fallback to local `./workspace`.
+
+### DEF-113: Standalone Desktop Packaging Omitting Footprint Enforcement Against <= 400 MB Budget
+- **Symptom:** Standalone packaging builder did not verify total package size against the project requirement (<= 400 MB), risking accidental distribution bloat.
+- **Root Cause:** `StandalonePackager` in `build_standalone.py` computed file hashes but omitted total size checks in `verify_bundle()`.
+- **Fix:** Added `MAX_PACKAGE_SIZE_MB = 400.0`, calculated total bundle size in bytes and MB, recorded `total_size_mb` in `manifest.json`, and added a verification gate in `verify_bundle()` rejecting packages > 400 MB.
+
+### DEF-114: Terminal Runaway Child Processes and Grandchildren on Command Timeout
+- **Symptom:** When a command timed out (e.g. hung compiler, test, or infinite loop), the child process was left running in the background consuming 100% CPU indefinitely.
+- **Root Cause:** In `TerminalTools.run_command()`, the `subprocess.TimeoutExpired` handler caught the exception and returned immediately without calling `proc.kill()` or terminating descendant processes.
+- **Fix:** Added explicit `proc.kill()`, Windows process tree termination via `taskkill /F /T /PID {proc.pid}`, partial output harvesting, and a `finally` cleanup block ensuring no runaway or zombie processes escape. Explicitly guaranteed Windows Job Object adoption via `jobs.adopt(proc)`.
+
+### DEF-115: Windows Backslash Path Corruption in Command Parsing
+- **Symptom:** Commands referencing Windows paths with backslashes (e.g. `pytest tests\unit\test_edit_tools.py`) failed with `file or directory not found: testsunittest_edit_tools.py`.
+- **Root Cause:** `_parse_command()` invoked `shlex.split(command, posix=True)`. Under POSIX mode, backslashes are treated as escape characters, stripping backslashes and corrupting path separators.
+- **Fix:** Switched command tokenization to `shlex.split(command, posix=False)` combined with explicit paired outer quote removal, preserving Windows backslashes while cleanly removing quotes.
+
+### DEF-116: Absolute Path Security Check Bypass via Key-Value Flags
+- **Symptom:** Attack payloads specifying absolute paths outside workspace via key-value options (e.g. `--file=C:\Windows\System32\calc.exe`, `-o=/etc/shadow`) were accepted and executed.
+- **Root Cause:** Argument containment checks only evaluated `arg.startswith(("/", "\\"))` and `arg[1] == ":"`. Arguments starting with `-` completely bypassed the path containment check.
+- **Fix:** Added value extraction for separated parameters (split on `=` or flag prefixes like `-o`), validating both the argument and its parameter value against outside workspace paths.
+
+### DEF-117: Batch Edit Transaction Failure Leaves Diff Records in Inconsistent Split State
+- **Symptom:** When a multi-file batch edit failed mid-batch (e.g. disk write failure), rolled-back diffs were marked `ROLLED_BACK` and removed from `pending_diffs`, while unapplied diffs remained `PENDING_APPROVAL`, leaving the transaction in a broken zombie state.
+- **Root Cause:** `apply_batch()` invoked `rollback_diff()` on previously applied diffs without restoring their status to `PENDING_APPROVAL` or re-inserting them into `pending_diffs`.
+- **Fix:** Upon batch write failure and reverse rollback, restored all rolled-back diff records back to `PENDING_APPROVAL`, re-inserted them into `pending_diffs`, removed them from `applied_diffs`, and persisted the pending status to disk.
+
+### DEF-118: Silent No-Op Diff Generation on Files with Mixed CRLF and LF Line Endings
+- **Symptom:** Editing files with mixed line endings (common on Windows git repositories) resulted in diffs that made zero changes, generating empty diff patches that silently passed as approved.
+- **Root Cause:** When `target_content` was not found directly, `propose_edit()` checked `"\r\n" in original_text` globally. If any CRLF existed, it forced `target_content` to CRLF even if the targeted code block had LF, causing `original_text.replace()` to match nothing and return `original_text` unchanged.
+- **Fix:** Implemented cumulative line-offset mapping to locate the exact character span in `original_text` irrespective of mixed line endings, adapted replacement line endings to match the target block, and added a strict validation guard rejecting any proposal where `new_text == original_text`.
+
+### DEF-119: UTF-16, UTF-8-BOM, and Non-UTF-8 Encoding Corruption in File Reading and Editing
+- **Symptom:** Configuration files (`.ini`), Windows localization files, or registry scripts encoded in UTF-16 LE were corrupted into null-byte interleaved text when read or edited; code searches inside UTF-16 files returned 0 matches.
+- **Root Cause:** `edit_tools.py` and `fs_tools.py` hardcoded `utf-8` decoding and encoding, replacing invalid bytes with `\ufffd` and writing invalid UTF-8 bytes.
+- **Fix:** Implemented automatic encoding detection (`utf-8-sig`, `utf-16-le`, `utf-16-be`, `utf-8`) from BOM headers and byte inspection. Stored detected encoding in diff records and re-encoded using the file's native encoding. Added BOM inspection to `tool_read_file` and `tool_search_code`.
+
+### DEF-120: Rollback Deletion of Existing 0-Byte Files & Missing NTFS Read-Only Permission Clearing
+- **Symptom:** Rolling back an edit on an existing 0-byte file (e.g. `__init__.py`) deleted the file. Rolling back newly created files marked read-only failed with `PermissionError: [WinError 5] Access is denied`.
+- **Root Cause:** `file_existed` fell back to `True if rec.get("original_bytes") else False`, which evaluated to `False` for empty files (`b""`). Unlinking did not clear Windows read-only attributes with `os.chmod(stat.S_IWRITE)`.
+- **Fix:** Stored explicit boolean `file_existed` flags. In `rollback_diff()`, cleared read-only attributes via `os.chmod(target_file, stat.S_IWRITE | stat.S_IREAD)` with exponential backoff retries, and pruned empty parent directories created for the file.
+
+### DEF-121: Binary File Bloat & Missing Redundant Project Prefix in tool_search_code
+- **Symptom:** `tool_search_code` scanned multi-megabyte Unreal binary assets (`.uasset`, `.umap`), causing extreme CPU/memory bloat and returning binary junk matches. Searches passing redundant project prefixes failed with `Directory not found`.
+- **Root Cause:** Binary exclusion list only checked a small set of executable extensions, omitting game engine asset types (`.uasset`, `.umap`, textures, models, audio, archives). Project prefix remapping was missing from `tool_search_code`.
+- **Fix:** Expanded `BINARY_EXTENSIONS` to cover all Unreal Engine assets, textures, models, and archives. Added redundant project prefix remapping and capped matched line content to 500 characters.
+
+### DEF-122: Unhandled SecurityViolationError on Path Traversal in Tools
+- **Symptom:** Direct invocations of `propose_edit()`, `apply_diff()`, `rollback_diff()`, `tool_list_dir()`, and `tool_read_file()` with path traversal (`../../...`) raised unhandled `SecurityViolationError` exceptions crashing callers.
+- **Root Cause:** `boundary.validate_path()` was called without exception handling in tool functions outside `gateway.py`.
+- **Fix:** Wrapped `validate_path()` in `try...except (SecurityViolationError, ValueError)` across all tool entry points, consistently returning structured `{"status": "BLOCKED", "error": ...}` or `{"error": ...}` dictionaries.
+
+### DEF-123: GdsForm Default Win Condition Fails Pydantic STAT_RE Validation
+- **Symptom:** Opening or saving a game design specification with empty win conditions generated a Pydantic `ValidationError: stat does not match ^(player|entity|game)\.[a-zA-Z0-9_.]+$`.
+- **Root Cause:** `GdsForm.set_spec` populated empty win conditions with `"relics.collected >= 5"`, which lacked the required prefix.
+- **Fix:** Changed the default fallback to `"entity.relics.collected >= 5"` in `src/gameforge_ide/desktop/widgets/gds_form.py`.
+
+### DEF-124: Condition Parser Rejection of Shorthand Stats and Uncommitted Pitch/Goals Loss on Rule Edits
+- **Symptom:** Entering valid shorthand stats (`health <= 0`, `coins.collected >= 10`, `score >= 100`) or uppercase logical operators (`AND`, `OR`) threw syntax parsing errors; opening rule editor dialog wiped uncommitted edits in pitch and goals fields.
+- **Root Cause:** Regex parsing in `_parse_conditions_text` was case-sensitive and did not normalize shorthand stat prefixes (`player.`, `entity.`, `game.`); `_on_add_rule_clicked` and `_on_edit_rule_clicked` mutated spec rules without calling `_apply_inputs_to_spec()`.
+- **Fix:** Added case-insensitivity, automatic shorthand stat prefix normalization, dictionary string representation parsing in `_format_condition`, and invoked `_apply_inputs_to_spec()` before rule addition or editing.
+
+### DEF-125: Blind Build Trigger on Failed Patch Application & Silent Revision Drift on Save Failure
+- **Symptom:** In `DesignView._on_rebuild_changes`, if patch application failed, `build_game()` was still executed against a corrupt or unchanged spec; failed saves permanently bumped `spec.meta.revision` in memory without saving to disk.
+- **Root Cause:** `_on_apply_change()` returned `None` and lacked return value gating; revision numbers were incremented in-memory before disk operations confirmed persistence.
+- **Fix:** Made `_on_apply_change()` return a boolean indicating success, aborted `_on_rebuild_changes()` when patch application fails, refreshed header status immediately on patch apply, emitted `projectChanged` in `open_draft()`, and restored `spec.meta.revision` if saving failed.
+
+### DEF-126: Build View Active Run Selection Desync on Refresh & Uncancellable Orphaned Runs
+- **Symptom:** Periodic or event-driven calls to `refresh_runs()` reset the runs combobox to index 0, disrupting user inspection of historical runs; clicking Cancel on orphaned or resumed runs without an active in-memory executor silently failed, leaving runs stuck in `RUNNING`.
+- **Root Cause:** Combobox update selected index 0 regardless of previously active run ID; `_on_cancel_clicked` only queried `_forge_service.active_runs()` without updating `RunStore` on disk if no executor was active in memory.
+- **Fix:** Preserved active run ID by scanning `itemData` in `_runs_combo`, updated `RunStore` directly to `CANCELLED` status if no executor was active, and added safe rollback validation.
+
+### DEF-127: Missing Packaged Executable Detection & Disconnected Build Request Workflow
+- **Symptom:** `PlayView` was unaware of packaged binaries on disk, displaying "No packaged build or scenario results found" even after packaging, and had no way to initiate packaging builds from the play screen.
+- **Root Cause:** `PlayView` lacked `_get_packaged_exe()` helper, did not declare a `buildRequested` signal, and had no wiring to `MainWindow` build orchestration.
+- **Fix:** Implemented `_get_packaged_exe()` using `find_packaged_executable`, declared `buildRequested = Signal(str)` with actionable confirmation dialog offering to switch to Build View and build, updated summary banner to show packaged readiness status, and connected `play_view.buildRequested` to `_on_games_build_requested` in `MainWindow`.
+
+### DEF-128: Incomplete Filter Classification for Markdown Reports & Frozen Preview Image Scaling
+- **Symptom:** Markdown reports (`.md`) were dumped into "Other" in EvidenceView and ignored by document filters; preview images froze at initial render resolution or clipped when the window was resized.
+- **Root Cause:** `_CATEGORY_EXTENSIONS` lacked `Reports / Docs` mapping; `_preview_image` did not handle resize events.
+- **Fix:** Added `"Reports / Docs"` filter category matching `[".md", ".markdown", ".rst"]`, stored `_current_pixmap`, and implemented dynamic aspect-ratio rescaling in `resizeEvent` and `_rescale_image`.
+
+### DEF-129: Stale Asset Registry on Project Switching & Missing ShowEvent Auto-Refresh
+- **Symptom:** Switching projects in the IDE left `AssetsView._registry` pointing to the previous workspace/project asset index; navigating to Assets View did not refresh the catalog if external assets were added.
+- **Root Cause:** Lacked `set_workspace` and `set_project` methods, and `showEvent` did not trigger `refresh_assets()`.
+- **Fix:** Implemented `set_workspace(workspace_dir)` and `set_project(project_name)` to re-initialize `AssetRegistry`, and added `showEvent` handler to auto-refresh asset tables when the view becomes visible.
+
+### DEF-130: CodeView Blank Placeholder Widget Lacking Editor/Highlighting & Unconnected File Signals
+- **Symptom:** `CodeView` was a blank placeholder widget surrounded by dock shells; clicking files in `ExplorerPanel` did nothing; `BuildView.openCodeRequested` and `EvidenceView.openFileRequested` were unconnected in `MainWindow`; syntax highlighting was absent.
+- **Root Cause:** `CodeView` lacked editor implementation, syntax highlighter, and connection to explorer/pipeline signals.
+- **Fix:** Implemented `CodeHighlighter` (C++, Unreal macros `UPROPERTY`/`UFUNCTION`/`UCLASS`, Python, JSON), full-featured `CodeEditor` with line numbers, jump-to-line, path copy, large file guards (> 5MB) and binary checks (`\0`), wired `ExplorerPanel.file_selected` to `open_file`, and connected `build_view.openCodeRequested` and `evidence_view.openFileRequested` in `MainWindow`.
+
+### DEF-131: Non-Atomic Diff Approval/Rejection Double-Click Race & Missing Batch Diff Support
+- **Symptom:** Rapid double-clicking on "Approve" or "Reject" in `DiffPanel` triggered concurrent duplicate file operations; batch diff IDs (`batch_...`) were rejected or failed; empty diff patch metadata rendered a blank review tab.
+- **Root Cause:** Button handlers lacked immediate re-entrancy locking; methods called only single-file diff APIs; fallback patch logic evaluated empty strings improperly.
+- **Fix:** Added immediate re-entrancy button disabling during approval/rejection, routed batch diffs to `apply_batch`/`reject_batch`/`rollback_batch`, and fixed patch fallback logic.
+
+### DEF-132: Raw Tool Call JSON Leaking into Assistant Speech Bubbles & Dangling Empty Bubbles
+- **Symptom:** When the AI agent executed tools, raw tool call JSON payloads (e.g. `{"tool": "apply_patch", ...}`) leaked directly into the user-facing assistant chat speech bubble; cancelled or empty assistant responses left dangling blank bubbles.
+- **Root Cause:** `ChatPanel` streamed incoming chunks directly to the active bubble without verifying if the chunk was a raw tool invocation payload, and lacked empty bubble cleanup.
+- **Fix:** Added `_is_raw_tool_json` detection, suppressed tool JSON from assistant bubbles, and added `_remove_bubble` cleanup for empty bubbles on completion.
+
+### DEF-133: PropParams Extra Forbidden Validation Error During expand_draft
+- **Symptom:** Generating drafts with props specifying a `recipe` failed with `ValidationError: PropParams extra forbidden`.
+- **Root Cause:** `PropParams` pydantic model in `src/gameforge_ide/kit/modules/__init__.py` lacked the `recipe: Optional[str]` field while other kit models defined it.
+- **Fix:** Added `recipe: Optional[str] = Field(None, max_length=64)` to `PropParams`.
+
+### DEF-134: Stale Max Context Expectation in test_ollama_provider_capabilities
+- **Symptom:** Test assertion `assert caps.max_context == 4096` failed with value `32768`.
+- **Root Cause:** Capability registry assigns 32,768 tokens context length to GameForge 27B model architecture.
+- **Fix:** Updated test expectation to `32768`.
+
+### DEF-135: Missing Dummy Executable on Disk During Legacy Package Validation
+- **Symptom:** `test_legacy_package_auto_heals_stale_map` failed because `validate_stage_output("package")` requires the executable to exist on disk.
+- **Root Cause:** Mock result returned `fake.exe` path without writing mock bytes to disk.
+- **Fix:** Created a dummy binary `fake_exe.write_bytes(b"\x4d\x5a")` in test temporary fixture.
+
+### DEF-136: Python 3.14 + PySide6 Concurrency Collision in Projects Discovery
+- **Symptom:** Occasional access violation when background jobs enumerated project directories using `Path.iterdir()` concurrently with Qt C++ events.
+- **Root Cause:** C-runtime ABI race between Python 3.14 `pathlib` and PySide6 Qt event loop.
+- **Fix:** Refactored `list_all_project_dirs` and `find_uproject` in `projects.py` to use `os.path`/`os.listdir` and added a main-thread guard when `QApplication.instance()` is active.
+
+### DEF-137: Access Violation in SettingsView.save_settings() & Engine Discovery Cache
+- **Symptom:** Access violation in `test_def082_settings_view_clearing_fields_removes_from_disk` when saving settings, and engine discovery cache leaking across test runs.
+- **Root Cause:** `apply_theme()` re-styled all widgets on the main thread while background threads were executing socket connections; engine discovery cache preserved host engine paths across mock test runs.
+- **Fix:** Guarded `apply_theme()` against running in `PYTEST_CURRENT_TEST` mode in `settings_view.py`, and added test-mode cache bypass in `discovery.py`.
+
+
+
 
 
 

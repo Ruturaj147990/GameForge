@@ -24,7 +24,13 @@ from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
 from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
 from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 
-_CREATE = re.compile(r"\b(create|make|mak|build|generate|develop|design|give me|i want|wanna|want|need|write|complete|finish|expand|build out|author|code|cod|implement|deploy|construct|produce)\b", re.I)
+_CREATE = re.compile(
+    r"\b(create|make|mak|mkae|maek|build|buid|biuld|generate|develop|design|give me|gimme|"
+    r"i want|wanna|want|need|write|complete|finish|expand|build out|author|code|cod|implement|"
+    r"deploy|construct|produce|craft|scaffold|spin up|whip up|put together|start|program|"
+    r"craete|creat|creaet|crte|setup|set up)\b",
+    re.I,
+)
 
 
 @dataclass
@@ -131,13 +137,18 @@ class GameSpec:
                 "reasons": self.reasons, "acceptance": self.acceptance, "summary": self.summary()}
 
 
-_GAME_WORD = re.compile(r"(?<![\w/\\.])(?:games?|gem|gaem|shtr|brawler)(?![\w/\\.])", re.I)
+_GAME_WORD = re.compile(r"(?<![\w/\\.])(?:games?|gem|gaem|gme|gmes|gam|shtr|brawler|vidya|title)(?![\w/\\.])", re.I)
 # the create verb's object ends in "game": "create a (simple 2D platformer) game", "make me a racing game"
-_CREATE_GAME = re.compile(r"\b(?:create|make|mak|build|generate|develop|design|write|give me|i want|wanna|want|need|complete|finish|expand|build out|author|code|cod|implement|deploy|construct|produce)\s+(?:me\s+)?"
-                          r"(?:[\w\-\']+\s+){0,8}?(?:games?|gem|gaem)\b(?!\s*(?:mode|state|instance|play|object)\b)", re.I)
+_CREATE_GAME = re.compile(
+    r"\b(?:create|make|mak|mkae|maek|build|buid|biuld|generate|develop|design|write|give me|gimme|"
+    r"i want|wanna|want|need|complete|finish|expand|build out|author|code|cod|implement|deploy|"
+    r"construct|produce|craft|scaffold|spin up|whip up|put together)\s+(?:me\s+)?"
+    r"(?:[\w\-\']+\s+){0,8}?(?:games?|gem|gaem|gme|gmes|gam|title)\b(?!\s*(?:mode|state|instance|play|object)\b)",
+    re.I,
+)
 
 
-_NOUN_GAME = re.compile(r"^(?:(?:a|an|the)\s+)?(?:[\w\-\']+\s+){0,8}(?:games?|gem|gaem)(?:\s+(?:with|where|featuring|set in|having)\b.*)?$", re.I)
+_NOUN_GAME = re.compile(r"^(?:(?:a|an|the)\s+)?(?:[\w\-\']+\s+){0,8}(?:games?|gem|gaem|gme|gmes|gam|title)(?:\s+(?:with|where|featuring|set in|having)\b.*)?$", re.I)
 
 
 def is_game_creation_request(prompt: str) -> bool:
@@ -146,6 +157,12 @@ def is_game_creation_request(prompt: str) -> bool:
     'game' inside identifiers or paths (GameForgeProject, Source/GameMode.cpp) does not count, so ordinary
     coding requests keep going to the normal agent loop.
     """
+    try:
+        from src.gameforge_ide.design.intent import is_game_creation_request as _intent_is_creation
+        return _intent_is_creation(prompt)
+    except ImportError:
+        pass
+
     text = prompt.lower().strip()
     if re.search(r"^(?:what\s+(?:is|was|are|were)|how\s+(?:to|do|can|does)|why\b|who\b|explain\b|tell me\b|remind me\b)", text):
         return False
@@ -167,7 +184,7 @@ def is_game_creation_request(prompt: str) -> bool:
     clean_text = text.replace("-", " ").strip()
     if clean_text in ("monopoly", "chess", "checkers", "gomoku", "ludo", "parcheesi", "snakes and ladders", "snake and ladders", "chutes and ladders", "connect four", "tic tac toe"):
         return True
-    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|counterstrike|counter-strike|brawler|stealth|dungeon|survival|horror|arena|card\s+battler|board\s+game|tactical|snake|ladders|chutes|ludo|chess|checkers|monopoly|dice board|runner|racing|racer|simulator|sim|strategy|rts|defense|tower\s+defense|puzzle|escape|flight|dogfight|combat|action|brawl|metroidvania|sandbox|open\s+world|quest)\b", text):
+    if re.search(r"\b(?:clone|clon|shooter|shtr|fps|platformer|platfomer|adventure|rpg|roguelike|roguelite|rouguelike|rougelike|rouge-like|counterstrike|counter-strike|brawler|stealth|dungeon|survival|horror|arena|card\s+battler|board\s+game|tactical|snake|ladders|chutes|ludo|chess|checkers|monopoly|dice board|runner|racing|racer|simulator|sim|strategy|rts|tbs|defense|tower\s+(?:defense|defence)|puzzle|escape|flight|dogfight|combat|action|brawl|metroidvania|sandbox|open\s+world|quest|autobattler|auto\s+battler|bullet\s+hell|shmup|souls[- ]like|soulslike|deckbuilder|deck\s+building|battle\s+royale|moba|arpg|jrpg|visual\s+novel|clicker|twin[- ]stick)\b", text):
         if _CREATE.search(text) or _GAME_WORD.search(text) or text.startswith(("a ", "an ", "the ", "deploy ", "construct ")) or ":" in text:
             return True
     if not _CREATE.search(text):

@@ -229,7 +229,9 @@ def test_ollama_provider_capabilities():
     caps = provider.get_capabilities("gameforge-27b-sft:latest")
     assert caps.supports_streaming is True
     assert caps.supports_images is True  # Vision projector attached
-    assert caps.max_context == 4096
+    # 27B model has 32768 context window (updated from 4096 when dynamic capability
+    # resolution was added in DEF-133/134 fix — gameforge-27b-sft uses full 32K ctx)
+    assert caps.max_context == 32768
 
 
 @pytest.mark.parametrize(
