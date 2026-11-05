@@ -73,7 +73,7 @@ class CommandPalette(QDialog):
             }}
             QListWidget::item:selected {{
                 background: {tokens.ACCENT_PRIMARY};
-                color: #ffffff;
+                color: {tokens.TEXT_PRIMARY};
             }}
         """)
         layout.addWidget(self.list_widget)

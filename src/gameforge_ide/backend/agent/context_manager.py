@@ -110,10 +110,14 @@ class ContextManager:
             try:
                 with open(self.context_file, "r", encoding="utf-8", errors="replace") as f:
                     lines = f.readlines()
-                # Extract just the Current Milestone line (line 4) for identity
+                # Extract Current Milestone or Last updated line for identity
                 for line in lines[:10]:
                     if line.startswith("**Current Milestone:**"):
                         milestone = line.replace("**Current Milestone:**", "").strip()[:200]
+                        context_snippet = f"Milestone: {milestone}"
+                        break
+                    elif line.startswith("**Last updated:**"):
+                        milestone = line.replace("**Last updated:**", "").strip()[:200]
                         context_snippet = f"Milestone: {milestone}"
                         break
             except Exception:
@@ -156,12 +160,17 @@ class ContextManager:
             "```\n"
             "Alternative schema also accepted: {\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}\n"
             "To create a file: tool=propose_edit, args={subpath, replacement_content}.\n"
+            "To edit an existing file: tool=propose_edit, args={subpath, target_content, replacement_content}.\n"
+            "To read a file: tool=read_file, args={subpath, start_line, end_line}.\n"
+            "To search code/symbols: tool=search_code or search_index, args={query}.\n"
             "To list files: tool=list_dir, args={subpath}.\n"
             "To find UE projects: tool=unreal_find_projects, args={}.\n\n"
             "=== PROTOCOL ===\n"
-            "1. For any game dev task, invoke a tool immediately (do not narrate first).\n"
-            "2. After discovering project info, proceed directly to propose_edit to create files.\n"
-            "3. Never call the same tool with the same args twice in a row.\n"
-            "4. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
-            "5. Be concise and direct."
+            "1. For any software engineering, game dev, or code modification task, inspect the codebase and invoke tools to make actual source modifications.\n"
+            "2. Read existing files before modifying them so you have exact target_content blocks.\n"
+            "3. After discovering project info, proceed directly to propose_edit to make real file modifications.\n"
+            "4. Never call the same tool with the same args twice in a row.\n"
+            "5. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
+            "6. Always ensure requested source modifications result in real diffs and files on disk.\n"
+            "7. Be concise and direct."
         )

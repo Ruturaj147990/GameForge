@@ -21,10 +21,9 @@ RAIL_ITEMS = [
     ("design", "Design", "Ctrl+3"),
     ("build", "Build", "Ctrl+4"),
     ("play", "Play", "Ctrl+5"),
-    ("evidence", "Evidence", "Ctrl+6"),
-    ("assets", "Assets", "Ctrl+7"),
+    ("assets", "Assets", "Ctrl+6"),
     ("separator", "", ""),
-    ("code", "Code", "Ctrl+8"),
+    ("code", "Code", "Ctrl+7"),
     ("settings", "Settings", "Ctrl+,"),
 ]
 
@@ -144,8 +143,6 @@ class Rail(QWidget):
         """Refresh all rail button icons to match the active theme."""
         for vid, btn in self._buttons.items():
             btn.setIcon(icon(vid, role="secondary", size=22))
-
-    update_theme = refresh_icons
 
     def set_running(self, view_id: str, is_running: bool) -> None:
         """Show active running status on a rail button."""

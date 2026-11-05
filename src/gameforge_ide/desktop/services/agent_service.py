@@ -146,6 +146,14 @@ class _AgentWorker(QObject):
             if not self._stop_flag.is_set():
                 print(f"[GameForge Agent Done] Stream finished. ({len(full_text)} chars)", flush=True)
                 self.task_done.emit(full_text)
+        except asyncio.CancelledError:
+            print("[GameForge Agent] Task cancelled.", flush=True)
+            self.task_done.emit(full_text or "[Cancelled by user]")
+            return
+        except Exception as exc:
+            print(f"[GameForge Agent Error] Stream exception: {exc}", flush=True)
+            self.error_occurred.emit(str(exc))
+            return
         finally:
             if hasattr(stream_gen, "aclose"):
                 try:

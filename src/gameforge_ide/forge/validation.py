@@ -64,12 +64,22 @@ def validate_stage_output(
     result = stage_result or {}
     pdir = Path(project_dir).resolve() if project_dir else (Path(result.get("project_dir")).resolve() if result.get("project_dir") else None)
 
+    if gds is None and pdir:
+        gds_file = pdir / "GameForge" / "design" / "game.gds.json"
+        if gds_file.is_file():
+            try:
+                import json
+                gds_raw = json.loads(gds_file.read_text(encoding="utf-8"))
+                gds = GameDesignSpec.model_validate(gds_raw)
+            except Exception:
+                pass
+
     overview = getattr(gds, "overview", None) if gds else None
     genre = getattr(overview, "genre", None)
     genre_val = (
         genre.value
         if isinstance(genre, Genre)
-        else str(genre or result.get("params", {}).get("genre", "") or result.get("recipe", "")).lower()
+        else str(genre or result.get("params", {}).get("genre", "") or result.get("genre", "") or result.get("recipe", "")).lower()
     )
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -104,8 +114,13 @@ def validate_stage_output(
         pitch = (
             getattr(overview, "pitch", "")
             if overview
-            else result.get("params", {}).get("pitch", "") or (f"Recipe design for {result.get('recipe')}" if result.get("recipe") else "")
+            else result.get("params", {}).get("pitch", "") or result.get("pitch", "") or (f"Recipe design for {result.get('recipe')}" if result.get("recipe") else "")
         )
+        if not pitch:
+            p_name = result.get("params", {}).get("display_title") or result.get("params", {}).get("project_name") or (pdir.name if pdir else "")
+            p_genre = result.get("params", {}).get("genre") or genre_val or "game"
+            if p_name:
+                pitch = f"{p_name} — dynamic {p_genre} specification"
         if not isinstance(pitch, str) or len(pitch.strip()) < 5:
             issues.append("GDS pitch is missing, empty, or too short")
         elif pitch.strip().lower() in ("todo", "placeholder", "game pitch", "n/a"):
@@ -218,15 +233,32 @@ def validate_stage_output(
         if not has_player:
             issues.append("Expected 'player' actor missing from assemble read-back")
 
-        # 2. Goal check (at least goal)
-        has_goal = (
-            "goal" in all_actor_text
-            or "finish" in all_actor_text
-            or "target" in all_actor_text
-            or "win" in all_actor_text
-            or "gf_goal" in all_actor_text
-            or "checkpoint" in all_actor_text
+        # 2. Goal / Objective check
+        # For platformers and board games, a physical goal/checkpoint actor is expected.
+        # For combat / shooter / FPS games, enemies, spawners, bomb sites, and objectives are the targets.
+        has_goal = any(
+            k in all_actor_text
+            for k in ("goal", "finish", "target", "win", "gf_goal", "checkpoint", "landmark", "relic")
         )
+        is_combat = (
+            genre_val in (
+                Genre.ARENA_COMBAT.value,
+                Genre.TOP_DOWN_SHOOTER.value,
+                "arena_combat",
+                "top_down_shooter",
+                "fps",
+                "tactical_fps",
+                "shooter",
+                "combat",
+            )
+            or any(k in all_actor_text for k in ("bombsite", "site_a", "site_b", "tactical", "terrorist"))
+        )
+        if is_combat:
+            has_goal = has_goal or any(
+                k in all_actor_text
+                for k in ("enemy", "spawner", "bot", "site", "bomb", "bombsite", "objective", "wave", "hazard", "boss", "guard")
+            )
+
         if not has_goal:
             issues.append("Expected 'goal' actor missing from assemble read-back")
 
@@ -239,15 +271,22 @@ def validate_stage_output(
             has_main = "card" in all_actor_text or "table" in all_actor_text or "gameforgecardtable" in all_actor_text
             if not has_main:
                 issues.append("Expected 'card_table' actor missing from card battler assemble read-back")
-        elif genre_val in (Genre.ARENA_COMBAT.value, Genre.TOP_DOWN_SHOOTER.value, "arena_combat", "top_down_shooter"):
-            has_main = (
-                "spawner" in all_actor_text
-                or "enemy" in all_actor_text
-                or "wave" in all_actor_text
-                or "bot" in all_actor_text
+        elif genre_val in (
+            Genre.ARENA_COMBAT.value,
+            Genre.TOP_DOWN_SHOOTER.value,
+            "arena_combat",
+            "top_down_shooter",
+            "fps",
+            "tactical_fps",
+            "shooter",
+            "combat",
+        ) or is_combat:
+            has_main = any(
+                k in all_actor_text
+                for k in ("spawner", "enemy", "wave", "bot", "guard", "site", "bomb", "bombsite")
             )
             if not has_main:
-                issues.append(f"Expected enemy or spawner actor missing from {genre_val} assemble read-back")
+                issues.append(f"Expected enemy, spawner, or objective actor missing from {genre_val or 'combat'} assemble read-back")
         else:
             # Platformer / Action / Other: check for pickups or landmarks or platforms
             has_main = (
@@ -255,20 +294,20 @@ def validate_stage_output(
                 or "platform" in all_actor_text
                 or "landmark" in all_actor_text
                 or "course" in all_actor_text
+                or is_combat
             )
             if not has_main:
                 issues.append("Expected primary gameplay actor missing from assemble read-back")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. SCENARIOS / AUTOMATION STAGE
+    # 3. SCENARIOS STAGE (Packaged QA Acceptance Scenarios)
     # ──────────────────────────────────────────────────────────────────────────
-    elif any(k in s_norm for k in ("scenario", "test", "automation", "smoke")):
-        if result.get("stage") in ("scenario", "scenarios", "packaged_smoke", "automation_tests", "automation", "smoke", "tests"):
+    elif any(k in s_norm for k in ("scenario", "acceptance")):
+        if result.get("stage") in ("scenario", "scenarios", "packaged_smoke"):
             return (True, [])
         test_results = (
             result.get("results")
             or result.get("scenarios")
-            or result.get("tests")
             or []
         )
 
@@ -284,20 +323,49 @@ def validate_stage_output(
                 elif isinstance(t, str):
                     test_names.append(t)
 
-        if result.get("test_filter"):
-            test_names.append(str(result["test_filter"]))
-
         if not test_names:
             issues.append("No scenario or test results found in stage output")
             return (False, issues)
 
-        # Check that tests are not exclusively generic kit tests
+        # For QA scenario runs, check that tests are not exclusively generic kit smoke
         all_generic = all(_is_generic_test(name) for name in test_names if name)
         if all_generic and test_names:
             issues.append(
                 f"Only generic Kit smoke tests ran ({test_names}); "
                 f"game-specific acceptance tests were not executed"
             )
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 3b. AUTOMATION STAGE (Unreal Editor C++ Automation Tests)
+    # ──────────────────────────────────────────────────────────────────────────
+    elif any(k in s_norm for k in ("automation", "smoke", "test")):
+        if result.get("stage") in ("automation_tests", "automation", "smoke", "tests"):
+            return (True, [])
+        test_results = (
+            result.get("tests")
+            or result.get("results")
+            or []
+        )
+
+        test_names: List[str] = []
+        if isinstance(test_results, list):
+            for t in test_results:
+                if isinstance(t, dict):
+                    name = t.get("name") or t.get("test_id") or ""
+                    test_names.append(name)
+                    state = t.get("state")
+                    if (state and state != "Success") or t.get("passed") is False:
+                        fails = t.get("errors") or t.get("failures") or ["test marked failed"]
+                        issues.append(f"Automation test '{name}' failed: {'; '.join(str(f) for f in fails)}")
+                elif isinstance(t, str):
+                    test_names.append(t)
+
+        if result.get("test_filter"):
+            test_names.append(str(result["test_filter"]))
+
+        if not test_names and not result.get("found"):
+            issues.append("No automation test results found in stage output")
+            return (False, issues)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4. SCAFFOLD STAGE

@@ -431,6 +431,7 @@ class GameDesignSpec(_M):
 
         # Lazy entity props validation against KitModule params_model (WI-5.14)
         try:
+            import src.gameforge_ide.kit.modules  # noqa: F401
             from ..kit.registry import KIT
             for e in self.entities:
                 if e.module in KIT:

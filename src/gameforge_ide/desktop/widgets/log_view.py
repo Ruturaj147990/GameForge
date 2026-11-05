@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import collections
-from typing import Optional
+from typing import Any, Optional
 
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QFont, QTextCursor

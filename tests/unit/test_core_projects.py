@@ -125,3 +125,30 @@ def test_find_packaged_executable(tmp_path: Path):
 
 def test_open_folder_in_file_manager_missing():
     assert open_folder_in_file_manager("Z:/NonExistentPath/123456") is False
+
+
+def test_repo_infrastructure_never_classified_as_game():
+    """Verify repository root and infrastructure dirs (scratch, reports, graders, fixtures) are never games."""
+    from src.gameforge_ide.core.settings import REPO_ROOT
+    from src.gameforge_ide.desktop.services.projects_service import list_games
+
+    assert is_gameforge_project(REPO_ROOT) is False
+    assert find_uproject(REPO_ROOT) is None
+
+    infra_names = ["scratch", "reports", "graders", "fixtures", "tests", "src", "docs"]
+    for name in infra_names:
+        p = REPO_ROOT / name
+        if p.is_dir():
+            assert is_gameforge_project(p) is False, f"{name} should NOT be a GameForge project"
+            assert find_uproject(p) is None, f"{name} should NOT have a project uproject"
+
+    discovered = list_all_project_dirs(workspace_dir=REPO_ROOT)
+    for name in infra_names:
+        assert name not in discovered, f"{name} should NOT be in list_all_project_dirs"
+    assert REPO_ROOT.name not in discovered, "REPO_ROOT should NOT be in list_all_project_dirs"
+
+    games = list_games(workspace_dir=REPO_ROOT)
+    game_names = [g.name for g in games]
+    for name in infra_names:
+        assert name not in game_names, f"{name} should NOT be in list_games"
+    assert REPO_ROOT.name not in game_names, "REPO_ROOT should NOT be in list_games"

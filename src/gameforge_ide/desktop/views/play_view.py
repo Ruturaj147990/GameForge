@@ -95,22 +95,6 @@ class PlayView(QWidget):
         self._btn_refresh.clicked.connect(self.refresh_results)
         header.addWidget(self._btn_refresh)
 
-        self._btn_folder = QPushButton("📁 Folder", self)
-        self._btn_folder.setObjectName("btnPlayOpenFolder")
-        self._btn_folder.setAccessibleName("Open game folder in Explorer")
-        self._btn_folder.setToolTip("Open game folder in Explorer")
-        self._btn_folder.setCursor(Qt.PointingHandCursor)
-        self._btn_folder.setStyleSheet(
-            f"QPushButton#{self._btn_folder.objectName()} {{"
-            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
-            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
-            f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
-            f"}}"
-            f"QPushButton#{self._btn_folder.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
-        )
-        self._btn_folder.clicked.connect(self._on_open_folder)
-        header.addWidget(self._btn_folder)
-
         self._btn_launch = QPushButton("Launch Game", self)
         self._btn_launch.setObjectName("btnPlayLaunch")
         self._btn_launch.setAccessibleName("Launch packaged game")
@@ -227,18 +211,27 @@ class PlayView(QWidget):
 
     def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         self._current_project = project_name
-        self._current_project_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        p_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        self._project_dir = p_dir
+        self._current_project_dir = p_dir
         if self._current_project_dir:
             self._store = RunStore(project_dir=self._current_project_dir, workspace_dir=self._workspace)
         self.refresh_results()
 
-    @Slot()
-    def _on_open_folder(self) -> None:
-        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
-        if p_dir:
-            open_folder_in_file_manager(p_dir)
-        elif self._workspace:
-            open_folder_in_file_manager(self._workspace)
+    def clear_project(self) -> None:
+        """Reset play view when no project is active."""
+        self._current_project = None
+        self._project_dir = None
+        self._current_project_dir = None
+        self._results.clear()
+        if hasattr(self, "_results_table"):
+            self._results_table.setRowCount(0)
+        if hasattr(self, "_detail_text"):
+            self._detail_text.clear()
+        if hasattr(self, "_lbl_summary"):
+            self._lbl_summary.setText("No project selected.")
+        if hasattr(self, "_lbl_detail_header"):
+            self._lbl_detail_header.setText("Select a scenario to view details")
 
     @Slot()
     def refresh_results(self) -> None:

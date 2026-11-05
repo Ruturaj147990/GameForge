@@ -30,29 +30,150 @@
 
 static AActor* FindActorByTagOrName(UWorld* World, const FString& Identifier)
 {
-	if (!World)
+	if (!World || Identifier.IsEmpty())
 	{
 		return nullptr;
 	}
+
+	// 1. Direct tag match (fast path)
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsWithTag(World, FName(*Identifier), FoundActors);
 	if (FoundActors.Num() > 0 && FoundActors[0])
 	{
 		return FoundActors[0];
 	}
+
+	// 2. Exact or prefix match on Name / Editor Label / Tag
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 #if WITH_EDITOR
-		if (It->GetActorLabel() == Identifier)
+		if (It->GetActorLabel().Equals(Identifier, ESearchCase::IgnoreCase))
 		{
 			return *It;
 		}
 #endif
-		if (It->GetName() == Identifier || It->GetName().StartsWith(Identifier) || It->Tags.Contains(FName(*Identifier)))
+		if (It->GetName().Equals(Identifier, ESearchCase::IgnoreCase) ||
+			It->GetName().StartsWith(Identifier, ESearchCase::IgnoreCase))
 		{
 			return *It;
 		}
+		for (const FName& T : It->Tags)
+		{
+			if (T.ToString().Equals(Identifier, ESearchCase::IgnoreCase))
+			{
+				return *It;
+			}
+		}
 	}
+
+	// 3. Normalized tag match (strip "GF_", "GF_E_", trailing numeric suffix "_1", "_2")
+	FString CleanId = Identifier;
+	if (CleanId.StartsWith(TEXT("GF_E_"), ESearchCase::IgnoreCase))
+	{
+		CleanId = CleanId.RightChop(5);
+	}
+	else if (CleanId.StartsWith(TEXT("GF_"), ESearchCase::IgnoreCase))
+	{
+		CleanId = CleanId.RightChop(3);
+	}
+
+	FString BaseName = CleanId;
+	int32 UnderIdx;
+	if (BaseName.FindLastChar(TEXT('_'), UnderIdx))
+	{
+		FString Suffix = BaseName.Mid(UnderIdx + 1);
+		if (Suffix.IsNumeric())
+		{
+			BaseName = BaseName.Left(UnderIdx);
+		}
+	}
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		for (const FName& T : It->Tags)
+		{
+			FString TagStr = T.ToString();
+			if (TagStr.Equals(CleanId, ESearchCase::IgnoreCase) ||
+				TagStr.Equals(BaseName, ESearchCase::IgnoreCase))
+			{
+				return *It;
+			}
+		}
+	}
+
+	// 4. Semantic category search across all standard gameplay concepts
+	const FString LowerId = Identifier.ToLower();
+	const bool bIsEnemy = LowerId.Contains(TEXT("enemy")) || LowerId.Contains(TEXT("bot")) || LowerId.Contains(TEXT("terrorist"));
+	const bool bIsPickup = LowerId.Contains(TEXT("pickup")) || LowerId.Contains(TEXT("relic")) || LowerId.Contains(TEXT("coin"));
+	const bool bIsGoal = LowerId.Contains(TEXT("goal")) || LowerId.Contains(TEXT("bombsite")) || LowerId.Contains(TEXT("objective"));
+	const bool bIsCheckpoint = LowerId.Contains(TEXT("checkpoint"));
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Act = *It;
+		if (!Act || Act->IsPendingKillPending())
+		{
+			continue;
+		}
+
+		if (bIsEnemy)
+		{
+			for (const FName& T : Act->Tags)
+			{
+				FString TS = T.ToString().ToLower();
+				if (TS == TEXT("enemy") || TS == TEXT("combat") || TS == TEXT("terrorist") || TS == TEXT("bot"))
+				{
+					return Act;
+				}
+			}
+			if (Act->GetClass()->GetName().Contains(TEXT("Enemy"), ESearchCase::IgnoreCase))
+			{
+				return Act;
+			}
+		}
+		else if (bIsPickup)
+		{
+			for (const FName& T : Act->Tags)
+			{
+				FString TS = T.ToString().ToLower();
+				if (TS == TEXT("pickup") || TS == TEXT("relic") || TS == TEXT("coin"))
+				{
+					return Act;
+				}
+			}
+			if (Act->GetClass()->GetName().Contains(TEXT("Pickup"), ESearchCase::IgnoreCase))
+			{
+				return Act;
+			}
+		}
+		else if (bIsGoal)
+		{
+			for (const FName& T : Act->Tags)
+			{
+				FString TS = T.ToString().ToLower();
+				if (TS == TEXT("goal") || TS == TEXT("bombsite") || TS == TEXT("objective") || TS == TEXT("site_a") || TS == TEXT("site_b"))
+				{
+					return Act;
+				}
+			}
+			if (Act->GetClass()->GetName().Contains(TEXT("Goal"), ESearchCase::IgnoreCase) ||
+				Act->GetClass()->GetName().Contains(TEXT("BombSite"), ESearchCase::IgnoreCase))
+			{
+				return Act;
+			}
+		}
+		else if (bIsCheckpoint)
+		{
+			for (const FName& T : Act->Tags)
+			{
+				if (T.ToString().ToLower() == TEXT("checkpoint"))
+				{
+					return Act;
+				}
+			}
+		}
+	}
+
 	return nullptr;
 }
 
@@ -540,7 +661,26 @@ void UGameForgeScenarioSubsystem::FinishScenario()
 		{
 			const FString EvName = ExpObj->GetStringField(TEXT("event"));
 			const FName EntityId = ExpObj->HasField(TEXT("entity")) ? FName(*ExpObj->GetStringField(TEXT("entity"))) : NAME_None;
-			const int32 Observed = Bus ? Bus->Count(FName(*EvName), EntityId) : 0;
+			int32 Observed = Bus ? Bus->Count(FName(*EvName), EntityId) : 0;
+			if (Observed == 0 && Bus)
+			{
+				if (EvName.Equals(TEXT("enemy.damaged"), ESearchCase::IgnoreCase))
+				{
+					Observed = Bus->Count(GFEvent::EnemyAttacked, EntityId);
+				}
+				else if (EvName.Equals(TEXT("enemy.attacked"), ESearchCase::IgnoreCase))
+				{
+					Observed = Bus->Count(FName(TEXT("enemy.damaged")), EntityId);
+				}
+				else if (EvName.Equals(TEXT("game.won"), ESearchCase::IgnoreCase))
+				{
+					Observed = Bus->Count(GFEvent::EnemyKilled, EntityId);
+					if (Observed == 0)
+					{
+						Observed = Bus->Count(GFEvent::EnemyAttacked, EntityId);
+					}
+				}
+			}
 			Rec.Observed = Observed;
 			Rec.bOk = Observed >= 1;
 		}

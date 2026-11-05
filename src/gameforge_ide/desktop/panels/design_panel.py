@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from ...design.gds import GameDesignSpec
 from ...design.render import render_markdown
 from ...design.store import load as load_gds
+from ..styles import tokens
 
 
 class DesignPanel(QWidget):
@@ -87,7 +88,7 @@ class DesignPanel(QWidget):
         md_text = render_markdown(gds)
         self._md_browser.setMarkdown(md_text)
         self._json_edit.setPlainText(gds.to_json())
-        self._status_lbl.setText("<span style='color: #4ade80;'>Spec loaded (valid)</span>")
+        self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>Spec loaded (valid)</span>")
 
     def reload_from_disk(self) -> None:
         gds = load_gds(self.workspace_root)
@@ -97,16 +98,16 @@ class DesignPanel(QWidget):
             self._md_browser.setMarkdown(
                 "*No `GameForge/design/game.gds.json` found in current workspace root.*"
             )
-            self._status_lbl.setText("<span style='color: #9ca3af;'>No spec loaded</span>")
+            self._status_lbl.setText(f"<span style='color: {tokens.TEXT_MUTED};'>No spec loaded</span>")
 
     def _validate_json(self) -> None:
         text = self._json_edit.toPlainText().strip()
         if not text:
-            self._status_lbl.setText("<span style='color: #f87171;'>Empty JSON</span>")
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>Empty JSON</span>")
             return
         try:
             gds = GameDesignSpec.model_validate_json(text)
             self.set_gds(gds)
-            self._status_lbl.setText("<span style='color: #4ade80;'>✔ Valid GDS (gds/1)</span>")
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ Valid GDS (gds/1)</span>")
         except Exception as exc:
-            self._status_lbl.setText(f"<span style='color: #f87171;'>✖ Invalid: {exc}</span>")
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Invalid: {exc}</span>")

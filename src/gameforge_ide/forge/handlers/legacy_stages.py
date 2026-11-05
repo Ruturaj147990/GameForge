@@ -173,10 +173,17 @@ def legacy_spec(ctx: StepContext) -> StepOutcome:
             (gds_data.get("meta", {}).get("title") if isinstance(gds_data, dict) else None)
             or proj_name
         )
+        pitch = (
+            (gds_data.get("overview", {}).get("pitch", "") if isinstance(gds_data, dict) else "")
+            or ctx.step.inputs.get("pitch")
+            or (gds_data.get("meta", {}).get("source_prompt") if isinstance(gds_data, dict) else "")
+            or f"{title} — {genre} game experience"
+        )
         design_params = {
             "project_name": proj_name,
             "display_title": title,
             "genre": genre,
+            "pitch": pitch,
         }
         if isinstance(gds_data, dict):
             overview = gds_data.get("overview", {})

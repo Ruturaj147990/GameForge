@@ -5,6 +5,7 @@ Lists target directories and requires typed project name to prevent accidental d
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, Slot
@@ -66,7 +67,8 @@ class DeleteGameDialog(QDialog):
         # Folder list box
         folders_box = QLabel(self)
         folders_box.setObjectName("deleteFolderList")
-        folders_text = f"• {game.project_dir}\n• {game.project_dir / 'Saved' / 'GameForge'}\n• {game.project_dir / 'Content'}"
+        pdir = Path(game.project_dir) if game and getattr(game, "project_dir", None) else Path.cwd()
+        folders_text = f"• {pdir}\n• {pdir / 'Saved' / 'GameForge'}\n• {pdir / 'Content'}"
         folders_box.setText(folders_text)
         folders_box.setStyleSheet(
             f"background-color: {tokens.BG_PANEL};"

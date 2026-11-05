@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Union
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
@@ -29,6 +30,7 @@ class TopBar(QWidget):
     homeRequested = Signal()
     projectSelected = Signal(str)
     openFolderRequested = Signal()
+    newProjectRequested = Signal()
     buildViewRequested = Signal()
     assistantToggled = Signal()
     paletteRequested = Signal()
@@ -38,6 +40,8 @@ class TopBar(QWidget):
         super().__init__(parent)
         self.setObjectName("studioTopBar")
         self.setFixedHeight(48)
+        self._current_project: str = ""
+        self._current_project_dir: Optional[Path] = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 0)
@@ -88,6 +92,12 @@ class TopBar(QWidget):
         """)
         self.project_combo.currentIndexChanged.connect(self._on_combo_index_changed)
         layout.addWidget(self.project_combo)
+
+        # Hidden project path label (for programmatic status/tests without adding duplicate topbar buttons)
+        self.project_path_label = QLabel(self)
+        self.project_path_label.setObjectName("topBarProjectPath")
+        self.project_path_label.setAccessibleName("Active Project Path")
+        self.project_path_label.setVisible(False)
 
         # 3. Breadcrumb
         self.breadcrumb_label = QLabel("› Home", self)
@@ -180,7 +190,8 @@ class TopBar(QWidget):
         for p in projects:
             self.project_combo.addItem(p, userData=p)
         self.project_combo.insertSeparator(self.project_combo.count())
-        self.project_combo.addItem("Open project folder…", userData="__open_folder__")
+        self.project_combo.addItem("➕ New project…", userData="__new_project__")
+        self.project_combo.addItem("📁 Open project folder…", userData="__open_folder__")
 
         if current and current in projects:
             self._current_project = current
@@ -197,10 +208,53 @@ class TopBar(QWidget):
         self.project_combo.setCompleter(completer)
         self.project_combo.blockSignals(False)
 
+    def set_active_project(self, project_name: str, project_dir: Optional[Union[str, Path]] = None) -> None:
+        """Update top bar to reflect the authoritative active project and its path."""
+        self._current_project = project_name
+        self._current_project_dir = Path(project_dir).resolve() if project_dir else None
+
+        self.project_combo.blockSignals(True)
+        idx = self.project_combo.findData(project_name)
+        if idx >= 0:
+            self.project_combo.setCurrentIndex(idx)
+        elif project_name:
+            self.project_combo.insertItem(0, project_name, userData=project_name)
+            self.project_combo.setCurrentIndex(0)
+        self.project_combo.blockSignals(False)
+
+        if self._current_project_dir and project_name:
+            p_str = str(self._current_project_dir)
+            display_text = f"📁 {self._current_project_dir.name}"
+            self.project_combo.setToolTip(f"Active Project: {project_name}\nDirectory: {p_str}")
+            self.project_path_label.setText(display_text)
+            self.project_path_label.setToolTip(f"Active Project: {project_name}\nDirectory: {p_str}")
+        elif project_name:
+            self.project_combo.setToolTip(f"Active Project: {project_name}")
+            self.project_path_label.setText(f"📁 {project_name}")
+            self.project_path_label.setToolTip(f"Active Project: {project_name}")
+        else:
+            self.project_combo.setToolTip("No active project selected")
+            self.project_path_label.setText("📁 No Project")
+            self.project_path_label.setToolTip("No active project selected")
+
+    def _on_project_path_clicked(self) -> None:
+        """Reveal active project folder in Windows File Explorer or trigger open."""
+        if self._current_project_dir and self._current_project_dir.is_dir():
+            from ...core.projects import open_folder_in_file_manager
+            open_folder_in_file_manager(self._current_project_dir)
+        else:
+            self.openFolderRequested.emit()
+
     def _on_combo_index_changed(self, index: int) -> None:
         data = self.project_combo.itemData(index)
-        if data == "__open_folder__":
-            prev_idx = self.project_combo.findText(self._current_project) if hasattr(self, "_current_project") and self._current_project else 0
+        if data == "__new_project__":
+            prev_idx = self.project_combo.findText(self._current_project) if getattr(self, "_current_project", None) else 0
+            self.project_combo.blockSignals(True)
+            self.project_combo.setCurrentIndex(max(0, prev_idx))
+            self.project_combo.blockSignals(False)
+            self.newProjectRequested.emit()
+        elif data == "__open_folder__":
+            prev_idx = self.project_combo.findText(self._current_project) if getattr(self, "_current_project", None) else 0
             self.project_combo.blockSignals(True)
             self.project_combo.setCurrentIndex(max(0, prev_idx))
             self.project_combo.blockSignals(False)
@@ -210,7 +264,7 @@ class TopBar(QWidget):
             self.projectSelected.emit(str(data))
         elif index >= 0:
             text = self.project_combo.currentText().strip()
-            if text and "Open project folder" not in text:
+            if text and "Open project folder" not in text and "New project" not in text:
                 self._current_project = text
                 self.projectSelected.emit(text)
 
@@ -234,7 +288,7 @@ class TopBar(QWidget):
         self.run_chip.setStyleSheet(f"""
             QPushButton {{
                 background: {bg};
-                color: #ffffff;
+                color: {tokens.TEXT_PRIMARY};
                 border: none;
                 border-radius: 12px;
                 padding: 4px 12px;
@@ -286,8 +340,6 @@ class TopBar(QWidget):
         """Refresh toolbar icons to match active theme."""
         self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
         self.palette_btn.setIcon(icon("search", role="secondary", size=18))
-
-    update_theme = refresh_icons
 
     def _add_system_menu_item(self, row: SystemRow) -> None:
         dot = "●" if row.state == "ok" else "▲" if row.state == "degraded" else "■"

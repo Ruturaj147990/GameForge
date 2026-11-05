@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...backend.assets.registry import AssetRegistry
+from ...backend.assets.registry import ASSET_TYPES, AssetRegistry
 
 
 class AssetPanel(QWidget):
@@ -75,7 +75,9 @@ class AssetPanel(QWidget):
 
         self._type_combo = QComboBox()
         self._type_combo.setObjectName("asset_type_filter")
-        self._type_combo.addItems(["All Types", "static_mesh", "skeletal_mesh", "texture", "material", "audio", "vfx"])
+        self._type_combo.addItem("All Types")
+        for t in ASSET_TYPES:
+            self._type_combo.addItem(t)
         self._type_combo.currentTextChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._type_combo)
         layout.addLayout(filter_row)
@@ -147,12 +149,20 @@ class AssetPanel(QWidget):
             return
 
         type_icons = {
+            "mesh": "🧊",
             "static_mesh": "🧊",
             "skeletal_mesh": "🏃",
             "texture": "🖼",
             "material": "🎨",
             "audio": "🔊",
+            "sound": "🔊",
+            "animation": "🎬",
             "vfx": "✨",
+            "sequence": "🎞",
+            "blueprint": "📐",
+            "widget": "🔲",
+            "level": "🗺",
+            "other": "📦",
         }
 
         for row in records:

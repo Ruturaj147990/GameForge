@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtGui import QColor, QTextCharFormat
+from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -32,6 +32,7 @@ class DiffView(QPlainTextEdit):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setReadOnly(True)
+        self.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.setFont_mono()
         self.setStyleSheet(
             "background: #0f1219; border: none; font-family: 'Consolas', 'Cascadia Code', monospace;"
@@ -47,7 +48,8 @@ class DiffView(QPlainTextEdit):
     def display_patch(self, patch: str) -> None:
         self.clear()
         cursor = self.textCursor()
-        for line in patch.splitlines(keepends=True):
+        normalized = (patch or "").replace("\r\n", "\n")
+        for line in normalized.splitlines(keepends=True):
             fmt = QTextCharFormat()
             if line.startswith("+") and not line.startswith("+++"):
                 fmt.setForeground(QColor(theme_color("#00d9a3")))
@@ -63,6 +65,7 @@ class DiffView(QPlainTextEdit):
             else:
                 fmt.setForeground(QColor(theme_color("#e8eaf6")))
             cursor.insertText(line, fmt)
+        cursor.movePosition(QTextCursor.Start)
         self.setTextCursor(cursor)
 
 

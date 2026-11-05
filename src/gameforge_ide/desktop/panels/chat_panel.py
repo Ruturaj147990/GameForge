@@ -322,6 +322,7 @@ class _StartScreen(QWidget):
     """Empty-session start screen with three prominent action cards."""
 
     make_game_clicked = Signal()
+    ask_question_clicked = Signal()
     open_project_clicked = Signal()
     play_game_clicked = Signal(str)
 
@@ -378,7 +379,7 @@ class _StartScreen(QWidget):
         c1_lay.addWidget(btn_c1)
         cards_layout.addWidget(card1, 1)
 
-        # Card 2: Open a project
+        # Card 2: Assistant guidance (Prompt & Rules exploration)
         card2 = QFrame()
         card2.setObjectName("start_action_card")
         card2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -386,18 +387,18 @@ class _StartScreen(QWidget):
         c2_lay.setContentsMargins(12, 12, 12, 12)
         c2_lay.setSpacing(8)
 
-        c2_title = QLabel("📂 Open a project")
+        c2_title = QLabel("💬 Ask Assistant")
         c2_title.setObjectName("start_card_title")
         c2_lay.addWidget(c2_title)
 
-        c2_desc = QLabel("Open an existing Unreal project folder to inspect assets or run builds.")
+        c2_desc = QLabel("Ask questions about game mechanics, C++ gameplay rules, or level design.")
         c2_desc.setObjectName("start_card_desc")
         c2_desc.setWordWrap(True)
         c2_lay.addWidget(c2_desc, 1)
 
-        btn_c2 = QPushButton("Open Folder…")
+        btn_c2 = QPushButton("Ask a Question")
         btn_c2.setObjectName("start_card_btn")
-        btn_c2.clicked.connect(self.open_project_clicked.emit)
+        btn_c2.clicked.connect(self.ask_question_clicked.emit)
         c2_lay.addWidget(btn_c2)
         cards_layout.addWidget(card2, 1)
 
@@ -1015,6 +1016,7 @@ class ChatPanel(QWidget):
         if self._start_screen is None:
             self._start_screen = _StartScreen(self._workspace, parent=self)
             self._start_screen.make_game_clicked.connect(self._on_start_make_game)
+            self._start_screen.ask_question_clicked.connect(self._on_start_ask_question)
             self._start_screen.open_project_clicked.connect(self.open_project_requested.emit)
             self._start_screen.play_game_clicked.connect(self._on_start_play_game)
             self._msg_layout.insertWidget(0, self._start_screen)
@@ -1030,6 +1032,10 @@ class ChatPanel(QWidget):
         cursor = self._input.textCursor()
         cursor.movePosition(QTextCursor.End)
         self._input.setTextCursor(cursor)
+
+    def _on_start_ask_question(self) -> None:
+        self._input.setFocus()
+        self._input.setPlaceholderText("Ask the assistant anything about your game…")
 
     def _on_start_play_game(self, game_id: str) -> None:
         if game_id == "__view_mission__":
@@ -1315,6 +1321,7 @@ class ChatPanel(QWidget):
 
     @Slot(str)
     def _on_error(self, error: str) -> None:
+        self._tokens_streamed_in_turn = False
         if self._ignore_active_task_events or self._agent.is_stopping:
             self._ignore_active_task_events = False
             self._active_bubble = None
@@ -1407,9 +1414,16 @@ class ChatPanel(QWidget):
         self._add_bubble("error", f"⚠️ **Error:** {text}")
 
     def _scroll_to_bottom(self) -> None:
-        QTimer.singleShot(20, lambda: self._scroll_area.verticalScrollBar().setValue(
-            self._scroll_area.verticalScrollBar().maximum()
-        ))
+        if getattr(self, "_scroll_pending", False):
+            return
+        self._scroll_pending = True
+
+        def _do_scroll():
+            self._scroll_pending = False
+            sb = self._scroll_area.verticalScrollBar()
+            sb.setValue(sb.maximum())
+
+        QTimer.singleShot(20, _do_scroll)
 
     def _clear_chat(self) -> None:
         try:

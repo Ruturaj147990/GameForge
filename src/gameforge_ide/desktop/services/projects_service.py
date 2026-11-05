@@ -124,6 +124,11 @@ def list_games(
     workspace_dir: Optional[Union[str, Path]] = None,
 ) -> List[GameSummary]:
     """Scan projects_root and workspace for GameForge projects, joining GDS and runs index."""
+    if not projects_root:
+        s_root = get_settings().projects_root
+        if s_root and Path(s_root).is_dir():
+            projects_root = s_root
+
     project_dirs_map: Dict[str, Path] = {}
     if projects_root:
         root = Path(projects_root).resolve()
@@ -135,7 +140,30 @@ def list_games(
                             project_dirs_map[d.name] = d.resolve()
             except OSError:
                 pass
-    else:
+
+    # If workspace_dir is provided and is a valid standalone project (and NOT repo root), include it
+    if workspace_dir:
+        ws = Path(workspace_dir).resolve()
+        if ws.is_dir():
+            repo_real = None
+            try:
+                from src.gameforge_ide.core.settings import REPO_ROOT
+                repo_real = Path(REPO_ROOT).resolve()
+            except Exception:
+                pass
+            if ws != repo_real:
+                if is_gameforge_project(ws):
+                    project_dirs_map[ws.name] = ws
+                ws_proj = ws / "Projects"
+                if ws_proj.is_dir():
+                    try:
+                        for d in ws_proj.iterdir():
+                            if d.is_dir() and not d.name.startswith(".") and is_gameforge_project(d):
+                                project_dirs_map[d.name] = d.resolve()
+                    except OSError:
+                        pass
+
+    if not project_dirs_map and not projects_root:
         project_dirs_map = list_all_project_dirs(workspace_dir)
 
     if not project_dirs_map:
@@ -415,6 +443,7 @@ class ProjectsService(QObject):
     gamesLoaded = Signal(list)
     gameDeleted = Signal(str)
     operationFailed = Signal(str)
+    activeProjectChanged = Signal(str, Path)
 
     def __init__(
         self,
@@ -423,9 +452,33 @@ class ProjectsService(QObject):
         parent: Optional[QObject] = None,
     ):
         super().__init__(parent)
-        self._projects_root = Path(projects_root).resolve() if projects_root else None
+        if projects_root:
+            self._projects_root = Path(projects_root).resolve()
+        else:
+            s_root = get_settings().projects_root
+            self._projects_root = Path(s_root).resolve() if s_root else None
         self._workspace_dir = Path(workspace_dir).resolve() if workspace_dir else None
         self._job_manager = default_job_manager()
+        self._active_project: Optional[str] = None
+        self._active_project_dir: Optional[Path] = None
+
+    @property
+    def active_project(self) -> Optional[str]:
+        return self._active_project
+
+    @property
+    def active_project_dir(self) -> Optional[Path]:
+        return self._active_project_dir
+
+    def set_active_project(self, project_name: str, project_dir: Optional[Union[str, Path]] = None) -> Path:
+        """Set the authoritative active project and resolve its directory."""
+        pdir = Path(project_dir).resolve() if project_dir else resolve_project_dir(project_name, self._workspace_dir)
+        self._active_project = project_name
+        self._active_project_dir = pdir
+        if pdir:
+            logger.info("ProjectsService active project set to '%s' -> %s", project_name, pdir)
+            self.activeProjectChanged.emit(project_name, pdir)
+        return pdir
 
     def refresh(self) -> None:
         """Fetch games asynchronously and emit gamesLoaded."""

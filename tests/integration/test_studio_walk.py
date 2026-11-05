@@ -117,16 +117,15 @@ def test_studio_usability_walk(qapp, tmp_path, monkeypatch):
         play_view._populate_table()
         assert play_view._results_table.rowCount() == 1
 
-        # Step 5: Evidence View
-        win._switch_studio_view("evidence")
+        # Step 5: Assets View
+        win._switch_studio_view("assets")
         qapp.processEvents()
-        assert win._view_host.current_view_id == "evidence"
+        assert win._view_host.current_view_id == "assets"
 
-        evidence_view = win._view_host.get_view_widget("evidence")
-        assert evidence_view is not None
-        assert evidence_view.objectName() == "studioView_evidence"
-        assert evidence_view.findChild(object, "evidenceGallery") is not None
-        assert evidence_view.findChild(object, "evidenceViewerStack") is not None
+        assets_view = win._view_host.get_view_widget("assets")
+        assert assets_view is not None
+        assert assets_view.objectName() == "studioView_assets"
+        assert assets_view.findChild(object, "assetsTableView") is not None
 
         # Let event loop spin and check stall monitor
         time.sleep(0.1)

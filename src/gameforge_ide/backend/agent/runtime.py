@@ -1117,6 +1117,15 @@ class AgentRuntime:
                 metadata={"tool": tool_name, "result": tool_result},
             )
 
+            # Track modified files from successful edit applications
+            if tool_name in ("apply_edit", "apply_diff") and tool_result.get("status") == "SUCCESS":
+                target_fp = tool_result.get("file_path") or tool_args.get("file_path") or tool_args.get("subpath")
+                if target_fp:
+                    _modified_files.add(str(target_fp).replace("\\", "/"))
+            elif tool_name in ("apply_batch", "apply_diffs_batch") and tool_result.get("status") == "SUCCESS":
+                for fp in tool_result.get("files", []):
+                    _modified_files.add(str(fp).replace("\\", "/"))
+
             # Bound observation string to preserve token budget
             obs_json = json.dumps(tool_result, indent=2, ensure_ascii=False)
             if len(obs_json) > 600 and isinstance(tool_result, dict):

@@ -490,6 +490,8 @@ class GdsForm(QWidget):
                 except (ValueError, TypeError):
                     v = val
                 return f"{stat} {op} {v}"
+            if c.get("kind") == "count_at_least" or ("n" in c and "event" in c):
+                return f"count({c['event']}) >= {c['n']}"
             if "event" in c:
                 return f"event={c['event']}"
             if "seconds" in c:
@@ -501,6 +503,8 @@ class GdsForm(QWidget):
             except (ValueError, TypeError):
                 v = c.value
             return f"{c.stat} {c.op} {v}"
+        if getattr(c, "kind", "") == "count_at_least" or (hasattr(c, "n") and hasattr(c, "event")):
+            return f"count({c.event}) >= {c.n}"
         if hasattr(c, "event"):
             return f"event={c.event}"
         if hasattr(c, "seconds"):
@@ -522,7 +526,7 @@ class GdsForm(QWidget):
             if p in existing_map_repr:
                 parsed.append(existing_map_repr[p])
                 continue
-            m = re.match(r"^([A-Za-z0-9_.]+)\s*(>=|<=|>|<|==)\s*([0-9.]+)$", p)
+            m = re.match(r"^([A-Za-z0-9_.]+)\s*(>=|<=|>|<|==)\s*(-?[0-9.]+)$", p)
             if m:
                 from ...design.gds import StatCompare
                 stat_name, op, val = m.group(1).lower(), m.group(2), float(m.group(3))
@@ -535,6 +539,11 @@ class GdsForm(QWidget):
                     if any(stat_name.endswith(sfx) for sfx in (".collected", ".remaining", ".killed")):
                         stat_name = f"entity.{stat_name}"
                 parsed.append(StatCompare(stat=stat_name, op=op, value=val))
+                continue
+            m_cnt = re.match(r"^count\(\s*([A-Za-z0-9_.]+)\s*\)\s*(>=|==)\s*([0-9]+)$", p, re.IGNORECASE)
+            if m_cnt:
+                from ...design.gds import CountAtLeast
+                parsed.append(CountAtLeast(kind="count_at_least", event=m_cnt.group(1).lower(), n=int(m_cnt.group(3))))
                 continue
             m_ev = re.match(r"^event[=:]\s*([A-Za-z0-9_.]+)$", p, re.IGNORECASE)
             if m_ev:
@@ -620,6 +629,12 @@ class GdsForm(QWidget):
         self._apply_inputs_to_spec()
         entity_ids = [e.entity_id for e in self._spec.entities] if self._spec else []
         dlg = RuleEditorDialog(entity_ids=entity_ids, parent=self)
+        if self._spec and self._spec.rules:
+            existing_ids = {r.rule_id for r in self._spec.rules}
+            next_idx = len(self._spec.rules) + 1
+            while f"rule_{next_idx}" in existing_ids:
+                next_idx += 1
+            dlg._id_input.setText(f"rule_{next_idx}")
         if dlg.exec() == RuleEditorDialog.Accepted:
             new_rule = dlg.get_rule_spec()
             if self._spec:

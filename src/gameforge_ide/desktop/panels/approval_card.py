@@ -89,23 +89,7 @@ class ApprovalCard(QFrame):
             self._lbl_card_dir = QLabel(f"<b>Project Root:</b> <code>{proj_dir}</code>")
             self._lbl_card_dir.setTextFormat(Qt.RichText)
             self._lbl_card_dir.setStyleSheet("color: #cbd5e1; font-size: 11px;")
-
-            btn_change_card_dir = QPushButton("Change Folder…")
-            btn_change_card_dir.setFlat(True)
-            btn_change_card_dir.setCursor(Qt.PointingHandCursor)
-            btn_change_card_dir.setStyleSheet("color: #a78bfa; font-size: 11px; padding: 0 4px;")
-
-            def _change_card_dir():
-                from PySide6.QtWidgets import QFileDialog
-                chosen = QFileDialog.getExistingDirectory(self, "Choose Project Directory", str(proj_dir))
-                if chosen:
-                    chosen_p = Path(chosen).resolve()
-                    approval["args"]["project_dir"] = str(chosen_p)
-                    self._lbl_card_dir.setText(f"<b>Project Root:</b> <code>{chosen_p}</code>")
-
-            btn_change_card_dir.clicked.connect(_change_card_dir)
             dir_row.addWidget(self._lbl_card_dir, 1)
-            dir_row.addWidget(btn_change_card_dir)
             lay.addLayout(dir_row)
 
         scope = approval.get("args", {}).get("scope") or approval.get("scope")

@@ -85,9 +85,10 @@ class EditTools:
         target_content: str = "",
         replacement_content: str = "",
         file_path: str = "",
+        path: str = "",
     ) -> Dict[str, Any]:
         """Proposes a code change, verifies path, and generates a unified diff for review."""
-        effective_path = subpath or file_path
+        effective_path = subpath or file_path or path
 
         # Strip accidental markdown code block fences if replacement_content is wrapped in ```
         if replacement_content:
@@ -137,17 +138,22 @@ class EditTools:
 
         # Check if target_content is present in file (if not creating fresh file)
         if original_text and not target_content:
-            return {
-                "status": "ERROR",
-                "error": f"target_content cannot be empty when editing existing file: {subpath}. Provide the exact code block to replace.",
-            }
+            # If target_content is empty but replacement_content is provided, this represents
+            # a full-file rewrite intention. Allow full-file replacement if replacement_content is non-empty.
+            if replacement_content:
+                target_content = original_text
+            else:
+                return {
+                    "status": "ERROR",
+                    "error": f"target_content cannot be empty when editing existing file: {subpath}. Provide the exact code block to replace.",
+                }
 
         new_text = original_text
         if original_text:
             if target_content in original_text:
                 new_text = original_text.replace(target_content, replacement_content, 1)
             else:
-                # Robust normalized matching across CRLF and LF line endings
+                # 1. Robust normalized matching across CRLF and LF line endings
                 norm_orig = original_text.replace("\r\n", "\n")
                 norm_target = target_content.replace("\r\n", "\n")
                 norm_repl = replacement_content.replace("\r\n", "\n")
@@ -174,10 +180,65 @@ class EditTools:
                     adjusted_repl = norm_repl.replace("\n", line_ending)
                     new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
                 else:
-                    return {
-                        "status": "ERROR",
-                        "error": f"Target content block not found in file: {subpath}",
-                    }
+                    # 2. Resilient Whitespace-Tolerant Matching (handles indent and minor formatting drift)
+                    orig_lines_raw = norm_orig.splitlines(keepends=True)
+                    orig_stripped = [l.strip() for l in orig_lines_raw]
+                    target_lines_raw = norm_target.splitlines(keepends=True)
+                    target_stripped = [l.strip() for l in target_lines_raw if l.strip()]
+
+                    found_match = False
+                    if target_stripped and len(target_stripped) <= len(orig_stripped):
+                        first_t = target_stripped[0]
+                        for i in range(len(orig_stripped) - len(target_stripped) + 1):
+                            if orig_stripped[i] == first_t:
+                                # Check if subsequent stripped lines match
+                                match_len = len(target_stripped)
+                                if [l for l in orig_stripped[i : i + match_len] if l] == target_stripped:
+                                    # Calculate start and end character positions in original_text
+                                    orig_lines_with_nl = original_text.splitlines(keepends=True)
+                                    cum_lens = [0] + list(itertools.accumulate([len(l) for l in orig_lines_with_nl]))
+                                    o_start = cum_lens[i]
+                                    end_idx = min(i + match_len, len(orig_lines_with_nl))
+                                    o_end = cum_lens[end_idx] if end_idx < len(cum_lens) else len(original_text)
+
+                                    line_ending = "\r\n" if "\r\n" in original_text else "\n"
+                                    adjusted_repl = norm_repl.replace("\n", line_ending)
+                                    new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
+                                    found_match = True
+                                    break
+
+                    if not found_match:
+                        # 3. Fuzzy ratio fallback for near-identical single-block replacements
+                        # Only attempted if target_content is multi-line to avoid false positive short matches
+                        if len(target_content.splitlines()) >= 3:
+                            matcher = difflib.SequenceMatcher(None, norm_orig, norm_target)
+                            match = matcher.find_longest_match(0, len(norm_orig), 0, len(norm_target))
+                            if match.size >= int(len(norm_target) * 0.88):
+                                o_start_norm = match.a
+                                o_end_norm = match.a + match.size
+                                orig_lines = original_text.splitlines(keepends=True)
+                                cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
+
+                                line_idx = norm_orig[:o_start_norm].count("\n")
+                                last_nl = norm_orig[:o_start_norm].rfind("\n")
+                                col_idx = o_start_norm - (last_nl + 1) if last_nl != -1 else o_start_norm
+                                o_start = cum_lengths[line_idx] + col_idx if line_idx < len(cum_lengths) else len(original_text)
+
+                                end_line_idx = norm_orig[:o_end_norm].count("\n")
+                                end_last_nl = norm_orig[:o_end_norm].rfind("\n")
+                                end_col_idx = o_end_norm - (end_last_nl + 1) if end_last_nl != -1 else o_end_norm
+                                o_end = cum_lengths[end_line_idx] + end_col_idx if end_line_idx < len(cum_lengths) else len(original_text)
+
+                                line_ending = "\r\n" if "\r\n" in original_text else "\n"
+                                adjusted_repl = norm_repl.replace("\n", line_ending)
+                                new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
+                                found_match = True
+
+                    if not found_match:
+                        return {
+                            "status": "ERROR",
+                            "error": f"Target content block not found in file: {subpath}",
+                        }
 
             if new_text == original_text:
                 return {

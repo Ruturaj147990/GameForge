@@ -41,7 +41,10 @@ class _ToolRunnable(QRunnable):
                 "status": "ERROR",
                 "error": f"Asynchronous tool execution failed: {exc}",
             }
-        self.signals.finished.emit(self._name, result)
+        try:
+            self.signals.finished.emit(self._name, result)
+        except RuntimeError:
+            pass
 
 
 class ToolService(QObject):

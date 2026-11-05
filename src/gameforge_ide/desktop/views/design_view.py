@@ -170,10 +170,15 @@ class DiffDialog(QDialog):
 
         table.setRowCount(len(ops))
         for r, op in enumerate(ops):
-            table.setItem(r, 0, QTableWidgetItem(str(op.get("op", ""))))
-            table.setItem(r, 1, QTableWidgetItem(str(op.get("path", ""))))
-            table.setItem(r, 2, QTableWidgetItem(str(op.get("from", "—"))))
-            table.setItem(r, 3, QTableWidgetItem(str(op.get("value", "—"))))
+            for c, text_val in enumerate([
+                str(op.get("op", "")),
+                str(op.get("path", "")),
+                str(op.get("from", "—")),
+                str(op.get("value", "—")),
+            ]):
+                item = QTableWidgetItem(text_val)
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                table.setItem(r, c, item)
         layout.addWidget(table, 1)
 
         btn_close = QPushButton("Close", self)
@@ -241,6 +246,7 @@ class DesignView(QWidget):
 
     buildRequested = Signal(str)        # (project_name) -> trigger Build view
     projectChanged = Signal(str)        # (project_name)
+    projectDirectoryChangeRequested = Signal(Path)  # (new_project_dir) -> synchronize IDE active project
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -345,36 +351,11 @@ class DesignView(QWidget):
 
         main_layout.addLayout(header_layout)
 
-        # Authoritative Project Directory Banner (Two-Location Storage Architecture)
+        # Internal directory tracker (authoritative project directory managed centrally via TopBar)
         self._dir_banner = QFrame(self)
         self._dir_banner.setObjectName("designProjectDirBanner")
-        self._dir_banner.setStyleSheet(
-            f"background-color: {tokens.BG_PANEL}; border: 1px solid {tokens.BORDER}; "
-            f"border-radius: {tokens.RADIUS}px; padding: 4px 10px;"
-        )
-        dir_banner_layout = QHBoxLayout(self._dir_banner)
-        dir_banner_layout.setContentsMargins(6, 4, 6, 4)
-        dir_banner_layout.setSpacing(tokens.SPACE_SM)
-
+        self._dir_banner.setVisible(False)
         self._lbl_project_dir = QLabel("Authoritative Project Root: Not set", self._dir_banner)
-        self._lbl_project_dir.setStyleSheet(
-            f"color: {tokens.TEXT_SECONDARY}; font-family: monospace; font-size: {tokens.FONT_BODY_SM}px;"
-        )
-        btn_change_dir = QPushButton("Change Folder…", self._dir_banner)
-        btn_change_dir.setCursor(Qt.PointingHandCursor)
-        btn_change_dir.setStyleSheet(
-            f"QPushButton {{"
-            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
-            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
-            f"  padding: 2px 8px; font-size: {tokens.FONT_BODY_SM}px;"
-            f"}}"
-            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
-        )
-        btn_change_dir.clicked.connect(self._on_change_project_dir_clicked)
-
-        dir_banner_layout.addWidget(self._lbl_project_dir, 1)
-        dir_banner_layout.addWidget(btn_change_dir)
-        main_layout.addWidget(self._dir_banner)
 
         # ── 2. Questions Panel ────────────────────────────────────────────────
         self._questions_panel = QFrame(self)
@@ -512,19 +493,33 @@ class DesignView(QWidget):
         self._shortcut_save = QShortcut(QKeySequence("Ctrl+S"), self)
         self._shortcut_save.activated.connect(self.save_spec)
 
-    @Slot()
-    def _on_change_project_dir_clicked(self) -> None:
-        from PySide6.QtWidgets import QFileDialog
-        start_dir = str(getattr(self, "_current_project_dir", None) or Path.home())
-        chosen = QFileDialog.getExistingDirectory(self, "Select Authoritative Project Directory", start_dir)
-        if chosen:
-            pdir = Path(chosen).resolve()
-            self._current_project_dir = pdir
-            self._lbl_project_dir.setText(f"Authoritative Project Root: {pdir}")
-            self._is_dirty = True
-            self._lbl_dirty.setVisible(True)
-
     # ── Public API ───────────────────────────────────────────────────────────
+
+    def set_project_dir(self, project_dir: Optional[Union[str, Path]]) -> None:
+        """Explicitly set the authoritative project directory."""
+        if project_dir:
+            self._current_project_dir = Path(project_dir).resolve()
+            if hasattr(self, "_lbl_project_dir"):
+                self._lbl_project_dir.setText(f"Authoritative Project Root: {self._current_project_dir}")
+
+    def clear_project(self) -> None:
+        """Reset view state when no project is active."""
+        self._current_spec = None
+        self._current_project = None
+        self._current_project_dir = None
+        self._is_dirty = False
+        if hasattr(self, "_lbl_status"):
+            self._lbl_status.setText("No game loaded")
+        if hasattr(self, "_lbl_dirty"):
+            self._lbl_dirty.setVisible(False)
+        if hasattr(self, "_lbl_project_dir"):
+            self._lbl_project_dir.setText("Authoritative Project Root: Not set")
+        if hasattr(self, "_questions_panel"):
+            self._questions_panel.setVisible(False)
+        if hasattr(self, "_change_panel"):
+            self._change_panel.setVisible(False)
+        if hasattr(self, "_form"):
+            self._form.set_spec(None)
 
     def open_draft(self, gds: GameDesignSpec, questions: Optional[List[str]] = None, project_dir: Optional[Path] = None) -> None:
         """Open an in-memory draft (e.g. from Home's prompt_to_gds)."""
@@ -585,6 +580,14 @@ class DesignView(QWidget):
             logger.error("Failed to get spec from form: %s", exc)
             return False
         if not spec or not self._current_project:
+            return False
+
+        # Validate spec before saving to guarantee stored GDS integrity
+        try:
+            GameDesignSpec.model_validate(spec.model_dump())
+        except Exception as val_exc:
+            logger.warning("Attempted to save invalid spec: %s", val_exc)
+            QMessageBox.warning(self, "Invalid Design Spec", f"Cannot save specification with validation errors:\n\n{val_exc}")
             return False
 
         p_dir = getattr(self, "_current_project_dir", None)

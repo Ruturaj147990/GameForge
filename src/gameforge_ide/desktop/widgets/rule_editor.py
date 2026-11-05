@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.design.gds import AddStat, EndGame, EventRef, RuleSpec
+from src.gameforge_ide.design.gds import AddStat, EndGame, EventRef, RuleSpec, SetStat
 
 
 class RuleEditorDialog(QDialog):
@@ -34,7 +34,7 @@ class RuleEditorDialog(QDialog):
         self.setAccessibleName("Structured rule editor")
         self.setWindowTitle("Edit Rule" if rule else "Add Rule")
         self.setModal(True)
-        self.resize(520, 400)
+        self.resize(560, 440)
         self.setStyleSheet(
             f"QDialog#{self.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
@@ -44,6 +44,7 @@ class RuleEditorDialog(QDialog):
 
         self._rule = rule
         self._entity_ids = entity_ids or []
+        self._target_stat = "game.score"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(tokens.SPACE_LG, tokens.SPACE_LG, tokens.SPACE_LG, tokens.SPACE_LG)
@@ -84,6 +85,7 @@ class RuleEditorDialog(QDialog):
         lbl_when.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
         self._event_combo = QComboBox(self)
         self._event_combo.setObjectName("ruleEventCombo")
+        self._event_combo.setEditable(True)
         events = [
             "pickup.collected",
             "guard.spotted",
@@ -95,7 +97,9 @@ class RuleEditorDialog(QDialog):
             "level.loaded",
         ]
         self._event_combo.addItems(events)
-        if rule and rule.when.event in events:
+        if rule and rule.when and rule.when.event:
+            if rule.when.event not in events:
+                self._event_combo.addItem(rule.when.event)
             self._event_combo.setCurrentText(rule.when.event)
         self._event_combo.setStyleSheet(
             f"background-color: {tokens.BG_SURFACE};"
@@ -115,7 +119,9 @@ class RuleEditorDialog(QDialog):
         self._source_combo.addItem("Any entity", userData=None)
         for eid in self._entity_ids:
             self._source_combo.addItem(eid, userData=eid)
-        if rule and rule.when.source in self._entity_ids:
+        if rule and rule.when and rule.when.source:
+            if rule.when.source not in self._entity_ids:
+                self._source_combo.addItem(rule.when.source, userData=rule.when.source)
             self._source_combo.setCurrentText(rule.when.source)
         self._source_combo.setStyleSheet(
             f"background-color: {tokens.BG_SURFACE};"
@@ -136,7 +142,7 @@ class RuleEditorDialog(QDialog):
 
         self._effect_type_combo = QComboBox(self)
         self._effect_type_combo.setObjectName("ruleEffectTypeCombo")
-        self._effect_type_combo.addItems(["Add Score / Stat", "End Game (Win)", "End Game (Lose)"])
+        self._effect_type_combo.addItems(["Add Score / Stat", "Set Stat", "End Game (Win)", "End Game (Lose)"])
         self._effect_type_combo.setStyleSheet(
             f"background-color: {tokens.BG_SURFACE};"
             f"color: {tokens.TEXT_PRIMARY};"
@@ -146,6 +152,24 @@ class RuleEditorDialog(QDialog):
         )
         effect_layout.addWidget(lbl_then)
         effect_layout.addWidget(self._effect_type_combo, 1)
+
+        self._lbl_stat = QLabel("Stat:", self)
+        self._lbl_stat.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        effect_layout.addWidget(self._lbl_stat)
+
+        self._stat_input = QLineEdit(self)
+        self._stat_input.setObjectName("ruleStatInput")
+        self._stat_input.setText("game.score")
+        self._stat_input.setPlaceholderText("stat (e.g. game.score)")
+        self._stat_input.setFixedWidth(130)
+        self._stat_input.setStyleSheet(
+            f"background-color: {tokens.BG_SURFACE};"
+            f"color: {tokens.TEXT_PRIMARY};"
+            f"border: 1px solid {tokens.BORDER};"
+            f"border-radius: {tokens.RADIUS}px;"
+            f"padding: 4px {tokens.SPACE_SM}px;"
+        )
+        effect_layout.addWidget(self._stat_input)
 
         self._delta_spin = QSpinBox(self)
         self._delta_spin.setObjectName("ruleDeltaSpin")
@@ -168,16 +192,36 @@ class RuleEditorDialog(QDialog):
                 outcome = getattr(eff0, "outcome", "win")
                 self._effect_type_combo.setCurrentText("End Game (Win)" if outcome == "win" else "End Game (Lose)")
                 self._delta_spin.setVisible(False)
+                self._lbl_stat.setVisible(False)
+                self._stat_input.setVisible(False)
+            elif isinstance(eff0, SetStat) or getattr(eff0, "kind", "") == "set_stat":
+                self._effect_type_combo.setCurrentText("Set Stat")
+                self._delta_spin.setValue(int(getattr(eff0, "value", 100)))
+                self._target_stat = getattr(eff0, "stat", "player.health")
+                self._stat_input.setText(self._target_stat)
+                self._delta_spin.setVisible(True)
+                self._lbl_stat.setVisible(True)
+                self._stat_input.setVisible(True)
             elif isinstance(eff0, AddStat) or getattr(eff0, "kind", "") == "add_stat":
                 self._effect_type_combo.setCurrentText("Add Score / Stat")
                 self._delta_spin.setValue(int(getattr(eff0, "delta", 10)))
+                self._target_stat = getattr(eff0, "stat", "game.score")
+                self._stat_input.setText(self._target_stat)
                 self._delta_spin.setVisible(True)
+                self._lbl_stat.setVisible(True)
+                self._stat_input.setVisible(True)
         else:
             self._delta_spin.setVisible(True)
+            self._lbl_stat.setVisible(True)
+            self._stat_input.setVisible(True)
 
-        self._effect_type_combo.currentTextChanged.connect(
-            lambda t: self._delta_spin.setVisible(t == "Add Score / Stat")
-        )
+        def _on_effect_type_changed(t: str) -> None:
+            is_stat = t in ("Add Score / Stat", "Set Stat")
+            self._delta_spin.setVisible(is_stat)
+            self._lbl_stat.setVisible(is_stat)
+            self._stat_input.setVisible(is_stat)
+
+        self._effect_type_combo.currentTextChanged.connect(_on_effect_type_changed)
 
         # Description
         desc_layout = QHBoxLayout()
@@ -239,7 +283,7 @@ class RuleEditorDialog(QDialog):
     def get_rule_spec(self) -> RuleSpec:
         """Construct validated RuleSpec from dialog inputs."""
         rid = self._id_input.text().strip() or "rule_1"
-        ev = self._event_combo.currentText()
+        ev = self._event_combo.currentText().strip() or "pickup.collected"
         src = self._source_combo.currentData()
 
         eff_type = self._effect_type_combo.currentText()
@@ -247,15 +291,34 @@ class RuleEditorDialog(QDialog):
             effect = EndGame(kind="end_game", outcome="win")
         elif eff_type == "End Game (Lose)":
             effect = EndGame(kind="end_game", outcome="lose")
+        elif eff_type == "Set Stat":
+            stat_name = self._stat_input.text().strip() or self._target_stat or "player.health"
+            if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
+                if stat_name in ("health", "lives", "stamina", "max_health"):
+                    stat_name = f"player.{stat_name}"
+                elif stat_name in ("score", "time_s"):
+                    stat_name = f"game.{stat_name}"
+                else:
+                    stat_name = f"game.{stat_name}"
+            effect = SetStat(kind="set_stat", stat=stat_name, value=float(self._delta_spin.value()))
         else:
-            effect = AddStat(kind="add_stat", stat="game.score", delta=float(self._delta_spin.value()))
+            stat_name = self._stat_input.text().strip() or self._target_stat or "game.score"
+            if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
+                if stat_name in ("health", "lives", "stamina", "max_health"):
+                    stat_name = f"player.{stat_name}"
+                elif stat_name in ("score", "time_s"):
+                    stat_name = f"game.{stat_name}"
+                else:
+                    stat_name = f"game.{stat_name}"
+            effect = AddStat(kind="add_stat", stat=stat_name, delta=float(self._delta_spin.value()))
 
         desc = self._desc_input.text().strip()
         existing_conds = self._rule.conditions if self._rule and hasattr(self._rule, "conditions") else []
+        trailing_effects = self._rule.effects[1:] if self._rule and len(self._rule.effects) > 1 else []
         return RuleSpec(
             rule_id=rid,
             when=EventRef(event=ev, source=src),
             conditions=existing_conds,
-            effects=[effect],
+            effects=[effect] + trailing_effects,
             description=desc,
         )

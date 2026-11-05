@@ -323,3 +323,39 @@ def test_validate_stage_output_scenarios():
     passed, issues = validate_stage_output("scenarios", empty_res, gds)
     assert passed is False
     assert any("no scenario or test results" in i.lower() for i in issues)
+
+
+def test_validate_stage_output_automation():
+    """Verify automation stage accepts successful Unreal Editor C++ Kit automation tests."""
+    # Passing case: Kit C++ automation tests passed
+    automation_data = {
+        "exit_code": 0,
+        "filter": "GameForge.Kit",
+        "found": True,
+        "failed": 0,
+        "succeeded": 3,
+        "tests": [
+            {"name": "GameForge.Kit.Rules.CountAtLeast", "state": "Success"},
+            {"name": "GameForge.Kit.Rules.NestingAndDepth", "state": "Success"},
+            {"name": "GameForge.Kit.Rules.StatOperators", "state": "Success"},
+        ],
+    }
+    passed, issues = validate_stage_output("automation", automation_data)
+    assert passed is True
+    assert len(issues) == 0
+
+    # Failing case: C++ automation test failed
+    failing_automation = {
+        "exit_code": 1,
+        "filter": "GameForge.Kit",
+        "found": True,
+        "failed": 1,
+        "succeeded": 2,
+        "tests": [
+            {"name": "GameForge.Kit.Rules.CountAtLeast", "state": "Fail", "errors": ["Assertion failed"]},
+            {"name": "GameForge.Kit.Rules.StatOperators", "state": "Success"},
+        ],
+    }
+    passed, issues = validate_stage_output("automation", failing_automation)
+    assert passed is False
+    assert any("failed" in i.lower() for i in issues)

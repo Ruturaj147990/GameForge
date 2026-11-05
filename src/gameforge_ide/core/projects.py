@@ -20,6 +20,15 @@ from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Repository infrastructure directories that are part of the platform source code,
+# test fixtures, documentation, or internal build cache, and are NEVER games.
+REPO_INFRASTRUCTURE_DIRS = {
+    "fixtures", "graders", "reports", "scratch", "tests", "src",
+    "docs", "configs", "pipeline", "unreal", "build", "dist",
+    ".git", ".gemini", ".github", "node_modules", ".venv",
+    "Saved", "Intermediate", "Binaries", "DerivedDataCache", "Plugins",
+}
+
 
 def find_uproject(folder: Union[str, Path]) -> Optional[Path]:
     """Find the first .uproject file in folder, matching folder name first if available, with nested directory support.
@@ -31,7 +40,24 @@ def find_uproject(folder: Union[str, Path]) -> Optional[Path]:
         folder_str = str(folder)
         if not os.path.isdir(folder_str):
             return None
+
+        # Guard: REPO_ROOT and its immediate infrastructure subdirectories are not Unreal projects
+        try:
+            from .settings import REPO_ROOT
+            repo_real = os.path.realpath(str(REPO_ROOT))
+            real_folder = os.path.realpath(folder_str)
+            if real_folder == repo_real:
+                return None
+            if os.path.dirname(real_folder) == repo_real:
+                if os.path.basename(real_folder) in REPO_INFRASTRUCTURE_DIRS:
+                    return None
+        except Exception:
+            pass
+
         folder_name = os.path.basename(folder_str.rstrip("/\\"))
+        if folder_name in REPO_INFRASTRUCTURE_DIRS:
+            return None
+
         # 1. Exact match <folder_name>.uproject
         exact = os.path.join(folder_str, f"{folder_name}.uproject")
         if os.path.isfile(exact):
@@ -46,7 +72,11 @@ def find_uproject(folder: Union[str, Path]) -> Optional[Path]:
                 return Path(os.path.join(folder_str, entry))
 
         # 3. Search nested directories up to 3 levels deep (for repo/Game/Game.uproject layouts)
-        ignore_dirs = {"Intermediate", "Saved", "Binaries", ".git", "scratch", "reports", "node_modules", ".venv", "Plugins"}
+        ignore_dirs = {
+            "Intermediate", "Saved", "Binaries", ".git", "scratch", "reports",
+            "node_modules", ".venv", "Plugins", "fixtures", "graders", "tests",
+            "src", "docs", "DerivedDataCache", "Build", ".gemini"
+        }
         nested_candidates: List[str] = []
         try:
             for root, dirs, files in os.walk(folder_str):
@@ -108,8 +138,40 @@ def is_gameforge_project(folder: Union[str, Path]) -> bool:
         folder_str = str(folder)
         if not os.path.isdir(folder_str):
             return False
-        if find_uproject(folder_str) is not None:
-            return True
+
+        # Guard: Repository root itself is NEVER a game project
+        try:
+            from .settings import REPO_ROOT
+            repo_real = os.path.realpath(str(REPO_ROOT))
+            real_folder = os.path.realpath(folder_str)
+            if real_folder == repo_real:
+                return False
+            # Immediate infrastructure subdirectories of REPO_ROOT are platform code/fixtures
+            if os.path.dirname(real_folder) == repo_real:
+                if os.path.basename(real_folder) in REPO_INFRASTRUCTURE_DIRS:
+                    return False
+        except Exception:
+            pass
+
+        folder_name = os.path.basename(folder_str.rstrip("/\\"))
+        if folder_name in {
+            "fixtures", "graders", "scratch", "reports", "src", "tests",
+            "docs", "configs", "pipeline", "unreal", "build", "dist",
+            ".git", ".gemini", "node_modules", ".venv"
+        }:
+            return False
+
+        # 1. Direct or stem-matching .uproject
+        up = find_uproject(folder_str)
+        if up is not None:
+            # A folder is ONLY an Unreal project if the .uproject is directly inside it,
+            # or if the uproject stem matches the folder name (e.g. MyGame/.../MyGame.uproject)
+            up_str = str(Path(up).resolve())
+            real_folder = os.path.realpath(folder_str)
+            if os.path.dirname(up_str) == real_folder or up.stem.lower() == folder_name.lower():
+                return True
+
+        # 2. GDS specification file
         if find_gds(folder_str) is not None:
             return True
         # .gameforge/project_graph.json sentinel
@@ -299,11 +361,23 @@ def list_all_project_dirs(
     if workspace_dir:
         ws_path_str = os.path.realpath(str(workspace_dir))
         if os.path.isdir(ws_path_str):
-            if include_workspace_self and is_gameforge_project(ws_path_str):
-                ws_name = os.path.basename(ws_path_str)
-                projects[ws_name] = Path(ws_path_str)
-            _add_root(ws_path_str)
+            repo_real = None
+            try:
+                from .settings import REPO_ROOT
+                repo_real = os.path.realpath(str(REPO_ROOT))
+            except Exception:
+                pass
+
+            is_repo_root = (repo_real is not None and ws_path_str == repo_real)
+            if not is_repo_root:
+                if include_workspace_self and is_gameforge_project(ws_path_str):
+                    ws_name = os.path.basename(ws_path_str)
+                    projects[ws_name] = Path(ws_path_str)
+                _add_root(ws_path_str)
+
+            # Subdirectory scanning for "Projects" / "projects"
             _add_root(os.path.join(ws_path_str, "Projects"))
+            _add_root(os.path.join(ws_path_str, "projects"))
 
     env_extra = os.environ.get("GAMEFORGE_EXTRA_PROJECTS_ROOT")
     if env_extra:

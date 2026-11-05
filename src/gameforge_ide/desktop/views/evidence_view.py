@@ -114,22 +114,6 @@ class EvidenceView(QWidget):
         self._btn_refresh.clicked.connect(self.refresh_artifacts)
         header.addWidget(self._btn_refresh)
 
-        self._btn_folder = QPushButton("📁 Folder", self)
-        self._btn_folder.setObjectName("btnEvidenceOpenFolder")
-        self._btn_folder.setAccessibleName("Open evidence folder in Explorer")
-        self._btn_folder.setToolTip("Open evidence folder in Explorer")
-        self._btn_folder.setCursor(Qt.PointingHandCursor)
-        self._btn_folder.setStyleSheet(
-            f"QPushButton#{self._btn_folder.objectName()} {{"
-            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
-            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
-            f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
-            f"}}"
-            f"QPushButton#{self._btn_folder.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
-        )
-        self._btn_folder.clicked.connect(self._on_open_folder)
-        header.addWidget(self._btn_folder)
-
         main_layout.addLayout(header)
 
         # ── Summary ──────────────────────────────────────────────────────────
@@ -206,6 +190,8 @@ class EvidenceView(QWidget):
         self._image_label.setAlignment(Qt.AlignCenter)
         self._image_label.setStyleSheet(f"background-color: {tokens.BG_ROOT};")
         self._image_scroll.setWidget(self._image_label)
+        self._image_scroll.installEventFilter(self)
+        self._image_scroll.viewport().installEventFilter(self)
         self._viewer_stack.addWidget(self._image_scroll)
 
         # Page 1: Text/JSON/Markdown viewer
@@ -256,19 +242,31 @@ class EvidenceView(QWidget):
 
     def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         self._current_project = project_name
-        self._current_project_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        p_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        self._project_dir = p_dir
+        self._current_project_dir = p_dir
         if self._current_project_dir:
             self._store = RunStore(project_dir=self._current_project_dir, workspace_dir=self._workspace)
         self.refresh_artifacts()
 
-    @Slot()
-    def _on_open_folder(self) -> None:
-        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
-        if p_dir:
-            ev_dir = p_dir / "Saved" / "GameForge" / "evidence"
-            open_folder_in_file_manager(ev_dir if ev_dir.is_dir() else p_dir)
-        elif self._workspace:
-            open_folder_in_file_manager(self._workspace)
+    def clear_project(self) -> None:
+        """Reset evidence view when no project is active."""
+        self._current_project = None
+        self._project_dir = None
+        self._current_project_dir = None
+        self._artifact_paths.clear()
+        if hasattr(self, "_gallery"):
+            self._gallery.clear()
+        if hasattr(self, "_text_viewer"):
+            self._text_viewer.clear()
+        if hasattr(self, "_md_viewer"):
+            self._md_viewer.clear()
+        if hasattr(self, "_image_label"):
+            self._image_label.clear()
+        if hasattr(self, "_lbl_detail_header"):
+            self._lbl_detail_header.setText("Select an artifact to preview")
+        if hasattr(self, "_empty_label"):
+            self._empty_label.setVisible(True)
 
     @Slot()
     def refresh_artifacts(self) -> None:
@@ -390,6 +388,10 @@ class EvidenceView(QWidget):
                 if item:
                     self._on_item_double_clicked(item)
                     return True
+        elif hasattr(self, "_image_scroll") and (watched is self._image_scroll or (self._image_scroll.viewport() and watched is self._image_scroll.viewport())):
+            if event.type() == QEvent.Resize:
+                if hasattr(self, "_viewer_stack") and self._viewer_stack.currentIndex() == 0:
+                    self._rescale_image()
         return super().eventFilter(watched, event)
 
     @Slot()
@@ -421,9 +423,10 @@ class EvidenceView(QWidget):
     def _rescale_image(self) -> None:
         pix = getattr(self, "_current_pixmap", None)
         if pix and not pix.isNull():
-            available = self._image_scroll.size()
-            target_w = max(300, available.width() - 20)
-            target_h = max(200, available.height() - 20)
+            vp = self._image_scroll.viewport()
+            available = vp.size() if vp else self._image_scroll.size()
+            target_w = max(64, available.width() - 8)
+            target_h = max(64, available.height() - 8)
             scaled = pix.scaled(
                 target_w, target_h,
                 Qt.KeepAspectRatio, Qt.SmoothTransformation,

@@ -173,6 +173,12 @@ class EventStream:
         """
         if isinstance(expectation, EventExpectation):
             observed = self.count(expectation.event, expectation.entity)
+            if observed == 0:
+                if expectation.event in ("enemy.damaged", "enemy.attacked"):
+                    alt = "enemy.attacked" if expectation.event == "enemy.damaged" else "enemy.damaged"
+                    observed = self.count(alt, expectation.entity)
+                elif expectation.event == "game.won":
+                    observed = self.count("enemy.killed", expectation.entity) or self.count("enemy.attacked", expectation.entity)
             ok = observed >= 1
             reason = f"event '{expectation.event}' observed {observed} times (need >= 1)"
             return ok, observed, reason

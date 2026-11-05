@@ -62,6 +62,13 @@ def find_ollama_executable() -> Optional[Path]:
         if std_win.is_file():
             return std_win.resolve()
 
+    # 4. Standard Windows 64-bit Program Files install
+    prog_files = os.environ.get("ProgramFiles")
+    if prog_files:
+        std_pf = Path(prog_files) / "Ollama" / "ollama.exe"
+        if std_pf.is_file():
+            return std_pf.resolve()
+
     return None
 
 

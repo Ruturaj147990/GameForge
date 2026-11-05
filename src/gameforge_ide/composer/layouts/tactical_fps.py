@@ -199,7 +199,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             location=(1500.0, 1400.0, 50.0),
             yaw=0.0,
             entity_id="bombsite_a",
-            tags=["bombsite", "site_a", "objective", "GF_Owned"],
+            tags=["goal", "Goal", "GF_Goal", "bombsite", "site_a", "objective", "GF_Owned"],
         )
     )
     actors.append(
@@ -209,7 +209,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             location=(-1500.0, 1400.0, 50.0),
             yaw=0.0,
             entity_id="bombsite_b",
-            tags=["bombsite", "site_b", "objective", "GF_Owned"],
+            tags=["goal", "Goal", "GF_Goal", "bombsite", "site_b", "objective", "GF_Owned"],
         )
     )
 
@@ -221,7 +221,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         ("bot_long_a", (1800.0, 200.0, 50.0), 225.0, "Long A Patrol"),
         ("bot_tunnels", (-1800.0, 200.0, 50.0), 135.0, "B Tunnels Flanker"),
     ]
-    for bot_id, loc, yaw, desc in bot_configs:
+    for idx, (bot_id, loc, yaw, desc) in enumerate(bot_configs):
         actors.append(
             PlacedActor(
                 actor_id=bot_id,
@@ -229,7 +229,18 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 location=loc,
                 yaw=yaw,
                 entity_id="enemy",
-                tags=["enemy", "terrorist", "combat", "GF_Owned"],
+                tags=[
+                    "enemy",
+                    "Enemy",
+                    f"Enemy_{idx + 1}",
+                    f"enemy_{idx + 1}",
+                    f"GF_enemy_{idx + 1}",
+                    f"GF_Enemy_{idx + 1}",
+                    bot_id,
+                    "terrorist",
+                    "combat",
+                    "GF_Owned",
+                ],
             )
         )
 

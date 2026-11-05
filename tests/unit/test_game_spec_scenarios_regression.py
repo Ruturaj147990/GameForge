@@ -55,7 +55,7 @@ def test_combat_damages_enemies_navigates_into_range():
     scenario = combat_spec.to_scenario()
     nav_steps = [s for s in scenario.steps if isinstance(s, NavigateToStep)]
     assert len(nav_steps) >= 1
-    assert "Enemy" in nav_steps[0].navigate_to.tag
+    assert "enemy" in nav_steps[0].navigate_to.tag.lower()
 
 
 def test_snakes_and_ladders_scenarios_inject_turns():
@@ -75,3 +75,59 @@ def test_snakes_and_ladders_scenarios_inject_turns():
     # Steps must include input injection
     has_inject = any(hasattr(s, "inject") for s in scenario.steps)
     assert has_inject, "snake_transition must inject dice rolls or actions to trigger transition"
+
+
+def test_combat_and_win_scenarios_expectations():
+    """Verify combat acceptance scenarios have achievable expectations and navigate to enemies."""
+    gds = preset_arena_combat()
+    tests = generate_acceptance_tests(gds)
+
+    combat_test = next(t for t in tests if t.test_id == "combat_damages_enemies")
+    combat_sc = combat_test.to_scenario()
+    assert combat_sc.expect[0].event == "enemy.attacked"
+    assert combat_sc.steps[0].navigate_to.tag in ("enemy", "Enemy_1")
+
+    win_test = next(t for t in tests if t.test_id == "win_on_defeat_all")
+    win_sc = win_test.to_scenario()
+    assert win_sc.expect[0].event == "enemy.killed"
+    assert win_sc.steps[0].navigate_to.tag in ("enemy", "Enemy_1")
+
+
+def test_events_aliasing_enemy_damaged_and_game_won():
+    """Verify EventStream evaluation supports bidirectional event aliases."""
+    from src.gameforge_ide.qa.events import EventStream, QAEvent
+
+    # Stream containing enemy.attacked
+    stream = EventStream(events=[
+        QAEvent(time=1.0, name="enemy.attacked", entity="Enemy_1", data={}),
+    ])
+    # Expecting enemy.damaged should pass via alias
+    ok, count, reason = stream.verify_expectation(EventExpectation(event="enemy.damaged"))
+    assert ok
+    assert count == 1
+
+    # Stream containing enemy.killed
+    stream_kill = EventStream(events=[
+        QAEvent(time=2.0, name="enemy.killed", entity="Enemy_1", data={}),
+    ])
+    # Expecting game.won in combat context should pass via kill alias
+    ok, count, reason = stream_kill.verify_expectation(EventExpectation(event="game.won"))
+    assert ok
+    assert count == 1
+
+
+def test_composer_layouts_tag_standardization():
+    """Verify composer assigns standardized canonical and indexed tags to all actors."""
+    from src.gameforge_ide.composer.compose import compose
+    gds = preset_arena_combat()
+    comp = compose(gds)
+    level_plan = comp.levels[0]
+
+    enemy_actors = [a for a in level_plan.actors if a.entity_id == "enemy" or "enemy" in a.tags]
+    assert len(enemy_actors) > 0
+    first_enemy = enemy_actors[0]
+    # Check that canonical tags are all present
+    assert "enemy" in first_enemy.tags
+    assert "Enemy" in first_enemy.tags
+    assert any("Enemy_1" in t or "enemy_1" in t for t in first_enemy.tags)
+

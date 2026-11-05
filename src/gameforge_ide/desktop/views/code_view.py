@@ -7,8 +7,18 @@ from pathlib import Path
 import re
 from typing import List, Optional, Tuple
 
-from PySide6.QtCore import QSettings, Qt, Slot
-from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QTextCursor
+from PySide6.QtCore import QRect, QSettings, QSize, Qt, Slot
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QPainter,
+    QPaintEvent,
+    QResizeEvent,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextCursor,
+    QTextFormat,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -19,16 +29,13 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from ..panels.asset_panel import AssetPanel
-from ..panels.design_panel import DesignPanel
 from ..panels.diff_panel import DiffPanel
 from ..panels.explorer_panel import ExplorerPanel
-from ..panels.mission_panel import MissionPanel
-from ..panels.plan_panel import PlanPanel
 from ..panels.terminal_panel import TerminalPanel
 from ..panels.unreal_panel import UnrealPanel
 from ..services.tool_service import ToolService
@@ -126,6 +133,106 @@ class CodeHighlighter(QSyntaxHighlighter):
                 self.setFormat(match.start(), match.end() - match.start(), fmt)
 
 
+class LineNumberArea(QWidget):
+    """Line number area beside CodePlainTextEdit."""
+
+    def __init__(self, editor: "CodePlainTextEdit") -> None:
+        super().__init__(editor)
+        self._code_editor = editor
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._code_editor.line_number_area_width(), 0)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        self._code_editor.line_number_area_paint_event(event)
+
+
+class CodePlainTextEdit(QPlainTextEdit):
+    """QPlainTextEdit with high-performance line numbering and active line highlighting."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._line_number_area = LineNumberArea(self)
+        self.blockCountChanged.connect(self._update_line_number_area_width)
+        self.updateRequest.connect(self._update_line_number_area)
+        self.cursorPositionChanged.connect(self._highlight_current_line)
+        self._update_line_number_area_width(0)
+
+    def line_number_area_width(self) -> int:
+        digits = 1
+        m = max(1, self.blockCount())
+        while m >= 10:
+            m //= 10
+            digits += 1
+        space = 16 + self.fontMetrics().horizontalAdvance("9") * max(digits, 3)
+        return space
+
+    def _update_line_number_area_width(self, _count: int) -> None:
+        self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
+
+    def _update_line_number_area(self, rect: QRect, dy: int) -> None:
+        if dy != 0:
+            self._line_number_area.scroll(0, dy)
+        else:
+            self._line_number_area.update(0, rect.y(), self._line_number_area.width(), rect.height())
+        if rect.contains(self.viewport().rect()):
+            self._update_line_number_area_width(0)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self._line_number_area.setGeometry(
+            QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height())
+        )
+
+    def line_number_area_paint_event(self, event: QPaintEvent) -> None:
+        painter = QPainter(self._line_number_area)
+        painter.fillRect(event.rect(), QColor(tokens.BG_PANEL))
+
+        # Right divider border
+        painter.setPen(QColor(tokens.BORDER))
+        painter.drawLine(event.rect().topRight(), event.rect().bottomRight())
+
+        block = self.firstVisibleBlock()
+        block_number = block.blockNumber()
+        top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
+        bottom = top + int(self.blockBoundingRect(block).height())
+
+        current_block = self.textCursor().blockNumber()
+
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible() and bottom >= event.rect().top():
+                number = str(block_number + 1)
+                if block_number == current_block:
+                    painter.setPen(QColor(tokens.TEXT_PRIMARY))
+                else:
+                    painter.setPen(QColor(tokens.TEXT_MUTED))
+                painter.setFont(self.font())
+                painter.drawText(
+                    0,
+                    top,
+                    self._line_number_area.width() - 8,
+                    self.fontMetrics().height(),
+                    Qt.AlignRight,
+                    number,
+                )
+            block = block.next()
+            top = bottom
+            bottom = top + int(self.blockBoundingRect(block).height())
+            block_number += 1
+
+    def _highlight_current_line(self) -> None:
+        extra_selections = []
+        selection = QTextEdit.ExtraSelection()
+        line_color = QColor(tokens.BG_HOVER)
+        selection.format.setBackground(line_color)
+        selection.format.setProperty(QTextFormat.FullWidthSelection, True)
+        selection.cursor = self.textCursor()
+        selection.cursor.clearSelection()
+        extra_selections.append(selection)
+        self.setExtraSelections(extra_selections)
+
+
 class CodeEditor(QWidget):
     """Central document editor for viewing code with syntax highlighting and read-only protection."""
 
@@ -175,7 +282,7 @@ class CodeEditor(QWidget):
         layout.addWidget(header)
 
         # Editor
-        self._edit = QPlainTextEdit(self)
+        self._edit = CodePlainTextEdit(self)
         self._edit.setObjectName("codePlainTextEdit")
         self._edit.setReadOnly(True)
         self._edit.setStyleSheet(
@@ -281,10 +388,6 @@ class CodeView(QMainWindow):
 
         # Panels
         self._explorer = ExplorerPanel(self._tools, self._workspace, parent=self)
-        self._mission = MissionPanel(self._workspace, parent=self)
-        self._plan_panel = PlanPanel(self._workspace, parent=self)
-        self._asset_panel = AssetPanel(self._workspace, parent=self)
-        self._design_panel = DesignPanel(self._workspace, parent=self)
         self._unreal_panel = UnrealPanel(self._tools, self._workspace, parent=self)
         self._diff_panel = DiffPanel(self._tools, parent=self)
         self._terminal = TerminalPanel(self._workspace, parent=self)

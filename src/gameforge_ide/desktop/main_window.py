@@ -7,6 +7,7 @@ called in-process via AgentService and ToolService.
 
 from __future__ import annotations
 
+import logging
 import sys
 import time
 from pathlib import Path
@@ -80,7 +81,6 @@ from .views import (
     AssetsView,
     BuildView,
     DesignView,
-    EvidenceView,
     GamesView,
     HomeView,
     PlayView,
@@ -89,6 +89,9 @@ from .views import (
 from .views.code_view import CodeView
 from .services.systems_service import SystemsService
 from .services.forge_service import ForgeService
+from .services.projects_service import ProjectsService
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -155,6 +158,8 @@ class MainWindow(QMainWindow):
             saved_geometry = self._settings.value("window/geometry")
             if saved_geometry:
                 self.restoreGeometry(saved_geometry)
+            if getattr(self, "_current_project", None) and getattr(self, "_current_project_dir", None):
+                self.set_active_project(self._current_project, self._current_project_dir)
         apply_theme(QApplication.instance(), self._theme)
         # Storage hygiene 10 s after start, off the UI thread: only policy-safe actions
         # (log rotation, items past retention). Cap-based cleanup is user-confirmed in Mission Control.
@@ -637,6 +642,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"GameForge IDE — {self._workspace.name} — [{self._workspace}]")
 
     @Slot()
+    def _open_new_project_dialog(self) -> None:
+        """Open the New Project dialog and activate the created project."""
+        from .dialogs.new_project_dialog import NewProjectDialog
+        p_root = get_settings().projects_root or (self._workspace / "projects")
+        dlg = NewProjectDialog(self, projects_root=p_root)
+        if dlg.exec():
+            name = dlg.project_name()
+            pdir = dlg.project_dir()
+            self._on_new_project_requested(name, pdir)
+
+    @Slot()
     def _open_folder(self) -> None:
         """Prompt user with native directory picker dialog and switch workspace or open project."""
         chosen = QFileDialog.getExistingDirectory(
@@ -658,10 +674,18 @@ class MainWindow(QMainWindow):
         if is_gameforge_project(target):
             # Target is a project itself!
             p_name = target.name
-            parent_ws = target.parent if target.parent != target else target
-            self.switch_workspace(parent_ws)
+            try:
+                target.relative_to(self._workspace)
+                already_in_ws = True
+            except ValueError:
+                already_in_ws = False
+
+            if not already_in_ws:
+                parent_ws = target.parent if target.parent != target else target
+                self.switch_workspace(parent_ws)
+
             self.refresh_projects(select_project=p_name)
-            self._on_project_selected(p_name)
+            self.set_active_project(p_name, target)
             if hasattr(self, "_toasts"):
                 self._toasts.info("Project Opened", f"Opened project '{p_name}' from {target}")
             self.statusBar().showMessage(f"Opened project: {p_name} ({target})", 4000)
@@ -672,7 +696,7 @@ class MainWindow(QMainWindow):
             self.refresh_projects()
             projects = self._list_projects()
             if projects:
-                self._on_project_selected(projects[0])
+                self.set_active_project(projects[0])
 
     def switch_workspace(self, new_workspace: Path | str) -> None:
         """Switch active workspace directory across all panels and services."""
@@ -999,7 +1023,6 @@ class MainWindow(QMainWindow):
             ("View: Design", lambda: self._switch_studio_view("design")),
             ("View: Build", lambda: self._switch_studio_view("build")),
             ("View: Play", lambda: self._switch_studio_view("play")),
-            ("View: Evidence", lambda: self._switch_studio_view("evidence")),
             ("View: Assets Registry", lambda: self._switch_studio_view("assets")),
             ("View: Code Developer", lambda: self._switch_studio_view("code")),
             ("View: Settings", lambda: self._switch_studio_view("settings")),
@@ -1058,6 +1081,11 @@ class MainWindow(QMainWindow):
         # Services
         self._systems_service = SystemsService(workspace_root=self._workspace, parent=self)
         self._forge_service = ForgeService(workspace_root=self._workspace, parent=self)
+        self._projects_service = ProjectsService(
+            projects_root=get_settings().projects_root,
+            workspace_dir=self._workspace,
+            parent=self,
+        )
 
         # Pre-instantiate CodeView so all dock attributes and panels are available
         self._get_or_create_code_view()
@@ -1070,6 +1098,7 @@ class MainWindow(QMainWindow):
         self._top_bar.paletteRequested.connect(self._open_command_palette)
         self._top_bar.projectSelected.connect(self._on_project_selected)
         self._top_bar.openFolderRequested.connect(self._open_folder)
+        self._top_bar.newProjectRequested.connect(self._open_new_project_dialog)
         self._top_bar.fixActionRequested.connect(self._handle_fix_action)
         self._systems_service.snapshotChanged.connect(self._top_bar.update_systems)
         self._forge_service.runEvent.connect(self._on_forge_run_event)
@@ -1147,25 +1176,52 @@ class MainWindow(QMainWindow):
             self._unreal_panel = self._code_view._unreal_panel
             self._diff_panel = self._code_view._diff_panel
             self._terminal = self._code_view._terminal
-            self._mission = self._code_view._mission
-            self._plan_panel = self._code_view._plan_panel
-            self._asset_panel = self._code_view._asset_panel
-            self._design_panel = self._code_view._design_panel
-            self._explorer.open_folder_requested.connect(self._open_folder)
             self._code_view.restore_dock_state(self._settings)
         return self._code_view
 
     def _register_studio_views(self) -> None:
-        self._current_project: Optional[str] = None
+        self._current_project = None
+        self._current_project_dir = None
         projects = self._list_projects()
-        if projects:
-            self._current_project = projects[0]
-            self._top_bar.set_projects(projects, self._current_project)
+        last_proj = self._settings.value("studio/last_project")
+        last_pdir_str = self._settings.value("studio/last_project_dir")
+
+        target_proj = None
+        target_dir = None
+
+        if last_proj and str(last_proj) in projects:
+            target_proj = str(last_proj)
+            if last_pdir_str and Path(last_pdir_str).is_dir():
+                target_dir = Path(last_pdir_str).resolve()
+            else:
+                target_dir = self._resolve_project_dir(target_proj)
+        elif projects:
+            target_proj = projects[0]
+            target_dir = self._resolve_project_dir(target_proj)
+
+        if target_proj and target_dir:
+            self._current_project = target_proj
+            self._current_project_dir = target_dir
+            if hasattr(self, "_top_bar") and self._top_bar:
+                self._top_bar.set_projects(projects, target_proj)
+                self._top_bar.set_active_project(target_proj, target_dir)
+            if hasattr(self, "_projects_service") and self._projects_service:
+                self._projects_service.set_active_project(target_proj, target_dir)
+        elif hasattr(self, "_top_bar") and self._top_bar:
+            self._top_bar.set_projects(projects, None)
 
         def create_home_view() -> HomeView:
             view = HomeView(parent=self)
             if hasattr(self, "_systems_service"):
                 view.attach_systems_service(self._systems_service)
+            if hasattr(self, "_projects_service"):
+                view.attach_projects_service(self._projects_service)
+            if self._current_project_dir:
+                view.set_project_directory(self._current_project_dir)
+            if hasattr(view, "projectDirectoryChangeRequested"):
+                view.projectDirectoryChangeRequested.connect(
+                    lambda pdir: self.set_active_project(self._current_project or pdir.name, pdir)
+                )
             view.projectSelected.connect(self._on_games_open_requested)
             view.designReady.connect(self._on_home_design_ready)
             view.fixActionRequested.connect(self._handle_fix_action)
@@ -1174,6 +1230,8 @@ class MainWindow(QMainWindow):
 
         def create_games_view() -> GamesView:
             view = GamesView(parent=self)
+            if hasattr(self, "_projects_service"):
+                view.attach_projects_service(self._projects_service)
             view.openGameRequested.connect(self._on_games_open_requested)
             view.playGameRequested.connect(self._on_games_play_requested)
             view.buildGameRequested.connect(self._on_games_build_requested)
@@ -1185,11 +1243,16 @@ class MainWindow(QMainWindow):
 
         self._view_host.register("home", create_home_view)
         self._view_host.register("games", create_games_view)
+
         def create_design_view() -> DesignView:
             view = DesignView(parent=self)
             view.buildRequested.connect(self._on_games_build_requested)
+            if hasattr(view, "projectDirectoryChangeRequested"):
+                view.projectDirectoryChangeRequested.connect(
+                    lambda pdir: self.set_active_project(self._current_project or pdir.name, pdir)
+                )
             if self._current_project:
-                view.load_project(self._current_project)
+                view.load_project(self._current_project, project_dir=self._current_project_dir)
             return view
 
         self._view_host.register(
@@ -1209,7 +1272,7 @@ class MainWindow(QMainWindow):
                 lambda f, l: (self._switch_studio_view("code"), self._get_or_create_code_view().open_file(f, l))
             )
             if self._current_project:
-                view.set_project(self._current_project)
+                view.set_project(self._current_project, project_dir=self._current_project_dir)
             return view
 
         self._view_host.register("build", create_build_view)
@@ -1222,7 +1285,7 @@ class MainWindow(QMainWindow):
             view.launchRequested.connect(self._on_launch_game)
             view.buildRequested.connect(lambda p: self._on_games_build_requested(p))
             if self._current_project:
-                view.set_project(self._current_project)
+                view.set_project(self._current_project, project_dir=self._current_project_dir)
             return view
 
         self._view_host.register(
@@ -1231,27 +1294,15 @@ class MainWindow(QMainWindow):
             enabled_when=lambda: (self._current_project_has_package(), "No packaged build found")
         )
 
-        def create_evidence_view() -> EvidenceView:
-            view = EvidenceView(
-                workspace_root=self._workspace,
-                parent=self,
-            )
-            view.openFileRequested.connect(
-                lambda p: (self._switch_studio_view("code"), self._get_or_create_code_view().open_file(p))
-            )
+        def create_assets_view() -> AssetsView:
+            view = AssetsView(workspace_root=self._workspace, parent=self)
             if self._current_project:
-                view.set_project(self._current_project)
+                view.set_project(self._current_project, project_dir=self._current_project_dir)
+            if self._current_project_dir:
+                view.set_workspace(self._current_project_dir)
             return view
 
-        self._view_host.register(
-            "evidence",
-            create_evidence_view,
-            enabled_when=lambda: (bool(self._current_project), "Select a game first")
-        )
-        self._view_host.register(
-            "assets",
-            lambda: AssetsView(workspace_root=self._workspace, parent=self),
-        )
+        self._view_host.register("assets", create_assets_view)
         self._view_host.register("code", lambda: self._get_or_create_code_view())
 
         def create_settings_view() -> SettingsView:
@@ -1270,9 +1321,8 @@ class MainWindow(QMainWindow):
             ("Ctrl+3", "design"),
             ("Ctrl+4", "build"),
             ("Ctrl+5", "play"),
-            ("Ctrl+6", "evidence"),
-            ("Ctrl+7", "assets"),
-            ("Ctrl+8", "code"),
+            ("Ctrl+6", "assets"),
+            ("Ctrl+7", "code"),
             ("Ctrl+,", "settings"),
         ]
         self._studio_shortcuts = []
@@ -1421,34 +1471,47 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_toasts"):
             self._toasts.info("Project Deleted", f"Project '{project_name}' has been permanently deleted.")
 
-    def _on_project_selected(self, project_name: str) -> None:
+    def set_active_project(self, project_name: str, project_dir: Optional[Union[str, Path]] = None) -> Optional[Path]:
+        """Authoritative coordinator for setting active project and propagating across all IDE components."""
+        p_dir = Path(project_dir).resolve() if project_dir else self._resolve_project_dir(project_name)
         self._current_project = project_name
-        p_dir = self._resolve_project_dir(project_name)
         self._current_project_dir = p_dir
-        print(f"[GameForge Studio] Selected project: '{project_name}' -> {p_dir}", flush=True)
+        logger.info("[GameForge Studio] Setting active project: '%s' -> %s", project_name, p_dir)
 
-        # Synchronize active project directory across backend services, agent, and panels
+        # 1. Update ProjectsService
+        if hasattr(self, "_projects_service") and self._projects_service:
+            self._projects_service.set_active_project(project_name, p_dir)
+
+        # 2. Update TopBar
+        if hasattr(self, "_top_bar") and self._top_bar:
+            self._top_bar.set_active_project(project_name, p_dir)
+
+        # 3. Synchronize backend services & assistant
         if p_dir and p_dir.is_dir():
-            self._agent.set_workspace(p_dir)
-            self._tools.set_workspace(p_dir)
-            if hasattr(self, "_chat_panel"):
+            if hasattr(self, "_agent") and self._agent:
+                self._agent.set_workspace(p_dir)
+            if hasattr(self, "_tools") and self._tools:
+                self._tools.set_workspace(p_dir)
+            if hasattr(self, "_chat_panel") and self._chat_panel:
                 self._chat_panel.set_workspace(self._agent, p_dir)
-            if hasattr(self, "_explorer"):
-                self._explorer.set_workspace(p_dir, self._tools)
-            if hasattr(self, "_terminal"):
-                self._terminal.set_workspace(p_dir)
-            if hasattr(self, "_unreal_panel") and hasattr(self._unreal_panel, "set_workspace"):
-                self._unreal_panel.set_workspace(self._tools, p_dir)
-            if hasattr(self, "_design_panel") and hasattr(self._design_panel, "set_workspace"):
-                self._design_panel.set_workspace(p_dir)
-            if hasattr(self, "_asset_panel") and hasattr(self._asset_panel, "set_workspace"):
-                self._asset_panel.set_workspace(p_dir)
 
-        if hasattr(self, "_rail") and hasattr(self, "_view_host"):
-            self._rail.update_enabled_states(self._view_host.is_enabled)
-            current = self._view_host.current_view_id
-            if current and not self._view_host.is_enabled(current)[0]:
-                self._switch_studio_view("home")
+        # 4. Synchronize Code developer view & docks
+        if hasattr(self, "_code_view") or hasattr(self, "_explorer"):
+            self._get_or_create_code_view()
+            if p_dir and p_dir.is_dir():
+                if hasattr(self, "_explorer") and self._explorer:
+                    self._explorer.set_workspace(p_dir, self._tools)
+                if hasattr(self, "_terminal") and self._terminal:
+                    self._terminal.set_workspace(p_dir)
+                if hasattr(self, "_unreal_panel") and hasattr(self._unreal_panel, "set_workspace"):
+                    self._unreal_panel.set_workspace(self._tools, p_dir)
+                if hasattr(self, "_design_panel") and hasattr(self._design_panel, "set_workspace"):
+                    self._design_panel.set_workspace(p_dir)
+                if hasattr(self, "_asset_panel") and hasattr(self._asset_panel, "set_workspace"):
+                    self._asset_panel.set_workspace(p_dir)
+
+        # 5. Synchronize Studio views
+        if hasattr(self, "_view_host") and self._view_host:
             dv = self._view_host.get_view_widget("design")
             if dv and hasattr(dv, "load_project"):
                 dv.load_project(project_name, project_dir=p_dir)
@@ -1458,18 +1521,40 @@ class MainWindow(QMainWindow):
             pv = self._view_host.get_view_widget("play")
             if pv and hasattr(pv, "set_project"):
                 pv.set_project(project_name, project_dir=p_dir)
-            ev = self._view_host.get_view_widget("evidence")
-            if ev and hasattr(ev, "set_project"):
-                ev.set_project(project_name, project_dir=p_dir)
+            av = self._view_host.get_view_widget("assets")
+            if av:
+                if hasattr(av, "set_project"):
+                    av.set_project(project_name, project_dir=p_dir)
+                if hasattr(av, "set_workspace") and p_dir:
+                    av.set_workspace(p_dir)
+            hv = self._view_host.get_view_widget("home")
+            if hv and hasattr(hv, "set_project_directory") and p_dir:
+                hv.set_project_directory(p_dir)
 
-        # Ensure top bar reflects the active project
-        if hasattr(self, "_top_bar") and hasattr(self._top_bar, "project_combo"):
-            combo = self._top_bar.project_combo
-            idx = combo.findData(project_name)
-            if idx >= 0 and combo.currentIndex() != idx:
-                combo.blockSignals(True)
-                combo.setCurrentIndex(idx)
-                combo.blockSignals(False)
+            # Update rail tab states
+            if hasattr(self, "_rail") and self._rail:
+                self._rail.update_enabled_states(self._view_host.is_enabled)
+                current = self._view_host.current_view_id
+                if current and not self._view_host.is_enabled(current)[0]:
+                    self._switch_studio_view("home")
+
+        # 6. Update Window Title
+        p_disp = f" ({p_dir})" if p_dir else ""
+        self.setWindowTitle(f"GameForge Studio — {project_name}{p_disp}")
+
+        # 7. Persist active project to QSettings
+        try:
+            self._settings.setValue("studio/last_project", project_name)
+            if p_dir:
+                self._settings.setValue("studio/last_project_dir", str(p_dir))
+            self._settings.sync()
+        except Exception:
+            pass
+
+        return p_dir
+
+    def _on_project_selected(self, project_name: str) -> None:
+        self.set_active_project(project_name)
 
     def _on_assistant_open_design(self, prompt: str) -> None:
         p_dir = getattr(self, "_current_project_dir", None)
@@ -1508,10 +1593,8 @@ class MainWindow(QMainWindow):
                 p_dir = Path(p_dir_str).resolve()
             else:
                 p_dir = self._resolve_project_dir(p_name)
-            self._current_project = p_name
-            self._current_project_dir = p_dir
             self.refresh_projects(select_project=p_name)
-            self._on_project_selected(p_name)
+            self.set_active_project(p_name, p_dir)
         self._switch_studio_view("design")
         design_view = self._view_host.get_view_widget("design")
         if design_view and hasattr(design_view, "open_draft"):
@@ -1519,9 +1602,8 @@ class MainWindow(QMainWindow):
 
     def _on_new_project_requested(self, project_name: str, project_dir: Path) -> None:
         pdir = Path(project_dir).resolve()
-        self._current_project = project_name
-        self._current_project_dir = pdir
         self.refresh_projects(select_project=project_name)
+        self.set_active_project(project_name, pdir)
         self._switch_studio_view("design")
         dv = self._view_host.get_view_widget("design")
         if dv and hasattr(dv, "load_project"):
@@ -1537,9 +1619,8 @@ class MainWindow(QMainWindow):
     def _on_open_project_directory_requested(self, project_dir: Path) -> None:
         pdir = Path(project_dir).resolve()
         name = pdir.name
-        self._current_project = name
-        self._current_project_dir = pdir
         self.refresh_projects(select_project=name)
+        self.set_active_project(name, pdir)
         self._switch_studio_view("design")
         dv = self._view_host.get_view_widget("design")
         if dv and hasattr(dv, "load_project"):
@@ -1553,15 +1634,15 @@ class MainWindow(QMainWindow):
                 dv.open_draft(spec, project_dir=pdir)
 
     def _on_games_open_requested(self, project_name: str) -> None:
-        self._on_project_selected(project_name)
+        self.set_active_project(project_name)
         self._switch_studio_view("design")
 
     def _on_games_play_requested(self, project_name: str) -> None:
-        self._on_project_selected(project_name)
+        self.set_active_project(project_name)
         self._switch_studio_view("play")
 
     def _on_games_build_requested(self, project_name: str) -> None:
-        self._on_project_selected(project_name)
+        self.set_active_project(project_name)
         self._switch_studio_view("build")
         bv = self._view_host.get_view_widget("build")
         dv = self._view_host.get_view_widget("design")
@@ -1583,6 +1664,12 @@ class MainWindow(QMainWindow):
                 self._assistant_panel.update_theme()
             from .styles.dark_theme import get_theme_display_name
             self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
+
+        from src.gameforge_ide.core.settings import get_settings
+        s = get_settings()
+        if hasattr(self, "_projects_service") and self._projects_service and s.projects_root:
+            self._projects_service._projects_root = Path(s.projects_root).resolve()
+        self.refresh_projects()
 
     def _find_packaged_exe(self, project_name: str) -> Optional[Path]:
         p_dir = self._resolve_project_dir(project_name)

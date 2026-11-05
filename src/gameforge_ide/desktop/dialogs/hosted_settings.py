@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
                                QLineEdit, QListWidget, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
 
+from ..styles import tokens
 from ...backend.providers.hosted import (CredentialStore, EgressPolicy, HostedModel, HostedProfile,
                                          PROVIDER_KINDS, GuardedProvider, load_profiles, user_config_dir)
 
@@ -38,8 +39,16 @@ def save_user_profiles(profiles: Dict[str, HostedProfile]) -> Path:
 class HostedSettingsDialog(QDialog):
     def __init__(self, workspace_root: Path, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("hostedSettingsDialog")
+        self.setAccessibleName("Hosted Models Settings")
         self.setWindowTitle("Hosted Models — GameForge")
         self.resize(820, 560)
+        self.setStyleSheet(
+            f"QDialog#{self.objectName()} {{"
+            f"  background-color: {tokens.BG_ROOT};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"}}"
+        )
         self._workspace = Path(workspace_root)
         self._profiles = load_profiles()
         self._creds = CredentialStore()
@@ -48,7 +57,24 @@ class HostedSettingsDialog(QDialog):
 
         root = QHBoxLayout(self)
         self._list = QListWidget()
+        self._list.setObjectName("hostedProvidersList")
+        self._list.setAccessibleName("Configured hosted providers list")
         self._list.setMaximumWidth(220)
+        self._list.setStyleSheet(
+            f"QListWidget {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"}}"
+            f"QListWidget::item:selected {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QListWidget::item:hover {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"}}"
+        )
         for pid in self._profiles:
             self._list.addItem(pid)
         root.addWidget(self._list)
@@ -57,15 +83,35 @@ class HostedSettingsDialog(QDialog):
         rv = QVBoxLayout(right)
         form = QFormLayout()
         self._enabled = QCheckBox("Enabled (allows this provider to be used at all)")
+        self._enabled.setAccessibleName("Enable provider")
         self._optin = QCheckBox(f"Allow for this workspace ({self._workspace.name})")
+        self._optin.setAccessibleName("Allow provider for workspace")
         self._base_url = QLineEdit()
+        self._base_url.setAccessibleName("Provider base URL")
+        self._base_url.setStyleSheet(
+            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
+            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px;"
+        )
         self._task_cap = QDoubleSpinBox(); self._task_cap.setRange(0, 1000); self._task_cap.setPrefix("$ ")
+        self._task_cap.setAccessibleName("Per task USD cap")
         self._day_cap = QDoubleSpinBox(); self._day_cap.setRange(0, 10000); self._day_cap.setPrefix("$ ")
+        self._day_cap.setAccessibleName("Per day USD cap")
         self._models = QPlainTextEdit()
+        self._models.setAccessibleName("Models JSON configuration")
+        self._models.setStyleSheet(
+            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
+            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; "
+            f"font-family: monospace; font-size: {tokens.FONT_BODY_SM}px;"
+        )
         self._models.setPlaceholderText('[{"id": "...", "display_name": "...", "max_context": 200000, '
                                         '"usd_per_mtok_in": 0, "usd_per_mtok_out": 0, "roles": ["author"]}]')
         self._key = QLineEdit()
         self._key.setEchoMode(QLineEdit.Password)
+        self._key.setAccessibleName("API key input")
+        self._key.setStyleSheet(
+            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
+            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px;"
+        )
         self._key.setPlaceholderText("Paste API key, then Save key (stored in Windows Credential Manager)")
         self._key_state = QLabel("")
         self._policy = QLabel("")
@@ -78,8 +124,21 @@ class HostedSettingsDialog(QDialog):
         form.addRow("Models (JSON; prices per million tokens are required for metered providers)", self._models)
         key_row = QHBoxLayout()
         key_row.addWidget(self._key, 1)
+        btn_key_style = (
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px 10px;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
         self._btn_save_key = QPushButton("Save key")
+        self._btn_save_key.setAccessibleName("Save API key to Credential Manager")
+        self._btn_save_key.setCursor(Qt.PointingHandCursor)
+        self._btn_save_key.setStyleSheet(btn_key_style)
         self._btn_del_key = QPushButton("Remove key")
+        self._btn_del_key.setAccessibleName("Remove API key from Credential Manager")
+        self._btn_del_key.setCursor(Qt.PointingHandCursor)
+        self._btn_del_key.setStyleSheet(btn_key_style)
         key_row.addWidget(self._btn_save_key)
         key_row.addWidget(self._btn_del_key)
         form.addRow("API key", key_row)
@@ -87,6 +146,15 @@ class HostedSettingsDialog(QDialog):
         form.addRow("Data policy", self._policy)
         rv.addLayout(form)
         self._btn_test = QPushButton("Test connection (one tiny billed call)")
+        self._btn_test.setAccessibleName("Test connection to hosted provider")
+        self._btn_test.setCursor(Qt.PointingHandCursor)
+        self._btn_test.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: none; border-radius: {tokens.RADIUS}px; padding: 6px 14px; font-weight: 600;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+        )
         rv.addWidget(self._btn_test)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
         rv.addWidget(buttons)

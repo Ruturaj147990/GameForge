@@ -77,7 +77,12 @@ class PlanRunner(QObject):
 
     def cancel(self) -> None:
         if self._worker is not None:
-            self._worker.executor.cancel()
+            self._worker.cancel()
+            try:
+                from ...forge.executor import ForgeExecutor
+                ForgeExecutor.cancel_run(self._worker._plan.plan_id)
+            except Exception:
+                pass
 
     def _on_finished(self, plan: TaskPlan) -> None:
         thread = self._thread

@@ -400,6 +400,8 @@ class SettingsView(QWidget):
         except Exception:
             self._lbl_routing_source.setText("Routing Source: Default table")
 
+        self._validate_engine_path()
+
     @Slot()
     def save_settings(self) -> None:
         cfg_path = user_settings_path()

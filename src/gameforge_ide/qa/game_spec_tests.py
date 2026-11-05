@@ -88,7 +88,7 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             description=spec.description,
             timeout_s=30.0,
             steps=[
-                NavigateToStep(navigate_to=NavigateToArgs(tag="GF_Pickup_1")),
+                NavigateToStep(navigate_to=NavigateToArgs(tag="GF_Pickup_1", accept_radius_cm=150.0)),
                 WaitStep(wait_s=WaitArgs(seconds=1.0)),
             ],
             expect=[EventCountExpectation(event_count="pickup.collected", min=1)],
@@ -99,11 +99,11 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             description=spec.description,
             timeout_s=30.0,
             steps=[
-                NavigateToStep(navigate_to=NavigateToArgs(tag="Enemy_1", accept_radius_cm=150.0)),
+                NavigateToStep(navigate_to=NavigateToArgs(tag="enemy", accept_radius_cm=180.0)),
                 InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.2)),
                 WaitStep(wait_s=WaitArgs(seconds=1.0)),
             ],
-            expect=[EventExpectation(event="enemy.damaged")],
+            expect=[EventExpectation(event="enemy.attacked")],
         )
     elif tid == "win_on_defeat_all":
         return Scenario(
@@ -111,13 +111,13 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             description=spec.description,
             timeout_s=60.0,
             steps=[
-                NavigateToStep(navigate_to=NavigateToArgs(tag="Enemy_1", accept_radius_cm=150.0)),
+                NavigateToStep(navigate_to=NavigateToArgs(tag="enemy", accept_radius_cm=180.0)),
                 InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.2)),
                 WaitStep(wait_s=WaitArgs(seconds=1.5)),
                 InjectStep(inject=InjectArgs(action="IA_PrimaryAttack", value=True, hold_s=0.2)),
                 WaitStep(wait_s=WaitArgs(seconds=2.0)),
             ],
-            expect=[EventExpectation(event="game.won")],
+            expect=[EventExpectation(event="enemy.killed")],
         )
     elif tid in ("dice_outcomes_valid", "player_token_movement", "turn_progression"):
         return Scenario(

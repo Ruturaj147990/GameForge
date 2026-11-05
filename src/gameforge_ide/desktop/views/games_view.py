@@ -227,7 +227,8 @@ class GameCardDelegate(QStyledItemDelegate):
         painter.setFont(font)
         title_rect = QRect(r.x() + 10, title_y, r.width() - 20, 20)
         title_str = game.title or game.name or "Untitled"
-        painter.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter, title_str)
+        elided_title = painter.fontMetrics().elidedText(title_str, Qt.ElideRight, title_rect.width())
+        painter.drawText(title_rect, Qt.AlignLeft | Qt.AlignVCenter, elided_title)
 
         # Genre & revision badge
         meta_y = title_y + 22
@@ -290,9 +291,10 @@ class GameCardDelegate(QStyledItemDelegate):
         painter.setFont(font)
         painter.setPen(QColor(tokens.TEXT_PRIMARY))
         title_str = game.title or game.name or "Untitled"
+        elided_title = painter.fontMetrics().elidedText(title_str, Qt.ElideRight, 260)
         genre_str = (game.genre or "unknown").capitalize()
         rev_val = getattr(game, "revision", 1) or 1
-        painter.drawText(QRect(r.x() + 64, r.y() + 10, 260, 20), Qt.AlignLeft | Qt.AlignVCenter, title_str)
+        painter.drawText(QRect(r.x() + 64, r.y() + 10, 260, 20), Qt.AlignLeft | Qt.AlignVCenter, elided_title)
 
         font.setPointSize(tokens.FONT_BODY_SM)
         font.setBold(False)
@@ -380,6 +382,7 @@ class GamesView(QWidget):
         self,
         projects_root: Optional[Union[str, Path]] = None,
         workspace_dir: Optional[Union[str, Path]] = None,
+        projects_service: Optional[Any] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -388,11 +391,15 @@ class GamesView(QWidget):
 
         self._projects_root = Path(projects_root).resolve() if projects_root else None
         self._workspace_dir = Path(workspace_dir).resolve() if workspace_dir else None
+        self._projects_service: Optional[Any] = None
         self._refresh_seq: int = 0
         self._selected_game_name: Optional[str] = None
         self._model = GamesListModel(self)
         self._job_manager = default_job_manager()
         self._delete_finished.connect(self._on_delete_finished)
+
+        if projects_service is not None:
+            self.attach_projects_service(projects_service)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(24, 20, 24, 20)
@@ -607,14 +614,41 @@ class GamesView(QWidget):
 
     # ── Slots & Logic ────────────────────────────────────────────────────────
 
+    def attach_projects_service(self, service: Any) -> None:
+        """Connect to shared ProjectsService to consume project updates."""
+        self._projects_service = service
+        if hasattr(service, "gamesLoaded"):
+            service.gamesLoaded.connect(self._on_service_games_loaded)
+        if hasattr(service, "gameDeleted"):
+            service.gameDeleted.connect(self._on_service_game_deleted)
+        if hasattr(service, "operationFailed"):
+            service.operationFailed.connect(self._on_service_operation_failed)
+
+    @Slot(list)
+    def _on_service_games_loaded(self, games: List[GameSummary]) -> None:
+        self._loaded_games = games
+        self._on_games_loaded()
+
+    @Slot(str)
+    def _on_service_game_deleted(self, project_name: str) -> None:
+        pdir = resolve_project_dir(project_name, self._projects_root)
+        self._delete_finished.emit(True, project_name, "", pdir or Path())
+
+    @Slot(str)
+    def _on_service_operation_failed(self, error_msg: str) -> None:
+        self._delete_finished.emit(False, "", error_msg, Path())
+
     def set_projects_root(self, root: Optional[Union[str, Path]]) -> None:
         """Update candidate projects root and refresh view."""
         self._projects_root = Path(root).resolve() if (root and str(root).strip()) else None
+        if hasattr(self, "_projects_service") and self._projects_service is not None:
+            if hasattr(self._projects_service, "_projects_root"):
+                self._projects_service._projects_root = self._projects_root
         self.refresh_games()
 
     @Slot()
     def refresh_games(self) -> None:
-        """Fetch games asynchronously via JobManager with stale rejection."""
+        """Fetch games asynchronously via ProjectsService or JobManager with stale rejection."""
         self._refresh_seq += 1
         seq = self._refresh_seq
         if hasattr(self, "_delegate"):
@@ -625,6 +659,11 @@ class GamesView(QWidget):
         if cur_idx.isValid():
             cur_game = self._model.get_game(cur_idx.row())
             self._selected_game_name = cur_game.name if cur_game else None
+
+        if hasattr(self, "_projects_service") and self._projects_service is not None:
+            if hasattr(self._projects_service, "refresh"):
+                self._projects_service.refresh()
+                return
 
         p_root = self._projects_root
         ws_dir = self._workspace_dir
@@ -803,6 +842,11 @@ class GamesView(QWidget):
 
     def _execute_delete(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         pdir = project_dir or resolve_project_dir(project_name, self._projects_root)
+
+        if hasattr(self, "_projects_service") and self._projects_service is not None:
+            if hasattr(self._projects_service, "delete_game"):
+                self._projects_service.delete_game(project_name, project_dir=pdir)
+                return
 
         def work() -> bool:
             success = delete_project(project_name, project_dir=pdir)

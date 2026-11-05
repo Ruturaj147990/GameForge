@@ -95,6 +95,8 @@ class AboutDialog(QDialog):
         btn_layout = QHBoxLayout()
 
         self._btn_copy = QPushButton("Copy System Info", self)
+        self._btn_copy.setObjectName("btnCopySystemInfo")
+        self._btn_copy.setAccessibleName("Copy system information to clipboard")
         self._btn_copy.setCursor(Qt.PointingHandCursor)
         self._btn_copy.setStyleSheet(
             f"QPushButton {{"
@@ -113,6 +115,8 @@ class AboutDialog(QDialog):
         btn_layout.addStretch(1)
 
         self._btn_close = QPushButton("Close", self)
+        self._btn_close.setObjectName("btnCloseAbout")
+        self._btn_close.setAccessibleName("Close about dialog")
         self._btn_close.setCursor(Qt.PointingHandCursor)
         self._btn_close.setStyleSheet(
             f"QPushButton {{"

@@ -58,6 +58,8 @@ class Composition(BaseModel):
     gds_id: str
     gds_revision: int
     project_name: str
+    genre: str = Field(default="Platformer")
+    pitch: str = Field(default="")
     modules: List[str]                       # kit module ids used
     plugins: List[str]                       # .uproject plugins to enable
     module_deps: List[str]                   # Build.cs deps for the game module

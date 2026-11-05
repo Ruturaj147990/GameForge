@@ -234,8 +234,14 @@ class OnboardingWizard(QWizard):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setObjectName("onboardingWizard")
+        self.setAccessibleName("GameForge First-Run Setup Wizard")
         self.setWindowTitle("GameForge Setup")
         self.resize(600, 420)
+        self.setStyleSheet(
+            f"QWizard#{self.objectName()} {{"
+            f"  background-color: {tokens.BG_ROOT};"
+            f"}}"
+        )
 
         self.engine_page = EnginePage(self)
         self.paths_page = PathsPage(self)

@@ -194,23 +194,6 @@ class BuildView(QWidget):
         self._btn_rollback.clicked.connect(self._show_rollback_menu)
         header_layout.addWidget(self._btn_rollback)
 
-        # Open project folder button
-        self._btn_open_folder = QPushButton("📁 Folder", self)
-        self._btn_open_folder.setObjectName("btnBuildOpenFolder")
-        self._btn_open_folder.setAccessibleName("Open project directory in Explorer")
-        self._btn_open_folder.setToolTip("Open active project folder in Explorer")
-        self._btn_open_folder.setCursor(Qt.PointingHandCursor)
-        self._btn_open_folder.setStyleSheet(
-            f"QPushButton#{self._btn_open_folder.objectName()} {{"
-            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
-            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
-            f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
-            f"}}"
-            f"QPushButton#{self._btn_open_folder.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
-        )
-        self._btn_open_folder.clicked.connect(self._on_open_folder_clicked)
-        header_layout.addWidget(self._btn_open_folder)
-
         main_layout.addLayout(header_layout)
 
         # ── Summary Banner (Ready to play or Failed) ──────────────────────────
@@ -364,18 +347,33 @@ class BuildView(QWidget):
         """Filter runs for project_name and switch store scope."""
         self._current_project = project_name
         p_dir = project_dir or resolve_project_dir(project_name, self._workspace)
+        self._project_dir = p_dir
         self._current_project_dir = p_dir
         if p_dir:
             self._store = RunStore(project_dir=p_dir, workspace_dir=self._workspace)
         self.refresh_runs()
 
-    @Slot()
-    def _on_open_folder_clicked(self) -> None:
-        p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project, self._workspace)
-        if p_dir:
-            open_folder_in_file_manager(p_dir)
-        elif self._workspace:
-            open_folder_in_file_manager(self._workspace)
+    def clear_project(self) -> None:
+        """Reset build view when no project is active."""
+        self._current_project = None
+        self._project_dir = None
+        self._current_project_dir = None
+        self._current_run_id = None
+        self._current_state = None
+        if hasattr(self, "_runs_combo"):
+            self._runs_combo.blockSignals(True)
+            self._runs_combo.clear()
+            self._runs_combo.blockSignals(False)
+        if hasattr(self, "_timeline_model"):
+            self._timeline_model.set_steps([])
+        if hasattr(self, "_log_view"):
+            self._log_view.clear()
+        if hasattr(self, "_problems_table"):
+            self._problems_table.set_problems([])
+        if hasattr(self, "_artifacts_text"):
+            self._artifacts_text.clear()
+        if hasattr(self, "_summary_banner"):
+            self._summary_banner.setVisible(False)
 
     def start_build(self, project_name: str, spec: Optional[Any] = None, project_dir: Optional[Path] = None) -> None:
         """Start or resume a Forge build run for project_name in a background thread."""

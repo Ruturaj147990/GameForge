@@ -135,15 +135,17 @@ class ToolGateway:
             ),
             ToolDefinition(
                 name="propose_edit",
-                description="Propose a file edit, generating a unified diff for developer review.",
+                description="Propose a file edit or new file creation, generating a unified diff for developer review. Accepts subpath, file_path, or path.",
                 parameters={
                     "type": "object",
                     "properties": {
                         "subpath": {"type": "string"},
+                        "file_path": {"type": "string"},
+                        "path": {"type": "string"},
                         "target_content": {"type": "string"},
                         "replacement_content": {"type": "string"},
                     },
-                    "required": ["subpath", "replacement_content"],
+                    "required": ["replacement_content"],
                 },
                 requires_approval=True,
             ),
@@ -369,6 +371,10 @@ class ToolGateway:
         params_schema = definition.parameters or {}
         required_params = params_schema.get("required", [])
         missing = [p for p in required_params if p not in args or args[p] is None]
+        # Allow propose_edit to use any of ('subpath', 'file_path', 'path')
+        if canonical_name == "propose_edit":
+            if not any(k in args and args[k] for k in ("subpath", "file_path", "path")):
+                missing.append("subpath")
         if missing:
             return {
                 "status": "ERROR",

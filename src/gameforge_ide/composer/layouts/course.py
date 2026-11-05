@@ -167,7 +167,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         runtime_class="/Script/GameForgeRuntime.GameForgeGoal",
         location=(last_pos[0], last_pos[1], last_pos[2] + 50.0),
         yaw=0.0,
-        tags=["GF_E_goal", "GF_Owned", "GF_Goal"],
+        tags=["GF_E_goal", "GF_Owned", "GF_Goal", "goal", "Goal", "Goal_1"],
         properties={},
     )
     actors.append(goal_actor)
@@ -181,7 +181,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         runtime_class="/Script/GameForgeRuntime.GameForgeCheckpoint",
         location=(mid_pos[0], mid_pos[1], mid_pos[2] + 50.0),
         yaw=0.0,
-        tags=["GF_E_checkpoint", "GF_Owned", "GF_Checkpoint"],
+        tags=["GF_E_checkpoint", "GF_Owned", "GF_Checkpoint", "checkpoint", "Checkpoint"],
         properties={},
     )
     actors.append(cp_actor)
@@ -201,7 +201,16 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 runtime_class="/Script/GameForgeRuntime.GameForgePickup",
                 location=(pos[0], pos[1], pos[2] + 60.0),
                 yaw=0.0,
-                tags=[f"GF_E_{entity_id}", "GF_Owned", f"GF_Pickup_{c_i + 1}"],
+                tags=[
+                    f"GF_E_{entity_id}",
+                    "GF_Owned",
+                    "pickup",
+                    "Pickup",
+                    f"GF_Pickup_{c_i + 1}",
+                    f"GF_pickup_{c_i + 1}",
+                    f"Pickup_{c_i + 1}",
+                    f"pickup_{c_i + 1}",
+                ],
                 properties={},
             )
             actors.append(pickup_actor)

@@ -505,6 +505,16 @@ class UnrealToolchain:
     def package(self, uproject: Path, archive_dir: Path, configuration: str = "Development",
                 platform: str = "Win64", timeout_s: float = 7200, profile: str = "default") -> StepResult:
         uproject = Path(uproject)
+        # Ensure GameForge plugin exists and is synchronized before packaging
+        try:
+            if uproject.is_file():
+                uproj_data = json.loads(uproject.read_text(encoding="utf-8"))
+                plugins = uproj_data.get("Plugins", [])
+                if any(p.get("Name") == "GameForge" for p in plugins):
+                    self.deploy_gameforge_plugin(uproject.parent)
+        except Exception as exc:
+            logger.warning("Could not check/deploy plugin before package: %s", exc)
+
         if profile == "release" or configuration == "Shipping":
             game_ini = uproject.parent / "Config" / "DefaultGame.ini"
             if game_ini.exists():

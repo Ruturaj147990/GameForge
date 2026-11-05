@@ -21,6 +21,13 @@ def composition_to_run_spec(
     """Generate a Forge RunSpec DAG from a Composition."""
     steps: List[StepSpec] = []
 
+    genre = getattr(comp, "genre", None)
+    if not genre and isinstance(comp.gfdef, dict):
+        genre = comp.gfdef.get("genre", "Platformer")
+    genre = genre or "Platformer"
+
+    pitch = getattr(comp, "pitch", "") or f"{comp.project_name} — dynamic {genre} gameplay"
+
     # 1. Design step
     steps.append(
         StepSpec(
@@ -31,7 +38,8 @@ def composition_to_run_spec(
             engine_lock=False,
             inputs={
                 "project_name": comp.project_name,
-                "genre": comp.gfdef.get("genre", "Platformer") if isinstance(comp.gfdef, dict) else "Platformer",
+                "genre": genre,
+                "pitch": pitch,
                 "gds_id": comp.gds_id,
                 "gds_revision": comp.gds_revision,
             },
@@ -116,6 +124,8 @@ def composition_to_run_spec(
                     "level_id": level.level_id,
                     "map_path": level.map_path,
                     "plan": level.model_dump(),
+                    "genre": genre,
+                    "project_name": comp.project_name,
                 },
             )
         )

@@ -235,7 +235,27 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                         loc = (center[0] + c_i * 200.0, center[1] + c_i * 200.0, 100.0)
 
                 actor_id = f"{e.entity_id}_{c_i}"
-                tags = [f"GF_E_{e.entity_id}", "GF_Owned", f"GF_{e.kind}_{c_i + 1}"]
+                kind_raw = str(getattr(e.kind, "value", e.kind)).lower()
+                kind_cap = kind_raw.capitalize()
+                tags = [
+                    f"GF_E_{e.entity_id}",
+                    "GF_Owned",
+                    kind_raw,
+                    kind_cap,
+                    f"{kind_raw}_{c_i + 1}",
+                    f"{kind_cap}_{c_i + 1}",
+                    f"GF_{kind_raw}_{c_i + 1}",
+                    f"GF_{kind_cap}_{c_i + 1}",
+                    actor_id,
+                ]
+                if kind_raw in ("enemy", "spawner", "ranged_enemy"):
+                    tags.extend(["enemy", "Enemy", f"Enemy_{c_i + 1}", f"enemy_{c_i + 1}"])
+                elif kind_raw in ("pickup", "collectible", "relic", "coin"):
+                    tags.extend(["pickup", "Pickup", f"Pickup_{c_i + 1}", f"pickup_{c_i + 1}"])
+                elif kind_raw in ("goal", "exit", "flag"):
+                    tags.extend(["goal", "Goal", f"Goal_{c_i + 1}", f"goal_{c_i + 1}"])
+                # Deduplicate while preserving order
+                tags = list(dict.fromkeys(tags))
 
                 # Map props: support aliases, direct PascalCase overrides, and nested property_overrides
                 props: Dict[str, Any] = {}
@@ -300,11 +320,25 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     else:
         project_name = "GameForgeGame"
 
+    # Genre and pitch extraction
+    genre_val = "Platformer"
+    if hasattr(gds, "overview") and getattr(gds.overview, "genre", None):
+        g = gds.overview.genre
+        genre_val = g.value if hasattr(g, "value") else str(g)
+
+    pitch_val = getattr(gds.overview, "pitch", "") if hasattr(gds, "overview") else ""
+    if not pitch_val and hasattr(gds, "meta") and getattr(gds.meta, "source_prompt", None):
+        pitch_val = gds.meta.source_prompt
+    if not pitch_val:
+        pitch_val = f"{project_name} — {genre_val} game experience"
+
     # Temporary composition object for gfdef builder
     prelim_comp = Composition(
         gds_id=getattr(gds.meta, "id", "gds_0"),
         gds_revision=getattr(gds.meta, "revision", 1),
         project_name=project_name,
+        genre=genre_val,
+        pitch=pitch_val,
         modules=sorted(used_modules),
         plugins=sorted(required_plugins),
         module_deps=sorted(required_deps),

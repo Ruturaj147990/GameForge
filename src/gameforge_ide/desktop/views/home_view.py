@@ -170,11 +170,13 @@ class RecentGameCard(QFrame):
     def _load_thumbnail(self, path: Optional[Any]) -> None:
         if path and str(path):
             try:
-                pm = QPixmap(str(path))
-                if not pm.isNull():
-                    scaled = pm.scaled(126, 78, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                    self._thumb_lbl.setPixmap(scaled)
-                    return
+                p = Path(path)
+                if p.is_file():
+                    pm = QPixmap(str(p))
+                    if not pm.isNull():
+                        scaled = pm.scaled(126, 78, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        self._thumb_lbl.setPixmap(scaled)
+                        return
             except Exception:
                 pass
         # Placeholder
@@ -205,6 +207,14 @@ class RecentGameCard(QFrame):
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event: Any) -> None:
+        if event.button() == Qt.LeftButton:
+            if self.game and getattr(self.game, "name", None):
+                self.clicked.emit(self.game.name)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
@@ -282,6 +292,7 @@ class HomeView(QWidget):
 
     designReady = Signal(object, list)       # (GameDesignSpec, questions)
     projectSelected = Signal(str)             # (project_name)
+    projectDirectoryChangeRequested = Signal(Path)  # (Path) -> Authoritative directory update
     openAssistantRequested = Signal()         # Request to open assistant panel
     fixActionRequested = Signal(str)          # ("start_ollama" | "set_engine" | "open_hosted")
 
@@ -293,6 +304,7 @@ class HomeView(QWidget):
         self._active_job: Optional[JobHandle] = None
         self._job_manager = default_job_manager()
         self._scan_generation: int = 0
+        self._projects_service: Optional[Any] = None
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(32, 28, 32, 28)
@@ -342,19 +354,10 @@ class HomeView(QWidget):
         chips_layout.addStretch(1)
         hero_layout.addLayout(chips_layout)
 
-        # Project Root Location Selection (Two-Location Storage Architecture)
-        location_layout = QHBoxLayout()
-        location_layout.setSpacing(tokens.SPACE_SM)
-        lbl_loc = QLabel("Project Folder:", self)
-        lbl_loc.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 500;")
+        # Internal project directory reference (authoritative root managed centrally via TopBar and Settings)
         self._edit_project_dir = QLineEdit(self)
         self._edit_project_dir.setObjectName("homeEditProjectDir")
-        self._edit_project_dir.setPlaceholderText("Select user project directory (authoritative root)…")
-        self._edit_project_dir.setStyleSheet(
-            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
-            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; "
-            f"padding: 4px 8px; font-size: {tokens.FONT_BODY_SM}px;"
-        )
+        self._edit_project_dir.setVisible(False)
         from src.gameforge_ide.core.settings import get_settings
         s = get_settings()
         default_root = s.projects_root
@@ -368,21 +371,6 @@ class HomeView(QWidget):
                 default_root = Path.home() / "Documents" / "GameForge" / "Projects"
         self._edit_project_dir.setText(str(default_root))
         self._edit_project_dir.textChanged.connect(self._on_project_dir_text_changed)
-
-        btn_browse_loc = QPushButton("Browse…", self)
-        btn_browse_loc.setObjectName("homeBtnBrowseProjectDir")
-        btn_browse_loc.setCursor(Qt.PointingHandCursor)
-        btn_browse_loc.setStyleSheet(
-            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
-            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; "
-            f"padding: 4px 12px; font-size: {tokens.FONT_BODY_SM}px;"
-        )
-        btn_browse_loc.clicked.connect(self._on_browse_project_dir_clicked)
-
-        location_layout.addWidget(lbl_loc)
-        location_layout.addWidget(self._edit_project_dir, 1)
-        location_layout.addWidget(btn_browse_loc)
-        hero_layout.addLayout(location_layout)
 
         # Action Bar: Design it -> + Spinner / Cancel + Unsupported notice
         action_layout = QHBoxLayout()
@@ -547,14 +535,24 @@ class HomeView(QWidget):
         current = self._edit_project_dir.text().strip()
         chosen = QFileDialog.getExistingDirectory(self, "Choose Project Directory", current or str(Path.home()))
         if chosen:
-            self._edit_project_dir.setText(str(Path(chosen).resolve()))
+            pdir = Path(chosen).resolve()
+            self._edit_project_dir.setText(str(pdir))
+            self.projectDirectoryChangeRequested.emit(pdir)
             self.refresh_recent_games()
 
     @Slot(str)
     def _on_project_dir_text_changed(self, text: str) -> None:
-        p = Path(text.strip())
-        if p.is_dir():
-            self.refresh_recent_games()
+        try:
+            p = Path(text.strip())
+            if p.is_dir():
+                resolved = p.resolve()
+                if hasattr(self, "_projects_service") and self._projects_service is not None:
+                    if hasattr(self._projects_service, "_projects_root"):
+                        self._projects_service._projects_root = resolved
+                self.projectDirectoryChangeRequested.emit(resolved)
+                self.refresh_recent_games()
+        except Exception:
+            pass
 
     @Slot()
     def _on_preset_chip_clicked(self) -> None:
@@ -649,13 +647,16 @@ class HomeView(QWidget):
         # Attach authoritative user-selected project directory (Two-Location Storage Architecture)
         pdir_text = self._edit_project_dir.text().strip()
         if pdir_text and gds and hasattr(gds, "meta"):
-            base_dir = Path(pdir_text).resolve()
-            proj_name = getattr(gds.meta, "project_name", None) or "MyGame"
-            if base_dir.name.lower() == proj_name.lower():
-                target_pdir = base_dir
-            else:
-                target_pdir = base_dir / proj_name
-            setattr(gds.meta, "project_dir", str(target_pdir))
+            try:
+                base_dir = Path(pdir_text).resolve()
+                proj_name = getattr(gds.meta, "project_name", None) or "MyGame"
+                if base_dir.name.lower() == proj_name.lower():
+                    target_pdir = base_dir
+                else:
+                    target_pdir = base_dir / proj_name
+                setattr(gds.meta, "project_dir", str(target_pdir))
+            except Exception as e:
+                logger.warning("Could not resolve project directory '%s': %s", pdir_text, e)
 
         print(f"[GameForge Studio] Design draft status: {result.status}" + (f" (Project: '{pname}')" if pname else "") + (f" | {q_count} questions" if q_count else ""), flush=True)
         if result.status == "OK":
@@ -690,11 +691,31 @@ class HomeView(QWidget):
         self._status_lbl.setText("Cancelling…")
         self._btn_cancel.setEnabled(False)
 
+    def attach_projects_service(self, service: Any) -> None:
+        """Connect to shared ProjectsService to consume project updates."""
+        self._projects_service = service
+        if hasattr(service, "gamesLoaded"):
+            service.gamesLoaded.connect(self._on_projects_loaded)
+        if hasattr(service, "gameDeleted"):
+            service.gameDeleted.connect(lambda _: self.refresh_recent_games())
+
+    @Slot(list)
+    def _on_projects_loaded(self, games: List[GameSummary]) -> None:
+        self._latest_games = games[:6] if games else []
+        from PySide6.QtCore import QMetaObject, Qt
+        QMetaObject.invokeMethod(self, "_render_recent_games", Qt.QueuedConnection)
+
     def set_project_directory(self, path: Path | str) -> None:
         """Programmatically update authoritative project directory and refresh games."""
-        resolved = Path(path).resolve()
+        try:
+            resolved = Path(path).resolve()
+        except Exception:
+            resolved = Path(path)
         if hasattr(self, "_edit_project_dir"):
             self._edit_project_dir.setText(str(resolved))
+        if hasattr(self, "_projects_service") and self._projects_service is not None:
+            if hasattr(self._projects_service, "_projects_root"):
+                self._projects_service._projects_root = resolved
         self.refresh_recent_games()
 
     def refresh_recent_games(self) -> None:
@@ -702,6 +723,11 @@ class HomeView(QWidget):
         self._scan_generation += 1
         current_gen = self._scan_generation
         pdir = self._edit_project_dir.text().strip() if hasattr(self, "_edit_project_dir") else ""
+
+        if hasattr(self, "_projects_service") and self._projects_service is not None:
+            if hasattr(self._projects_service, "refresh"):
+                self._projects_service.refresh()
+                return
 
         def work():
             if pdir and Path(pdir).is_dir():

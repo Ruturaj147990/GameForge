@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -35,14 +35,24 @@ class NewProjectDialog(QDialog):
         parent: Optional[QWidget] = None,
         initial_name: str = "MyNewGame",
         initial_parent_dir: Optional[Path] = None,
+        projects_root: Optional[Union[str, Path]] = None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("newProjectDialog")
+        self.setAccessibleName("Create or Open Project dialog")
         self.setWindowTitle("Create or Open Project — GameForge")
         self.setMinimumWidth(560)
         self.setModal(True)
+        self.setStyleSheet(
+            f"QDialog#{self.objectName()} {{"
+            f"  background-color: {tokens.BG_ROOT};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"}}"
+        )
 
+        parent_dir = projects_root or initial_parent_dir
         self._default_parent = Path(
-            initial_parent_dir or get_settings().projects_root or (Path.home() / "Documents" / "GameForge" / "Projects")
+            parent_dir or get_settings().projects_root or (Path.home() / "Documents" / "GameForge" / "Projects")
         ).resolve()
 
         self._init_ui(initial_name)
@@ -85,11 +95,14 @@ class NewProjectDialog(QDialog):
         lbl_name = QLabel("Project Name (C++ identifier):", self)
         lbl_name.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: 500;")
         self._edit_name = QLineEdit(initial_name, self)
+        self._edit_name.setObjectName("newProjectNameInput")
+        self._edit_name.setAccessibleName("Project Name identifier input")
         self._edit_name.setStyleSheet(
             f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
             f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px;"
         )
         self._edit_name.textChanged.connect(self._on_name_changed)
+        self._edit_name.returnPressed.connect(self._on_confirm_clicked)
         name_layout.addWidget(lbl_name)
         name_layout.addWidget(self._edit_name)
         layout.addLayout(name_layout)
@@ -100,13 +113,19 @@ class NewProjectDialog(QDialog):
         lbl_dir.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: 500;")
         dir_input_row = QHBoxLayout()
         self._edit_dir = QLineEdit(str(self._default_parent), self)
+        self._edit_dir.setObjectName("newProjectDirInput")
+        self._edit_dir.setAccessibleName("Project Folder Location input")
         self._edit_dir.setStyleSheet(
             f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
             f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px;"
         )
         self._edit_dir.textChanged.connect(self._update_resolution)
+        self._edit_dir.returnPressed.connect(self._on_confirm_clicked)
 
         btn_browse = QPushButton("Browse…", self)
+        btn_browse.setObjectName("btnBrowseNewProjectDir")
+        btn_browse.setAccessibleName("Browse project directory")
+        btn_browse.setCursor(Qt.PointingHandCursor)
         btn_browse.setStyleSheet(
             f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
             f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 14px;"
@@ -144,6 +163,9 @@ class NewProjectDialog(QDialog):
         btn_row.addStretch(1)
 
         self._btn_cancel = QPushButton("Cancel", self)
+        self._btn_cancel.setObjectName("btnCancelNewProject")
+        self._btn_cancel.setAccessibleName("Cancel project creation")
+        self._btn_cancel.setCursor(Qt.PointingHandCursor)
         self._btn_cancel.setStyleSheet(
             f"background-color: transparent; color: {tokens.TEXT_MUTED}; "
             f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 14px;"
@@ -151,6 +173,9 @@ class NewProjectDialog(QDialog):
         self._btn_cancel.clicked.connect(self.reject)
 
         self._btn_confirm = QPushButton("Confirm Project Root", self)
+        self._btn_confirm.setObjectName("btnConfirmNewProject")
+        self._btn_confirm.setAccessibleName("Confirm project root directory")
+        self._btn_confirm.setCursor(Qt.PointingHandCursor)
         self._btn_confirm.setStyleSheet(
             f"background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY}; "
             f"border: none; border-radius: {tokens.RADIUS}px; padding: 6px 18px; font-weight: 600;"
@@ -192,13 +217,23 @@ class NewProjectDialog(QDialog):
             return name, parent_dir
         return name, parent_dir / name
 
+    def project_name(self) -> str:
+        """Convenience accessor for project name."""
+        name, _ = self.get_resolved_project_dir()
+        return name
+
+    def project_dir(self) -> Path:
+        """Convenience accessor for authoritative project directory."""
+        _, pdir = self.get_resolved_project_dir()
+        return pdir
+
     def _update_resolution(self) -> None:
         name, pdir = self.get_resolved_project_dir()
         self._lbl_resolved.setText(f"Authoritative Root:\n{pdir}")
 
         # Validation
         if not name:
-            self._lbl_status.setText("<font color='red'>✕ Please enter a valid project name.</font>")
+            self._lbl_status.setText(f"<font color='{tokens.ACCENT_ERROR}'>✕ Please enter a valid project name.</font>")
             self._btn_confirm.setEnabled(False)
             return
 
@@ -209,7 +244,7 @@ class NewProjectDialog(QDialog):
             parent_exists = False
 
         if not parent_exists:
-            self._lbl_status.setText("<font color='orange'>⚠️ Parent directory does not exist yet (will be created).</font>")
+            self._lbl_status.setText(f"<font color='{tokens.ACCENT_WARNING}'>⚠️ Parent directory does not exist yet (will be created).</font>")
             self._btn_confirm.setEnabled(True)
             return
 
@@ -226,7 +261,7 @@ class NewProjectDialog(QDialog):
                     )
                 else:
                     self._lbl_status.setText(
-                        "<font color='orange'>⚠️ Directory is not empty. Existing files may be modified.</font>"
+                        f"<font color='{tokens.ACCENT_WARNING}'>⚠️ Directory is not empty. Existing files may be modified.</font>"
                     )
         else:
             self._lbl_status.setText(
