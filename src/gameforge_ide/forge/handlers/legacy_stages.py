@@ -275,7 +275,7 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
                         import shutil
                         shutil.rmtree(old_src_dir, ignore_errors=True)
                 except Exception as exc:
-                    errors.append(f"Assemble validation error: {exc}")
+                    ctx.log(f"Stale project cleanup warning: {exc}")
 
     # Resolve default map: inputs -> plan -> GDS -> filesystem -> fallback
     default_map = ctx.step.inputs.get("default_map")

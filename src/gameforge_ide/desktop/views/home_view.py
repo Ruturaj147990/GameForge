@@ -653,7 +653,14 @@ class HomeView(QWidget):
                 if base_dir.name.lower() == proj_name.lower():
                     target_pdir = base_dir
                 else:
-                    target_pdir = base_dir / proj_name
+                    from src.gameforge_ide.core.settings import get_settings
+                    s_root = get_settings().projects_root
+                    if s_root and (base_dir == Path(s_root).resolve() or base_dir.parent == Path(s_root).resolve()):
+                        target_pdir = Path(s_root).resolve() / proj_name
+                    elif (base_dir / "GameForge").is_dir() or any(base_dir.glob("*.uproject")):
+                        target_pdir = base_dir.parent / proj_name
+                    else:
+                        target_pdir = base_dir / proj_name
                 setattr(gds.meta, "project_dir", str(target_pdir))
             except Exception as e:
                 logger.warning("Could not resolve project directory '%s': %s", pdir_text, e)

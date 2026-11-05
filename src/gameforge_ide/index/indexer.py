@@ -24,11 +24,15 @@ RE_UENUM = re.compile(r"UENUM\s*\([^)]*\)", re.MULTILINE)
 RE_UFUNCTION = re.compile(r"UFUNCTION\s*\([^)]*\)", re.MULTILINE)
 RE_UPROPERTY = re.compile(r"UPROPERTY\s*\([^)]*\)", re.MULTILINE)
 
-RE_CLASS_DECL = re.compile(r"\bclass\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Z][A-Za-z0-9_]*)(?:\s*:\s*public\s+([A-Za-z0-9_]+))?", re.MULTILINE)
-RE_STRUCT_DECL = re.compile(r"\bstruct\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Z][A-Za-z0-9_]*)", re.MULTILINE)
+RE_CLASS_DECL = re.compile(r"\bclass\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*(?:public|protected|private|virtual\s+public)?\s*([A-Za-z_][A-Za-z0-9_]*))?", re.MULTILINE)
+RE_STRUCT_DECL = re.compile(r"\bstruct\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
 RE_ENUM_DECL = re.compile(r"\benum\s+(?:class\s+)?([A-Za-z0-9_]+)", re.MULTILINE)
-RE_FUNC_DECL = re.compile(r"(?:virtual\s+|static\s+)?(?:[\w:<>&*~]+\s+)+([^\W\d]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:override\s*)?(?:final\s*)?[;{]", re.MULTILINE | re.UNICODE)
-RE_PROP_DECL = re.compile(r"(?:[\w:<>&*]+\s+)+([^\W\d]\w*)\s*(?:=\s*[^;]+)?;", re.MULTILINE | re.UNICODE)
+RE_FUNC_DECL = re.compile(r"(?:virtual\s+|static\s+|inline\s+|FORCEINLINE\s+)?(?:[A-Za-z0-9_:<>&*~,]+\s+)+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:override\s*)?(?:final\s*)?[;{]", re.MULTILINE | re.UNICODE)
+RE_PROP_DECL = re.compile(r"(?:[A-Za-z0-9_:<>&*,]+\s+)+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*[^;]+)?;", re.MULTILINE | re.UNICODE)
+CPP_CONTROL_KEYWORDS = {
+    "if", "while", "for", "switch", "catch", "return", "sizeof", "decltype",
+    "static_cast", "dynamic_cast", "reinterpret_cast", "const_cast", "case", "default",
+}
 
 
 class ProjectIndex:
@@ -54,7 +58,8 @@ class ProjectIndex:
         return conn
 
     def _init_db(self) -> None:
-        with self._get_connection() as conn:
+        conn = self._get_connection()
+        try:
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS files (
@@ -97,16 +102,29 @@ class ProjectIndex:
             )
             # Create FTS5 virtual table for symbols with sync triggers
             try:
-                conn.execute(
-                    """
-                    CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
-                        name,
-                        file,
-                        content=symbols,
-                        content_rowid=id
-                    );
-                    """
-                )
+                try:
+                    conn.execute(
+                        """
+                        CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
+                            name,
+                            file,
+                            content=symbols,
+                            content_rowid=id,
+                            tokenize="unicode61 tokenchars '_'"
+                        );
+                        """
+                    )
+                except sqlite3.OperationalError:
+                    conn.execute(
+                        """
+                        CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
+                            name,
+                            file,
+                            content=symbols,
+                            content_rowid=id
+                        );
+                        """
+                    )
                 conn.execute(
                     """
                     CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
@@ -132,6 +150,8 @@ class ProjectIndex:
                 self._has_fts_triggers = True
             except sqlite3.OperationalError:
                 self._has_fts_triggers = False
+        finally:
+            conn.close()
 
     def index_project(self, force: bool = False) -> Dict[str, Any]:
         """Scan project tree and update database incrementally."""
@@ -285,63 +305,102 @@ class ProjectIndex:
         def has_macro(name: str, start_idx: int, end_idx: int) -> bool:
             return any(name in lines[k] for k in range(max(0, start_idx), min(len(lines), end_idx)))
 
+        def get_joined_snippet(start_line_idx: int, max_lines: int = 5, terminators: tuple = (";", "{")) -> str:
+            snip_lines = []
+            for k in range(start_line_idx, min(len(lines), start_line_idx + max_lines)):
+                snip_lines.append(lines[k])
+                if any(t in lines[k] for t in terminators):
+                    break
+            return "\n".join(snip_lines)
+
         current_class: Optional[str] = None
+        seen_symbols: set[Tuple[str, str]] = set()
         for i, line in enumerate(lines, 1):
             sline = line.strip()
-
-            # Enum declaration (check before class because of `enum class`)
-            m_enum = RE_ENUM_DECL.search(line)
-            if m_enum and (has_macro("UENUM", i - 3, i) or sline.startswith("enum")):
-                en_name = m_enum.group(1)
-                symbols.append(
-                    {
-                        "kind": "enum",
-                        "name": en_name,
-                        "file": rel_str,
-                        "line": i,
-                        "parent": current_class,
-                    }
-                )
+            if not sline or sline.startswith(("//", "/*", "*", "#", "GENERATED_BODY")):
+                continue
+            if sline.startswith(("UCLASS", "USTRUCT", "UENUM", "UPROPERTY", "UFUNCTION")):
                 continue
 
+            # Enum declaration (check before class because of `enum class`)
+            if "enum" in sline:
+                snippet = get_joined_snippet(i - 1, max_lines=4, terminators=("{", ";"))
+                m_enum = RE_ENUM_DECL.search(snippet)
+                if m_enum and (has_macro("UENUM", i - 12, i) or sline.startswith("enum")):
+                    en_name = m_enum.group(1)
+                    if ("enum", en_name) not in seen_symbols:
+                        seen_symbols.add(("enum", en_name))
+                        symbols.append(
+                            {
+                                "kind": "enum",
+                                "name": en_name,
+                                "file": rel_str,
+                                "line": i,
+                                "parent": current_class,
+                            }
+                        )
+                    continue
+
             # Class declaration (skip if enum class)
-            if not sline.startswith("enum"):
-                m_class = RE_CLASS_DECL.search(line)
-                if m_class and (has_macro("UCLASS", i - 3, i) or "class" in sline):
+            if "class" in sline and not sline.startswith("enum"):
+                snippet = get_joined_snippet(i - 1, max_lines=5, terminators=("{", ";"))
+                m_class = RE_CLASS_DECL.search(snippet)
+                if m_class and (has_macro("UCLASS", i - 12, i) or "class" in sline):
                     cls_name = m_class.group(1)
                     parent_cls = m_class.group(2)
                     current_class = cls_name
-                    symbols.append(
-                        {
-                            "kind": "class",
-                            "name": cls_name,
-                            "file": rel_str,
-                            "line": i,
-                            "parent": parent_cls,
-                        }
-                    )
+                    if ("class", cls_name) not in seen_symbols:
+                        seen_symbols.add(("class", cls_name))
+                        symbols.append(
+                            {
+                                "kind": "class",
+                                "name": cls_name,
+                                "file": rel_str,
+                                "line": i,
+                                "parent": parent_cls,
+                            }
+                        )
                     continue
 
             # Struct declaration
-            m_struct = RE_STRUCT_DECL.search(line)
-            if m_struct and (has_macro("USTRUCT", i - 3, i) or "struct" in sline):
-                st_name = m_struct.group(1)
-                symbols.append(
-                    {
-                        "kind": "struct",
-                        "name": st_name,
-                        "file": rel_str,
-                        "line": i,
-                        "parent": current_class,
-                    }
-                )
-                continue
+            if "struct" in sline:
+                snippet = get_joined_snippet(i - 1, max_lines=4, terminators=("{", ";"))
+                m_struct = RE_STRUCT_DECL.search(snippet)
+                if m_struct and (has_macro("USTRUCT", i - 12, i) or "struct" in sline):
+                    st_name = m_struct.group(1)
+                    if ("struct", st_name) not in seen_symbols:
+                        seen_symbols.add(("struct", st_name))
+                        symbols.append(
+                            {
+                                "kind": "struct",
+                                "name": st_name,
+                                "file": rel_str,
+                                "line": i,
+                                "parent": current_class,
+                            }
+                        )
+                    continue
 
             # UFUNCTION declaration
-            if has_macro("UFUNCTION", i - 6, i):
-                m_fn = RE_FUNC_DECL.search(line)
-                if m_fn:
-                    fn_name = m_fn.group(1)
+            is_ufunction = has_macro("UFUNCTION", i - 12, i)
+            fn_snippet = get_joined_snippet(i - 1, max_lines=6, terminators=(";", "{"))
+            m_fn = RE_FUNC_DECL.search(fn_snippet)
+            fn_name = None
+            if m_fn:
+                cand = m_fn.group(1)
+                if cand not in CPP_CONTROL_KEYWORDS:
+                    fn_name = cand
+            elif is_ufunction:
+                clean_fn = re.sub(r"//.*$", "", fn_snippet).strip()
+                m_direct = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", clean_fn)
+                if m_direct:
+                    cand = m_direct.group(1)
+                    if cand not in CPP_CONTROL_KEYWORDS and cand not in ("UFUNCTION", "UPROPERTY"):
+                        fn_name = cand
+
+            if fn_name and (is_ufunction or (current_class and not sline.startswith(("//", "/*", "*", "#")))):
+                if ("function", fn_name) not in seen_symbols:
+                    seen_symbols.add(("function", fn_name))
                     symbols.append(
                         {
                             "kind": "function",
@@ -351,22 +410,37 @@ class ProjectIndex:
                             "parent": current_class,
                         }
                     )
-                    continue
+                continue
 
             # UPROPERTY declaration
-            if has_macro("UPROPERTY", i - 6, i):
-                m_prop = RE_PROP_DECL.search(line)
+            if has_macro("UPROPERTY", i - 12, i):
+                prop_snippet = get_joined_snippet(i - 1, max_lines=6, terminators=(";",))
+                m_prop = RE_PROP_DECL.search(prop_snippet)
+                prop_name = None
                 if m_prop:
-                    prop_name = m_prop.group(1)
-                    symbols.append(
-                        {
-                            "kind": "property",
-                            "name": prop_name,
-                            "file": rel_str,
-                            "line": i,
-                            "parent": current_class,
-                        }
-                    )
+                    cand = m_prop.group(1)
+                    if cand not in CPP_CONTROL_KEYWORDS:
+                        prop_name = cand
+                else:
+                    clean_prop = re.sub(r"//.*$", "", prop_snippet).strip()
+                    m_direct_prop = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*[^;]+)?;\s*$", clean_prop)
+                    if m_direct_prop:
+                        cand = m_direct_prop.group(1)
+                        if cand not in CPP_CONTROL_KEYWORDS and cand not in ("UFUNCTION", "UPROPERTY"):
+                            prop_name = cand
+
+                if prop_name:
+                    if ("property", prop_name) not in seen_symbols:
+                        seen_symbols.add(("property", prop_name))
+                        symbols.append(
+                            {
+                                "kind": "property",
+                                "name": prop_name,
+                                "file": rel_str,
+                                "line": i,
+                                "parent": current_class,
+                            }
+                        )
                     continue
 
         return symbols
@@ -435,8 +509,8 @@ class ProjectIndex:
 
         conn = self._get_connection()
         try:
-            clean_q = re.sub(r"[^A-Za-z0-9_*]", "", query).strip()
-            use_fts = bool(re.search(r"[A-Za-z0-9]", clean_q))
+            clean_q = re.sub(r'[^A-Za-z0-9_*]', " ", query).strip()
+            use_fts = bool(re.search(r"[A-Za-z0-9_]", clean_q))
 
             results = []
             total = 0
@@ -444,35 +518,44 @@ class ProjectIndex:
 
             if use_fts:
                 try:
-                    q_fts = f"{clean_q}*" if not clean_q.endswith("*") else clean_q
-                    where_clauses = ["symbols_fts MATCH ?"]
-                    params: List[Any] = [q_fts]
-                    if kind:
-                        where_clauses.append("s.kind = ?")
-                        params.append(kind)
-                    where_str = f"WHERE {' AND '.join(where_clauses)}"
+                    terms = clean_q.split()
+                    quoted_terms = []
+                    for t in terms:
+                        t_clean = t.replace('"', '').strip('*')
+                        if not t_clean:
+                            continue
+                        quoted_terms.append(f'"{t_clean}"*')
 
-                    count_sql = f"SELECT COUNT(*) FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid {where_str}"
-                    total = conn.execute(count_sql, params).fetchone()[0]
+                    if quoted_terms:
+                        q_fts = " ".join(quoted_terms)
+                        where_clauses = ["symbols_fts MATCH ?"]
+                        params: List[Any] = [q_fts]
+                        if kind:
+                            where_clauses.append("s.kind = ?")
+                            params.append(kind)
+                        where_str = f"WHERE {' AND '.join(where_clauses)}"
 
-                    select_sql = (
-                        f"SELECT s.kind, s.name, s.file, s.line, s.parent "
-                        f"FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid "
-                        f"{where_str} ORDER BY s.name ASC LIMIT ? OFFSET ?"
-                    )
-                    params.extend([limit, offset])
-                    rows = conn.execute(select_sql, params).fetchall()
-                    results = [
-                        {
-                            "kind": r[0],
-                            "name": r[1],
-                            "file": r[2],
-                            "line": r[3],
-                            "parent": r[4],
-                        }
-                        for r in rows
-                    ]
-                    fts_worked = True
+                        count_sql = f"SELECT COUNT(*) FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid {where_str}"
+                        total = conn.execute(count_sql, params).fetchone()[0]
+
+                        select_sql = (
+                            f"SELECT s.kind, s.name, s.file, s.line, s.parent "
+                            f"FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid "
+                            f"{where_str} ORDER BY s.name ASC LIMIT ? OFFSET ?"
+                        )
+                        params.extend([limit, offset])
+                        rows = conn.execute(select_sql, params).fetchall()
+                        results = [
+                            {
+                                "kind": r[0],
+                                "name": r[1],
+                                "file": r[2],
+                                "line": r[3],
+                                "parent": r[4],
+                            }
+                            for r in rows
+                        ]
+                        fts_worked = True
                 except Exception:
                     fts_worked = False
 

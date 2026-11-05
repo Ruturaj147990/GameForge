@@ -84,7 +84,8 @@ class ToolGateway:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "subpath": {"type": "string", "default": "."},
+                        "subpath": {"type": "string", "default": ".", "description": "Path relative to workspace root (aliases: path, directory)."},
+                        "path": {"type": "string"},
                         "max_depth": {"type": "integer", "default": 2},
                     },
                 },
@@ -96,7 +97,9 @@ class ToolGateway:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "subpath": {"type": "string"},
+                        "subpath": {"type": "string", "description": "Path relative to workspace root (aliases: file_path, path)."},
+                        "file_path": {"type": "string"},
+                        "path": {"type": "string"},
                         "start_line": {"type": "integer", "default": 1},
                         "end_line": {"type": "integer", "optional": True},
                     },
@@ -110,8 +113,9 @@ class ToolGateway:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string"},
-                        "kind": {"type": "string"},
+                        "query": {"type": "string", "description": "Search query for symbol name or asset (aliases: q, symbol)."},
+                        "q": {"type": "string"},
+                        "kind": {"type": "string", "description": "Filter by kind: class, struct, enum, function, property."},
                         "limit": {"type": "integer", "default": 50},
                         "offset": {"type": "integer", "default": 0},
                     },
@@ -125,8 +129,10 @@ class ToolGateway:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string"},
-                        "subpath": {"type": "string", "default": "."},
+                        "query": {"type": "string", "description": "Text or regex pattern (aliases: pattern)."},
+                        "pattern": {"type": "string"},
+                        "subpath": {"type": "string", "default": ".", "description": "Directory relative to workspace root (aliases: path)."},
+                        "path": {"type": "string"},
                         "is_regex": {"type": "boolean", "default": False},
                     },
                     "required": ["query"],
@@ -139,11 +145,11 @@ class ToolGateway:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "subpath": {"type": "string"},
+                        "subpath": {"type": "string", "description": "Path relative to workspace root (aliases: file_path, path)."},
                         "file_path": {"type": "string"},
                         "path": {"type": "string"},
-                        "target_content": {"type": "string"},
-                        "replacement_content": {"type": "string"},
+                        "target_content": {"type": "string", "description": "Target block to replace (aliases: target, old_content)."},
+                        "replacement_content": {"type": "string", "description": "New content to insert (aliases: replacement, new_content)."},
                     },
                     "required": ["replacement_content"],
                 },
@@ -339,6 +345,147 @@ class ToolGateway:
             return True
         return definition.requires_approval
 
+    def _normalize_arguments(self, canonical_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(args)
+
+        # Path parameter normalization across tools
+        path_val = (
+            normalized.get("subpath")
+            or normalized.get("file_path")
+            or normalized.get("path")
+            or normalized.get("filepath")
+            or normalized.get("file")
+            or normalized.get("dir_path")
+            or normalized.get("directory")
+            or normalized.get("folder")
+        )
+        if path_val and "subpath" not in normalized:
+            normalized["subpath"] = path_val
+
+        if canonical_name == "propose_edit":
+            target = (
+                normalized.get("target_content")
+                or normalized.get("target")
+                or normalized.get("old_content")
+                or normalized.get("old_str")
+                or normalized.get("search")
+                or normalized.get("find")
+                or normalized.get("original_content")
+                or normalized.get("original_text")
+                or normalized.get("old")
+            )
+            if target is not None and "target_content" not in normalized:
+                normalized["target_content"] = target
+            elif "target_content" not in normalized:
+                normalized["target_content"] = ""
+
+            repl = (
+                normalized.get("replacement_content")
+                or normalized.get("replacement")
+                or normalized.get("new_content")
+                or normalized.get("new_str")
+                or normalized.get("replace")
+                or normalized.get("new")
+                or normalized.get("content")
+                or normalized.get("text")
+            )
+            if repl is not None and "replacement_content" not in normalized:
+                normalized["replacement_content"] = repl
+
+        elif canonical_name in ("apply_edit", "rollback_edit", "reject_edit"):
+            diff_id = normalized.get("diff_id") or normalized.get("id") or normalized.get("diff")
+            if diff_id and "diff_id" not in normalized:
+                normalized["diff_id"] = diff_id
+
+        elif canonical_name in ("apply_batch", "rollback_batch"):
+            diff_ids = (
+                normalized.get("diff_ids")
+                or normalized.get("diffs")
+                or normalized.get("ids")
+                or normalized.get("diff_id")
+            )
+            if diff_ids is not None:
+                if isinstance(diff_ids, str):
+                    if "," in diff_ids:
+                        normalized["diff_ids"] = [d.strip() for d in diff_ids.split(",") if d.strip()]
+                    elif diff_ids.strip():
+                        normalized["diff_ids"] = [diff_ids.strip()]
+                    else:
+                        normalized["diff_ids"] = []
+                else:
+                    normalized["diff_ids"] = list(diff_ids)
+
+        elif canonical_name == "read_file":
+            start = (
+                normalized.get("start_line")
+                or normalized.get("startLine")
+                or normalized.get("line_start")
+                or normalized.get("from_line")
+            )
+            if start is not None:
+                try:
+                    normalized["start_line"] = int(start)
+                except (ValueError, TypeError):
+                    pass
+            end = (
+                normalized.get("end_line")
+                or normalized.get("endLine")
+                or normalized.get("line_end")
+                or normalized.get("to_line")
+            )
+            if end is not None:
+                try:
+                    normalized["end_line"] = int(end)
+                except (ValueError, TypeError):
+                    pass
+
+        elif canonical_name == "search_code":
+            q = (
+                normalized.get("query")
+                or normalized.get("pattern")
+                or normalized.get("search_term")
+                or normalized.get("text")
+            )
+            if q is not None and "query" not in normalized:
+                normalized["query"] = q
+
+        elif canonical_name == "search_index":
+            q = (
+                normalized.get("query")
+                or normalized.get("q")
+                or normalized.get("search")
+                or normalized.get("symbol")
+            )
+            if q is not None and "query" not in normalized:
+                normalized["query"] = q
+            kind = normalized.get("kind") or normalized.get("type") or normalized.get("symbol_type")
+            if kind is not None and "kind" not in normalized:
+                normalized["kind"] = kind
+            proj = normalized.get("project") or normalized.get("project_name") or normalized.get("proj")
+            if proj is not None and "project" not in normalized:
+                normalized["project"] = proj
+
+        elif canonical_name == "run_command":
+            cmd = normalized.get("command") or normalized.get("cmd")
+            if cmd is not None and "command" not in normalized:
+                normalized["command"] = cmd
+            cwd = (
+                normalized.get("subpath")
+                or normalized.get("path")
+                or normalized.get("cwd")
+                or normalized.get("working_dir")
+            )
+            if cwd is not None and "subpath" not in normalized:
+                normalized["subpath"] = cwd
+            to = normalized.get("timeout_seconds") or normalized.get("timeout")
+            if to is not None and "timeout_seconds" not in normalized:
+                try:
+                    normalized["timeout_seconds"] = int(to)
+                except (ValueError, TypeError):
+                    pass
+
+        return normalized
+
     def execute_tool(
         self,
         name: str,
@@ -354,6 +501,7 @@ class ToolGateway:
         t0 = time.time()
         args = dict(arguments) if isinstance(arguments, dict) else {}
         canonical_name = TOOL_ALIASES.get(name, name)
+        args = self._normalize_arguments(canonical_name, args)
 
         definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
         if definition is None:

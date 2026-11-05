@@ -219,6 +219,168 @@ class PlanGenerator:
 
         return plan
 
+    def generate_engineering_plan(
+        self,
+        goal: str,
+        target_files: Optional[List[str]] = None,
+        test_command: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> TaskPlan:
+        """Creates a verified 5-step DAG implementing the full autonomous engineering chain:
+        Inspect -> Scaffold -> Implement -> Test -> Verify.
+        """
+        files = target_files or ["Source/GameModule.cpp"]
+        t_cmd = test_command or "pytest tests/unit/ -q"
+        primary_file = files[0]
+        header_file = files[1] if len(files) > 1 else primary_file.replace(".cpp", ".h")
+
+        plan = TaskPlan(
+            goal=goal,
+            metadata={"archetype": "autonomous_engineering", "target_files": files, "test_command": t_cmd},
+        )
+
+        # Step 1: Inspect existing architecture and references
+        step1 = TaskNode(
+            task_id="step1_inspect",
+            title=f"Inspect codebase context for {Path(primary_file).name}",
+            objective=f"Inspect existing files and architecture related to: {goal}",
+            expected_result="Codebase context, existing symbols, and dependencies inspected",
+            task_type="inspect",
+            permitted_tools=["read_file", "list_dir", "search_code", "search_index"],
+            dependency_ids=[],
+            reversibility="read-only",
+            requires_approval=False,
+            context={"engineering_stage": 1, "stage_name": "inspect"},
+            tool_call={"name": "read_file", "arguments": {"subpath": primary_file}},
+            acceptance=[TaskAcceptancePredicate(predicate_type="custom", target="inspection_complete")],
+        )
+
+        # Step 2: Scaffold interface / header / types
+        step2 = TaskNode(
+            task_id="step2_scaffold",
+            title=f"Scaffold interfaces and definitions in {Path(header_file).name}",
+            objective=f"Scaffold interfaces, headers, or declarations required for: {goal}",
+            expected_result=f"Declarations and structure in {header_file} staged",
+            task_type="mutate",
+            permitted_tools=["propose_edit", "apply_edit", "write_file"],
+            dependency_ids=["step1_inspect"],
+            reversibility="transactional",
+            requires_approval=True,
+            context={"engineering_stage": 2, "stage_name": "scaffold"},
+            tool_call={
+                "name": "propose_edit",
+                "arguments": {
+                    "subpath": header_file,
+                    "target_content": "",
+                    "replacement_content": f"// Scaffolding for {goal}\n",
+                },
+            },
+            acceptance=[
+                TaskAcceptancePredicate(predicate_type="file_exists", target=header_file),
+                TaskAcceptancePredicate(predicate_type="file_changed", target=header_file),
+            ],
+            recovery_behavior="repair",
+        )
+
+        # Step 3: Implement core logic and source modifications
+        step3 = TaskNode(
+            task_id="step3_implement",
+            title=f"Implement core logic changes in {Path(primary_file).name}",
+            objective=f"Implement verified functionality to satisfy: {goal}",
+            expected_result=f"Code modifications applied to {primary_file}",
+            task_type="mutate",
+            permitted_tools=["propose_edit", "apply_edit", "write_file"],
+            dependency_ids=["step2_scaffold"],
+            reversibility="transactional",
+            requires_approval=True,
+            context={"engineering_stage": 3, "stage_name": "implement"},
+            tool_call={
+                "name": "propose_edit",
+                "arguments": {
+                    "subpath": primary_file,
+                    "target_content": "",
+                    "replacement_content": f"// Implementation for {goal}\n",
+                },
+            },
+            acceptance=[
+                TaskAcceptancePredicate(predicate_type="file_changed", target=primary_file),
+            ],
+            recovery_behavior="repair",
+        )
+
+        # Step 4: Execute test suite / build verification
+        step4 = TaskNode(
+            task_id="step4_test",
+            title="Execute test suite to verify implementation",
+            objective=f"Run test verification command '{t_cmd}' to ensure zero regressions",
+            expected_result=f"Test command '{t_cmd}' exits with code 0",
+            task_type="test",
+            permitted_tools=["run_command", "terminal_run"],
+            dependency_ids=["step3_implement"],
+            reversibility="read-only",
+            requires_approval=False,
+            context={"engineering_stage": 4, "stage_name": "test"},
+            tool_call={"name": "run_command", "arguments": {"command": t_cmd}},
+            acceptance=[
+                TaskAcceptancePredicate(predicate_type="command_exit_code", target=t_cmd, expected=0),
+            ],
+            recovery_behavior="repair",
+        )
+
+        # Step 5: Final acceptance verification
+        step5 = TaskNode(
+            task_id="step5_verify",
+            title="Verify complete feature acceptance criteria",
+            objective=f"Verify acceptance predicates over real observed state for: {goal}",
+            expected_result="All files modified and test execution verified",
+            task_type="inspect",
+            permitted_tools=["read_file", "list_dir", "run_command"],
+            dependency_ids=["step4_test"],
+            reversibility="read-only",
+            requires_approval=False,
+            context={"engineering_stage": 5, "stage_name": "verify"},
+            acceptance=[
+                TaskAcceptancePredicate(predicate_type="file_changed", target=primary_file),
+                TaskAcceptancePredicate(predicate_type="command_exit_code", target=t_cmd, expected=0),
+            ],
+        )
+
+        plan.add_task(step1)
+        plan.add_task(step2)
+        plan.add_task(step3)
+        plan.add_task(step4)
+        plan.add_task(step5)
+        plan.final_acceptance = [
+            TaskAcceptancePredicate(predicate_type="file_changed", target=primary_file),
+            TaskAcceptancePredicate(predicate_type="command_exit_code", target=t_cmd, expected=0),
+        ]
+
+        valid, errs = plan.validate()
+        if not valid:
+            raise PlanValidationError("; ".join(errs))
+
+        return plan
+
+    @staticmethod
+    def validate_engineering_dag(plan: TaskPlan) -> Tuple[bool, List[str]]:
+        """Validates that a 5-stage engineering DAG strictly respects required lifecycle states,
+        topological sequencing, and machine-checkable acceptance criteria."""
+        valid, errs = plan.validate()
+        if not valid:
+            return False, errs
+        required_stages = ["step1_inspect", "step2_scaffold", "step3_implement", "step4_test", "step5_verify"]
+        for st in required_stages:
+            if st not in plan.tasks:
+                errs.append(f"Missing required engineering stage: {st}")
+        if not errs:
+            order = plan.get_topological_order()
+            idx_map = {tid: idx for idx, tid in enumerate(order)}
+            for i in range(len(required_stages) - 1):
+                cur, nxt = required_stages[i], required_stages[i + 1]
+                if idx_map[cur] >= idx_map[nxt]:
+                    errs.append(f"Engineering stage {cur} must execute before {nxt}")
+        return len(errs) == 0, errs
+
     def generate_plan_from_prompt(self, user_prompt: str, context: Optional[Dict[str, Any]] = None) -> TaskPlan:
         """Parses natural language prompt into an executable TaskPlan.
 
@@ -243,7 +405,18 @@ class PlanGenerator:
                 actor_label=label,
             )
 
-        # 2. Check for code edit / repo task
+        # 2. Check for multi-file or full engineering goal
+        all_file_matches = re.findall(r"[\w\-\./\\]+\.(?:cpp|h|hpp|py|cs|json|ini)", user_prompt)
+        has_engineering_intent = any(
+            k in prompt_lower for k in ("scaffold", "implement", "feature", "refactor", "multi-file", "and test", "with test")
+        )
+        if len(all_file_matches) >= 2 or (has_engineering_intent and all_file_matches):
+            return self.generate_engineering_plan(
+                goal=user_prompt,
+                target_files=[f.replace("\\", "/") for f in all_file_matches],
+            )
+
+        # 3. Check for single file code edit / repo task
         target_file_match = re.search(r"(?:in|file|edit)\s+([A-Za-z0-9_\-\./\\]+\.[a-zA-Z0-9]+)", user_prompt)
         if target_file_match:
             tfile = target_file_match.group(1).replace("\\", "/")

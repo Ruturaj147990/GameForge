@@ -265,7 +265,7 @@ def run_editor_game(
                     plog = None
                 except Exception:
                     pass
-            diag = _extract_crash_diagnostics(exe, proc_log, getattr(proc, "returncode", None))
+            diag = _extract_crash_diagnostics(editor_exe, proc_log, getattr(proc, "returncode", None))
             diag_str = f" | Diagnostics: {diag}" if diag else ""
             return ScenarioResult(
                 schema="scenario_result/1",

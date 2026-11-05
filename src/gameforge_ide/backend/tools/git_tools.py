@@ -57,12 +57,13 @@ class GitTools:
         except Exception as e:
             return {"status": "ERROR", "error": str(e)}
 
-    def get_diff(self, path: str = "") -> Dict[str, Any]:
+    def get_diff(self, path: str = "", subpath: str = "", file_path: str = "", **kwargs: Any) -> Dict[str, Any]:
         """Returns unstaged git diff."""
+        effective_path = path or subpath or file_path or ""
         try:
             cmd = ["git", "diff"]
-            if path:
-                cmd.append(path)
+            if effective_path:
+                cmd.append(effective_path)
             diff_proc = subprocess.run(
                 cmd,
                 cwd=str(self.workspace_root),

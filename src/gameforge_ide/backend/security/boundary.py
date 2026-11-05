@@ -69,7 +69,7 @@ class BoundaryManager:
                 resolved = (self.workspace_root / raw_path).resolve()
             else:
                 resolved = raw_path.resolve()
-        except (RuntimeError, OSError) as e:
+        except (RuntimeError, OSError, ValueError) as e:
             raise SecurityViolationError(f"Path resolution failure for '{target_path}': {e}")
 
         # Workspace containment check (prevent path traversal)

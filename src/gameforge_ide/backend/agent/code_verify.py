@@ -21,6 +21,162 @@ from ...forge.model import RunSpec, StepKind, StepSpec
 from ...index.indexer import ProjectIndex
 
 
+def _extract_symbol(message: str) -> Optional[str]:
+    """Extract symbol name from compiler or runtime diagnostic message."""
+    if not message:
+        return None
+    # 1. Quoted C++ or Python symbols: 'UHealthComponent', "MaxAmmo", `GF::FCombatStats`
+    quoted = re.search(r"['\"`]([a-zA-Z_][\w:]*)['\"`]", message)
+    if quoted:
+        return quoted.group(1)
+    # 2. Clang/GCC/MSVC unquoted patterns
+    patterns = [
+        r"\bundeclared identifier\s+([a-zA-Z_][\w:]*)",
+        r"\bidentifier\s+([a-zA-Z_][\w:]*)\s+is undefined",
+        r"\bno member named\s+([a-zA-Z_][\w:]*)\s+in",
+        r"\bundefined reference to\s+([a-zA-Z_][\w:]*)",
+        r"\bcannot find symbol\s*:\s*(?:(?:class|variable|method|symbol)\s+)?([a-zA-Z_][\w:]*)",
+        r"\bname\s+([a-zA-Z_][\w:]*)\s+is not defined",
+    ]
+    for pat in patterns:
+        m = re.search(pat, message, re.IGNORECASE)
+        if m:
+            return m.group(1)
+    return None
+
+
+def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
+    """Robustly parse compiler outputs, pytest tracebacks, and raw logs into structured diagnostics."""
+    if not raw_diagnostics:
+        return []
+
+    if isinstance(raw_diagnostics, list):
+        parsed = []
+        for item in raw_diagnostics:
+            if isinstance(item, dict):
+                norm = dict(item)
+                norm.setdefault("file", item.get("file", ""))
+                norm.setdefault("line", int(item.get("line", 0) or 0))
+                norm.setdefault("column", int(item.get("column", 0) or 0))
+                norm.setdefault("message", item.get("message", ""))
+                norm.setdefault("severity", item.get("severity", "error"))
+                # Extract symbol if not present
+                if not norm.get("symbol") and norm.get("message"):
+                    norm["symbol"] = _extract_symbol(norm["message"])
+                parsed.append(norm)
+            elif isinstance(item, str):
+                parsed.extend(parse_diagnostics(item))
+        return parsed
+
+    if not isinstance(raw_diagnostics, str):
+        return []
+
+    results: List[Dict[str, Any]] = []
+    lines = raw_diagnostics.splitlines()
+
+    # Pattern 1: GCC / Clang format: [drive:]path/file.cpp:12:5: error: message
+    gcc_clang_pattern = re.compile(
+        r"^(?P<file>(?:[a-zA-Z]:[\\/])?[^:\r\n]+\.[a-zA-Z0-9]+):(?P<line>\d+):(?:(?P<col>\d+):)?\s*(?P<severity>error|warning|fatal error|note):\s*(?P<message>.*)$",
+        re.IGNORECASE,
+    )
+    # Pattern 2: MSVC format: [drive:]path\file.cpp(12,5): error C1234: message or (12): error
+    msvc_pattern = re.compile(
+        r"^(?P<file>(?:[a-zA-Z]:[\\/])?[^\(\r\n]+\.[a-zA-Z0-9]+)\((?P<line>\d+)(?:,\s*(?P<col>\d+))?\)\s*:\s*(?P<severity>error|warning|fatal error|note)\s*(?:[A-Z0-9]+)?\s*:\s*(?P<message>.*)$",
+        re.IGNORECASE,
+    )
+    # Pattern 3: Pytest failure/error format: FAILED/ERROR test_file.py::[Class::]test_func - AssertionError: message
+    pytest_fail_pattern = re.compile(
+        r"^(?:FAILED|ERROR)\s+(?P<file>(?:[a-zA-Z]:[\\/])?[^:\s\r\n]+\.py)::(?:(?P<cls>\w+)::)?(?P<func>\w+)(?:\s*-\s*(?P<message>.*))?$",
+        re.IGNORECASE,
+    )
+    # Pattern 4: Python traceback line: File "path/file.py", line 12, in func
+    py_trace_pattern = re.compile(
+        r'^\s*File\s+"(?P<file>[^"]+)",\s*line\s*(?P<line>\d+)(?:,\s*in\s*(?P<func>\w+))?',
+        re.IGNORECASE,
+    )
+
+    for idx, line in enumerate(lines):
+        line_str = line.strip()
+        if not line_str:
+            continue
+
+        m_gcc = gcc_clang_pattern.match(line_str)
+        if m_gcc:
+            msg = m_gcc.group("message").strip()
+            sym = _extract_symbol(msg)
+            results.append({
+                "file": m_gcc.group("file").replace("\\", "/"),
+                "line": int(m_gcc.group("line")),
+                "column": int(m_gcc.group("col") or 0),
+                "severity": m_gcc.group("severity").lower(),
+                "message": msg,
+                "symbol": sym,
+            })
+            continue
+
+        m_msvc = msvc_pattern.match(line_str)
+        if m_msvc:
+            msg = m_msvc.group("message").strip()
+            sym = _extract_symbol(msg)
+            results.append({
+                "file": m_msvc.group("file").replace("\\", "/"),
+                "line": int(m_msvc.group("line")),
+                "column": int(m_msvc.group("col") or 0),
+                "severity": m_msvc.group("severity").lower(),
+                "message": msg,
+                "symbol": sym,
+            })
+            continue
+
+        m_pytest = pytest_fail_pattern.match(line_str)
+        if m_pytest:
+            func_name = m_pytest.group("func")
+            cls_name = m_pytest.group("cls")
+            full_symbol = f"{cls_name}::{func_name}" if cls_name else func_name
+            msg = (m_pytest.group("message") or f"Test failure in {full_symbol}").strip()
+            results.append({
+                "file": m_pytest.group("file").replace("\\", "/"),
+                "line": 1,
+                "column": 0,
+                "severity": "error",
+                "message": msg,
+                "symbol": func_name,
+            })
+            continue
+
+        m_pytrace = py_trace_pattern.match(line_str)
+        if m_pytrace:
+            # Check next line for error message
+            next_msg = lines[idx + 1].strip() if idx + 1 < len(lines) else "Exception raised"
+            results.append({
+                "file": m_pytrace.group("file").replace("\\", "/"),
+                "line": int(m_pytrace.group("line")),
+                "column": 0,
+                "severity": "error",
+                "message": next_msg,
+                "symbol": m_pytrace.group("func"),
+            })
+            continue
+
+    if not results and lines:
+        # Fallback: treat non-empty error-sounding lines as general diagnostics
+        for line in lines:
+            line_str = line.strip()
+            if any(k in line_str.lower() for k in ("error", "failed", "exception", "assert")):
+                results.append({
+                    "file": "",
+                    "line": 0,
+                    "column": 0,
+                    "severity": "error",
+                    "message": line_str,
+                    "symbol": _extract_symbol(line_str),
+                })
+                if len(results) >= 10:
+                    break
+
+    return results
+
+
 def extract_unified_diff(text: str) -> str:
     """Robustly extract a clean unified diff from model output, stripping markdown code fences and conversational prose."""
     if not text:
@@ -113,7 +269,7 @@ def create_code_verification_spec(
 
 def propose_assistant_fix(
     project_dir: Path,
-    diagnostics: List[Dict[str, Any]],
+    diagnostics: Any,
     build_errors: Optional[List[str]] = None,
     attempt: int = 1,
     max_attempts: int = 3,
@@ -130,12 +286,12 @@ def propose_assistant_fix(
             "error": f"Maximum fix attempts ({max_attempts}) reached without resolving build issues.",
         }
 
-    # Extract top 10 diagnostics
-    top_diags = diagnostics[:10]
-    if not top_diags and build_errors:
-        # Fallback to text error parsing
-        for err in build_errors[:10]:
-            top_diags.append({"message": err, "file": "", "line": 0})
+    # Extract parsed diagnostics
+    all_diags = parse_diagnostics(diagnostics)
+    if not all_diags and build_errors:
+        all_diags = parse_diagnostics(build_errors)
+
+    top_diags = all_diags[:10]
 
     if not top_diags:
         return {
@@ -146,7 +302,7 @@ def propose_assistant_fix(
 
     first_diag = top_diags[0]
     file_rel = first_diag.get("file", "")
-    line_no = int(first_diag.get("line", 0))
+    line_no = int(first_diag.get("line", 0) or 0)
 
     file_excerpt = ""
     target_path = Path(file_rel) if file_rel and Path(file_rel).is_absolute() else (project_dir / file_rel if file_rel else None)
@@ -159,21 +315,47 @@ def propose_assistant_fix(
         except Exception:
             pass
 
-    # Context query via ProjectIndex
-    index = ProjectIndex(project_dir)
+    # Context query via ProjectIndex and symbol extraction
     sym_context = []
-    if first_diag.get("message"):
-        # Extract potential identifier from message
-        words = [w for w in first_diag["message"].split() if len(w) > 3 and w.isidentifier()]
-        for w in words[:2]:
-            s_res = index.search_symbols(w, limit=3)
+    searched_symbols: Set[str] = set()
+    for diag in top_diags:
+        msg = diag.get("message", "")
+        sym = diag.get("symbol")
+        candidates = [sym] if sym else []
+        candidates.extend(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]{3,}\b", msg))
+        for cand in candidates:
+            if cand and cand not in searched_symbols and cand.isidentifier():
+                searched_symbols.add(cand)
+                if len(searched_symbols) >= 5:
+                    break
+
+    try:
+        index = ProjectIndex(project_dir)
+        for s in searched_symbols:
+            s_res = index.search_symbols(s, limit=3)
             sym_context.extend(s_res.get("results", []))
+    except Exception:
+        pass
+
+    # Fallback search in project_dir if index returned no symbol matches
+    if not sym_context and searched_symbols and project_dir.is_dir():
+        for s in list(searched_symbols)[:3]:
+            for p in list(project_dir.glob(f"**/*{s}*"))[:2]:
+                if p.is_file() and p.suffix in (".h", ".hpp", ".cpp", ".py", ".cs"):
+                    try:
+                        rel = str(p.relative_to(project_dir)).replace("\\", "/")
+                        sym_context.append({"symbol": s, "file": rel, "type": "file_match"})
+                    except Exception:
+                        pass
 
     # Model call or heuristic fix
     if model_caller is not None and target_path and target_path.is_file():
         repetition_warning = ""
         if previous_diffs:
-            repetition_warning = "\nAvoid repeating previous failed attempts. Provide an alternative resolution.\n"
+            repetition_warning = (
+                f"\nAvoid repeating previous failed attempts ({len(previous_diffs)} prior diffs recorded). "
+                "Provide an alternative resolution.\n"
+            )
         prompt = (
             f"You are GameForge's C++ codegen repair agent.\n"
             f"Build diagnostics:\n{json.dumps(top_diags, indent=2)}\n\n"
@@ -192,6 +374,7 @@ def propose_assistant_fix(
                 "line": line_no,
                 "diff": clean_diff,
                 "diagnostics_addressed": len(top_diags),
+                "symbols_queried": list(searched_symbols),
             }
         except Exception as exc:
             return {
@@ -216,17 +399,19 @@ def propose_assistant_fix(
         "line": line_no,
         "diff": "\n".join(diff_lines),
         "diagnostics_addressed": len(top_diags),
+        "symbols_queried": list(searched_symbols),
         "explanation": f"Automated fix proposal for diagnostic: {first_diag.get('message', '')}",
     }
 
 
 def run_code_repair_loop(
     project_dir: Path,
-    diagnostics_fn: Callable[[], List[Dict[str, Any]]],
+    diagnostics_fn: Callable[[], Any],
     apply_fix_fn: Callable[[Dict[str, Any]], bool],
     build_verify_fn: Callable[[], bool],
     model_caller: Optional[Callable[[str, str], str]] = None,
     max_attempts: int = 3,
+    rollback_fn: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
     """Autonomous bounded code repair loop with cycle detection and retry limits.
 
@@ -234,19 +419,31 @@ def run_code_repair_loop(
     - Bounded retries: capped at max_attempts (clamped between 1 and 5).
     - Prevents infinite loops: tracks proposed diffs and halts on cycle detection.
     - Early exit on success.
+    - Optional rollback on failure.
     - Detailed audit history of all attempts.
     """
     hard_cap = min(max(1, int(max_attempts)), 5)
     seen_diffs: Set[str] = set()
     history: List[Dict[str, Any]] = []
 
+    def _execute_rollback() -> bool:
+        if rollback_fn is not None:
+            try:
+                res = rollback_fn()
+                return True if res is None or res else False
+            except Exception:
+                return False
+        return False
+
     for attempt in range(1, hard_cap + 1):
-        diags = diagnostics_fn()
+        raw_diags = diagnostics_fn()
+        diags = parse_diagnostics(raw_diags)
         if not diags:
             return {
                 "status": "SUCCESS",
                 "attempt": attempt - 1 if attempt > 1 else 1,
                 "history": history,
+                "rolled_back": False,
                 "message": "No diagnostics reported; code is clean.",
             }
 
@@ -264,33 +461,40 @@ def run_code_repair_loop(
             "status": fix.get("status"),
             "target_file": fix.get("target_file"),
             "diff": fix.get("diff"),
+            "diagnostics_addressed": fix.get("diagnostics_addressed", len(diags)),
         })
 
         if fix.get("status") != "PROPOSED":
+            did_rollback = _execute_rollback()
             return {
                 "status": fix.get("status", "FAILED"),
                 "attempt": attempt,
                 "error": fix.get("error", "Fix proposal failed."),
                 "history": history,
+                "rolled_back": did_rollback,
             }
 
         diff = fix.get("diff", "")
         if diff in seen_diffs:
+            did_rollback = _execute_rollback()
             return {
                 "status": "BLOCKED",
                 "attempt": attempt,
                 "error": "Cyclic repair detected: model proposed an identical diff already attempted.",
                 "history": history,
+                "rolled_back": did_rollback,
             }
         seen_diffs.add(diff)
 
         applied = apply_fix_fn(fix)
         if not applied:
+            did_rollback = _execute_rollback()
             return {
                 "status": "FAILED",
                 "attempt": attempt,
                 "error": f"Failed to apply proposed fix on attempt {attempt}.",
                 "history": history,
+                "rolled_back": did_rollback,
             }
 
         if build_verify_fn():
@@ -298,13 +502,16 @@ def run_code_repair_loop(
                 "status": "SUCCESS",
                 "attempt": attempt,
                 "history": history,
+                "rolled_back": False,
                 "message": f"Code repair succeeded on attempt {attempt}.",
             }
 
+    did_rollback = _execute_rollback()
     return {
         "status": "EXHAUSTED",
         "attempt": hard_cap,
         "max_attempts": hard_cap,
         "error": f"Maximum fix attempts ({hard_cap}) reached without resolving build issues.",
         "history": history,
+        "rolled_back": did_rollback,
     }

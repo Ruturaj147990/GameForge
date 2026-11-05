@@ -173,3 +173,52 @@ def test_compose_layout_detection_for_genres():
     comp_ttt = compose(gds_ttt)
     assert comp_ttt.levels[0].map_path == "/Game/Maps/Level_1"
     assert any("GridBoard" in a.runtime_class for a in comp_ttt.levels[0].actors)
+
+
+def test_non_ue_gds_props_filtered_and_set_actor_property_guarded():
+    """Verify non-UE design props are filtered out from set_actor_property emissions."""
+    actor = PlacedActor(
+        actor_id="test_actor",
+        runtime_class="StaticMeshActor",
+        location=(0.0, 0.0, 50.0),
+        properties={
+            "count": 5,
+            "min_spacing_m": 4.0,
+            "strategy": "patrol",
+            "slot": "primary",
+            "attack_mode": "melee",
+            "patrol_radius": 500.0,
+            "shape": "sphere",
+            "color": "red",
+            "type": "hazard",
+            "recipe": "combat",
+            "genre": "arena_combat",
+            "seed": 42,
+            "difficulty": "hard",
+            "_internal_flag": True,
+            "Invalid Prop With Spaces": 100,
+            "ValidPascalProp": 42.0,
+            "MeshAsset": "/Game/Assets/MyMesh",
+        },
+    )
+    plan = LevelPlan(
+        level_id="level_1",
+        map_path="/Game/Maps/Level_1",
+        player_start=(0.0, 0.0, 100.0),
+        nav_bounds=((0.0, 0.0, 100.0), (1000.0, 1000.0, 500.0)),
+        geometry_ops=[],
+        actors=[actor],
+        lighting="day",
+        nav_checks=[],
+    )
+    ops = plan_to_op_calls(plan)
+    prop_ops = [o for o in ops if o.op == "set_actor_property"]
+    emitted_props = [o.args["property"] for o in prop_ops]
+
+    # Valid properties should be emitted
+    assert "ValidPascalProp" in emitted_props
+    assert "MeshAsset" in emitted_props
+
+    # Non-UE design props should ALL be filtered out
+    for non_ue in ("count", "min_spacing_m", "strategy", "slot", "attack_mode", "patrol_radius", "shape", "color", "type", "recipe", "genre", "seed", "difficulty", "_internal_flag", "Invalid Prop With Spaces"):
+        assert non_ue not in emitted_props

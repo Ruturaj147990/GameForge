@@ -86,8 +86,6 @@ def validate_stage_output(
     # 1. DESIGN / SPEC STAGE
     # ──────────────────────────────────────────────────────────────────────────
     if "design" in s_norm or "spec" in s_norm:
-        if result.get("stage") in ("spec", "design"):
-            return (True, [])
         if gds is None:
             # Check if GDS is in result
             gds_raw = result.get("gds") or result.get("spec")
@@ -167,8 +165,6 @@ def validate_stage_output(
     # 2. ASSEMBLE STAGE
     # ──────────────────────────────────────────────────────────────────────────
     elif "assemble" in s_norm:
-        if result.get("stage") in ("assemble", "assemble_level"):
-            return (True, [])
         # Collect actor evidence from read_back_actors, spawned_actors, calls, or manifest
         actor_records: List[Union[Dict[str, Any], str]] = []
         if isinstance(result.get("read_back_actors"), list):
@@ -288,12 +284,15 @@ def validate_stage_output(
             if not has_main:
                 issues.append(f"Expected enemy, spawner, or objective actor missing from {genre_val or 'combat'} assemble read-back")
         else:
-            # Platformer / Action / Other: check for pickups or landmarks or platforms
+            # Platformer / Action / Other: check for pickups or landmarks or platforms or board
             has_main = (
                 "pickup" in all_actor_text
                 or "platform" in all_actor_text
                 or "landmark" in all_actor_text
                 or "course" in all_actor_text
+                or "board" in all_actor_text
+                or "grid" in all_actor_text
+                or "table" in all_actor_text
                 or is_combat
             )
             if not has_main:
@@ -303,8 +302,6 @@ def validate_stage_output(
     # 3. SCENARIOS STAGE (Packaged QA Acceptance Scenarios)
     # ──────────────────────────────────────────────────────────────────────────
     elif any(k in s_norm for k in ("scenario", "acceptance")):
-        if result.get("stage") in ("scenario", "scenarios", "packaged_smoke"):
-            return (True, [])
         test_results = (
             result.get("results")
             or result.get("scenarios")
@@ -339,8 +336,6 @@ def validate_stage_output(
     # 3b. AUTOMATION STAGE (Unreal Editor C++ Automation Tests)
     # ──────────────────────────────────────────────────────────────────────────
     elif any(k in s_norm for k in ("automation", "smoke", "test")):
-        if result.get("stage") in ("automation_tests", "automation", "smoke", "tests"):
-            return (True, [])
         test_results = (
             result.get("tests")
             or result.get("results")
@@ -371,9 +366,7 @@ def validate_stage_output(
     # 4. SCAFFOLD STAGE
     # ──────────────────────────────────────────────────────────────────────────
     elif "scaffold" in s_norm:
-        if result.get("stage") == "scaffold" or result.get("scaffolded"):
-            pass  # Test double / mock handler
-        elif pdir is not None:
+        if pdir is not None:
             if not pdir.is_dir():
                 issues.append(f"Scaffold project directory '{pdir}' does not exist on disk")
             else:
@@ -387,75 +380,69 @@ def validate_stage_output(
     # 5. CODEGEN / SOURCES STAGE
     # ──────────────────────────────────────────────────────────────────────────
     elif any(k in s_norm for k in ("codegen", "source")):
-        if result.get("stage") in ("codegen", "sources", "source"):
-            pass  # Test double / mock handler
-        else:
-            files = result.get("files") or []
-            tasks_count = result.get("codegen_tasks", 0)
-            if not files and tasks_count == 0 and not result.get("written_files"):
-                issues.append("Codegen stage produced no source or header files")
-            elif pdir is not None and files:
-                # Verify at least one declared source file exists on disk
-                any_exist = False
-                for f in files:
-                    f_path = Path(f) if Path(f).is_absolute() else (pdir / f)
-                    if f_path.is_file() and f_path.stat().st_size > 0:
-                        any_exist = True
-                        break
-                if not any_exist and len(files) > 0:
-                    issues.append(f"None of the {len(files)} generated source files exist on disk in '{pdir}'")
+        files = result.get("files") or []
+        tasks_count = result.get("codegen_tasks", 0)
+        if not files and tasks_count == 0 and not result.get("written_files"):
+            issues.append("Codegen stage produced no source or header files")
+        elif pdir is not None and files:
+            # Verify at least one declared source file exists on disk
+            any_exist = False
+            for f in files:
+                pf = Path(f)
+                if pf.is_absolute():
+                    f_path = pf
+                elif pf.is_file() and pf.stat().st_size > 0:
+                    f_path = pf
+                else:
+                    f_path = pdir / pf
+                if f_path.is_file() and f_path.stat().st_size > 0:
+                    any_exist = True
+                    break
+            if not any_exist and len(files) > 0:
+                issues.append(f"None of the {len(files)} generated source files exist on disk in '{pdir}'")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 6. BUILD / BUILD_EDITOR STAGE
     # ──────────────────────────────────────────────────────────────────────────
     elif "build" in s_norm:
-        if result.get("stage") in ("build", "build_editor"):
-            pass  # Test double / mock handler
-        else:
-            exit_code = result.get("exit_code")
-            if exit_code is not None and exit_code != 0:
-                issues.append(f"Build failed with non-zero exit code: {exit_code}")
-            err_val = result.get("errors")
-            if isinstance(err_val, int) and err_val > 0:
-                issues.append(f"Build reported {err_val} compilation error(s)")
-            elif isinstance(err_val, list) and len(err_val) > 0:
-                issues.append(f"Build reported compilation errors: {err_val[:3]}")
+        exit_code = result.get("exit_code")
+        if exit_code is not None and exit_code != 0:
+            issues.append(f"Build failed with non-zero exit code: {exit_code}")
+        err_val = result.get("errors")
+        if isinstance(err_val, int) and err_val > 0:
+            issues.append(f"Build reported {err_val} compilation error(s)")
+        elif isinstance(err_val, list) and len(err_val) > 0:
+            issues.append(f"Build reported compilation errors: {err_val[:3]}")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 7. CONTENT STAGE
     # ──────────────────────────────────────────────────────────────────────────
     elif "content" in s_norm:
-        if result.get("stage") == "content":
-            pass  # Test double / mock handler
-        else:
-            artifacts_count = result.get("artifacts_count", 0)
-            installed = result.get("installed_packs") or []
-            cook_dirs = result.get("cook_dirs") or []
-            if artifacts_count == 0 and not installed and not cook_dirs:
-                issues.append("Content stage produced neither installed template packs nor configured assets")
+        artifacts_count = result.get("artifacts_count", 0)
+        installed = result.get("installed_packs") or []
+        cook_dirs = result.get("cook_dirs") or []
+        if artifacts_count == 0 and not installed and not cook_dirs:
+            issues.append("Content stage produced neither installed template packs nor configured assets")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 8. PACKAGE STAGE
     # ──────────────────────────────────────────────────────────────────────────
     elif "package" in s_norm:
-        if result.get("stage") in ("package", "packaged_smoke"):
-            pass  # Test double / mock handler
+        exe_path = result.get("exe") or result.get("package_dir")
+        if exe_path:
+            ep = Path(exe_path)
+            if ep.suffix.lower() == ".exe":
+                if not ep.is_file():
+                    issues.append(f"Packaged executable '{exe_path}' does not exist on disk")
+                elif ep.stat().st_size == 0:
+                    issues.append(f"Packaged executable '{exe_path}' is an empty file (0 bytes)")
+        elif pdir is not None:
+            # Check for candidate exe in project dir
+            exes = [e for e in (list(pdir.glob("Packaged/**/*.exe")) + list(pdir.glob("Binaries/Win64/*.exe"))) if e.is_file() and e.stat().st_size > 0]
+            if not exes:
+                issues.append("Package stage produced no packaged executable on disk")
         else:
-            exe_path = result.get("exe") or result.get("package_dir")
-            if exe_path:
-                ep = Path(exe_path)
-                if ep.suffix.lower() == ".exe":
-                    if not ep.is_file():
-                        issues.append(f"Packaged executable '{exe_path}' does not exist on disk")
-                    elif ep.stat().st_size == 0:
-                        issues.append(f"Packaged executable '{exe_path}' is an empty file (0 bytes)")
-            elif pdir is not None:
-                # Check for candidate exe in project dir
-                exes = list(pdir.glob("Packaged/**/*.exe")) + list(pdir.glob("Binaries/Win64/*.exe"))
-                if not exes:
-                    issues.append("Package stage produced no packaged executable on disk")
-            else:
-                issues.append("Package stage outcome missing executable path ('exe')")
+            issues.append("Package stage outcome missing executable path ('exe')")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 9. REVIEW STAGE

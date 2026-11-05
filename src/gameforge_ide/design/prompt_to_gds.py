@@ -66,8 +66,9 @@ Genre guidance:
 - puzzle: for logic puzzle games
 - custom: for everything else
 
-For board games with dice, tokens, snakes/ladders, or path-based movement, ALWAYS use genre=grid_board with camera=fixed_board and players>=2.
-For first-person shooters or tactical combat, use camera=first_person with enemies, combat spawner, weapons, and clear win condition.
+- If the idea involves jumping across platforms, courses, or parkour (e.g. floating stone platforms, temple ruins course), ALWAYS use genre=platformer with camera=third_person or camera=first_person.
+- For turn-based board games with dice, tokens, snakes/ladders, or grid tiles, ALWAYS use genre=grid_board with camera=fixed_board and players>=2.
+- For first-person shooters or tactical combat, use camera=first_person with enemies, combat spawner, weapons, and clear win condition.
 
 - entities: list what the player meets (pickups, enemies, guards, npcs, doors, hazards, checkpoints, goal). Counts must be small (1-20).
 - win: 1-3 conditions the game can check (collect_all, reach_goal, defeat_all, survive_seconds, score_at_least, board_win, match_win).

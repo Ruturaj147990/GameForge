@@ -104,11 +104,15 @@ def set_actor_property(args):
             value = [_vec(v) if isinstance(v, dict) and set(v) == {"x", "y", "z"} else v for v in value]
     elif isinstance(value, dict) and set(value) == {"x", "y", "z"}:
         value = _vec(value)
-    with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
-        actor.set_editor_property(name, value)
-    actual = actor.get_editor_property(name)
-    return _envelope("set_actor_property", True, {"label": args["label"], "property": name, "value": str(actual)},
-                     reversibility="transactional")
+    try:
+        with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
+            actor.set_editor_property(name, value)
+        actual = actor.get_editor_property(name)
+        return _envelope("set_actor_property", True, {"label": args["label"], "property": name, "value": str(actual)},
+                         reversibility="transactional")
+    except Exception as exc:
+        return _envelope("set_actor_property", True, {"label": args["label"], "property": name, "skipped": str(exc)},
+                         warnings=[f"Property '{name}' skipped on {args['label']}: {exc}"], reversibility="transactional")
 
 
 @op("actor_set_tags", mutates=True, reversibility="transactional")

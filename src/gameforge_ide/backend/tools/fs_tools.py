@@ -52,15 +52,23 @@ def tool_list_dir(
     subpath: str = ".",
     max_depth: int = 2,
     include_hidden: bool = False,
+    path: str = "",
+    dir_path: str = "",
+    directory: str = "",
+    folder: str = "",
+    depth: Optional[int] = None,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Lists files and directories under subpath with safety checks."""
+    effective_path = path or dir_path or directory or folder or subpath or "."
+    effective_depth = depth if depth is not None else max_depth
     try:
-        target_dir = boundary.validate_path(subpath, allow_write=False)
+        target_dir = boundary.validate_path(effective_path, allow_write=False)
     except (SecurityViolationError, ValueError) as exc:
         return {"error": f"Security violation: {exc}"}
 
     if not target_dir.exists():
-        clean_sub = subpath.replace("\\", "/").strip("/")
+        clean_sub = effective_path.replace("\\", "/").strip("/")
         parts = clean_sub.split("/")
         if parts and parts[0].lower() == boundary.workspace_root.name.lower():
             remapped = "/".join(parts[1:]) or "."
@@ -71,16 +79,16 @@ def tool_list_dir(
             except Exception:
                 pass
     if not target_dir.exists():
-        return {"error": f"Directory not found: {subpath}"}
+        return {"error": f"Directory not found: {effective_path}"}
     if not target_dir.is_dir():
-        return {"error": f"Path is not a directory: {subpath}"}
+        return {"error": f"Path is not a directory: {effective_path}"}
 
     results = []
 
     for root, dirs, files in os.walk(target_dir):
         rel_root = Path(root).relative_to(target_dir)
-        depth = len(rel_root.parts) if str(rel_root) != "." else 0
-        if depth >= max_depth:
+        curr_depth = len(rel_root.parts) if str(rel_root) != "." else 0
+        if curr_depth >= effective_depth:
             dirs.clear()
             continue
 
@@ -112,18 +120,24 @@ def tool_list_dir(
 
 def tool_read_file(
     boundary: BoundaryManager,
-    subpath: str,
+    subpath: str = "",
     start_line: int = 1,
     end_line: Optional[int] = None,
+    file_path: str = "",
+    path: str = "",
+    file: str = "",
+    filepath: str = "",
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Reads line-numbered content from a file inside the workspace."""
+    effective_path = subpath or file_path or path or file or filepath or ""
     try:
-        target_file = boundary.validate_path(subpath, allow_write=False)
+        target_file = boundary.validate_path(effective_path, allow_write=False)
     except (SecurityViolationError, ValueError) as exc:
         return {"error": f"Security violation: {exc}"}
 
     if not target_file.exists():
-        clean_sub = subpath.replace("\\", "/").strip("/")
+        clean_sub = effective_path.replace("\\", "/").strip("/")
         parts = clean_sub.split("/")
         if parts and parts[0].lower() == boundary.workspace_root.name.lower():
             remapped = "/".join(parts[1:])
@@ -134,9 +148,9 @@ def tool_read_file(
             except Exception:
                 pass
     if not target_file.exists():
-        return {"error": f"File does not exist: {subpath}"}
+        return {"error": f"File does not exist: {effective_path}"}
     if not target_file.is_file():
-        return {"error": f"Path is not a file: {subpath}"}
+        return {"error": f"Path is not a file: {effective_path}"}
 
     encoding = _detect_file_encoding(target_file)
     lines = None
@@ -154,12 +168,21 @@ def tool_read_file(
     if lines is None:
         return {"error": f"Failed to read file: {last_err}"}
 
+    try:
+        start_line_int = int(start_line) if start_line is not None else 1
+    except (ValueError, TypeError):
+        start_line_int = 1
+
     total_lines = len(lines)
-    s_idx = max(0, start_line - 1)
+    s_idx = max(0, start_line_int - 1)
     truncated = False
 
     if end_line is not None:
-        e_idx = max(s_idx, min(total_lines, end_line))
+        try:
+            end_line_int = int(end_line)
+        except (ValueError, TypeError):
+            end_line_int = total_lines
+        e_idx = max(s_idx, min(total_lines, end_line_int))
     else:
         # Default safety ceiling for large files (> 2,000 lines) to prevent runaway memory
         if total_lines - s_idx > 2000:
@@ -175,7 +198,7 @@ def tool_read_file(
         "status": "SUCCESS",
         "file_path": str(target_file.relative_to(boundary.workspace_root).as_posix()),
         "total_lines": total_lines,
-        "start_line": start_line,
+        "start_line": start_line_int,
         "end_line": e_idx,
         "content": "".join(selected),
         "formatted": "".join(numbered),
@@ -193,23 +216,38 @@ def tool_read_file(
 
 def tool_search_code(
     boundary: BoundaryManager,
-    query: str,
+    query: str = "",
     subpath: str = ".",
     is_regex: bool = False,
     case_sensitive: bool = False,
     max_results: int = 50,
+    pattern: str = "",
+    search_term: str = "",
+    text: str = "",
+    path: str = "",
+    dir_path: str = "",
+    directory: str = "",
+    limit: Optional[int] = None,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Searches workspace files for code patterns."""
-    if not is_regex and (not query or not query.strip()):
+    effective_query = query or pattern or search_term or text or ""
+    effective_path = path or dir_path or directory or subpath or "."
+    try:
+        effective_limit = int(limit) if limit is not None else int(max_results)
+    except (ValueError, TypeError):
+        effective_limit = 50
+
+    if not is_regex and (not effective_query or not effective_query.strip()):
         return {"status": "SUCCESS", "matches": [], "truncated": False}
 
     try:
-        target_dir = boundary.validate_path(subpath, allow_write=False)
+        target_dir = boundary.validate_path(effective_path, allow_write=False)
     except (SecurityViolationError, ValueError) as exc:
         return {"error": f"Security violation: {exc}"}
 
     if not target_dir.exists():
-        clean_sub = subpath.replace("\\", "/").strip("/")
+        clean_sub = effective_path.replace("\\", "/").strip("/")
         parts = clean_sub.split("/")
         if parts and parts[0].lower() == boundary.workspace_root.name.lower():
             remapped = "/".join(parts[1:]) or "."
@@ -221,14 +259,14 @@ def tool_search_code(
                 pass
 
     if not target_dir.exists():
-        return {"error": f"Directory not found: {subpath}"}
+        return {"error": f"Directory not found: {effective_path}"}
 
     matches = []
     try:
         flags = 0 if case_sensitive else re.IGNORECASE
-        pattern = re.compile(query if is_regex else re.escape(query), flags)
+        re_pattern = re.compile(effective_query if is_regex else re.escape(effective_query), flags)
     except re.error as e:
-        return {"error": f"Invalid regular expression '{query}': {e}"}
+        return {"error": f"Invalid regular expression '{effective_query}': {e}"}
 
     for root, dirs, files in os.walk(target_dir):
         # Ignore git, cache, build dirs
@@ -248,13 +286,13 @@ def tool_search_code(
             try:
                 with open(file_path, "r", encoding=encoding, errors="ignore") as handle:
                     for line_idx, line in enumerate(handle, 1):
-                        if pattern.search(line):
+                        if re_pattern.search(line):
                             matches.append({
                                 "file": str(file_path.relative_to(boundary.workspace_root).as_posix()),
                                 "line": line_idx,
                                 "content": line.strip()[:500],
                             })
-                            if len(matches) >= max_results:
+                            if len(matches) >= effective_limit:
                                 return {"status": "SUCCESS", "matches": matches, "truncated": True}
             except Exception:
                 continue

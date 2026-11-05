@@ -13,6 +13,45 @@ from ..unreal import op_schemas
 from ..backend.tools import biomes
 
 
+NON_UE_GDS_PROPS = frozenset({
+    "count",
+    "value",
+    "respawns",
+    "respawn_seconds",
+    "min_spacing_m",
+    "min_spacing_cm",
+    "strategy",
+    "slot",
+    "attack_mode",
+    "location",
+    "rotation",
+    "scale",
+    "yaw",
+    "pitch",
+    "roll",
+    "tags",
+    "kind",
+    "module",
+    "level_id",
+    "entity_id",
+    "actor_id",
+    "property_overrides",
+    "patrol_radius",
+    "behavior",
+    "shape",
+    "speed",
+    "color",
+    "type",
+    "recipe",
+    "genre",
+    "snakes",
+    "ladders",
+    "snakes_and_ladders",
+    "seed",
+    "difficulty",
+})
+
+
 def _validate_call(op: str, args: Dict[str, Any]) -> None:
     """Validate op call against op_schemas in strict mode."""
     _, errs = op_schemas.validate_args(op, args)
@@ -118,13 +157,25 @@ def plan_to_op_calls(
         for prop_name, prop_val in a.properties.items():
             if prop_val is None:
                 continue
+            if not isinstance(prop_name, str) or not prop_name.strip():
+                continue
+            p_clean = prop_name.strip()
+            if p_clean.lower() in NON_UE_GDS_PROPS or p_clean.startswith("_"):
+                continue
+            # Guard: property name must be a valid C++/Unreal identifier
+            if not p_clean.isidentifier():
+                continue
+            # Guard: filter complex nested dicts that Unreal cannot assign directly
+            if isinstance(prop_val, dict) and not (set(prop_val).issubset({"x", "y", "z"}) or set(prop_val).issubset({"r", "g", "b", "a"})):
+                continue
+
             is_asset = (
                 isinstance(prop_val, str)
                 and (prop_val.startswith("/Game/") or prop_val.startswith("/Engine/") or prop_val.startswith("/Script/"))
             )
             set_args: Dict[str, Any] = {
                 "label": a.actor_id,
-                "property": prop_name,
+                "property": p_clean,
                 "value": prop_val,
             }
             if is_asset:
@@ -132,7 +183,7 @@ def plan_to_op_calls(
             emit(
                 "set_actor_property",
                 set_args,
-                purpose=f"Set {prop_name} on {a.actor_id}",
+                purpose=f"Set {p_clean} on {a.actor_id}",
             )
 
     # 5. NavMeshBoundsVolume and nav rebuild

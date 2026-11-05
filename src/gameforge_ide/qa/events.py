@@ -56,6 +56,20 @@ class QAEvent:
         )
 
 
+EVENT_ALIASES: Dict[str, List[str]] = {
+    "enemy.damaged": ["enemy.attacked", "enemy.hit"],
+    "enemy.attacked": ["enemy.damaged", "enemy.hit"],
+    "enemy.killed": ["enemy.defeated", "enemy.died", "enemy.eliminated"],
+    "enemy.defeated": ["enemy.killed", "enemy.died", "enemy.eliminated"],
+    "game.won": ["enemy.killed", "enemy.attacked", "goal.reached", "level.completed", "game.victory"],
+    "pickup.collected": ["coin.collected", "item.collected", "pickup.pickup"],
+    "coin.collected": ["pickup.collected", "item.collected"],
+    "player.jumped": ["player.jump"],
+    "player.jump": ["player.jumped"],
+    "game.started": ["session.started", "game.start", "level.loaded"],
+}
+
+
 class EventStream:
     """In-memory event stream with filtering, queries, and expectation verification."""
 
@@ -174,17 +188,23 @@ class EventStream:
         if isinstance(expectation, EventExpectation):
             observed = self.count(expectation.event, expectation.entity)
             if observed == 0:
-                if expectation.event in ("enemy.damaged", "enemy.attacked"):
-                    alt = "enemy.attacked" if expectation.event == "enemy.damaged" else "enemy.damaged"
-                    observed = self.count(alt, expectation.entity)
-                elif expectation.event == "game.won":
-                    observed = self.count("enemy.killed", expectation.entity) or self.count("enemy.attacked", expectation.entity)
+                for alias in EVENT_ALIASES.get(expectation.event, []):
+                    c = self.count(alias, expectation.entity)
+                    if c > 0:
+                        observed = c
+                        break
             ok = observed >= 1
             reason = f"event '{expectation.event}' observed {observed} times (need >= 1)"
             return ok, observed, reason
 
         elif isinstance(expectation, EventCountExpectation):
             observed = self.count(expectation.event_count, expectation.entity)
+            if observed == 0:
+                for alias in EVENT_ALIASES.get(expectation.event_count, []):
+                    c = self.count(alias, expectation.entity)
+                    if c > 0:
+                        observed = c
+                        break
             min_val = expectation.min
             max_val = expectation.max
             ok = observed >= min_val and (max_val is None or observed <= max_val)

@@ -75,6 +75,30 @@ class EditTools:
                 return "utf-8"
 
     @staticmethod
+    def _unwrap_markdown_fences(content: str) -> str:
+        """Strip enclosing markdown code block fences (```lang ... ```) safely while preserving line ending semantics."""
+        if not content:
+            return content
+        stripped = content.strip()
+        if stripped.startswith("```") and stripped.endswith("```"):
+            lines = stripped.splitlines()
+            if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].strip() == "```":
+                inner = "\n".join(lines[1:-1])
+                # Preserve trailing newline if multi-line or original snippet had a trailing newline
+                if content.endswith(("\n", "\r\n")) or len(lines) > 2:
+                    if inner and not inner.endswith("\n"):
+                        inner += "\n"
+                return inner
+        return content
+
+    @staticmethod
+    def _detect_dominant_line_ending(text: str) -> str:
+        """Detect whether CRLF or LF is dominant in text."""
+        crlf = text.count("\r\n")
+        lf = text.count("\n") - crlf
+        return "\r\n" if crlf > lf else "\n"
+
+    @staticmethod
     def _atomic_write(target_file: Path, content: bytes) -> None:
         """Write content atomically so an interrupted apply cannot truncate a file."""
         atomic_write(target_path=target_file, content=content)
@@ -86,19 +110,37 @@ class EditTools:
         replacement_content: str = "",
         file_path: str = "",
         path: str = "",
+        target: str = "",
+        old_content: str = "",
+        old_str: str = "",
+        search: str = "",
+        replacement: str = "",
+        new_content: str = "",
+        new_str: str = "",
+        replace: str = "",
+        file: str = "",
+        filepath: str = "",
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Proposes a code change, verifies path, and generates a unified diff for review."""
-        effective_path = subpath or file_path or path
+        effective_path = (
+            subpath
+            or file_path
+            or path
+            or file
+            or filepath
+            or kwargs.get("rel_path", "")
+            or ""
+        )
+        if not target_content:
+            target_content = target or old_content or old_str or search or ""
+        if not replacement_content:
+            replacement_content = replacement or new_content or new_str or replace or ""
 
-        # Strip accidental markdown code block fences if replacement_content is wrapped in ```
-        if replacement_content:
-            stripped_rc = replacement_content.strip()
-            if stripped_rc.startswith("```") and stripped_rc.endswith("```"):
-                rc_lines = stripped_rc.splitlines()
-                if len(rc_lines) >= 2 and rc_lines[0].startswith("```") and rc_lines[-1].strip() == "```":
-                    replacement_content = "\n".join(rc_lines[1:-1])
-                    if replacement_content and not replacement_content.endswith("\n"):
-                        replacement_content += "\n"
+        # Strip accidental markdown code block fences if replacement_content or target_content is wrapped in ```
+        replacement_content = self._unwrap_markdown_fences(replacement_content)
+        target_content = self._unwrap_markdown_fences(target_content)
+
         try:
             target_file = self.boundary.validate_path(effective_path, allow_write=True)
         except (SecurityViolationError, ValueError) as exc:
@@ -129,6 +171,7 @@ class EditTools:
         original_bytes = target_file.read_bytes() if target_file.exists() else b""
         encoding = self._detect_encoding(original_bytes) if original_bytes else "utf-8"
         original_text = original_bytes.decode(encoding, errors="replace") if original_bytes else ""
+        dom_ending = self._detect_dominant_line_ending(original_text) if original_text else "\n"
 
         if original_text and target_content and target_content == replacement_content:
             return {
@@ -137,30 +180,58 @@ class EditTools:
             }
 
         # Check if target_content is present in file (if not creating fresh file)
+        is_full_file_rewrite = False
         if original_text and not target_content:
-            # If target_content is empty but replacement_content is provided, this represents
-            # a full-file rewrite intention. Allow full-file replacement if replacement_content is non-empty.
             if replacement_content:
+                is_full_file_rewrite = True
                 target_content = original_text
             else:
                 return {
                     "status": "ERROR",
-                    "error": f"target_content cannot be empty when editing existing file: {subpath}. Provide the exact code block to replace.",
+                    "error": f"target_content cannot be empty when editing existing file: {effective_path}. Provide the exact code block to replace.",
                 }
 
         new_text = original_text
         if original_text:
-            if target_content in original_text:
-                new_text = original_text.replace(target_content, replacement_content, 1)
+            if is_full_file_rewrite:
+                # Full-file rewrite: preserve file's dominant line ending
+                if dom_ending == "\r\n" and "\r\n" not in replacement_content:
+                    new_text = replacement_content.replace("\r\n", "\n").replace("\n", "\r\n")
+                else:
+                    new_text = replacement_content
+            elif target_content in original_text:
+                # Tier 1: Exact substring match with line ending & boundary formatting preservation
+                line_ending = "\r\n" if "\r\n" in target_content else dom_ending
+                repl_to_use = replacement_content
+                if line_ending == "\r\n" and "\r\n" not in repl_to_use and "\n" in repl_to_use:
+                    repl_to_use = repl_to_use.replace("\r\n", "\n").replace("\n", "\r\n")
+
+                if (
+                    not target_content.endswith(("\n", "\r\n"))
+                    and repl_to_use.endswith(("\n", "\r\n"))
+                    and (target_content + line_ending) in original_text
+                ):
+                    new_text = original_text.replace(target_content + line_ending, repl_to_use, 1)
+                else:
+                    new_text = original_text.replace(target_content, repl_to_use, 1)
             else:
-                # 1. Robust normalized matching across CRLF and LF line endings
+                # Tier 2: Robust normalized matching across CRLF and LF line endings
                 norm_orig = original_text.replace("\r\n", "\n")
                 norm_target = target_content.replace("\r\n", "\n")
                 norm_repl = replacement_content.replace("\r\n", "\n")
 
-                if norm_target in norm_orig:
-                    pos = norm_orig.find(norm_target)
-                    end_pos = pos + len(norm_target)
+                target_to_find = norm_target
+                if (
+                    target_to_find not in norm_orig
+                    and not target_to_find.endswith("\n")
+                    and (target_to_find + "\n") in norm_orig
+                    and norm_repl.endswith("\n")
+                ):
+                    target_to_find = target_to_find + "\n"
+
+                if target_to_find in norm_orig:
+                    pos = norm_orig.find(target_to_find)
+                    end_pos = pos + len(target_to_find)
 
                     orig_lines = original_text.splitlines(keepends=True)
                     cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
@@ -176,68 +247,113 @@ class EditTools:
                     o_end = cum_lengths[end_line_idx] + end_col_idx if end_line_idx < len(cum_lengths) else len(original_text)
 
                     matched_block = original_text[o_start:o_end]
-                    line_ending = "\r\n" if "\r\n" in matched_block else ("\r\n" if "\r\n" in original_text else "\n")
+                    line_ending = "\r\n" if "\r\n" in matched_block else dom_ending
                     adjusted_repl = norm_repl.replace("\n", line_ending)
                     new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
                 else:
-                    # 2. Resilient Whitespace-Tolerant Matching (handles indent and minor formatting drift)
+                    # Tier 3: Resilient Whitespace & Indentation Tolerant Sequence Matching
                     orig_lines_raw = norm_orig.splitlines(keepends=True)
                     orig_stripped = [l.strip() for l in orig_lines_raw]
                     target_lines_raw = norm_target.splitlines(keepends=True)
-                    target_stripped = [l.strip() for l in target_lines_raw if l.strip()]
+                    target_stripped = [l.strip() for l in target_lines_raw]
+
+                    orig_non_empty = [(i, l) for i, l in enumerate(orig_stripped) if l]
+                    target_non_empty = [(i, l) for i, l in enumerate(target_stripped) if l]
 
                     found_match = False
-                    if target_stripped and len(target_stripped) <= len(orig_stripped):
-                        first_t = target_stripped[0]
-                        for i in range(len(orig_stripped) - len(target_stripped) + 1):
-                            if orig_stripped[i] == first_t:
-                                # Check if subsequent stripped lines match
-                                match_len = len(target_stripped)
-                                if [l for l in orig_stripped[i : i + match_len] if l] == target_stripped:
-                                    # Calculate start and end character positions in original_text
-                                    orig_lines_with_nl = original_text.splitlines(keepends=True)
-                                    cum_lens = [0] + list(itertools.accumulate([len(l) for l in orig_lines_with_nl]))
-                                    o_start = cum_lens[i]
-                                    end_idx = min(i + match_len, len(orig_lines_with_nl))
-                                    o_end = cum_lens[end_idx] if end_idx < len(cum_lens) else len(original_text)
+                    if target_non_empty and len(target_non_empty) <= len(orig_non_empty):
+                        t_seq = [t[1] for t in target_non_empty]
+                        o_seq = [o[1] for o in orig_non_empty]
+                        t_len = len(t_seq)
 
-                                    line_ending = "\r\n" if "\r\n" in original_text else "\n"
+                        for k in range(len(o_seq) - t_len + 1):
+                            if o_seq[k : k + t_len] == t_seq:
+                                start_line_idx = orig_non_empty[k][0]
+                                end_line_idx = orig_non_empty[k + t_len - 1][0]
+
+                                orig_lines_with_nl = original_text.splitlines(keepends=True)
+                                cum_lens = [0] + list(itertools.accumulate([len(l) for l in orig_lines_with_nl]))
+                                o_start = cum_lens[start_line_idx]
+                                end_bound = end_line_idx + 1
+                                o_end = cum_lens[end_bound] if end_bound < len(cum_lens) else len(original_text)
+
+                                line_ending = dom_ending
+                                adjusted_repl = norm_repl.replace("\n", line_ending)
+
+                                # Preserve full-line boundary formatting
+                                if (
+                                    adjusted_repl
+                                    and original_text[o_start:o_end].endswith(("\n", "\r\n"))
+                                    and not adjusted_repl.endswith(("\n", "\r\n"))
+                                ):
+                                    adjusted_repl += line_ending
+
+                                new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
+                                found_match = True
+                                break
+
+                    if not found_match:
+                        # Tier 4: Fuzzy ratio fallback with line-candidate acceleration for large files
+                        target_lines = norm_target.splitlines()
+                        if len(target_lines) >= 3:
+                            t_len = len(target_lines)
+                            probe_line = next((l.strip() for l in target_lines if l.strip()), "")
+                            candidates = []
+                            if probe_line:
+                                for idx, ol in enumerate(orig_stripped):
+                                    if ol == probe_line or (len(probe_line) > 10 and (probe_line in ol or ol in probe_line)):
+                                        candidates.append(idx)
+
+                            best_ratio = 0.0
+                            best_slice = None
+                            for c_idx in candidates[:20]:
+                                start_w = max(0, c_idx - 2)
+                                end_w = min(len(orig_lines_raw), c_idx + t_len + 3)
+                                window_lines = [l.strip() for l in orig_lines_raw[start_w:end_w]]
+                                ratio = difflib.SequenceMatcher(None, window_lines, [l.strip() for l in target_lines]).ratio()
+                                if ratio > best_ratio and ratio >= 0.82:
+                                    best_ratio = ratio
+                                    best_slice = (start_w, end_w)
+
+                            if best_slice:
+                                orig_lines = original_text.splitlines(keepends=True)
+                                cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
+                                o_start = cum_lengths[best_slice[0]]
+                                o_end = cum_lengths[best_slice[1]] if best_slice[1] < len(cum_lengths) else len(original_text)
+                                line_ending = dom_ending
+                                adjusted_repl = norm_repl.replace("\n", line_ending)
+                                if adjusted_repl and not adjusted_repl.endswith(("\n", "\r\n")):
+                                    adjusted_repl += line_ending
+                                new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
+                                found_match = True
+                            elif len(norm_orig) <= 300_000:
+                                matcher = difflib.SequenceMatcher(None, norm_orig, norm_target)
+                                match = matcher.find_longest_match(0, len(norm_orig), 0, len(norm_target))
+                                if match.size >= int(len(norm_target) * 0.88):
+                                    o_start_norm = match.a
+                                    o_end_norm = match.a + match.size
+                                    orig_lines = original_text.splitlines(keepends=True)
+                                    cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
+
+                                    line_idx = norm_orig[:o_start_norm].count("\n")
+                                    last_nl = norm_orig[:o_start_norm].rfind("\n")
+                                    col_idx = o_start_norm - (last_nl + 1) if last_nl != -1 else o_start_norm
+                                    o_start = cum_lengths[line_idx] + col_idx if line_idx < len(cum_lengths) else len(original_text)
+
+                                    end_line_idx = norm_orig[:o_end_norm].count("\n")
+                                    end_last_nl = norm_orig[:o_end_norm].rfind("\n")
+                                    end_col_idx = o_end_norm - (end_last_nl + 1) if end_last_nl != -1 else o_end_norm
+                                    o_end = cum_lengths[end_line_idx] + end_col_idx if end_line_idx < len(cum_lengths) else len(original_text)
+
+                                    line_ending = dom_ending
                                     adjusted_repl = norm_repl.replace("\n", line_ending)
                                     new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
                                     found_match = True
-                                    break
-
-                    if not found_match:
-                        # 3. Fuzzy ratio fallback for near-identical single-block replacements
-                        # Only attempted if target_content is multi-line to avoid false positive short matches
-                        if len(target_content.splitlines()) >= 3:
-                            matcher = difflib.SequenceMatcher(None, norm_orig, norm_target)
-                            match = matcher.find_longest_match(0, len(norm_orig), 0, len(norm_target))
-                            if match.size >= int(len(norm_target) * 0.88):
-                                o_start_norm = match.a
-                                o_end_norm = match.a + match.size
-                                orig_lines = original_text.splitlines(keepends=True)
-                                cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
-
-                                line_idx = norm_orig[:o_start_norm].count("\n")
-                                last_nl = norm_orig[:o_start_norm].rfind("\n")
-                                col_idx = o_start_norm - (last_nl + 1) if last_nl != -1 else o_start_norm
-                                o_start = cum_lengths[line_idx] + col_idx if line_idx < len(cum_lengths) else len(original_text)
-
-                                end_line_idx = norm_orig[:o_end_norm].count("\n")
-                                end_last_nl = norm_orig[:o_end_norm].rfind("\n")
-                                end_col_idx = o_end_norm - (end_last_nl + 1) if end_last_nl != -1 else o_end_norm
-                                o_end = cum_lengths[end_line_idx] + end_col_idx if end_line_idx < len(cum_lengths) else len(original_text)
-
-                                line_ending = "\r\n" if "\r\n" in original_text else "\n"
-                                adjusted_repl = norm_repl.replace("\n", line_ending)
-                                new_text = original_text[:o_start] + adjusted_repl + original_text[o_end:]
-                                found_match = True
 
                     if not found_match:
                         return {
                             "status": "ERROR",
-                            "error": f"Target content block not found in file: {subpath}",
+                            "error": f"Target content block not found in file: {effective_path}",
                         }
 
             if new_text == original_text:
@@ -294,16 +410,26 @@ class EditTools:
             "message": "Diff generated successfully. Requires developer approval to apply.",
         }
 
-    def apply_diff(self, diff_id: str) -> Dict[str, Any]:
+    def apply_diff(
+        self,
+        diff_id: str = "",
+        id: str = "",
+        diff: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Applies an approved diff to the filesystem and saves rollback state."""
-        if diff_id not in self.pending_diffs:
-            loaded = self._load_diff_from_disk(diff_id)
-            if loaded and loaded.get("status") == "PENDING_APPROVAL":
-                self.pending_diffs[diff_id] = loaded
-            else:
-                return {"status": "ERROR", "error": f"Pending diff {diff_id} not found."}
+        effective_id = diff_id or id or diff or ""
+        if not effective_id:
+            return {"status": "ERROR", "error": "Missing diff_id for apply_diff."}
 
-        rec = self.pending_diffs[diff_id]
+        if effective_id not in self.pending_diffs:
+            loaded = self._load_diff_from_disk(effective_id)
+            if loaded and loaded.get("status") == "PENDING_APPROVAL":
+                self.pending_diffs[effective_id] = loaded
+            else:
+                return {"status": "ERROR", "error": f"Pending diff {effective_id} not found."}
+
+        rec = self.pending_diffs[effective_id]
         target_file = Path(rec["target_file"])
 
         # Re-validate security boundary
@@ -350,35 +476,58 @@ class EditTools:
         except Exception as e:
             return {"status": "ERROR", "error": f"Failed to write file: {e}"}
 
-    def reject_diff(self, diff_id: str, reason: str = "User rejected") -> Dict[str, Any]:
+    def reject_diff(
+        self,
+        diff_id: str = "",
+        reason: str = "User rejected",
+        id: str = "",
+        diff: str = "",
+        message: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Rejects a proposed diff and discards it without touching the filesystem."""
-        if diff_id not in self.pending_diffs:
-            loaded = self._load_diff_from_disk(diff_id)
-            if loaded and loaded.get("status") == "PENDING_APPROVAL":
-                self.pending_diffs[diff_id] = loaded
-            else:
-                return {"status": "ERROR", "error": f"Pending diff {diff_id} not found."}
+        effective_id = diff_id or id or diff or ""
+        effective_reason = reason if reason != "User rejected" else (message or "User rejected")
+        if not effective_id:
+            return {"status": "ERROR", "error": "Missing diff_id for reject_diff."}
 
-        rec = self.pending_diffs.pop(diff_id)
+        if effective_id not in self.pending_diffs:
+            loaded = self._load_diff_from_disk(effective_id)
+            if loaded and loaded.get("status") == "PENDING_APPROVAL":
+                self.pending_diffs[effective_id] = loaded
+            else:
+                return {"status": "ERROR", "error": f"Pending diff {effective_id} not found."}
+
+        rec = self.pending_diffs.pop(effective_id)
         rec["status"] = "REJECTED"
         self._save_diff_to_disk(rec)
         return {
             "status": "REJECTED",
-            "diff_id": diff_id,
+            "diff_id": effective_id,
             "file_path": rec["file_path"],
-            "reason": reason,
+            "reason": effective_reason,
         }
 
-    def rollback_diff(self, diff_id: str) -> Dict[str, Any]:
+    def rollback_diff(
+        self,
+        diff_id: str = "",
+        id: str = "",
+        diff: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Rolls back an applied diff to its original pre-edit state."""
-        if diff_id not in self.applied_diffs:
-            loaded = self._load_diff_from_disk(diff_id)
-            if loaded and loaded.get("status") == "APPLIED":
-                self.applied_diffs[diff_id] = loaded
-            else:
-                return {"status": "ERROR", "error": f"Applied diff {diff_id} not found for rollback."}
+        effective_id = diff_id or id or diff or ""
+        if not effective_id:
+            return {"status": "ERROR", "error": "Missing diff_id for rollback_diff."}
 
-        rec = self.applied_diffs[diff_id]
+        if effective_id not in self.applied_diffs:
+            loaded = self._load_diff_from_disk(effective_id)
+            if loaded and loaded.get("status") == "APPLIED":
+                self.applied_diffs[effective_id] = loaded
+            else:
+                return {"status": "ERROR", "error": f"Applied diff {effective_id} not found for rollback."}
+
+        rec = self.applied_diffs[effective_id]
         target_file = Path(rec["target_file"])
         try:
             self.boundary.validate_path(target_file, allow_write=True)
@@ -450,7 +599,14 @@ class EditTools:
         except Exception as e:
             return {"status": "ERROR", "error": f"Rollback failed: {e}"}
 
-    def apply_batch(self, diff_ids: List[str]) -> Dict[str, Any]:
+    def apply_batch(
+        self,
+        diff_ids: Any = None,
+        diffs: Any = None,
+        ids: Any = None,
+        diff_id: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Atomically applies a batch of approved diffs across multiple files.
         
         Performs pre-validation on all diffs and hashes first; if any diff is stale
@@ -458,13 +614,26 @@ class EditTools:
         If a write failure occurs mid-batch, previously applied diffs in the batch
         are rolled back automatically and restored to PENDING_APPROVAL.
         """
-        if not diff_ids:
+        raw_ids = diff_ids if diff_ids is not None else (diffs if diffs is not None else (ids if ids is not None else diff_id))
+        if isinstance(raw_ids, str):
+            if "," in raw_ids:
+                effective_ids = [d.strip() for d in raw_ids.split(",") if d.strip()]
+            elif raw_ids.strip():
+                effective_ids = [raw_ids.strip()]
+            else:
+                effective_ids = []
+        elif raw_ids:
+            effective_ids = list(raw_ids)
+        else:
+            effective_ids = []
+
+        if not effective_ids:
             return {"status": "NOOP", "applied_diff_ids": [], "files": []}
 
         # Phase 1: Pre-validation (dry run)
         validated_records: List[Dict[str, Any]] = []
         seen_targets: set[str] = set()
-        for diff_id in diff_ids:
+        for diff_id in effective_ids:
             if diff_id not in self.pending_diffs:
                 loaded = self._load_diff_from_disk(diff_id)
                 if loaded and loaded.get("status") == "PENDING_APPROVAL":
@@ -564,18 +733,39 @@ class EditTools:
                 "applied_diff_ids": [],
             }
 
-    def rollback_batch(self, diff_ids: List[str]) -> Dict[str, Any]:
+    def rollback_batch(
+        self,
+        diff_ids: Any = None,
+        diffs: Any = None,
+        ids: Any = None,
+        diff_id: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Rolls back a batch of applied diffs in reverse order.
         
         Validates freshness for all files first. If any file has been modified
         after the diff was applied, aborts without modifying files.
         """
-        if not diff_ids:
+        raw_ids = diff_ids if diff_ids is not None else (diffs if diffs is not None else (ids if ids is not None else diff_id))
+        if isinstance(raw_ids, str):
+            if "," in raw_ids:
+                effective_ids = [d.strip() for d in raw_ids.split(",") if d.strip()]
+            elif raw_ids.strip():
+                effective_ids = [raw_ids.strip()]
+            else:
+                effective_ids = []
+        elif raw_ids:
+            effective_ids = list(raw_ids)
+        else:
+            effective_ids = []
+
+        if not effective_ids:
             return {"status": "NOOP", "rolled_back_diff_ids": [], "files": []}
 
         # Pre-validate all diffs
         validated_records: List[Dict[str, Any]] = []
-        for diff_id in diff_ids:
+        seen_targets: set[str] = set()
+        for diff_id in effective_ids:
             if diff_id not in self.applied_diffs:
                 loaded = self._load_diff_from_disk(diff_id)
                 if loaded and loaded.get("status") == "APPLIED":
@@ -597,6 +787,15 @@ class EditTools:
                     "error": f"Security boundary violation for {rec['file_path']}: {e}",
                     "failed_diff_id": diff_id,
                 }
+
+            norm_target = str(target_file.resolve()).lower()
+            if norm_target in seen_targets:
+                return {
+                    "status": "ERROR",
+                    "error": f"Duplicate target file in batch rollback: '{rec['file_path']}' is targeted by multiple diffs.",
+                    "failed_diff_id": diff_id,
+                }
+            seen_targets.add(norm_target)
 
             current_bytes = target_file.read_bytes() if target_file.exists() else b""
             if self._digest(current_bytes) != rec["new_sha256"]:

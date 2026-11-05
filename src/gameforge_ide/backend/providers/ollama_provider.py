@@ -286,6 +286,7 @@ class OllamaProvider(ModelProvider):
     ) -> AsyncIterator[StreamChunk]:
         """Streams completion tokens from Ollama /api/chat."""
         url = f"http://{self.host}/api/chat"
+        resolved_ctx = kwargs.get("num_ctx") or self.get_capabilities(model_id).max_context
         
         payload = self.build_chat_payload(
             model_id=model_id,
@@ -293,7 +294,7 @@ class OllamaProvider(ModelProvider):
             system_prompt=system_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
-            num_ctx=kwargs.get("num_ctx", 4096),
+            num_ctx=resolved_ctx,
         )
 
         req = urllib.request.Request(
@@ -326,6 +327,7 @@ class OllamaProvider(ModelProvider):
         **kwargs: Any,
     ) -> ChatResponse:
         url = f"http://{self.host}/api/generate"
+        resolved_ctx = kwargs.get("num_ctx") or self.get_capabilities(model_id).max_context
         payload = {
             "model": model_id,
             "prompt": prompt,
@@ -334,7 +336,7 @@ class OllamaProvider(ModelProvider):
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens,
-                "num_ctx": kwargs.get("num_ctx", 4096),
+                "num_ctx": resolved_ctx,
             },
             "think": False,
         }

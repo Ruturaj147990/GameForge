@@ -134,6 +134,10 @@ def atomic_write(
         # Guaranteed cleanup of temporary file without shadowing root cause
         try:
             if os.path.exists(temporary_name):
+                try:
+                    os.chmod(temporary_name, stat.S_IWRITE | stat.S_IREAD)
+                except Exception:
+                    pass
                 os.unlink(temporary_name)
         except (FileNotFoundError, PermissionError, OSError):
             pass

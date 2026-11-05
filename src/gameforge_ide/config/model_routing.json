@@ -2,7 +2,7 @@
   "schema": "model_routing/1",
   "source": {
     "description": "Generated from latest P9 empirical evaluation reports.",
-    "generated_at": "2026-11-05T00:30:24Z",
+    "generated_at": "2026-11-05T17:02:23Z",
     "reports": [
       {
         "path": "reports/P9/eval_gameforge-27b-sft_latest_20261101T112010Z.json",

@@ -202,6 +202,13 @@ def enable_gameforge_management(
     if src_plugin.is_dir():
         shutil.copytree(src_plugin, target_plugin, dirs_exist_ok=True, ignore=shutil.ignore_patterns("Intermediate"))
 
+    # 1b. Ensure DirectoriesToAlwaysCook includes /Game/Maps
+    try:
+        from ..content.epic_packs import update_default_game_ini_cook_dirs
+        update_default_game_ini_cook_dirs(target_root, ["/Game/Maps", "/Game/GameForge"])
+    except Exception:
+        pass
+
     # 2. Checkpoints & Git
     warning = ""
     has_git = (p_dir / ".git").is_dir()

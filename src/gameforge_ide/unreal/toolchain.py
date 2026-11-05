@@ -214,9 +214,12 @@ class UnrealToolchain:
     @staticmethod
     def kill_tree(proc: subprocess.Popen) -> None:
         """Kill a process and all its descendants (UBT/UAT/packaged bootstrappers spawn children)."""
+        if proc is None:
+            return
+        pid = getattr(proc, "pid", None)
         try:
             import psutil
-            parent = psutil.Process(proc.pid)
+            parent = psutil.Process(pid)
             for child in parent.children(recursive=True):
                 try:
                     child.kill()
@@ -224,12 +227,26 @@ class UnrealToolchain:
                     pass
             parent.kill()
         except Exception:
+            pass
+
+        if pid and sys.platform == "win32":
             try:
-                proc.kill()
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
             except Exception:
                 pass
+
         try:
-            proc.wait(timeout=30)
+            proc.kill()
+        except Exception:
+            pass
+
+        try:
+            proc.wait(timeout=5)
         except Exception:
             pass
 
@@ -408,13 +425,13 @@ class UnrealToolchain:
 
             # Target exists: synchronize latest Python ops, C++ sources, config, uplugin, and binaries
             if repo_plugin.is_dir():
-                # 1. Sync gameforge_ops
-                repo_python_ops = repo_plugin / "Content" / "Python" / "gameforge_ops"
-                if repo_python_ops.is_dir():
-                    target_ops = target / "Content" / "Python" / "gameforge_ops"
-                    target_ops.parent.mkdir(parents=True, exist_ok=True)
+                # 1. Sync Python ops and scripts
+                repo_python = repo_plugin / "Content" / "Python"
+                if repo_python.is_dir():
+                    target_python = target / "Content" / "Python"
+                    target_python.mkdir(parents=True, exist_ok=True)
                     try:
-                        shutil.copytree(repo_python_ops, target_ops, dirs_exist_ok=True)
+                        shutil.copytree(repo_python, target_python, dirs_exist_ok=True)
                     except Exception as exc:
                         logger.warning("Could not sync Python ops to %s: %s", target, exc)
 
@@ -442,14 +459,18 @@ class UnrealToolchain:
                     except Exception as exc:
                         logger.warning("Could not sync plugin Config to %s: %s", target, exc)
 
-            # 5. Sync Binaries if missing from target but available in best source
-            if best_source and (best_source / "Binaries" / "Win64").is_dir():
+            # 5. Sync Binaries from binary_source into target
+            binary_source = next((c for c in candidates if c.is_dir() and (c / "Binaries" / "Win64").is_dir() and any((c / "Binaries" / "Win64").glob("*.dll"))), None)
+            if not binary_source and best_source and (best_source / "Binaries" / "Win64").is_dir():
+                binary_source = best_source
+
+            if binary_source and (binary_source / "Binaries" / "Win64").is_dir():
                 target_bin = target / "Binaries" / "Win64"
-                if not target_bin.is_dir():
-                    try:
-                        shutil.copytree(best_source / "Binaries" / "Win64", target_bin, dirs_exist_ok=True)
-                    except Exception as exc:
-                        logger.warning("Could not sync plugin Binaries to %s: %s", target, exc)
+                target_bin.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copytree(binary_source / "Binaries" / "Win64", target_bin, dirs_exist_ok=True)
+                except Exception as exc:
+                    logger.warning("Could not sync plugin Binaries to %s: %s", target, exc)
 
             return target
 
@@ -515,6 +536,16 @@ class UnrealToolchain:
         except Exception as exc:
             logger.warning("Could not check/deploy plugin before package: %s", exc)
 
+        # Ensure cooker always cooks map paths (+DirectoriesToAlwaysCook=(Path="/Game/Maps"))
+        try:
+            from ..content.epic_packs import update_default_game_ini_cook_dirs
+            update_default_game_ini_cook_dirs(
+                uproject.parent,
+                ["/Game/Maps", "/Game/Characters", "/Game/LevelPrototyping", "/Game/GameForge"],
+            )
+        except Exception as exc:
+            logger.warning("Could not update cook dirs in DefaultGame.ini: %s", exc)
+
         if profile == "release" or configuration == "Shipping":
             game_ini = uproject.parent / "Config" / "DefaultGame.ini"
             if game_ini.exists():
@@ -576,10 +607,11 @@ class UnrealToolchain:
         exe = Path(exe)
         log_path = Path(log_path or exe.parent / "GameForgeSmoke.log")
         argv = [str(exe)] + list(args) + [f"-abslog={log_path}", "-unattended", "-nosplash", "-NoSound"]
+        cmd = format_unreal_cmd(argv)
         started = time.monotonic()
         try:
-            proc = jobs.spawn(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                    creationflags=NO_WINDOW)
+            proc = jobs.spawn(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              creationflags=NO_WINDOW)
             code = self._wait(proc, timeout_s)
         except TimeoutError:
             return StepResult(False, "smoke", None, round(time.monotonic() - started, 1), str(log_path),

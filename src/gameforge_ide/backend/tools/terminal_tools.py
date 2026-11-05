@@ -111,12 +111,18 @@ class TerminalTools:
             if forbidden in cmd_lower:
                 return self._blocked(f"Command contains forbidden operation '{forbidden}'")
 
-        if not isinstance(timeout_seconds, int) or isinstance(timeout_seconds, bool):
+        try:
+            if isinstance(timeout_seconds, bool):
+                raise ValueError()
+            timeout_val = int(timeout_seconds)
+        except (ValueError, TypeError):
             return self._blocked("timeout_seconds must be an integer.")
-        if not 1 <= timeout_seconds <= self.MAX_TIMEOUT_SECONDS:
+
+        if not 1 <= timeout_val <= self.MAX_TIMEOUT_SECONDS:
             return self._blocked(
                 f"timeout_seconds must be between 1 and {self.MAX_TIMEOUT_SECONDS}."
             )
+        timeout_seconds = timeout_val
 
         try:
             args = self._parse_command(command)

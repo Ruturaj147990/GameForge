@@ -281,10 +281,15 @@ class TaskState(BaseModel):
                 expected_code = int(pred.expected) if pred.expected is not None else 0
                 matched_cmd = False
                 for th in reversed(tool_history):
-                    tool_n = th.get("tool_name", "")
-                    cmd_arg = str(th.get("arguments", {}).get("command", ""))
-                    if tool_n in ("run_command", "terminal_run"):
-                        if not pred.target or pred.target in cmd_arg or fnmatch.fnmatch(cmd_arg, pred.target):
+                    tool_n = th.get("tool_name") or th.get("tool") or ""
+                    cmd_arg = str(
+                        th.get("command")
+                        or (th.get("arguments", {}).get("command") if isinstance(th.get("arguments"), dict) else "")
+                        or (th.get("args", {}).get("command") if isinstance(th.get("args"), dict) else "")
+                        or ""
+                    )
+                    if tool_n in ("run_command", "terminal_run") or cmd_arg:
+                        if not pred.target or pred.target in cmd_arg or fnmatch.fnmatch(cmd_arg, pred.target) or cmd_arg in pred.target:
                             out_data = th.get("output", {})
                             code = th.get("exit_code")
                             if code is None and isinstance(out_data, dict):

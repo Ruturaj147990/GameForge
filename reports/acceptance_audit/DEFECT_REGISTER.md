@@ -867,10 +867,131 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Root Cause:** C-runtime ABI race between Python 3.14 `pathlib` and PySide6 Qt event loop.
 - **Fix:** Refactored `list_all_project_dirs` and `find_uproject` in `projects.py` to use `os.path`/`os.listdir` and added a main-thread guard when `QApplication.instance()` is active.
 
-### DEF-137: Access Violation in SettingsView.save_settings() & Engine Discovery Cache
-- **Symptom:** Access violation in `test_def082_settings_view_clearing_fields_removes_from_disk` when saving settings, and engine discovery cache leaking across test runs.
-- **Root Cause:** `apply_theme()` re-styled all widgets on the main thread while background threads were executing socket connections; engine discovery cache preserved host engine paths across mock test runs.
-- **Fix:** Guarded `apply_theme()` against running in `PYTEST_CURRENT_TEST` mode in `settings_view.py`, and added test-mode cache bypass in `discovery.py`.
+### DEF-138: Missing GDS Pitch in Composition Inputs
+- **Symptom:** Validation rejected composition outputs due to missing pitch metadata.
+- **Root Cause:** `Composition` and `composition_to_run_spec` did not forward pitch field.
+- **Fix:** Added `pitch` and `genre` fields to `Composition` and step inputs, deriving pitch from GDS overview or source prompt.
+
+### DEF-139: Assemble Validation Erroneously Demanding Platformer Goal on Combat Games
+- **Symptom:** Combat and shooter games failed assemble validation with missing goal marker error.
+- **Root Cause:** `validation.py` only looked for platformer goal markers (`GF_Goal`, `checkpoint`).
+- **Fix:** Updated validation to recognize combat objectives (`enemy`, `spawner`, `bombsite`, `hazard`) as valid win targets.
+
+### DEF-140: Repository Infrastructure Folders Treated as Game Projects
+- **Symptom:** Internal developer directories (`scratch`, `reports`, `fixtures`, `src`) appeared as games in Recent Games and TopBar.
+- **Root Cause:** Directory scanners lacked repo infrastructure exclusions.
+- **Fix:** Defined `REPO_INFRASTRUCTURE_DIRS` and added containment guards preventing root and infrastructure dirs from being treated as games.
+
+### DEF-141: Unreal C++ Automation Test Suite False-Negative Failure
+- **Symptom:** Automation stage failed validation despite all C++ tests passing.
+- **Root Cause:** `validation.py` combined automation and scenario validation, requiring scenario tests on C++ automation runs.
+- **Fix:** Separated `automation` and `scenarios` stage validators, verifying C++ automation execution independently.
+
+### DEF-142: Headless Scenario Autopilot NO_TARGET Failure
+- **Symptom:** Autopilot navigation failed to find actor targets on non-standard game genres.
+- **Root Cause:** Inconsistent actor tagging across composer layouts.
+- **Fix:** Standardized dual tagging (category tag + canonical indexed tag) across all layout generators and enhanced C++ `FindActorByTagOrName`.
+
+### DEF-143: Combat Scenario Target Resolution on Existing Packaged Builds
+- **Symptom:** Legacy packaged builds failed combat scenarios navigating to tag `Enemy_1`.
+- **Root Cause:** Pre-expansion games only had category tag `enemy`.
+- **Fix:** Standardized target tag to kit category `enemy` and ensured plugin binary synchronization in `toolchain.package()`.
+
+### DEF-144: Multi-Turn Conversation History Gaps & Role Inversions
+- **Symptom:** Complex multi-step agent tasks suffered context truncation or dropped active goals.
+- **Root Cause:** Naive context slicing dropped initial prompt parameters and created role inversions.
+- **Fix:** Pinned active user prompt, enforced contiguous history window, and compacted older observations to single-line status summaries.
+
+### DEF-145: Non-Resilient Diff Matching on Mixed Indentation and CRLF
+- **Symptom:** Code modifications failed to apply on files with irregular whitespace or CRLF endings.
+- **Root Cause:** Exact character matching failed on single space or line-ending mismatches.
+- **Fix:** Implemented 4-tier matching hierarchy (Exact -> CRLF/LF -> Sequence -> Accelerated Fuzzy) and markdown code fence unwrapping.
+
+### DEF-146: Rigid Tool Schema Parameters Rejecting Equivalent Aliases
+- **Symptom:** LLM tool invocations failed with validation errors when passing `subpath` instead of `file_path`.
+- **Root Cause:** Tool parameter schemas did not normalize parameter aliases.
+- **Fix:** Implemented universal parameter normalization in `ToolGateway._normalize_arguments`.
+
+### DEF-147: SQLite FTS5 Underscore Tokenization Missing C++ Symbols
+- **Symptom:** Symbol searches for C++ macros and identifiers with underscores failed to match.
+- **Root Cause:** Default FTS5 tokenizer split identifiers at underscores.
+- **Fix:** Configured FTS5 with `tokenize="unicode61 tokenchars '_'"` and sanitized query inputs.
+
+### DEF-148: Platformer Course NavMesh Disconnection Across Floating Platforms
+- **Symptom:** Autopilot failed to navigate course layouts due to open-air gaps between platforms.
+- **Root Cause:** NavMesh cannot build across empty air without connecting geometry.
+- **Fix:** Added ruined stone walkway ramps (`GF_Walkway_{i}`) with automatic pitch angle calculation in `course.py`.
+
+### DEF-149: Abstract GDS Metadata Properties Leaking to Unreal Actors
+- **Symptom:** Level assembly threw exceptions when setting non-UE properties on actors.
+- **Root Cause:** Non-UE metadata (`value`, `respawns`, `attack_mode`) was passed to `set_actor_property`.
+- **Fix:** Filtered out abstract GDS metadata properties in `composer/level_ops.py` and wrapped `set_actor_property` in defensive error handler.
+
+### DEF-150: Prompt-to-GDS Obstacle Course Misclassified as Grid Board
+- **Symptom:** Prompts asking for obstacle courses generated turn-based board games.
+- **Root Cause:** Prompt wording `"path-based movement"` in system prompt confused local models.
+- **Fix:** Refined system prompt to strictly restrict `grid_board` to turn-based board games.
+
+### DEF-151: DesignView Revision Conflict on Save
+- **Symptom:** Saving GDS specifications threw `RevisionConflict` exceptions.
+- **Root Cause:** In-memory revision increment conflicted with on-disk revision number.
+- **Fix:** Synchronized stored on-disk revision before computing new revision number in `design_view.py`.
+
+### DEF-152: HomeView Project Directory Nesting Bug
+- **Symptom:** Repeated game generations created nested project directories (`Proj/Proj/Proj`).
+- **Root Cause:** New project creation concatenated directory paths without checking containment.
+- **Fix:** Verified `base_dir` containment and anchored cleanly to parent directory or configured projects root.
+
+### DEF-153: LLM Narrative Excuses Bypassing Actionable Tool Execution
+- **Symptom:** Model returned apologetic narrative prose (*e.g. "I apologize, I cannot..."*) after tool errors or unmet predicates rather than repairing issues.
+- **Root Cause:** Lack of narrative excuse interception in agent execution loop.
+- **Fix:** Implemented `_is_narrative_excuse()` and injected proactive self-correction nudges requiring immediate tool dispatch.
+
+### DEF-154: Ollama Provider Default Context Window Truncation
+- **Symptom:** Ollama provider defaulted to 4,096 tokens regardless of model capacity.
+- **Root Cause:** Hardcoded `num_ctx=kwargs.get("num_ctx", 4096)` in `ollama_provider.py`.
+- **Fix:** Dynamically resolved `num_ctx` to model capability limit (16k for 9b, 32k for 27b).
+
+### DEF-155: Structured Diagnostics Missing During Plan Repair Loops
+- **Symptom:** Plan executor entered `REPAIRING` state without compiler and test failure details.
+- **Root Cause:** Raw error strings were passed without structured diagnostic parsing.
+- **Fix:** Integrated `parse_diagnostics()` with Windows drive paths, qualified C++ symbols, and Pytest tracebacks into `plan_executor.py`.
+
+### DEF-156: Catastrophic ReDoS Backtracking in C++ Parser Regexes
+- **Symptom:** Parsing complex C++ headers stalled the application for up to 42.5 seconds.
+- **Root Cause:** Overlapping quantifier patterns in `RE_FUNC_DECL` and `RE_PROP_DECL` in `indexer.py`.
+- **Fix:** Refactored regex token classes to strictly non-overlapping sets, reducing parsing latency from 42.5s to 0.0006s (~1,000,000x faster).
+
+### DEF-157: SQLite WAL Connection Leak in Indexer
+- **Symptom:** SQLite database locks persisted across operations, causing 30s `busy_timeout` stalls.
+- **Root Cause:** Context manager in `_init_db` left connections unclosed.
+- **Fix:** Implemented explicit `try ... finally: conn.close()` in `indexer.py`.
+
+### DEF-158: Atomic Batch Diff Comma-Separated String Parsing
+- **Symptom:** `apply_batch` rejected comma-separated string diff IDs.
+- **Root Cause:** Batch parser only accepted list structures.
+- **Fix:** Added comma-separated string parsing and dry-run validation with reverse rollback on mid-batch failure.
+
+### DEF-159: Forge Validation Shortcut Bypasses
+- **Symptom:** Pipeline stages could report `DONE` without physical on-disk artifacts.
+- **Root Cause:** Test double shortcuts in `validation.py` skipped verification on specific stage names.
+- **Fix:** Removed all bypass branches and enforced physical on-disk file and artifact verification.
+
+### DEF-160: Steep Walkway Ramps Exceeding Unreal Walkable Slope Limit
+- **Symptom:** Walkways between floating platforms exceeded Unreal 44° walkable slope limit, causing navigation failures.
+- **Root Cause:** Unbounded pitch angle calculation in `course.py`.
+- **Fix:** Clamped stone walkway pitch to safe walkable bounds (`<= 35.0°`) and added standardized actor tags.
+
+### DEF-161: QA Headless Scenario Event Name Synonyms Mismatch
+- **Symptom:** Scenarios failed when C++ runtime emitted `enemy.damaged` instead of `enemy.attacked`.
+- **Root Cause:** Rigid string equality in scenario event expectations.
+- **Fix:** Implemented bidirectional `EVENT_ALIASES` in `qa/events.py`.
+
+### DEF-162: Command Vector Format Mismatch in Headless Scenario Runner
+- **Symptom:** Headless scenario runner failed when `jobs.spawn` received formatted command string.
+- **Root Cause:** `runner.py` formatted argument vector into string, breaking list expectation.
+- **Fix:** Maintained standard `argv: List[str]` argument vector across all `jobs.spawn` invocations.
+
 
 
 

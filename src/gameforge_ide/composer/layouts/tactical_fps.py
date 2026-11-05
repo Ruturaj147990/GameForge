@@ -199,7 +199,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             location=(1500.0, 1400.0, 50.0),
             yaw=0.0,
             entity_id="bombsite_a",
-            tags=["goal", "Goal", "GF_Goal", "bombsite", "site_a", "objective", "GF_Owned"],
+            tags=["goal", "Goal", "GF_Goal", "Goal_1", "goal_1", "GF_Goal_1", "bombsite", "site_a", "objective", "GF_Owned", "bombsite_a"],
         )
     )
     actors.append(
@@ -209,7 +209,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             location=(-1500.0, 1400.0, 50.0),
             yaw=0.0,
             entity_id="bombsite_b",
-            tags=["goal", "Goal", "GF_Goal", "bombsite", "site_b", "objective", "GF_Owned"],
+            tags=["goal", "Goal", "GF_Goal", "Goal_2", "goal_2", "GF_Goal_2", "bombsite", "site_b", "objective", "GF_Owned", "bombsite_b"],
         )
     )
 

@@ -95,6 +95,75 @@ class ContextManager:
             summary = summary[:max_chars].rstrip() + "\n[Canonical context summary truncated at configured character limit.]"
         return summary
 
+    @classmethod
+    def compact_conversation_history(
+        cls,
+        history: List[Dict[str, str]],
+        max_tokens: int = 4096,
+        preserve_recent: int = 4,
+    ) -> List[Dict[str, str]]:
+        """Compacts multi-turn history while preserving active prompt, task goal, and recent context.
+
+        Older tool observation payloads are collapsed to concise single-line summaries
+        to prevent token overflow and ensure long autonomous loops never drop active tasks.
+        Preserves the initial task prompt/parameters (goal) and the most recent turns.
+        """
+        if not history:
+            return []
+
+        compacted = [dict(m) for m in history]
+        n = len(compacted)
+        cutoff = max(1, n - preserve_recent)
+
+        # 1. Compact older tool observations before cutoff
+        for i in range(1, cutoff):
+            msg = compacted[i]
+            content = msg.get("content", "")
+            if "[Observation for `" in content or "[Tool Execution Error in `" in content:
+                m_tool = re.search(r"\[(?:Observation for|Tool Execution Error in) `([^`]+)`\]", content)
+                tool_label = m_tool.group(1) if m_tool else "tool"
+                status_note = "error observed" if "Error in `" in content else "completed"
+                msg["content"] = f"[Tool `{tool_label}`: {status_note} (compacted for context)]"
+
+        # 2. Check token budget and compress intermediate turns if still exceeding max_tokens
+        def _estimate_tokens(text: str) -> int:
+            return (len(text.encode("utf-8")) + 2) // 3
+
+        total_tokens = sum(_estimate_tokens(m.get("content", "")) for m in compacted)
+        if total_tokens > max_tokens and n > (preserve_recent + 1):
+            initial_msg = compacted[0]
+            recent_msgs = compacted[-preserve_recent:]
+            intermediate = compacted[1:-preserve_recent]
+            
+            snippets = []
+            for m in intermediate:
+                role = m.get("role", "turn")
+                c = m.get("content", "").strip()
+                if not c:
+                    continue
+                first_line = c.splitlines()[0]
+                if len(first_line) > 60:
+                    first_line = first_line[:57] + "..."
+                snippets.append(f"{role}: {first_line}")
+            
+            summary_msg = {
+                "role": "user" if initial_msg.get("role") != "user" else "assistant",
+                "content": "[Earlier conversation compacted: " + " | ".join(snippets[:5]) + "]",
+            }
+            compacted = [initial_msg, summary_msg] + recent_msgs
+
+        # 3. Enforce alternating roles
+        merged: List[Dict[str, str]] = []
+        for m in compacted:
+            if not merged:
+                merged.append(dict(m))
+            elif merged[-1].get("role") == m.get("role"):
+                merged[-1]["content"] += "\n\n" + m.get("content", "")
+            else:
+                merged.append(dict(m))
+
+        return merged
+
     def build_system_prompt(
         self,
         tools_description: str,
@@ -166,11 +235,12 @@ class ContextManager:
             "To list files: tool=list_dir, args={subpath}.\n"
             "To find UE projects: tool=unreal_find_projects, args={}.\n\n"
             "=== PROTOCOL ===\n"
-            "1. For any software engineering, game dev, or code modification task, inspect the codebase and invoke tools to make actual source modifications.\n"
-            "2. Read existing files before modifying them so you have exact target_content blocks.\n"
-            "3. After discovering project info, proceed directly to propose_edit to make real file modifications.\n"
-            "4. Never call the same tool with the same args twice in a row.\n"
-            "5. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
-            "6. Always ensure requested source modifications result in real diffs and files on disk.\n"
-            "7. Be concise and direct."
+            "1. Follow the strict 9-stage autonomous engineering loop: Prompt -> Understanding -> Codebase Inspection -> Planning -> Actual Source Changes -> Diff/Approval -> Application -> Testing -> Verification.\n"
+            "2. Inspect & Read: Inspect existing files before modifying them so you have exact target_content blocks.\n"
+            "3. Propose Edits: Proceed directly to propose_edit to produce real file diffs. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
+            "4. Track & Verify: After source modifications, invoke verification tools (run_command with tests, or build commands) to verify zero regressions.\n"
+            "5. Self-Correction: When a tool returns an error, inspect the diagnostic, reason about the failure, and perform corrective actions rather than outputting text apologies.\n"
+            "6. Machine Acceptance: Actionable code modification tasks require real diffs on disk and passing verification; narrative explanations alone cannot complete tasks.\n"
+            "7. Repetition Budget: Never call the same tool with the same arguments repeatedly.\n"
+            "8. Be concise and direct."
         )

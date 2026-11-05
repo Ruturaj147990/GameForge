@@ -180,7 +180,9 @@ class LiveEditorLink:
         if log_path:
             argv.append(f"-abslog={log_path}")
         argv += list(extra_args or [])
-        self._process = jobs.spawn(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        from .toolchain import format_unreal_cmd
+        cmd = format_unreal_cmd(argv)
+        self._process = jobs.spawn(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return self._process.pid
 

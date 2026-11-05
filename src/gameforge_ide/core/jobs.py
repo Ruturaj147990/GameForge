@@ -96,7 +96,7 @@ def adopt(proc: subprocess.Popen) -> bool:
             _ACTIVE_PROCESSES.discard(p)
 
     job = _job()
-    if job is None:
+    if job is None or not hasattr(proc, "_handle") or proc._handle is None:
         return False
     try:
         handle = wintypes.HANDLE(int(proc._handle))

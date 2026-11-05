@@ -9,10 +9,12 @@ import pytest
 
 from src.gameforge_ide.backend.agent.code_verify import (
     extract_unified_diff,
+    parse_diagnostics,
     propose_assistant_fix,
     run_code_repair_loop,
 )
 from src.gameforge_ide.backend.agent.context_manager import ContextManager
+from src.gameforge_ide.backend.agent.plan_generator import PlanGenerator
 from src.gameforge_ide.backend.agent.runtime import AgentRuntime
 from src.gameforge_ide.backend.models import (
     AnimationSpec,
@@ -438,3 +440,277 @@ def test_backend_models_package_exports():
     assert hasattr(backend_models, "AnimationSpec")
     assert hasattr(backend_models, "CharacterSpec")
     assert hasattr(backend_models, "AssetProvenanceRecord")
+
+
+# ── 8. Autonomous Engineering Assistant Execution & Planning ──────────────────
+
+def test_parse_diagnostics_gcc_msvc_pytest():
+    # 1. GCC / Clang
+    gcc_out = "Source/Player.cpp:42:15: error: 'UHealthComponent' was not declared in this scope"
+    diags = parse_diagnostics(gcc_out)
+    assert len(diags) == 1
+    assert diags[0]["file"] == "Source/Player.cpp"
+    assert diags[0]["line"] == 42
+    assert diags[0]["column"] == 15
+    assert diags[0]["symbol"] == "UHealthComponent"
+
+    # 2. MSVC
+    msvc_out = "Source\\Weapon.cpp(88,4): error C2065: 'MaxAmmo': undeclared identifier"
+    diags_m = parse_diagnostics(msvc_out)
+    assert len(diags_m) == 1
+    assert diags_m[0]["file"] == "Source/Weapon.cpp"
+    assert diags_m[0]["line"] == 88
+    assert diags_m[0]["symbol"] == "MaxAmmo"
+
+    # 3. Pytest failure line
+    pytest_out = "FAILED tests/unit/test_combat.py::test_damage_calc - AssertionError: 50 != 100"
+    diags_p = parse_diagnostics(pytest_out)
+    assert len(diags_p) == 1
+    assert diags_p[0]["file"] == "tests/unit/test_combat.py"
+    assert diags_p[0]["symbol"] == "test_damage_calc"
+
+
+def test_engineering_plan_5_stage_dag_decomposition(tmp_path: Path):
+    pg = PlanGenerator(tmp_path)
+    plan = pg.generate_engineering_plan(
+        goal="Implement stamina and sprinting system",
+        target_files=["Source/Game/Player.cpp", "Source/Game/Player.h"],
+        test_command="pytest tests/unit/test_stamina.py -q",
+    )
+
+    valid, errs = plan.validate()
+    assert valid, f"DAG must be valid: {errs}"
+
+    # Verify topological order follows the engineering chain:
+    # step1_inspect -> step2_scaffold -> step3_implement -> step4_test -> step5_verify
+    order = plan.get_topological_order()
+    assert order == ["step1_inspect", "step2_scaffold", "step3_implement", "step4_test", "step5_verify"]
+
+    # Verify dependencies
+    assert plan.tasks["step1_inspect"].dependency_ids == []
+    assert plan.tasks["step2_scaffold"].dependency_ids == ["step1_inspect"]
+    assert plan.tasks["step3_implement"].dependency_ids == ["step2_scaffold"]
+    assert plan.tasks["step4_test"].dependency_ids == ["step3_implement"]
+    assert plan.tasks["step5_verify"].dependency_ids == ["step4_test"]
+
+
+def test_plan_generator_prompt_multi_file_creates_engineering_plan(tmp_path: Path):
+    pg = PlanGenerator(tmp_path)
+    prompt = "Implement sprint ability in Source/Player.cpp and Source/Player.h with tests"
+    plan = pg.generate_plan_from_prompt(prompt)
+
+    assert plan.metadata.get("archetype") == "autonomous_engineering"
+    assert len(plan.tasks) == 5
+    order = plan.get_topological_order()
+    assert "step1_inspect" in order
+    assert "step4_test" in order
+
+
+def test_context_manager_compact_conversation_history():
+    history = [
+        {"role": "user", "content": "Initial prompt: implement weapon system"},
+        {"role": "assistant", "content": '{"tool": "list_dir", "args": {}}'},
+        {"role": "user", "content": "[Observation for `list_dir`]:\n" + "file.cpp\n" * 50},
+        {"role": "assistant", "content": '{"tool": "read_file", "args": {"subpath": "file.cpp"}}'},
+        {"role": "user", "content": "[Observation for `read_file`]:\nint health = 100;\n" * 30},
+        {"role": "assistant", "content": "I will now edit file.cpp"},
+        {"role": "user", "content": "Please continue."},
+    ]
+
+    compacted = ContextManager.compact_conversation_history(history, preserve_recent=2)
+    assert len(compacted) > 0
+    # Older observations should be compacted to single-line summaries
+    older_obs = [m["content"] for m in compacted if "[Tool `list_dir`:" in m.get("content", "")]
+    assert len(older_obs) == 1
+    assert "compacted for context" in older_obs[0]
+
+
+def test_code_repair_loop_with_rollback_on_failure(tmp_path: Path):
+    proj_dir = tmp_path / "Proj"
+    proj_dir.mkdir()
+    (proj_dir / "Source").mkdir()
+    code_file = proj_dir / "Source" / "Code.cpp"
+    code_file.write_text("int broken = 0;\n", encoding="utf-8")
+
+    diags = [{"file": "Source/Code.cpp", "line": 1, "message": "fatal error: unresolved"}]
+    rolled_back = False
+
+    def get_diags():
+        return diags
+
+    def apply_fix(fix):
+        return True
+
+    def build_verify():
+        return False  # Always fails to trigger exhaustion
+
+    def mock_rollback():
+        nonlocal rolled_back
+        rolled_back = True
+        return True
+
+    res = run_code_repair_loop(
+        project_dir=proj_dir,
+        diagnostics_fn=get_diags,
+        apply_fix_fn=apply_fix,
+        build_verify_fn=build_verify,
+        max_attempts=2,
+        rollback_fn=mock_rollback,
+    )
+
+    assert res["status"] in ("EXHAUSTED", "FAILED", "BLOCKED")
+    assert rolled_back is True
+
+
+def test_runtime_proposes_test_command_predicate(agent_runtime: AgentRuntime):
+    prompt = "Update Player.cpp and run pytest tests/unit/test_player.py"
+    predicates = agent_runtime._propose_acceptance_predicates(prompt)
+    types = [p.predicate_type for p in predicates]
+    assert "file_exists" in types
+    assert "file_changed" in types
+    assert "command_exit_code" in types
+    cmd_pred = next(p for p in predicates if p.predicate_type == "command_exit_code")
+    assert "pytest tests/unit/test_player.py" in cmd_pred.target
+
+
+# ── 9. Hardening: ReAct, Windows Paths, 5-Stage DAG & Narrative Excuses ───────
+
+def test_parse_diagnostics_windows_paths_and_qualified_symbols():
+    # 1. Windows GCC path with drive letter and qualified C++ namespace symbol
+    gcc_win = "E:\\gameforge_step1\\Source\\Combat\\HealthComp.cpp:115:8: error: 'GF::FCombatStats' was not declared in this scope"
+    diags_gcc = parse_diagnostics(gcc_win)
+    assert len(diags_gcc) == 1
+    assert "Source/Combat/HealthComp.cpp" in diags_gcc[0]["file"]
+    assert diags_gcc[0]["line"] == 115
+    assert diags_gcc[0]["symbol"] == "GF::FCombatStats"
+
+    # 2. Windows MSVC path with drive letter
+    msvc_win = "C:\\Projects\\GameForge\\Source\\Weapon.cpp(45,12): error C2065: 'MaxClipSize': undeclared identifier"
+    diags_msvc = parse_diagnostics(msvc_win)
+    assert len(diags_msvc) == 1
+    assert "Source/Weapon.cpp" in diags_msvc[0]["file"]
+    assert diags_msvc[0]["line"] == 45
+    assert diags_msvc[0]["symbol"] == "MaxClipSize"
+
+    # 3. Pytest with class name
+    pytest_cls = "FAILED tests/unit/test_gameplay.py::TestInventory::test_stacking - AssertionError: assert 5 == 10"
+    diags_py = parse_diagnostics(pytest_cls)
+    assert len(diags_py) == 1
+    assert diags_py[0]["file"] == "tests/unit/test_gameplay.py"
+    assert diags_py[0]["symbol"] == "test_stacking"
+
+
+def test_extract_tool_call_react_plain_text(agent_runtime: AgentRuntime):
+    react_text = (
+        "Thought: I need to inspect the Source directory to locate the weapon files.\n"
+        "Action: list_dir\n"
+        "Action Input: {\"subpath\": \"Source/Weapon\"}\n"
+    )
+    call = agent_runtime._extract_tool_call(react_text)
+    assert call is not None
+    assert call["name"] == "list_dir"
+    assert call["arguments"] == {"subpath": "Source/Weapon"}
+
+
+def test_extract_tool_call_anthropic_content_array(agent_runtime: AgentRuntime):
+    anthropic_raw = json.dumps({
+        "content": [
+            {"type": "text", "text": "I will inspect the header file now."},
+            {
+                "type": "tool_use",
+                "id": "toolu_abc123",
+                "name": "read_file",
+                "input": {"subpath": "Source/Player.h", "start_line": 1, "end_line": 50},
+            },
+        ]
+    })
+    call = agent_runtime._extract_tool_call(anthropic_raw)
+    assert call is not None
+    assert call["name"] == "read_file"
+    assert call["arguments"]["subpath"] == "Source/Player.h"
+
+
+def test_validate_engineering_dag(tmp_path: Path):
+    pg = PlanGenerator(tmp_path)
+    plan = pg.generate_engineering_plan(
+        goal="Implement dash mechanic",
+        target_files=["Source/Dash.cpp", "Source/Dash.h"],
+    )
+    valid, errs = PlanGenerator.validate_engineering_dag(plan)
+    assert valid is True
+    assert len(errs) == 0
+
+    # Tamper with dependency to verify invalidation
+    plan.tasks["step1_inspect"].dependency_ids = ["step5_verify"]
+    invalid, errs = PlanGenerator.validate_engineering_dag(plan)
+    assert invalid is False
+    assert len(errs) > 0
+
+
+def test_runtime_detects_narrative_excuses():
+    assert AgentRuntime._is_narrative_excuse("I apologize, I am unable to modify this file due to an error.")
+    assert AgentRuntime._is_narrative_excuse("I'm sorry, I cannot proceed with the requested changes.")
+    assert AgentRuntime._is_narrative_excuse("Unfortunately, the build failed and I cannot continue.")
+    # Productive explanations or normal instructions are NOT excuses
+    assert not AgentRuntime._is_narrative_excuse("I will now inspect the directory and modify Player.cpp.")
+    assert not AgentRuntime._is_narrative_excuse("Let me run pytest to verify zero regressions.")
+
+
+def test_context_manager_compact_preserves_initial_goal_and_bounds_tokens():
+    initial_user = {
+        "role": "user",
+        "content": "Goal: Implement multi-turn weapon system with parameters damage=50, ammo=100. Follow UE 5.7 rules.",
+    }
+    history = [initial_user]
+    for i in range(10):
+        history.append({"role": "assistant", "content": f"Turn {i} action: " + "inspecting files " * 20})
+        history.append({"role": "user", "content": f"[Observation for `tool_{i}`]:\n" + "long observation data line\n" * 40})
+    history.append({"role": "assistant", "content": "I am ready to write the code."})
+    history.append({"role": "user", "content": "Please proceed with writing."})
+
+    compacted = ContextManager.compact_conversation_history(history, max_tokens=600, preserve_recent=2)
+    assert len(compacted) > 0
+    # Initial goal and parameters must be preserved
+    assert "Implement multi-turn weapon system with parameters" in compacted[0]["content"]
+    # Recent prompt must be preserved
+    assert any("Please proceed with writing" in m.get("content", "") for m in compacted)
+    # Consecutive turns must strictly alternate roles
+    for i in range(len(compacted) - 1):
+        assert compacted[i]["role"] != compacted[i + 1]["role"]
+
+
+def test_code_repair_loop_records_rolled_back_flag(tmp_path: Path):
+    proj_dir = tmp_path / "ProjRollback"
+    proj_dir.mkdir()
+    (proj_dir / "Source").mkdir()
+    (proj_dir / "Source" / "Bad.cpp").write_text("int broken;\n", encoding="utf-8")
+
+    diags = [{"file": "Source/Bad.cpp", "line": 1, "message": "fatal compiler error"}]
+    rolled_back = False
+
+    def get_diags():
+        return diags
+
+    def apply_fix(fix):
+        return True
+
+    def build_verify():
+        return False
+
+    def mock_rollback():
+        nonlocal rolled_back
+        rolled_back = True
+        return True
+
+    res = run_code_repair_loop(
+        project_dir=proj_dir,
+        diagnostics_fn=get_diags,
+        apply_fix_fn=apply_fix,
+        build_verify_fn=build_verify,
+        max_attempts=2,
+        rollback_fn=mock_rollback,
+    )
+
+    assert res["status"] in ("EXHAUSTED", "FAILED", "BLOCKED")
+    assert res.get("rolled_back") is True
+    assert rolled_back is True

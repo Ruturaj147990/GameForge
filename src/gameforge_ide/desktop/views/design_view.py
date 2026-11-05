@@ -524,6 +524,7 @@ class DesignView(QWidget):
     def open_draft(self, gds: GameDesignSpec, questions: Optional[List[str]] = None, project_dir: Optional[Path] = None) -> None:
         """Open an in-memory draft (e.g. from Home's prompt_to_gds)."""
         self._current_spec = gds
+        self._current_questions = list(questions) if questions else []
         self._current_project = gds.meta.project_name or gds.meta.title
         self.projectChanged.emit(self._current_project)
         pdir_meta = getattr(gds.meta, "project_dir", None)
@@ -601,7 +602,9 @@ class DesignView(QWidget):
             return False
         p_dir.mkdir(parents=True, exist_ok=True)
 
-        prev_rev = spec.meta.revision or 1
+        stored = gds_store.load(p_dir)
+        stored_rev = stored.meta.revision if (stored and hasattr(stored, "meta") and stored.meta) else 0
+        prev_rev = max(spec.meta.revision or 1, stored_rev)
         spec.meta.revision = prev_rev + 1
         try:
             gds_store.save(p_dir, spec)

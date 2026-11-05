@@ -35,6 +35,19 @@ from .task_state import (
 )
 
 
+ENGINEERING_STAGES: tuple[str, ...] = (
+    "Prompt",
+    "Understanding",
+    "Codebase Inspection",
+    "Planning",
+    "Actual Source Changes",
+    "Diff/Approval",
+    "Application",
+    "Testing",
+    "Verification",
+)
+
+
 class AgentEvent(BaseModel):
     event_type: str  # "status", "token", "plan", "tool_call", "tool_result", "diff_pending", "error", "done"
     content: str
@@ -148,21 +161,33 @@ class AgentRuntime:
         selected_indices: List[int] = []
         pinned_index = None
         if pinned_message is not None:
+            pinned_content = pinned_message.get("content", "").strip()
             for index in range(len(messages) - 1, -1, -1):
-                if messages[index] == pinned_message:
+                msg_content = messages[index].get("content", "").strip()
+                if messages[index] == pinned_message or (
+                    messages[index].get("role") == pinned_message.get("role")
+                    and pinned_content
+                    and (msg_content == pinned_content or pinned_content in msg_content)
+                ):
                     pinned_index = index
                     break
             if pinned_index is None:
-                raise ValueError("The active user prompt is missing from provider history.")
-            pinned_tokens = cls.estimate_tokens(messages[pinned_index].get("content", ""))
-            if pinned_tokens > remaining:
-                raise ValueError(
-                    f"The complete active prompt is estimated at {pinned_tokens} tokens, "
-                    f"but only {remaining} input tokens remain after system context. "
-                    "Shorten the prompt or reduce project context; no prompt text was truncated."
-                )
-            selected_indices.append(pinned_index)
-            remaining -= pinned_tokens
+                # Fallback: locate the latest user turn if prompt was merged or modified
+                for index in range(len(messages) - 1, -1, -1):
+                    if messages[index].get("role") == "user":
+                        pinned_index = index
+                        break
+
+            if pinned_index is not None:
+                pinned_tokens = cls.estimate_tokens(messages[pinned_index].get("content", ""))
+                if pinned_tokens > remaining:
+                    raise ValueError(
+                        f"The complete active prompt is estimated at {pinned_tokens} tokens, "
+                        f"but only {remaining} input tokens remain after system context. "
+                        "Shorten the prompt or reduce project context; no prompt text was truncated."
+                    )
+                selected_indices.append(pinned_index)
+                remaining -= pinned_tokens
 
         # Select contiguous history backwards from the latest message
         idx = len(messages) - 1
@@ -267,6 +292,14 @@ class AgentRuntime:
             if data.get("type") == "tool_use" and "name" in data:
                 return {"name": str(data["name"]), "arguments": _parse_arguments(data.get("input", {}))}
 
+            # Anthropic content array with tool_use blocks
+            if "content" in data and isinstance(data["content"], list):
+                for item in data["content"]:
+                    if isinstance(item, dict) and (item.get("type") == "tool_use" or "tool" in item or "function" in item):
+                        res = _normalize_tool_data(item)
+                        if res:
+                            return res
+
             # GameForge native format: {"tool": "...", "args": {...}}
             if "tool" in data and ("args" in data or "parameters" in data or "arguments" in data):
                 args_val = data.get("args") or data.get("parameters") or data.get("arguments")
@@ -328,6 +361,30 @@ class AgentRuntime:
                     return norm
             except Exception:
                 pass
+
+        # Plain text ReAct pattern: Action: <tool_name>\nAction Input: <args>
+        react_match = re.search(
+            r"(?:^|\n)\s*Action\s*:\s*([a-zA-Z0-9_\-]+)\s*\n\s*Action\s+Input\s*:\s*(.*?)(?=\n\s*(?:Action|Observation|Thought|Final Answer)|\Z)",
+            text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if react_match:
+            action_name = react_match.group(1).strip()
+            action_input = react_match.group(2).strip()
+            action_input = re.sub(r"^```(?:json)?\s*", "", action_input)
+            action_input = re.sub(r"\s*```$", "", action_input)
+            parsed_args = _parse_arguments(action_input)
+            if not parsed_args and action_input and not action_input.startswith(("{", "[")):
+                parsed_args = {"input": action_input}
+            return {"name": action_name, "arguments": parsed_args}
+
+        # XML named tool or action pattern: <tool_call name="..."> or <action name="...">
+        xml_named = re.search(r"<(?:tool_call|action|tool)\s+name=[\"']([^\"']+)[\"']\s*>(.*?)</(?:tool_call|action|tool)>", text, re.DOTALL | re.IGNORECASE)
+        if xml_named:
+            name = xml_named.group(1).strip()
+            body = xml_named.group(2).strip()
+            args = _parse_arguments(body) if body else {}
+            return {"name": name, "arguments": args}
 
         # 1. Match ```json {...} ``` code blocks with balanced brace extraction
         for m in re.finditer(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL):
@@ -437,11 +494,14 @@ class AgentRuntime:
             '```json\n{\n  "tool"', '```json\n{\n  "name"', '```json\n{\n  "function"',
             '```\n{"tool"', '```\n{"name"', '```\n{"function"', '```\n{"action"',
             '```\n{\n  "tool"', '```\n{\n  "name"',
-            '<tool_call>', '<tool_use>', '<invoke', '<function_call>',
+            '<tool_call>', '<tool_use>', '<invoke', '<function_call>', '<tool_call name=', '<action name=', '<tool name=',
+            'Action:', 'Action :', 'Thought:\nAction:',
         )
         if any(stripped.startswith(pfx) for pfx in tool_prefixes):
             return True
         if re.search(r"```(?:json)?\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"", stripped):
+            return True
+        if re.search(r"(?:^|\n)\s*Action\s*:\s*[a-zA-Z0-9_\-]+", stripped):
             return True
         return False
 
@@ -457,7 +517,13 @@ class AgentRuntime:
             flags=re.DOTALL,
         )
         cleaned = re.sub(
-            r"<(?:tool_call|tool_use|function_call|invoke(?:\s+name=[^>]+)?)>.*?</(?:tool_call|tool_use|function_call|invoke)>",
+            r"<(?:tool_call|tool_use|function_call|invoke(?:\s+name=[^>]+)?|action(?:\s+name=[^>]+)?|tool(?:\s+name=[^>]+)?)>.*?</(?:tool_call|tool_use|function_call|invoke|action|tool)>",
+            "",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            r"(?:^|\n)\s*Action\s*:\s*[a-zA-Z0-9_\-]+\s*\n\s*Action\s+Input\s*:.*?(?=\n\s*(?:Action|Observation|Thought|Final Answer)|\Z)",
             "",
             cleaned,
             flags=re.DOTALL | re.IGNORECASE,
@@ -465,6 +531,36 @@ class AgentRuntime:
         cleaned = re.sub(r"\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"\s*:.*?\}\s*$", "", cleaned, flags=re.DOTALL)
         cleaned = re.sub(r"^\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"\s*:.*?\}\s*", "", cleaned, flags=re.DOTALL)
         return cleaned.strip()
+
+    @staticmethod
+    def _is_narrative_excuse(text: str) -> bool:
+        """Detects if model response is an excuse, apology, or passive refusal rather than an action."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        excuse_patterns = [
+            r"\b(?:i(?:'m| am)?\s+sorry|i apologize|apologies|my apologies)\b",
+            r"\b(?:unfortunately|regrettably)\b.*?\b(?:cannot|could not|unable|failed|error)\b",
+            r"\b(?:i cannot|i am unable to|i'm unable to)\b.*?\b(?:proceed|complete|execute|continue|perform)\b",
+            r"\b(?:due to\s+(?:an?\s+)?(?:error|failure|issue))\b",
+            r"\b(?:as an ai|as a language model)\b.*?\b(?:cannot|unable)\b",
+        ]
+        return any(bool(re.search(pat, t, re.DOTALL)) for pat in excuse_patterns)
+
+    @staticmethod
+    def _classify_engineering_stage(tool_name: str, has_modified_files: bool = False) -> str:
+        """Maps an active tool invocation to its corresponding stage in the 9-stage engineering loop."""
+        if tool_name in ("list_dir", "read_file", "search_code", "search_index", "unreal_find_projects", "unreal_engine_info"):
+            return "Codebase Inspection"
+        elif tool_name in ("propose_edit", "write_file"):
+            return "Actual Source Changes"
+        elif tool_name in ("apply_edit", "apply_diff", "apply_batch", "apply_diffs_batch"):
+            return "Application"
+        elif tool_name in ("run_command", "terminal_run"):
+            return "Testing"
+        elif tool_name == "unreal_editor":
+            return "Actual Source Changes"
+        return "Verification" if has_modified_files else "Planning"
 
     @staticmethod
     def _is_conversational(user_prompt: str) -> bool:
@@ -560,6 +656,12 @@ class AgentRuntime:
     def _propose_acceptance_predicates(self, user_prompt: str) -> List[TaskAcceptancePredicate]:
         """Derives machine-checkable acceptance predicates from the user prompt."""
         predicates: List[TaskAcceptancePredicate] = []
+        # Identify files being run as tests (e.g. pytest tests/test_physics.py)
+        test_file_targets = set()
+        test_cmd_matches = re.findall(r"\b(?:pytest|python\s+-m\s+pytest)\s+([\w\-\./\\]+)", user_prompt, re.I)
+        for tf in test_cmd_matches:
+            test_file_targets.add(tf.strip("`'\" \t\r\n").replace("\\", "/"))
+
         # Find file path mentions like GameName/GameName.uproject or *.cpp, *.h, *.py, etc.
         path_matches = re.findall(r"[\w\-\./\\]+\.(?:uproject|cpp|h|cs|gd|py|json|md|ini|txt)", user_prompt)
         for pm in path_matches:
@@ -571,12 +673,13 @@ class AgentRuntime:
                         target=clean_path,
                     )
                 )
-                predicates.append(
-                    TaskAcceptancePredicate(
-                        predicate_type="file_changed",
-                        target=clean_path,
+                if clean_path not in test_file_targets:
+                    predicates.append(
+                        TaskAcceptancePredicate(
+                            predicate_type="file_changed",
+                            target=clean_path,
+                        )
                     )
-                )
 
         is_inspect_only = bool(re.search(r"\b(find|search|list|inspect|check|query|read|status|view|show|where|who)\b", user_prompt, re.I)) and not bool(re.search(r"\b(modify|change|edit|fix|create|write|add|delete|remove|refactor|update)\b", user_prompt, re.I))
         if not predicates and self._is_actionable_task(user_prompt, "") and not is_inspect_only:
@@ -585,6 +688,18 @@ class AgentRuntime:
                 TaskAcceptancePredicate(
                     predicate_type="file_changed",
                     target="*",
+                )
+            )
+
+        # Check for explicit test commands, e.g. "pytest tests/..."
+        test_cmd_match = re.search(r"\b(pytest\s+[\w\-\./\\]+)", user_prompt, re.I)
+        if test_cmd_match:
+            t_cmd = test_cmd_match.group(1).strip()
+            predicates.append(
+                TaskAcceptancePredicate(
+                    predicate_type="command_exit_code",
+                    target=t_cmd,
+                    expected=0,
                 )
             )
 
@@ -633,14 +748,18 @@ class AgentRuntime:
         intent = "answer" if is_conversational else "mutate"
         predicates = acceptance_predicates or self._propose_acceptance_predicates(user_prompt)
 
+        existing_task = self._active_tasks.get(session_id)
         task_state = TaskState(
             session_id=session_id,
-            goal=user_prompt,
+            goal=existing_task.goal if existing_task else user_prompt,
             intent=intent,
             acceptance=predicates,
             budget=TaskBudget(max_iterations=self.max_iterations),
             phase="author" if intent == "mutate" else "discover",
         )
+        if existing_task:
+            task_state.ledger = list(existing_task.ledger)
+            task_state.pending_approval = existing_task.pending_approval
         self._active_tasks[session_id] = task_state
         self._save_task_state(task_state)
 
@@ -687,7 +806,12 @@ class AgentRuntime:
         yield AgentEvent(
             event_type="status",
             content="PLANNING",
-            metadata={"message": "Analyzing project and goal...", "task_id": task_state.task_id, **budget},
+            metadata={
+                "message": "Analyzing project and goal...",
+                "task_id": task_state.task_id,
+                "engineering_stage": "Understanding",
+                **budget,
+            },
         )
 
         # Game-production fast path: a request that matches an installed, verified recipe is
@@ -823,6 +947,41 @@ class AgentRuntime:
         _edit_proposed = False
         _task_needs_edit = self._is_actionable_task(user_prompt, "")
         _unmet_predicates_nudged = False
+        _self_correction_nudged = False
+        _last_tool_error = False
+
+        # Populate previous tool history and modified files across turns
+        for rec in session.tool_history:
+            th_dict = {
+                "tool_name": rec.tool_name,
+                "arguments": rec.arguments,
+                "output": rec.output,
+                "status": rec.status,
+                "diff_id": rec.diff_id,
+            }
+            if rec.output:
+                try:
+                    parsed_out = json.loads(rec.output) if isinstance(rec.output, str) else rec.output
+                    if isinstance(parsed_out, dict):
+                        th_dict["exit_code"] = parsed_out.get("exit_code")
+                except Exception:
+                    pass
+            _tool_history.append(th_dict)
+            if rec.tool_name in ("apply_edit", "apply_diff") and rec.status == "SUCCESS":
+                target_fp = rec.arguments.get("file_path") or rec.arguments.get("subpath")
+                if target_fp:
+                    _modified_files.add(str(target_fp).replace("\\", "/"))
+
+        for entry in task_state.ledger:
+            if entry.action_type == "diff_apply":
+                fp = entry.payload.get("file_path")
+                if fp:
+                    _modified_files.add(str(fp).replace("\\", "/"))
+            elif entry.payload and isinstance(entry.payload, dict) and entry.payload.get("tool_name"):
+                _tool_history.append(entry.payload)
+
+        if _modified_files:
+            _edit_proposed = True
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -903,6 +1062,27 @@ class AgentRuntime:
                     self.workspace_root, _modified_files, _tool_history
                 )
 
+                # Check for proactive self-correction vs narrative excuses after tool error or unmet predicate
+                if (_last_tool_error or not all_satisfied) and self._is_narrative_excuse(full_response):
+                    if not _self_correction_nudged and iteration < self.max_iterations:
+                        _self_correction_nudged = True
+                        conversation_history.append({"role": "assistant", "content": full_response})
+                        conversation_history.append({
+                            "role": "user",
+                            "content": (
+                                "[Proactive Self-Correction Required]: You responded with an excuse or apology rather than taking corrective action.\n"
+                                "GameForge autonomous agents must never output narrative excuses. Analyze the failure diagnostic, reason through the cause, "
+                                "and invoke an appropriate tool (such as read_file to verify exact line contents, list_dir, or propose_edit) to perform the fix now.\n\n"
+                                "Available tools:\n" + self._format_tools_description()
+                            ),
+                        })
+                        yield AgentEvent(
+                            event_type="status",
+                            content="PLANNING",
+                            metadata={"action": "proactive_self_correction", "iteration": iteration, "engineering_stage": "Planning"},
+                        )
+                        continue
+
                 if not all_satisfied and (task_state.intent == "mutate" or _task_needs_edit or task_actionable):
                     if not _unmet_predicates_nudged and iteration < self.max_iterations:
                         # Structured nudge listing unmet predicates and available tools
@@ -921,7 +1101,7 @@ class AgentRuntime:
                         yield AgentEvent(
                             event_type="status",
                             content="PLANNING",
-                            metadata={"action": "nudge_unmet_predicates", "unmet": unmet, "iteration": iteration},
+                            metadata={"action": "nudge_unmet_predicates", "unmet": unmet, "iteration": iteration, "engineering_stage": "Planning"},
                         )
                         continue
                     else:
@@ -939,6 +1119,7 @@ class AgentRuntime:
                                 "status": "BLOCKED",
                                 "reason": "model_not_acting",
                                 "unmet_predicates": unmet,
+                                "engineering_stage": "Verification",
                             },
                         )
                         return
@@ -950,12 +1131,13 @@ class AgentRuntime:
                 yield AgentEvent(
                     event_type="done",
                     content="Task completed successfully.",
-                    metadata={"full_text": full_response, "terminal_status": "COMPLETED"},
+                    metadata={"full_text": full_response, "terminal_status": "COMPLETED", "engineering_stage": "Verification"},
                 )
                 return
 
             tool_name = tool_call["name"]
             tool_args = tool_call["arguments"]
+            _last_tool_error = False
 
             # --- Repetition and Loop Control (Rule 4 & Blueprint §4.E) ---
             _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
@@ -992,10 +1174,11 @@ class AgentRuntime:
             if tool_name == "propose_edit":
                 _edit_proposed = True
 
+            eng_stage = self._classify_engineering_stage(tool_name, bool(_modified_files))
             yield AgentEvent(
                 event_type="tool_call",
                 content=f"Dispatching tool: {tool_name}",
-                metadata={"tool": tool_name, "args": tool_args},
+                metadata={"tool": tool_name, "args": tool_args, "engineering_stage": eng_stage},
             )
 
             definition = next(
@@ -1098,6 +1281,7 @@ class AgentRuntime:
                         "diff_id": diff_id,
                         "file_path": tool_result.get("file_path"),
                         "diff_patch": tool_result.get("diff_patch"),
+                        "engineering_stage": "Diff/Approval",
                     },
                 )
                 clean_narrative = self._clean_narrative_text(full_response)
@@ -1164,6 +1348,13 @@ class AgentRuntime:
             if len(obs_json) > 1200:
                 obs_json = obs_json[:1200] + "\n... [truncated]"
 
+            is_tool_error = (
+                tool_result.get("status") in ("ERROR", "FAILED")
+                or (isinstance(tool_result.get("exit_code"), int) and tool_result["exit_code"] != 0)
+                or bool(tool_result.get("error"))
+            )
+            _last_tool_error = is_tool_error
+
             # Build continuation nudge
             if call_count >= 2:
                 continuation_nudge = (
@@ -1174,12 +1365,34 @@ class AgentRuntime:
                     "If you need to inspect a directory, call `list_dir`. If you need engine info, call `unreal_engine_info`. "
                     "Otherwise synthesize your final answer."
                 )
-            elif tool_name in ("unreal_find_projects", "unreal_engine_info", "list_dir"):
+            elif is_tool_error:
+                continuation_nudge = (
+                    f"[Tool Execution Error in `{tool_name}`]:\n{obs_json}\n\n"
+                    f"The tool invocation returned an error. Analyze the error above, reason through why it occurred, "
+                    f"and invoke an appropriate tool to inspect or repair the issue (e.g. read the file to verify exact lines, check directory contents, or adjust parameters). "
+                    f"Do not terminate prematurely or output narrative excuses; perform the correction now."
+                )
+            elif tool_name in ("unreal_find_projects", "unreal_engine_info", "list_dir", "search_code", "search_index", "read_file"):
+                if (_task_needs_edit or task_state.intent == "mutate") and not _edit_proposed:
+                    continuation_nudge = (
+                        f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                        "Inspection complete. Now proceed to make the actual source modifications. "
+                        "Invoke `propose_edit` with the exact file path and code changes to satisfy the task. "
+                        "Do not return text explanations without proposing the required code changes."
+                    )
+                else:
+                    continuation_nudge = (
+                        f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                        "You now have the required workspace/engine information. "
+                        "Proceed with the next appropriate tool call to complete the task, or synthesize your final response. "
+                        "Do not call discovery tools again unless you need a specific piece of information not yet retrieved."
+                    )
+            elif tool_name in ("apply_edit", "apply_diff", "apply_batch", "apply_diffs_batch") and tool_result.get("status") == "SUCCESS":
                 continuation_nudge = (
                     f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
-                    "You now have the required workspace/engine information. "
-                    "Proceed with the next appropriate tool call to complete the task, or synthesize your final response. "
-                    "Do not call discovery tools again unless you need a specific piece of information not yet retrieved."
+                    "Source modification applied successfully. "
+                    "Proceed with test/verification execution (e.g. `run_command` with pytest or build check) to verify zero regressions, "
+                    "or confirm all acceptance predicates are satisfied."
                 )
             else:
                 continuation_nudge = (
@@ -1266,6 +1479,11 @@ class AgentRuntime:
         )
 
         modified_files = {target_file} if target_file else set()
+        for entry in task_state.ledger:
+            if entry.action_type == "diff_apply":
+                fp = entry.payload.get("file_path")
+                if fp:
+                    modified_files.add(str(fp).replace("\\", "/"))
         all_satisfied, unmet = task_state.evaluate_acceptance(
             self.workspace_root, modified_files, []
         )
@@ -1286,6 +1504,7 @@ class AgentRuntime:
                     "task_id": task_state.task_id,
                     "diff_id": diff_id,
                     "terminal_status": "COMPLETED",
+                    "engineering_stage": "Verification",
                 },
             )
         else:
@@ -1293,6 +1512,119 @@ class AgentRuntime:
             prompt = (
                 f"Diff {diff_id} was applied successfully. "
                 f"Remaining unmet predicates: {', '.join(unmet)}. Proceed to complete the task."
+            )
+            async for event in self.execute_task_stream(session_id, prompt, task_state.acceptance):
+                yield event
+
+    async def resume_task_after_approval(
+        self,
+        session_id: str,
+        approval_id: str,
+        tool_result: Dict[str, Any],
+        approved: bool = True,
+        tool_name: Optional[str] = None,
+    ) -> AsyncIterator[AgentEvent]:
+        """Resumes a suspended task after human approval for non-diff actions (e.g. run_command, unreal_editor)."""
+        task_state = self._active_tasks.get(session_id)
+        if not task_state:
+            yield AgentEvent(
+                event_type="error",
+                content=f"No active suspended task found for session {session_id}.",
+            )
+            return
+
+        if not approved:
+            task_state.terminal_status = "CANCELLED"
+            task_state.terminal_reason = f"approval_{approval_id}_rejected"
+            self._save_task_state(task_state)
+            self.session_manager.append_message(
+                session_id, "user", f"[Approval]: Action {approval_id} was REJECTED by developer."
+            )
+            yield AgentEvent(
+                event_type="done",
+                content=f"Action {approval_id} rejected. Task halted.",
+                metadata={"terminal_status": "CANCELLED"},
+            )
+            return
+
+        appr_entry = self.tool_gateway.game_tools.approvals.get(approval_id)
+        resolved_tool = (
+            tool_name
+            if tool_name
+            else (appr_entry.get("tool") if appr_entry else None)
+            or tool_result.get("tool")
+            or tool_result.get("tool_name")
+            or "run_command"
+        )
+        tool_args = (appr_entry.get("args") if appr_entry else None) or tool_result.get("arguments") or {}
+        if not tool_args and tool_result.get("command"):
+            tool_args = {"command": tool_result["command"]}
+
+        th_record = {
+            "approval_id": approval_id,
+            "tool_name": resolved_tool,
+            "arguments": tool_args,
+            "command": tool_result.get("command") or tool_args.get("command"),
+            "exit_code": tool_result.get("exit_code"),
+            "status": tool_result.get("status", "SUCCESS"),
+            **tool_result,
+        }
+
+        task_state.ledger.append(
+            LedgerEntry(
+                phase=task_state.phase,
+                action_type="tool_result",
+                payload=th_record,
+            )
+        )
+
+        self.session_manager.record_tool(
+            session_id=session_id,
+            tool_name=resolved_tool,
+            arguments=tool_args,
+            output=json.dumps(tool_result),
+            status=tool_result.get("status", "SUCCESS"),
+        )
+
+        # Re-evaluate acceptance predicates with the new execution evidence
+        _modified_files = set()
+        _tool_history = []
+        for entry in task_state.ledger:
+            if entry.action_type == "diff_apply":
+                fp = entry.payload.get("file_path")
+                if fp:
+                    _modified_files.add(str(fp).replace("\\", "/"))
+            elif entry.payload and isinstance(entry.payload, dict):
+                _tool_history.append(entry.payload)
+
+        all_satisfied, unmet = task_state.evaluate_acceptance(
+            self.workspace_root, _modified_files, _tool_history
+        )
+
+        obs_json = json.dumps(tool_result, indent=2, ensure_ascii=False)
+        self.session_manager.append_message(
+            session_id,
+            "user",
+            f"[Observation for `{resolved_tool}` (Approved)]:\n{obs_json}",
+        )
+
+        if all_satisfied:
+            task_state.terminal_status = "COMPLETED"
+            self._save_task_state(task_state)
+            msg = f"Tool `{tool_name}` executed and all acceptance predicates are satisfied. Task completed."
+            yield AgentEvent(
+                event_type="done",
+                content=msg,
+                metadata={
+                    "task_id": task_state.task_id,
+                    "approval_id": approval_id,
+                    "terminal_status": "COMPLETED",
+                },
+            )
+        else:
+            prompt = (
+                f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                f"Remaining unmet predicates: {', '.join(unmet) or 'None'}. Proceed to complete the task or summarize your work."
             )
             async for event in self.execute_task_stream(session_id, prompt, task_state.acceptance):
                 yield event

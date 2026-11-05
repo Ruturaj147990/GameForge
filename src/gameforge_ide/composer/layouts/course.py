@@ -142,6 +142,33 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             )
         )
 
+        # Spawn connecting stone walkway ramp between consecutive platforms for continuous traversal & NavMesh
+        prev_x, _, prev_z = platform_tops[i - 1]
+        mid_x = (prev_x + current_x) / 2.0
+        mid_z = (prev_z + current_z) / 2.0 - 25.0
+        dx = current_x - prev_x
+        dz = current_z - prev_z
+        span = math.hypot(dx, dz)
+        raw_pitch = math.degrees(math.atan2(dz, dx)) if dx != 0.0 else 0.0
+        # Clamp pitch to safe walkable slope (<= 35 degrees) ensuring unbroken NavMesh generation
+        pitch_deg = max(-35.0, min(35.0, raw_pitch))
+
+        geometry_ops.append(
+            OpCall(
+                op="spawn_actor",
+                args={
+                    "actor_class": "StaticMeshActor",
+                    "label": f"GF_Walkway_{i}",
+                    "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                    "material": "/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Gray",
+                    "location": {"x": mid_x, "y": 0.0, "z": mid_z},
+                    "rotation": {"pitch": round(pitch_deg, 2), "yaw": 0.0, "roll": 0.0},
+                    "scale": {"x": max(1.0, round(span / 100.0, 2)), "y": 1.5, "z": 0.5},
+                },
+                purpose=f"Spawn stone walkway ramp connecting platform {i-1} to {i}",
+            )
+        )
+
     # Spawn safety floor beneath course span to prevent unrecoverable void fall
     course_length = current_x + 1000.0
     geometry_ops.append(
@@ -167,7 +194,18 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         runtime_class="/Script/GameForgeRuntime.GameForgeGoal",
         location=(last_pos[0], last_pos[1], last_pos[2] + 50.0),
         yaw=0.0,
-        tags=["GF_E_goal", "GF_Owned", "GF_Goal", "goal", "Goal", "Goal_1"],
+        tags=[
+            "GF_E_goal",
+            "GF_Owned",
+            "GF_Goal",
+            "goal",
+            "Goal",
+            "Goal_1",
+            "goal_1",
+            "GF_Goal_1",
+            "GF_goal_1",
+            "goal_0",
+        ],
         properties={},
     )
     actors.append(goal_actor)
@@ -181,7 +219,18 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         runtime_class="/Script/GameForgeRuntime.GameForgeCheckpoint",
         location=(mid_pos[0], mid_pos[1], mid_pos[2] + 50.0),
         yaw=0.0,
-        tags=["GF_E_checkpoint", "GF_Owned", "GF_Checkpoint", "checkpoint", "Checkpoint"],
+        tags=[
+            "GF_E_checkpoint",
+            "GF_Owned",
+            "GF_Checkpoint",
+            "checkpoint",
+            "Checkpoint",
+            "Checkpoint_1",
+            "checkpoint_1",
+            "GF_Checkpoint_1",
+            "GF_checkpoint_1",
+            "cp_0",
+        ],
         properties={},
     )
     actors.append(cp_actor)
@@ -210,6 +259,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                     f"GF_pickup_{c_i + 1}",
                     f"Pickup_{c_i + 1}",
                     f"pickup_{c_i + 1}",
+                    f"{entity_id}_{c_i}",
                 ],
                 properties={},
             )

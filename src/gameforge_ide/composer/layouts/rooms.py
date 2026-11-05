@@ -89,7 +89,18 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         runtime_class="/Script/GameForgeRuntime.GameForgeGoal",
         location=(goal_x, goal_y, 100.0),
         yaw=0.0,
-        tags=["GF_E_goal", "GF_Owned", "GF_Goal", "goal", "Goal", "Goal_1"],
+        tags=[
+            "GF_E_goal",
+            "GF_Owned",
+            "GF_Goal",
+            "goal",
+            "Goal",
+            "Goal_1",
+            "goal_1",
+            "GF_Goal_1",
+            "GF_goal_1",
+            "goal_0",
+        ],
         properties={},
     )
 

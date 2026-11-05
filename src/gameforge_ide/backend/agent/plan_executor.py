@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from ..tools.game_tools import READ_ONLY_EDITOR_OPS
 from ..tools.gateway import ToolGateway
+from .code_verify import parse_diagnostics
 from .task_plan import PlanValidationError, TaskNode, TaskNodeStatus, TaskPlan
 from .task_state import TaskAcceptancePredicate
 
@@ -326,8 +327,17 @@ class TaskPlanExecutor:
                 if task.retry_count < task.retry_limit and task.recovery_behavior in ("retry", "repair"):
                     task.retry_count += 1
                     task.status = "REPAIRING"
+                    # Extract structured compiler or test diagnostics if available
+                    diags = parse_diagnostics(err_detail)
+                    if not diags and isinstance(step_output, dict):
+                        raw_out = str(step_output.get("output", "") or step_output.get("error", ""))
+                        diags = parse_diagnostics(raw_out)
+                    if diags:
+                        task.evidence[-1]["diagnostics"] = diags
+                        task.context["last_diagnostics"] = diags
                     self._emit("task_repairing", plan.plan_id, task.task_id, status="REPAIRING",
-                               message=f"Task '{task.title}' failed: {err_detail}. Attempting repair {task.retry_count}/{task.retry_limit}")
+                               message=f"Task '{task.title}' failed: {err_detail}. Attempting repair {task.retry_count}/{task.retry_limit}",
+                               data={"diagnostics": diags})
                     # Brief backoff before retry
                     time.sleep(0.5)
                     continue
@@ -358,8 +368,22 @@ class TaskPlanExecutor:
                 if task.retry_count < task.retry_limit and task.recovery_behavior in ("retry", "repair"):
                     task.retry_count += 1
                     task.status = "REPAIRING"
+                    task.context["unmet_acceptance"] = unmet
+                    task.evidence[-1]["unmet"] = unmet
+                    pred_diags: List[Dict[str, Any]] = []
+                    for u in unmet:
+                        pred_diags.extend(parse_diagnostics(u))
+                    if not pred_diags and tool_history:
+                        last_out = tool_history[-1].get("output")
+                        if isinstance(last_out, dict):
+                            raw_t = str(last_out.get("output", "") or last_out.get("error", ""))
+                            pred_diags = parse_diagnostics(raw_t)
+                    if pred_diags:
+                        task.evidence[-1]["diagnostics"] = pred_diags
+                        task.context["last_diagnostics"] = pred_diags
                     self._emit("task_repairing", plan.plan_id, task.task_id, status="REPAIRING",
-                               message=f"Acceptance verification failed: {task.error_message}. Attempting repair {task.retry_count}/{task.retry_limit}")
+                               message=f"Acceptance verification failed: {task.error_message}. Attempting repair {task.retry_count}/{task.retry_limit}",
+                               data={"unmet": unmet, "diagnostics": pred_diags})
                     time.sleep(0.5)
                     continue
                 else:

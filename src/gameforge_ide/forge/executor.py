@@ -28,9 +28,12 @@ class StepContext:
 
     @property
     def artifacts_dir(self) -> Path:
-        base = Path(self.project_dir) if self.project_dir else Path(self.workspace_dir)
+        base = Path(self.project_dir) if (self.project_dir and str(self.project_dir).strip()) else Path(self.workspace_dir)
         d = base / "Saved" / "GameForge" / "evidence"
-        d.mkdir(parents=True, exist_ok=True)
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         return d
 
 
@@ -231,9 +234,14 @@ class ForgeExecutor:
                 if ctx.project_dir is not None or gds_obj is not None or any(
                     k in out.data for k in ("params", "recipe", "files", "exe", "report_path", "mesh_audit", "spawned_actors", "read_back_actors")
                 ):
+                    val_data = dict(out.data)
+                    if "params" in ctx.step.inputs and "params" not in val_data:
+                        val_data["params"] = ctx.step.inputs["params"]
+                    if "recipe" in ctx.step.inputs and "recipe" not in val_data:
+                        val_data["recipe"] = ctx.step.inputs["recipe"]
                     stage_ok, validation_issues = validate_stage_output(
                         step.kind.value,
-                        out.data,
+                        val_data,
                         gds=gds_obj,
                         project_dir=ctx.project_dir,
                         artifacts=out.artifacts,
@@ -326,10 +334,10 @@ class ForgeExecutor:
             except Exception:
                 pass
             t.join(timeout=2.0)
-            if timed_out or t.is_alive():
-                return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
             if self._run_cancel.is_set():
                 return StepOutcome(False, errors=["Cancelled by user"])
+            if timed_out or t.is_alive():
+                return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
         if "exc" in box:
             return StepOutcome(False, errors=[box["exc"], box["tb"]])
         return box.get("out") or StepOutcome(False, errors=["handler returned nothing"])

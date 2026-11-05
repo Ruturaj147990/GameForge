@@ -40,15 +40,52 @@ def test_plan_legacy_steps_and_dag(tmp_path: Path):
     ]
 
 
-def test_pipeline_run_with_fake_handlers(tmp_path: Path, monkeypatch):
+def _make_valid_stage_outcome(ctx, name: str):
     from src.gameforge_ide.forge.executor import StepOutcome
+    pdir = Path(ctx.project_dir)
+    pdir.mkdir(parents=True, exist_ok=True)
+    if name == "spec":
+        return StepOutcome(True, data={"recipe": "grid_board", "params": {"genre": "grid_board", "pitch": "Grid game pitch"}})
+    elif name == "scaffold":
+        uproj = pdir / f"{pdir.name}.uproject"
+        uproj.write_text("{}", encoding="utf-8")
+        (pdir / "Config").mkdir(parents=True, exist_ok=True)
+        (pdir / "Config" / "DefaultGame.ini").write_text("[/Script/UnrealEd.ProjectPackagingSettings]\n+DirectoriesToAlwaysCook=(Path=\"/Game/Maps\")\n", encoding="utf-8")
+        return StepOutcome(True, data={"uproject": str(uproj), "project_name": pdir.name})
+    elif name == "sources":
+        f = (pdir / "Source" / f"{pdir.name}" / "Main.cpp").resolve()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("// C++", encoding="utf-8")
+        return StepOutcome(True, data={"files": [str(f)]})
+    elif name == "build_editor":
+        return StepOutcome(True, data={"exit_code": 0, "errors": 0})
+    elif name == "assemble_level":
+        return StepOutcome(True, data={
+            "read_back_actors": [
+                {"label": "PlayerStart_1", "class": "PlayerStart"},
+                {"label": "GridBoard_1", "class": "GameForgeGridBoard"},
+                {"label": "GoalTrigger_1", "class": "GameForgeGoal"},
+            ]
+        })
+    elif name == "automation_tests":
+        return StepOutcome(True, data={"tests": [{"name": "GameForge.Kit.Smoke", "state": "Success", "passed": True}]})
+    elif name == "package":
+        exe = pdir / "Packaged" / "Windows" / f"{pdir.name}.exe"
+        exe.parent.mkdir(parents=True, exist_ok=True)
+        exe.write_text("MZ", encoding="utf-8")
+        return StepOutcome(True, data={"exe": str(exe)})
+    elif name == "packaged_smoke":
+        return StepOutcome(True, data={"results": [{"test_id": "game_spec_acceptance_grid", "passed": True}]})
+    return StepOutcome(True, data={"ok": True})
 
+
+def test_pipeline_run_with_fake_handlers(tmp_path: Path, monkeypatch):
     calls = []
 
     def make_fake_handler(name: str):
         def fn(ctx):
             calls.append(name)
-            return StepOutcome(True, data={"stage": name})
+            return _make_valid_stage_outcome(ctx, name)
         return fn
 
     for stage in [
@@ -101,7 +138,6 @@ def test_pipeline_run_with_fake_handlers(tmp_path: Path, monkeypatch):
 
 
 def test_pipeline_resume_skips_done_steps(tmp_path: Path, monkeypatch):
-    from src.gameforge_ide.forge.executor import StepOutcome
     from src.gameforge_ide.forge.model import StepStatus
 
     counts = {}
@@ -109,7 +145,7 @@ def test_pipeline_resume_skips_done_steps(tmp_path: Path, monkeypatch):
     def make_counting_handler(name: str):
         def fn(ctx):
             counts[name] = counts.get(name, 0) + 1
-            return StepOutcome(True, data={"stage": name})
+            return _make_valid_stage_outcome(ctx, name)
         return fn
 
     for stage in [
