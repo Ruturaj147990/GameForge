@@ -149,12 +149,29 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             (center[0] - half_w, center[1] + half_h),
         ]
 
-        # Avoid player start and existing actors
+        # Avoid player start, existing actors, and solid obstacles (walls, cover blocks, pillars)
         avoid_zones: List[Tuple[float, float, float]] = [
             (layout_plan.player_start[0], layout_plan.player_start[1], 400.0)
         ]
         for a in layout_plan.actors:
             avoid_zones.append((a.location[0], a.location[1], 300.0))
+
+        solid_obstacles: List[Tuple[float, float, float]] = []
+        for g_op in layout_plan.geometry_ops:
+            if g_op.args.get("actor_class") == "StaticMeshActor":
+                lbl = str(g_op.args.get("label", ""))
+                # Skip ground floors, safety floors, walkways, ramps, and platforms
+                if any(floor_kw in lbl.lower() for floor_kw in ("floor", "walkway", "ramp", "platform")):
+                    continue
+                loc_g = g_op.args.get("location", {})
+                scale_g = g_op.args.get("scale", {})
+                gx = float(loc_g.get("x", 0.0))
+                gy = float(loc_g.get("y", 0.0))
+                sx = float(scale_g.get("x", 1.0)) * 50.0
+                sy = float(scale_g.get("y", 1.0)) * 50.0
+                obs_radius = math.hypot(sx, sy) + 100.0
+                solid_obstacles.append((gx, gy, obs_radius))
+                avoid_zones.append((gx, gy, obs_radius))
 
         # Scatter unplaced entities
         total_to_place = 0
@@ -233,6 +250,32 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                         loc = (float(rf_loc.get("x", 0.0)) + spread_offset, float(rf_loc.get("y", 0.0)), 50.0)
                     else:
                         loc = (center[0] + c_i * 200.0, center[1] + c_i * 200.0, 100.0)
+
+                # Validate coordinates: ensure actors cannot spawn inside colliders, under terrain, or past world bounds
+                nav_center, nav_extent = layout_plan.nav_bounds
+                min_bx = nav_center[0] - nav_extent[0] * 0.95
+                max_bx = nav_center[0] + nav_extent[0] * 0.95
+                min_by = nav_center[1] - nav_extent[1] * 0.95
+                max_by = nav_center[1] + nav_extent[1] * 0.95
+                min_safe_z = -350.0 if is_course_layout else 0.0
+
+                lx = max(min_bx, min(max_bx, loc[0]))
+                ly = max(min_by, min(max_by, loc[1]))
+                lz = max(min_safe_z + 50.0, loc[2])
+
+                # Check and push away from any solid obstacle collider
+                for ox, oy, orad in solid_obstacles:
+                    dist_sq = (lx - ox) ** 2 + (ly - oy) ** 2
+                    if dist_sq < orad ** 2:
+                        dist = math.sqrt(max(1e-4, dist_sq))
+                        push_dir_x = (lx - ox) / dist if dist > 1e-4 else 1.0
+                        push_dir_y = (ly - oy) / dist if dist > 1e-4 else 0.0
+                        lx = ox + push_dir_x * (orad + 50.0)
+                        ly = oy + push_dir_y * (orad + 50.0)
+                        lx = max(min_bx, min(max_bx, lx))
+                        ly = max(min_by, min(max_by, ly))
+
+                loc = (round(lx, 1), round(ly, 1), round(lz, 1))
 
                 actor_id = f"{e.entity_id}_{c_i}"
                 kind_raw = str(getattr(e.kind, "value", e.kind)).lower()

@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from ...forge.model import RunSpec, StepKind, StepSpec
-from ...index.indexer import ProjectIndex
 
 
 def _extract_symbol(message: str) -> Optional[str]:
@@ -330,6 +329,7 @@ def propose_assistant_fix(
                     break
 
     try:
+        from ...index.indexer import ProjectIndex
         index = ProjectIndex(project_dir)
         for s in searched_symbols:
             s_res = index.search_symbols(s, limit=3)
@@ -404,6 +404,19 @@ def propose_assistant_fix(
     }
 
 
+def _normalize_diff_for_cycle_check(diff: str) -> str:
+    """Normalize diff lines, ignoring blank lines, line endings, and whitespace variations."""
+    lines = []
+    for line in (diff or "").splitlines():
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+        if line_clean.startswith(("--- ", "+++ ")) and "\t" in line_clean:
+            line_clean = line_clean.split("\t")[0].strip()
+        lines.append(line_clean)
+    return "\n".join(lines)
+
+
 def run_code_repair_loop(
     project_dir: Path,
     diagnostics_fn: Callable[[], Any],
@@ -475,7 +488,8 @@ def run_code_repair_loop(
             }
 
         diff = fix.get("diff", "")
-        if diff in seen_diffs:
+        norm_diff = _normalize_diff_for_cycle_check(diff)
+        if norm_diff in seen_diffs or diff in seen_diffs:
             did_rollback = _execute_rollback()
             return {
                 "status": "BLOCKED",
@@ -485,6 +499,8 @@ def run_code_repair_loop(
                 "rolled_back": did_rollback,
             }
         seen_diffs.add(diff)
+        if norm_diff:
+            seen_diffs.add(norm_diff)
 
         applied = apply_fix_fn(fix)
         if not applied:

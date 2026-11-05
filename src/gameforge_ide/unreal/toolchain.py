@@ -172,12 +172,15 @@ def format_unreal_cmd(argv: List[str]) -> Union[str, List[str]]:
             else:
                 tokens.append(f'{switch}={val_norm}')
         elif arg.startswith("-"):
-            tokens.append(arg)
+            if " " in arg or '"' in arg:
+                tokens.append(f'"{arg}"')
+            else:
+                tokens.append(arg)
         else:
             # Positional argument (e.g. exe path or uproject path)
             clean = arg.strip('"')
             norm = clean.replace("\\", "/") if (":" in clean or "/" in clean or "\\" in clean) else clean
-            if " " in norm:
+            if " " in norm or '"' in clean:
                 tokens.append(f'"{norm}"')
             else:
                 tokens.append(norm)
@@ -269,7 +272,7 @@ class UnrealToolchain:
         return {"ubt": self.ubt.is_file(), "uat": self.uat.is_file(), "editor_cmd": self.editor_cmd.is_file()}
 
     def engine_version(self) -> str:
-        v = json.loads((self.engine_root / "Engine" / "Build" / "Build.version").read_text(encoding="utf-8"))
+        v = json.loads((self.engine_root / "Engine" / "Build" / "Build.version").read_text(encoding="utf-8", errors="replace"))
         return f'{v["MajorVersion"]}.{v["MinorVersion"]}.{v["PatchVersion"]}'
 
     # ── process helper ─────────────────────────────────────────────────────
@@ -481,7 +484,7 @@ class UnrealToolchain:
         # Ensure GameForge plugin exists if referenced in .uproject
         try:
             if uproject.is_file():
-                uproj_data = json.loads(uproject.read_text(encoding="utf-8"))
+                uproj_data = json.loads(uproject.read_text(encoding="utf-8", errors="replace"))
                 plugins = uproj_data.get("Plugins", [])
                 if any(p.get("Name") == "GameForge" for p in plugins):
                     self.deploy_gameforge_plugin(uproject.parent)
@@ -529,7 +532,7 @@ class UnrealToolchain:
         # Ensure GameForge plugin exists and is synchronized before packaging
         try:
             if uproject.is_file():
-                uproj_data = json.loads(uproject.read_text(encoding="utf-8"))
+                uproj_data = json.loads(uproject.read_text(encoding="utf-8", errors="replace"))
                 plugins = uproj_data.get("Plugins", [])
                 if any(p.get("Name") == "GameForge" for p in plugins):
                     self.deploy_gameforge_plugin(uproject.parent)
@@ -549,7 +552,7 @@ class UnrealToolchain:
         if profile == "release" or configuration == "Shipping":
             game_ini = uproject.parent / "Config" / "DefaultGame.ini"
             if game_ini.exists():
-                text = game_ini.read_text(encoding="utf-8")
+                text = game_ini.read_text(encoding="utf-8", errors="replace")
                 if "PakFileCompressionFormats=Oodle" not in text:
                     oodle_lines = (
                         "BuildConfiguration=PPBC_Shipping\n"

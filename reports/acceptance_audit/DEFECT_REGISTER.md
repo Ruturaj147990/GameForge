@@ -992,6 +992,138 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Root Cause:** `runner.py` formatted argument vector into string, breaking list expectation.
 - **Fix:** Maintained standard `argv: List[str]` argument vector across all `jobs.spawn` invocations.
 
+### DEF-163: Zero-Byte Placeholder Declared Artifacts Passing Stage Validation
+- **Symptom:** Pipeline stages could emit 0-byte placeholder files and falsely pass output validation.
+- **Root Cause:** `validation.py` only checked file existence (`os.path.exists`) without verifying non-zero content length.
+- **Fix:** Enforced physical on-disk validation checking both existence and non-zero size (`st_size > 0`) across declared artifacts, GDS, `.uproject`, level manifests, and scenario reports.
+
+### DEF-164: Windows System Modal Error Dialogs on Removable Drives During Engine Discovery
+- **Symptom:** Probing drives during Unreal Engine discovery stalled the process waiting on Windows modal dialogs for unmounted or removable drives.
+- **Root Cause:** Standard Win32 API calls invoked Windows default error UI on media missing.
+- **Fix:** Injected `ctypes.WinDLL("kernel32").SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX)` (`0x0001 | 0x8000`) before probing drives in `discovery.py`.
+
+### DEF-165: Equal-Power Audio Looping Discontinuity and Seam Clicks
+- **Symptom:** Synthesized audio loops exhibited 3dB volume dips and audible boundary clicks on seam repetition.
+- **Root Cause:** Linear crossfading created perceptual energy drops; unaligned loop boundaries clicked.
+- **Fix:** Implemented circular equal-power sine/cosine crossfading (`ramp_head = sin(theta)`, `ramp_tail = cos(theta)`) in `audio.py`, preserving signal energy (0 dB dip) across loop boundaries.
+
+### DEF-166: Multi-File Batch Transactions Lacking Syntax Pre-Validation and Rollback Callbacks
+- **Symptom:** If a syntax error was introduced on file 3 of a 5-file edit, partially written files were left on disk.
+- **Root Cause:** `apply_batch` did not run pre-validation syntax checks or provide a validation callback before finalizing transactions.
+- **Fix:** Integrated `_validate_file_syntax` (Python AST and JSON) and validator callbacks into `apply_batch`, with automatic reverse rollback of all applied files popping diffs back to `PENDING_APPROVAL` in memory and on disk.
+
+### DEF-167: UNC Network Shares and Cross-Drive Jumps Bypassing Workspace Boundary
+- **Symptom:** Tool paths using `\\server\share` or drive letters different from the workspace drive could evade containment.
+- **Root Cause:** Standard relative path checks did not explicitly validate drive letters or reject UNC root prefixes.
+- **Fix:** Added explicit UNC prefix rejection and drive identity verification (`raw_path.drive != workspace_root.drive`) in `boundary.py`.
+
+### DEF-168: Process Tree Destruction Order on Subprocess Timeout
+- **Symptom:** Killing root processes before child processes on command timeouts left orphaned child/grandchild worker processes.
+- **Root Cause:** `terminal_tools.py` called `proc.kill()` before invoking Windows tree kill.
+- **Fix:** Ensured `taskkill /F /T /PID` executes first to eliminate the entire process tree cleanly, and integrated tree cleanup into the `finally:` block.
+
+### DEF-169: C++ Macro and Prop Declaration Regex Backtracking in Indexer
+- **Symptom:** Complex templated C++ functions or single-line declarations like `UPROPERTY() int32 Health = 100;` were skipped or caused high parsing latency.
+- **Root Cause:** Greedy nested quantifiers in indexer regexes and strict multiline-only macro filtering.
+- **Fix:** Re-engineered regexes with atomic groups `(?>...)` for linear-time parsing, and updated macro line filtering to capture single-line and multiline declarations.
+
+### DEF-170: Ollama Transient HTTP Errors Lacking Exponential Backoff
+- **Symptom:** Heavy GPU memory swapping on AMD Radeon RX 7700 XT caused occasional transient HTTP 502/503/429 errors from Ollama to crash caller tasks.
+- **Root Cause:** Requests lacked automated retry with exponential backoff on transient server errors.
+- **Fix:** Implemented `_request_with_retry` with exponential backoff (`0.5 * 2^attempt`), dynamic `num_ctx` budgeting, and fallback extraction for markdown-fenced JSON in `ollama_provider.py`.
+
+### DEF-171: Ollama Empty Response Body / JSONDecodeError Unhandled Crash
+- **Symptom:** When Ollama returned an empty body during layer swaps, `json.loads("")` raised `JSONDecodeError`, bypassing retry logic and crashing caller tasks.
+- **Root Cause:** Retry logic only caught connection errors and HTTP status codes, not `json.JSONDecodeError` / `ValueError`.
+- **Fix:** Added empty response payload checks and extended transient retry handler to catch `JSONDecodeError` with exponential backoff in `ollama_provider.py`.
+
+### DEF-172: Ollama Stream Truncation and Status Record Emission
+- **Symptom:** Prematurely severed streams caused hanging client generators, and model-loading status objects emitted empty token bubbles.
+- **Root Cause:** Generator did not emit finality signals on severed connections and treated status records as text tokens.
+- **Fix:** Handled `chunk.get("error")`, attached status metadata without empty token emission, and guaranteed terminating chunk on premature stream termination in `ollama_provider.py`.
+
+### DEF-173: Hosted Provider SSE Error Event Drop and Empty Payload Crash
+- **Symptom:** OpenAICompatibleHostedProvider dropped SSE error events and crashed on empty body HTTP responses.
+- **Root Cause:** Missing `ev.get("error")` handler and unhandled JSON decode on empty response.
+- **Fix:** Intercepted SSE error events and added empty body retry resilience in `hosted.py`.
+
+### DEF-174: Unhandled Tool Execution Exceptions Crashing Agent Runtime Generator
+- **Symptom:** If an underlying tool raised an OS or gateway error (`PermissionError`, `OSError`), the async generator crashed, terminating the WebSocket stream.
+- **Root Cause:** `execute_tool` call in `AgentRuntime` lacked exception handling.
+- **Fix:** Wrapped `execute_tool` in `try...except Exception`, packaging failures into structured error diagnostics for autonomous LLM repair.
+
+### DEF-175: Zombie Task State Due to Missing Cooperative Cancellation
+- **Symptom:** Cancelling a running task or rejecting approval left pending approvals and active iterations running in the background.
+- **Root Cause:** `AgentRuntime` lacked a cooperative `cancel_task` cancellation token mechanism.
+- **Fix:** Implemented `cancel_task` and `is_task_cancelled`, checking cancellation across iterations and tool dispatch points, cleanly transitioning to `CANCELLED`.
+
+### DEF-176: Escaped JSON String and Code Fence Tool Argument Parsing Failures
+- **Symptom:** LLMs returning double-serialized JSON strings (`"{\"path\": ...}"`) or code-fenced arguments were rejected with empty `{}` parameter dicts.
+- **Root Cause:** Argument parser only attempted single-pass unnested JSON decoding.
+- **Fix:** Added fence stripping, nested stringified JSON unpacking, and raw string preservation (`{"input": s}`) in `runtime.py`.
+
+### DEF-177: Expanded Narrative Excuse and Permission Refusal Phrasing
+- **Symptom:** LLM claims containing adverbs ("successfully updated", "already modified") or permission refusal excuses bypassed tool enforcement.
+- **Root Cause:** Narrative excuse regexes only matched narrow verb stems without adverbs or refusal variants.
+- **Fix:** Broadened regexes with optional adverbs and added refusal interceptors in `runtime.py`.
+
+### DEF-178: Negative Prompt Constraints Inverted into Spawning Combat
+- **Symptom:** Prompts with negative constraints like "without enemies" or "no guns" were incorrectly mapped into spawning enemies, weapons, and combat systems.
+- **Root Cause:** Keyword matching triggered on "enemies" and "weapons" without checking for preceding negation words.
+- **Fix:** Added negative constraint pre-checks (`no`, `without`, `zero`, `peaceful`), added `_match_remove_weapons`, and filtered negated mechanics in `patch_rules.py` and `intent.py`.
+
+### DEF-179: Contradictory Win/Loss Conditions Passing Validation
+- **Symptom:** GDS specs requiring both `score >= 10` (win) and `score <= 0` (loss) caused instant game over on initial score.
+- **Root Cause:** `semantic_validate_gds` did not check logical contradictions between win and lose criteria.
+- **Fix:** Added contradictory condition checks and negative prompt violation detection in `semantic_validate.py`.
+
+### DEF-180: Non-Existent Item ID in RFC 6902 Patch Raising Index/KeyError
+- **Symptom:** Patching or removing a non-existent entity produced confusing unhandled exceptions.
+- **Root Cause:** `patch.py` lacked explicit containment checks on ID lookups and dictionary replacements.
+- **Fix:** Added clear `PatchError` on missing IDs and enforced RFC 6902 key existence in `patch.py`.
+
+### DEF-181: Multi-Chunk Diffs Lacking Cumulative Offset Tracking
+- **Symptom:** Applying multiple disjoint edits to the same file caused chunk 2 to misalign and corrupt code.
+- **Root Cause:** Line and character offsets were calculated against original text without tracking cumulative deltas from earlier chunks.
+- **Fix:** Implemented `apply_unified_diff` with multi-hunk tracking and cumulative offset adjustment in `edit_tools.py`.
+
+### DEF-182: LF vs CRLF Line Ending Pollution on Partial File Replacements
+- **Symptom:** Modifying an LF file with CRLF replacement content converted untouched lines or mixed line endings.
+- **Root Cause:** Replacement logic bypassed newline normalization on single-block replacements.
+- **Fix:** Enforced strict normalization to dominant file line endings (`dom_ending`) across all replacement paths in `edit_tools.py`.
+
+### DEF-183: Rollback State Validation and Batch Rollback Integrity
+- **Symptom:** Duplicate rollback calls corrupted diff state, and batch rollbacks failed to distinguish newly created files from modified files.
+- **Root Cause:** Rollback did not check if diff was in `APPLIED` state, and lacked unified created-file deletion with read-only clearance.
+- **Fix:** Validated `status == "APPLIED"` before rollback, deleted created files with read-only clearance, and restored exact original bytes on modified files in `edit_tools.py`.
+
+### DEF-184: Windows Drive Letter Casing and 8.3 Short Filename Evasion
+- **Symptom:** Drive letter case differences (`e:\` vs `E:\`) or 8.3 short paths (`PROGRA~1`) caused boundary check failures.
+- **Root Cause:** Path equality checks did not use `os.path.normcase` and did not resolve 8.3 short names.
+- **Fix:** Enforced `os.path.normcase` and implemented `GetLongPathNameW` resolution in `boundary.py`.
+
+### DEF-185: Alternate Data Streams (NTFS ADS) Path Evasion
+- **Symptom:** Paths with colons (`secret.txt:hidden`) could evade boundary containment on Windows NTFS.
+- **Root Cause:** Colon checks only validated drive letters at index 1.
+- **Fix:** Added explicit validation rejecting colons in any path component beyond the drive letter in `boundary.py`.
+
+### DEF-186: SQLite FTS5 Query Crashes on Special Operators
+- **Symptom:** Queries with lone `*`, unbalanced quotes `"`, or boolean keywords (`NOT`, `AND`, `OR`) crashed FTS5 with syntax errors.
+- **Root Cause:** Raw query terms were passed directly to FTS5 MATCH without sanitization.
+- **Fix:** Added query token sanitization, term double-quoting (`"{token}"*`), and `@_retry_sqlite_locked` backoff in `indexer.py`.
+
+### DEF-187: EventBus Subscriber Exception Isolation
+- **Symptom:** If one subscriber callback threw an exception, remaining subscribers did not receive the event.
+- **Root Cause:** `publish()` called subscribers in a loop without per-subscriber exception isolation.
+- **Fix:** Added `_invoke_subscriber` isolating exceptions, recording errors in `_last_errors`, and ensuring all subscribers run in `events.py`.
+
+### DEF-188: Forge Step Cancellation Immediate Signal and Post-Processing Safety
+- **Symptom:** Cancelling a Forge run left step handlers sleeping without setting `ctx.cancel`, and post-processing crashes left steps stuck in `RUNNING`.
+- **Root Cause:** Cancellation check broke while loop without setting `ctx.cancel`, and post-processing lacked fail-closed exception handlers.
+- **Fix:** Signalled `ctx.cancel.set()` immediately upon run cancellation, eliminated dangerous global `terminate_all_children` invocations during step checks, and wrapped step execution and post-processing in fail-closed handlers transitioning cleanly to `FAILED`/`CANCELLED` in `executor.py`.
+
+
+
 
 
 

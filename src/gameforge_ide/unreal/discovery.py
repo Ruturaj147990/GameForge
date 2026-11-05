@@ -72,7 +72,7 @@ def parse_engine_version(root: Path) -> Optional[Tuple[str, int, str]]:
     if not build_version_file.is_file():
         return None
     try:
-        data = json.loads(build_version_file.read_text(encoding="utf-8"))
+        data = json.loads(build_version_file.read_text(encoding="utf-8", errors="replace"))
         major = data.get("MajorVersion")
         minor = data.get("MinorVersion")
         patch = data.get("PatchVersion", 0)
@@ -299,6 +299,12 @@ def _scan_filesystem_drives_impl() -> List[Path]:
         try:
             import ctypes
             k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            # Disable Windows modal error dialogs (SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX)
+            # to prevent hangs on removable or unmounted drives during background discovery.
+            try:
+                k32.SetErrorMode(0x0001 | 0x8000)
+            except Exception:
+                pass
             mask = k32.GetLogicalDrives()
             # Only scan Fixed (3) and RAMDisk (6) drives — skip Remote/Network (4)
             # which can hang or corrupt state when scanned from background threads.

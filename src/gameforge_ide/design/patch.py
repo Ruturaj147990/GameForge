@@ -142,6 +142,8 @@ def apply_op(root: Dict[str, Any], op: Dict[str, Any], op_index: int = 0) -> Non
         named_idx = _find_item_index_by_id(parent, target)
         if named_idx is not None:
             target = named_idx
+        elif action in ("replace", "remove"):
+            raise PatchError(f"Item {target!r} not found in list (len={len(parent)})", op_index=op_index, path=path)
 
     if action == "add":
         val = copy.deepcopy(op.get("value"))
@@ -174,6 +176,8 @@ def apply_op(root: Dict[str, Any], op: Dict[str, Any], op_index: int = 0) -> Non
         val = copy.deepcopy(op.get("value"))
         if isinstance(parent, dict):
             key = str(target)
+            if key not in parent:
+                raise PatchError(f"Key {key!r} does not exist for replace", op_index=op_index, path=path)
             parent[key] = val
         elif isinstance(parent, list):
             if not isinstance(target, int) or target < 0 or target >= len(parent):

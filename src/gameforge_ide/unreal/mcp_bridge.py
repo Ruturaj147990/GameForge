@@ -27,7 +27,10 @@ READ_ONLY_PREFIXES = (
     "search_",
     "status_",
 )
-_MUTATING_WORD_RE = re.compile(r"(?:^|_)(delete|remove|modify|set|create|spawn|write|update|exec|destroy|drop|clear|kill)(?:_|$)", re.IGNORECASE)
+_MUTATING_WORD_RE = re.compile(
+    r"(?:^|_)(delete|remove|modify|set|create|spawn|write|update|exec|destroy|drop|clear|kill|alter|insert|reset|rename|truncate)(?:_|$)",
+    re.IGNORECASE,
+)
 
 
 def _validate_read_only(tool_name: str) -> Optional[str]:
@@ -74,7 +77,7 @@ class UnrealMcpClient:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                data = json.loads(resp.read().decode("utf-8", errors="replace"))
                 return data.get("result", {}).get("tools", [])
         except Exception:
             return []
@@ -109,7 +112,7 @@ class UnrealMcpClient:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                return json.loads(resp.read().decode("utf-8", errors="replace"))
         except Exception as e:
             return {"error": str(e)}
 

@@ -55,6 +55,44 @@ class EventBus:
 
                 return unsubscribe
 
+    def unsubscribe(self, topic: Optional[str], callback: Subscriber) -> bool:
+        """Unsubscribe a callback from a topic, pattern, or global subscription. Returns True if removed."""
+        with self._lock:
+            removed = False
+            if topic is None or topic == "*":
+                if callback in self._global_subscribers:
+                    self._global_subscribers.remove(callback)
+                    removed = True
+            elif "*" in topic or "?" in topic:
+                if topic in self._pattern_subscribers and callback in self._pattern_subscribers[topic]:
+                    self._pattern_subscribers[topic].remove(callback)
+                    if not self._pattern_subscribers[topic]:
+                        del self._pattern_subscribers[topic]
+                    removed = True
+            else:
+                if topic in self._subscribers and callback in self._subscribers[topic]:
+                    self._subscribers[topic].remove(callback)
+                    if not self._subscribers[topic]:
+                        del self._subscribers[topic]
+                    removed = True
+            return removed
+
+    def _invoke_subscriber(self, s: Subscriber, topic: str, payload: Dict[str, Any]) -> None:
+        """Invokes a subscriber safely, supporting both (topic, event) and (event) signatures and isolating errors."""
+        try:
+            try:
+                s(topic, dict(payload))
+            except TypeError as te:
+                # If subscriber takes only 1 argument (the event payload), call it with payload
+                try:
+                    s(dict(payload))  # type: ignore[call-arg]
+                except Exception:
+                    raise te
+        except Exception as exc:
+            logger.exception("EventBus subscriber %r error on topic %s: %s", s, topic, exc)
+            with self._lock:
+                self._last_errors.append((topic, exc))
+
     def publish(self, topic: str, event: Any) -> None:
         """Publish an event dict to a topic in a thread-safe manner, isolating subscriber failures."""
         if isinstance(event, dict):
@@ -72,22 +110,12 @@ class EventBus:
                             subs.append(ps)
             globals_ = list(self._global_subscribers)
 
-        # Call subscribers outside lock to prevent deadlocks
+        # Call subscribers outside lock to prevent deadlocks, strictly isolating exceptions per subscriber
         for s in subs:
-            try:
-                s(topic, dict(evt_copy))
-            except Exception as exc:
-                logger.exception("EventBus subscriber %r error on topic %s: %s", s, topic, exc)
-                with self._lock:
-                    self._last_errors.append((topic, exc))
+            self._invoke_subscriber(s, topic, evt_copy)
 
         for s in globals_:
-            try:
-                s(topic, dict(evt_copy))
-            except Exception as exc:
-                logger.exception("EventBus global subscriber %r error on topic %s: %s", s, topic, exc)
-                with self._lock:
-                    self._last_errors.append((topic, exc))
+            self._invoke_subscriber(s, topic, evt_copy)
 
     def subscriber_count(self, topic: Optional[str] = None) -> int:
         """Return the number of subscribers for a specific topic, or total across all topics if None."""

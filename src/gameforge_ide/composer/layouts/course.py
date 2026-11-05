@@ -104,6 +104,11 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         gap = rng.uniform(260.0, 420.0)
         h_delta = rng.uniform(-80.0, 110.0)
 
+        # Enforce walkable slope <= 35.0 degrees between consecutive platforms
+        max_walkable_h = gap * math.tan(math.radians(35.0))
+        if abs(h_delta) > max_walkable_h:
+            h_delta = math.copysign(max_walkable_h, h_delta)
+
         # Validate with ballistic formula
         reachable, max_h, max_g = validate_jump_reachability(
             gap, h_delta, move_speed, jump_velocity, gravity_scale
@@ -112,9 +117,16 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             # Clamp to safe bounds
             h_delta = min(h_delta, max_h)
             gap = max(150.0, min(gap, max_g))
+            max_walkable_h = gap * math.tan(math.radians(35.0))
+            if abs(h_delta) > max_walkable_h:
+                h_delta = math.copysign(max_walkable_h, h_delta)
 
         # Clamp current_z to prevent dropping into KillZ (-500) or excessive climbing
-        current_z = max(-200.0, min(800.0, current_z + h_delta))
+        target_z = max(-200.0, min(800.0, current_z + h_delta))
+        dz_target = target_z - current_z
+        if abs(dz_target) > max_walkable_h:
+            target_z = current_z + math.copysign(max_walkable_h, dz_target)
+        current_z = target_z
         current_x += gap
         platform_tops.append((current_x, 0.0, current_z))
 

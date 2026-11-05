@@ -161,6 +161,20 @@ def validate_stage_output(
             _, sem_issues = semantic_validate_gds(gds, prompt)
             issues.extend(sem_issues)
 
+        # Strict on-disk GDS artifact verification
+        if pdir is not None:
+            gds_on_disk = pdir / "GameForge" / "design" / "game.gds.json"
+            if gds_on_disk.is_file() and gds_on_disk.stat().st_size == 0:
+                issues.append(f"GameDesignSpec file '{gds_on_disk}' exists but is empty (0 bytes)")
+        if "gds_path" in result and result["gds_path"]:
+            gp = Path(result["gds_path"])
+            if not gp.is_absolute() and pdir is not None:
+                gp = pdir / gp
+            if not gp.is_file():
+                issues.append(f"Design GDS file '{result['gds_path']}' does not exist on disk")
+            elif gp.stat().st_size == 0:
+                issues.append(f"Design GDS file '{result['gds_path']}' is empty (0 bytes)")
+
     # ──────────────────────────────────────────────────────────────────────────
     # 2. ASSEMBLE STAGE
     # ──────────────────────────────────────────────────────────────────────────
@@ -298,6 +312,24 @@ def validate_stage_output(
             if not has_main:
                 issues.append("Expected primary gameplay actor missing from assemble read-back")
 
+        # Strict on-disk level manifest and level file validation
+        if "manifest_path" in result and result["manifest_path"]:
+            mp = Path(result["manifest_path"])
+            if not mp.is_absolute() and pdir is not None:
+                mp = pdir / mp
+            if not mp.is_file():
+                issues.append(f"Assemble manifest file '{result['manifest_path']}' does not exist on disk")
+            elif mp.stat().st_size == 0:
+                issues.append(f"Assemble manifest file '{result['manifest_path']}' is empty (0 bytes)")
+        if "level_file" in result and result["level_file"]:
+            lf = Path(result["level_file"])
+            if not lf.is_absolute() and pdir is not None:
+                lf = pdir / lf
+            if not lf.is_file():
+                issues.append(f"Assemble level file '{result['level_file']}' does not exist on disk")
+            elif lf.stat().st_size == 0:
+                issues.append(f"Assemble level file '{result['level_file']}' is empty (0 bytes)")
+
     # ──────────────────────────────────────────────────────────────────────────
     # 3. SCENARIOS STAGE (Packaged QA Acceptance Scenarios)
     # ──────────────────────────────────────────────────────────────────────────
@@ -331,6 +363,16 @@ def validate_stage_output(
                 f"Only generic Kit smoke tests ran ({test_names}); "
                 f"game-specific acceptance tests were not executed"
             )
+
+        # Strict on-disk scenario report verification
+        if "report_file" in result and result["report_file"]:
+            rf = Path(result["report_file"])
+            if not rf.is_absolute() and pdir is not None:
+                rf = pdir / rf
+            if not rf.is_file():
+                issues.append(f"Scenario report file '{result['report_file']}' does not exist on disk")
+            elif rf.stat().st_size == 0:
+                issues.append(f"Scenario report file '{result['report_file']}' is empty (0 bytes)")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 3b. AUTOMATION STAGE (Unreal Editor C++ Automation Tests)
@@ -370,9 +412,13 @@ def validate_stage_output(
             if not pdir.is_dir():
                 issues.append(f"Scaffold project directory '{pdir}' does not exist on disk")
             else:
-                uprojects = list(pdir.glob("*.uproject"))
+                uprojects = [p for p in pdir.glob("*.uproject") if p.is_file()]
                 if not uprojects:
                     issues.append(f"Scaffold failed: no .uproject file exists in '{pdir}'")
+                else:
+                    for up in uprojects:
+                        if up.stat().st_size == 0:
+                            issues.append(f"Scaffold produced empty .uproject file '{up.name}' (0 bytes)")
         elif not result.get("uproject") and not result.get("project_name"):
             issues.append("Scaffold outcome missing project identification (uproject/project_name)")
 
@@ -423,6 +469,10 @@ def validate_stage_output(
         cook_dirs = result.get("cook_dirs") or []
         if artifacts_count == 0 and not installed and not cook_dirs:
             issues.append("Content stage produced neither installed template packs nor configured assets")
+        if pdir is not None and cook_dirs:
+            dg_ini = pdir / "Config" / "DefaultGame.ini"
+            if dg_ini.is_file() and dg_ini.stat().st_size == 0:
+                issues.append(f"Config/DefaultGame.ini in '{pdir}' is empty (0 bytes)")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 8. PACKAGE STAGE
@@ -431,11 +481,18 @@ def validate_stage_output(
         exe_path = result.get("exe") or result.get("package_dir")
         if exe_path:
             ep = Path(exe_path)
+            if not ep.is_absolute() and pdir is not None:
+                ep = pdir / ep
             if ep.suffix.lower() == ".exe":
                 if not ep.is_file():
                     issues.append(f"Packaged executable '{exe_path}' does not exist on disk")
                 elif ep.stat().st_size == 0:
                     issues.append(f"Packaged executable '{exe_path}' is an empty file (0 bytes)")
+            elif ep.is_dir():
+                if not any(ep.iterdir()):
+                    issues.append(f"Package directory '{exe_path}' is empty")
+            elif not ep.exists():
+                issues.append(f"Packaged path '{exe_path}' does not exist on disk")
         elif pdir is not None:
             # Check for candidate exe in project dir
             exes = [e for e in (list(pdir.glob("Packaged/**/*.exe")) + list(pdir.glob("Binaries/Win64/*.exe"))) if e.is_file() and e.stat().st_size > 0]
@@ -466,10 +523,18 @@ def validate_stage_output(
             issues.append("Report stage outcome missing 'report_path'")
         else:
             rp = Path(rep)
+            if not rp.is_absolute() and pdir is not None:
+                rp = pdir / rp
             if not rp.is_file():
                 issues.append(f"Pipeline report file '{rep}' does not exist on disk")
             elif rp.stat().st_size == 0:
                 issues.append(f"Pipeline report file '{rep}' is empty (0 bytes)")
+            else:
+                try:
+                    if rp.suffix.lower() == ".json":
+                        json.loads(rp.read_text(encoding="utf-8", errors="replace"))
+                except Exception as exc:
+                    issues.append(f"Pipeline report JSON file '{rep}' is corrupt: {exc}")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 11. TOOL_CALL STAGE
@@ -498,9 +563,16 @@ def validate_stage_output(
             path_str = a.get("path") if isinstance(a, dict) else getattr(a, "path", None)
             if path_str:
                 ap = Path(path_str)
-                if not ap.is_absolute() and pdir is not None:
-                    ap = pdir / ap
-                if ap.is_absolute() and ap.suffix and not ap.exists():
+                if not ap.is_absolute():
+                    if pdir is not None:
+                        ap = pdir / ap
+                    else:
+                        ap = ap.resolve()
+                if not ap.exists():
                     issues.append(f"Declared artifact file '{path_str}' does not exist on disk")
+                elif ap.is_file() and ap.stat().st_size == 0:
+                    issues.append(f"Declared artifact file '{path_str}' is empty (0 bytes)")
+                elif ap.is_dir() and not any(ap.iterdir()):
+                    issues.append(f"Declared artifact directory '{path_str}' is empty")
 
     return (len(issues) == 0, issues)

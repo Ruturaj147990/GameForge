@@ -536,6 +536,11 @@ class ToolGateway:
                 from ...core.projects import resolve_project_dir
                 proj_name = args.get("project") or args.get("project_name")
                 if proj_name:
+                    # Enforce workspace boundary check on target project path
+                    try:
+                        self.boundary.validate_path(proj_name, allow_write=False)
+                    except (SecurityViolationError, ValueError) as exc:
+                        raise SecurityViolationError(f"Target project path is outside workspace: {exc}")
                     resolved_dir = resolve_project_dir(proj_name, self.workspace_root)
                     if not resolved_dir:
                         return {"status": "ERROR", "error": f"Project not found: '{proj_name}'"}

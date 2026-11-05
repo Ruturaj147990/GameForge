@@ -289,14 +289,20 @@ def _post_json(url: str, headers: Dict[str, str], body: Dict, timeout: float) ->
             req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
                                          headers={"Content-Type": "application/json", **headers}, method="POST")
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                raw_bytes = resp.read()
+                if not raw_bytes or not raw_bytes.strip():
+                    if attempt < 2:
+                        time.sleep(0.3 * (2 ** attempt))
+                        continue
+                    raise RuntimeError("Remote hosted provider returned an empty response body")
+                return json.loads(raw_bytes.decode("utf-8"))
         except urllib.error.HTTPError as exc:
             last_err = exc
             if exc.code in (429, 502, 503, 504) and attempt < 2:
                 time.sleep(0.3 * (2 ** attempt))
                 continue
             raise
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
             last_err = exc
             if attempt < 2:
                 time.sleep(0.3 * (2 ** attempt))
@@ -401,6 +407,9 @@ class OpenAICompatibleHostedProvider(_HostedBase):
         headers = self._headers()
         usage: Dict[str, int] = {}
         async for ev in _iterate_in_thread(lambda: _sse_lines(url, headers, body, self.profile.timeout_s)):
+            if ev.get("error"):
+                yield StreamChunk(token="", is_final=True, error=str(ev["error"]))
+                return
             if ev.get("usage"):
                 usage = {"prompt_tokens": ev["usage"].get("prompt_tokens", 0),
                          "completion_tokens": ev["usage"].get("completion_tokens", 0)}

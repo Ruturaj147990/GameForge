@@ -63,9 +63,19 @@ def atomic_write(
     if backup and target.is_file():
         try:
             if target.stat().st_size > 0:
+                if bak_path.exists():
+                    try:
+                        os.chmod(bak_path, stat.S_IWRITE | stat.S_IREAD)
+                    except Exception:
+                        pass
                 for b_attempt in range(max_retries):
                     try:
                         shutil.copyfile(str(target), str(bak_path))
+                        # Ensure backup copy is writable even if target was read-only
+                        try:
+                            os.chmod(bak_path, stat.S_IWRITE | stat.S_IREAD)
+                        except Exception:
+                            pass
                         break
                     except (PermissionError, OSError):
                         if bak_path.exists():
@@ -91,6 +101,14 @@ def atomic_write(
                     os.fsync(handle.fileno())
                 except OSError:
                     pass
+
+        # On Windows NTFS, files with S_IREAD (Read-only) cannot be overwritten or replaced directly.
+        # Proactively clear read-only flag on target before attempting replacement.
+        if target.exists():
+            try:
+                os.chmod(target, stat.S_IWRITE | stat.S_IREAD)
+            except Exception:
+                pass
 
         last_exc: Optional[Exception] = None
         for attempt in range(max_retries):

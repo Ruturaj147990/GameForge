@@ -28,7 +28,7 @@ class StepContext:
 
     @property
     def artifacts_dir(self) -> Path:
-        base = Path(self.project_dir) if (self.project_dir and str(self.project_dir).strip()) else Path(self.workspace_dir)
+        base = Path(self.project_dir).resolve() if (self.project_dir and str(self.project_dir).strip()) else Path(self.workspace_dir).resolve()
         d = base / "Saved" / "GameForge" / "evidence"
         try:
             d.mkdir(parents=True, exist_ok=True)
@@ -138,7 +138,7 @@ class ForgeExecutor:
             rec = state.records[step.step_id]
             if self._run_cancel.is_set():
                 return self._finish(state, store, "CANCELLED")
-            if rec.status == StepStatus.DONE and rec.input_hash == eff[step.step_id]:
+            if rec.status == StepStatus.DONE and rec.ok is True and rec.input_hash == eff[step.step_id]:
                 continue  # resume / incremental: unchanged work is skipped
 
             # If step was previously marked BLOCKED, check if its dependencies are now all DONE:
@@ -159,7 +159,24 @@ class ForgeExecutor:
                 continue
             if step.approval == "step" and step.step_id not in state.approvals:
                 return self._suspend(state, store, step.step_id)
-            self._run_step(state, store, step, rec, repo, editor_running, eff[step.step_id])
+            try:
+                self._run_step(state, store, step, rec, repo, editor_running, eff[step.step_id])
+            except Exception as exc:
+                rec.finished_at = time.time()
+                rec.ok = False
+                rec.status = StepStatus.CANCELLED if self._run_cancel.is_set() else StepStatus.FAILED
+                rec.errors = [f"Step execution crashed: {type(exc).__name__}: {exc}", traceback.format_exc(limit=4)]
+                self._persist(
+                    state,
+                    store,
+                    {
+                        "kind": "step_finished",
+                        "step_id": step.step_id,
+                        "ok": False,
+                        "status": rec.status.value,
+                        "errors": rec.errors[:10],
+                    },
+                )
             # A FAILED step needs no special handling: its dependants become BLOCKED by the dependency check above.
         final = (
             "DONE"
@@ -193,111 +210,144 @@ class ForgeExecutor:
                 Path(state.run.workspace_dir),
                 self._step_cancel,
                 lambda line, sid=step.step_id: store.append_event(
-                    state.run.run_id, {"kind": "log", "step_id": sid, "line": line[:2048]}
+                    state.run.run_id, {"kind": "log", "step_id": sid, "line": (str(line) if line is not None else "")[:2048]}
                 ),
             )
             try:
-                if step.engine_lock:
-                    with ENGINE_LOCK:
-                        out = self._with_timeout(handler, ctx, step.timeout_s)
-                else:
-                    out = self._with_timeout(handler, ctx, step.timeout_s)
-            except Exception as exc:  # a handler crash is a typed step failure, never a crashed run
-                out = StepOutcome(False, errors=[f"{type(exc).__name__}: {exc}", traceback.format_exc(limit=4)])
-            rec.finished_at, rec.ok, rec.data = time.time(), out.ok, out.data
-            rec.errors = out.errors
-            valid_artifacts = []
-            for a in (out.artifacts or []):
                 try:
-                    if isinstance(a, dict):
-                        a_copy = dict(a)
-                        kind = a_copy.get("kind", "other")
-                        if kind not in ("log", "report", "screenshot", "package", "scenario_result", "other"):
-                            a_copy["kind"] = "other"
-                        valid_artifacts.append(ArtifactRef.model_validate(a_copy))
-                    elif isinstance(a, ArtifactRef):
-                        valid_artifacts.append(a)
-                except Exception:
-                    pass
-            rec.artifacts = valid_artifacts
-            if out.ok:
-                from .validation import validate_stage_output
-                gds_obj = None
-                if "gds" in ctx.step.inputs:
+                    if step.engine_lock:
+                        with ENGINE_LOCK:
+                            out = self._with_timeout(handler, ctx, step.timeout_s)
+                    else:
+                        out = self._with_timeout(handler, ctx, step.timeout_s)
+                except Exception as exc:  # a handler crash is a typed step failure, never a crashed run
+                    out = StepOutcome(False, errors=[f"{type(exc).__name__}: {exc}", traceback.format_exc(limit=4)])
+
+                if not out.ok and self._run_cancel.is_set():
+                    out = StepOutcome(False, errors=["Cancelled by user"])
+
+                rec.finished_at, rec.ok, rec.data = time.time(), out.ok, out.data
+                rec.errors = out.errors
+                valid_artifacts = []
+                for a in (out.artifacts or []):
                     try:
-                        from ..design.gds import GameDesignSpec
-                        g_raw = ctx.step.inputs["gds"]
-                        gds_obj = GameDesignSpec.model_validate(g_raw) if isinstance(g_raw, dict) else g_raw
+                        if isinstance(a, dict):
+                            a_copy = dict(a)
+                            kind = a_copy.get("kind", "other")
+                            if kind not in ("log", "report", "screenshot", "package", "scenario_result", "other"):
+                                a_copy["kind"] = "other"
+                            valid_artifacts.append(ArtifactRef.model_validate(a_copy))
+                        elif isinstance(a, ArtifactRef):
+                            valid_artifacts.append(a)
                     except Exception:
                         pass
-                # Strictly validate outputs when project context or stage outputs are present
-                if ctx.project_dir is not None or gds_obj is not None or any(
-                    k in out.data for k in ("params", "recipe", "files", "exe", "report_path", "mesh_audit", "spawned_actors", "read_back_actors")
-                ):
-                    val_data = dict(out.data)
-                    if "params" in ctx.step.inputs and "params" not in val_data:
-                        val_data["params"] = ctx.step.inputs["params"]
-                    if "recipe" in ctx.step.inputs and "recipe" not in val_data:
-                        val_data["recipe"] = ctx.step.inputs["recipe"]
-                    stage_ok, validation_issues = validate_stage_output(
-                        step.kind.value,
-                        val_data,
-                        gds=gds_obj,
-                        project_dir=ctx.project_dir,
-                        artifacts=out.artifacts,
-                    )
-                    if not stage_ok:
-                        out.ok = False
-                        out.errors.extend([f"Validation: {issue}" for issue in validation_issues])
+                rec.artifacts = valid_artifacts
+                if out.ok and not self._run_cancel.is_set():
+                    from .validation import validate_stage_output
+                    gds_obj = None
+                    if "gds" in ctx.step.inputs:
+                        try:
+                            from ..design.gds import GameDesignSpec
+                            g_raw = ctx.step.inputs["gds"]
+                            gds_obj = GameDesignSpec.model_validate(g_raw) if isinstance(g_raw, dict) else g_raw
+                        except Exception:
+                            pass
+                    if gds_obj is None:
+                        for sh in ctx.shared.values():
+                            if isinstance(sh, dict) and "gds" in sh:
+                                try:
+                                    from ..design.gds import GameDesignSpec
+                                    g_raw = sh["gds"]
+                                    gds_obj = GameDesignSpec.model_validate(g_raw) if isinstance(g_raw, dict) else g_raw
+                                    if gds_obj is not None:
+                                        break
+                                except Exception:
+                                    pass
+                    # Strictly validate outputs when project context or stage outputs are present
+                    if ctx.project_dir is not None or gds_obj is not None or any(
+                        k in out.data for k in ("params", "recipe", "files", "exe", "report_path", "mesh_audit", "spawned_actors", "read_back_actors")
+                    ):
+                        val_data = dict(out.data)
+                        if "params" in ctx.step.inputs and "params" not in val_data:
+                            val_data["params"] = ctx.step.inputs["params"]
+                        if "recipe" in ctx.step.inputs and "recipe" not in val_data:
+                            val_data["recipe"] = ctx.step.inputs["recipe"]
+                        stage_ok, validation_issues = validate_stage_output(
+                            step.kind.value,
+                            val_data,
+                            gds=gds_obj,
+                            project_dir=ctx.project_dir,
+                            artifacts=out.artifacts,
+                        )
+                        if not stage_ok:
+                            out.ok = False
+                            out.errors.extend([f"Validation: {issue}" for issue in validation_issues])
 
-            if out.ok:
-                if repo is not None and step.checkpoint and repo.available:
-                    try:
-                        repo.ensure()
-                        rec.checkpoint = repo.commit(f"forge: {step.step_id} ({state.run.run_id})")
-                    except (CheckpointError, Exception) as exc:
-                        rec.data = {**rec.data, "checkpoint_warning": str(exc)}
-                rec.status = StepStatus.DONE
-                self._persist(
-                    state,
-                    store,
-                    {"kind": "step_finished", "step_id": step.step_id, "ok": True, "duration_s": rec.duration_s},
-                )
-                return
-            if self._run_cancel.is_set():
-                rec.status = StepStatus.CANCELLED
-            elif out.blocked:
-                rec.status = StepStatus.BLOCKED
-            elif (
-                rec.attempts < step.max_attempts
-                and out.repairable
-                and self.repair_hooks.get(step.kind.value, lambda c, o: False)(ctx, out)
-            ):
+                if out.ok:
+                    if repo is not None and step.checkpoint and repo.available:
+                        try:
+                            repo.ensure()
+                            rec.checkpoint = repo.commit(f"forge: {step.step_id} ({state.run.run_id})")
+                        except (CheckpointError, Exception) as exc:
+                            rec.data = {**rec.data, "checkpoint_warning": str(exc)}
+                    rec.status = StepStatus.DONE
+                    self._persist(
+                        state,
+                        store,
+                        {"kind": "step_finished", "step_id": step.step_id, "ok": True, "duration_s": rec.duration_s},
+                    )
+                    return
+                if self._run_cancel.is_set():
+                    rec.status = StepStatus.CANCELLED
+                elif out.blocked:
+                    rec.status = StepStatus.BLOCKED
+                elif (
+                    rec.attempts < step.max_attempts
+                    and out.repairable
+                    and self.repair_hooks.get(step.kind.value, lambda c, o: False)(ctx, out)
+                ):
+                    self._persist(
+                        state,
+                        store,
+                        {
+                            "kind": "step_repairing",
+                            "step_id": step.step_id,
+                            "attempt": rec.attempts,
+                            "errors": out.errors[:5],
+                        },
+                    )
+                    continue
+                else:
+                    rec.status = StepStatus.FAILED
                 self._persist(
                     state,
                     store,
                     {
-                        "kind": "step_repairing",
+                        "kind": "step_finished",
                         "step_id": step.step_id,
-                        "attempt": rec.attempts,
-                        "errors": out.errors[:5],
+                        "ok": False,
+                        "status": rec.status.value,
+                        "errors": out.errors[:10],
                     },
                 )
-                continue
-            else:
-                rec.status = StepStatus.FAILED
-            self._persist(
-                state,
-                store,
-                {
-                    "kind": "step_finished",
-                    "step_id": step.step_id,
-                    "ok": False,
-                    "status": rec.status.value,
-                    "errors": out.errors[:10],
-                },
-            )
-            return
+                return
+            except Exception as exc:
+                rec.finished_at = time.time()
+                rec.ok = False
+                rec.status = StepStatus.CANCELLED if self._run_cancel.is_set() else StepStatus.FAILED
+                rec.errors = [f"Step execution crashed: {type(exc).__name__}: {exc}", traceback.format_exc(limit=4)]
+                self._persist(
+                    state,
+                    store,
+                    {
+                        "kind": "step_finished",
+                        "step_id": step.step_id,
+                        "ok": False,
+                        "status": rec.status.value,
+                        "errors": rec.errors[:10],
+                    },
+                )
+                return
 
     def _with_timeout(self, handler: Handler, ctx: StepContext, timeout_s: float) -> StepOutcome:
         """Handlers must poll ctx.cancel; on timeout or cancel we signal cancel and wait up to 2 s."""
@@ -320,24 +370,25 @@ class ForgeExecutor:
         while t.is_alive():
             t.join(timeout=0.05)
             if self._run_cancel.is_set():
+                ctx.cancel.set()
                 break
             if time.time() >= deadline:
                 timed_out = True
                 ctx.cancel.set()
                 break
 
-        if timed_out or t.is_alive():
+        if timed_out:
             ctx.cancel.set()
-            try:
-                from ..core.jobs import terminate_all_children
-                terminate_all_children()
-            except Exception:
-                pass
-            t.join(timeout=2.0)
-            if self._run_cancel.is_set():
-                return StepOutcome(False, errors=["Cancelled by user"])
-            if timed_out or t.is_alive():
-                return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
+            t.join(timeout=1.0)
+            return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
+
+        if self._run_cancel.is_set():
+            ctx.cancel.set()
+            t.join(timeout=1.0)
+            if "out" in box and box["out"].ok:
+                return box["out"]
+            return StepOutcome(False, errors=["Cancelled by user"])
+
         if "exc" in box:
             return StepOutcome(False, errors=[box["exc"], box["tb"]])
         return box.get("out") or StepOutcome(False, errors=["handler returned nothing"])
@@ -359,6 +410,25 @@ class ForgeExecutor:
 
     def _finish(self, state: RunState, store: RunStore, status: str) -> RunState:
         state.status = status
+        now = time.time()
+        for rec in state.records.values():
+            if rec.status == StepStatus.RUNNING:
+                rec.status = StepStatus.CANCELLED if status == "CANCELLED" else StepStatus.FAILED
+                if not rec.finished_at:
+                    rec.finished_at = now
+                if not rec.errors:
+                    rec.errors = ["Cancelled by user"] if status == "CANCELLED" else ["Run failed while step was running"]
+                self._persist(
+                    state,
+                    store,
+                    {
+                        "kind": "step_finished",
+                        "step_id": rec.step_id,
+                        "ok": False,
+                        "status": rec.status.value,
+                        "errors": rec.errors[:10],
+                    },
+                )
         self._persist(state, store, {"kind": "run_finished", "status": status})
         return state
 

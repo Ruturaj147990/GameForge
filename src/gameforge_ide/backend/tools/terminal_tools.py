@@ -166,7 +166,6 @@ class TerminalTools:
             stderr_str = ""
             if proc is not None:
                 try:
-                    proc.kill()
                     if sys.platform == "win32":
                         try:
                             subprocess.run(
@@ -176,6 +175,7 @@ class TerminalTools:
                             )
                         except Exception:
                             pass
+                    proc.kill()
                     rem_out, rem_err = proc.communicate(timeout=2)
                     stdout_str = exc.stdout or rem_out or ""
                     stderr_str = exc.stderr or rem_err or ""
@@ -203,6 +203,15 @@ class TerminalTools:
         finally:
             if proc is not None and proc.poll() is None:
                 try:
+                    if sys.platform == "win32":
+                        try:
+                            subprocess.run(
+                                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                                capture_output=True,
+                                timeout=2,
+                            )
+                        except Exception:
+                            pass
                     proc.kill()
                 except Exception:
                     pass

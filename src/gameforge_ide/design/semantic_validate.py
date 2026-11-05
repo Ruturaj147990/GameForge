@@ -173,7 +173,115 @@ def semantic_validate_gds(
     goals = getattr(gds, "goals", None)
     if goals is not None and not getattr(goals, "sandbox", False):
         win_conds = getattr(goals, "win", []) or []
+        lose_conds = getattr(goals, "lose", []) or []
         if not win_conds:
             issues.append("Non-sandbox game must specify at least one win condition")
+
+        # Check pickup count sufficiency for count_at_least win conditions
+        for cond in win_conds:
+            if getattr(cond, "kind", "") == "count_at_least" and getattr(cond, "event", "") == "kit.pickup/collected":
+                required_n = getattr(cond, "n", 0)
+                total_pickups = sum(
+                    getattr(e, "count", 1)
+                    for e in entities
+                    if getattr(e, "kind", None) in (EntityKind.PICKUP, "pickup")
+                )
+                has_spawner = any(
+                    getattr(e, "kind", None) in (EntityKind.SPAWNER, "spawner")
+                    for e in entities
+                )
+                if required_n > total_pickups and not has_spawner:
+                    issues.append(
+                        f"Win condition requires collecting {required_n} pickups, but level only contains {total_pickups} pickups with no spawner"
+                    )
+
+        # Check for contradictory win and lose conditions
+        def _get_atomic_conditions(cond_list):
+            atomics = []
+            for c in cond_list:
+                k = getattr(c, "kind", "")
+                if k in ("all", "any"):
+                    atomics.extend(_get_atomic_conditions(getattr(c, "items", [])))
+                else:
+                    atomics.append(c)
+            return atomics
+
+        win_atomics = _get_atomic_conditions(win_conds)
+        lose_atomics = _get_atomic_conditions(lose_conds)
+
+        for w in win_atomics:
+            w_kind = getattr(w, "kind", "")
+            for l in lose_atomics:
+                l_kind = getattr(l, "kind", "")
+                if w_kind == "stat" and l_kind == "stat":
+                    w_stat = getattr(w, "stat", "")
+                    l_stat = getattr(l, "stat", "")
+                    if w_stat == l_stat:
+                        w_op = getattr(w, "op", "")
+                        w_val = getattr(w, "value", 0.0)
+                        l_op = getattr(l, "op", "")
+                        l_val = getattr(l, "value", 0.0)
+                        # Identical condition for both win and lose
+                        if w_op == l_op and w_val == l_val:
+                            issues.append(f"Contradictory win and lose conditions: both trigger when '{w_stat} {w_op} {w_val}'")
+                        # Score-based contradiction where initial value triggers loss immediately
+                        if w_stat == "game.score":
+                            if w_op in (">=", ">") and w_val > 0 and l_op in ("<=", "<") and l_val >= 0:
+                                issues.append(
+                                    f"Contradictory goals: win requires '{w_stat} {w_op} {w_val}', but lose triggers on initial/zero score '{w_stat} {l_op} {l_val}'"
+                                )
+                            elif w_op in (">=", ">") and l_op in (">=", ">") and l_val <= w_val:
+                                issues.append(
+                                    f"Contradictory goals: lose condition '{l_stat} {l_op} {l_val}' triggers before win condition '{w_stat} {w_op} {w_val}' can be reached"
+                                )
+                        # Health-based contradiction (e.g. winning on player death)
+                        if w_stat == "player.health":
+                            if w_op in ("<=", "<", "==") and w_val <= 0:
+                                issues.append("Contradictory win condition: player wins when player.health <= 0")
+                elif w_kind == "event" and l_kind == "event":
+                    if getattr(w, "event", "") == getattr(l, "event", "") and getattr(w, "source", None) == getattr(l, "source", None):
+                        issues.append(f"Contradictory win and lose conditions: both trigger on event '{getattr(w, 'event', '')}'")
+
+    # 4. Negative prompt constraints validation
+    if bool(re.search(r"\b(?:no|without|zero)\s+(?:enemies|enemy|monsters?|hostiles?|combat|opponents?|bad\s+guys?)\b", p_lower)) or "peaceful" in p_lower:
+        has_enemy = any(
+            getattr(e, "kind", None) in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY, EntityKind.SPAWNER, "enemy", "ranged_enemy", "spawner")
+            for e in entities
+        )
+        if has_enemy:
+            issues.append("Prompt explicitly requested 'no enemies', but GDS contains enemy or spawner entities")
+
+    if bool(re.search(r"\b(?:no|without)\s+(?:guns?|weapons?|rifles?|pistols?|firearms?|shooting)\b", p_lower)):
+        for e in entities:
+            if getattr(e, "kind", None) in (EntityKind.PLAYER, "player"):
+                props = getattr(e, "props", {}) or {}
+                if isinstance(props, dict):
+                    if props.get("attack_mode") == "projectile" or props.get("weapons"):
+                        issues.append("Prompt explicitly requested 'no guns/weapons', but player entity is configured with projectile weapons")
+
+    if bool(re.search(r"\b(?:no|without)\s+(?:timer|time\s+limit|countdown)\b", p_lower)):
+        goals = getattr(gds, "goals", None)
+        lose_conds = getattr(goals, "lose", []) if goals else []
+        for c in lose_conds:
+            if getattr(c, "kind", "") == "timer":
+                issues.append("Prompt explicitly requested 'no timer', but GDS contains a timer loss condition")
+
+    # 5. Mechanics and Input Consistency
+    input_spec = getattr(gds, "input", None)
+    if input_spec and getattr(input_spec, "actions", None):
+        action_ids = {getattr(a, "action_id", "") for a in input_spec.actions}
+        camera_val = getattr(getattr(gds, "overview", None), "camera", None)
+        camera_str = camera_val.value if hasattr(camera_val, "value") else str(camera_val or "")
+        if camera_str in ("first_person", "third_person") and "IA_Move" not in action_ids:
+            issues.append(f"Camera perspective '{camera_str}' requires 'IA_Move' action in input configuration")
+
+    # 6. Entity property sanity bounds
+    for e in entities:
+        props = getattr(e, "props", {}) or {}
+        if isinstance(props, dict):
+            if "jump_velocity" in props and float(props["jump_velocity"]) < 0:
+                issues.append(f"Entity '{e.entity_id}' has negative jump_velocity ({props['jump_velocity']})")
+            if "speed" in props and float(props["speed"]) <= 0:
+                issues.append(f"Entity '{e.entity_id}' has non-positive speed ({props['speed']})")
 
     return (len(issues) == 0, issues)

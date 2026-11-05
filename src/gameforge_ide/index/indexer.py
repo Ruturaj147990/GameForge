@@ -8,16 +8,36 @@ Incremental: re-indexes only files whose mtime or size changed.
 from __future__ import annotations
 
 import configparser
+import functools
 import hashlib
 import os
 import re
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-# Regex patterns for C++ Unreal macro declarations and symbols
+def _retry_sqlite_locked(max_retries: int = 5, base_backoff: float = 0.05):
+    """Decorator to retry SQLite operations with exponential backoff on database locked or busy errors."""
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapped(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return fn(*args, **kwargs)
+                except sqlite3.OperationalError as exc:
+                    err_lower = str(exc).lower()
+                    if ("locked" in err_lower or "busy" in err_lower) and attempt < max_retries - 1:
+                        time.sleep(base_backoff * (2 ** attempt))
+                        continue
+                    raise
+        return wrapped
+    return decorator
+
+
+# Regex patterns for C++ Unreal macro declarations and symbols (linear-time / ReDoS-immune)
 RE_UCLASS = re.compile(r"UCLASS\s*\([^)]*\)", re.MULTILINE)
 RE_USTRUCT = re.compile(r"USTRUCT\s*\([^)]*\)", re.MULTILINE)
 RE_UENUM = re.compile(r"UENUM\s*\([^)]*\)", re.MULTILINE)
@@ -27,8 +47,8 @@ RE_UPROPERTY = re.compile(r"UPROPERTY\s*\([^)]*\)", re.MULTILINE)
 RE_CLASS_DECL = re.compile(r"\bclass\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*(?:public|protected|private|virtual\s+public)?\s*([A-Za-z_][A-Za-z0-9_]*))?", re.MULTILINE)
 RE_STRUCT_DECL = re.compile(r"\bstruct\s+(?:[A-Za-z0-9_]+_API\s+)?([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
 RE_ENUM_DECL = re.compile(r"\benum\s+(?:class\s+)?([A-Za-z0-9_]+)", re.MULTILINE)
-RE_FUNC_DECL = re.compile(r"(?:virtual\s+|static\s+|inline\s+|FORCEINLINE\s+)?(?:[A-Za-z0-9_:<>&*~,]+\s+)+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:override\s*)?(?:final\s*)?[;{]", re.MULTILINE | re.UNICODE)
-RE_PROP_DECL = re.compile(r"(?:[A-Za-z0-9_:<>&*,]+\s+)+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*[^;]+)?;", re.MULTILINE | re.UNICODE)
+RE_FUNC_DECL = re.compile(r"(?:virtual\s+|static\s+|inline\s+|FORCEINLINE\s+)?(?>[A-Za-z0-9_:<>&*~,]+\s+)+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:override\s*)?(?:final\s*)?[;{]", re.MULTILINE | re.UNICODE)
+RE_PROP_DECL = re.compile(r"(?>[A-Za-z0-9_:<>&*,]+\s+)+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*[^;]+)?;", re.MULTILINE | re.UNICODE)
 CPP_CONTROL_KEYWORDS = {
     "if", "while", "for", "switch", "catch", "return", "sizeof", "decltype",
     "static_cast", "dynamic_cast", "reinterpret_cast", "const_cast", "case", "default",
@@ -46,6 +66,7 @@ class ProjectIndex:
         index_dir = self.workspace_dir / ".gameforge" / "index"
         index_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = index_dir / f"{self.project_key}.db"
+        self._write_lock = threading.RLock()
         self._has_fts_triggers = False
         self._init_db()
 
@@ -57,6 +78,7 @@ class ProjectIndex:
         conn.execute("PRAGMA busy_timeout = 30000;")
         return conn
 
+    @_retry_sqlite_locked(max_retries=5, base_backoff=0.05)
     def _init_db(self) -> None:
         conn = self._get_connection()
         try:
@@ -155,6 +177,11 @@ class ProjectIndex:
 
     def index_project(self, force: bool = False) -> Dict[str, Any]:
         """Scan project tree and update database incrementally."""
+        with self._write_lock:
+            return self._index_project_locked(force=force)
+
+    @_retry_sqlite_locked(max_retries=5, base_backoff=0.05)
+    def _index_project_locked(self, force: bool = False) -> Dict[str, Any]:
         t0 = time.time()
         conn = self._get_connection()
         try:
@@ -303,7 +330,7 @@ class ProjectIndex:
         symbols: List[Dict[str, Any]] = []
 
         def has_macro(name: str, start_idx: int, end_idx: int) -> bool:
-            return any(name in lines[k] for k in range(max(0, start_idx), min(len(lines), end_idx)))
+            return any(name in lines[k] for k in range(max(0, start_idx), min(len(lines), end_idx + 1)))
 
         def get_joined_snippet(start_line_idx: int, max_lines: int = 5, terminators: tuple = (";", "{")) -> str:
             snip_lines = []
@@ -319,7 +346,7 @@ class ProjectIndex:
             sline = line.strip()
             if not sline or sline.startswith(("//", "/*", "*", "#", "GENERATED_BODY")):
                 continue
-            if sline.startswith(("UCLASS", "USTRUCT", "UENUM", "UPROPERTY", "UFUNCTION")):
+            if re.match(r"^(?:UCLASS|USTRUCT|UENUM|UPROPERTY|UFUNCTION)\s*\([^)]*\)\s*$", sline):
                 continue
 
             # Enum declaration (check before class because of `enum class`)
@@ -469,33 +496,36 @@ class ProjectIndex:
                 )
         return items
 
+    @_retry_sqlite_locked(max_retries=5, base_backoff=0.05)
     def index_assets(self, assets_list: List[Dict[str, Any]]) -> int:
         """Populate assets table from list_assets output."""
-        conn = self._get_connection()
-        try:
-            conn.execute("BEGIN IMMEDIATE;")
+        with self._write_lock:
+            conn = self._get_connection()
             try:
-                conn.execute("DELETE FROM assets;")
-                for a in assets_list:
-                    path = a.get("path") or a.get("asset_path", "")
-                    cls_name = a.get("class") or a.get("asset_class", "")
-                    deps = a.get("dependencies", [])
+                conn.execute("BEGIN IMMEDIATE;")
+                try:
+                    conn.execute("DELETE FROM assets;")
+                    for a in assets_list:
+                        path = a.get("path") or a.get("asset_path", "")
+                        cls_name = a.get("class") or a.get("asset_class", "")
+                        deps = a.get("dependencies", [])
+                        conn.execute(
+                            "INSERT OR REPLACE INTO assets (path, class, deps_json) VALUES (?, ?, ?)",
+                            (path, cls_name, str(deps)),
+                        )
                     conn.execute(
-                        "INSERT OR REPLACE INTO assets (path, class, deps_json) VALUES (?, ?, ?)",
-                        (path, cls_name, str(deps)),
+                        "INSERT OR REPLACE INTO meta (key, value) VALUES ('assets_indexed_at', ?)",
+                        (time.strftime("%Y-%m-%dT%H:%M:%SZ"),),
                     )
-                conn.execute(
-                    "INSERT OR REPLACE INTO meta (key, value) VALUES ('assets_indexed_at', ?)",
-                    (time.strftime("%Y-%m-%dT%H:%M:%SZ"),),
-                )
-                conn.execute("COMMIT;")
-            except Exception:
-                conn.execute("ROLLBACK;")
-                raise
-            return len(assets_list)
-        finally:
-            conn.close()
+                    conn.execute("COMMIT;")
+                except Exception:
+                    conn.execute("ROLLBACK;")
+                    raise
+                return len(assets_list)
+            finally:
+                conn.close()
 
+    @_retry_sqlite_locked(max_retries=5, base_backoff=0.05)
     def search_symbols(
         self,
         query: str,
@@ -507,61 +537,79 @@ class ProjectIndex:
         limit = min(50, max(1, limit))
         offset = max(0, offset)
 
+        raw_query = query or ""
+        trimmed = raw_query.strip()
+        is_wildcard_all = trimmed in ("*", "", '""', "''")
+
         conn = self._get_connection()
         try:
-            clean_q = re.sub(r'[^A-Za-z0-9_*]', " ", query).strip()
-            use_fts = bool(re.search(r"[A-Za-z0-9_]", clean_q))
-
             results = []
             total = 0
             fts_worked = False
 
-            if use_fts:
-                try:
-                    terms = clean_q.split()
-                    quoted_terms = []
-                    for t in terms:
-                        t_clean = t.replace('"', '').strip('*')
-                        if not t_clean:
-                            continue
-                        quoted_terms.append(f'"{t_clean}"*')
+            if not is_wildcard_all:
+                clean_q = re.sub(r'[^A-Za-z0-9_*]', " ", raw_query).strip()
+                use_fts = bool(re.search(r"[A-Za-z0-9_]", clean_q))
 
-                    if quoted_terms:
-                        q_fts = " ".join(quoted_terms)
-                        where_clauses = ["symbols_fts MATCH ?"]
-                        params: List[Any] = [q_fts]
-                        if kind:
-                            where_clauses.append("s.kind = ?")
-                            params.append(kind)
-                        where_str = f"WHERE {' AND '.join(where_clauses)}"
+                if use_fts:
+                    try:
+                        terms = clean_q.split()
+                        quoted_terms = []
+                        for t in terms:
+                            t_clean = t.replace('"', '').strip('*')
+                            if not t_clean:
+                                continue
+                            # Quoting term safely handles FTS5 reserved keywords (NOT, AND, OR)
+                            quoted_terms.append(f'"{t_clean}"*')
 
-                        count_sql = f"SELECT COUNT(*) FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid {where_str}"
-                        total = conn.execute(count_sql, params).fetchone()[0]
+                        if quoted_terms:
+                            q_fts = " ".join(quoted_terms)
+                            where_clauses = ["symbols_fts MATCH ?"]
+                            params: List[Any] = [q_fts]
+                            if kind:
+                                where_clauses.append("s.kind = ?")
+                                params.append(kind)
+                            where_str = f"WHERE {' AND '.join(where_clauses)}"
 
-                        select_sql = (
-                            f"SELECT s.kind, s.name, s.file, s.line, s.parent "
-                            f"FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid "
-                            f"{where_str} ORDER BY s.name ASC LIMIT ? OFFSET ?"
-                        )
-                        params.extend([limit, offset])
-                        rows = conn.execute(select_sql, params).fetchall()
-                        results = [
-                            {
-                                "kind": r[0],
-                                "name": r[1],
-                                "file": r[2],
-                                "line": r[3],
-                                "parent": r[4],
-                            }
-                            for r in rows
-                        ]
-                        fts_worked = True
-                except Exception:
-                    fts_worked = False
+                            count_sql = f"SELECT COUNT(*) FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid {where_str}"
+                            total = conn.execute(count_sql, params).fetchone()[0]
+
+                            if total > 0:
+                                select_sql = (
+                                    f"SELECT s.kind, s.name, s.file, s.line, s.parent "
+                                    f"FROM symbols_fts fts JOIN symbols s ON s.id = fts.rowid "
+                                    f"{where_str} ORDER BY (CASE WHEN s.name = ? THEN 0 WHEN s.name LIKE ? THEN 1 ELSE 2 END), s.name ASC LIMIT ? OFFSET ?"
+                                )
+                                rank_params = list(params) + [clean_q, f"%{clean_q}%", limit, offset]
+                                rows = conn.execute(select_sql, rank_params).fetchall()
+                                results = [
+                                    {
+                                        "kind": r[0],
+                                        "name": r[1],
+                                        "file": r[2],
+                                        "line": r[3],
+                                        "parent": r[4],
+                                    }
+                                    for r in rows
+                                ]
+                                fts_worked = True
+                    except Exception:
+                        fts_worked = False
 
             if not fts_worked:
-                where_clauses = ["name LIKE ?"]
-                params = [f"%{query}%"]
+                where_clauses = []
+                params = []
+                if is_wildcard_all or not trimmed:
+                    where_clauses.append("1=1")
+                    like_term = ""
+                else:
+                    where_clauses.append("name LIKE ?")
+                    like_pattern = trimmed.replace("*", "%")
+                    if "%" not in like_pattern:
+                        like_pattern = f"%{like_pattern}%"
+                    params.append(like_pattern)
+                    like_term = trimmed.replace("*", "").replace("%", "")
+
                 if kind:
                     where_clauses.append("kind = ?")
                     params.append(kind)
@@ -570,9 +618,17 @@ class ProjectIndex:
                 count_sql = f"SELECT COUNT(*) FROM symbols {where_str}"
                 total = conn.execute(count_sql, params).fetchone()[0]
 
-                select_sql = f"SELECT kind, name, file, line, parent FROM symbols {where_str} ORDER BY name ASC LIMIT ? OFFSET ?"
-                params.extend([limit, offset])
-                rows = conn.execute(select_sql, params).fetchall()
+                if like_term:
+                    select_sql = (
+                        f"SELECT kind, name, file, line, parent FROM symbols {where_str} "
+                        f"ORDER BY (CASE WHEN name = ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END), name ASC LIMIT ? OFFSET ?"
+                    )
+                    rank_params = list(params) + [like_term, f"%{like_term}%", limit, offset]
+                else:
+                    select_sql = f"SELECT kind, name, file, line, parent FROM symbols {where_str} ORDER BY name ASC LIMIT ? OFFSET ?"
+                    rank_params = list(params) + [limit, offset]
+
+                rows = conn.execute(select_sql, rank_params).fetchall()
                 results = [
                     {
                         "kind": r[0],

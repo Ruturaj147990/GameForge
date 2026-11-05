@@ -8,16 +8,109 @@ import hashlib
 import itertools
 import json
 import os
+import re
 import stat
 import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
 from ...storage.atomic import atomic_write, atomic_write_json
 from ...storage.diff_store import DiffStore
+
+
+def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, Optional[str]]:
+    """Applies a multi-hunk unified diff to original_text with cumulative line offset tracking.
+
+    Returns (success, result_text, error_message).
+    """
+    if not diff_text or not diff_text.strip():
+        return True, original_text, None
+
+    orig_lines = original_text.splitlines(keepends=True)
+    diff_lines = diff_text.splitlines(keepends=True)
+
+    hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+    out_lines: List[str] = []
+    orig_idx = 0
+    i = 0
+    n = len(diff_lines)
+    cumulative_line_delta = 0
+
+    # Skip file headers (--- / +++)
+    while i < n and (diff_lines[i].startswith("---") or diff_lines[i].startswith("+++")):
+        i += 1
+
+    while i < n:
+        line = diff_lines[i]
+        match = hunk_header_re.match(line)
+        if not match:
+            i += 1
+            continue
+
+        hunk_orig_start = int(match.group(1)) - 1  # 0-indexed line number in original file
+        i += 1
+
+        # Advance untouched original lines up to the start of this hunk
+        target_orig_start = max(0, hunk_orig_start)
+        while orig_idx < target_orig_start and orig_idx < len(orig_lines):
+            out_lines.append(orig_lines[orig_idx])
+            orig_idx += 1
+
+        hunk_added = 0
+        hunk_deleted = 0
+
+        while i < n and not diff_lines[i].startswith("@@"):
+            hline = diff_lines[i]
+            prefix = hline[0] if len(hline) > 0 else ""
+            content = hline[1:] if len(hline) > 0 else ""
+
+            if prefix == " ":
+                # Context line: must match original
+                if orig_idx < len(orig_lines):
+                    if orig_lines[orig_idx].rstrip("\r\n") != content.rstrip("\r\n"):
+                        return (
+                            False,
+                            original_text,
+                            f"Diff context mismatch at line {orig_idx + 1}: expected {content.strip()!r}, got {orig_lines[orig_idx].strip()!r}",
+                        )
+                    out_lines.append(orig_lines[orig_idx])
+                    orig_idx += 1
+                else:
+                    return False, original_text, "Diff context line exceeds original file length"
+            elif prefix == "-":
+                # Deletion line: advance original index
+                if orig_idx < len(orig_lines):
+                    if orig_lines[orig_idx].rstrip("\r\n") != content.rstrip("\r\n"):
+                        return (
+                            False,
+                            original_text,
+                            f"Diff deletion mismatch at line {orig_idx + 1}: expected {content.strip()!r}, got {orig_lines[orig_idx].strip()!r}",
+                        )
+                    orig_idx += 1
+                    hunk_deleted += 1
+                else:
+                    return False, original_text, "Diff deletion line exceeds original file length"
+            elif prefix == "+":
+                # Addition line: append to output
+                out_lines.append(content)
+                hunk_added += 1
+            elif prefix == "\\":
+                # '\ No newline at end of file' comment
+                pass
+            i += 1
+
+        cumulative_line_delta += (hunk_added - hunk_deleted)
+
+    # Append any remaining untouched original lines
+    while orig_idx < len(orig_lines):
+        out_lines.append(orig_lines[orig_idx])
+        orig_idx += 1
+
+    return True, "".join(out_lines), None
 
 
 class EditTools:
@@ -103,6 +196,22 @@ class EditTools:
         """Write content atomically so an interrupted apply cannot truncate a file."""
         atomic_write(target_path=target_file, content=content)
 
+    @staticmethod
+    def _validate_file_syntax(target_file: Path, new_bytes: bytes) -> Optional[str]:
+        """Validate syntax for common formats like .py and .json. Returns error message if syntax is invalid, else None."""
+        suffix = target_file.suffix.lower()
+        if suffix == ".py":
+            try:
+                compile(new_bytes, str(target_file), "exec")
+            except SyntaxError as exc:
+                return f"Python syntax error at line {exc.lineno}: {exc.msg}"
+        elif suffix == ".json":
+            try:
+                json.loads(new_bytes.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                return f"JSON syntax error: {exc}"
+        return None
+
     def propose_edit(
         self,
         subpath: str = "",
@@ -110,14 +219,17 @@ class EditTools:
         replacement_content: str = "",
         file_path: str = "",
         path: str = "",
+        content: str = "",
         target: str = "",
         old_content: str = "",
         old_str: str = "",
         search: str = "",
+        find: str = "",
         replacement: str = "",
         new_content: str = "",
         new_str: str = "",
         replace: str = "",
+        text: str = "",
         file: str = "",
         filepath: str = "",
         **kwargs: Any,
@@ -130,12 +242,47 @@ class EditTools:
             or file
             or filepath
             or kwargs.get("rel_path", "")
+            or kwargs.get("file_path", "")
+            or kwargs.get("subpath", "")
+            or kwargs.get("path", "")
+            or kwargs.get("file", "")
+            or kwargs.get("filepath", "")
             or ""
         )
         if not target_content:
-            target_content = target or old_content or old_str or search or ""
+            target_content = (
+                target
+                or old_content
+                or old_str
+                or search
+                or find
+                or kwargs.get("target", "")
+                or kwargs.get("target_content", "")
+                or kwargs.get("old_content", "")
+                or kwargs.get("old_str", "")
+                or kwargs.get("search", "")
+                or kwargs.get("find", "")
+                or kwargs.get("original_content", "")
+                or kwargs.get("original_text", "")
+                or ""
+            )
         if not replacement_content:
-            replacement_content = replacement or new_content or new_str or replace or ""
+            replacement_content = (
+                replacement
+                or new_content
+                or new_str
+                or replace
+                or content
+                or text
+                or kwargs.get("replacement", "")
+                or kwargs.get("replacement_content", "")
+                or kwargs.get("new_content", "")
+                or kwargs.get("new_str", "")
+                or kwargs.get("replace", "")
+                or kwargs.get("content", "")
+                or kwargs.get("text", "")
+                or ""
+            )
 
         # Strip accidental markdown code block fences if replacement_content or target_content is wrapped in ```
         replacement_content = self._unwrap_markdown_fences(replacement_content)
@@ -179,9 +326,16 @@ class EditTools:
                 "message": f"No changes proposed: replacement_content is identical to target_content for {effective_path}.",
             }
 
+        raw_chunks = kwargs.get("chunks") or kwargs.get("edits")
+        raw_patch = kwargs.get("patch") or kwargs.get("diff") or kwargs.get("unified_diff")
+        is_unified_diff = bool(
+            raw_patch
+            or (replacement_content and (replacement_content.startswith("--- ") or replacement_content.startswith("@@ ")))
+        )
+
         # Check if target_content is present in file (if not creating fresh file)
         is_full_file_rewrite = False
-        if original_text and not target_content:
+        if original_text and not target_content and not raw_chunks and not is_unified_diff:
             if replacement_content:
                 is_full_file_rewrite = True
                 target_content = original_text
@@ -192,19 +346,110 @@ class EditTools:
                 }
 
         new_text = original_text
-        if original_text:
+
+        if original_text and is_unified_diff:
+            diff_text = raw_patch or replacement_content
+            ok, applied_text, err = apply_unified_diff(original_text, diff_text)
+            if not ok:
+                return {
+                    "status": "ERROR",
+                    "error": f"Failed to apply unified diff patch to {effective_path}: {err}",
+                }
+            new_text = applied_text
+
+        elif original_text and raw_chunks and isinstance(raw_chunks, (list, tuple)):
+            # Multi-chunk diff application with cumulative line and character offset tracking
+            matched_chunks = []
+            for c_idx, c in enumerate(raw_chunks):
+                if not isinstance(c, dict):
+                    continue
+                c_target = str(c.get("target_content") or c.get("target") or c.get("old_content") or c.get("search") or "")
+                c_repl = str(c.get("replacement_content") or c.get("replacement") or c.get("new_content") or c.get("replace") or "")
+                c_target = self._unwrap_markdown_fences(c_target)
+                c_repl = self._unwrap_markdown_fences(c_repl)
+                if not c_target:
+                    return {"status": "ERROR", "error": f"Chunk #{c_idx + 1} is missing target_content."}
+
+                c_norm_orig = original_text.replace("\r\n", "\n")
+                c_norm_target = c_target.replace("\r\n", "\n")
+
+                if c_target in original_text:
+                    pos = original_text.find(c_target)
+                    end_pos = pos + len(c_target)
+                elif c_norm_target in c_norm_orig:
+                    pos_norm = c_norm_orig.find(c_norm_target)
+                    end_pos_norm = pos_norm + len(c_norm_target)
+                    orig_lines = original_text.splitlines(keepends=True)
+                    cum_lengths = [0] + list(itertools.accumulate([len(l) for l in orig_lines]))
+
+                    line_idx = c_norm_orig[:pos_norm].count("\n")
+                    last_nl = c_norm_orig[:pos_norm].rfind("\n")
+                    col_idx = pos_norm - (last_nl + 1) if last_nl != -1 else pos_norm
+                    pos = cum_lengths[line_idx] + col_idx if line_idx < len(cum_lengths) else len(original_text)
+
+                    end_line_idx = c_norm_orig[:end_pos_norm].count("\n")
+                    end_last_nl = c_norm_orig[:end_pos_norm].rfind("\n")
+                    end_col_idx = end_pos_norm - (end_last_nl + 1) if end_last_nl != -1 else end_pos_norm
+                    end_pos = cum_lengths[end_line_idx] + end_col_idx if end_line_idx < len(cum_lengths) else len(original_text)
+                else:
+                    return {"status": "ERROR", "error": f"Chunk #{c_idx + 1} target block not found in file: {effective_path}"}
+
+                matched_chunks.append({
+                    "start": pos,
+                    "end": end_pos,
+                    "target": original_text[pos:end_pos],
+                    "replacement": c_repl,
+                })
+
+            # Sort chunks by start position in original text
+            matched_chunks.sort(key=lambda m: m["start"])
+
+            # Verify no overlapping chunks
+            for i in range(len(matched_chunks) - 1):
+                if matched_chunks[i]["end"] > matched_chunks[i + 1]["start"]:
+                    return {"status": "ERROR", "error": f"Overlapping chunks in multi-chunk edit for {effective_path}."}
+
+            # Sequentially apply chunks with cumulative offset adjustments
+            new_text = original_text
+            cumulative_char_offset = 0
+            cumulative_line_offset = 0
+
+            for m in matched_chunks:
+                adj_start = m["start"] + cumulative_char_offset
+                adj_end = m["end"] + cumulative_char_offset
+
+                repl = m["replacement"]
+                if dom_ending == "\r\n":
+                    repl = repl.replace("\r\n", "\n").replace("\n", "\r\n")
+                else:
+                    repl = repl.replace("\r\n", "\n")
+
+                orig_chunk_text = original_text[m["start"]:m["end"]]
+                if orig_chunk_text.endswith(("\n", "\r\n")) and not repl.endswith(("\n", "\r\n")):
+                    repl += dom_ending
+
+                new_text = new_text[:adj_start] + repl + new_text[adj_end:]
+
+                delta_chars = len(repl) - (m["end"] - m["start"])
+                delta_lines = repl.count("\n") - orig_chunk_text.count("\n")
+                cumulative_char_offset += delta_chars
+                cumulative_line_offset += delta_lines
+
+        elif original_text:
             if is_full_file_rewrite:
-                # Full-file rewrite: preserve file's dominant line ending
-                if dom_ending == "\r\n" and "\r\n" not in replacement_content:
+                # Full-file rewrite: strictly preserve file's dominant line ending
+                if dom_ending == "\r\n":
                     new_text = replacement_content.replace("\r\n", "\n").replace("\n", "\r\n")
                 else:
-                    new_text = replacement_content
+                    new_text = replacement_content.replace("\r\n", "\n")
             elif target_content in original_text:
                 # Tier 1: Exact substring match with line ending & boundary formatting preservation
-                line_ending = "\r\n" if "\r\n" in target_content else dom_ending
+                line_ending = dom_ending
                 repl_to_use = replacement_content
-                if line_ending == "\r\n" and "\r\n" not in repl_to_use and "\n" in repl_to_use:
+                if dom_ending == "\r\n":
                     repl_to_use = repl_to_use.replace("\r\n", "\n").replace("\n", "\r\n")
+                else:
+                    repl_to_use = repl_to_use.replace("\r\n", "\n")
 
                 if (
                     not target_content.endswith(("\n", "\r\n"))
@@ -445,7 +690,7 @@ class EditTools:
         if rec.get("file_existed") is not None and rec["file_existed"] != target_file.is_file():
             return {
                 "status": "STALE",
-                "diff_id": diff_id,
+                "diff_id": effective_id,
                 "file_path": rec["file_path"],
                 "error": "File existence state changed after this diff was proposed; review a newly generated diff before applying.",
             }
@@ -454,7 +699,7 @@ class EditTools:
         if self._digest(current_bytes) != rec["original_sha256"]:
             return {
                 "status": "STALE",
-                "diff_id": diff_id,
+                "diff_id": effective_id,
                 "file_path": rec["file_path"],
                 "error": "File changed after this diff was proposed; review a newly generated diff before applying.",
             }
@@ -463,13 +708,13 @@ class EditTools:
             self._atomic_write(target_file, rec["new_bytes"])
 
             rec["status"] = "APPLIED"
-            self.applied_diffs[diff_id] = rec
-            del self.pending_diffs[diff_id]
+            self.applied_diffs[effective_id] = rec
+            self.pending_diffs.pop(effective_id, None)
             self._save_diff_to_disk(rec)
 
             return {
                 "status": "SUCCESS",
-                "diff_id": diff_id,
+                "diff_id": effective_id,
                 "file_path": rec["file_path"],
                 "message": f"Successfully applied changes to {rec['file_path']}.",
             }
@@ -524,10 +769,24 @@ class EditTools:
             loaded = self._load_diff_from_disk(effective_id)
             if loaded and loaded.get("status") == "APPLIED":
                 self.applied_diffs[effective_id] = loaded
+            elif loaded:
+                return {
+                    "status": "ERROR",
+                    "diff_id": effective_id,
+                    "error": f"Diff {effective_id} is not in APPLIED state (current: {loaded.get('status')}).",
+                }
             else:
-                return {"status": "ERROR", "error": f"Applied diff {effective_id} not found for rollback."}
+                return {"status": "ERROR", "diff_id": effective_id, "error": f"Applied diff {effective_id} not found for rollback."}
 
         rec = self.applied_diffs[effective_id]
+        if rec.get("status") != "APPLIED":
+            return {
+                "status": "ERROR",
+                "diff_id": effective_id,
+                "file_path": rec.get("file_path", ""),
+                "error": f"Diff {effective_id} is not in APPLIED state (current: {rec.get('status')}).",
+            }
+
         target_file = Path(rec["target_file"])
         try:
             self.boundary.validate_path(target_file, allow_write=True)
@@ -541,7 +800,7 @@ class EditTools:
         if self._digest(current_bytes) != rec["new_sha256"]:
             return {
                 "status": "STALE",
-                "diff_id": diff_id,
+                "diff_id": effective_id,
                 "file_path": rec["file_path"],
                 "error": "File changed after this diff was applied; rollback would overwrite newer work.",
             }
@@ -589,9 +848,10 @@ class EditTools:
 
             rec["status"] = "ROLLED_BACK"
             self._save_diff_to_disk(rec)
+            self.applied_diffs.pop(effective_id, None)
             return {
                 "status": "SUCCESS",
-                "diff_id": diff_id,
+                "diff_id": effective_id,
                 "file_path": rec["file_path"],
                 "message": f"Successfully rolled back {rec['file_path']} to pre-edit state.",
             }
@@ -605,14 +865,16 @@ class EditTools:
         diffs: Any = None,
         ids: Any = None,
         diff_id: str = "",
+        validate_syntax: bool = False,
+        validator: Optional[Any] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Atomically applies a batch of approved diffs across multiple files.
         
-        Performs pre-validation on all diffs and hashes first; if any diff is stale
-        or invalid, the transaction aborts with zero filesystem modifications.
-        If a write failure occurs mid-batch, previously applied diffs in the batch
-        are rolled back automatically and restored to PENDING_APPROVAL.
+        Performs pre-validation on all diffs, hashes, and syntax first; if any diff is stale,
+        invalid, or fails syntax check, the transaction aborts with zero filesystem modifications.
+        If a write failure or validation error occurs mid-batch, all previously applied files
+        in the batch are rolled back automatically in exact reverse order and restored to PENDING_APPROVAL.
         """
         raw_ids = diff_ids if diff_ids is not None else (diffs if diffs is not None else (ids if ids is not None else diff_id))
         if isinstance(raw_ids, str):
@@ -622,8 +884,15 @@ class EditTools:
                 effective_ids = [raw_ids.strip()]
             else:
                 effective_ids = []
-        elif raw_ids:
-            effective_ids = list(raw_ids)
+        elif raw_ids and isinstance(raw_ids, (list, tuple, set)):
+            effective_ids = []
+            for item in raw_ids:
+                if isinstance(item, dict):
+                    d_id = item.get("diff_id") or item.get("id") or item.get("diff")
+                    if d_id:
+                        effective_ids.append(str(d_id).strip())
+                elif item:
+                    effective_ids.append(str(item).strip())
         else:
             effective_ids = []
 
@@ -681,9 +950,22 @@ class EditTools:
                     "file_path": rec["file_path"],
                     "error": f"File {rec['file_path']} changed after diff {diff_id} was proposed; batch aborted.",
                 }
+
+            # Optional syntax pre-validation
+            if validate_syntax or kwargs.get("validate_syntax") or kwargs.get("syntax_check"):
+                syntax_err = self._validate_file_syntax(target_file, rec["new_bytes"])
+                if syntax_err:
+                    return {
+                        "status": "ERROR",
+                        "error": f"Pre-validation syntax check failed for {rec['file_path']}: {syntax_err}",
+                        "failed_diff_id": diff_id,
+                        "file_path": rec["file_path"],
+                        "applied_diff_ids": [],
+                    }
+
             validated_records.append(rec)
 
-        # Phase 2: Staged execution with automatic rollback on error
+        # Phase 2: Staged execution with automatic reverse rollback on error
         applied_now: List[str] = []
         applied_files: List[str] = []
         try:
@@ -694,10 +976,20 @@ class EditTools:
 
                 rec["status"] = "APPLIED"
                 self.applied_diffs[diff_id] = rec
+                applied_now.append(diff_id)
+
+                # Post-write validation check
+                if validator is not None and callable(validator):
+                    val_res = validator(target_file, rec)
+                    if isinstance(val_res, tuple):
+                        val_ok, val_err = val_res
+                    else:
+                        val_ok, val_err = bool(val_res), "Custom validator callback failed"
+                    if not val_ok:
+                        raise ValueError(f"Validation failed for {rec['file_path']}: {val_err}")
+
                 self.pending_diffs.pop(diff_id, None)
                 self._save_diff_to_disk(rec)
-
-                applied_now.append(diff_id)
                 applied_files.append(rec["file_path"])
 
             return {
@@ -715,7 +1007,7 @@ class EditTools:
                     rollback_errors.append(f"{rb_id}: {rb_res.get('error')}")
                 else:
                     # Restore diff record back to PENDING_APPROVAL so transaction state is atomic
-                    rec_rb = self.applied_diffs.pop(rb_id, None)
+                    rec_rb = self._load_diff_from_disk(rb_id)
                     if rec_rb:
                         rec_rb["status"] = "PENDING_APPROVAL"
                         self.pending_diffs[rb_id] = rec_rb

@@ -296,8 +296,16 @@ def is_game_creation_request(prompt: str) -> bool:
 
 
 def detect_genre_intent(prompt: str) -> Optional[Genre]:
-    """Detect the most likely Genre enum from prompt text."""
+    """Detect the most likely Genre enum from prompt text, prioritizing dominant main clause over subordinate modifiers."""
     normalized = normalize_prompt(prompt).lower()
+    # 1. Main clause check (before secondary modifiers like 'with giant chess tiles' or 'featuring card mini-game')
+    main_clause = re.split(r"\b(?:with|featuring|where|having|set in|containing|on giant|on a)\b", normalized, maxsplit=1)[0].strip()
+    if main_clause:
+        for genre, pattern in GENRE_PATTERNS:
+            if pattern.search(main_clause):
+                return genre
+
+    # 2. Full prompt fallback
     for genre, pattern in GENRE_PATTERNS:
         if pattern.search(normalized):
             return genre
@@ -305,13 +313,16 @@ def detect_genre_intent(prompt: str) -> Optional[Genre]:
 
 
 def extract_gameplay_mechanics(prompt: str) -> List[str]:
-    """Extract recognized custom gameplay mechanics mentioned in the prompt."""
+    """Extract recognized custom gameplay mechanics mentioned in the prompt, respecting negative constraints."""
     normalized = normalize_prompt(prompt).lower()
     words = set(re.findall(r"\b[\w\-]+\b", normalized))
     found: List[str] = []
     for m in sorted(MECHANIC_KEYWORDS):
         if m in words or (" " in m and m in normalized):
-            found.append(m)
+            # Check if this mechanic is negated (e.g. "no timer", "without hazards", "never jump")
+            is_negated = bool(re.search(rf"\b(?:no|without|zero|never|no\s+more|remove)\s+(?:[\w\-]+\s+)?{re.escape(m)}\b", normalized))
+            if not is_negated:
+                found.append(m)
     return found
 
 
@@ -323,7 +334,7 @@ def classify_prompt_intent(prompt: str) -> IntentResult:
     raw_lower = norm.lower().strip().rstrip(".!?")
 
     # Conversational
-    if PURE_CONVERSATIONAL_PAT.match(raw_lower) or (text and PURE_CONVERSATIONAL_PAT.match(text.rstrip(".!?"))):
+    if not text or PURE_CONVERSATIONAL_PAT.match(raw_lower) or (text and PURE_CONVERSATIONAL_PAT.match(text.rstrip(".!?"))):
         return IntentResult(
             intent=IntentType.CONVERSATIONAL,
             confidence=0.95,

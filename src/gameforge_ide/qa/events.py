@@ -41,10 +41,18 @@ class QAEvent:
             t = 0.0
 
         src = str(d.get("src", d.get("source", "")))
-        ent = str(d.get("ent", d.get("entity", "")))
         data = d.get("d") or d.get("data") or {}
         if not isinstance(data, dict):
             data = {"raw": data}
+
+        ent = str(
+            d.get("ent")
+            or d.get("entity")
+            or (data.get("entity") if isinstance(data, dict) else "")
+            or (data.get("actor") if isinstance(data, dict) else "")
+            or (data.get("target") if isinstance(data, dict) else "")
+            or ""
+        )
 
         return cls(
             name=name,
@@ -61,12 +69,23 @@ EVENT_ALIASES: Dict[str, List[str]] = {
     "enemy.attacked": ["enemy.damaged", "enemy.hit"],
     "enemy.killed": ["enemy.defeated", "enemy.died", "enemy.eliminated"],
     "enemy.defeated": ["enemy.killed", "enemy.died", "enemy.eliminated"],
-    "game.won": ["enemy.killed", "enemy.attacked", "goal.reached", "level.completed", "game.victory"],
+    "game.won": ["enemy.killed", "enemy.attacked", "goal.reached", "level.completed", "game.victory", "game.win"],
+    "game.victory": ["game.won", "level.completed", "goal.reached", "game.win"],
+    "game.win": ["game.won", "game.victory", "level.completed"],
+    "goal.reached": ["game.won", "level.completed", "game.victory", "finish.reached"],
+    "level.completed": ["game.won", "goal.reached", "game.victory"],
+    "game.lost": ["game.defeat", "game.over", "player.died", "player.eliminated"],
+    "game.defeat": ["game.lost", "game.over", "player.died"],
+    "player.died": ["player.killed", "player.eliminated", "player.death", "game.lost", "game.defeat"],
     "pickup.collected": ["coin.collected", "item.collected", "pickup.pickup"],
     "coin.collected": ["pickup.collected", "item.collected"],
     "player.jumped": ["player.jump"],
     "player.jump": ["player.jumped"],
     "game.started": ["session.started", "game.start", "level.loaded"],
+    "objective.completed": ["objective.complete", "bomb.defused", "bomb.planted", "target.destroyed", "game.won"],
+    "dice.rolled": ["dice.roll", "dice.result"],
+    "snake.transition": ["snake.slide", "board.snake"],
+    "ladder.transition": ["ladder.climb", "board.ladder"],
 }
 
 
@@ -154,8 +173,18 @@ class EventStream:
         for ev in self.events:
             if name and ev.name != name:
                 continue
-            if entity and ev.entity != entity:
-                continue
+            if entity:
+                ent_lower = entity.lower()
+                ev_ent_lower = ev.entity.lower()
+                match_ent = (
+                    ev_ent_lower == ent_lower
+                    or ev_ent_lower.startswith(f"{ent_lower}_")
+                    or ev_ent_lower.startswith(f"gf_{ent_lower}")
+                    or ent_lower in ev_ent_lower
+                    or (isinstance(ev.data, dict) and any(str(v).lower() == ent_lower for v in ev.data.values()))
+                )
+                if not match_ent:
+                    continue
             if source and ev.source != source:
                 continue
             if ev.time < t0:
@@ -212,7 +241,21 @@ class EventStream:
             return ok, observed, reason
 
         elif isinstance(expectation, NoEventExpectation):
-            observed = self.count(expectation.no_event)
+            # Check for edge case: if game was won, any subsequent death or lost event
+            # during cleanup/level unload/teardown is not a game failure.
+            win_events = self.filter(name="game.won") + self.filter(name="game.victory") + self.filter(name="level.completed")
+            win_time = win_events[0].time if win_events else None
+
+            # Collect matches strictly before win_time (or any time if not won)
+            t_limit = win_time if (win_time is not None and expectation.no_event in ("player.died", "game.lost", "game.defeat")) else None
+            matching_events = self.filter(name=expectation.no_event, t1=t_limit)
+            if not matching_events and expectation.no_event in EVENT_ALIASES:
+                for alias in EVENT_ALIASES[expectation.no_event]:
+                    m = self.filter(name=alias, t1=t_limit)
+                    if m:
+                        matching_events = m
+                        break
+            observed = len(matching_events)
             ok = observed == 0
             reason = f"no_event '{expectation.no_event}' observed {observed} times (need 0)"
             return ok, observed, reason

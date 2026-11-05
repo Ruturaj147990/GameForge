@@ -99,5 +99,6 @@ def content_handler(ctx: StepContext) -> StepOutcome:
     return StepOutcome(
         ok=valid,
         data=outcome_data,
+        artifacts=[{"path": a, "kind": "other"} for a in artifacts],
         errors=issues if not valid else [],
     )

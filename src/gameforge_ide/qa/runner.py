@@ -8,8 +8,35 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 from ..core import jobs
-from ..unreal.toolchain import UnrealToolchain
+from ..unreal.toolchain import UnrealToolchain, format_unreal_cmd
 from .scenario import Scenario, ScenarioResult
+
+
+def _format_argv_tokens(argv: Sequence[str]) -> List[str]:
+    """Format argv tokens ensuring switches with spaces or special characters are quoted for Unreal."""
+    tokens: List[str] = []
+    for arg in argv:
+        if arg.startswith("-") and "=" in arg:
+            switch, val = arg.split("=", 1)
+            val_clean = val.strip('"')
+            val_norm = val_clean.replace("\\", "/") if ((":" in val_clean or "/" in val_clean or "\\" in val_clean) and not val_clean.startswith("Automation")) else val_clean
+            if " " in val_norm or '"' in val:
+                tokens.append(f'{switch}="{val_norm}"')
+            else:
+                tokens.append(f'{switch}={val_norm}')
+        elif arg.startswith("-"):
+            if " " in arg or '"' in arg:
+                tokens.append(f'"{arg}"')
+            else:
+                tokens.append(arg)
+        else:
+            clean = arg.strip('"')
+            norm = clean.replace("\\", "/") if (":" in clean or "/" in clean or "\\" in clean) else clean
+            if " " in norm or '"' in clean:
+                tokens.append(f'"{norm}"')
+            else:
+                tokens.append(norm)
+    return tokens
 
 
 def _extract_crash_diagnostics(exe: Path, proc_log: Path, exit_code: Optional[int]) -> str:
@@ -30,6 +57,12 @@ def _extract_crash_diagnostics(exe: Path, proc_log: Path, exit_code: Optional[in
         "Failed to load",
         "Error:",
         "Exception",
+        "EXCEPTION_ACCESS_VIOLATION",
+        "D3D12 error",
+        "DXGI_ERROR",
+        "Device lost",
+        "Out of video memory",
+        "GPU crash",
     )
 
     if proc_log.is_file():
@@ -133,7 +166,8 @@ def run_packaged(
     proc = None
     try:
         try:
-            proc = jobs.spawn(argv, stdout=stdout_target, stderr=stderr_target)
+            cmd = _format_argv_tokens(argv)
+            proc = jobs.spawn(cmd, stdout=stdout_target, stderr=stderr_target)
         except Exception as spawn_exc:
             return ScenarioResult(
                 schema="scenario_result/1",
@@ -146,6 +180,19 @@ def run_packaged(
             proc.wait(timeout=timeout_s)
         except Exception as exc:
             UnrealToolchain.kill_tree(proc)
+            try:
+                import psutil
+                exe_name = exe.name.lower()
+                stem = exe.stem.lower()
+                for p in psutil.process_iter(['pid', 'name']):
+                    try:
+                        pname = str(p.info.get('name') or "").lower()
+                        if pname in (exe_name, f"{stem}-win64-development.exe", f"{stem}-win64-shipping.exe"):
+                            p.kill()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.Error):
+                        pass
+            except Exception:
+                pass
             if plog is not None:
                 try:
                     plog.flush()
@@ -245,7 +292,8 @@ def run_editor_game(
     proc = None
     try:
         try:
-            proc = jobs.spawn(argv, stdout=stdout_target, stderr=stderr_target)
+            cmd = _format_argv_tokens(argv)
+            proc = jobs.spawn(cmd, stdout=stdout_target, stderr=stderr_target)
         except Exception as spawn_exc:
             return ScenarioResult(
                 schema="scenario_result/1",

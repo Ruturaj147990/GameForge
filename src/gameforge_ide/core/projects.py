@@ -154,11 +154,7 @@ def is_gameforge_project(folder: Union[str, Path]) -> bool:
             pass
 
         folder_name = os.path.basename(folder_str.rstrip("/\\"))
-        if folder_name in {
-            "fixtures", "graders", "scratch", "reports", "src", "tests",
-            "docs", "configs", "pipeline", "unreal", "build", "dist",
-            ".git", ".gemini", "node_modules", ".venv"
-        }:
+        if folder_name in REPO_INFRASTRUCTURE_DIRS:
             return False
 
         # 1. Direct or stem-matching .uproject
@@ -201,11 +197,13 @@ def resolve_project_dir(
         return None
 
     raw_path = Path(name_or_path)
-    # 1. Direct path check
-    if raw_path.is_dir():
-        return raw_path.resolve()
-
     name = raw_path.name
+    if name in REPO_INFRASTRUCTURE_DIRS:
+        return None
+
+    # 1. Direct path check (must be a valid GameForge or Unreal project)
+    if raw_path.is_dir() and is_gameforge_project(raw_path):
+        return raw_path.resolve()
     s = get_settings()
 
     # Candidate roots
@@ -264,10 +262,13 @@ def resolve_project_dir(
         if p_dir.is_dir():
             return p_dir.resolve()
 
-    # Third pass: check all discovered projects across all roots
+    # Third pass: check all discovered projects across all roots (exact + case-insensitive)
     all_discovered = list_all_project_dirs(workspace_dir)
     if name in all_discovered:
         return all_discovered[name]
+    for d_name, d_path in all_discovered.items():
+        if d_name.lower() == name.lower():
+            return d_path
 
     # Fall back to projects_root / name (even if not yet on disk)
     if s.projects_root:

@@ -158,6 +158,18 @@ def _spec_to_scenario(spec: AcceptanceTestSpec) -> Scenario:
             steps=[WaitStep(wait_s=WaitArgs(seconds=2.0))],
             expect=[NoEventExpectation(no_event="game.won")],
         )
+    elif tid in ("defuse_bomb", "plant_bomb", "tactical_objective"):
+        return Scenario(
+            scenario_id=tid,
+            description=spec.description,
+            timeout_s=45.0,
+            steps=[
+                NavigateToStep(navigate_to=NavigateToArgs(tag="bombsite", accept_radius_cm=200.0)),
+                InjectStep(inject=InjectArgs(action="IA_Interact", value=True, hold_s=3.0)),
+                WaitStep(wait_s=WaitArgs(seconds=1.5)),
+            ],
+            expect=[EventExpectation(event="objective.completed")],
+        )
     elif tid in ("goal_exists", "enemies_spawn", "player_health_decreases", "board_structure_valid", "card_table_initialized", "player_initialization"):
         return Scenario(
             scenario_id=tid,
@@ -517,7 +529,72 @@ def generate_acceptance_tests(gds: GameDesignSpec) -> List[AcceptanceTestSpec]:
         )
         return tests
 
-    # Default fallback acceptance tests for other genres
+    # 5. DUNGEON_CRAWLER / ACTION_ADVENTURE / EXPLORATION / OTHER GENRES
+    has_enemies = any(
+        getattr(e, "kind", None) in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY, EntityKind.SPAWNER, "enemy", "ranged_enemy", "spawner")
+        for e in getattr(gds, "entities", []) or []
+    )
+    has_pickups = any(
+        getattr(e, "kind", None) in (EntityKind.PICKUP, "pickup", "collectible", "relic")
+        for e in getattr(gds, "entities", []) or []
+    )
+    has_goal = any(
+        getattr(e, "kind", None) in (EntityKind.GOAL, "goal", "exit")
+        for e in getattr(gds, "entities", []) or []
+    )
+
+    if has_enemies:
+        tests.append(
+            AcceptanceTestSpec(
+                test_id="combat_damages_enemies",
+                description="player attack reduces enemy health",
+                genre=genre_val,
+                category="mechanics",
+                assertions=["player.attack(enemy) -> enemy.health < enemy.max_health"],
+            )
+        )
+        tests.append(
+            AcceptanceTestSpec(
+                test_id="win_on_defeat_all",
+                description="defeating all enemies triggers game.won",
+                genre=genre_val,
+                category="win_loss",
+                assertions=["count(enemies_remaining) == 0 -> trigger(game.won)"],
+            )
+        )
+
+    if has_pickups:
+        tests.append(
+            AcceptanceTestSpec(
+                test_id="collectibles_exist",
+                description="level has collectible pickup entities",
+                genre=genre_val,
+                category="structure",
+                assertions=["pickups.count >= 1"],
+            )
+        )
+        tests.append(
+            AcceptanceTestSpec(
+                test_id="win_on_collect_all",
+                description="collecting all required items triggers game.won",
+                genre=genre_val,
+                category="win_loss",
+                assertions=["collected_items >= target -> trigger(game.won)"],
+            )
+        )
+
+    if has_goal:
+        tests.append(
+            AcceptanceTestSpec(
+                test_id="goal_exists",
+                description="goal or extraction point exists in level",
+                genre=genre_val,
+                category="structure",
+                assertions=["level.has_actor('goal') == True"],
+            )
+        )
+
+    # Base mechanics for any interactive game
     tests.append(
         AcceptanceTestSpec(
             test_id="player_initialization",
@@ -527,15 +604,16 @@ def generate_acceptance_tests(gds: GameDesignSpec) -> List[AcceptanceTestSpec]:
             assertions=["player.is_valid == True"],
         )
     )
-    tests.append(
-        AcceptanceTestSpec(
-            test_id="win_condition",
-            description="primary objective triggers game.won",
-            genre=genre_val,
-            category="win_loss",
-            assertions=["primary_objective_met -> trigger(game.won)"],
+    if not any(t.test_id.startswith("win_") for t in tests):
+        tests.append(
+            AcceptanceTestSpec(
+                test_id="win_condition",
+                description="primary objective triggers game.won",
+                genre=genre_val,
+                category="win_loss",
+                assertions=["primary_objective_met -> trigger(game.won)"],
+            )
         )
-    )
     return tests
 
 

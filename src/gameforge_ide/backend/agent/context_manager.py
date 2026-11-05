@@ -169,6 +169,7 @@ class ContextManager:
         tools_description: str,
         active_model: Optional[str] = None,
         include_tools: bool = True,
+        modified_files: Optional[Set[str] | List[str]] = None,
     ) -> str:
         """Assembles a compact system prompt that stays well within the model's input budget."""
         active_model = active_model or get_settings().model_for("chat")
@@ -204,11 +205,17 @@ class ContextManager:
                 + "\n"
             )
 
+        files_note = ""
+        if modified_files:
+            file_items = "\n".join(f"- {f}" for f in sorted(modified_files))
+            files_note = f"\n=== PREVIOUSLY MODIFIED FILES IN SESSION ===\nThe following files were created or modified in earlier turns of this session:\n{file_items}\n"
+
         base_header = (
             "You are GameForge IDE Agent — autonomous expert game-dev assistant.\n"
             f"Workspace: {workspace_name} | Model: {active_model}\n"
             f"{context_snippet}\n"
             f"Engine rules: {ue_note}{ue_ctx_note}\n"
+            f"{files_note}"
         )
 
         if not include_tools or not tools_description:

@@ -3,12 +3,103 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 import time
 import urllib.request
 import urllib.error
 from typing import Any, AsyncIterator, Dict, Iterator, List, Optional
 
 from .base import ChatResponse, ModelInfo, ModelProvider, ProviderCapabilities, StreamChunk
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_clean_json(text: str) -> Optional[str]:
+    """Extract and validate clean JSON from raw model output, unwrapping code fences or explanatory prose."""
+    if not text:
+        return None
+    s = text.strip()
+    # 1. Fast path: directly parses as JSON
+    try:
+        json.loads(s)
+        return s
+    except Exception:
+        pass
+
+    # 2. Extract from markdown code fences: ```json ... ``` or ``` ... ```
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", s, re.IGNORECASE)
+    if fence_match:
+        candidate = fence_match.group(1).strip()
+        try:
+            json.loads(candidate)
+            return candidate
+        except Exception:
+            pass
+
+    # 3. Locate the outermost balanced JSON object {...}
+    start = s.find("{")
+    if start != -1:
+        brace_count = 0
+        in_str = False
+        escape = False
+        for i in range(start, len(s)):
+            c = s[i]
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                escape = True
+                continue
+            if c == '"':
+                in_str = not in_str
+                continue
+            if not in_str:
+                if c == "{":
+                    brace_count += 1
+                elif c == "}":
+                    brace_count -= 1
+                    if brace_count == 0:
+                        candidate = s[start : i + 1]
+                        try:
+                            json.loads(candidate)
+                            return candidate
+                        except Exception:
+                            pass
+                        break
+
+    # 4. Locate the outermost balanced JSON array [...]
+    arr_start = s.find("[")
+    if arr_start != -1:
+        bracket_count = 0
+        in_str = False
+        escape = False
+        for i in range(arr_start, len(s)):
+            c = s[i]
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                escape = True
+                continue
+            if c == '"':
+                in_str = not in_str
+                continue
+            if not in_str:
+                if c == "[":
+                    bracket_count += 1
+                elif c == "]":
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        candidate = s[arr_start : i + 1]
+                        try:
+                            json.loads(candidate)
+                            return candidate
+                        except Exception:
+                            pass
+                        break
+
+    return s
 
 
 class OllamaProvider(ModelProvider):
@@ -70,6 +161,64 @@ class OllamaProvider(ModelProvider):
             max_context=ctx,
         )
 
+    def budget_num_ctx(self, model_id: str, estimated_input_tokens: int = 0, requested_ctx: Optional[int] = None) -> int:
+        """Dynamically budgets num_ctx based on model family and input size, respecting hardware bounds."""
+        caps = self.get_capabilities(model_id)
+        if requested_ctx and requested_ctx > 0:
+            return requested_ctx
+        needed = max(8192, estimated_input_tokens + 2048)
+        return min(needed, caps.max_context)
+
+    def _request_with_retry(
+        self,
+        req: urllib.request.Request,
+        timeout: float,
+        max_retries: int = 3,
+    ) -> Dict[str, Any]:
+        """Executes HTTP request to Ollama with exponential backoff on transient errors."""
+        last_exc: Optional[Exception] = None
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    raw_bytes = resp.read()
+                    if not raw_bytes or not raw_bytes.strip():
+                        if attempt < max_retries - 1:
+                            sleep_time = 0.5 * (2 ** attempt)
+                            logger.warning(
+                                "Ollama returned empty response body, retrying in %.1fs (attempt %d/%d)",
+                                sleep_time, attempt + 1, max_retries
+                            )
+                            time.sleep(sleep_time)
+                            continue
+                        raise RuntimeError("Ollama returned an empty response body")
+                    return json.loads(raw_bytes.decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""
+                last_exc = RuntimeError(f"Ollama API HTTP {exc.code}: {body}")
+                if exc.code in (429, 502, 503, 504) and attempt < max_retries - 1:
+                    sleep_time = 0.5 * (2 ** attempt)
+                    logger.warning(
+                        "Ollama HTTP %s (transient busy state), retrying in %.1fs (attempt %d/%d): %s",
+                        exc.code, sleep_time, attempt + 1, max_retries, body[:200]
+                    )
+                    time.sleep(sleep_time)
+                    continue
+                raise last_exc from exc
+            except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError, ValueError) as exc:
+                last_exc = exc
+                if attempt < max_retries - 1:
+                    sleep_time = 0.5 * (2 ** attempt)
+                    logger.warning(
+                        "Ollama connection/decode error '%s', retrying in %.1fs (attempt %d/%d)",
+                        exc, sleep_time, attempt + 1, max_retries
+                    )
+                    time.sleep(sleep_time)
+                    continue
+                raise RuntimeError(f"Ollama connection failed after {max_retries} attempts: {exc}") from exc
+        if last_exc:
+            raise last_exc
+        return {}
+
     @staticmethod
     def build_stream_payload(
         model_id: str,
@@ -120,7 +269,8 @@ class OllamaProvider(ModelProvider):
         `tools` uses the provider-neutral shape {name, description, parameters}. `think` is
         always False and `num_ctx` is always explicit (Master Blueprint v2 §6).
         """
-        effective_ctx = max(8192, num_ctx) if tools else num_ctx
+        est_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 3
+        effective_ctx = self.budget_num_ctx(model_id, est_tokens, max(8192, num_ctx) if tools else num_ctx)
         payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
@@ -137,12 +287,9 @@ class OllamaProvider(ModelProvider):
             headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Ollama API HTTP {exc.code}: {body}") from exc
+        data = self._request_with_retry(req, timeout=self.timeout)
+        if "error" in data:
+            raise RuntimeError(f"Ollama API error: {data['error']}")
         msg = data.get("message", {}) or {}
         calls = []
         for c in msg.get("tool_calls") or []:
@@ -152,7 +299,14 @@ class OllamaProvider(ModelProvider):
                 try:
                     args = json.loads(args)
                 except json.JSONDecodeError:
-                    args = {"_unparsed": args}
+                    clean_args = _extract_clean_json(args)
+                    if clean_args:
+                        try:
+                            args = json.loads(clean_args)
+                        except Exception:
+                            args = {"_unparsed": args}
+                    else:
+                        args = {"_unparsed": args}
             calls.append({"name": fn.get("name"), "arguments": args})
         return {
             "content": msg.get("content", ""),
@@ -172,7 +326,9 @@ class OllamaProvider(ModelProvider):
         temperature: float = 0.2,
         timeout_s: float = 120.0,
     ) -> Optional[str]:
-        """Structured output via /api/chat `format` (JSON schema). Returns the raw JSON text or None on transport errors."""
+        """Structured output via /api/chat `format` (JSON schema). Returns clean JSON text or None on transport errors."""
+        est_tokens = (len(system) + len(user)) // 3
+        effective_ctx = self.budget_num_ctx(model_id, est_tokens, num_ctx)
         payload = {
             "model": model_id,
             "stream": False,
@@ -182,7 +338,7 @@ class OllamaProvider(ModelProvider):
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "options": {"num_ctx": num_ctx, "temperature": temperature},
+            "options": {"num_ctx": effective_ctx, "temperature": temperature},
         }
         req = urllib.request.Request(
             f"http://{self.host}/api/chat",
@@ -191,12 +347,12 @@ class OllamaProvider(ModelProvider):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            data = self._request_with_retry(req, timeout=timeout_s)
             msg = data.get("message", {}) or {}
-            return msg.get("content", "")
+            raw_content = msg.get("content", "")
+            return _extract_clean_json(raw_content)
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
+            body = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""
             logger.warning("Ollama complete_json HTTP %s: %s", exc.code, body)
             return None
         except Exception as exc:
@@ -254,6 +410,7 @@ class OllamaProvider(ModelProvider):
     @staticmethod
     def parse_stream_lines(lines) -> Iterator[StreamChunk]:
         """Decode Ollama's newline-delimited JSON response records from /api/chat or /api/generate."""
+        saw_done = False
         for line in lines:
             if not line:
                 continue
@@ -261,19 +418,40 @@ class OllamaProvider(ModelProvider):
                 chunk = json.loads(line.decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
                 continue
+            if not isinstance(chunk, dict):
+                continue
+            if "error" in chunk and chunk["error"]:
+                saw_done = True
+                yield StreamChunk(
+                    token="",
+                    is_final=True,
+                    error=str(chunk["error"]),
+                )
+                break
             done = chunk.get("done", False)
+            if done:
+                saw_done = True
             # /api/chat sends token in chunk["message"]["content"], /api/generate sends in chunk["response"]
             msg = chunk.get("message", {})
             token = msg.get("content", "") if isinstance(msg, dict) else ""
             if not token and "response" in chunk:
                 token = chunk.get("response", "")
-            yield StreamChunk(
-                token=token,
-                is_final=done,
-                metadata={"eval_count": chunk.get("eval_count", 0)} if done else {},
-            )
+            status = chunk.get("status")
+            meta = {"eval_count": chunk.get("eval_count", 0)} if done else {}
+            if status and not token:
+                meta["status"] = status
+            # Only yield if there's a token, completion, or status update
+            if token or done or status:
+                yield StreamChunk(
+                    token=token,
+                    is_final=done,
+                    metadata=meta,
+                )
             if done:
                 break
+        if not saw_done:
+            # Stream severed or ended without explicit done signal
+            yield StreamChunk(token="", is_final=True)
 
     async def stream_chat(
         self,
@@ -327,7 +505,8 @@ class OllamaProvider(ModelProvider):
         **kwargs: Any,
     ) -> ChatResponse:
         url = f"http://{self.host}/api/generate"
-        resolved_ctx = kwargs.get("num_ctx") or self.get_capabilities(model_id).max_context
+        est_tokens = (len(prompt) + len(system_prompt or "")) // 3
+        resolved_ctx = kwargs.get("num_ctx") or self.budget_num_ctx(model_id, est_tokens)
         payload = {
             "model": model_id,
             "prompt": prompt,
@@ -347,8 +526,7 @@ class OllamaProvider(ModelProvider):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            data = self._request_with_retry(req, timeout=self.timeout)
             return ChatResponse(
                 content=data.get("response", ""),
                 model=model_id,

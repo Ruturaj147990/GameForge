@@ -25,6 +25,7 @@ from ..providers.base import ModelProvider
 from ..providers.router import ModelRouter
 from ..session_manager import Session, SessionManager
 from ..tools.gateway import ToolGateway
+from .code_verify import parse_diagnostics
 from .context_manager import ContextManager
 from .task_state import (
     LedgerEntry,
@@ -37,13 +38,13 @@ from .task_state import (
 
 ENGINEERING_STAGES: tuple[str, ...] = (
     "Prompt",
-    "Understanding",
-    "Codebase Inspection",
+    "Code Retrieval",
+    "Reasoning",
     "Planning",
-    "Actual Source Changes",
-    "Diff/Approval",
-    "Application",
-    "Testing",
+    "Source Inspection",
+    "Code Generation",
+    "Diff",
+    "Approval",
     "Verification",
 )
 
@@ -87,6 +88,32 @@ class AgentRuntime:
         except Exception:
             pass
         self._active_tasks: Dict[str, TaskState] = {}
+        self._cancel_events: Dict[str, asyncio.Event] = {}
+        self._cancelled_sessions: set[str] = set()
+
+    def cancel_task(self, session_id: str) -> bool:
+        """Cooperatively cancels an active or waiting task without zombie locks."""
+        self._cancelled_sessions.add(session_id)
+        ev = self._cancel_events.get(session_id)
+        if ev:
+            ev.set()
+        task = self._active_tasks.get(session_id)
+        if task:
+            task.terminal_status = "CANCELLED"
+            task.terminal_reason = "cancelled_by_user"
+            task.pending_approval = None
+            self._save_task_state(task)
+        return True
+
+    def is_task_cancelled(self, session_id: str) -> bool:
+        """Returns True if a task has received a cooperative cancellation request."""
+        if session_id in self._cancelled_sessions:
+            return True
+        ev = self._cancel_events.get(session_id)
+        if ev and ev.is_set():
+            return True
+        task = self._active_tasks.get(session_id)
+        return bool(task and task.terminal_status == "CANCELLED")
 
     def set_workspace(self, new_workspace: Path | str) -> None:
         """Switch the agent runtime active workspace and re-initialize path-dependent subsystems."""
@@ -260,13 +287,48 @@ class AgentRuntime:
                 return args
             if isinstance(args, str):
                 s = args.strip()
-                if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+                # 1. Strip outer markdown code fences if present: ```json ... ```
+                fence_m = re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", s, re.IGNORECASE)
+                if fence_m:
+                    s = fence_m.group(1).strip()
+                # 2. Try direct JSON parsing or unpack stringified JSON
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, dict):
+                        return parsed
+                    elif isinstance(parsed, str):
+                        # Escaped/double-serialized JSON string: e.g. "{\"file_path\": \"foo\"}"
+                        try:
+                            nested = json.loads(parsed)
+                            if isinstance(nested, dict):
+                                return nested
+                        except Exception:
+                            pass
+                        return {"input": parsed}
+                except Exception:
+                    pass
+                # 3. Balanced JSON extraction within string
+                b_start = s.find("{")
+                b_end = s.rfind("}")
+                if b_start != -1 and b_end > b_start:
+                    candidate = s[b_start : b_end + 1]
                     try:
-                        parsed = json.loads(s)
+                        parsed = json.loads(candidate)
                         if isinstance(parsed, dict):
                             return parsed
                     except Exception:
                         pass
+                    # Unescape escaped newlines/quotes if present
+                    try:
+                        unescaped = candidate.encode().decode("unicode_escape")
+                        parsed = json.loads(unescaped)
+                        if isinstance(parsed, dict):
+                            return parsed
+                    except Exception:
+                        pass
+                # 4. If it's a raw non-empty string, preserve as input
+                if s and not s.startswith(("{", "[")):
+                    return {"input": s}
             return {}
 
         def _normalize_tool_data(data: Any) -> Optional[Dict[str, Any]]:
@@ -541,25 +603,46 @@ class AgentRuntime:
         excuse_patterns = [
             r"\b(?:i(?:'m| am)?\s+sorry|i apologize|apologies|my apologies)\b",
             r"\b(?:unfortunately|regrettably)\b.*?\b(?:cannot|could not|unable|failed|error)\b",
-            r"\b(?:i cannot|i am unable to|i'm unable to)\b.*?\b(?:proceed|complete|execute|continue|perform)\b",
+            r"\b(?:i cannot|i am unable to|i'm unable to|i am not able to|i'm not able to)\b.*?\b(?:proceed|complete|execute|continue|perform)\b",
             r"\b(?:due to\s+(?:an?\s+)?(?:error|failure|issue))\b",
-            r"\b(?:as an ai|as a language model)\b.*?\b(?:cannot|unable)\b",
+            r"\b(?:as an ai|as a language model|i am an ai|i'm an ai)\b.*?\b(?:cannot|unable|don't have)\b",
+            r"\b(?:there\s+seems\s+to\s+be\s+an\s+issue|something\s+went\s+wrong)\b",
+            r"\b(?:i\s+cannot\s+modify|i\s+can't\s+directly\s+modify|cannot\s+directly\s+edit|can't\s+directly\s+edit)\b",
+            r"\bi\s+(?:don't|do not)\s+have\s+(?:the\s+)?(?:ability|access|permission)\s+to\b",
         ]
         return any(bool(re.search(pat, t, re.DOTALL)) for pat in excuse_patterns)
 
     @staticmethod
+    def _detect_phantom_edit_or_claimed_modification(text: str) -> bool:
+        """Detects if model claims modifications without actually calling tools or proposing diffs."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        claimed_patterns = [
+            r"\bi(?:'ve| have)?\s+(?:\w+\s+)?(?:updated|modified|changed|added|created|implemented|edited|written|refactored|fixed|applied|replaced|inserted)\b.*?\b(?:file|class|code|script|function|component|header|method|diff|lines?)\b",
+            r"\bi(?:'ve| have)?\s+(?:\w+\s+)?(?:made|applied)\s+(?:the\s+)?(?:necessary\s+)?(?:changes|modifications|edits|updates)\b",
+            r"\b(?:the\s+)?(?:file|class|source|code|component|header)\s+(?:has\s+been|is\s+now|was|is)\s+(?:updated|modified|created|changed|added|written|edited|refactored|fixed)\b",
+            r"\bi\s+(?:went\s+ahead\s+and|have\s+already)\s+(?:updated|modified|created|added|implemented|edited)\b",
+            r"\b(?:here\s+is|here\s+are|below\s+is|above\s+is)\s+the\s+(?:updated|modified|new)\s+(?:code|file|implementation|changes|contents?)\b",
+            r"\ball\s+(?:changes|updates|modifications)\s+(?:have\s+been\s+)?(?:applied|saved|completed)\b",
+            r"\b(?:done|finished|completed)[!.]?\s+i(?:'ve| have)?\s+(?:updated|modified|created|added)\b",
+            r"\bi(?:'ve| have)?\s+(?:\w+\s+)?(?:completed|finished)\s+(?:the\s+)?(?:implementation|changes|updates|edits|modifications)\b",
+        ]
+        return any(bool(re.search(pat, t, re.DOTALL)) for pat in claimed_patterns)
+
+    @staticmethod
     def _classify_engineering_stage(tool_name: str, has_modified_files: bool = False) -> str:
         """Maps an active tool invocation to its corresponding stage in the 9-stage engineering loop."""
-        if tool_name in ("list_dir", "read_file", "search_code", "search_index", "unreal_find_projects", "unreal_engine_info"):
-            return "Codebase Inspection"
-        elif tool_name in ("propose_edit", "write_file"):
-            return "Actual Source Changes"
+        if tool_name in ("search_code", "search_index"):
+            return "Code Retrieval"
+        elif tool_name in ("list_dir", "read_file", "unreal_find_projects", "unreal_engine_info"):
+            return "Source Inspection"
+        elif tool_name in ("propose_edit", "write_file", "unreal_editor"):
+            return "Code Generation"
         elif tool_name in ("apply_edit", "apply_diff", "apply_batch", "apply_diffs_batch"):
             return "Application"
         elif tool_name in ("run_command", "terminal_run"):
-            return "Testing"
-        elif tool_name == "unreal_editor":
-            return "Actual Source Changes"
+            return "Verification" if has_modified_files else "Testing"
         return "Verification" if has_modified_files else "Planning"
 
     @staticmethod
@@ -763,12 +846,50 @@ class AgentRuntime:
         self._active_tasks[session_id] = task_state
         self._save_task_state(task_state)
 
+        # Pre-populate modified files from previous turns in this session for context
+        _session_modified_files: set[str] = set()
+        for rec in session.tool_history:
+            if rec.tool_name in ("apply_edit", "apply_diff") and rec.status == "SUCCESS":
+                target_fp = rec.arguments.get("file_path") or rec.arguments.get("subpath")
+                if target_fp:
+                    _session_modified_files.add(str(target_fp).replace("\\", "/"))
+        for entry in task_state.ledger:
+            if entry.action_type == "diff_apply":
+                fp = entry.payload.get("file_path")
+                if fp:
+                    _session_modified_files.add(str(fp).replace("\\", "/"))
+
+        cancel_ev = asyncio.Event()
+        self._cancel_events[session_id] = cancel_ev
+
+        try:
+            async for ev in self._run_task_stream(
+                session_id, user_prompt, acceptance_predicates, session, task_state,
+                is_conversational, predicates, _session_modified_files
+            ):
+                yield ev
+        finally:
+            self._cancel_events.pop(session_id, None)
+
+    async def _run_task_stream(
+        self,
+        session_id: str,
+        user_prompt: str,
+        acceptance_predicates: Optional[List[TaskAcceptancePredicate]],
+        session: Session,
+        task_state: TaskState,
+        is_conversational: bool,
+        predicates: List[TaskAcceptancePredicate],
+        _session_modified_files: set[str],
+    ) -> AsyncIterator[AgentEvent]:
+
         # 1. Build context and preflight the prompt before provider execution.
         tools_desc = self._format_tools_description()
         full_system_prompt = self.context_manager.build_system_prompt(
             tools_desc,
             active_model=session.model_name,
             include_tools=True,
+            modified_files=_session_modified_files,
         )
         system_prompt = (
             self.context_manager.build_system_prompt(
@@ -942,12 +1063,13 @@ class AgentRuntime:
         iteration = 0
         _tool_call_counts: Dict[str, int] = {}
         _cached_observations: Dict[str, Any] = {}
-        _modified_files: set[str] = set()
+        _modified_files: set[str] = set(_session_modified_files)
         _tool_history: List[Dict[str, Any]] = []
         _edit_proposed = False
         _task_needs_edit = self._is_actionable_task(user_prompt, "")
         _unmet_predicates_nudged = False
         _self_correction_nudged = False
+        _phantom_edit_nudged = False
         _last_tool_error = False
 
         # Populate previous tool history and modified files across turns
@@ -995,6 +1117,17 @@ class AgentRuntime:
                     event_type="error",
                     content=f"Task BLOCKED: timeout_exceeded. Budget duration ({task_state.budget.timeout_seconds}s) reached.",
                     metadata={"status": "BLOCKED", "reason": "timeout_exceeded"},
+                )
+                return
+
+            if self.is_task_cancelled(session_id):
+                task_state.terminal_status = "CANCELLED"
+                task_state.terminal_reason = "cancelled_by_user"
+                self._save_task_state(task_state)
+                yield AgentEvent(
+                    event_type="done",
+                    content="Task cancelled by user.",
+                    metadata={"terminal_status": "CANCELLED"},
                 )
                 return
 
@@ -1080,6 +1213,29 @@ class AgentRuntime:
                             event_type="status",
                             content="PLANNING",
                             metadata={"action": "proactive_self_correction", "iteration": iteration, "engineering_stage": "Planning"},
+                        )
+                        continue
+
+                # Check for phantom edits: LLM claims modifications without actually calling tools or proposing diffs
+                if (not all_satisfied or not _edit_proposed) and self._detect_phantom_edit_or_claimed_modification(full_response):
+                    if not _phantom_edit_nudged and iteration < self.max_iterations:
+                        _phantom_edit_nudged = True
+                        conversation_history.append({"role": "assistant", "content": full_response})
+                        conversation_history.append({
+                            "role": "user",
+                            "content": (
+                                "[Phantom Modification Intercepted]: You stated that changes were made, but no tools were invoked "
+                                "and no diffs or edits were proposed or applied to disk.\n"
+                                "In GameForge, autonomous agents must never output narrative claims of code changes without tool actions. "
+                                "You MUST invoke `propose_edit` with the exact file path and code replacement, or `write_file`, to apply these changes now.\n\n"
+                                "Available tools:\n" + self._format_tools_description() + "\n\n"
+                                "Invoke `propose_edit` now."
+                            ),
+                        })
+                        yield AgentEvent(
+                            event_type="status",
+                            content="PLANNING",
+                            metadata={"action": "phantom_edit_interception", "iteration": iteration, "engineering_stage": "Planning"},
                         )
                         continue
 
@@ -1233,11 +1389,30 @@ class AgentRuntime:
 
             # Execute tool (or return cached observation if second repeat)
             yield AgentEvent(event_type="status", content="EXECUTING_TOOL", metadata={"tool": tool_name})
-            if call_count == 2 and _tool_key in _cached_observations:
-                tool_result = _cached_observations[_tool_key]
-            else:
-                tool_result = self.tool_gateway.execute_tool(tool_name, tool_args)
-                _cached_observations[_tool_key] = tool_result
+            try:
+                if call_count == 2 and _tool_key in _cached_observations:
+                    tool_result = _cached_observations[_tool_key]
+                else:
+                    tool_result = self.tool_gateway.execute_tool(tool_name, tool_args)
+                    _cached_observations[_tool_key] = tool_result
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).exception("Unexpected exception executing tool %s: %s", tool_name, exc)
+                tool_result = {
+                    "status": "ERROR",
+                    "error": f"Tool execution failed with unexpected exception ({type(exc).__name__}): {exc}",
+                }
+
+            if self.is_task_cancelled(session_id):
+                task_state.terminal_status = "CANCELLED"
+                task_state.terminal_reason = "cancelled_by_user"
+                self._save_task_state(task_state)
+                yield AgentEvent(
+                    event_type="done",
+                    content="Task cancelled by user.",
+                    metadata={"terminal_status": "CANCELLED"},
+                )
+                return
 
             # Record in session and tool history
             diff_id = tool_result.get("diff_id")
@@ -1366,9 +1541,19 @@ class AgentRuntime:
                     "Otherwise synthesize your final answer."
                 )
             elif is_tool_error:
+                diags = parse_diagnostics(obs_json)
+                diag_summary = ""
+                if diags:
+                    diag_lines = [
+                        f"- {d.get('file', 'unknown')}:{d.get('line', 0)}: {d.get('message', '')} "
+                        + (f"[Symbol: {d.get('symbol')}]" if d.get('symbol') else "")
+                        for d in diags[:5]
+                    ]
+                    diag_summary = "\n\nStructured Diagnostics:\n" + "\n".join(diag_lines)
+
                 continuation_nudge = (
-                    f"[Tool Execution Error in `{tool_name}`]:\n{obs_json}\n\n"
-                    f"The tool invocation returned an error. Analyze the error above, reason through why it occurred, "
+                    f"[Tool Execution Error in `{tool_name}`]:\n{obs_json}{diag_summary}\n\n"
+                    f"The tool invocation returned an error. Analyze the error and diagnostics above, reason through why it occurred, "
                     f"and invoke an appropriate tool to inspect or repair the issue (e.g. read the file to verify exact lines, check directory contents, or adjust parameters). "
                     f"Do not terminate prematurely or output narrative excuses; perform the correction now."
                 )
@@ -1400,14 +1585,17 @@ class AgentRuntime:
                     "Review the observation above and proceed with the next appropriate tool call or synthesize your final response."
                 )
 
-            # Compact older tool observations in history to avoid multi-turn context overflow
+            # Compact older tool observations in history to avoid multi-turn context overflow,
+            # while keeping the current-turn inspection/observation intact.
             if len(conversation_history) > 4:
                 for hist_idx in range(len(conversation_history) - 2):
                     h_msg = conversation_history[hist_idx]
-                    if h_msg.get("role") == "user" and "[Observation for `" in h_msg.get("content", ""):
-                        m_tool = re.search(r"\[Observation for `([^`]+)`\]", h_msg["content"])
+                    h_content = h_msg.get("content", "")
+                    if h_msg.get("role") == "user" and ("[Observation for `" in h_content or "[Tool Execution Error in `" in h_content):
+                        m_tool = re.search(r"\[(?:Observation for|Tool Execution Error in) `([^`]+)`\]", h_content)
                         t_lbl = m_tool.group(1) if m_tool else "tool"
-                        h_msg["content"] = f"[Observation for `{t_lbl}`: completed (compacted)]"
+                        status_note = "error observed" if "Error in `" in h_content else "completed"
+                        h_msg["content"] = f"[Tool `{t_lbl}`: {status_note} (compacted for context)]"
 
             conversation_history.append({"role": "assistant", "content": full_response})
             conversation_history.append({"role": "user", "content": continuation_nudge})

@@ -42,10 +42,11 @@ def resample_audio(samples: np.ndarray, in_rate: int, out_rate: int) -> np.ndarr
     return np.interp(target_indices, orig_indices, samples)
 
 
-def crossfade_loop(audio: np.ndarray, crossfade_samples: int) -> np.ndarray:
+def crossfade_loop(audio: np.ndarray, crossfade_samples: int, curve: str = "equal_power") -> np.ndarray:
     """Seamlessly crossfade the tail of an audio buffer into its head.
     
     Eliminates loop pops, phase clicks, and silence dropouts.
+    Supports circular equal-power crossfade (sine/cosine) and linear crossfade.
     """
     fade = int(crossfade_samples)
     n = len(audio)
@@ -53,10 +54,19 @@ def crossfade_loop(audio: np.ndarray, crossfade_samples: int) -> np.ndarray:
         return audio.copy()
 
     result = audio.copy()
-    ramp = np.linspace(0.0, 1.0, fade, endpoint=False)
     head = result[:fade].copy()
     tail = result[-fade:].copy()
-    result[:fade] = head * ramp + tail * (1.0 - ramp)
+
+    if curve == "equal_power":
+        # Circular sine/cosine equal-power crossfade prevents volume dips
+        theta = 0.5 * np.pi * np.linspace(0.0, 1.0, fade, endpoint=False)
+        ramp_head = np.sin(theta)
+        ramp_tail = np.cos(theta)
+        result[:fade] = head * ramp_head + tail * ramp_tail
+    else:
+        ramp = np.linspace(0.0, 1.0, fade, endpoint=False)
+        result[:fade] = head * ramp + tail * (1.0 - ramp)
+
     return result[:-fade]
 
 
