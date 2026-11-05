@@ -1,6 +1,7 @@
 # GameForge 1.0 — Component Improvement & Exclusive Ownership Ledger
 
-**Date:** 2026-11-05T16:32:00+05:30  
+**Date:** 2026-11-05T17:08:00+05:30  
+**Scope:** Complete Non-Frontend Engineering Transformation (Every backend, core, execution, intelligence, storage, pipeline, content, kit, and engine component; Frontend/UI/UX strictly excluded).  
 **Protocol:** Strictly non-overlapping single-owner architecture. Every in-scope source, test, and implementation file has exactly ONE primary owner.
 
 ---
@@ -8,6 +9,7 @@
 ## 1. Specialist Subagent Allocation & Exclusive File Ownership
 
 ### Agent 1: LLM Intelligence, Autonomous Planning & Execution Engine
+- **Conversation ID:** `4e9d9de2-b952-46d6-a505-a6e9946cb84d`
 - **Role:** LLM Intelligence & Execution Specialist
 - **Mission:** Autonomous reasoning, intent interpretation, prompt-to-GDS, GDS mutations & patches, agent loop execution, context compaction & retrieval, and code repair loops.
 - **Exclusively Owned Implementation Modules:**
@@ -25,6 +27,8 @@
   - `src/gameforge_ide/backend/providers/openai_provider.py`
   - `src/gameforge_ide/backend/providers/hosted.py`
   - `src/gameforge_ide/backend/session_manager.py`
+  - `src/gameforge_ide/backend/unreal_context.py`
+  - `src/gameforge_ide/design/gds.py`
   - `src/gameforge_ide/design/prompt_to_gds.py`
   - `src/gameforge_ide/design/spec_from_prompt.py`
   - `src/gameforge_ide/design/intent.py`
@@ -50,10 +54,17 @@
   - `tests/unit/test_genre_classification.py`
   - `tests/unit/test_task_plan.py`
   - `tests/unit/test_planner_evidence.py`
+  - `tests/unit/test_plan_runner.py`
+  - `tests/unit/test_model_adapter.py`
+  - `tests/unit/test_model_routing_evidence.py`
+  - `tests/unit/test_prompt_classification.py`
+  - `tests/unit/test_patch_application.py`
+  - `tests/unit/test_patch_requests.py`
 
 ---
 
 ### Agent 2: Backend Architecture, Tools, Data Integrity, Storage & Services
+- **Conversation ID:** `b4e99e4c-e90b-4c9e-86fc-5fa41bb198c5`
 - **Role:** Backend & Tools Specialist
 - **Mission:** Resilient source-code editing with diff generation and rollback, atomic multi-file transactions, typed ToolGateway, file search and directory listing, sandboxed terminal execution, boundary security, SQLite FTS5 symbol indexing, and service-layer desktop integration.
 - **Exclusively Owned Implementation Modules:**
@@ -62,6 +73,7 @@
   - `src/gameforge_ide/backend/tools/fs_tools.py`
   - `src/gameforge_ide/backend/tools/terminal_tools.py`
   - `src/gameforge_ide/backend/tools/git_tools.py`
+  - `src/gameforge_ide/backend/tools/unreal_tools.py`
   - `src/gameforge_ide/backend/security/boundary.py`
   - `src/gameforge_ide/index/indexer.py`
   - `src/gameforge_ide/storage/atomic.py`
@@ -89,10 +101,20 @@
   - `tests/unit/test_backend_services_and_gateway_hardening.py`
   - `tests/unit/test_core_projects.py`
   - `tests/unit/test_unified_project_directory.py`
+  - `tests/unit/test_jobs.py`
+  - `tests/unit/test_events.py`
+  - `tests/unit/test_atomic_write.py`
+  - `tests/unit/test_diff_store.py`
+  - `tests/unit/test_approval_store.py`
+  - `tests/unit/test_indexer_investigation.py`
+  - `tests/unit/test_fts_queries.py`
+  - `tests/unit/test_systems_service.py`
+  - `tests/unit/test_projects_service.py`
 
 ---
 
-### Agent 3: Pipeline, Forge DAG, Code Generation & Unreal Engine Integration
+### Agent 3: Pipeline, Forge DAG, Code Generation, Content & Unreal Engine Integration
+- **Conversation ID:** `f402c461-bf3f-4624-9df2-1bef2f63787f`
 - **Role:** Unreal & Pipeline Specialist
 - **Mission:** Forge DAG execution engine, step execution handlers, artifact validation, C++ code generation, composer algorithms, layouts & placement, procedural props & content, Unreal toolchain & Live Editor bridge, gameplay kit, and headless QA autopilot scenarios.
 - **Exclusively Owned Implementation Modules:**
@@ -127,6 +149,16 @@
   - `src/gameforge_ide/composer/layouts/open_world.py`
   - `src/gameforge_ide/composer/layouts/rooms.py`
   - `src/gameforge_ide/composer/layouts/tactical_fps.py`
+  - `src/gameforge_ide/content/epic_packs.py`
+  - `src/gameforge_ide/content/themes.py`
+  - `src/gameforge_ide/content/procedural_props.py`
+  - `src/gameforge_ide/content/library.py`
+  - `src/gameforge_ide/content/audio.py`
+  - `src/gameforge_ide/content/vfx_presets.py`
+  - `src/gameforge_ide/content/sfx_presets.py`
+  - `src/gameforge_ide/content/music.py`
+  - `src/gameforge_ide/content/ambience.py`
+  - `src/gameforge_ide/kit/modules/__init__.py`
   - `src/gameforge_ide/unreal/toolchain.py`
   - `src/gameforge_ide/unreal/live_editor.py`
   - `src/gameforge_ide/unreal/discovery.py`
@@ -150,6 +182,16 @@
   - `tests/unit/test_composer.py`
   - `tests/unit/test_composer_layout_specialist_regressions.py`
   - `tests/unit/test_forge_legacy_adapter.py`
+  - `tests/unit/test_forge_engine_jobs_regression.py`
+  - `tests/unit/test_content_biomes_audio.py`
+  - `tests/unit/test_content_props_themes_vfx.py`
+  - `tests/unit/test_ide_scenario_execution.py`
+  - `tests/unit/test_optimization_loop.py`
+  - `tests/unit/test_optimizer_cvars_regression.py`
+  - `tests/unit/test_multiplayer_harness.py`
+  - `tests/unit/test_live_editor_link.py`
+  - `tests/unit/test_mcp_bridge.py`
+  - `tests/unit/test_project_import.py`
 
 ---
 
