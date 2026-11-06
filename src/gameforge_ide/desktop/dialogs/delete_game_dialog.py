@@ -150,13 +150,21 @@ class DeleteGameDialog(QDialog):
 
         self._btn_cancel = QPushButton("Cancel", self)
         self._btn_cancel.setObjectName("btnCancelDelete")
+        self._btn_cancel.setAccessibleName("Cancel deletion")
+        self._btn_cancel.setCursor(Qt.PointingHandCursor)
         self._btn_cancel.setStyleSheet(
-            f"QPushButton {{"
+            f"QPushButton#{self._btn_cancel.objectName()} {{"
             f"  background-color: {tokens.BG_SURFACE};"
             f"  color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
             f"  padding: 6px {tokens.SPACE_LG}px;"
+            f"  font-size: {tokens.FONT_BODY}px;"
+            f"}}"
+            f"QPushButton#{self._btn_cancel.objectName()}:hover, QPushButton#{self._btn_cancel.objectName()}:focus {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
         )
         self._btn_cancel.clicked.connect(self.reject)
@@ -164,6 +172,8 @@ class DeleteGameDialog(QDialog):
 
         self._btn_delete = QPushButton("Delete permanently", self)
         self._btn_delete.setObjectName("btnConfirmDelete")
+        self._btn_delete.setAccessibleName("Permanently delete project")
+        self._btn_delete.setCursor(Qt.PointingHandCursor)
         self._btn_delete.setEnabled(False)
         self._btn_delete.setStyleSheet(
             f"QPushButton#{self._btn_delete.objectName()} {{"
@@ -172,7 +182,12 @@ class DeleteGameDialog(QDialog):
             f"  border: none;"
             f"  border-radius: {tokens.RADIUS}px;"
             f"  padding: 6px {tokens.SPACE_LG}px;"
+            f"  font-size: {tokens.FONT_BODY}px;"
             f"  font-weight: 600;"
+            f"}}"
+            f"QPushButton#{self._btn_delete.objectName()}:hover, QPushButton#{self._btn_delete.objectName()}:focus {{"
+            f"  background-color: {tokens.ACCENT_WARNING};"
+            f"  outline: none;"
             f"}}"
             f"QPushButton#{self._btn_delete.objectName()}:disabled {{"
             f"  background-color: {tokens.BG_SURFACE};"

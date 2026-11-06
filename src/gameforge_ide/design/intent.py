@@ -210,14 +210,25 @@ def is_game_creation_request(prompt: str) -> bool:
     if PURE_CONVERSATIONAL_PAT.match(raw_lower) or (text and PURE_CONVERSATIONAL_PAT.match(text.rstrip(".!?"))):
         return False
 
-    # 2. Informational questions: "what is a platformer", "how do you make...", "can you explain..."
+    # 2. Informational questions & project status/completeness inquiries:
+    # e.g., "what is a platformer", "is the sudoku game complete", "status of the build"
     if INFORMATIONAL_QUESTION_PAT.search(text):
         return False
-    # If original text had a question word before stripping:
     orig_lower = normalized.lower().strip()
+    question_starters = (
+        "what", "how", "why", "who", "is", "are", "can", "could", "should",
+        "would", "does", "did", "has", "have", "was", "were", "check", "verify", "status",
+    )
+    is_status_query = bool(re.search(
+        r"\b(?:complete|completed|done|finished|ready|status|progress|state|exist|existing|working|built|packaged|errors?|issues?|logs?)\b",
+        orig_lower,
+    ))
+    if orig_lower.startswith(question_starters) and is_status_query and not re.search(r"\b(create|make|build|scaffold|generate|author)\b", orig_lower):
+        return False
+
     if orig_lower.startswith(("what", "how", "why", "who", "explain", "tell me", "remind me")) and "?" in orig_lower:
         return False
-    if (text.endswith("?") or "?" in orig_lower) and not CREATE_VERB_PAT.search(text):
+    if (text.endswith("?") or "?" in orig_lower) and not re.search(r"\b(create|make|build|generate|develop|scaffold|craft)\b", text):
         return False
 
     # 3. Bug fixes, refactoring, code editing, Unreal source files

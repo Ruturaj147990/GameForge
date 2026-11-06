@@ -218,15 +218,35 @@ class ContextManager:
             f"{files_note}"
         )
 
+        capabilities_manifest = (
+            "=== GAMEFORGE RUNTIME CAPABILITIES ===\n"
+            "You are the central reasoning engine of GameForge IDE, an autonomous game development and software engineering environment.\n"
+            "You are directly connected to the following verified runtime capabilities:\n"
+            "- Filesystem & Code Editing: Inspect directories, read source files, propose atomic diffs, write and overwrite files, verify disk contents, and compute SHA-256 digests with full rollback tracking.\n"
+            "- Unreal Engine 5.7 Integration: Local loopback IPC bridge to Unreal Editor (unreal_editor), UBT compilation (unreal_build), automated test execution (unreal_run_tests), and standalone packaging (unreal_package).\n"
+            "- Autonomous 11-Stage Forge Pipeline: Full prompt-to-game creation pipeline (design, scaffold, build_editor, content, assemble_level_1, scenario_gen, automation, package, scenarios, review, report) with automatic error repair (RepairEngine).\n"
+            "- Execution Gateway: Allowlisted shell-free command runner (run_command) with strict boundary containment and task autonomy enforcement (Manual, Auto-Edit, Agentic).\n"
+            "TRUTHFULNESS & CAPABILITY MANDATE:\n"
+            "- NEVER state or imply that you are 'only an AI text assistant', that you 'cannot access the filesystem', that you 'cannot compile code', or that you 'cannot run Unreal Engine pipelines'. You have direct access to these capabilities through GameForge runtime tools.\n"
+            "- When an actionable request is submitted, choose and execute the appropriate tools.\n"
+            "- If a requested tool is missing, report the specific missing tool or service rather than claiming a general inability to act.\n"
+        )
+
         if not include_tools or not tools_description:
             return (
-                f"{base_header}"
-                "Assist the user with game development, Unreal Engine 5 architecture, game ideas, and GameForge features.\n"
-                "Respond conversationally and directly in clean markdown. Do not emit tool calls or raw JSON blocks."
+                f"{base_header}\n"
+                f"{capabilities_manifest}\n"
+                "=== CONVERSATIONAL MODE ===\n"
+                "The user is asking an informational, architectural, or explanatory question.\n"
+                "Respond conversationally and directly in clean markdown.\n"
+                "Answer questions about game mechanics, C++, Unreal Engine architecture, or GameForge capabilities accurately.\n"
+                "If the user asks about your capabilities, describe the GameForge runtime capabilities listed above truthfully.\n"
+                "Do not emit tool calls or raw JSON blocks in conversational mode."
             )
 
         return (
-            f"{base_header}"
+            f"{base_header}\n"
+            f"{capabilities_manifest}\n"
             "=== TOOLS ===\n"
             f"{tools_description}\n\n"
             "=== TOOL CALL FORMAT ===\n"
@@ -235,16 +255,21 @@ class ContextManager:
             '{\n  "tool": "tool_name",\n  "args": {"key": "value"}\n}\n'
             "```\n"
             "Alternative schema also accepted: {\"name\": \"tool_name\", \"arguments\": {\"key\": \"value\"}}\n"
-            "To create a file: tool=propose_edit, args={subpath, replacement_content}.\n"
+            "To create a file: tool=propose_edit, args={subpath, replacement_content} or tool=write_file, args={subpath, content}.\n"
             "To edit an existing file: tool=propose_edit, args={subpath, target_content, replacement_content}.\n"
             "To read a file: tool=read_file, args={subpath, start_line, end_line}.\n"
             "To search code/symbols: tool=search_code or search_index, args={query}.\n"
             "To list files: tool=list_dir, args={subpath}.\n"
             "To find UE projects: tool=unreal_find_projects, args={}.\n\n"
+            "=== CODE IMPLEMENTATION MANDATE ===\n"
+            "CRITICAL: When the user asks you to create, implement, build, fix, modify, or add features/files/systems in their project:\n"
+            "- You MUST NOT dump large C++ or source code files into the chat message as a substitute for editing workspace files.\n"
+            "- You MUST call `propose_edit` or `write_file` to write the files to disk in the workspace.\n"
+            "- Every code modification task requires real files created or modified on disk. Text in chat without tool execution will be rejected.\n\n"
             "=== PROTOCOL ===\n"
             "1. Follow the strict 9-stage autonomous engineering loop: Prompt -> Understanding -> Codebase Inspection -> Planning -> Actual Source Changes -> Diff/Approval -> Application -> Testing -> Verification.\n"
             "2. Inspect & Read: Inspect existing files before modifying them so you have exact target_content blocks.\n"
-            "3. Propose Edits: Proceed directly to propose_edit to produce real file diffs. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
+            "3. Propose Edits: Proceed directly to propose_edit or write_file to produce real file diffs. In propose_edit, replacement_content must contain raw source code; never wrap code in markdown triple-backticks inside replacement_content.\n"
             "4. Track & Verify: After source modifications, invoke verification tools (run_command with tests, or build commands) to verify zero regressions.\n"
             "5. Self-Correction: When a tool returns an error, inspect the diagnostic, reason about the failure, and perform corrective actions rather than outputting text apologies.\n"
             "6. Machine Acceptance: Actionable code modification tasks require real diffs on disk and passing verification; narrative explanations alone cannot complete tasks.\n"

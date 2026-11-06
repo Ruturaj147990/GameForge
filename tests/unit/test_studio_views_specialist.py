@@ -320,3 +320,130 @@ def test_def085_onboarding_view_module_alias_and_validation(qapp, tmp_path, monk
         assert data.get("projects_root") == str(tmp_path / "TestOnboard")
     finally:
         wizard.deleteLater()
+
+
+# ── Specialist Enhancements Tests (Agent A Polish & Verification) ────────────
+
+def test_home_view_recent_games_card_and_empty_state(qapp, tmp_path):
+    """Verify HomeView RecentGameCard displays genre badge, elides title, and renders styled empty state."""
+    view = HomeView()
+    try:
+        # 1. Empty state
+        view._latest_games = []
+        view._render_recent_games()
+        empty_frame = view.findChild(object, "homeRecentGamesEmpty")
+        assert empty_frame is not None
+
+        # 2. Populated card
+        game = GameSummary(
+            name="SuperEpicAdventureGameLongTitle",
+            title="Super Epic Adventure Game Long Title That Exceeds Width",
+            genre="platformer",
+            pitch="A test platformer",
+            project_dir=tmp_path / "Adventure",
+            updated_at=time.time() - 300,
+            last_run_status="DONE",
+        )
+        view._latest_games = [game]
+        view._render_recent_games()
+
+        card = view.findChild(RecentGameCard, f"recentGameCard_{game.name}")
+        assert card is not None
+        assert card.game.genre == "platformer"
+        assert card.focusPolicy() == Qt.StrongFocus
+    finally:
+        view.deleteLater()
+
+
+def test_games_view_search_escape_and_empty_cta(qapp):
+    """Verify Esc clears GamesView search input and empty container has + New Project CTA."""
+    view = GamesView()
+    try:
+        view.show()
+        # Search clear via Esc eventFilter
+        view._search_input.setText("Searching...")
+        assert view._search_input.text() == "Searching..."
+
+        esc_event = QKeyEvent(QKeyEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier)
+        view.eventFilter(view._search_input, esc_event)
+        assert view._search_input.text() == ""
+
+        # Empty catalog call-to-action button
+        view._loaded_games = []
+        view._on_games_loaded()
+        btn_empty = view.findChild(object, "gamesBtnEmptyNewProject")
+        assert btn_empty is not None
+        assert not btn_empty.isHidden()
+    finally:
+        view.deleteLater()
+
+
+def test_settings_view_instant_theme_switching_and_storage_guidance(qapp, tmp_path):
+    """Verify SettingsView switches theme instantly and provides non-red guidance on empty storage."""
+    view = SettingsView(workspace_root=tmp_path)
+    try:
+        # Instant theme change persists to workspace ini
+        target_idx = 0 if view._theme_combo.currentIndex() == 1 else 1
+        view._theme_combo.setCurrentIndex(target_idx)
+        ws_ini = tmp_path / ".gameforge" / "ide_settings.ini"
+        assert ws_ini.is_file()
+        ini_content = ws_ini.read_text(encoding="utf-8")
+        expected_theme = "dark" if target_idx == 0 else "light"
+        assert expected_theme in ini_content.lower()
+
+        # Storage paths neutral validation on empty inputs
+        view._projects_root_input.setText("")
+        view._artifacts_root_input.setText("")
+        view._validate_storage_paths()
+
+        p_status = view._lbl_projects_status.text()
+        a_status = view._lbl_artifacts_status.text()
+        assert "Default projects directory will be used" in p_status
+        assert "Default artifacts directory will be used" in a_status
+        assert "Directory does not exist" not in p_status
+    finally:
+        view.deleteLater()
+
+
+def test_dialogs_standardized_button_order_and_accessibility(qapp, tmp_path):
+    """Verify dialogs have standardized button placement, padding, and accessible labels."""
+    from src.gameforge_ide.desktop.dialogs.new_project_dialog import NewProjectDialog
+    from src.gameforge_ide.desktop.dialogs.delete_game_dialog import DeleteGameDialog
+    from src.gameforge_ide.desktop.dialogs.about_dialog import AboutDialog
+
+    # 1. NewProjectDialog
+    np_dlg = NewProjectDialog()
+    try:
+        assert np_dlg._btn_cancel.text() == "Cancel"
+        assert np_dlg._btn_confirm.text() == "Confirm Project Root"
+        assert np_dlg._btn_confirm.accessibleName() == "Confirm project root directory"
+        assert np_dlg._btn_cancel.accessibleName() == "Cancel project creation"
+    finally:
+        np_dlg.deleteLater()
+
+    # 2. DeleteGameDialog
+    dummy_game = GameSummary(
+        name="TestDel",
+        title="Test Del",
+        genre="fps",
+        pitch="test",
+        project_dir=tmp_path / "TestDel",
+    )
+    del_dlg = DeleteGameDialog(dummy_game)
+    try:
+        assert del_dlg._btn_cancel.text() == "Cancel"
+        assert del_dlg._btn_delete.text() == "Delete permanently"
+        assert del_dlg._btn_delete.accessibleName() == "Permanently delete project"
+        assert del_dlg._btn_cancel.accessibleName() == "Cancel deletion"
+    finally:
+        del_dlg.deleteLater()
+
+    # 3. AboutDialog
+    abt_dlg = AboutDialog()
+    try:
+        assert abt_dlg._btn_copy.text() == "Copy System Info"
+        assert abt_dlg._btn_close.text() == "Close"
+        assert abt_dlg._btn_copy.accessibleName() == "Copy system information to clipboard"
+        assert abt_dlg._btn_close.accessibleName() == "Close about dialog"
+    finally:
+        abt_dlg.deleteLater()

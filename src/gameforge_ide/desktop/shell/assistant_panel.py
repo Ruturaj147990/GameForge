@@ -24,7 +24,6 @@ class AssistantPanel(QWidget):
 
     closeRequested = Signal()
     modelChanged = Signal(str)
-    openDesignRequested = Signal(str)
 
     def __init__(
         self,
@@ -34,8 +33,6 @@ class AssistantPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("studioAssistantPanel")
         self.chat_panel = chat_panel
-        if hasattr(self.chat_panel, "openDesignRequested"):
-            self.chat_panel.openDesignRequested.connect(self.openDesignRequested)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -124,6 +121,26 @@ class AssistantPanel(QWidget):
 
         # Embed ChatPanel
         layout.addWidget(self.chat_panel, 1)
+
+    @property
+    def task_mode_combo(self):
+        return getattr(self.chat_panel, "task_mode_combo", None)
+
+    @property
+    def taskModeCombo(self):
+        return getattr(self.chat_panel, "task_mode_combo", None)
+
+    @property
+    def autonomy_combo(self):
+        return getattr(self.chat_panel, "autonomy_combo", None)
+
+    @property
+    def autonomy_profile_combo(self):
+        return getattr(self.chat_panel, "autonomy_combo", None)
+
+    @property
+    def autonomyCombo(self):
+        return getattr(self.chat_panel, "autonomy_combo", None)
 
         self.setStyleSheet(f"""
             QWidget#studioAssistantPanel {{

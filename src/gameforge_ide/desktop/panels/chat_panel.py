@@ -35,6 +35,9 @@ from ...backend.unreal_context import UnrealEditorContext, load_unreal_context
 from ..services.action_runner import ActionRunner
 from ..services.agent_service import AgentService
 from .approval_card import ApprovalCard
+from .diff_card import DiffApprovalCard, FileChangedNotification
+from .plan_card import PlanCard
+from ...backend.models.modes import AutonomyProfile, TaskMode
 from ..styles import tokens
 from ..styles.dark_theme import theme_color, theme_stylesheet
 
@@ -46,11 +49,11 @@ class _MessageBubble(QFrame):
 
     # Colours per role: (bg, border_accent, role_label_color)
     _ROLE_THEMES = {
-        "user":      ("#1a2236", "#6366f1", "#818cf8"),
-        "assistant": ("#131b26", "#00d9a3", "#00d9a3"),
-        "tool":      ("#1a1f2b", "#f59e0b", "#fbbf24"),
-        "error":     ("#28161a", "#ef4444", "#f87171"),
-        "system":    ("#111622", "#9d95b0", "#94a3b8"),
+        "user":      (tokens.BG_ACTIVE, tokens.ACCENT_PRIMARY, tokens.ACCENT_HOVER),
+        "assistant": (tokens.BG_PANEL, tokens.ACCENT_SUCCESS, tokens.ACCENT_SUCCESS),
+        "tool":      (tokens.BG_SURFACE, tokens.ACCENT_WARNING, tokens.ACCENT_WARNING),
+        "error":     (tokens.BG_SURFACE, tokens.ACCENT_ERROR, tokens.ACCENT_ERROR),
+        "system":    (tokens.BG_ROOT, tokens.BORDER, tokens.TEXT_SECONDARY),
     }
 
     _DOCUMENT_CSS = """
@@ -66,7 +69,7 @@ class _MessageBubble(QFrame):
             margin: 4px 0;
         }
         h1, h2, h3, h4 {
-            color: #ffffff;
+            color: #f3f4f8;
             margin-top: 8px;
             margin-bottom: 4px;
             font-weight: 700;
@@ -75,20 +78,20 @@ class _MessageBubble(QFrame):
         h2 { font-size: 15px; }
         h3 { font-size: 14px; }
         pre {
-            background-color: #0b0e15;
-            border: 1px solid #26304a;
+            background-color: #0c0e14;
+            border: 1px solid #231c34;
             border-radius: 6px;
             padding: 8px 10px;
             margin: 6px 0;
-            color: #e6edf3;
+            color: #f3f4f8;
             font-family: 'Cascadia Code', 'Consolas', monospace;
             font-size: 12px;
             line-height: 1.4;
         }
         code {
             font-family: 'Cascadia Code', 'Consolas', monospace;
-            color: #79c0ff;
-            background-color: #161d2d;
+            color: #8b5cf6;
+            background-color: #120f1d;
             padding: 1px 4px;
             border-radius: 4px;
             font-size: 12px;
@@ -103,7 +106,7 @@ class _MessageBubble(QFrame):
             margin: 2px 0;
         }
         a {
-            color: #6366f1;
+            color: #7c3aed;
             text-decoration: none;
         }
     """
@@ -113,9 +116,10 @@ class _MessageBubble(QFrame):
         self.role = role
         self._raw_text = text
         self.setObjectName("chat_message_bubble")
+        self.setAccessibleName(f"{role.capitalize()} chat message")
 
         bg, border_accent, role_color = self._ROLE_THEMES.get(
-            role, ("#141a29", "#6366f1", "#f3f4f8")
+            role, (tokens.BG_PANEL, tokens.ACCENT_PRIMARY, tokens.TEXT_PRIMARY)
         )
         bg, border_accent, role_color = (
             theme_color(bg), theme_color(border_accent), theme_color(role_color)
@@ -125,10 +129,10 @@ class _MessageBubble(QFrame):
             _MessageBubble#chat_message_bubble {{
                 background-color: {bg};
                 border-left: 3px solid {border_accent};
-                border-top: 1px solid #1e263d;
-                border-right: 1px solid #1e263d;
-                border-bottom: 1px solid #1e263d;
-                border-radius: 8px;
+                border-top: 1px solid {tokens.BORDER};
+                border-right: 1px solid {tokens.BORDER};
+                border-bottom: 1px solid {tokens.BORDER};
+                border-radius: {tokens.RADIUS}px;
                 margin: 4px 10px;
             }}
         """))
@@ -159,26 +163,29 @@ class _MessageBubble(QFrame):
         # Copy button
         btn_copy = QPushButton("Copy")
         btn_copy.setObjectName("btn_copy_bubble")
+        btn_copy.setAccessibleName("Copy message content")
         btn_copy.setToolTip("Copy message text to clipboard")
-        btn_copy.setStyleSheet(theme_stylesheet("""
-            QPushButton#btn_copy_bubble {
-                background: #181f30;
-                border: 1px solid #26304a;
+        btn_copy.setStyleSheet(theme_stylesheet(f"""
+            QPushButton#btn_copy_bubble {{
+                background: {tokens.BG_SURFACE};
+                border: 1px solid {tokens.BORDER};
                 border-radius: 4px;
                 padding: 2px 8px;
-                color: #9ca3af;
+                color: {tokens.TEXT_SECONDARY};
                 font-size: 10px;
                 font-weight: 600;
-            }
-            QPushButton#btn_copy_bubble:hover {
-                background: #222a42;
-                border-color: #6366f1;
-                color: #ffffff;
-            }
+            }}
+            QPushButton#btn_copy_bubble:hover {{
+                background: {tokens.BG_HOVER};
+                border-color: {tokens.ACCENT_PRIMARY};
+                color: {tokens.TEXT_PRIMARY};
+            }}
         """))
         btn_copy.clicked.connect(self._copy_to_clipboard)
+        self._btn_copy = btn_copy
         header.addWidget(btn_copy)
 
+        self.set_timestamp(time.strftime("%H:%M:%S"))
         layout.addLayout(header)
 
         # Content widget: auto-sizing QTextBrowser with rich markdown support
@@ -245,12 +252,15 @@ class _MessageBubble(QFrame):
     @Slot()
     def _copy_to_clipboard(self) -> None:
         QApplication.clipboard().setText(self._raw_text)
+        if hasattr(self, "_btn_copy"):
+            self._btn_copy.setText("Copied! ✓")
+            QTimer.singleShot(1500, lambda: self._btn_copy.setText("Copy") if hasattr(self, "_btn_copy") else None)
 
 
 # ── Status indicator widget ────────────────────────────────────────────────────
 
 class _StatusBar(QWidget):
-    """Thin status row showing agent state and model name."""
+    """Thin status row showing agent state, animated indeterminate activity, and model name."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -258,16 +268,23 @@ class _StatusBar(QWidget):
         layout.setContentsMargins(12, 5, 12, 5)
 
         self._dot = QLabel("●")
-        self._dot.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 11px;"))
+        self._dot.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 11px;"))
         layout.addWidget(self._dot)
 
         self._label = QLabel("Ready")
-        self._label.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 12px; font-weight: 600;"))
+        self._label.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 12px; font-weight: 600;"))
         layout.addWidget(self._label)
+
+        # Pulse timer for busy states
+        self._pulse_frames = ["◐", "◓", "◑", "◒"]
+        self._pulse_idx = 0
+        self._pulse_timer = QTimer(self)
+        self._pulse_timer.setInterval(250)
+        self._pulse_timer.timeout.connect(self._on_pulse)
 
         # Unreal connection badge
         self._ue_label = QLabel("Unreal: Disconnected")
-        self._ue_label.setStyleSheet(theme_stylesheet("color: #9d95b0; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: #120f1d;"))
+        self._ue_label.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: {tokens.BG_SURFACE};"))
         self._ue_label.setVisible(False)
         layout.addWidget(self._ue_label)
 
@@ -275,25 +292,35 @@ class _StatusBar(QWidget):
 
         self._model_label = QLabel()
         self._model_label.setStyleSheet(theme_stylesheet(
-            "color: #818cf8; font-size: 12px; font-weight: 700;"
+            f"color: {tokens.ACCENT_HOVER}; font-size: 12px; font-weight: 700;"
         ))
         self._model_label.setVisible(False)
         layout.addWidget(self._model_label)
 
+    def _on_pulse(self) -> None:
+        self._pulse_idx = (self._pulse_idx + 1) % len(self._pulse_frames)
+        self._dot.setText(self._pulse_frames[self._pulse_idx])
+
     def set_ready(self) -> None:
-        self._dot.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 11px;"))
+        self._pulse_timer.stop()
+        self._dot.setText("●")
+        self._dot.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 11px;"))
         self._label.setText("Ready")
-        self._label.setStyleSheet(theme_stylesheet("color: #00d9a3; font-size: 12px; font-weight: 600;"))
+        self._label.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 12px; font-weight: 600;"))
 
     def set_busy(self, status: str = "THINKING") -> None:
-        self._dot.setStyleSheet(theme_stylesheet("color: #f59e0b; font-size: 11px;"))
         self._label.setText(status)
-        self._label.setStyleSheet(theme_stylesheet("color: #f59e0b; font-size: 12px; font-weight: 600;"))
+        self._label.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_WARNING}; font-size: 12px; font-weight: 600;"))
+        self._dot.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_WARNING}; font-size: 11px;"))
+        if not self._pulse_timer.isActive():
+            self._pulse_timer.start()
 
     def set_error(self) -> None:
-        self._dot.setStyleSheet(theme_stylesheet("color: #ef4444; font-size: 11px;"))
+        self._pulse_timer.stop()
+        self._dot.setText("●")
+        self._dot.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_ERROR}; font-size: 11px;"))
         self._label.setText("Error")
-        self._label.setStyleSheet(theme_stylesheet("color: #ef4444; font-size: 12px; font-weight: 600;"))
+        self._label.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_ERROR}; font-size: 12px; font-weight: 600;"))
 
     def set_model(self, model_name: str) -> None:
         self._model_label.setText(f"🤖 {model_name}")
@@ -319,9 +346,9 @@ class _StatusBar(QWidget):
 # ── Start Screen Widget ────────────────────────────────────────────────────────
 
 class _StartScreen(QWidget):
-    """Empty-session start screen with three prominent action cards."""
+    """Empty-session start screen with assistant guidance and prompt suggestions."""
 
-    make_game_clicked = Signal()
+    make_game_clicked = Signal(str)
     ask_question_clicked = Signal()
     open_project_clicked = Signal()
     play_game_clicked = Signal(str)
@@ -333,122 +360,73 @@ class _StartScreen(QWidget):
         self._workspace = Path(workspace_root) if workspace_root else None
 
         root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(16, 20, 16, 20)
+        root_layout.setContentsMargins(20, 24, 20, 24)
         root_layout.setSpacing(16)
         root_layout.setAlignment(Qt.AlignCenter)
 
         # Hero header
         hero_box = QVBoxLayout()
-        hero_box.setSpacing(4)
+        hero_box.setSpacing(6)
         hero_box.setAlignment(Qt.AlignCenter)
-        lbl_title = QLabel("🎮 GameForge")
+        lbl_title = QLabel("🎮 GameForge Assistant")
         lbl_title.setObjectName("start_hero_title")
         lbl_title.setAlignment(Qt.AlignCenter)
+        lbl_title.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {tokens.TEXT_PRIMARY};")
         hero_box.addWidget(lbl_title)
 
-        lbl_sub = QLabel("Create and modify Unreal Engine 5 games directly from prompts.")
+        lbl_sub = QLabel("Autonomous software engineering and game development for Unreal Engine 5.\nSubmit natural-language requests below to create, modify, inspect, or build.")
         lbl_sub.setObjectName("start_hero_subtitle")
         lbl_sub.setAlignment(Qt.AlignCenter)
+        lbl_sub.setWordWrap(True)
+        lbl_sub.setStyleSheet(f"font-size: 12px; color: {tokens.TEXT_SECONDARY}; line-height: 1.4;")
         hero_box.addWidget(lbl_sub)
         root_layout.addLayout(hero_box)
 
-        # 3 Large Action Cards Row
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(14)
+        # Quick Guidance & Prompt Suggestions Card
+        hints_box = QFrame()
+        hints_box.setObjectName("start_hints_card")
+        hints_box.setStyleSheet(f"""
+            QFrame#start_hints_card {{
+                background-color: {tokens.BG_PANEL};
+                border: 1px solid {tokens.BORDER};
+                border-radius: {tokens.RADIUS}px;
+                padding: 12px;
+            }}
+        """)
+        hints_layout = QVBoxLayout(hints_box)
+        hints_layout.setSpacing(8)
 
-        # Card 1: Make a game from a prompt
-        card1 = QFrame()
-        card1.setObjectName("start_action_card")
-        card1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        c1_lay = QVBoxLayout(card1)
-        c1_lay.setContentsMargins(12, 12, 12, 12)
-        c1_lay.setSpacing(8)
+        lbl_hints_hdr = QLabel("Quick prompt suggestions:")
+        lbl_hints_hdr.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px; font-weight: 600; text-transform: uppercase;")
+        hints_layout.addWidget(lbl_hints_hdr)
 
-        c1_title = QLabel("✨ Make a game")
-        c1_title.setObjectName("start_card_title")
-        c1_lay.addWidget(c1_title)
+        examples = [
+            ("✨ Create Game", "Create a top-down roguelike with dash mechanics"),
+            ("🔧 Source Edit", "Add stamina consumption to dash in PlayerController.cpp"),
+            ("🚀 Engine Build", "/build project and execute automation scenarios"),
+        ]
+        for icon_tag, prompt_text in examples:
+            btn_ex = QPushButton(f"{icon_tag}  •  \"{prompt_text}\"")
+            btn_ex.setCursor(Qt.PointingHandCursor)
+            btn_ex.setStyleSheet(f"""
+                QPushButton {{
+                    background: {tokens.BG_SURFACE};
+                    color: {tokens.TEXT_PRIMARY};
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: 4px;
+                    padding: 8px 12px;
+                    font-size: 12px;
+                    text-align: left;
+                }}
+                QPushButton:hover {{
+                    background: {tokens.BG_HOVER};
+                    border-color: {tokens.ACCENT_PRIMARY};
+                }}
+            """)
+            btn_ex.clicked.connect(lambda _, txt=prompt_text: self.make_game_clicked.emit(txt))
+            hints_layout.addWidget(btn_ex)
 
-        c1_desc = QLabel("Describe a game in plain text. GameForge synthesizes C++, Blueprints, and assets.")
-        c1_desc.setObjectName("start_card_desc")
-        c1_desc.setWordWrap(True)
-        c1_lay.addWidget(c1_desc, 1)
-
-        btn_c1 = QPushButton("New Prompt")
-        btn_c1.setObjectName("start_card_btn")
-        btn_c1.clicked.connect(self.make_game_clicked.emit)
-        c1_lay.addWidget(btn_c1)
-        cards_layout.addWidget(card1, 1)
-
-        # Card 2: Assistant guidance (Prompt & Rules exploration)
-        card2 = QFrame()
-        card2.setObjectName("start_action_card")
-        card2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        c2_lay = QVBoxLayout(card2)
-        c2_lay.setContentsMargins(12, 12, 12, 12)
-        c2_lay.setSpacing(8)
-
-        c2_title = QLabel("💬 Ask Assistant")
-        c2_title.setObjectName("start_card_title")
-        c2_lay.addWidget(c2_title)
-
-        c2_desc = QLabel("Ask questions about game mechanics, C++ gameplay rules, or level design.")
-        c2_desc.setObjectName("start_card_desc")
-        c2_desc.setWordWrap(True)
-        c2_lay.addWidget(c2_desc, 1)
-
-        btn_c2 = QPushButton("Ask a Question")
-        btn_c2.setObjectName("start_card_btn")
-        btn_c2.clicked.connect(self.ask_question_clicked.emit)
-        c2_lay.addWidget(btn_c2)
-        cards_layout.addWidget(card2, 1)
-
-        # Card 3: Recent games
-        card3 = QFrame()
-        card3.setObjectName("start_action_card")
-        card3.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        c3_lay = QVBoxLayout(card3)
-        c3_lay.setContentsMargins(12, 12, 12, 12)
-        c3_lay.setSpacing(8)
-
-        c3_title = QLabel("🕹 Recent games")
-        c3_title.setObjectName("start_card_title")
-        c3_lay.addWidget(c3_title)
-
-        recent = self._find_recent_games()
-        if recent:
-            for name, proj_path, shot_path in recent[:2]:
-                grow = QHBoxLayout()
-                gicon = QLabel()
-                if shot_path and Path(shot_path).is_file():
-                    from PySide6.QtGui import QPixmap
-                    pm = QPixmap(str(shot_path))
-                    if not pm.isNull():
-                        gicon.setPixmap(pm.scaled(36, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                if not gicon.pixmap():
-                    gicon.setText("🎮")
-                grow.addWidget(gicon)
-                gname = QLabel(name[:16])
-                gname.setStyleSheet("font-weight: 600; font-size: 11px;")
-                grow.addWidget(gname, 1)
-                gplay = QPushButton("▶")
-                gplay.setStyleSheet("padding: 2px 6px; font-size: 11px;")
-                gplay.clicked.connect(lambda _, p=proj_path: self.play_game_clicked.emit(str(p)))
-                grow.addWidget(gplay)
-                c3_lay.addLayout(grow)
-            c3_lay.addStretch(1)
-        else:
-            c3_desc = QLabel("No games built yet.\nClick 'Make a game' to generate your first game.")
-            c3_desc.setObjectName("start_card_desc")
-            c3_desc.setWordWrap(True)
-            c3_lay.addWidget(c3_desc, 1)
-
-        btn_c3 = QPushButton("Mission Control")
-        btn_c3.setObjectName("start_card_btn")
-        btn_c3.clicked.connect(lambda: self.play_game_clicked.emit("__view_mission__"))
-        c3_lay.addWidget(btn_c3)
-        cards_layout.addWidget(card3, 1)
-
-        root_layout.addLayout(cards_layout)
+        root_layout.addWidget(hints_box)
 
     def _find_recent_games(self) -> list[tuple[str, Path, Optional[Path]]]:
         if not self._workspace or not Path(self._workspace).exists():
@@ -482,8 +460,12 @@ class ChatPanel(QWidget):
     QThread bridge) — no HTTP, no browser.
     """
 
-    # Forwarded diff event for the main window to show the diff panel
+    # Streaming and lifecycle signals
     diff_pending = Signal(str, dict)
+    plan_received = Signal(dict)
+    file_changed = Signal(str, dict)
+    task_mode_changed = Signal(str)
+    autonomy_changed = Signal(str)
     action_finished = Signal(str, dict)
     slash_command_executed = Signal(str, str)
     model_changed = Signal(str)
@@ -492,11 +474,16 @@ class ChatPanel(QWidget):
 
     def __init__(
         self,
-        agent_service: AgentService,
+        agent_service: Optional[AgentService] = None,
         workspace_root: Optional[Path] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        if agent_service is None:
+            agent_service = AgentService(Path(workspace_root or "."))
+            self._owns_agent = True
+        else:
+            self._owns_agent = False
         self._agent = agent_service
         self._workspace = workspace_root or getattr(agent_service, "workspace_root", None)
         self._session_id: Optional[str] = None
@@ -507,7 +494,9 @@ class ChatPanel(QWidget):
         self._ignore_active_task_events = False
         self._last_unreal_sync = ""
         self._tokens_streamed_in_turn = False
+        self._token_buffer = ""
         self._cards: dict = {}
+        self._plan_cards: dict = {}
         self._runner = ActionRunner(Path(self._workspace or "."), parent=self)
         self._runner.progress.connect(self._on_action_progress)
         self._runner.finished.connect(self._on_action_finished)
@@ -531,6 +520,20 @@ class ChatPanel(QWidget):
         QTimer.singleShot(0, self._restore_pending_approvals)
         self._check_unreal_context_sync()
 
+    def deleteLater(self) -> None:
+        """Cleanly terminate background runner and any internally-owned AgentService."""
+        try:
+            if getattr(self, "_owns_agent", False) and hasattr(self, "_agent") and self._agent:
+                self._agent.shutdown()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_runner") and self._runner:
+                self._runner.shutdown()
+        except Exception:
+            pass
+        super().deleteLater()
+
     # ── UI Construction ────────────────────────────────────────────────────────
 
 
@@ -551,6 +554,66 @@ class ChatPanel(QWidget):
         lbl.setStyleSheet("color: #818cf8; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
         tbar_layout.addWidget(lbl)
         tbar_layout.addStretch()
+
+        # Two Independent Controls: Task Approach Mode and Autonomy Profile
+        self.lbl_task_mode = QLabel("Approach:", toolbar)
+        self.lbl_task_mode.setObjectName("lbl_task_mode")
+        self.lbl_task_mode.setStyleSheet("color: #9ca3af; font-size: 11px; font-weight: 600;")
+        tbar_layout.addWidget(self.lbl_task_mode)
+
+        self.task_mode_combo = QComboBox(toolbar)
+        self.task_mode_combo.setObjectName("task_mode_combo")
+        self.taskModeCombo = self.task_mode_combo
+        self.task_mode_combo.setAccessibleName("Task Approach Mode Selector")
+        self.task_mode_combo.setToolTip("Task Approach: Planning (deliberative with interactive plan) vs Fast (immediate autonomous execution)")
+        self.task_mode_combo.addItems(["Planning", "Fast"])
+        self.task_mode_combo.setCurrentText("Planning")
+        self.task_mode_combo.setStyleSheet(f"""
+            QComboBox#task_mode_combo {{
+                background-color: {tokens.BG_SURFACE};
+                color: {tokens.TEXT_PRIMARY};
+                border: 1px solid {tokens.BORDER};
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QComboBox#task_mode_combo:hover {{
+                border-color: {tokens.BORDER_FOCUS};
+            }}
+        """)
+        self.task_mode_combo.currentTextChanged.connect(self._on_task_mode_changed)
+        tbar_layout.addWidget(self.task_mode_combo)
+
+        self.lbl_autonomy = QLabel("Autonomy:", toolbar)
+        self.lbl_autonomy.setObjectName("lbl_autonomy_profile")
+        self.lbl_autonomy.setStyleSheet("color: #9ca3af; font-size: 11px; font-weight: 600;")
+        tbar_layout.addWidget(self.lbl_autonomy)
+
+        self.autonomy_combo = QComboBox(toolbar)
+        self.autonomy_combo.setObjectName("autonomy_combo")
+        self.autonomy_profile_combo = self.autonomy_combo
+        self.autonomyCombo = self.autonomy_combo
+        self.autonomy_combo.setAccessibleName("Autonomy Profile Selector")
+        self.autonomy_combo.setToolTip("Autonomy Profile: Manual (explicit approval for edits/commands), Auto-Edit (auto file edits), Agentic (fully autonomous safe ops)")
+        self.autonomy_combo.addItems(["Manual", "Auto-Edit", "Agentic"])
+        self.autonomy_combo.setCurrentText("Agentic")
+        self.autonomy_combo.setStyleSheet(f"""
+            QComboBox#autonomy_combo {{
+                background-color: {tokens.BG_SURFACE};
+                color: {tokens.TEXT_PRIMARY};
+                border: 1px solid {tokens.BORDER};
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+            QComboBox#autonomy_combo:hover {{
+                border-color: {tokens.BORDER_FOCUS};
+            }}
+        """)
+        self.autonomy_combo.currentTextChanged.connect(self._on_autonomy_changed)
+        tbar_layout.addWidget(self.autonomy_combo)
 
         model_lbl = QLabel("Model:")
         model_lbl.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 600;")
@@ -695,8 +758,10 @@ class ChatPanel(QWidget):
     def _connect_signals(self) -> None:
         self._agent.token_received.connect(self._on_token)
         self._agent.status_changed.connect(self._on_status)
+        self._agent.plan_received.connect(self._on_plan_received)
         self._agent.tool_called.connect(self._on_tool_called)
         self._agent.tool_result.connect(self._on_tool_result)
+        self._agent.file_changed.connect(self._on_file_changed)
         self._agent.diff_pending.connect(self._on_diff_pending)
         self._agent.error_occurred.connect(self._on_error)
         self._agent.task_done.connect(self._on_done)
@@ -705,10 +770,14 @@ class ChatPanel(QWidget):
     def _init_session(self) -> None:
         """Create initial session asynchronously."""
         try:
+            t_mode = "planning" if self.task_mode_combo.currentText() == "Planning" else "fast"
+            a_prof = self.autonomy_combo.currentText().lower().replace("-", "_")
             self._session_id = self._agent.create_session(
                 name="Default Session",
                 model_name=get_settings().model_for("chat"),
                 provider_type="ollama",
+                task_mode=t_mode,
+                autonomy_profile=a_prof,
             )
             self._show_start_screen()
             self._status_bar.set_ready()
@@ -1026,8 +1095,11 @@ class ChatPanel(QWidget):
         if self._start_screen is not None:
             self._start_screen.hide()
 
-    def _on_start_make_game(self) -> None:
-        self._input.setPlainText("/game ")
+    def _on_start_make_game(self, text: str = "") -> None:
+        if text:
+            self._input.setPlainText(text)
+        else:
+            self._input.setPlainText("/game ")
         self._input.setFocus()
         cursor = self._input.textCursor()
         cursor.movePosition(QTextCursor.End)
@@ -1042,6 +1114,26 @@ class ChatPanel(QWidget):
             self.slash_command_executed.emit("mission", "")
         else:
             self._on_play_game(game_id)
+
+    def send_prompt(self, prompt: str) -> bool:
+        """Send a prompt directly through the active assistant session."""
+        if not prompt.strip() or not self._session_id:
+            return False
+        if self._agent.is_busy:
+            return False
+        self._hide_start_screen()
+        self._last_prompt = prompt
+        self._add_bubble("user", prompt)
+        self._active_bubble = self._add_bubble("assistant", "")
+        self._btn_send.setEnabled(False)
+        self._btn_stop.setEnabled(True)
+        self._status_bar.set_busy("PLANNING")
+        ok = self._agent.send(self._session_id, prompt)
+        if not ok:
+            self._btn_send.setEnabled(True)
+            self._btn_stop.setEnabled(False)
+            self._status_bar.set_ready()
+        return ok
 
     @Slot()
     def _on_send(self) -> None:
@@ -1062,24 +1154,8 @@ class ChatPanel(QWidget):
             )
             return
 
-        self._hide_start_screen()
-        self._last_prompt = prompt
         self._input.clear()
-        self._add_bubble("user", prompt)
-
-        # Start assistant bubble (will be filled by streaming tokens)
-        self._active_bubble = self._add_bubble("assistant", "")
-
-        self._btn_send.setEnabled(False)
-        self._btn_stop.setEnabled(True)
-        self._status_bar.set_busy("PLANNING")
-
-        ok = self._agent.send(self._session_id, prompt)
-        if not ok:
-            self._input.setPlainText(self._last_prompt)
-            self._btn_send.setEnabled(True)
-            self._btn_stop.setEnabled(False)
-            self._status_bar.set_ready()
+        self.send_prompt(prompt)
 
     @Slot()
     def _on_stop(self) -> None:
@@ -1097,12 +1173,28 @@ class ChatPanel(QWidget):
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
         self._tokens_streamed_in_turn = True
+
         if not self._active_bubble:
+            self._token_buffer += token
+            stripped = self._token_buffer.lstrip()
+            # Suppress raw JSON tool call leaks from appearing in assistant bubbles during streaming
+            if stripped.startswith(("{", "```json", "```\n{", "[TOOL_CALL]", "<tool_call>")):
+                if self._is_raw_tool_json(self._token_buffer):
+                    return
+                if len(stripped) < 40:
+                    return
             self._active_bubble = self._add_bubble("assistant", "")
-        was_at_bottom = self._is_scrolled_to_bottom()
-        self._active_bubble.append_token(token)
-        if was_at_bottom:
-            self._scroll_to_bottom()
+            self._active_bubble.append_token(self._token_buffer)
+            self._token_buffer = ""
+        else:
+            if self._is_raw_tool_json(self._active_bubble._raw_text + token):
+                self._remove_bubble(self._active_bubble)
+                self._active_bubble = None
+                return
+            was_at_bottom = self._is_scrolled_to_bottom()
+            self._active_bubble.append_token(token)
+            if was_at_bottom:
+                self._scroll_to_bottom()
 
     # ── Approval-gated actions (create_game, editor ops, builds) ───────────────
     def _add_open_design_card(self, card_data: dict) -> QFrame:
@@ -1266,8 +1358,7 @@ class ChatPanel(QWidget):
                 else:
                     self._active_bubble.finalise()
                 self._active_bubble = None
-            if _meta["card"].get("type") == "open_design":
-                self._add_open_design_card(_meta["card"])
+            # In GameForge 1.0, all tasks execute autonomously in chat; retired open_design cards are omitted
         omitted = int(_meta.get("omitted_history_messages", 0) or 0)
         if status == "PLANNING" and omitted:
             used = _meta.get("estimated_input_tokens", "?")
@@ -1283,6 +1374,7 @@ class ChatPanel(QWidget):
     def _on_tool_called(self, tool_name: str, args: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
+        self._token_buffer = ""
         if self._active_bubble:
             if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
                 self._remove_bubble(self._active_bubble)
@@ -1307,17 +1399,104 @@ class ChatPanel(QWidget):
         # Start new assistant bubble for continued response
         self._active_bubble = self._add_bubble("assistant", "")
 
+    @Slot(dict)
+    def _on_plan_received(self, plan_data: dict) -> None:
+        if self._ignore_active_task_events or self._agent.is_stopping:
+            return
+        self._tokens_streamed_in_turn = False
+        if self._active_bubble:
+            if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                self._remove_bubble(self._active_bubble)
+            else:
+                self._active_bubble.finalise()
+            self._active_bubble = None
+
+        plan_id = plan_data.get("plan_id", "")
+        if plan_id and plan_id in self._plan_cards:
+            self._plan_cards[plan_id].update_plan(plan_data)
+        else:
+            card = PlanCard(plan_data, parent=self)
+            card.proceed_clicked.connect(self._on_plan_proceed)
+            card.revision_requested.connect(self._on_plan_revision)
+            self._msg_layout.insertWidget(self._msg_layout.count() - 1, card)
+            if plan_id:
+                self._plan_cards[plan_id] = card
+
+        self.plan_received.emit(plan_data)
+        self._scroll_to_bottom()
+
+    @Slot(str)
+    def _on_plan_proceed(self, plan_id: str) -> None:
+        if self._agent.is_busy:
+            return
+        self.send_prompt("proceed")
+
+    @Slot(str, str)
+    def _on_plan_revision(self, plan_id: str, revision_text: str) -> None:
+        if self._agent.is_busy or not revision_text.strip():
+            return
+        self.send_prompt(revision_text.strip())
+
+    @Slot(str, dict)
+    def _on_file_changed(self, content: str, meta: dict) -> None:
+        if self._ignore_active_task_events or self._agent.is_stopping:
+            return
+        notif = FileChangedNotification(content, meta, parent=self)
+        self._msg_layout.insertWidget(self._msg_layout.count() - 1, notif)
+        self.file_changed.emit(content, meta)
+        self._scroll_to_bottom()
+
     @Slot(str, dict)
     def _on_diff_pending(self, diff_id: str, meta: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
+        if self._active_bubble:
+            if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                self._remove_bubble(self._active_bubble)
+            else:
+                self._active_bubble.finalise()
+            self._active_bubble = None
+
+        card = DiffApprovalCard(diff_id, meta, parent=self)
+        card.diff_approved.connect(lambda did: self._agent.resume_after_diff(self._session_id, did, approved=True))
+        card.diff_rejected.connect(lambda did: self._agent.resume_after_diff(self._session_id, did, approved=False))
+        self._msg_layout.insertWidget(self._msg_layout.count() - 1, card)
+        self._cards[diff_id] = card
+
         self.diff_pending.emit(diff_id, meta)
-        self._add_bubble(
-            "tool",
-            f"📝 **Diff Ready for Review:** `{diff_id}`\n"
-            f"• File: `{meta.get('file_path', 'unknown')}`\n"
-            "• Open the **Diff Review** panel on the right to approve or reject.",
-        )
+        self._scroll_to_bottom()
+
+    def _on_task_mode_changed(self, text: str) -> None:
+        val = "planning" if text.lower() == "planning" else "fast"
+        if self._session_id and hasattr(self._agent, "set_session_mode"):
+            self._agent.set_session_mode(self._session_id, task_mode=val)
+        self.task_mode_changed.emit(val)
+
+    def _on_autonomy_changed(self, text: str) -> None:
+        prof_map = {"manual": "manual", "auto-edit": "auto_edit", "auto_edit": "auto_edit", "agentic": "agentic"}
+        val = prof_map.get(text.lower(), "agentic")
+        if self._session_id and hasattr(self._agent, "set_session_mode"):
+            self._agent.set_session_mode(self._session_id, autonomy_profile=val)
+        self.autonomy_changed.emit(val)
+
+    def set_task_mode(self, mode: str) -> None:
+        normalized = "Planning" if mode.lower() == "planning" else "Fast"
+        val = "planning" if mode.lower() == "planning" else "fast"
+        self.task_mode_combo.blockSignals(True)
+        self.task_mode_combo.setCurrentText(normalized)
+        self.task_mode_combo.blockSignals(False)
+        if self._session_id and hasattr(self._agent, "set_session_mode"):
+            self._agent.set_session_mode(self._session_id, task_mode=val)
+
+    def set_autonomy_profile(self, profile: str) -> None:
+        prof_map = {"manual": "Manual", "auto_edit": "Auto-Edit", "auto-edit": "Auto-Edit", "agentic": "Agentic"}
+        normalized = prof_map.get(profile.lower(), "Agentic")
+        val = "auto_edit" if "auto" in profile.lower() else ("manual" if profile.lower() == "manual" else "agentic")
+        self.autonomy_combo.blockSignals(True)
+        self.autonomy_combo.setCurrentText(normalized)
+        self.autonomy_combo.blockSignals(False)
+        if self._session_id and hasattr(self._agent, "set_session_mode"):
+            self._agent.set_session_mode(self._session_id, autonomy_profile=val)
 
     @Slot(str)
     def _on_error(self, error: str) -> None:
@@ -1346,10 +1525,20 @@ class ChatPanel(QWidget):
         if self._ignore_active_task_events:
             self._ignore_active_task_events = False
             self._active_bubble = None
+            self._token_buffer = ""
             self._btn_send.setEnabled(True)
             self._btn_stop.setEnabled(False)
             self._status_bar.set_ready()
             return
+
+        # Flush any remaining non-tool buffer
+        if self._token_buffer:
+            if not self._is_raw_tool_json(self._token_buffer):
+                if not self._active_bubble:
+                    self._active_bubble = self._add_bubble("assistant", "")
+                self._active_bubble.append_token(self._token_buffer)
+            self._token_buffer = ""
+
         if self._active_bubble:
             if not self._active_bubble.has_tokens() and _full_text and not self._tokens_streamed_in_turn:
                 clean_text = _full_text.strip()
@@ -1366,6 +1555,7 @@ class ChatPanel(QWidget):
                 b = self._add_bubble("assistant", _full_text)
                 b.finalise()
         self._tokens_streamed_in_turn = False
+        self._token_buffer = ""
         self._btn_send.setEnabled(True)
         self._btn_stop.setEnabled(False)
         self._status_bar.set_ready()
@@ -1426,6 +1616,8 @@ class ChatPanel(QWidget):
         QTimer.singleShot(20, _do_scroll)
 
     def _clear_chat(self) -> None:
+        self._token_buffer = ""
+        self._tokens_streamed_in_turn = False
         try:
             if self._agent.is_busy:
                 self._ignore_active_task_events = True
@@ -1442,18 +1634,28 @@ class ChatPanel(QWidget):
                 self._msg_layout.removeWidget(w)
                 w.setParent(None)
                 w.deleteLater()
+        self._active_bubble = None
+        self._plan_cards.clear()
+        self._cards.clear()
+        self._status_bar.set_ready()
         self._show_start_screen()
 
     def _new_session(self) -> None:
+        self._token_buffer = ""
+        self._tokens_streamed_in_turn = False
         try:
             if self._agent.is_busy:
                 self._ignore_active_task_events = True
                 self._agent.stop()
                 self._active_bubble = None
+            t_mode = "planning" if self.task_mode_combo.currentText() == "Planning" else "fast"
+            a_prof = self.autonomy_combo.currentText().lower().replace("-", "_")
             self._session_id = self._agent.create_session(
                 name="New Session",
                 model_name=self._current_model,
                 provider_type="ollama",
+                task_mode=t_mode,
+                autonomy_profile=a_prof,
             )
             self._clear_chat()
             self._btn_send.setEnabled(not self._agent.is_busy)

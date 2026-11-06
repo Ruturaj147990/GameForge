@@ -68,6 +68,7 @@ from .panels.terminal_panel import TerminalPanel
 from .panels.unreal_panel import UnrealPanel
 from .services.agent_service import AgentService
 from .services.tool_service import ToolService
+from .styles import tokens
 from .styles.dark_theme import apply_theme, theme_stylesheet
 from .shell import (
     AssistantPanel,
@@ -122,6 +123,7 @@ class MainWindow(QMainWindow):
         self._current_project_dir: Optional[Path] = None
         self._ollama_check_running = False
         self._ollama_status_ready.connect(self._apply_ollama_status)
+        self.confirm_on_close: bool = True
         settings_path = workspace_root / ".gameforge" / "ide_settings.ini"
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         self._settings = QSettings(str(settings_path), QSettings.IniFormat)
@@ -170,10 +172,30 @@ class MainWindow(QMainWindow):
 
         # ── Connect cross-panel signals ──────────────────────────────────
         self._chat_panel.diff_pending.connect(self._on_diff_pending)
+        self._chat_panel.plan_received.connect(self._on_plan_received)
+        self._chat_panel.file_changed.connect(self._on_file_changed)
         self._chat_panel.slash_command_executed.connect(self._on_slash_command)
         self._chat_panel.model_changed.connect(self._on_chat_model_changed)
         self._chat_panel.open_project_requested.connect(self._open_folder)
         self._chat_panel.unreal_status_changed.connect(self._apply_unreal_status)
+
+        # ── Connect Agent streaming events ────────────────────────────────
+        self._agent.token_received.connect(self._on_agent_token)
+        self._agent.status_changed.connect(self._on_agent_status)
+        self._agent.plan_received.connect(self._on_plan_received)
+        self._agent.tool_called.connect(self._on_agent_tool_called)
+        self._agent.tool_result.connect(self._on_agent_tool_result)
+        self._agent.file_changed.connect(self._on_file_changed)
+        self._agent.diff_pending.connect(self._on_diff_pending)
+        self._agent.error_occurred.connect(self._on_agent_error)
+        self._agent.task_done.connect(self._on_agent_done)
+
+        # ── Sync Mode Selectors between TopBar and ChatPanel ──────────────
+        if hasattr(self, "_top_bar") and hasattr(self, "_chat_panel"):
+            self._top_bar.taskModeChanged.connect(self._chat_panel.set_task_mode)
+            self._top_bar.autonomyProfileChanged.connect(self._chat_panel.set_autonomy_profile)
+            self._chat_panel.task_mode_changed.connect(self._top_bar.set_task_mode)
+            self._chat_panel.autonomy_changed.connect(self._top_bar.set_autonomy_profile)
 
         # ── Deferred startup health-check ────────────────────────────────
         self._health_timer = QTimer(self)
@@ -322,7 +344,7 @@ class MainWindow(QMainWindow):
         # Logo / brand label
         brand = QLabel("  🎮 GameForge IDE ")
         brand.setObjectName("brand_label")
-        brand.setStyleSheet("color: #7c3aed; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
+        brand.setStyleSheet(f"color: {tokens.ACCENT_PRIMARY}; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
         tb.addWidget(brand)
 
         # Workspace badge / switch button (like VS Code / Antigravity)
@@ -330,9 +352,9 @@ class MainWindow(QMainWindow):
         self._tb_workspace_btn.setObjectName("tb_workspace_badge")
         self._tb_workspace_btn.setToolTip(f"Active Workspace: {self._workspace}\nClick to choose another folder…")
         self._tb_workspace_btn.setStyleSheet(
-            "QPushButton { background: #1a1f2c; color: #a5b4fc; border: 1px solid #374151; "
-            "border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px; margin-right: 6px; } "
-            "QPushButton:hover { background: #262f45; border-color: #6366f1; color: #ffffff; }"
+            f"QPushButton {{ background: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; "
+            f"border-radius: {tokens.RADIUS}px; padding: 4px 10px; font-weight: 600; font-size: 11px; margin-right: 6px; }} "
+            f"QPushButton:hover {{ background: {tokens.BG_HOVER}; border-color: {tokens.BORDER_FOCUS}; color: {tokens.TEXT_PRIMARY}; }}"
         )
         self._tb_workspace_btn.clicked.connect(self._open_folder)
         tb.addWidget(self._tb_workspace_btn)
@@ -380,16 +402,16 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         lbl_model = QLabel("Model: ")
-        lbl_model.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 600; margin-left: 4px;")
+        lbl_model.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px; font-weight: 600; margin-left: 4px;")
         tb.addWidget(lbl_model)
 
         self._tb_model_combo = QComboBox()
         self._tb_model_combo.setObjectName("tb_model_combo")
         self._tb_model_combo.setMinimumWidth(220)
         self._tb_model_combo.setStyleSheet(
-            "QComboBox { background: #1a1f2c; color: #a5b4fc; border: 1px solid #374151; "
-            "border-radius: 4px; padding: 3px 8px; font-weight: 600; font-size: 11px; } "
-            "QComboBox:hover { border-color: #6366f1; } "
+            f"QComboBox {{ background: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; "
+            f"border-radius: {tokens.RADIUS}px; padding: 3px 8px; font-weight: 600; font-size: 11px; }} "
+            f"QComboBox:hover {{ border-color: {tokens.BORDER_FOCUS}; }} "
             "QComboBox::drop-down { border: none; width: 18px; }"
         )
         self._tb_model_combo.addItem(get_settings().model_for("chat"))
@@ -450,12 +472,10 @@ class MainWindow(QMainWindow):
         self._act_rail_assets.triggered.connect(lambda: self._on_rail_action_clicked(3))
         rail.addAction(self._act_rail_assets)
 
+        # Retired design rail action (retained hidden for backwards compatibility)
         self._act_rail_design = QAction("📐", self)
         self._act_rail_design.setObjectName("rail_act_design")
-        self._act_rail_design.setCheckable(True)
-        self._act_rail_design.setToolTip("Game Design Spec (Design)")
-        self._act_rail_design.triggered.connect(lambda: self._on_rail_action_clicked(4))
-        rail.addAction(self._act_rail_design)
+        self._act_rail_design.setVisible(False)
 
     @Slot(int)
     def _on_sidebar_tab_changed(self, index: int) -> None:
@@ -626,14 +646,14 @@ class MainWindow(QMainWindow):
         # (no separator before the first permanent widget: it rendered as an orphan "|" on the right)
         self._model_status = QLabel("Model: " + get_settings().model_for("chat"))
         self._model_status.setObjectName("status_model")
-        self._model_status.setStyleSheet("color: #7c3aed;")
+        self._model_status.setStyleSheet(f"color: {tokens.ACCENT_PRIMARY};")
         sb.addPermanentWidget(self._model_status)
 
         sb.addPermanentWidget(QLabel("|"))
 
         self._version_lbl = QLabel("GameForge IDE v1.0.0")
         self._version_lbl.setObjectName("status_version")
-        self._version_lbl.setStyleSheet("color: #9d95b0; font-size: 11px;")
+        self._version_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px;")
         sb.addPermanentWidget(self._version_lbl)
 
     # ── Slots ─────────────────────────────────────────────────────────────────
@@ -848,18 +868,18 @@ class MainWindow(QMainWindow):
             if ok:
                 self._ollama_indicator.setText("● Ollama: online")
                 self._ollama_indicator.setStyleSheet(theme_stylesheet(
-                    "color: #00d9a3; font-size: 12px; padding-right: 12px; font-weight: 600;"
+                    f"color: {tokens.ACCENT_SUCCESS}; font-size: 12px; padding-right: 12px; font-weight: 600;"
                 ))
                 self._sync_models_to_toolbar()
             else:
                 self._ollama_indicator.setText("● Ollama: offline")
                 self._ollama_indicator.setStyleSheet(theme_stylesheet(
-                    "color: #ff6b6b; font-size: 12px; padding-right: 12px; font-weight: 600;"
+                    f"color: {tokens.ACCENT_ERROR}; font-size: 12px; padding-right: 12px; font-weight: 600;"
                 ))
         except Exception as exc:
             self._ollama_indicator.setText(f"● Ollama: error ({exc})")
             self._ollama_indicator.setStyleSheet(theme_stylesheet(
-                "color: #ff6b6b; font-size: 12px; padding-right: 12px;"
+                f"color: {tokens.ACCENT_ERROR}; font-size: 12px; padding-right: 12px;"
             ))
 
     @Slot(bool, str, str)
@@ -872,12 +892,12 @@ class MainWindow(QMainWindow):
                 txt += f" ({Path(active_asset).name})"
             self._unreal_indicator.setText(txt)
             self._unreal_indicator.setStyleSheet(theme_stylesheet(
-                "color: #00d9a3; font-size: 12px; padding-right: 12px; font-weight: 600;"
+                f"color: {tokens.ACCENT_SUCCESS}; font-size: 12px; padding-right: 12px; font-weight: 600;"
             ))
         else:
             self._unreal_indicator.setText("● Unreal: disconnected")
             self._unreal_indicator.setStyleSheet(theme_stylesheet(
-                "color: #9ca3af; font-size: 12px; padding-right: 12px; font-weight: 600;"
+                f"color: {tokens.TEXT_MUTED}; font-size: 12px; padding-right: 12px; font-weight: 600;"
             ))
 
     def _sync_models_to_toolbar(self) -> None:
@@ -929,10 +949,84 @@ class MainWindow(QMainWindow):
 
     @Slot(str, dict)
     def _on_diff_pending(self, diff_id: str, meta: dict) -> None:
-        self._diff_panel.show_diff(diff_id, meta)
-        self._dock_diff.show()
-        self._dock_diff.raise_()
-        self.statusBar().showMessage(f"Diff pending review: {diff_id}", 5000)
+        if hasattr(self, "_diff_panel"):
+            self._diff_panel.show_diff(diff_id, meta)
+        if hasattr(self, "_dock_diff") and self._dock_diff is not None:
+            self._dock_diff.show()
+            self._dock_diff.raise_()
+        if self.statusBar():
+            self.statusBar().showMessage(f"Diff pending review: {diff_id}", 5000)
+
+    @Slot(str, dict)
+    def _on_agent_status(self, status: str, meta: dict) -> None:
+        if self.statusBar():
+            self.statusBar().showMessage(f"Agent: {status}", 3000)
+
+    @Slot(str)
+    def _on_agent_token(self, token: str) -> None:
+        pass
+
+    @Slot(dict)
+    def _on_plan_received(self, plan_data: dict) -> None:
+        goal = plan_data.get("goal", "Execution Plan") if isinstance(plan_data, dict) else "Execution Plan"
+        ver = plan_data.get("version", 1) if isinstance(plan_data, dict) else 1
+        if self.statusBar():
+            self.statusBar().showMessage(f"📋 Plan updated: {goal} (v{ver})", 4000)
+
+    @Slot(str, dict)
+    def _on_agent_tool_called(self, tool_name: str, args: dict) -> None:
+        if self.statusBar():
+            self.statusBar().showMessage(f"🔧 Running tool: {tool_name}", 3000)
+
+    @Slot(str, dict)
+    def _on_agent_tool_result(self, tool_name: str, result: dict) -> None:
+        status = result.get("status", "SUCCESS") if isinstance(result, dict) else "OK"
+        if self.statusBar():
+            self.statusBar().showMessage(f"Tool {tool_name} finished: {status}", 3000)
+
+    @Slot(str, dict)
+    def _on_file_changed(self, content_or_path: str, meta: dict) -> None:
+        fp = meta.get("file_path", content_or_path)
+        diff_id = meta.get("diff_id", "")
+        if self.statusBar():
+            self.statusBar().showMessage(f"⚡ File modified: {fp} (diff: {diff_id})", 4000)
+        if hasattr(self, "_explorer") and self._explorer is not None:
+            try:
+                self._explorer.refresh()
+            except Exception:
+                pass
+
+    @Slot(str)
+    def _on_agent_error(self, error: str) -> None:
+        if self.statusBar():
+            self.statusBar().showMessage(f"⚠️ Agent Error: {error}", 5000)
+        if hasattr(self, "_toasts"):
+            self._toasts.error("Agent Error", error[:120])
+
+    @Slot(str)
+    def _on_agent_done(self, full_text: str) -> None:
+        if self.statusBar():
+            self.statusBar().showMessage("Agent task completed.", 4000)
+
+    @property
+    def task_mode_combo(self):
+        return getattr(getattr(self, "_chat_panel", None), "task_mode_combo", None) or getattr(getattr(self, "_top_bar", None), "task_mode_combo", None)
+
+    @property
+    def taskModeCombo(self):
+        return self.task_mode_combo
+
+    @property
+    def autonomy_combo(self):
+        return getattr(getattr(self, "_chat_panel", None), "autonomy_combo", None) or getattr(getattr(self, "_top_bar", None), "autonomy_combo", None)
+
+    @property
+    def autonomy_profile_combo(self):
+        return self.autonomy_combo
+
+    @property
+    def autonomyCombo(self):
+        return self.autonomy_combo
 
     @Slot(str)
     def _on_diff_applied(self, diff_id: str) -> None:
@@ -1020,7 +1114,6 @@ class MainWindow(QMainWindow):
             ("Toggle Terminal", lambda: self._dock_terminal.setVisible(not self._dock_terminal.isVisible())),
             ("View: Home", lambda: self._switch_studio_view("home")),
             ("View: Games Catalog", lambda: self._switch_studio_view("games")),
-            ("View: Design", lambda: self._switch_studio_view("design")),
             ("View: Build", lambda: self._switch_studio_view("build")),
             ("View: Play", lambda: self._switch_studio_view("play")),
             ("View: Assets Registry", lambda: self._switch_studio_view("assets")),
@@ -1118,9 +1211,15 @@ class MainWindow(QMainWindow):
         self._assistant_panel = AssistantPanel(self._chat_panel, self)
         self._assistant_panel.closeRequested.connect(lambda: self._set_assistant_visible(False))
         self._assistant_panel.modelChanged.connect(self._on_chat_model_changed)
-        self._assistant_panel.openDesignRequested.connect(self._on_assistant_open_design)
         models = [get_settings().model_for("chat")]
         self._assistant_panel.set_models(models, models[0])
+
+        # Mode selector synchronization
+        if hasattr(self, "_top_bar"):
+            self._top_bar.taskModeChanged.connect(self._chat_panel.set_task_mode)
+            self._top_bar.autonomyProfileChanged.connect(self._chat_panel.set_autonomy_profile)
+            self._chat_panel.task_mode_changed.connect(self._top_bar.set_task_mode)
+            self._chat_panel.autonomy_changed.connect(self._top_bar.set_autonomy_profile)
 
         # Center splitter: ViewHost + AssistantPanel
         self._center_splitter = QSplitter(Qt.Horizontal, self)
@@ -1557,32 +1656,9 @@ class MainWindow(QMainWindow):
         self.set_active_project(project_name)
 
     def _on_assistant_open_design(self, prompt: str) -> None:
-        p_dir = getattr(self, "_current_project_dir", None)
-        has_active_gds = p_dir and (p_dir / "GameForge" / "design" / "game.gds.json").is_file()
-
-        if has_active_gds and getattr(self, "_current_project", None):
-            # Apply design change / completion directly to active project
-            self._switch_studio_view("design")
-            dv = self._view_host.get_view_widget("design")
-            if dv and hasattr(dv, "load_project"):
-                dv.load_project(self._current_project, project_dir=p_dir)
-                if hasattr(dv, "_txt_change"):
-                    dv._txt_change.setText(prompt)
-                if hasattr(dv, "_on_propose_change"):
-                    dv._on_propose_change()
-            if hasattr(self, "_toasts"):
-                self._toasts.info("Design Updated", f"Applied prompt update to '{self._current_project}' in Design View.")
-            return
-
-        self._switch_studio_view("home")
-        hv = self._view_host.get_view_widget("home")
-        if hv:
-            edit = getattr(hv, "_prompt_input", getattr(hv, "_prompt_box", None))
-            if edit:
-                edit.setPlainText(prompt)
-            fn = getattr(hv, "_on_design_it_clicked", getattr(hv, "_on_design_clicked", None))
-            if fn:
-                fn()
+        """Route design requests directly into the universal assistant chat without bouncing to retired views."""
+        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_on_prompt_submitted"):
+            self._chat_panel._on_prompt_submitted(prompt)
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         p_dir = None
@@ -1595,47 +1671,24 @@ class MainWindow(QMainWindow):
                 p_dir = self._resolve_project_dir(p_name)
             self.refresh_projects(select_project=p_name)
             self.set_active_project(p_name, p_dir)
-        self._switch_studio_view("design")
-        design_view = self._view_host.get_view_widget("design")
-        if design_view and hasattr(design_view, "open_draft"):
-            design_view.open_draft(gds, questions, project_dir=p_dir)
+        self._switch_studio_view("home")
 
     def _on_new_project_requested(self, project_name: str, project_dir: Path) -> None:
         pdir = Path(project_dir).resolve()
         self.refresh_projects(select_project=project_name)
         self.set_active_project(project_name, pdir)
-        self._switch_studio_view("design")
-        dv = self._view_host.get_view_widget("design")
-        if dv and hasattr(dv, "load_project"):
-            if not dv.load_project(project_name, project_dir=pdir):
-                from ..design.gds import GameDesignSpec, Meta, Overview, TechSpec
-                spec = GameDesignSpec(
-                    meta=Meta(title=project_name, project_name=project_name, project_dir=str(pdir)),
-                    overview=Overview(genre="action", pitch=f"{project_name} project"),
-                    tech=TechSpec(),
-                )
-                dv.open_draft(spec, project_dir=pdir)
+        self._switch_studio_view("home")
 
     def _on_open_project_directory_requested(self, project_dir: Path) -> None:
         pdir = Path(project_dir).resolve()
         name = pdir.name
         self.refresh_projects(select_project=name)
         self.set_active_project(name, pdir)
-        self._switch_studio_view("design")
-        dv = self._view_host.get_view_widget("design")
-        if dv and hasattr(dv, "load_project"):
-            if not dv.load_project(name, project_dir=pdir):
-                from ..design.gds import GameDesignSpec, Meta, Overview, TechSpec
-                spec = GameDesignSpec(
-                    meta=Meta(title=name, project_name=name, project_dir=str(pdir)),
-                    overview=Overview(genre="action", pitch=f"{name} project"),
-                    tech=TechSpec(),
-                )
-                dv.open_draft(spec, project_dir=pdir)
+        self._switch_studio_view("home")
 
     def _on_games_open_requested(self, project_name: str) -> None:
         self.set_active_project(project_name)
-        self._switch_studio_view("design")
+        self._switch_studio_view("home")
 
     def _on_games_play_requested(self, project_name: str) -> None:
         self.set_active_project(project_name)

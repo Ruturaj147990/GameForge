@@ -157,6 +157,32 @@ class HostedSettingsDialog(QDialog):
         )
         rv.addWidget(self._btn_test)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
+        buttons.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px {tokens.SPACE_LG}px;"
+            f"}}"
+            f"QPushButton:hover, QPushButton:focus {{"
+            f"  background-color: {tokens.BG_HOVER}; border-color: {tokens.BORDER_FOCUS}; outline: none;"
+            f"}}"
+        )
+        btn_save = buttons.button(QDialogButtonBox.Save)
+        if btn_save:
+            btn_save.setAccessibleName("Save hosted provider configuration")
+            btn_save.setCursor(Qt.PointingHandCursor)
+            btn_save.setStyleSheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: none; border-radius: {tokens.RADIUS}px; padding: 6px {tokens.SPACE_LG}px; font-weight: 600;"
+                f"}}"
+                f"QPushButton:hover, QPushButton:focus {{"
+                f"  background-color: {tokens.ACCENT_HOVER}; outline: none;"
+                f"}}"
+            )
+        btn_close = buttons.button(QDialogButtonBox.Close)
+        if btn_close:
+            btn_close.setAccessibleName("Close hosted models dialog")
+            btn_close.setCursor(Qt.PointingHandCursor)
         rv.addWidget(buttons)
         root.addWidget(right, 1)
 

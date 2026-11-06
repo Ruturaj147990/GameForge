@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..core.settings import get_settings
+from .models.modes import AutonomyProfile, TaskLifecycleStatus, TaskMode
+from .models.plan_artifact import PlanArtifact
 
 
 class ChatMessage(BaseModel):
@@ -55,6 +57,11 @@ class Session(BaseModel):
     workspace_path: str
     model_name: str = Field(default_factory=lambda: get_settings().model_for("chat"))
     provider_type: str = "ollama"
+    task_mode: TaskMode = Field(default=TaskMode.PLANNING)
+    autonomy_profile: AutonomyProfile = Field(default=AutonomyProfile.AGENTIC)
+    active_plan: Optional[PlanArtifact] = None
+    active_task_id: Optional[str] = None
+    task_status: TaskLifecycleStatus = Field(default=TaskLifecycleStatus.CREATED)
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
     messages: List[ChatMessage] = Field(default_factory=list)
@@ -71,15 +78,62 @@ class SessionManager:
         self.storage_dir = self.workspace_path / ".gameforge" / "sessions"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-    def create_session(self, name: str = "New Session", model_name: Optional[str] = None, provider_type: str = "ollama") -> Session:
+    def create_session(
+        self,
+        name: str = "New Session",
+        model_name: Optional[str] = None,
+        provider_type: str = "ollama",
+        task_mode: Optional[TaskMode | str] = None,
+        autonomy_profile: Optional[AutonomyProfile | str] = None,
+    ) -> Session:
+        settings = get_settings()
+        m_mode = TaskMode(task_mode) if task_mode else TaskMode(getattr(settings, "default_task_mode", "planning"))
+        a_profile = AutonomyProfile(autonomy_profile) if autonomy_profile else AutonomyProfile(getattr(settings, "default_autonomy_profile", "agentic"))
         session = Session(
             name=name,
             workspace_path=str(self.workspace_path),
-            model_name=model_name or get_settings().model_for("chat"),
+            model_name=model_name or settings.model_for("chat"),
             provider_type=provider_type,
+            task_mode=m_mode,
+            autonomy_profile=a_profile,
         )
         self.save_session(session)
         return session
+
+    def set_session_mode(
+        self,
+        session_id: str,
+        task_mode: Optional[TaskMode | str] = None,
+        autonomy_profile: Optional[AutonomyProfile | str] = None,
+    ) -> bool:
+        """Update task_mode and/or autonomy_profile on an existing session."""
+        session = self.get_session(session_id)
+        if not session:
+            return False
+        if task_mode:
+            session.task_mode = TaskMode(task_mode)
+        if autonomy_profile:
+            session.autonomy_profile = AutonomyProfile(autonomy_profile)
+        self.save_session(session)
+        return True
+
+    def set_active_plan(self, session_id: str, plan: PlanArtifact) -> bool:
+        """Store or update the active plan artifact on the session."""
+        session = self.get_session(session_id)
+        if not session:
+            return False
+        session.active_plan = plan
+        self.save_session(session)
+        return True
+
+    def clear_active_plan(self, session_id: str) -> bool:
+        """Clear the active plan artifact from the session."""
+        session = self.get_session(session_id)
+        if not session:
+            return False
+        session.active_plan = None
+        self.save_session(session)
+        return True
 
     def get_session(self, session_id: str) -> Optional[Session]:
         path = self.storage_dir / f"{session_id}.json"
@@ -121,6 +175,10 @@ class SessionManager:
                     "created_at": data.get("created_at"),
                     "updated_at": data.get("updated_at"),
                     "model_name": data.get("model_name"),
+                    "task_mode": data.get("task_mode", "planning"),
+                    "autonomy_profile": data.get("autonomy_profile", "agentic"),
+                    "has_active_plan": bool(data.get("active_plan")),
+                    "task_status": data.get("task_status", "CREATED"),
                     "message_count": len(data.get("messages", [])),
                 })
             except Exception:

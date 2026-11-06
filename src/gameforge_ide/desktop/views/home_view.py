@@ -49,8 +49,9 @@ class PromptTextEdit(QPlainTextEdit):
         self.setObjectName("homePromptInput")
         self.setAccessibleName("Game design prompt input")
         self.setPlaceholderText(
-            'Describe your game… e.g. "a third-person forest adventure where I collect 5 relics while avoiding guards"'
+            'Describe your game… e.g. "a third-person forest adventure where I collect 5 relics while avoiding guards" (Press Ctrl+Enter to design)'
         )
+        self.setToolTip("Enter: new line | Ctrl+Enter: Design it")
         self.setFixedHeight(110)
         self.setStyleSheet(
             f"QPlainTextEdit#{self.objectName()} {{"
@@ -64,6 +65,7 @@ class PromptTextEdit(QPlainTextEdit):
             f"}}"
             f"QPlainTextEdit#{self.objectName()}:focus {{"
             f"  border: 1px solid {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
         )
 
@@ -84,7 +86,9 @@ class PresetChip(QPushButton):
         self.prompt_text = prompt_text
         self.setObjectName(f"presetChip_{preset_id}")
         self.setAccessibleName(f"Preset chip {title}")
+        self.setToolTip(f"Pre-fill prompt with '{title}' template")
         self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setStyleSheet(
             f"QPushButton#{self.objectName()} {{"
             f"  background-color: {tokens.BG_SURFACE};"
@@ -93,11 +97,13 @@ class PresetChip(QPushButton):
             f"  border-radius: 14px;"
             f"  padding: {tokens.SPACE_XS}px {tokens.SPACE_MD}px;"
             f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"  font-weight: 500;"
             f"}}"
-            f"QPushButton#{self.objectName()}:hover {{"
+            f"QPushButton#{self.objectName()}:hover, QPushButton#{self.objectName()}:focus {{"
             f"  background-color: {tokens.BG_HOVER};"
             f"  color: {tokens.TEXT_PRIMARY};"
-            f"  border-color: {tokens.ACCENT_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
             f"QPushButton#{self.objectName()}:pressed {{"
             f"  background-color: {tokens.BG_ACTIVE};"
@@ -106,7 +112,7 @@ class PresetChip(QPushButton):
 
 
 class RecentGameCard(QFrame):
-    """Clickable card displaying a recent game with thumbnail and status."""
+    """Clickable card displaying a recent game with thumbnail, genre badge, and status."""
 
     clicked = Signal(str)
 
@@ -117,7 +123,7 @@ class RecentGameCard(QFrame):
         self.setAccessibleName(f"Recent game {game.title}")
         self.setCursor(Qt.PointingHandCursor)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setFixedSize(140, 150)
+        self.setFixedSize(140, 160)
         self.setStyleSheet(
             f"QFrame#{self.objectName()} {{"
             f"  background-color: {tokens.BG_SURFACE};"
@@ -125,18 +131,19 @@ class RecentGameCard(QFrame):
             f"  border-radius: {tokens.RADIUS}px;"
             f"}}"
             f"QFrame#{self.objectName()}:hover, QFrame#{self.objectName()}:focus {{"
-            f"  border-color: {tokens.ACCENT_PRIMARY};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
             f"  background-color: {tokens.BG_HOVER};"
+            f"  outline: none;"
             f"}}"
         )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         # Thumbnail
         self._thumb_lbl = QLabel(self)
-        self._thumb_lbl.setFixedSize(126, 78)
+        self._thumb_lbl.setFixedSize(126, 74)
         self._thumb_lbl.setStyleSheet(
             f"background-color: {tokens.BG_PANEL};"
             f"border-radius: 4px;"
@@ -145,9 +152,11 @@ class RecentGameCard(QFrame):
         self._load_thumbnail(game.thumbnail_path)
         layout.addWidget(self._thumb_lbl)
 
-        # Title
+        # Title (elided with full text in tooltip)
         title_text = game.title or game.name or "Untitled"
-        title_lbl = QLabel(title_text, self)
+        title_lbl = QLabel(self)
+        elided_title = title_lbl.fontMetrics().elidedText(title_text, Qt.ElideRight, 126)
+        title_lbl.setText(elided_title)
         title_lbl.setToolTip(title_text)
         title_lbl.setStyleSheet(
             f"color: {tokens.TEXT_PRIMARY};"
@@ -157,14 +166,30 @@ class RecentGameCard(QFrame):
         title_lbl.setFixedHeight(18)
         layout.addWidget(title_lbl)
 
-        # Status badge & time
+        # Genre badge row
+        meta_row = QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
+        meta_row.setSpacing(tokens.SPACE_XS)
+
+        genre_val = (getattr(game, "genre", "") or "custom").capitalize()
+        genre_lbl = QLabel(genre_val, self)
+        genre_lbl.setStyleSheet(
+            f"color: {tokens.TEXT_SECONDARY};"
+            f"font-size: {tokens.FONT_BODY_SM}px;"
+            f"font-weight: 500;"
+        )
+        meta_row.addWidget(genre_lbl)
+        meta_row.addStretch(1)
+
+        # Status & relative time
         status_text = self._format_status(game)
         status_lbl = QLabel(status_text, self)
         status_lbl.setStyleSheet(
             f"color: {tokens.TEXT_MUTED};"
             f"font-size: {tokens.FONT_BODY_SM}px;"
         )
-        layout.addWidget(status_lbl)
+        meta_row.addWidget(status_lbl)
+        layout.addLayout(meta_row)
         layout.addStretch(1)
 
     def _load_thumbnail(self, path: Optional[Any]) -> None:
@@ -236,16 +261,23 @@ class ReadinessRowWidget(QWidget):
         self.setAccessibleName(f"Readiness item {row.key}")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 3, 0, 3)
+        layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(tokens.SPACE_SM)
 
-        # Dot
-        dot_color = tokens.ACCENT_SUCCESS if row.state == "ok" else (
-            tokens.ACCENT_WARNING if row.state == "degraded" else tokens.ACCENT_ERROR
+        # Status indicator: prominent badge and dot
+        is_ok = row.state == "ok"
+        is_deg = row.state == "degraded"
+        status_color = tokens.ACCENT_SUCCESS if is_ok else (
+            tokens.ACCENT_WARNING if is_deg else tokens.ACCENT_ERROR
         )
-        dot_lbl = QLabel("●", self)
-        dot_lbl.setStyleSheet(f"color: {dot_color}; font-size: 11px;")
-        layout.addWidget(dot_lbl)
+        status_text = "READY" if is_ok else ("DEGRADED" if is_deg else "OFFLINE")
+
+        badge_lbl = QLabel(f"● {status_text}", self)
+        badge_lbl.setStyleSheet(
+            f"color: {status_color}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 700;"
+        )
+        badge_lbl.setFixedWidth(74)
+        layout.addWidget(badge_lbl)
 
         # Key title + summary
         r_key = str(getattr(row, "key", "") or "")
@@ -267,21 +299,26 @@ class ReadinessRowWidget(QWidget):
         if row.fix_action:
             btn = QPushButton("Set up", self)
             btn.setObjectName(f"btn_fix_{row.key}")
+            btn.setAccessibleName(f"Set up {row.key.capitalize()}")
             btn.setCursor(Qt.PointingHandCursor)
             action_key = str(row.fix_action)
             btn.clicked.connect(lambda checked=False, act=action_key: self.fixActionRequested.emit(act))
             btn.setToolTip(f"Set up {row.key.capitalize()}")
             btn.setStyleSheet(
-                f"QPushButton {{"
-                f"  background: transparent;"
+                f"QPushButton#{btn.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE};"
                 f"  color: {tokens.ACCENT_HOVER};"
                 f"  border: 1px solid {tokens.BORDER};"
-                f"  border-radius: 4px;"
-                f"  padding: 1px 6px;"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: 2px {tokens.SPACE_SM}px;"
                 f"  font-size: {tokens.FONT_BODY_SM}px;"
+                f"  font-weight: 600;"
                 f"}}"
-                f"QPushButton:hover {{"
+                f"QPushButton#{btn.objectName()}:hover, QPushButton#{btn.objectName()}:focus {{"
                 f"  background-color: {tokens.BG_HOVER};"
+                f"  border-color: {tokens.BORDER_FOCUS};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  outline: none;"
                 f"}}"
             )
             layout.addWidget(btn)
@@ -310,28 +347,44 @@ class HomeView(QWidget):
         main_layout.setContentsMargins(32, 28, 32, 28)
         main_layout.setSpacing(tokens.SPACE_MD)
 
-        # ── 1. Hero Section ──────────────────────────────────────────────────
-        hero_layout = QVBoxLayout()
-        hero_layout.setSpacing(tokens.SPACE_SM)
+        # ── 1. Dashboard Header ──────────────────────────────────────────────
+        dash_header = QVBoxLayout()
+        dash_header.setSpacing(4)
 
-        title_lbl = QLabel("Make a game", self)
+        title_lbl = QLabel("Studio Dashboard", self)
         title_lbl.setObjectName("homeTitle")
-        title_lbl.setAccessibleName("Make a game hero title")
+        title_lbl.setAccessibleName("Dashboard title")
         title_lbl.setStyleSheet(
             f"color: {tokens.TEXT_PRIMARY};"
             f"font-size: {tokens.FONT_HEADING}px;"
             f"font-weight: 700;"
         )
-        hero_layout.addWidget(title_lbl)
+        dash_header.addWidget(title_lbl)
 
-        # Prompt Box
+        sub_lbl = QLabel("System readiness and project overview. All code creation, game generation, and modifications flow through the Assistant chat on the right.", self)
+        sub_lbl.setObjectName("homeSubtitle")
+        sub_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        dash_header.addWidget(sub_lbl)
+        main_layout.addLayout(dash_header)
+        main_layout.addSpacing(tokens.SPACE_MD)
+
+        # Internal widgets retained hidden for backward compatibility and test stability
         self._prompt_input = PromptTextEdit(self)
-        self._prompt_input.designRequested.connect(self._on_design_it_clicked)
-        hero_layout.addWidget(self._prompt_input)
+        self._prompt_input.setVisible(False)
+        self._btn_design = QPushButton("Design it →", self)
+        self._btn_design.setObjectName("homeBtnDesign")
+        self._btn_design.setVisible(False)
+        self._btn_cancel = QPushButton("Cancel", self)
+        self._btn_cancel.setObjectName("homeBtnCancel")
+        self._btn_cancel.setVisible(False)
+        self._status_lbl = QLabel("", self)
+        self._status_lbl.setObjectName("homeStatusLabel")
+        self._status_lbl.setVisible(False)
+        self._notice_lbl = QLabel("", self)
+        self._notice_lbl.setObjectName("homeUnsupportedNotice")
+        self._notice_lbl.setVisible(False)
 
-        # Preset Chips
-        chips_layout = QHBoxLayout()
-        chips_layout.setSpacing(tokens.SPACE_SM)
+        self._preset_chips: Dict[str, PresetChip] = {}
         preset_items = [
             ("Tic-Tac-Toe", "tic_tac_toe"),
             ("Platformer", "platformer"),
@@ -341,18 +394,17 @@ class HomeView(QWidget):
         ]
         for title, pid in preset_items:
             preset_fn = PRESETS.get(pid)
-            prompt_str = ""
+            prompt_str = f"Create a {title.lower()} game"
             if preset_fn:
                 try:
                     spec = preset_fn()
                     prompt_str = spec.meta.source_prompt or spec.overview.pitch
                 except Exception:
-                    prompt_str = f"Create a {title.lower()} game"
+                    pass
             chip = PresetChip(title, pid, prompt_str, self)
+            chip.setVisible(False)
             chip.clicked.connect(self._on_preset_chip_clicked)
-            chips_layout.addWidget(chip)
-        chips_layout.addStretch(1)
-        hero_layout.addLayout(chips_layout)
+            self._preset_chips[pid] = chip
 
         # Internal project directory reference (authoritative root managed centrally via TopBar and Settings)
         self._edit_project_dir = QLineEdit(self)
@@ -372,89 +424,7 @@ class HomeView(QWidget):
         self._edit_project_dir.setText(str(default_root))
         self._edit_project_dir.textChanged.connect(self._on_project_dir_text_changed)
 
-        # Action Bar: Design it -> + Spinner / Cancel + Unsupported notice
-        action_layout = QHBoxLayout()
-        action_layout.setSpacing(tokens.SPACE_MD)
-
-        self._btn_design = QPushButton("Design it →", self)
-        self._btn_design.setObjectName("homeBtnDesign")
-        self._btn_design.setAccessibleName("Design it button")
-        self._btn_design.setCursor(Qt.PointingHandCursor)
-        self._btn_design.setFixedHeight(34)
-        self._btn_design.setStyleSheet(
-            f"QPushButton#{self._btn_design.objectName()} {{"
-            f"  background-color: {tokens.ACCENT_PRIMARY};"
-            f"  color: {tokens.TEXT_PRIMARY};"
-            f"  border: none;"
-            f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: 0 {tokens.SPACE_LG}px;"
-            f"  font-size: {tokens.FONT_BODY}px;"
-            f"  font-weight: 600;"
-            f"}}"
-            f"QPushButton#{self._btn_design.objectName()}:hover {{"
-            f"  background-color: {tokens.ACCENT_HOVER};"
-            f"}}"
-            f"QPushButton#{self._btn_design.objectName()}:pressed {{"
-            f"  background-color: {tokens.ACCENT_ACTIVE};"
-            f"}}"
-            f"QPushButton#{self._btn_design.objectName()}:disabled {{"
-            f"  background-color: {tokens.BG_SURFACE};"
-            f"  color: {tokens.TEXT_MUTED};"
-            f"}}"
-        )
-        self._btn_design.clicked.connect(self._on_design_it_clicked)
-
-        self._status_lbl = QLabel("", self)
-        self._status_lbl.setObjectName("homeStatusLabel")
-        self._status_lbl.setAccessibleName("Design generation status")
-        self._status_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
-        self._status_lbl.setVisible(False)
-
-        self._btn_cancel = QPushButton("Cancel", self)
-        self._btn_cancel.setObjectName("homeBtnCancel")
-        self._btn_cancel.setAccessibleName("Cancel design generation")
-        self._btn_cancel.setCursor(Qt.PointingHandCursor)
-        self._btn_cancel.setStyleSheet(
-            f"QPushButton#{self._btn_cancel.objectName()} {{"
-            f"  background: transparent;"
-            f"  color: {tokens.ACCENT_ERROR};"
-            f"  border: 1px solid {tokens.BORDER};"
-            f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: 4px {tokens.SPACE_MD}px;"
-            f"  font-size: {tokens.FONT_BODY_SM}px;"
-            f"}}"
-            f"QPushButton#{self._btn_cancel.objectName()}:hover {{"
-            f"  background-color: {tokens.BG_HOVER};"
-            f"}}"
-        )
-        self._btn_cancel.clicked.connect(self._on_cancel_clicked)
-        self._btn_cancel.setVisible(False)
-
-        action_layout.addWidget(self._btn_design)
-        action_layout.addWidget(self._status_lbl)
-        action_layout.addWidget(self._btn_cancel)
-        action_layout.addStretch(1)
-        hero_layout.addLayout(action_layout)
-
-        # Inline unsupported / error notice
-        self._notice_lbl = QLabel(self)
-        self._notice_lbl.setObjectName("homeUnsupportedNotice")
-        self._notice_lbl.setAccessibleName("Unsupported game request notice")
-        self._notice_lbl.setStyleSheet(
-            f"background-color: {tokens.BG_SURFACE};"
-            f"color: {tokens.ACCENT_WARNING};"
-            f"border: 1px solid {tokens.BORDER};"
-            f"border-radius: {tokens.RADIUS}px;"
-            f"padding: {tokens.SPACE_SM}px {tokens.SPACE_MD}px;"
-            f"font-size: {tokens.FONT_BODY_SM}px;"
-        )
-        self._notice_lbl.setVisible(False)
-        hero_layout.addWidget(self._notice_lbl)
-
-        main_layout.addLayout(hero_layout)
-        main_layout.addSpacing(tokens.SPACE_MD)
-
-        # ── 2. Bottom Split: Recent Games + Readiness ─────────────────────────
+        # ── 2. Primary Dashboard: Recent Games + Readiness ───────────────────
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(tokens.SPACE_LG)
 
@@ -548,7 +518,9 @@ class HomeView(QWidget):
                 resolved = p.resolve()
                 if hasattr(self, "_projects_service") and self._projects_service is not None:
                     if hasattr(self._projects_service, "_projects_root"):
-                        self._projects_service._projects_root = resolved
+                        from src.gameforge_ide.core.projects import is_gameforge_project
+                        p_root = resolved.parent if is_gameforge_project(resolved) else resolved
+                        self._projects_service._projects_root = p_root
                 self.projectDirectoryChangeRequested.emit(resolved)
                 self.refresh_recent_games()
         except Exception:
@@ -572,7 +544,7 @@ class HomeView(QWidget):
         print(f"[GameForge Studio] Drafting design for prompt: '{prompt_text}'...", flush=True)
         self._notice_lbl.setVisible(False)
         self._btn_design.setEnabled(False)
-        self._status_lbl.setText("Drafting a design…")
+        self._status_lbl.setText("⏳ Drafting design spec with Ollama…")
         self._status_lbl.setVisible(True)
         self._btn_cancel.setVisible(True)
         self._btn_cancel.setEnabled(True)
@@ -722,7 +694,10 @@ class HomeView(QWidget):
             self._edit_project_dir.setText(str(resolved))
         if hasattr(self, "_projects_service") and self._projects_service is not None:
             if hasattr(self._projects_service, "_projects_root"):
-                self._projects_service._projects_root = resolved
+                # If path is an individual game project, the projects root is its parent directory
+                from src.gameforge_ide.core.projects import is_gameforge_project
+                p_root = resolved.parent if is_gameforge_project(resolved) else resolved
+                self._projects_service._projects_root = p_root
         self.refresh_recent_games()
 
     def refresh_recent_games(self) -> None:
@@ -767,9 +742,28 @@ class HomeView(QWidget):
 
         games: List[GameSummary] = getattr(self, "_latest_games", [])
         if not games:
-            empty_lbl = QLabel("No recent games yet.", self._recent_section)
-            empty_lbl.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
-            self._cards_layout.addWidget(empty_lbl)
+            empty_frame = QFrame(self._recent_section)
+            empty_frame.setObjectName("homeRecentGamesEmpty")
+            empty_frame.setStyleSheet(
+                f"QFrame#{empty_frame.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  border: 1px dashed {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_MD}px;"
+                f"}}"
+            )
+            empty_box = QVBoxLayout(empty_frame)
+            empty_box.setContentsMargins(12, 10, 12, 10)
+            empty_box.setSpacing(4)
+            empty_lbl = QLabel("No recent games yet.", empty_frame)
+            empty_lbl.setAlignment(Qt.AlignCenter)
+            empty_lbl.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: {tokens.FONT_BODY}px; font-weight: 600;")
+            empty_sub = QLabel("Type a prompt above or pick a preset chip to create your first game.", empty_frame)
+            empty_sub.setAlignment(Qt.AlignCenter)
+            empty_sub.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+            empty_box.addWidget(empty_lbl)
+            empty_box.addWidget(empty_sub)
+            self._cards_layout.addWidget(empty_frame)
         else:
             for g in games:
                 card = RecentGameCard(g, self._recent_section)

@@ -58,6 +58,15 @@ class EnginePage(QWizardPage):
         self._combo_engines = QComboBox(self)
         self._combo_engines.setObjectName("onboardingEngineCombo")
         self._combo_engines.setAccessibleName("Select detected Unreal Engine")
+        self._combo_engines.setStyleSheet(
+            f"QComboBox {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_SM}px;"
+            f"}}"
+        )
 
         detected = discover_engines()
         for inst in detected:
@@ -71,12 +80,40 @@ class EnginePage(QWizardPage):
         self._custom_path.setObjectName("onboardingEnginePath")
         self._custom_path.setAccessibleName("Custom engine root path")
         self._custom_path.setPlaceholderText("E.g. E:\\UE\\UE_5.7")
+        self._custom_path.setStyleSheet(
+            f"QLineEdit {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_SM}px;"
+            f"}}"
+            f"QLineEdit:focus {{"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
+            f"}}"
+        )
         if detected:
             self._custom_path.setText(str(detected[0].root))
         path_box.addWidget(self._custom_path, 1)
 
         self._btn_browse = QPushButton("Browse...", self)
         self._btn_browse.setObjectName("btnBrowseEngine")
+        self._btn_browse.setAccessibleName("Browse engine root directory")
+        self._btn_browse.setCursor(Qt.PointingHandCursor)
+        self._btn_browse.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_MD}px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"}}"
+        )
         self._btn_browse.clicked.connect(self._browse_engine)
         path_box.addWidget(self._btn_browse)
 
@@ -147,11 +184,39 @@ class PathsPage(QWizardPage):
         self._projects_path = QLineEdit(self)
         self._projects_path.setObjectName("onboardingProjectsPath")
         self._projects_path.setAccessibleName("Projects root path")
+        self._projects_path.setStyleSheet(
+            f"QLineEdit {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_SM}px;"
+            f"}}"
+            f"QLineEdit:focus {{"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
+            f"}}"
+        )
         s = get_settings()
         self._projects_path.setText(str(s.projects_root))
         p_box.addWidget(self._projects_path, 1)
 
         btn_browse_proj = QPushButton("Browse...", self)
+        btn_browse_proj.setAccessibleName("Browse projects root directory")
+        btn_browse_proj.setCursor(Qt.PointingHandCursor)
+        btn_browse_proj.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_MD}px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"}}"
+        )
         btn_browse_proj.clicked.connect(self._browse_projects)
         p_box.addWidget(btn_browse_proj)
         form.addRow("Projects Root:", p_box)
@@ -240,6 +305,27 @@ class OnboardingWizard(QWizard):
         self.setStyleSheet(
             f"QWizard#{self.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QWizard QWidget {{"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QWizard QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_LG}px;"
+            f"  font-size: {tokens.FONT_BODY}px;"
+            f"}}"
+            f"QWizard QPushButton:hover {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"}}"
+            f"QWizard QPushButton:disabled {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  color: {tokens.TEXT_MUTED};"
+            f"  border-color: {tokens.BORDER};"
             f"}}"
         )
 
@@ -250,6 +336,20 @@ class OnboardingWizard(QWizard):
         self.addPage(self.engine_page)
         self.addPage(self.paths_page)
         self.addPage(self.models_page)
+
+        # Accessible names for standard wizard buttons
+        btn_next = self.button(QWizard.NextButton)
+        if btn_next:
+            btn_next.setAccessibleName("Next onboarding step")
+        btn_back = self.button(QWizard.BackButton)
+        if btn_back:
+            btn_back.setAccessibleName("Previous onboarding step")
+        btn_finish = self.button(QWizard.FinishButton)
+        if btn_finish:
+            btn_finish.setAccessibleName("Finish onboarding setup")
+        btn_cancel = self.button(QWizard.CancelButton)
+        if btn_cancel:
+            btn_cancel.setAccessibleName("Cancel onboarding setup")
 
     def accept(self) -> None:
         """Save settings to user_settings_path()."""

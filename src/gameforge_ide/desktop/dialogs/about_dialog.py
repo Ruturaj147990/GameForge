@@ -104,10 +104,14 @@ class AboutDialog(QDialog):
             f"  color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: 6px 14px;"
+            f"  padding: 6px {tokens.SPACE_MD}px;"
             f"  font-size: {tokens.FONT_BODY_SM}px;"
             f"}}"
-            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            f"QPushButton:hover, QPushButton:focus {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
+            f"}}"
         )
         self._btn_copy.clicked.connect(self._copy_system_info)
         btn_layout.addWidget(self._btn_copy)
@@ -124,11 +128,14 @@ class AboutDialog(QDialog):
             f"  color: {tokens.TEXT_PRIMARY};"
             f"  border: none;"
             f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: 6px 20px;"
+            f"  padding: 6px {tokens.SPACE_LG}px;"
             f"  font-weight: 600;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
-            f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+            f"QPushButton:hover, QPushButton:focus {{"
+            f"  background-color: {tokens.ACCENT_HOVER};"
+            f"  outline: none;"
+            f"}}"
         )
         self._btn_close.clicked.connect(self.accept)
         btn_layout.addWidget(self._btn_close)

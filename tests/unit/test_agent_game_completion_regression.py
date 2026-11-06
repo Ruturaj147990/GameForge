@@ -117,3 +117,48 @@ def test_cpp_source_code_requests_not_routed_to_open_design(tmp_path):
         if e.event_type == "status" and e.metadata.get("card", {}).get("type") == "open_design"
     ]
     assert len(open_design_events) == 0, "Direct C++ code requests must not be routed to open_design"
+
+
+def test_project_status_inquiries_not_treated_as_game_creation():
+    """Verify inquiries about game/project completion or status are not misclassified as game creation."""
+    inquiries = [
+        "Is the sudoku game complete",
+        "Is the platformer complete?",
+        "Status of the sudoku game",
+        "Check if the game is ready",
+        "How is the game progress",
+        "Did the package build succeed",
+        "Are the levels complete",
+    ]
+    for prompt in inquiries:
+        assert not is_game_creation_request(prompt), f"'{prompt}' must NOT be classified as a game creation request"
+
+    # In contrast, actual creation commands must remain classified as creation requests:
+    creations = [
+        "Create me a Sudoku game.",
+        "Complete the counterstrike lite game , only a box is present right now.",
+        "Finish the game and add enemies",
+        "Build out the shooter game with weapons and score",
+    ]
+    for prompt in creations:
+        assert is_game_creation_request(prompt), f"'{prompt}' must be classified as a game creation request"
+
+
+def test_narrative_promise_interception():
+    """Verify narrative promises to check files without tool execution are detected."""
+    assert AgentRuntime._is_narrative_promise("Let me check the project files.")
+    assert AgentRuntime._is_narrative_promise("I will inspect the workspace structure.")
+    assert AgentRuntime._is_narrative_promise("Let me search for Sudoku-related files in the workspace.")
+    assert AgentRuntime._is_narrative_promise("Checking the project files now.")
+    assert not AgentRuntime._is_narrative_promise("The game is complete and has 5 levels.")
+    assert not AgentRuntime._is_narrative_promise("No Sudoku project was found in the workspace.")
+
+
+def test_is_conversational_project_queries_have_tools():
+    """Verify project queries preserve tools rather than being treated as pure conversational chit-chat."""
+    assert not AgentRuntime._is_conversational("Is the sudoku game complete")
+    assert not AgentRuntime._is_conversational("What is the status of the project files")
+    assert not AgentRuntime._is_conversational("Check if the game compiles without errors")
+    # Pure conversational prompts without project terms remain conversational:
+    assert AgentRuntime._is_conversational("Hello there!")
+    assert AgentRuntime._is_conversational("Thanks!")

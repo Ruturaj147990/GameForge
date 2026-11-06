@@ -77,7 +77,7 @@ def agent_env(tmp_path: Path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     session_mgr = SessionManager(workspace)
-    session = session_mgr.create_session("Test Session", "test-model", "mock")
+    session = session_mgr.create_session("Test Session", "test-model", "mock", task_mode="fast", autonomy_profile="manual")
     return workspace, session_mgr, session
 
 

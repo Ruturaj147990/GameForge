@@ -164,8 +164,11 @@ def is_game_creation_request(prompt: str) -> bool:
         pass
 
     text = prompt.lower().strip()
-    if re.search(r"^(?:what\s+(?:is|was|are|were)|how\s+(?:to|do|can|does)|why\b|who\b|explain\b|tell me\b|remind me\b)", text):
-        return False
+    if re.search(r"^(?:what\s+(?:is|was|are|were)|how\s+(?:to|do|can|does)|why\b|who\b|is\b|are\b|did\b|does\b|has\b|have\b|check\b|verify\b|status\b|explain\b|tell me\b|remind me\b)", text):
+        if re.search(r"\b(?:complete|completed|done|finished|ready|status|progress|state|exist|working|built|packaged|errors?|issues?|logs?)\b", text):
+            return False
+        if text.endswith("?") or re.search(r"^(?:what|how|why|who|explain|tell me)\b", text):
+            return False
     if re.search(r"\b(?:fix|debug|error|bug|issue|problem|refactor|compile|build error)\b", text):
         return False
     if re.search(r"^(?:my|your|our|their|his|her|its)\b", text):

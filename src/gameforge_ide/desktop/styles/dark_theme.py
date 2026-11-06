@@ -325,8 +325,8 @@ QPushButton#btn_stop:disabled {
 
 QPushButton#btn_approve {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #059669, stop:1 #10b981);
-    border: 1px solid #34d399;
+        stop:0 #047857, stop:1 #065f46);
+    border: 1px solid #10b981;
     border-radius: 6px;
     color: #ffffff;
     font-weight: 700;
@@ -334,7 +334,7 @@ QPushButton#btn_approve {
 }
 
 QPushButton#btn_approve:hover {
-    background: #10b981;
+    background: #059669;
 }
 
 QPushButton#btn_reject {
@@ -468,12 +468,30 @@ QTreeView::branch {
 }
 
 /* ── Table view ── */
-QTableWidget {
+QTableWidget, QTableView {
     background-color: #0d0b14;
-    border: none;
+    border: 1px solid #231c34;
+    border-radius: 6px;
     gridline-color: #231c34;
     alternate-background-color: #090810;
     color: #f5f3ff;
+    font-size: 13px;
+    selection-background-color: #251d38;
+    selection-color: #a78bfa;
+}
+
+QTableWidget::item, QTableView::item {
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+QTableWidget::item:hover, QTableView::item:hover {
+    background-color: #120f1d;
+}
+
+QTableWidget::item:selected, QTableView::item:selected {
+    background-color: #251d38;
+    color: #a78bfa;
 }
 
 QHeaderView::section {
@@ -486,6 +504,11 @@ QHeaderView::section {
     color: #9d95b0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+QHeaderView::section:hover {
+    background-color: #120f1d;
+    color: #f5f3ff;
 }
 
 /* ── Tab widget ── */
@@ -654,7 +677,8 @@ QComboBox:focus {
 QTreeView:focus,
 QListView:focus,
 QListWidget:focus,
-QTableWidget:focus {
+QTableWidget:focus,
+QTableView:focus {
     border: 1px solid #8b5cf6;
 }
 
@@ -760,9 +784,26 @@ _DARK_TO_LIGHT = {
     "#161c28": "#ede8f5",
 }
 _LIGHT_TO_DARK = {light: dark for dark, light in _DARK_TO_LIGHT.items()}
-GAMEFORGE_LIGHT_QSS = GAMEFORGE_DARK_QSS
-for _dark_color, _light_color in _DARK_TO_LIGHT.items():
-    GAMEFORGE_LIGHT_QSS = GAMEFORGE_LIGHT_QSS.replace(_dark_color, _light_color)
+
+
+def _build_theme_regex_replacer(mapping: dict[str, str]):
+    import re
+    sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
+    pattern = re.compile("|".join(re.escape(k) for k in sorted_keys), flags=re.IGNORECASE)
+    lower_map = {k.lower(): v for k, v in mapping.items()}
+
+    def replacer(text: str) -> str:
+        if not text:
+            return text
+        return pattern.sub(lambda m: lower_map.get(m.group(0).lower(), m.group(0)), text)
+
+    return replacer
+
+
+_replace_dark_to_light = _build_theme_regex_replacer(_DARK_TO_LIGHT)
+_replace_light_to_dark = _build_theme_regex_replacer(_LIGHT_TO_DARK)
+
+GAMEFORGE_LIGHT_QSS = _replace_dark_to_light(GAMEFORGE_DARK_QSS)
 
 
 def normalize_theme_name(theme: str) -> str:
@@ -790,17 +831,17 @@ def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
         clear_icon_cache()
     except Exception:
         pass
+    replacer = _replace_dark_to_light if theme == "light" else _replace_light_to_dark
     mapping = _DARK_TO_LIGHT if theme == "light" else _LIGHT_TO_DARK
     for widget in QApplication.allWidgets():
         try:
             previous = widget.property("gameforgeTheme") or "dark"
             if previous == theme:
                 continue
-            style = widget.styleSheet()
-            for source, target in mapping.items():
-                style = style.replace(source, target)
-            if style != widget.styleSheet():
-                widget.setStyleSheet(style)
+            orig_style = widget.styleSheet()
+            new_style = replacer(orig_style)
+            if new_style != orig_style:
+                widget.setStyleSheet(new_style)
             if isinstance(widget, (QTextEdit, QPlainTextEdit)):
                 document = widget.document()
                 document_css = widget.property("gameforgeDocumentCss")
@@ -858,7 +899,5 @@ def theme_stylesheet(dark_stylesheet: str) -> str:
     """Convert a dark-palette inline stylesheet for the active app theme."""
     if QApplication.instance() is None or QApplication.instance().property("gameforgeTheme") != "light":
         return dark_stylesheet
-    for source, target in _DARK_TO_LIGHT.items():
-        dark_stylesheet = dark_stylesheet.replace(source, target)
-    return dark_stylesheet
+    return _replace_dark_to_light(dark_stylesheet)
 

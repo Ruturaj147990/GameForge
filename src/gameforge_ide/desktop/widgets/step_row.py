@@ -45,13 +45,22 @@ class StepRowDelegate(QStyledItemDelegate):
         r = option.rect.adjusted(4, 2, -4, -2)
         is_hover = bool(option.state & QStyle.State_MouseOver)
         is_selected = bool(option.state & QStyle.State_Selected)
+        has_focus = bool(option.state & QStyle.State_HasFocus)
 
-        # Background
+        # Background & WCAG focus outline
         bg_col = QColor(tokens.BG_HOVER) if is_hover else (QColor(tokens.BG_ACTIVE) if is_selected else QColor(tokens.BG_SURFACE))
-        border_col = QColor(tokens.ACCENT_PRIMARY) if is_selected else QColor(tokens.BORDER)
+        if has_focus:
+            border_col = QColor(tokens.BORDER_FOCUS)
+            border_width = 1.5
+        elif is_selected:
+            border_col = QColor(tokens.ACCENT_PRIMARY)
+            border_width = 1.0
+        else:
+            border_col = QColor(tokens.BORDER)
+            border_width = 1.0
 
         painter.setBrush(QBrush(bg_col))
-        painter.setPen(QPen(border_col, 1.0))
+        painter.setPen(QPen(border_col, border_width))
         painter.drawRoundedRect(r, tokens.RADIUS, tokens.RADIUS)
 
         # Status icon

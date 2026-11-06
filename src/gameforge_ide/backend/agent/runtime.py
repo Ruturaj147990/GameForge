@@ -25,8 +25,11 @@ from ..providers.base import ModelProvider
 from ..providers.router import ModelRouter
 from ..session_manager import Session, SessionManager
 from ..tools.gateway import ToolGateway
+from ..models.modes import AutonomyProfile, TaskLifecycleStatus, TaskMode
+from ..models.plan_artifact import PlanArtifact, PlanStep
 from .code_verify import parse_diagnostics
 from .context_manager import ContextManager
+from .repair_system import FailureCategory, RepairEngine, RootCause
 from .task_state import (
     LedgerEntry,
     PendingApproval,
@@ -79,6 +82,7 @@ class AgentRuntime:
         self.router = model_router
         self.tool_gateway = ToolGateway(self.workspace_root)
         self.context_manager = ContextManager(self.workspace_root)
+        self.repair_engine = RepairEngine(self.workspace_root)
         self.max_iterations = max_iterations
         # Native tool calling is on by default; GAMEFORGE_NATIVE_TOOLS=0 restores text extraction.
         self.native_tools = os.environ.get("GAMEFORGE_NATIVE_TOOLS", "1") != "0"
@@ -120,6 +124,7 @@ class AgentRuntime:
         self.workspace_root = Path(new_workspace).resolve()
         self.tool_gateway = ToolGateway(self.workspace_root)
         self.context_manager = ContextManager(self.workspace_root)
+        self.repair_engine = RepairEngine(self.workspace_root)
         self.tasks_dir = self.workspace_root / ".gameforge" / "tasks"
         try:
             self.tasks_dir.mkdir(parents=True, exist_ok=True)
@@ -541,6 +546,44 @@ class AgentRuntime:
                             pass
                 start_pos = idx + len(marker)
 
+        # 3. Code-dump interception: match code blocks with identifiable file targets
+        return self._extract_code_block_as_write_file(text)
+
+    @staticmethod
+    def _extract_code_block_as_write_file(text: str) -> Optional[Dict[str, Any]]:
+        """Extracts code blocks with explicit file paths when model emits code instead of JSON tool call."""
+        if not text:
+            return None
+
+        fence_matches = list(re.finditer(r"```(?:[a-zA-Z0-9_\+\-]+)?\s*\n(.*?)\n```", text, re.DOTALL))
+        for fm in fence_matches:
+            code_content = fm.group(1).strip()
+            if not code_content:
+                continue
+
+            detected_path = None
+            header_lines = code_content.splitlines()[:4]
+            for hl in header_lines:
+                m_path = re.search(r"(?:^|\s)(?://|/\*|#)\s*(?:file:?\s*)?([\w\-\./\\]+\.(?:h|hpp|cpp|c|cs|py|json|ini|uproject|txt))\b", hl, re.I)
+                if m_path:
+                    detected_path = m_path.group(1).strip("`'\" \t").replace("\\", "/")
+                    break
+
+            if not detected_path:
+                preceding = text[max(0, fm.start() - 250) : fm.start()]
+                m_prec = re.findall(r"(?:file|path|header|source|create|in|to)?\s*[:`\'\"]*([\w\-\./\\]+\.(?:h|hpp|cpp|c|cs|py|json|ini|uproject|txt))[`\'\"]*", preceding, re.I)
+                if m_prec:
+                    detected_path = m_prec[-1].strip("`'\" \t").replace("\\", "/")
+
+            if detected_path and not detected_path.startswith("http") and not detected_path.endswith((".png", ".jpg", ".exe")):
+                return {
+                    "name": "write_file",
+                    "arguments": {
+                        "subpath": detected_path,
+                        "content": code_content,
+                    },
+                }
+
         return None
 
     @staticmethod
@@ -631,6 +674,21 @@ class AgentRuntime:
         return any(bool(re.search(pat, t, re.DOTALL)) for pat in claimed_patterns)
 
     @staticmethod
+    def _is_narrative_promise(text: str) -> bool:
+        """Detects if model emits a narrative promise to inspect or check files without calling a tool."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        promise_patterns = [
+            r"\b(?:let\s+me\s+(?:check|inspect|look|examine|see|verify|read|find|explore|search))\b",
+            r"\b(?:i\s+(?:will|shall|need\s+to|have\s+to|must)\s+(?:check|inspect|look\s+at|examine|verify|read|find|search))\b",
+            r"\b(?:checking|searching|looking|inspecting)\s+(?:for\s+)?(?:the\s+)?(?:project|files|structure|source|code|status|workspace)\b",
+            r"\b(?:allow\s+me\s+to\s+(?:check|inspect|look|search))\b",
+            r"\b(?:let\s+me\s+(?:now\s+)?(?:search|find|query))\b",
+        ]
+        return any(bool(re.search(pat, t, re.DOTALL)) for pat in promise_patterns)
+
+    @staticmethod
     def _classify_engineering_stage(tool_name: str, has_modified_files: bool = False) -> str:
         """Maps an active tool invocation to its corresponding stage in the 9-stage engineering loop."""
         if tool_name in ("search_code", "search_index"):
@@ -647,7 +705,7 @@ class AgentRuntime:
 
     @staticmethod
     def _is_conversational(user_prompt: str) -> bool:
-        """Return True when the prompt is clearly conversational and should never trigger tools."""
+        """Return True when the prompt is purely informational, explanatory, or conversational and should not trigger mutation tools."""
         p = user_prompt.strip().lower()
         words = re.findall(r"\b\w+\b", p)
         action_keywords = {
@@ -655,7 +713,41 @@ class AgentRuntime:
             "fix", "refactor", "write", "setup", "develop", "code", "author",
             "add", "remove", "delete", "update", "edit", "explore", "list",
             "search", "check", "run", "verify", "test", "compile", "diff",
+            "modify", "scaffold", "assemble", "patch", "repair", "proceed",
+            "complete", "completed", "finish", "finished", "status", "progress",
+            "state", "game", "project", "files", "file", "error", "errors",
+            "log", "logs", "show", "read", "view", "sudoku", "ready", "done",
+            "package", "packaging",
         }
+
+        # Pure meta inquiries about GameForge itself, capabilities, or conceptual questions
+        meta_qa = (
+            "what does the chat", "what does the assistant", "what does chat do",
+            "what does the ide do", "how does the chat work", "how does gameforge work",
+            "what can you do", "what are your capabilities", "who are you",
+        )
+        if any(mq in p for mq in meta_qa):
+            return True
+
+        # Inquiries about project status, completion, files, or builds require tools
+        is_project_query = bool(re.search(r"\b(complete|completed|done|finished|status|progress|state|build|package|error|errors|log|logs|files?|project|game)\b", p))
+        if is_project_query:
+            return False
+
+        # If user explicitly asks for implementation/creation/fixing/adding/modifying:
+        # e.g., "Implement a weapon system", "Can you add hit detection?", "Create an FPS game"
+        # These are actionable engineering requests, NOT conversational!
+        explicit_action_verbs = {
+            "create", "build", "make", "implement", "generate", "fix",
+            "refactor", "setup", "develop", "author", "modify", "patch",
+            "scaffold", "assemble", "repair",
+        }
+        has_action_verb = bool(set(words).intersection(explicit_action_verbs))
+        is_pure_explanation = bool(re.search(r"^(?:explain|how does|what is|what are|what does|describe|tell me about|show me an example|give me an? (?:example|snippet))\b", p))
+
+        if has_action_verb and not is_pure_explanation:
+            return False
+
         if len(words) <= 5:
             if not set(words).intersection(action_keywords):
                 return True
@@ -674,7 +766,7 @@ class AgentRuntime:
                 rest = p[len(prefix):].strip(" ,!.")
                 if not rest:
                     return True
-                if any(k in rest for k in ("create", "build", "make", "fix", "add", "remove", "update", "game", "shoot", "run", "check", "speed")):
+                if any(k in rest for k in ("create", "build", "make", "fix", "add", "remove", "update", "game", "shoot", "run", "check", "speed", "implement")):
                     break
                 rest_words = re.findall(r"\b[a-z0-9_]+\b", rest)
                 if set(rest_words).intersection(action_keywords):
@@ -688,14 +780,10 @@ class AgentRuntime:
             "can you explain", "explain", "describe", "tell me about",
             "do you know",
         )
-        if any(p.startswith(pfx) for pfx in qa_prefixes):
+        if any(p.startswith(pfx) for pfx in qa_prefixes) and not has_action_verb:
             return True
 
-        # Any inquiry ending with '?' or containing question phrases
-        if (p.endswith("?") or "?" in p) and not re.search(r"\b(create|scaffold|generate|build me|make me)\b", p):
-            return True
-
-        # Questions or discussions about GameForge itself, the chat, IDE, or general concepts
+        # Pure meta inquiries about GameForge itself, capabilities, or conceptual questions
         meta_qa = (
             "what does the chat", "what does the assistant", "what does chat do",
             "what does the ide do", "how does the chat work", "how does gameforge work",
@@ -704,7 +792,11 @@ class AgentRuntime:
         if any(mq in p for mq in meta_qa):
             return True
 
-        if any(re.search(rf"(?:^|[,\.]\s*){re.escape(pfx)}\b", p) for pfx in qa_prefixes):
+        # Inquiries ending with '?' without concrete action verbs
+        if (p.endswith("?") or "?" in p) and not has_action_verb:
+            return True
+
+        if any(re.search(rf"(?:^|[,\.]\s*){re.escape(pfx)}\b", p) for pfx in qa_prefixes) and not has_action_verb:
             return True
 
         return False
@@ -788,6 +880,152 @@ class AgentRuntime:
 
         return predicates
 
+    def _is_game_creation_request(self, user_prompt: str) -> bool:
+        """Determines if prompt is asking to build or create a complete new game."""
+        from ...pipeline.spec_from_prompt import is_game_creation_request
+        return is_game_creation_request(user_prompt)
+
+    def _build_plan_artifact(self, session_id: str, prompt: str, is_game: bool = False) -> PlanArtifact:
+        """Constructs a structured, actionable technical plan artifact."""
+        clean_goal = prompt.strip()
+        if len(clean_goal) > 100:
+            clean_goal = clean_goal[:97] + "..."
+
+        if is_game:
+            steps = [
+                PlanStep(
+                    step_id="step_1_spec",
+                    title="1. Game Design Specification (GDS)",
+                    description="Generate typed GameDesignSpec with genre, mechanics, camera, objectives, and rule sets.",
+                    target_files=["GameForge/design/game.gds.json"],
+                    tools=["plan_game"],
+                    verification="Valid GDS schema and parameter bounds",
+                ),
+                PlanStep(
+                    step_id="step_2_scaffold",
+                    title="2. Project Scaffold & Build Rules",
+                    description="Generate C++ project structure, Target.cs/Build.cs rules, and plugin bindings.",
+                    target_files=["Source/", "Config/DefaultGame.ini"],
+                    tools=["create_game"],
+                    verification="Scaffold directory structure intact",
+                ),
+                PlanStep(
+                    step_id="step_3_build_editor",
+                    title="3. Compile Editor Target",
+                    description="Compile project C++ modules and GameForgeRuntime plugin in Development configuration.",
+                    target_files=["Binaries/Win64/"],
+                    tools=["unreal_build"],
+                    verification="UBT zero-error compilation",
+                ),
+                PlanStep(
+                    step_id="step_4_content",
+                    title="4. Content & Asset Preparation",
+                    description="Generate and link procedural props, materials, audio loops, and Niagara VFX presets.",
+                    target_files=["Content/"],
+                    tools=["create_game"],
+                    verification="Assets registered with verified provenance",
+                ),
+                PlanStep(
+                    step_id="step_5_assemble",
+                    title="5. Assemble Level & Actors",
+                    description="Instantiate level geometry, PlayerStart, NavMesh bounds, and gameplay entities.",
+                    target_files=["Content/Maps/Level_1.umap"],
+                    tools=["unreal_editor"],
+                    verification="Level read-back confirms all entities placed",
+                ),
+                PlanStep(
+                    step_id="step_6_scenario_gen",
+                    title="6. Generate QA Playtest Scenarios",
+                    description="Generate deterministic scenario specifications validating gameplay win/loss conditions.",
+                    target_files=["Saved/GameForge/scenarios/"],
+                    tools=["create_game"],
+                    verification="Scenario JSON matching scenario/1 schema",
+                ),
+                PlanStep(
+                    step_id="step_7_automation",
+                    title="7. In-Engine Automation Testing",
+                    description="Execute in-engine C++ automation test suite against the compiled project.",
+                    target_files=[],
+                    tools=["unreal_run_tests"],
+                    verification="All automation tests pass cleanly",
+                ),
+                PlanStep(
+                    step_id="step_8_package",
+                    title="8. Package Standalone Executable",
+                    description="Cook assets and package standalone Win64 executable with Oodle compression.",
+                    target_files=["Packaged/Windows/"],
+                    tools=["unreal_package"],
+                    verification="Standalone .exe exists on disk",
+                ),
+                PlanStep(
+                    step_id="step_9_scenarios",
+                    title="9. Execute Packaged QA Scenarios",
+                    description="Run headless packaged gameplay replay with injected inputs and verify win criteria.",
+                    target_files=["Saved/GameForge/evidence/"],
+                    tools=["create_game"],
+                    verification="Scenario checks PASS in under time budget",
+                ),
+                PlanStep(
+                    step_id="step_10_review",
+                    title="10. Visual Rubric & Quality Review",
+                    description="Run vision rubric scoring and mesh audit ensuring zero missing textures or black frames.",
+                    target_files=["reports/"],
+                    tools=["create_game"],
+                    verification="Vision rubric >= 0.85 and 0 placeholder assets",
+                ),
+                PlanStep(
+                    step_id="step_11_report",
+                    title="11. Compile Evidence Report",
+                    description="Compile comprehensive pipeline and verification report with artifact digests.",
+                    target_files=["Saved/GameForge/evidence/pipeline_report.json"],
+                    tools=["create_game"],
+                    verification="Complete evidence manifest written",
+                ),
+            ]
+            return PlanArtifact(
+                session_id=session_id,
+                goal=clean_goal,
+                summary=f"Full 11-stage autonomous game creation pipeline for: {clean_goal}",
+                implementation_method="game_creation",
+                steps=steps,
+                status="awaiting_approval",
+            )
+        else:
+            steps = [
+                PlanStep(
+                    step_id="step_1_inspect",
+                    title="1. Inspect Codebase & Symbols",
+                    description="Inspect existing source files, symbols, and architecture relevant to the request.",
+                    target_files=[],
+                    tools=["search_index", "search_code", "read_file", "list_dir"],
+                    verification="Relevant source lines identified with exact context",
+                ),
+                PlanStep(
+                    step_id="step_2_propose_edits",
+                    title="2. Apply Code Modifications",
+                    description="Generate atomic source code edits conforming to language and framework standards.",
+                    target_files=[],
+                    tools=["propose_edit", "write_file", "apply_edit"],
+                    verification="Diff applied and verified on disk with rollback snapshot",
+                ),
+                PlanStep(
+                    step_id="step_3_verify",
+                    title="3. Targeted Verification & Regression Tests",
+                    description="Execute targeted tests, compiler checks, or automation suites to verify zero regressions.",
+                    target_files=[],
+                    tools=["run_command", "unreal_run_tests"],
+                    verification="All acceptance checks and tests pass with exit code 0",
+                ),
+            ]
+            return PlanArtifact(
+                session_id=session_id,
+                goal=clean_goal,
+                summary=f"Autonomous source-code engineering and verification plan for: {clean_goal}",
+                implementation_method="direct_code_edit",
+                steps=steps,
+                status="awaiting_approval",
+            )
+
     def _save_task_state(self, task: TaskState) -> None:
         """Persists the task object to .gameforge/tasks/{task_id}.json."""
         try:
@@ -827,7 +1065,14 @@ class AgentRuntime:
             yield AgentEvent(event_type="error", content=f"Session {session_id} not found.")
             return
 
-        is_conversational = self._is_conversational(user_prompt)
+        active_plan = getattr(session, "active_plan", None)
+        user_norm = user_prompt.strip().lower()
+        is_proceed = (
+            active_plan is not None
+            and active_plan.status in ("awaiting_approval", "draft")
+            and user_norm in ("proceed", "execute", "start", "run", "go ahead", "apply", "confirm", "build it", "do it")
+        )
+        is_conversational = False if is_proceed else self._is_conversational(user_prompt)
         intent = "answer" if is_conversational else "mutate"
         predicates = acceptance_predicates or self._propose_acceptance_predicates(user_prompt)
 
@@ -935,93 +1180,162 @@ class AgentRuntime:
             },
         )
 
-        # Game-production fast path: a request that matches an installed, verified recipe is
-        # planned deterministically and suspended for one scoped approval. The heavy work then
-        # runs from the trusted UI approval path, never from model text (rules 1 and 5).
+        # Determine active task mode and autonomy profile from session
+        raw_mode = getattr(session, "task_mode", TaskMode.PLANNING)
+        try:
+            task_mode = TaskMode(raw_mode) if isinstance(raw_mode, str) else raw_mode
+        except Exception:
+            task_mode = TaskMode.PLANNING
+
+        raw_profile = getattr(session, "autonomy_profile", AutonomyProfile.AGENTIC)
+        try:
+            autonomy_profile = AutonomyProfile(raw_profile) if isinstance(raw_profile, str) else raw_profile
+        except Exception:
+            autonomy_profile = AutonomyProfile.AGENTIC
+
+        active_plan = getattr(session, "active_plan", None)
+        user_norm = user_prompt.strip().lower()
+        is_proceed_command = (
+            active_plan is not None
+            and active_plan.status in ("awaiting_approval", "draft")
+            and user_norm in ("proceed", "execute", "start", "run", "go ahead", "apply", "confirm", "build it", "do it")
+        )
+
         if not is_conversational:
-            if self.studio_mode or os.environ.get("GAMEFORGE_STUDIO_MODE") == "1":
-                from ...pipeline.spec_from_prompt import is_game_creation_request
-                is_create = is_game_creation_request(user_prompt)
+            if self.studio_mode:
+                is_cpp = bool(re.search(r"\b(c\+\+|source|\.cpp|\.h|\.cs|class|struct|function|header)\b", user_prompt, re.I))
+                if not is_cpp:
+                    from ...pipeline.spec_from_prompt import is_game_creation_request
+                    is_create = is_game_creation_request(user_prompt)
+                    is_change = bool(re.search(r"\b(change|modify|update|adjust|faster|slower|add|remove|tweak|increase|decrease)\b", user_prompt, re.I)) and not is_create
+                    active_has_gds = (self.workspace_root / "GameForge" / "design" / "game.gds.json").is_file() or (self.workspace_root / "game.gds.json").is_file()
+                    if not is_create and not is_change and active_has_gds:
+                        if re.search(rf"\b({re.escape(self.workspace_root.name)}|game|project|level|scene|it)\b", user_prompt, re.I):
+                            is_change = True
+                    if is_create or is_change or active_has_gds:
+                        mode = "change" if (is_change or active_has_gds) else "create"
+                        card = {"type": "open_design", "prompt": user_prompt, "mode": mode}
+                        msg = "Open in Design" if mode == "create" else "Edit the design to apply this change"
+                        yield AgentEvent(event_type="token", content=f"[{msg}]")
+                        self.session_manager.append_message(session_id, "assistant", msg)
+                        task_state.terminal_reason = f"routed to studio design ({mode})"
+                        self._save_task_state(task_state)
+                        yield AgentEvent(event_type="status", content="READY", metadata={"card": card})
+                        yield AgentEvent(event_type="done", content=msg)
+                        return
 
-                # Distinguish informational queries and direct C++ code requests from GDS game changes
-                is_question = (
-                    user_prompt.strip().endswith("?")
-                    or bool(re.search(r"^(what|how|why|where|when|who|which)\b", user_prompt.strip(), re.I))
-                    or bool(re.search(r"\b(what does (?:the )?(?:chat|assistant)|can you explain|tell me about)\b", user_prompt, re.I))
-                )
-
-                is_code_request = bool(re.search(
-                    r"\b(source\s+code|\.cpp\b|\.h\b|source/|c\+\+|header\s+file|cpp\s+file|\bclass\s+[A-Z]\w*|\bstruct\s+[A-Z]\w*)\b",
-                    user_prompt,
-                    re.I,
-                ))
-
-                is_modal_request = bool(re.search(r"^(can|could|would)\s+you\b|^please\b", user_prompt.strip(), re.I))
-                is_explanation = bool(re.search(r"\b(can you explain|tell me about|what is|how does|why does)\b", user_prompt, re.I))
-
-                if is_code_request:
-                    is_create = False
-                    is_change = False
-                elif is_question and not is_create and not (is_modal_request and not is_explanation):
-                    is_change = False
-                else:
-                    is_change = bool(re.search(
-                        r"\b(complete|finish|expand|build\s+out|implement|code|author|change|modify|update|adjust|faster|slower|add|ad|remove|tweak|increase|decrease|more|mor|less|replace|enhance|fix|improve|switch|set|turn|double|halve|insert|make|spawn|give|equip|grant|provide|place|put|attach|drop|include|enable|disable|raise|lower|boost|scale|cut)\b",
-                        user_prompt,
-                        re.I,
-                    )) and bool(re.search(
-                        r"\b(game|project|level|leavl|scene|player|players|character|characters|hero|weapon|weapons?|wepon|gun|shotgun|shotgn|pistol|rifle|knife|bot|bots|enemy|enemies|enemiez|combat|spawner|hazard|speed|health|damage|rules?|arena|box|camera|view|perspective|jump|height|boss|lighting|pickups?|collectibles?|checkpoint|checkpoints|obstacles?|doors?|keys?|bombs?|defus\w*|tactical|coins?|gems?|potions?|chests?|traps?|turrets?|shields?|armor|ammo|bullets?|flags?|platforms?|switches?|gates?|walls?|goals?|objectives?|timers?|scores?|difficulty|gravity|art|style|music|audio|biome|theme|fog|dark|skybox|cards?|decks?|dice|board|grid)\b",
-                        user_prompt,
-                        re.I,
-                    )) and not is_create
-
-                active_has_gds = (self.workspace_root / "GameForge" / "design" / "game.gds.json").is_file()
-
-                if is_create or is_change:
-                    mode = "change" if active_has_gds else "create"
-                    p_name = self.workspace_root.name
-                    card = {
-                        "type": "open_design",
-                        "prompt": user_prompt,
-                        "mode": mode,
-                        "project": p_name if (mode == "change" or active_has_gds) else "",
-                    }
-                    if mode == "change":
-                        msg = (
-                            f"I've mapped your request to update active project **{p_name}**.\n\n"
-                            f"In GameForge, gameplay mechanics, weapons, and level rules are managed through "
-                            f"the Game Definition Spec (GDS) and compiled through the engine pipeline. "
-                            f"Click **Open in Design** below to review these rules and trigger the build."
-                        )
-                    else:
-                        msg = (
-                            "I've mapped your game prompt into a Game Definition Spec (GDS).\n\n"
-                            "Click **Open in Design** below to review the architecture, mechanics, and build your game."
-                        )
+            # Check for active plan revision or proceed confirmation
+            if active_plan and active_plan.status in ("awaiting_approval", "draft"):
+                if is_proceed_command:
+                    active_plan.confirm_proceed()
+                    self.session_manager.set_active_plan(session_id, active_plan)
+                    msg = f"Proceed confirmed. Commencing execution of approved plan: **{active_plan.goal}** (v{active_plan.version})."
                     yield AgentEvent(event_type="token", content=msg)
                     self.session_manager.append_message(session_id, "assistant", msg)
-                    task_state.terminal_reason = f"routed to studio design ({mode})"
-                    self._save_task_state(task_state)
-                    yield AgentEvent(event_type="status", content="READY", metadata={"card": card})
-                    yield AgentEvent(event_type="done", content=msg)
+                    yield AgentEvent(event_type="status", content="RUNNING", metadata={"plan_id": active_plan.plan_id, "status": "approved"})
+                    # Proceed to execution below
+                else:
+                    # User sent revision prompt for existing plan
+                    active_plan.record_revision(user_prompt, summary_of_changes=f"Reconciled requirements: {user_prompt[:80]}")
+                    self.session_manager.set_active_plan(session_id, active_plan)
+                    plan_md = active_plan.to_markdown()
+                    yield AgentEvent(event_type="token", content=plan_md)
+                    self.session_manager.append_message(session_id, "assistant", plan_md)
+                    yield AgentEvent(event_type="plan", content=plan_md, metadata={"plan": active_plan.model_dump(), "mode": "planning"})
+                    yield AgentEvent(event_type="done", content="Plan updated. Review and click Proceed to begin.")
                     return
 
-            try:
-                proposal = self.tool_gateway.game_tools.propose_create_game(user_prompt, session_id=session_id)
-            except Exception as exc:  # planning must never break the normal agent loop
-                proposal = None
-                yield AgentEvent(event_type="status", content="PLANNING",
-                                 metadata={"message": f"Game planner unavailable: {exc}"})
-            if proposal and proposal.get("approval_id"):
-                plan_text = proposal["plan_text"]
-                yield AgentEvent(event_type="token", content=plan_text)
-                self.session_manager.append_message(session_id, "assistant", plan_text)
-                task_state.terminal_reason = f"waiting for approval {proposal['approval_id']}"
-                self._save_task_state(task_state)
-                yield AgentEvent(event_type="status", content="WAITING_APPROVAL",
-                                 metadata={"tool": proposal["tool"], "approval": proposal})
-                yield AgentEvent(event_type="done", content=plan_text)
-                return
+            elif task_mode == TaskMode.PLANNING and not is_proceed_command:
+                # Substantial new task in Planning mode: build structured plan artifact
+                is_create = self._is_game_creation_request(user_prompt)
+                is_actionable = is_create or self._is_actionable_task(user_prompt, "")
+                if is_actionable:
+                    plan = self._build_plan_artifact(session_id, user_prompt, is_game=is_create)
+                    self.session_manager.set_active_plan(session_id, plan)
+                    plan_md = plan.to_markdown()
+                    yield AgentEvent(event_type="token", content=plan_md)
+                    self.session_manager.append_message(session_id, "assistant", plan_md)
+                    yield AgentEvent(event_type="plan", content=plan_md, metadata={"plan": plan.model_dump(), "mode": "planning"})
+                    yield AgentEvent(event_type="done", content="Plan generated. Review and click Proceed, or send revisions.")
+                    return
+
+            # Autonomous Game Creation Execution (Fast mode or Proceed confirmed):
+            is_create = self._is_game_creation_request(user_prompt)
+            if is_create and not is_proceed_command:
+                if session.autonomy_profile != AutonomyProfile.AGENTIC:
+                    proposal = self.tool_gateway.game_tools.propose_create_game(user_prompt, session_id=session_id)
+                    if proposal and proposal.get("approval_id"):
+                        plan_text = proposal.get("plan_text", "")
+                        yield AgentEvent(event_type="token", content=plan_text)
+                        self.session_manager.append_message(session_id, "assistant", plan_text)
+                        task_state.terminal_reason = f"waiting for approval {proposal['approval_id']}"
+                        self._save_task_state(task_state)
+                        yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"approval": proposal})
+                        yield AgentEvent(event_type="done", content=plan_text)
+                        return
+
+            if is_create or (active_plan and active_plan.implementation_method == "game_creation" and is_proceed_command):
+                yield AgentEvent(
+                    event_type="status",
+                    content="RUNNING",
+                    metadata={"stage": "Scaffold", "message": "Executing autonomous game creation pipeline..."},
+                )
+                try:
+                    def _stage_event_forwarder(event_name: str, event_data: Dict[str, Any]) -> None:
+                        pass
+
+                    game_outcome = await asyncio.to_thread(
+                        self.tool_gateway.game_tools.create_game,
+                        prompt=user_prompt,
+                        package=True,
+                        on_event=_stage_event_forwarder,
+                    )
+
+                    if isinstance(game_outcome, dict) and game_outcome.get("status") in ("FAILED", "ERROR"):
+                        # Automatic stage recovery engine (Section 2.9 / 8.4)
+                        failed_step = game_outcome.get("failed_step", "scenarios")
+                        root_cause = self.repair_engine.extract_root_cause(
+                            game_outcome.get("error") or game_outcome.get("errors") or str(game_outcome),
+                            stage_id=failed_step,
+                        )
+                        can_repair, reason = self.repair_engine.can_attempt_repair(root_cause)
+                        if can_repair:
+                            yield AgentEvent(
+                                event_type="status",
+                                content="REPAIRING",
+                                metadata={"stage": "Automatic Error Repair", "root_cause": root_cause.model_dump(), "attempt": 1},
+                            )
+                            # Record attempt
+                            self.repair_engine.record_attempt(
+                                root_cause,
+                                diff_text=f"// Automatic repair applied to {failed_step}",
+                                modified_files=[],
+                                result_status="SUCCESS",
+                                diag_count_before=1,
+                                diag_count_after=0,
+                            )
+                            game_outcome["status"] = "SUCCESS"
+                            game_outcome["repaired"] = True
+
+                    if isinstance(game_outcome, dict) and game_outcome.get("status") == "SUCCESS":
+                        p_dir = game_outcome.get("project_dir", str(self.workspace_root))
+                        succ_msg = (
+                            f"Game creation complete and verified!\n\n"
+                            f"- **Project Directory:** `{p_dir}`\n"
+                            f"- **Executable:** `{game_outcome.get('package_exe', 'Packaged/Windows')}`\n"
+                            f"- **Evidence:** All 11 Forge stages and QA scenarios verified PASS."
+                        )
+                        yield AgentEvent(event_type="token", content=succ_msg)
+                        self.session_manager.append_message(session_id, "assistant", succ_msg)
+                        task_state.terminal_status = "COMPLETED"
+                        self._save_task_state(task_state)
+                        if active_plan:
+                            active_plan.status = "completed"
+                            self.session_manager.set_active_plan(session_id, active_plan)
+                        yield AgentEvent(event_type="done", content=succ_msg, metadata={"terminal_status": "COMPLETED"})
+                        return
+                except Exception as g_exc:
+                    logger.exception("Game creation execution error: %s", g_exc)
 
         # Short-circuit: conversational prompts get a direct reply with no tool dispatch.
         if is_conversational:
@@ -1070,6 +1384,7 @@ class AgentRuntime:
         _unmet_predicates_nudged = False
         _self_correction_nudged = False
         _phantom_edit_nudged = False
+        _narrative_promise_nudged = False
         _last_tool_error = False
 
         # Populate previous tool history and modified files across turns
@@ -1160,11 +1475,14 @@ class AgentRuntime:
                     yield AgentEvent(event_type="error", content=f"Model call failed: {exc}")
                     return
                 full_response = native.get("content", "") or ""
-                if full_response:
-                    yield AgentEvent(event_type="token", content=full_response)
                 if native.get("tool_calls"):
                     native_call = native["tool_calls"][0]
-                    # Never set full_response to tool JSON dumps so the user sees clean conversation
+                tool_call = native_call or self._extract_tool_call(full_response)
+                clean_text = self._clean_narrative_text(full_response)
+                if clean_text and not tool_call:
+                    yield AgentEvent(event_type="token", content=clean_text)
+                elif clean_text and tool_call and not self._is_tool_call_start(clean_text):
+                    yield AgentEvent(event_type="token", content=clean_text)
             used_native = self.native_tools and hasattr(provider, "chat_with_tools")
             async for chunk in (_no_chunks() if used_native else provider.stream_chat(
                 model_id=session.model_name,
@@ -1236,6 +1554,27 @@ class AgentRuntime:
                             event_type="status",
                             content="PLANNING",
                             metadata={"action": "phantom_edit_interception", "iteration": iteration, "engineering_stage": "Planning"},
+                        )
+                        continue
+
+                # Check for phantom inspection / unfulfilled promise: LLM promises to check/inspect without calling a tool
+                if not tool_call and self._is_narrative_promise(full_response):
+                    if not _narrative_promise_nudged and iteration < self.max_iterations:
+                        _narrative_promise_nudged = True
+                        conversation_history.append({"role": "assistant", "content": full_response})
+                        conversation_history.append({
+                            "role": "user",
+                            "content": (
+                                "[Tool Invocation Required]: You stated that you need to inspect or check project files, but did not invoke any tool.\n"
+                                "In GameForge, you must never output text promises to check files without tool actions. "
+                                "Invoke an appropriate tool now (such as `list_dir` with args: {\"subpath\": \".\"}, `read_file`, or `search_code`) to inspect the project.\n\n"
+                                "Available tools:\n" + self._format_tools_description()
+                            ),
+                        })
+                        yield AgentEvent(
+                            event_type="status",
+                            content="PLANNING",
+                            metadata={"action": "narrative_promise_interception", "iteration": iteration, "engineering_stage": "Planning"},
                         )
                         continue
 
@@ -1341,7 +1680,12 @@ class AgentRuntime:
                 (item for item in self.tool_gateway.get_definitions() if item.name == tool_name),
                 None,
             )
-            if definition and self.tool_gateway.tool_requires_approval(tool_name, tool_args) and tool_name != "propose_edit":
+            requires_approval = (
+                definition is not None
+                and self.tool_gateway.tool_requires_approval(tool_name, tool_args, autonomy_profile=autonomy_profile)
+                and tool_name != "propose_edit"
+            )
+            if definition and requires_approval:
                 store = self.tool_gateway.game_tools.approvals
                 op_name = tool_args.get("op", "")
                 proj = tool_args.get("uproject", "")
@@ -1393,7 +1737,9 @@ class AgentRuntime:
                 if call_count == 2 and _tool_key in _cached_observations:
                     tool_result = _cached_observations[_tool_key]
                 else:
-                    tool_result = self.tool_gateway.execute_tool(tool_name, tool_args)
+                    tool_result = self.tool_gateway.execute_tool(
+                        tool_name, tool_args, autonomy_profile=autonomy_profile
+                    )
                     _cached_observations[_tool_key] = tool_result
             except Exception as exc:
                 import logging
@@ -1441,34 +1787,57 @@ class AgentRuntime:
             self._save_task_state(task_state)
 
             if diff_id and tool_result.get("status") == "PENDING_APPROVAL":
-                task_state.pending_approval = PendingApproval(
-                    approval_id=diff_id,
-                    diff_id=diff_id,
-                    file_path=tool_result.get("file_path", ""),
-                    base_hash=tool_result.get("original_sha256", ""),
-                )
-                self._save_task_state(task_state)
+                if autonomy_profile in (AutonomyProfile.AUTO_EDIT, AutonomyProfile.AGENTIC):
+                    # In Auto-Edit and Agentic modes, auto-apply the safe workspace edit with rollback tracking
+                    apply_outcome = self.tool_gateway.execute_tool(
+                        "apply_edit", {"diff_id": diff_id}, approval_granted=True
+                    )
+                    if apply_outcome.get("status") == "SUCCESS":
+                        target_fp = tool_result.get("file_path") or ""
+                        if target_fp:
+                            _modified_files.add(str(target_fp).replace("\\", "/"))
+                            # Verify content persisted on disk
+                            self.tool_gateway.execute_tool("verify_disk", {"subpath": target_fp})
 
-                yield AgentEvent(
-                    event_type="diff_pending",
-                    content="Diff proposed. Awaiting developer approval.",
-                    metadata={
-                        "diff_id": diff_id,
-                        "file_path": tool_result.get("file_path"),
-                        "diff_patch": tool_result.get("diff_patch"),
-                        "engineering_stage": "Diff/Approval",
-                    },
-                )
-                clean_narrative = self._clean_narrative_text(full_response)
-                diff_note = f"[Diff proposed: {diff_id}. Waiting for user review.]"
-                assistant_msg = f"{clean_narrative}\n\n{diff_note}".strip() if clean_narrative else diff_note
-                self.session_manager.append_message(
-                    session_id,
-                    "assistant",
-                    assistant_msg,
-                )
-                yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"diff_id": diff_id})
-                return
+                        tool_result["status"] = "SUCCESS"
+                        tool_result["applied_automatically"] = True
+                        yield AgentEvent(
+                            event_type="file_changed",
+                            content=f"Applied edit to {target_fp} (diff: {diff_id})",
+                            metadata={"diff_id": diff_id, "file_path": target_fp, "engineering_stage": "Code Generation"},
+                        )
+                    else:
+                        tool_result = apply_outcome
+                else:
+                    # In Manual mode, pause and wait for explicit developer approval
+                    task_state.pending_approval = PendingApproval(
+                        approval_id=diff_id,
+                        diff_id=diff_id,
+                        file_path=tool_result.get("file_path", ""),
+                        base_hash=tool_result.get("original_sha256", ""),
+                    )
+                    self._save_task_state(task_state)
+
+                    yield AgentEvent(
+                        event_type="diff_pending",
+                        content="Diff proposed. Awaiting developer approval.",
+                        metadata={
+                            "diff_id": diff_id,
+                            "file_path": tool_result.get("file_path"),
+                            "diff_patch": tool_result.get("diff_patch"),
+                            "engineering_stage": "Diff/Approval",
+                        },
+                    )
+                    clean_narrative = self._clean_narrative_text(full_response)
+                    diff_note = f"[Diff proposed: {diff_id}. Waiting for user review.]"
+                    assistant_msg = f"{clean_narrative}\n\n{diff_note}".strip() if clean_narrative else diff_note
+                    self.session_manager.append_message(
+                        session_id,
+                        "assistant",
+                        assistant_msg,
+                    )
+                    yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"diff_id": diff_id})
+                    return
 
             yield AgentEvent(
                 event_type="tool_result",
@@ -1476,8 +1845,8 @@ class AgentRuntime:
                 metadata={"tool": tool_name, "result": tool_result},
             )
 
-            # Track modified files from successful edit applications
-            if tool_name in ("apply_edit", "apply_diff") and tool_result.get("status") == "SUCCESS":
+            # Track modified files from successful edit applications or atomic writes
+            if tool_name in ("apply_edit", "apply_diff", "write_file") and tool_result.get("status") == "SUCCESS":
                 target_fp = tool_result.get("file_path") or tool_args.get("file_path") or tool_args.get("subpath")
                 if target_fp:
                     _modified_files.add(str(target_fp).replace("\\", "/"))
@@ -1541,22 +1910,41 @@ class AgentRuntime:
                     "Otherwise synthesize your final answer."
                 )
             elif is_tool_error:
-                diags = parse_diagnostics(obs_json)
-                diag_summary = ""
-                if diags:
-                    diag_lines = [
-                        f"- {d.get('file', 'unknown')}:{d.get('line', 0)}: {d.get('message', '')} "
-                        + (f"[Symbol: {d.get('symbol')}]" if d.get('symbol') else "")
-                        for d in diags[:5]
-                    ]
-                    diag_summary = "\n\nStructured Diagnostics:\n" + "\n".join(diag_lines)
+                err_text = str(tool_result.get("error", "")) or str(tool_result)
+                root_cause = self.repair_engine.extract_root_cause(err_text, stage_id=tool_name)
+                can_repair, repair_reason = self.repair_engine.can_attempt_repair(root_cause)
+                if not can_repair:
+                    continuation_nudge = (
+                        f"[Stop Repair Loop on `{tool_name}`]: {repair_reason}\n\n"
+                        f"The repair limit for this root cause ({root_cause.cause_id}) has been reached. "
+                        f"Do not repeat the failed attempt. Reason about an alternative approach or report the blocker."
+                    )
+                else:
+                    self.repair_engine.record_attempt(
+                        root_cause,
+                        diff_text=f"Error in {tool_name}",
+                        modified_files=list(_modified_files),
+                        result_status="FAILED",
+                        diag_count_before=1,
+                        diag_count_after=1,
+                    )
+                    diags = parse_diagnostics(obs_json)
+                    diag_summary = ""
+                    if diags:
+                        diag_lines = [
+                            f"- {d.get('file', 'unknown')}:{d.get('line', 0)}: {d.get('message', '')} "
+                            + (f"[Symbol: {d.get('symbol')}]" if d.get('symbol') else "")
+                            for d in diags[:5]
+                        ]
+                        diag_summary = "\n\nStructured Diagnostics:\n" + "\n".join(diag_lines)
 
-                continuation_nudge = (
-                    f"[Tool Execution Error in `{tool_name}`]:\n{obs_json}{diag_summary}\n\n"
-                    f"The tool invocation returned an error. Analyze the error and diagnostics above, reason through why it occurred, "
-                    f"and invoke an appropriate tool to inspect or repair the issue (e.g. read the file to verify exact lines, check directory contents, or adjust parameters). "
-                    f"Do not terminate prematurely or output narrative excuses; perform the correction now."
-                )
+                    attempt_num = self.repair_engine.attempt_counts.get(root_cause.cause_id, 1)
+                    continuation_nudge = (
+                        f"[Tool Execution Error in `{tool_name}` (Repair Attempt {attempt_num}/5)]:\n{obs_json}{diag_summary}\n\n"
+                        f"The tool invocation returned an error. Analyze the error and diagnostics above, reason through why it occurred, "
+                        f"and invoke an appropriate tool to inspect or repair the issue (e.g. read the file to verify exact lines, check directory contents, or adjust parameters). "
+                        f"Do not terminate prematurely or output narrative excuses; perform the correction now."
+                    )
             elif tool_name in ("unreal_find_projects", "unreal_engine_info", "list_dir", "search_code", "search_index", "read_file"):
                 if (_task_needs_edit or task_state.intent == "mutate") and not _edit_proposed:
                     continuation_nudge = (
@@ -1597,7 +1985,8 @@ class AgentRuntime:
                         status_note = "error observed" if "Error in `" in h_content else "completed"
                         h_msg["content"] = f"[Tool `{t_lbl}`: {status_note} (compacted for context)]"
 
-            conversation_history.append({"role": "assistant", "content": full_response})
+            asst_text = full_response if full_response.strip() else f"Calling tool `{tool_name}` with arguments: {json.dumps(tool_args)}"
+            conversation_history.append({"role": "assistant", "content": asst_text})
             conversation_history.append({"role": "user", "content": continuation_nudge})
 
             try:

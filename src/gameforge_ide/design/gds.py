@@ -5,7 +5,7 @@ import re
 import secrets
 import time
 from enum import Enum
-from typing import Annotated, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -106,11 +106,41 @@ class Meta(_M):
 
 
 class Overview(_M):
-    genre: Genre
+    genre: Genre = Genre.ACTION_ADVENTURE
     pitch: str = Field("", max_length=280)
-    camera: CameraKind
+    camera: CameraKind = CameraKind.THIRD_PERSON
     players: int = Field(1, ge=1, le=8)
     session_minutes: int = Field(10, ge=1, le=120)
+
+    @field_validator("genre", mode="before")
+    @classmethod
+    def _coerce_genre(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower().replace("-", "_").replace(" ", "_")
+            if v_clean in ("action", "adventure"):
+                return Genre.ACTION_ADVENTURE
+            if v_clean in ("shooter", "fps"):
+                return Genre.TOP_DOWN_SHOOTER
+            if v_clean in ("board", "grid"):
+                return Genre.GRID_BOARD
+            if v_clean in ("combat", "arena"):
+                return Genre.ARENA_COMBAT
+            if v_clean in ("card", "cards"):
+                return Genre.CARD_BATTLER
+            for g in Genre:
+                if g.value == v_clean:
+                    return g
+        return v
+
+    @field_validator("camera", mode="before")
+    @classmethod
+    def _coerce_camera(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower().replace("-", "_").replace(" ", "_")
+            for c in CameraKind:
+                if c.value == v_clean:
+                    return c
+        return v or CameraKind.THIRD_PERSON
 
 
 class LevelSpec(_M):

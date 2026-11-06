@@ -174,7 +174,7 @@ def test_is_narrative_excuse_expanded_phrasing(tmp_path: Path):
 async def test_runtime_catches_tool_execution_exception(tmp_path: Path):
     """Verify runtime does not crash when tool execution raises an unexpected exception."""
     sm = SessionManager(tmp_path)
-    session = sm.create_session("ExTest")
+    session = sm.create_session("ExTest", task_mode="fast")
     runtime = AgentRuntime(tmp_path, sm, ModelRouter())
 
     # Mock tool gateway to raise an unexpected exception

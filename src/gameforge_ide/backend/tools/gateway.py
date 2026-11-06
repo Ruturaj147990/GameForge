@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
+from ..models.modes import AutonomyProfile
 from .asset_tools import ProceduralMeshGenerator
 from .edit_tools import EditTools
 from .fs_tools import tool_list_dir, tool_read_file, tool_search_code
@@ -217,6 +218,34 @@ class ToolGateway:
                 requires_approval=False,
             ),
             ToolDefinition(
+                name="write_file",
+                description="Atomically write or overwrite a file in the workspace with rollback tracking.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "subpath": {"type": "string", "description": "Target file path relative to workspace."},
+                        "content": {"type": "string", "description": "Full file content to write."},
+                        "file_path": {"type": "string"},
+                        "path": {"type": "string"},
+                    },
+                    "required": ["subpath", "content"],
+                },
+                requires_approval=True,
+            ),
+            ToolDefinition(
+                name="verify_disk",
+                description="Verify that a file exists on disk and optionally contains an expected content fragment.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "subpath": {"type": "string", "description": "Target file path relative to workspace."},
+                        "expected_fragment": {"type": "string", "default": ""},
+                    },
+                    "required": ["subpath"],
+                },
+                requires_approval=False,
+            ),
+            ToolDefinition(
                 name="run_command",
                 description="Execute an approved non-shell command inside the workspace.",
                 parameters={
@@ -331,14 +360,58 @@ class ToolGateway:
             ),
         ]
 
-    def tool_requires_approval(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> bool:
-        """True when dispatching ``name`` with ``arguments`` needs explicit user approval."""
+    def tool_requires_approval(
+        self,
+        name: str,
+        arguments: Optional[Dict[str, Any]] = None,
+        autonomy_profile: Optional[AutonomyProfile | str] = None,
+    ) -> bool:
+        """True when dispatching ``name`` with ``arguments`` needs explicit user approval under active autonomy profile."""
         canonical_name = TOOL_ALIASES.get(name, name)
         args = dict(arguments) if isinstance(arguments, dict) else {}
-        if canonical_name == "propose_edit":
+        profile = AutonomyProfile(autonomy_profile) if autonomy_profile else AutonomyProfile.MANUAL
+
+        # Read-only operations never require approval in any profile
+        read_only_tools = {
+            "list_dir", "read_file", "search_code", "search_index", "verify_disk",
+            "git_status", "git_diff", "unreal_engine_info", "unreal_find_projects",
+            "generate_3d_mesh", "reject_edit", "plan_game",
+        }
+        if canonical_name in read_only_tools:
             return False
+
         if canonical_name == "unreal_editor" and args.get("op") in READ_ONLY_EDITOR_OPS:
             return False  # T0 read-back operations
+
+        if canonical_name == "propose_edit":
+            # propose_edit produces diff preview without mutating disk
+            return False
+
+        # In MANUAL profile: all mutations, commands, builds require approval
+        if profile == AutonomyProfile.MANUAL:
+            return True
+
+        # In AUTO_EDIT profile: safe file modifications inside workspace proceed automatically
+        if profile == AutonomyProfile.AUTO_EDIT:
+            if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch"):
+                return False
+            # Commands, builds, packages, unreal editor mutations still require approval
+            return True
+
+        # In AGENTIC profile: safe file edits, allowlisted project commands, safe builds & tests proceed automatically
+        if profile == AutonomyProfile.AGENTIC:
+            if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch"):
+                return False
+            if canonical_name in ("unreal_run_tests", "unreal_build"):
+                return False
+            if canonical_name == "run_command":
+                cmd = str(args.get("command", "")).strip().lower()
+                # Allowlisted non-destructive dev commands
+                allowlist_starts = ("pytest", "python -m pytest", "git ", "git.exe ", "cargo test", "ctest")
+                if any(cmd.startswith(p) for p in allowlist_starts):
+                    return False
+                return True
+
         definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
         if definition is None:
             # Fail closed: unrecognized tool actions require explicit approval or are rejected
@@ -492,6 +565,7 @@ class ToolGateway:
         arguments: Optional[Dict[str, Any]] = None,
         *,
         approval_granted: bool = False,
+        autonomy_profile: Optional[AutonomyProfile | str] = None,
     ) -> Dict[str, Any]:
         """Dispatch a tool, requiring explicit approval for marked actions.
 
@@ -507,7 +581,7 @@ class ToolGateway:
         if definition is None:
             return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
 
-        if self.tool_requires_approval(canonical_name, args) and not approval_granted:
+        if self.tool_requires_approval(canonical_name, args, autonomy_profile=autonomy_profile) and not approval_granted:
             return {
                 "status": "PENDING_APPROVAL",
                 "tool": name,
@@ -576,6 +650,10 @@ class ToolGateway:
                 res = self.edit_tools.apply_batch(**args)
             elif canonical_name == "reject_edit":
                 res = self.edit_tools.reject_diff(**args)
+            elif canonical_name == "write_file":
+                res = self.edit_tools.write_file(**args)
+            elif canonical_name == "verify_disk":
+                res = self.edit_tools.verify_disk_contents(**args)
             elif canonical_name == "rollback_edit":
                 res = self.edit_tools.rollback_diff(**args)
             elif canonical_name == "rollback_batch":

@@ -12,19 +12,21 @@ Implementers (Antigravity) must not change anything in this document. Proposed c
 
 ## 1. Product definition
 
-**GameForge is a Windows desktop platform that turns a natural-language game idea into a playable, verified
-Unreal Engine 5 game. The user can then keep changing that game with further prompts.** It is not a game and not a
-code assistant with game features. The primary loop is:
+**GameForge is a genuinely autonomous AI game-development and software-engineering IDE with capabilities, execution quality, and interaction patterns comparable to Claude Code and Google Antigravity.** The assistant is the universal entry point for all engineering, code editing, game creation, testing, and debugging.
+
+The primary product loop is:
 
 ```
-Idea (prompt) ──► Game Design Spec (editable) ──► Build run (plan → generate → assemble → test → package)
-      ▲                                                                                   │
-      └──────── change request (prompt or spec edit) ◄── Play + Evidence (scenarios, screenshots, reports) ◄┘
+Idea / Task (Prompt) ──► Universal Assistant (Inspect / Plan / Auto-Edit / Execute)
+                                  │
+                                  ├──► Direct Source Code Modification & Test Verification
+                                  └──► 11-Stage Forge Pipeline (Plan → Scaffold → Build → Content → Assemble → Package → Scenarios → Report)
+                                  │
+                                  ▼
+                     Evidence Verification & Reversible Diffs
 ```
 
-Success means that a non-developer can type *"a third-person forest adventure where I collect 5 relics while
-avoiding guards"*, review a one-page design, press **Build**, and receive a packaged game. Replayable scenarios prove
-that winning and losing actually work, and the user can then say *"make the guards faster and add a second area"*.
+Forge serves as an internal execution capability rather than a mandatory UI detour. The user submits requests once through the assistant, which selects the appropriate execution path based on active Task Approach (`Planning` vs `Fast`) and Autonomy Profile (`Manual`, `Auto-Edit`, `Agentic`).
 
 ### Quality bar (from the design contract, unchanged since Blueprint v1)
 
@@ -301,39 +303,49 @@ the same models. P2 makes a missing schema a unit-test failure.
 
 ## 4. Main data flows
 
-### 4.1 Prompt → game (target, after P6)
+### 4.1 Prompt → Game (Universal Assistant Architecture)
 
 ```
-User prompt
-  └─ design.prompt_to_gds  (deterministic preset match → model draft with JSON schema → pydantic validate
-                            → ≤1 repair round → fail closed with questions)  ─► GDS r1 (shown in Design view)
-User reviews / edits → "Build"  (one approval covers the run's declared scope: project dir, engine ops, packaging)
-  └─ composer.compose(GDS) ─► Composition {modules, layout per level, level_ops, gfdef JSON, codegen tasks, scenarios}
-  └─ forge.plan(Composition) ─► RunSpec:
-       scaffold → [codegen? → build_editor] → content (textures/meshes/audio, parallel-safe)
-       → assemble (per level: ops with read-back; manifest) → automation (kit + game tests)
-       → package(Development) → scenario (each must_pass scenario, packaged) → review (vision rubric)
-       → package(Shipping, if release) → report
-  └─ Forge executes: per step git checkpoint; failures → repair hook → retry ≤ max_attempts → FAILED with diagnostics
-Play view: ▶ Play, scenario table, screenshots, report
+User prompt submitted through Universal Assistant Chat
+  └─ AgentRuntime identifies intent:
+       ├─ Game Creation Request:
+       │    ├─ Planning Mode: Generates structured 11-stage PlanArtifact → awaits Proceed confirmation.
+       │    ├─ Fast Mode / Proceed Confirmed:
+       │    │    └─ Invokes GameTools.create_game / Forge DAG:
+       │    │         scaffold → build_editor → content → assemble_level_1 → scenario_gen
+       │    │         → automation → package → scenarios → review → report
+       │    │         (Failures trigger RepairEngine automatic repair; max 5 attempts per root cause)
+       │    └─ Verified output: Standalone executable, pipeline report, and test evidence reported in chat.
+       ├─ Feature / Source-Code Engineering:
+       │    └─ Codebase Inspection → propose_edit / write_file → DiffStore verification
+       │         → disk read-back & SHA-256 integrity → targeted tests / compiler diagnostics.
+       └─ Informational / Architectural Query:
+            └─ Concise markdown explanation & verified snippets; no unsolicited tool execution.
 ```
 
-### 4.2 Change request (P8)
+### 4.2 Feature & Source-Code Modification
 
 ```
-Prompt "make guards faster" ─► design.patch: model proposes a JSON Patch against the GDS (schema-validated)
-  ─► Design view shows the diff ─► approve ─► GDS r(n+1)
-  ─► composer recomposes ─► forge plans with the same step ids ─► unchanged input_hash ⇒ steps skipped
-  ─► only affected steps rerun ─► full scenario regression ─► report shows the delta
-User-edited assets (hash ≠ recorded generation hash) are never overwritten without a conflict prompt.
+User prompt: "Implement weapon system with recoil and ammo"
+  └─ Assistant inspects project workspace via search_code / read_file / list_dir
+  └─ In Planning mode: Structured PlanStep artifact displayed with Proceed confirmation
+  └─ In Fast mode or after Proceed:
+       └─ Proposes atomic source changes (propose_edit / write_file)
+       └─ Under active AutonomyProfile (Manual / Auto-Edit / Agentic):
+            - Auto-Edit / Agentic: Applies diffs immediately to disk with rollback tracking
+            - Manual: Displays interactive ApprovalCard in conversation
+       └─ Verifies real file creation via verify_disk and SHA-256 hash checking
+       └─ Runs targeted compiler / test verification (run_command / unreal_run_tests)
+       └─ Reports verified diffs and file paths in the conversation.
 ```
 
-### 4.3 Chat assistant
+### 4.3 Universal Assistant Chat (Single Natural-Language Entry Point)
 
-The assistant is a side panel available everywhere. It answers questions, edits code in Code mode through the diff
-and approval flow, and **routes game-building intents to the Design/Build flow** instead of running pipelines itself.
-Agent plans (multi-step tool-call tasks) become Forge runs of `tool_call` steps (P2), so there is one executor, one
-persistence format and one timeline UI.
+The Universal Assistant is the **sole authoritative natural-language entry point** across GameForge Studio:
+- All game creation, feature modification, C++ source editing, debugging, asset requests, and Unreal operations are submitted exclusively through the universal Assistant chat.
+- Old standalone Design prompt inputs, "Make a game" textboxes, and navigation rail destinations have been retired from the user-facing interface.
+- All internal Design, GDS specification, Composer, and Forge pipeline capabilities remain fully active as autonomous runtime tools orchestrated directly by the assistant.
+- Real-time progress, diff cards, approval prompts, and verification results are streamed directly into the active conversation.
 
 ---
 

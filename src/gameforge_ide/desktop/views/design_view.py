@@ -170,6 +170,7 @@ class DiffDialog(QDialog):
 
         table.setRowCount(len(ops))
         for r, op in enumerate(ops):
+            op_kind = str(op.get("op", "")).lower()
             for c, text_val in enumerate([
                 str(op.get("op", "")),
                 str(op.get("path", "")),
@@ -178,6 +179,13 @@ class DiffDialog(QDialog):
             ]):
                 item = QTableWidgetItem(text_val)
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                if c == 0:
+                    if op_kind == "add":
+                        item.setForeground(QColor(tokens.ACCENT_SUCCESS))
+                    elif op_kind == "remove":
+                        item.setForeground(QColor(tokens.ACCENT_ERROR))
+                    else:
+                        item.setForeground(QColor(tokens.ACCENT_PRIMARY))
                 table.setItem(r, c, item)
         layout.addWidget(table, 1)
 
@@ -421,6 +429,36 @@ class DesignView(QWidget):
         row_req.addWidget(self._btn_preview_change)
 
         self._change_layout.addLayout(row_req)
+
+        # Quick prompt suggestions row
+        row_suggestions = QHBoxLayout()
+        row_suggestions.setSpacing(tokens.SPACE_XS)
+        lbl_sug = QLabel("Suggestions:", self._change_panel)
+        lbl_sug.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
+        row_suggestions.addWidget(lbl_sug)
+
+        suggestions = [
+            "Make guards faster",
+            "Add hazard area",
+            "Double pickup count",
+            "Switch to night lighting",
+        ]
+        for sug in suggestions:
+            btn_sug = QPushButton(sug, self._change_panel)
+            btn_sug.setCursor(Qt.PointingHandCursor)
+            btn_sug.setAccessibleName(f"Suggest prompt: {sug}")
+            btn_sug.setStyleSheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 2px 8px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+                f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; border-color: {tokens.ACCENT_PRIMARY}; }}"
+            )
+            btn_sug.clicked.connect(lambda _, s=sug: self._apply_prompt_suggestion(s))
+            row_suggestions.addWidget(btn_sug)
+        row_suggestions.addStretch(1)
+        self._change_layout.addLayout(row_suggestions)
 
         self._diff_preview_box = QFrame(self._change_panel)
         self._diff_preview_box.setObjectName("designDiffPreviewBox")
@@ -946,6 +984,10 @@ class DesignView(QWidget):
         except Exception:
             return None
 
+    def _apply_prompt_suggestion(self, suggestion: str) -> None:
+        self._txt_change.setText(suggestion)
+        self._on_propose_change()
+
     @Slot()
     def _on_propose_change(self) -> None:
         text = self._txt_change.text().strip()
@@ -962,7 +1004,17 @@ class DesignView(QWidget):
         if prop.status == "OK" and prop.ops:
             self._pending_change_ops = prop.ops
             sentences = summarize_patch(curr_spec, prop.ops)
-            summary_txt = "<b>Diff preview:</b><br/>" + "<br/>".join(f"• {s}" for s in sentences)
+            formatted_sentences = []
+            for s in sentences:
+                s_lower = s.lower()
+                if s_lower.startswith("add") or s_lower.startswith("create") or "added" in s_lower or " + " in s_lower:
+                    badge = f"<b style='color: {tokens.ACCENT_SUCCESS};'>[+ ADD]</b>"
+                elif s_lower.startswith("remove") or s_lower.startswith("delete") or "removed" in s_lower or " - " in s_lower:
+                    badge = f"<b style='color: {tokens.ACCENT_ERROR};'>[- REMOVE]</b>"
+                else:
+                    badge = f"<b style='color: {tokens.ACCENT_PRIMARY};'>[~ MODIFY]</b>"
+                formatted_sentences.append(f"{badge} {s}")
+            summary_txt = f"<b>Diff preview ({len(sentences)} operations):</b><br/>" + "<br/>".join(f"• {fs}" for fs in formatted_sentences)
             self._lbl_diff_preview.setText(summary_txt)
             self._btn_apply_change.setEnabled(True)
             self._btn_rebuild_changes.setEnabled(True)

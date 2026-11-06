@@ -255,6 +255,23 @@ class GameTools:
         elif "params" in kwargs:
             params = kwargs["params"]
 
+        prompt_input = (
+            kwargs.get("prompt")
+            or (gds_or_params.get("prompt") if isinstance(gds_or_params, dict) else None)
+            or (gds_or_params if isinstance(gds_or_params, str) and not gds_or_params.strip().startswith("{") else None)
+        )
+        if gds is None and params is None and prompt_input:
+            spec = match_prompt(prompt_input)
+            if spec.matched and spec.params:
+                params = spec.params
+            else:
+                return self.create_game_freeform(
+                    prompt=prompt_input,
+                    on_event=on_event,
+                    cancel_event=cancel_event,
+                    project_dir=kwargs.get("project_dir"),
+                )
+
         hook = None
         if gds is not None:
             try:

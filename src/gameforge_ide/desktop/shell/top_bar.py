@@ -35,6 +35,8 @@ class TopBar(QWidget):
     assistantToggled = Signal()
     paletteRequested = Signal()
     fixActionRequested = Signal(str)
+    taskModeChanged = Signal(str)
+    autonomyProfileChanged = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -52,7 +54,7 @@ class TopBar(QWidget):
         self.logo_btn.setObjectName("topBarLogoBtn")
         self.logo_btn.setAccessibleName("GameForge Home")
         self.logo_btn.setCursor(Qt.PointingHandCursor)
-        self.logo_btn.setFocusPolicy(Qt.NoFocus)
+        self.logo_btn.setFocusPolicy(Qt.TabFocus)
         self.logo_btn.setStyleSheet(f"""
             QPushButton {{
                 color: {tokens.TEXT_PRIMARY};
@@ -66,6 +68,10 @@ class TopBar(QWidget):
             QPushButton:hover {{
                 background: {tokens.BG_HOVER};
             }}
+            QPushButton:focus {{
+                outline: 2px solid {tokens.BORDER_FOCUS};
+                background: {tokens.BG_HOVER};
+            }}
         """)
         self.logo_btn.clicked.connect(self.homeRequested.emit)
         layout.addWidget(self.logo_btn)
@@ -77,6 +83,7 @@ class TopBar(QWidget):
         self.project_combo.setEditable(True)
         self.project_combo.setInsertPolicy(QComboBox.NoInsert)
         self.project_combo.setMinimumWidth(180)
+        self.project_combo.setFocusPolicy(Qt.TabFocus)
         self.project_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {tokens.BG_SURFACE};
@@ -88,6 +95,9 @@ class TopBar(QWidget):
             }}
             QComboBox:hover {{
                 border-color: {tokens.BORDER_FOCUS};
+            }}
+            QComboBox:focus {{
+                border: 2px solid {tokens.BORDER_FOCUS};
             }}
         """)
         self.project_combo.currentIndexChanged.connect(self._on_combo_index_changed)
@@ -105,6 +115,35 @@ class TopBar(QWidget):
         self.breadcrumb_label.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 13px;")
         layout.addWidget(self.breadcrumb_label)
 
+        # 3a. Task Mode Selector (Authoritative controls in Chat header; hidden in TopBar to eliminate duplicate UI)
+        self.lbl_task_mode = QLabel("Approach:", self)
+        self.lbl_task_mode.setObjectName("topBarLblTaskMode")
+        self.lbl_task_mode.setVisible(False)
+
+        self.task_mode_combo = QComboBox(self)
+        self.task_mode_combo.setObjectName("task_mode_combo")
+        self.taskModeCombo = self.task_mode_combo
+        self.task_mode_combo.setAccessibleName("Task Approach Mode")
+        self.task_mode_combo.setVisible(False)
+        self.task_mode_combo.addItems(["Planning", "Fast"])
+        self.task_mode_combo.setCurrentText("Planning")
+        self.task_mode_combo.currentTextChanged.connect(self._on_task_mode_changed)
+
+        # 3b. Autonomy Profile Selector (Authoritative controls in Chat header; hidden in TopBar to eliminate duplicate UI)
+        self.lbl_autonomy = QLabel("Autonomy:", self)
+        self.lbl_autonomy.setObjectName("topBarLblAutonomy")
+        self.lbl_autonomy.setVisible(False)
+
+        self.autonomy_combo = QComboBox(self)
+        self.autonomy_combo.setObjectName("autonomy_combo")
+        self.autonomy_profile_combo = self.autonomy_combo
+        self.autonomyCombo = self.autonomy_combo
+        self.autonomy_combo.setAccessibleName("Autonomy Profile")
+        self.autonomy_combo.setVisible(False)
+        self.autonomy_combo.addItems(["Manual", "Auto-Edit", "Agentic"])
+        self.autonomy_combo.setCurrentText("Agentic")
+        self.autonomy_combo.currentTextChanged.connect(self._on_autonomy_profile_changed)
+
         layout.addStretch(1)
 
         # 4. Active-run chip (hidden unless run is active)
@@ -112,7 +151,7 @@ class TopBar(QWidget):
         self.run_chip.setObjectName("topBarRunChip")
         self.run_chip.setAccessibleName("Active Run Status")
         self.run_chip.setCursor(Qt.PointingHandCursor)
-        self.run_chip.setFocusPolicy(Qt.NoFocus)
+        self.run_chip.setFocusPolicy(Qt.TabFocus)
         self.run_chip.setVisible(False)
         self.run_chip.clicked.connect(self.buildViewRequested.emit)
         layout.addWidget(self.run_chip)
@@ -122,7 +161,7 @@ class TopBar(QWidget):
         self.systems_btn.setObjectName("topBarSystemsBtn")
         self.systems_btn.setAccessibleName("Systems Readiness")
         self.systems_btn.setCursor(Qt.PointingHandCursor)
-        self.systems_btn.setFocusPolicy(Qt.NoFocus)
+        self.systems_btn.setFocusPolicy(Qt.TabFocus)
         self._set_pill_style("ok")
         self.systems_menu = QMenu(self)
         self.systems_menu.setObjectName("topBarSystemsMenu")
@@ -137,6 +176,7 @@ class TopBar(QWidget):
         self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
         self.assistant_btn.setFixedSize(32, 32)
         self.assistant_btn.setCursor(Qt.PointingHandCursor)
+        self.assistant_btn.setFocusPolicy(Qt.TabFocus)
         self.assistant_btn.setStyleSheet(f"""
             QToolButton {{
                 background: transparent;
@@ -145,6 +185,10 @@ class TopBar(QWidget):
             }}
             QToolButton:hover {{
                 background: {tokens.BG_HOVER};
+                border-color: {tokens.BORDER_FOCUS};
+            }}
+            QToolButton:focus {{
+                outline: 2px solid {tokens.BORDER_FOCUS};
                 border-color: {tokens.BORDER_FOCUS};
             }}
         """)
@@ -159,6 +203,7 @@ class TopBar(QWidget):
         self.palette_btn.setIcon(icon("search", role="secondary", size=18))
         self.palette_btn.setFixedSize(32, 32)
         self.palette_btn.setCursor(Qt.PointingHandCursor)
+        self.palette_btn.setFocusPolicy(Qt.TabFocus)
         self.palette_btn.setStyleSheet(f"""
             QToolButton {{
                 background: transparent;
@@ -167,6 +212,10 @@ class TopBar(QWidget):
             }}
             QToolButton:hover {{
                 background: {tokens.BG_HOVER};
+                border-color: {tokens.BORDER_FOCUS};
+            }}
+            QToolButton:focus {{
+                outline: 2px solid {tokens.BORDER_FOCUS};
                 border-color: {tokens.BORDER_FOCUS};
             }}
         """)
@@ -355,7 +404,7 @@ class TopBar(QWidget):
         """Repaint top bar background and tool button icons with active theme tokens."""
         self.setStyleSheet(f"""
             QWidget#studioTopBar {{
-                background: {tokens.BG_ROOT};
+                background: {tokens.BG_PANEL};
                 border-bottom: 1px solid {tokens.BORDER};
             }}
         """)
@@ -363,3 +412,24 @@ class TopBar(QWidget):
             self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
         if hasattr(self, "palette_btn"):
             self.palette_btn.setIcon(icon("search", role="secondary", size=18))
+
+    def _on_task_mode_changed(self, text: str) -> None:
+        self.taskModeChanged.emit(text)
+
+    def _on_autonomy_profile_changed(self, text: str) -> None:
+        self.autonomyProfileChanged.emit(text)
+
+    def set_task_mode(self, mode: str) -> None:
+        """Update the Task Mode combo box without re-emitting signals."""
+        normalized = "Planning" if mode.lower() == "planning" else "Fast"
+        self.task_mode_combo.blockSignals(True)
+        self.task_mode_combo.setCurrentText(normalized)
+        self.task_mode_combo.blockSignals(False)
+
+    def set_autonomy_profile(self, profile: str) -> None:
+        """Update the Autonomy Profile combo box without re-emitting signals."""
+        prof_map = {"manual": "Manual", "auto_edit": "Auto-Edit", "auto-edit": "Auto-Edit", "agentic": "Agentic"}
+        normalized = prof_map.get(profile.lower(), "Agentic")
+        self.autonomy_combo.blockSignals(True)
+        self.autonomy_combo.setCurrentText(normalized)
+        self.autonomy_combo.blockSignals(False)

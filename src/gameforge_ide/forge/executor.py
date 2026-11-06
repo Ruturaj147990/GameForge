@@ -93,6 +93,41 @@ class ForgeExecutor:
             pass
 
     # -- public -------------------------------------------------------------------------------
+    def invalidate_stage_and_downstream(self, state: RunState, stage_id: str) -> List[str]:
+        """Invalidate the given stage and all downstream stages in the DAG, resetting them to PENDING.
+        Upstream completed stages remain DONE and will be skipped on resume."""
+        dependants: set[str] = set()
+        to_visit = [stage_id]
+        while to_visit:
+            curr = to_visit.pop()
+            dependants.add(curr)
+            for s in state.run.steps:
+                if curr in s.depends_on and s.step_id not in dependants:
+                    to_visit.append(s.step_id)
+
+        for sid in dependants:
+            if sid in state.records:
+                rec = state.records[sid]
+                rec.status = StepStatus.PENDING
+                rec.ok = False
+                rec.finished_at = None
+                rec.errors = []
+                rec.artifacts = []
+        state.status = "PENDING"
+        return sorted(list(dependants))
+
+    def resume_from_stage(
+        self,
+        state: RunState,
+        store: RunStore,
+        stage_id: str,
+        editor_running: Callable[[], bool] = lambda: False,
+    ) -> RunState:
+        """Resume execution specifically from the failed/repaired stage, invalidating downstream stages
+        while preserving upstream artifacts and completed stages."""
+        self.invalidate_stage_and_downstream(state, stage_id)
+        return self.run(state, store, editor_running)
+
     def resume(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
         """Resume a failed, cancelled or interrupted run, unblocking failed/cancelled/blocked steps."""
         for rec in state.records.values():

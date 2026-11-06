@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Dict, Optional
-
 import time
+from typing import Dict, Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ...pipeline.game_pipeline import STAGES
+from ..styles import tokens
 from ..styles.dark_theme import theme_color
 
 STAGE_LABELS = {
@@ -54,23 +54,39 @@ class ApprovalCard(QFrame):
         self._exe: Optional[str] = None
         self._stage_labels: Dict[str, QLabel] = {}
         self.setObjectName("approvalCard")
-        accent = theme_color("#7c3aed")
+        self.setAccessibleName(f"Approval card for {approval.get('tool', 'action')}")
+
+        accent = theme_color(tokens.ACCENT_PRIMARY)
+        bg = theme_color(tokens.BG_PANEL)
+        border_col = theme_color(tokens.BORDER)
+
         self.setStyleSheet(
-            f"#approvalCard {{ border: 1px solid {accent}; border-radius: 6px; "
-            f"background: {theme_color('#120f1d')}; }} QLabel {{ background: transparent; }}")
+            f"#approvalCard {{"
+            f"  border: 1px solid {accent};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  background: {bg};"
+            f"}}"
+            f"QLabel {{ background: transparent; }}"
+        )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 12, 14, 12)
-        lay.setSpacing(6)
+        lay.setSpacing(tokens.SPACE_SM)
 
-        title = QLabel(f"<b>Approval required — {approval.get('tool', 'action').replace('_', ' ')}</b>")
+        # Header Title
+        title_str = approval.get('tool', 'action').replace('_', ' ')
+        title = QLabel(f"<b style='color: {tokens.TEXT_PRIMARY}; font-size: 13px;'>Approval required — {title_str}</b>")
         title.setTextFormat(Qt.RichText)
         lay.addWidget(title)
+
         summary = QLabel(approval.get("summary", ""))
         summary.setWordWrap(True)
+        summary.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 12px;")
         lay.addWidget(summary)
+
         consequence = QLabel(f"<i>{approval.get('consequence', '')}</i>")
         consequence.setWordWrap(True)
         consequence.setTextFormat(Qt.RichText)
+        consequence.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px;")
         lay.addWidget(consequence)
         self._consequence = consequence
 
@@ -85,12 +101,17 @@ class ApprovalCard(QFrame):
             args["project_dir"] = str(proj_dir)
 
         if proj_dir:
-            dir_row = QHBoxLayout()
-            self._lbl_card_dir = QLabel(f"<b>Project Root:</b> <code>{proj_dir}</code>")
+            dir_frame = QFrame(self)
+            dir_frame.setStyleSheet(
+                f"background-color: {tokens.BG_SURFACE}; border: 1px solid {tokens.BORDER}; border-radius: 4px; padding: 2px 6px;"
+            )
+            dir_lay = QHBoxLayout(dir_frame)
+            dir_lay.setContentsMargins(4, 2, 4, 2)
+            self._lbl_card_dir = QLabel(f"<b style='color: {tokens.TEXT_SECONDARY};'>Project Root:</b> <code style='color: {tokens.ACCENT_PRIMARY};'>{proj_dir}</code>", dir_frame)
             self._lbl_card_dir.setTextFormat(Qt.RichText)
-            self._lbl_card_dir.setStyleSheet("color: #cbd5e1; font-size: 11px;")
-            dir_row.addWidget(self._lbl_card_dir, 1)
-            lay.addLayout(dir_row)
+            self._lbl_card_dir.setStyleSheet("font-size: 11px;")
+            dir_lay.addWidget(self._lbl_card_dir, 1)
+            lay.addWidget(dir_frame)
 
         scope = approval.get("args", {}).get("scope") or approval.get("scope")
         if isinstance(scope, dict):
@@ -106,7 +127,7 @@ class ApprovalCard(QFrame):
             if scope_lines:
                 scope_lbl = QLabel("<br>".join(scope_lines))
                 scope_lbl.setTextFormat(Qt.RichText)
-                scope_lbl.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+                scope_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px;")
                 lay.addWidget(scope_lbl)
 
         summary_md = approval.get("summary_md", "")
@@ -114,7 +135,9 @@ class ApprovalCard(QFrame):
             self._spec_toggle = QPushButton("▶  Show Game Design Spec")
             self._spec_toggle.setFlat(True)
             self._spec_toggle.setCursor(Qt.PointingHandCursor)
-            self._spec_toggle.setStyleSheet("text-align: left; padding: 2px 0; color: #a78bfa; font-weight: bold;")
+            self._spec_toggle.setStyleSheet(
+                f"text-align: left; padding: 2px 0; color: {tokens.ACCENT_HOVER}; font-weight: bold; font-size: 11px;"
+            )
             lay.addWidget(self._spec_toggle)
 
             self._spec_content = QLabel(summary_md)
@@ -129,7 +152,9 @@ class ApprovalCard(QFrame):
                 self._spec_toggle.setText("▼  Hide Game Design Spec" if is_vis else "▶  Show Game Design Spec")
 
             self._spec_toggle.clicked.connect(toggle_spec)
+
         self._elapsed = QLabel("")
+        self._elapsed.setStyleSheet(f"color: {tokens.ACCENT_WARNING}; font-size: 11px; font-weight: 600;")
         self._elapsed.setVisible(False)
         lay.addWidget(self._elapsed)
         self._started = 0.0
@@ -140,10 +165,11 @@ class ApprovalCard(QFrame):
         self._stage_box = QWidget()
         sb = QVBoxLayout(self._stage_box)
         sb.setContentsMargins(4, 4, 4, 4)
-        sb.setSpacing(2)
+        sb.setSpacing(4)
         for st in approval.get("stages") or STAGES:
             if st in STAGE_LABELS:
                 lbl = QLabel(f"○  {STAGE_LABELS[st]}")
+                lbl.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: 11px;")
                 self._stage_labels[st] = lbl
                 sb.addWidget(lbl)
         self._stage_box.setVisible(False)
@@ -158,15 +184,64 @@ class ApprovalCard(QFrame):
         lay.addWidget(self._result)
 
         row = QHBoxLayout()
+        row.setSpacing(tokens.SPACE_SM)
+
         self._btn_approve = QPushButton("Approve and build")
         self._btn_approve.setObjectName("approvalApprove")
+        self._btn_approve.setAccessibleName("Approve action and begin execution")
+        self._btn_approve.setStyleSheet(
+            f"QPushButton#approvalApprove {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: none; border-radius: {tokens.RADIUS}px; padding: 6px 14px; font-weight: 600;"
+            f"}}"
+            f"QPushButton#approvalApprove:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+            f"QPushButton#approvalApprove:disabled {{ background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_MUTED}; }}"
+        )
+
         self._btn_reject = QPushButton("Reject")
         self._btn_reject.setObjectName("approvalReject")
+        self._btn_reject.setAccessibleName("Reject proposed action")
+        self._btn_reject.setStyleSheet(
+            f"QPushButton#approvalReject {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_ERROR};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 14px; font-weight: 600;"
+            f"}}"
+            f"QPushButton#approvalReject:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            f"QPushButton#approvalReject:disabled {{ background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_MUTED}; }}"
+        )
+
         self._btn_play = QPushButton("▶  Play game")
         self._btn_play.setObjectName("approvalPlay")
+        self._btn_play.setAccessibleName("Launch packaged game")
+        self._btn_play.setStyleSheet(
+            f"QPushButton#approvalPlay {{"
+            f"  background-color: {tokens.ACCENT_SUCCESS}; color: {tokens.BG_ROOT};"
+            f"  border: none; border-radius: {tokens.RADIUS}px; padding: 6px 14px; font-weight: 700;"
+            f"}}"
+            f"QPushButton#approvalPlay:hover {{ opacity: 0.9; }}"
+        )
+
         self._btn_folder = QPushButton("Open folder")
+        self._btn_folder.setAccessibleName("Open game project directory in Explorer")
+        self._btn_folder.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 12px;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+
         self._btn_cancel = QPushButton("Cancel build")
         self._btn_cancel.setObjectName("approvalCancel")
+        self._btn_cancel.setAccessibleName("Cancel running build task")
+        self._btn_cancel.setStyleSheet(
+            f"QPushButton#approvalCancel {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_WARNING};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 12px;"
+            f"}}"
+            f"QPushButton#approvalCancel:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
+
         self._btn_cancel.setVisible(False)
         self._btn_play.setVisible(False)
         self._btn_folder.setVisible(False)
@@ -186,18 +261,20 @@ class ApprovalCard(QFrame):
     # ── state transitions ──────────────────────────────────────────────────
     def _on_approve(self) -> None:
         self._btn_approve.setEnabled(False)  # idempotent: one click, one run
+        self._btn_approve.setText("⏳ Approving…")
         self._btn_reject.setEnabled(False)
         self.approve_clicked.emit(self.approval_id)
 
     def _on_reject(self) -> None:
         self._btn_approve.setEnabled(False)
         self._btn_reject.setEnabled(False)
+        self._btn_reject.setText("⏳ Rejecting…")
         self.reject_clicked.emit(self.approval_id)
-        self._show_result("<b>Rejected.</b> Nothing was changed.")
+        self._show_result(f"<b style='color: {tokens.TEXT_MUTED};'>Rejected.</b> Nothing was changed.")
 
     def _on_cancel(self) -> None:
         self._btn_cancel.setEnabled(False)
-        self._btn_cancel.setText("Cancelling…")
+        self._btn_cancel.setText("⏳ Cancelling…")
         self.cancel_clicked.emit(self.approval_id)
 
     def set_running(self) -> None:
@@ -226,17 +303,22 @@ class ApprovalCard(QFrame):
         text = STAGE_LABELS.get(stage) or STAGE_LABELS.get(data.get("step_id", "")) or stage
         if kind == "stage_started":
             lbl.setText(f"◐  {text} …")
+            lbl.setStyleSheet(f"color: {tokens.ACCENT_PRIMARY}; font-size: 11px; font-weight: 600;")
         elif kind == "build_attempt" and not data.get("ok"):
             lbl = self._stage_labels.get("build_repair")
             if lbl:
                 lbl.setText(f"◐  {STAGE_LABELS['build_repair']} … attempt {data.get('attempt', 0) + 1}: "
                             f"{data.get('errors')} error(s), asking the model to fix")
+                lbl.setStyleSheet(f"color: {tokens.ACCENT_WARNING}; font-size: 11px;")
             return
         elif kind == "stage_finished":
-            mark = "✔" if data.get("ok") else "✖"
+            ok = data.get("ok")
+            mark = "✔" if ok else "✖"
             dur = data.get("duration_s")
-            extra = "" if data.get("ok") else f" — {'; '.join(data.get('errors') or [])[:160]}"
+            extra = "" if ok else f" — {'; '.join(data.get('errors') or [])[:160]}"
+            color = tokens.ACCENT_SUCCESS if ok else tokens.ACCENT_ERROR
             lbl.setText(f"{mark}  {text} ({dur}s){extra}")
+            lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
 
     def _update_elapsed(self, final: bool = False) -> None:
         secs = int(time.monotonic() - self._started) if self._started else 0
@@ -253,16 +335,16 @@ class ApprovalCard(QFrame):
         if result.get("status") == "SUCCESS":
             self._exe = result.get("exe")
             report = result.get("report_path", "")
-            html = "<b>✔ Done — all acceptance checks passed.</b>"
+            html = f"<b style='color: {tokens.ACCENT_SUCCESS};'>✔ Done — all acceptance checks passed.</b>"
             if self._exe:
                 html += f"<br>Game: <code>{self._exe}</code>"
             if report:
-                html += f"<br>Evidence: <a href='file:///{report.replace(os.sep, '/')}'>pipeline report</a>"
+                html += f"<br>Evidence: <a href='file:///{report.replace(os.sep, '/')}' style='color: {tokens.ACCENT_HOVER};'>pipeline report</a>"
             self._show_result(html)
             self._btn_play.setVisible(bool(self._exe))
         else:
             err = result.get("error") or f"failed at stage {result.get('failed_stage')}"
-            self._show_result(f"<b>✖ Not complete:</b> {err}")
+            self._show_result(f"<b style='color: {tokens.ACCENT_ERROR};'>✖ Not complete:</b> {err}")
         self._btn_folder.setVisible(bool(self._project_dir))
 
     def show_already_handled(self, status: str) -> None:

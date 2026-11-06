@@ -56,6 +56,8 @@ class CollapsibleSection(QFrame):
         super().__init__(parent)
         safe_name = object_name or re.sub(r"[^a-zA-Z0-9_]", "", f"collapsible_{title.replace(' ', '_').lower()}")
         self.setObjectName(safe_name)
+        self.setAccessibleName(f"{title} collapsible section")
+        self.setAccessibleDescription("Collapsed")
         self.setStyleSheet(
             f"QFrame#{safe_name} {{"
             f"  background-color: {tokens.BG_PANEL};"
@@ -70,7 +72,10 @@ class CollapsibleSection(QFrame):
 
         # Header bar
         header = QHBoxLayout()
-        self._toggle_btn = QPushButton(f"▶ {title}", self)
+        self._toggle_btn = QPushButton(f"▶  {title}", self)
+        self._toggle_btn.setObjectName(f"btn_toggle_{safe_name}")
+        self._toggle_btn.setAccessibleName(f"Toggle {title} section")
+        self._toggle_btn.setFocusPolicy(Qt.StrongFocus)
         self._toggle_btn.setCursor(Qt.PointingHandCursor)
         self._toggle_btn.setStyleSheet(
             f"QPushButton {{"
@@ -80,8 +85,10 @@ class CollapsibleSection(QFrame):
             f"  font-size: {tokens.FONT_BODY}px;"
             f"  font-weight: 600;"
             f"  text-align: left;"
+            f"  padding: 2px 4px;"
             f"}}"
             f"QPushButton:hover {{ color: {tokens.ACCENT_HOVER}; }}"
+            f"QPushButton:focus {{ outline: 1px solid {tokens.BORDER_FOCUS}; border-radius: {tokens.RADIUS}px; }}"
         )
         self._toggle_btn.clicked.connect(self._toggle)
         header.addWidget(self._toggle_btn)
@@ -104,7 +111,8 @@ class CollapsibleSection(QFrame):
         vis = not self._body.isVisible()
         self._body.setVisible(vis)
         arrow = "▼" if vis else "▶"
-        self._toggle_btn.setText(f"{arrow} {self._title}")
+        self._toggle_btn.setText(f"{arrow}  {self._title}")
+        self.setAccessibleDescription("Expanded" if vis else "Collapsed")
 
 
 class GdsForm(QWidget):
@@ -130,85 +138,122 @@ class GdsForm(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(tokens.SPACE_LG)
 
-        # ── 1. Overview Section ──────────────────────────────────────────────
+        # ── 1. Overview Section (Two-Column Grid) ─────────────────────────────
         sec_overview = self._create_card("Overview", "cardOverview")
         olayout = QVBoxLayout(sec_overview)
         olayout.setContentsMargins(14, 14, 14, 14)
         olayout.setSpacing(tokens.SPACE_MD)
 
-        row1 = QHBoxLayout()
-        row1.setSpacing(tokens.SPACE_LG)
+        grid_overview = QHBoxLayout()
+        grid_overview.setSpacing(tokens.SPACE_LG)
 
-        # Genre combo
+        # Left Column: Title, Genre, Camera, Session & Players
+        col_left = QVBoxLayout()
+        col_left.setSpacing(tokens.SPACE_SM)
+
+        # Title
+        vbox_title = QVBoxLayout()
+        vbox_title.setSpacing(tokens.SPACE_XS)
+        lbl_title = QLabel("Game Title:", sec_overview)
+        lbl_title.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;")
+        self._edit_title = QLineEdit(sec_overview)
+        self._edit_title.setObjectName("gdsTitleInput")
+        self._edit_title.setAccessibleName("Game Title")
+        self._edit_title.setPlaceholderText("Untitled Game")
+        self._edit_title.textChanged.connect(self._on_field_changed)
+        self._style_input(self._edit_title)
+        vbox_title.addWidget(lbl_title)
+        vbox_title.addWidget(self._edit_title)
+        col_left.addLayout(vbox_title)
+
+        # Genre & Camera row
+        row_gc = QHBoxLayout()
+        row_gc.setSpacing(tokens.SPACE_MD)
+
         vbox_genre = QVBoxLayout()
+        vbox_genre.setSpacing(tokens.SPACE_XS)
         lbl_genre = QLabel("Genre:", sec_overview)
         lbl_genre.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._combo_genre = QComboBox(sec_overview)
         self._combo_genre.setObjectName("gdsGenreCombo")
+        self._combo_genre.setAccessibleName("Game Genre")
         for g in Genre:
             self._combo_genre.addItem(g.value.capitalize(), userData=g.value)
         self._combo_genre.currentIndexChanged.connect(self._on_field_changed)
         self._style_input(self._combo_genre)
         vbox_genre.addWidget(lbl_genre)
         vbox_genre.addWidget(self._combo_genre)
-        row1.addLayout(vbox_genre, 1)
+        row_gc.addLayout(vbox_genre, 1)
 
-        # Camera combo
         vbox_cam = QVBoxLayout()
+        vbox_cam.setSpacing(tokens.SPACE_XS)
         lbl_cam = QLabel("Camera:", sec_overview)
         lbl_cam.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._combo_camera = QComboBox(sec_overview)
         self._combo_camera.setObjectName("gdsCameraCombo")
+        self._combo_camera.setAccessibleName("Camera Style")
         for c in CameraKind:
             self._combo_camera.addItem(c.value.replace("_", " ").capitalize(), userData=c.value)
         self._combo_camera.currentIndexChanged.connect(self._on_field_changed)
         self._style_input(self._combo_camera)
         vbox_cam.addWidget(lbl_cam)
         vbox_cam.addWidget(self._combo_camera)
-        row1.addLayout(vbox_cam, 1)
+        row_gc.addLayout(vbox_cam, 1)
+        col_left.addLayout(row_gc)
 
-        # Session minutes
+        # Session & Players row
+        row_sp = QHBoxLayout()
+        row_sp.setSpacing(tokens.SPACE_MD)
+
         vbox_session = QVBoxLayout()
+        vbox_session.setSpacing(tokens.SPACE_XS)
         lbl_session = QLabel("Target Session (min):", sec_overview)
         lbl_session.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._spin_session = QSpinBox(sec_overview)
         self._spin_session.setObjectName("gdsSessionSpin")
+        self._spin_session.setAccessibleName("Target Session Duration in Minutes")
         self._spin_session.setRange(1, 180)
         self._spin_session.setValue(10)
         self._spin_session.valueChanged.connect(self._on_field_changed)
         self._style_input(self._spin_session)
         vbox_session.addWidget(lbl_session)
         vbox_session.addWidget(self._spin_session)
-        row1.addLayout(vbox_session, 1)
+        row_sp.addLayout(vbox_session, 1)
 
-        # Players
         vbox_players = QVBoxLayout()
+        vbox_players.setSpacing(tokens.SPACE_XS)
         lbl_players = QLabel("Players:", sec_overview)
         lbl_players.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         self._spin_players = QSpinBox(sec_overview)
         self._spin_players.setObjectName("gdsPlayersSpin")
+        self._spin_players.setAccessibleName("Number of Players")
         self._spin_players.setRange(1, 8)
         self._spin_players.setValue(1)
         self._spin_players.valueChanged.connect(self._on_field_changed)
         self._style_input(self._spin_players)
         vbox_players.addWidget(lbl_players)
         vbox_players.addWidget(self._spin_players)
-        row1.addLayout(vbox_players, 1)
+        row_sp.addLayout(vbox_players, 1)
+        col_left.addLayout(row_sp)
 
-        olayout.addLayout(row1)
+        grid_overview.addLayout(col_left, 1)
 
-        # Pitch
-        vbox_pitch = QVBoxLayout()
-        lbl_pitch = QLabel("Pitch:", sec_overview)
-        lbl_pitch.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        # Right Column: Pitch / Core Concept
+        col_right = QVBoxLayout()
+        col_right.setSpacing(tokens.SPACE_XS)
+        lbl_pitch = QLabel("Pitch / Game Concept:", sec_overview)
+        lbl_pitch.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;")
         self._edit_pitch = QPlainTextEdit(sec_overview)
         self._edit_pitch.setObjectName("gdsPitchInput")
-        self._edit_pitch.setFixedHeight(60)
+        self._edit_pitch.setAccessibleName("Elevator Pitch and Game Concept")
+        self._edit_pitch.setPlaceholderText("Brief elevator pitch for the core game mechanics, player goal, tone, and loop...")
         self._edit_pitch.textChanged.connect(self._on_field_changed)
         self._style_input(self._edit_pitch)
-        vbox_pitch.addWidget(lbl_pitch)
-        vbox_pitch.addWidget(self._edit_pitch)
-        olayout.addLayout(vbox_pitch)
+        col_right.addWidget(lbl_pitch)
+        col_right.addWidget(self._edit_pitch, 1)
+
+        grid_overview.addLayout(col_right, 1)
+        olayout.addLayout(grid_overview)
 
         main_layout.addWidget(sec_overview)
 
@@ -384,12 +429,33 @@ class GdsForm(QWidget):
             f"font-size: {tokens.FONT_BODY}px;"
         )
 
-    def set_spec(self, spec: GameDesignSpec) -> None:
+    def set_spec(self, spec: Optional[GameDesignSpec]) -> None:
         """Populate form with GameDesignSpec data."""
+        if spec is None:
+            self._spec = None
+            if hasattr(self, "_edit_title"):
+                self._edit_title.clear()
+            self._combo_genre.setCurrentIndex(0)
+            self._combo_camera.setCurrentIndex(0)
+            self._spin_session.setValue(10)
+            self._spin_players.setValue(1)
+            self._edit_pitch.clear()
+            self._table_levels.setRowCount(0)
+            self._table_entities.setRowCount(0)
+            self._table_rules.setRowCount(0)
+            self._edit_win.clear()
+            self._edit_lose.clear()
+            return
+
         self._spec = copy.deepcopy(spec)
         self._is_populating = True
         try:
-            # Overview
+            # Overview Title
+            if hasattr(self, "_edit_title"):
+                t_val = spec.meta.title if (spec.meta and spec.meta.title) else ""
+                self._edit_title.setText(t_val)
+
+            # Overview Parameters
             genre_val = spec.overview.genre.value if hasattr(spec.overview.genre, "value") else str(spec.overview.genre)
             idx = self._combo_genre.findData(genre_val)
             if idx >= 0:
@@ -561,6 +627,12 @@ class GdsForm(QWidget):
     def _apply_inputs_to_spec(self) -> None:
         if not self._spec:
             return
+        # Apply overview title
+        if hasattr(self, "_edit_title") and hasattr(self._spec, "meta") and self._spec.meta:
+            title_text = self._edit_title.text().strip()
+            if title_text:
+                self._spec.meta.title = title_text
+
         # Apply overview fields
         genre_str = self._combo_genre.currentData() or "action_adventure"
         try:

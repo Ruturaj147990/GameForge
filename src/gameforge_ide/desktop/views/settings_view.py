@@ -134,7 +134,7 @@ class SettingsView(QWidget):
     # ── Section Builders ─────────────────────────────────────────────────────
 
     def _build_engine_section(self) -> QGroupBox:
-        box = QGroupBox("Unreal Engine", self)
+        box = QGroupBox("Engine Discovery", self)
         box.setObjectName("groupSettingsEngine")
         box.setStyleSheet(self._group_box_style())
         layout = QVBoxLayout(box)
@@ -172,7 +172,7 @@ class SettingsView(QWidget):
         return box
 
     def _build_paths_section(self) -> QGroupBox:
-        box = QGroupBox("Directories & Storage", self)
+        box = QGroupBox("Project Storage", self)
         box.setObjectName("groupSettingsPaths")
         box.setStyleSheet(self._group_box_style())
         layout = QVBoxLayout(box)
@@ -184,22 +184,32 @@ class SettingsView(QWidget):
         self._projects_root_input = QLineEdit(box)
         self._projects_root_input.setObjectName("settingsProjectsRootInput")
         self._projects_root_input.setAccessibleName("Projects storage directory")
+        self._projects_root_input.textChanged.connect(self._validate_storage_paths)
         p_row.addWidget(self._projects_root_input, 1)
         btn_browse_proj = QPushButton("Browse...", box)
         btn_browse_proj.clicked.connect(self._browse_projects)
         p_row.addWidget(btn_browse_proj)
         form.addRow("Projects Root:", p_row)
 
+        self._lbl_projects_status = QLabel(box)
+        self._lbl_projects_status.setObjectName("lblSettingsProjectsStatus")
+        form.addRow("", self._lbl_projects_status)
+
         # Artifacts Root
         a_row = QHBoxLayout()
         self._artifacts_root_input = QLineEdit(box)
         self._artifacts_root_input.setObjectName("settingsArtifactsRootInput")
         self._artifacts_root_input.setAccessibleName("Artifacts storage directory")
+        self._artifacts_root_input.textChanged.connect(self._validate_storage_paths)
         a_row.addWidget(self._artifacts_root_input, 1)
         btn_browse_art = QPushButton("Browse...", box)
         btn_browse_art.clicked.connect(self._browse_artifacts)
         a_row.addWidget(btn_browse_art)
         form.addRow("Artifacts Root:", a_row)
+
+        self._lbl_artifacts_status = QLabel(box)
+        self._lbl_artifacts_status.setObjectName("lblSettingsArtifactsStatus")
+        form.addRow("", self._lbl_artifacts_status)
 
         # Ollama URL
         self._ollama_url_input = QLineEdit(box)
@@ -254,6 +264,7 @@ class SettingsView(QWidget):
         self._theme_combo.setAccessibleName("IDE Theme selection")
         self._theme_combo.addItems(["Studio Dark", "Studio Light"])
         self._theme_combo.setMinimumHeight(32)
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         form.addRow("Theme:", self._theme_combo)
 
         self._font_scale_spin = QSpinBox(box)
@@ -264,6 +275,7 @@ class SettingsView(QWidget):
         self._font_scale_spin.setValue(100)
         self._font_scale_spin.setSuffix("%")
         self._font_scale_spin.setMinimumHeight(32)
+        self._font_scale_spin.valueChanged.connect(self._on_font_scale_changed)
         form.addRow("Font Scale:", self._font_scale_spin)
 
         layout.addLayout(form)
@@ -325,6 +337,80 @@ class SettingsView(QWidget):
                 f"<span style='color: {tokens.ACCENT_WARNING};'>UnrealEditor.exe missing or invalid build.</span>"
             )
 
+    def _validate_storage_paths(self) -> None:
+        if not hasattr(self, "_lbl_projects_status") or not hasattr(self, "_lbl_artifacts_status"):
+            return
+        p_txt = self._projects_root_input.text().strip()
+        if not p_txt:
+            self._lbl_projects_status.setText(
+                f"<span style='color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;'>Default projects directory will be used.</span>"
+            )
+        else:
+            p = Path(p_txt)
+            if p.is_dir():
+                self._lbl_projects_status.setText(
+                    f"<span style='color: {tokens.ACCENT_SUCCESS}; font-size: {tokens.FONT_BODY_SM}px;'>✓ Directory exists and accessible.</span>"
+                )
+            else:
+                self._lbl_projects_status.setText(
+                    f"<span style='color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;'>Directory does not exist yet (will be created on save).</span>"
+                )
+
+        a_txt = self._artifacts_root_input.text().strip()
+        if not a_txt:
+            self._lbl_artifacts_status.setText(
+                f"<span style='color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;'>Default artifacts directory will be used.</span>"
+            )
+        else:
+            a = Path(a_txt)
+            if a.is_dir():
+                self._lbl_artifacts_status.setText(
+                    f"<span style='color: {tokens.ACCENT_SUCCESS}; font-size: {tokens.FONT_BODY_SM}px;'>✓ Directory exists and accessible.</span>"
+                )
+            else:
+                self._lbl_artifacts_status.setText(
+                    f"<span style='color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;'>Directory does not exist yet (will be created on save).</span>"
+                )
+
+    @Slot(int)
+    def _on_theme_changed(self, index: int) -> None:
+        new_theme = "light" if index == 1 else "dark"
+        from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QApplication
+        from ..styles.dark_theme import apply_theme
+
+        ide_settings = QSettings("GameForge", "GameForgeIDE")
+        ide_settings.setValue("appearance/theme", new_theme)
+
+        ws_ini = self._workspace / ".gameforge" / "ide_settings.ini"
+        try:
+            ws_ini.parent.mkdir(parents=True, exist_ok=True)
+            ws_settings = QSettings(str(ws_ini), QSettings.IniFormat)
+            ws_settings.setValue("appearance/theme", new_theme)
+            ws_settings.sync()
+        except Exception as exc:
+            logger.debug("Could not write workspace ini settings: %s", exc)
+
+        app_inst = QApplication.instance()
+        if app_inst and not os.environ.get("PYTEST_CURRENT_TEST"):
+            apply_theme(app_inst, new_theme)
+
+    @Slot(int)
+    def _on_font_scale_changed(self, value: int) -> None:
+        from PySide6.QtCore import QSettings
+
+        ide_settings = QSettings("GameForge", "GameForgeIDE")
+        ide_settings.setValue("appearance/font_scale", value)
+
+        ws_ini = self._workspace / ".gameforge" / "ide_settings.ini"
+        try:
+            ws_ini.parent.mkdir(parents=True, exist_ok=True)
+            ws_settings = QSettings(str(ws_ini), QSettings.IniFormat)
+            ws_settings.setValue("appearance/font_scale", value)
+            ws_settings.sync()
+        except Exception as exc:
+            logger.debug("Could not write font scale to workspace ini: %s", exc)
+
     # ── Data Load & Save ─────────────────────────────────────────────────────
 
     def showEvent(self, event: Any) -> None:
@@ -384,8 +470,13 @@ class SettingsView(QWidget):
                 scale_val = int(ide_settings.value("appearance/font_scale", 100))
             except (ValueError, TypeError):
                 scale_val = 100
+        self._theme_combo.blockSignals(True)
         self._theme_combo.setCurrentIndex(1 if str(current_theme).lower() == "light" else 0)
+        self._theme_combo.blockSignals(False)
+
+        self._font_scale_spin.blockSignals(True)
         self._font_scale_spin.setValue(scale_val)
+        self._font_scale_spin.blockSignals(False)
 
         # Routing Source info
         try:
@@ -401,6 +492,7 @@ class SettingsView(QWidget):
             self._lbl_routing_source.setText("Routing Source: Default table")
 
         self._validate_engine_path()
+        self._validate_storage_paths()
 
     @Slot()
     def save_settings(self) -> None:

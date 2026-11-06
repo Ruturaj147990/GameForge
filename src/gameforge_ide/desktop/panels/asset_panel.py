@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...backend.assets.registry import ASSET_TYPES, AssetRegistry
+from ..styles import tokens
 
 
 class AssetPanel(QWidget):
@@ -37,6 +38,8 @@ class AssetPanel(QWidget):
 
     def __init__(self, workspace_root: Path, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.setObjectName("assetPanel")
+        self.setAccessibleName("Asset Registry Dock Panel")
         self._workspace = Path(workspace_root).resolve()
         self._registry: Optional[AssetRegistry] = None
 
@@ -48,15 +51,18 @@ class AssetPanel(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         lbl_title = QLabel("📦 Asset Registry")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 14px; color: #f5f3ff;")
+        lbl_title.setStyleSheet(f"font-weight: 700; font-size: {tokens.FONT_HEADING_SM}px; color: {tokens.TEXT_PRIMARY};")
         header.addWidget(lbl_title)
         header.addStretch()
 
         self._btn_refresh = QPushButton("🔄 Refresh")
         self._btn_refresh.setObjectName("btn_refresh_assets")
+        self._btn_refresh.setAccessibleName("Refresh assets list")
+        self._btn_refresh.setToolTip("Reload assets from SQLite registry")
+        self._btn_refresh.setCursor(Qt.PointingHandCursor)
         self._btn_refresh.setStyleSheet(
-            "QPushButton { background: #120f1d; border: 1px solid #231c34; border-radius: 4px; padding: 3px 8px; font-size: 11px; } "
-            "QPushButton:hover { background: #1a1528; border-color: #7c3aed; }"
+            f"QPushButton {{ background: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 3px 8px; font-size: {tokens.FONT_BODY_SM}px; }} "
+            f"QPushButton:hover {{ background: {tokens.BG_HOVER}; border-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY}; }}"
         )
         self._btn_refresh.clicked.connect(self.refresh)
         header.addWidget(self._btn_refresh)
@@ -69,15 +75,26 @@ class AssetPanel(QWidget):
 
         self._search = QLineEdit()
         self._search.setObjectName("asset_search_input")
+        self._search.setAccessibleName("Search assets")
+        self._search.setToolTip("Filter assets by keyword or tag")
         self._search.setPlaceholderText("Filter assets…")
+        self._search.setStyleSheet(
+            f"QLineEdit {{ background: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px; }}"
+            f"QLineEdit:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
+        )
         self._search.textChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._search, 1)
 
         self._type_combo = QComboBox()
         self._type_combo.setObjectName("asset_type_filter")
+        self._type_combo.setAccessibleName("Filter by type")
+        self._type_combo.setToolTip("Filter by asset category")
         self._type_combo.addItem("All Types")
         for t in ASSET_TYPES:
             self._type_combo.addItem(t)
+        self._type_combo.setStyleSheet(
+            f"QComboBox {{ background: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px; }}"
+        )
         self._type_combo.currentTextChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._type_combo)
         layout.addLayout(filter_row)
@@ -89,15 +106,25 @@ class AssetPanel(QWidget):
         # Assets list
         self._list = QListWidget()
         self._list.setObjectName("asset_list")
+        self._list.setAccessibleName("Registered assets list")
         self._list.setAlternatingRowColors(True)
+        self._list.setStyleSheet(
+            f"QListWidget {{ background: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; }}"
+            f"QListWidget::item:selected {{ background: {tokens.BG_ACTIVE}; color: {tokens.TEXT_PRIMARY}; }}"
+            f"QListWidget:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
+        )
         self._list.itemClicked.connect(self._on_item_clicked)
         splitter.addWidget(self._list)
 
         # Detail pane
         self._detail = QTextBrowser()
         self._detail.setObjectName("asset_detail_view")
+        self._detail.setAccessibleName("Asset details and history")
         self._detail.setOpenExternalLinks(False)
         self._detail.setPlaceholderText("Select an asset to view provenance, stage, and license metadata.")
+        self._detail.setStyleSheet(
+            f"QTextBrowser {{ background: {tokens.BG_PANEL}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: {tokens.SPACE_SM}px; font-family: monospace; font-size: 11px; }}"
+        )
         splitter.addWidget(self._detail)
 
         splitter.setSizes([260, 160])

@@ -111,3 +111,26 @@ def test_evidence_view_no_raw_hex_colors():
     text = f.read_text(encoding="utf-8")
     matches = pattern.findall(text)
     assert not matches, f"Raw hex color literals found in {f}: {matches}"
+
+
+def test_evidence_view_open_file_signal(qapp, tmp_path):
+    """Verify double clicking an artifact emits openFileRequested without popping explorer."""
+    view = EvidenceView(workspace_root=tmp_path)
+    try:
+        sample_file = tmp_path / "sample.txt"
+        sample_file.write_text("sample content", encoding="utf-8")
+
+        view._artifact_paths = [sample_file]
+        view._populate_gallery()
+
+        assert view._gallery.count() == 1
+        opened = []
+        view.openFileRequested.connect(lambda p: opened.append(p))
+
+        item = view._gallery.item(0)
+        view._on_item_double_clicked(item)
+
+        assert opened == [str(sample_file)]
+    finally:
+        view.deleteLater()
+

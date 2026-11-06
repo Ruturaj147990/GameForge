@@ -66,6 +66,8 @@ class Settings:
     host_profile: Dict[str, Any] = field(default_factory=dict)
     host_profile_path: Optional[Path] = None
     engine_channel: str = "pinned"  # "pinned" (5.7.4) | "next" (5.8)
+    default_task_mode: str = "planning"  # "planning" | "fast"
+    default_autonomy_profile: str = "agentic"  # "manual" | "auto_edit" | "agentic"
 
     @property
     def engine_root(self) -> Path:
@@ -276,6 +278,8 @@ def get_settings() -> Settings:
         host_profile=profile,
         host_profile_path=profile_path if profile else None,
         engine_channel=channel,
+        default_task_mode=str(pick("GAMEFORGE_TASK_MODE", "default_task_mode") or "planning"),
+        default_autonomy_profile=str(pick("GAMEFORGE_AUTONOMY_PROFILE", "default_autonomy_profile") or "agentic"),
     )
 
 

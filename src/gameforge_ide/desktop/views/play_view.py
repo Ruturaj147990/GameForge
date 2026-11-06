@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -157,16 +157,33 @@ class PlayView(QWidget):
         self._results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self._results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self._results_table.setSelectionMode(QTableWidget.SingleSelection)
+        self._results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._results_table.setStyleSheet(
             f"QTableWidget#{self._results_table.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
+            f"  gridline-color: {tokens.BORDER};"
+            f"  selection-background-color: {tokens.BG_ACTIVE};"
+            f"  selection-color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QTableWidget#{self._results_table.objectName()}:focus {{"
+            f"  border: 1px solid {tokens.BORDER_FOCUS};"
+            f"}}"
+            f"QHeaderView::section {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  padding: 4px {tokens.SPACE_SM}px;"
+            f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"  font-weight: 600;"
             f"}}"
         )
         self._results_table.clicked.connect(self._on_result_selected)
         self._results_table.itemSelectionChanged.connect(self._on_result_selected)
+        self._results_table.currentCellChanged.connect(lambda r, c, pr, pc: self._on_result_selected())
+        self._results_table.installEventFilter(self)
         left_layout.addWidget(self._results_table, 1)
         splitter.addWidget(left_widget)
 
@@ -232,6 +249,17 @@ class PlayView(QWidget):
             self._lbl_summary.setText("No project selected.")
         if hasattr(self, "_lbl_detail_header"):
             self._lbl_detail_header.setText("Select a scenario to view details")
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self._results_table and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self._on_result_selected()
+                return True
+            elif event.key() in (Qt.Key_Up, Qt.Key_Down, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Home, Qt.Key_End):
+                res = super().eventFilter(watched, event)
+                self._on_result_selected()
+                return res
+        return super().eventFilter(watched, event)
 
     @Slot()
     def refresh_results(self) -> None:
@@ -310,20 +338,28 @@ class PlayView(QWidget):
 
         if total == 0:
             if exe:
-                self._lbl_summary.setText(f"Packaged build ready ({exe.name}). No scenario results recorded yet.")
+                self._lbl_summary.setText(f"Packaged build ready ({exe.name} · {exe.resolve()}). No scenario results recorded yet.")
+                self._btn_launch.setText(f"Launch {exe.name}")
+                self._btn_launch.setToolTip(f"Launch packaged game ({exe.resolve()})")
             else:
                 self._lbl_summary.setText(
                     f"No packaged build or scenario results found for '{self._current_project}'. "
                     f"Run a Forge build to package and test this game."
                 )
+                self._btn_launch.setText("Package Game")
+                self._btn_launch.setToolTip("Switch to Build View to package game")
             return
 
         color = tokens.ACCENT_SUCCESS if passed == total else tokens.ACCENT_ERROR
-        pkg_status = (
-            f"  ·  <span style='color: {tokens.ACCENT_SUCCESS};'>🎮 {exe.name} ready</span>"
-            if exe else
-            f"  ·  <span style='color: {tokens.ACCENT_WARNING};'>⚠️ Not packaged</span>"
-        )
+        if exe:
+            pkg_status = f"  ·  <span style='color: {tokens.ACCENT_SUCCESS};'>🎮 {exe.name} ready</span>"
+            self._btn_launch.setText(f"Launch {exe.name}")
+            self._btn_launch.setToolTip(f"Launch packaged game ({exe.resolve()})")
+        else:
+            pkg_status = f"  ·  <span style='color: {tokens.ACCENT_WARNING};'>⚠️ Not packaged</span>"
+            self._btn_launch.setText("Launch Game")
+            self._btn_launch.setToolTip("Packaged game executable not yet created")
+
         self._lbl_summary.setText(
             f"<span style='color: {color}; font-weight: 600;'>"
             f"{passed}/{total} scenarios passed</span>"
@@ -333,26 +369,43 @@ class PlayView(QWidget):
 
         self._results_table.setRowCount(total)
         for row, result in enumerate(self._results):
-            # Status
-            status_text = "✓ PASS" if result.passed else "✕ FAIL"
-            item_status = QTableWidgetItem(status_text)
-            from PySide6.QtGui import QColor
-            item_status.setForeground(
-                QColor(tokens.ACCENT_SUCCESS) if result.passed else QColor(tokens.ACCENT_ERROR)
+            # Status badge (PASS / FAIL / SKIP)
+            failures_list = getattr(result, "failures", []) or []
+            is_skipped = (
+                getattr(result, "skipped", False)
+                or str(getattr(result, "status", "")).upper() == "SKIP"
+                or (not result.passed and any(f.lower().startswith("skip") or "skipped" in f.lower() for f in failures_list))
             )
+            if is_skipped:
+                status_text = "↷ SKIP"
+                status_col = tokens.ACCENT_WARNING
+            elif result.passed:
+                status_text = "✓ PASS"
+                status_col = tokens.ACCENT_SUCCESS
+            else:
+                status_text = "✕ FAIL"
+                status_col = tokens.ACCENT_ERROR
+
+            from PySide6.QtGui import QColor
+            item_status = QTableWidgetItem(status_text)
+            item_status.setFlags(item_status.flags() & ~Qt.ItemIsEditable)
+            item_status.setForeground(QColor(status_col))
             self._results_table.setItem(row, 0, item_status)
 
             # Scenario ID
             item_id = QTableWidgetItem(result.scenario_id)
+            item_id.setFlags(item_id.flags() & ~Qt.ItemIsEditable)
             self._results_table.setItem(row, 1, item_id)
 
             # Duration
             item_dur = QTableWidgetItem(f"{result.duration_s:.1f}s")
+            item_dur.setFlags(item_dur.flags() & ~Qt.ItemIsEditable)
             self._results_table.setItem(row, 2, item_dur)
 
             # Failure count
             fail_count = len(result.failures)
             item_fails = QTableWidgetItem(str(fail_count) if fail_count else "—")
+            item_fails.setFlags(item_fails.flags() & ~Qt.ItemIsEditable)
             if fail_count:
                 item_fails.setForeground(QColor(tokens.ACCENT_ERROR))
             self._results_table.setItem(row, 3, item_fails)

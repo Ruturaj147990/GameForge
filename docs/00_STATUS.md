@@ -1,7 +1,7 @@
 # GameForge Capability Status (live matrix)
 
 **Owner:** Claude (Antigravity updates rows when a work item finishes; Claude reviews). **Last full review:**
-2026-10-31 (audit). This replaces `GAMEFORGE_COMPLETE_CAPABILITY_MATRIX.md` and `GAMEFORGE_FINAL_PRODUCTION_READINESS.md`.
+2026-11-06 (Post-Transformation Audit, Defect Correction, & Verification). This replaces `GAMEFORGE_COMPLETE_CAPABILITY_MATRIX.md` and `GAMEFORGE_FINAL_PRODUCTION_READINESS.md`.
 Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, `NOT VERIFIED`, `EXPERIMENTAL`,
 `PLANNED`. Provenance classes: see `07_CONTENT_AND_MODELS.md` §3.
 
@@ -25,6 +25,11 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 
 | Capability | Status | Evidence / note | Phase |
 |---|---|---|---|
+| Universal Assistant Loop (no open_design detour) | PASS | Direct code modification, task planning, and 11-stage game pipeline execution; tested in `test_universal_assistant_no_open_design_bypass` | Phase 1 |
+| Task Mode (Planning vs Fast) & Autonomy Profiles | PASS | Manual, Auto-Edit, Agentic enforcement in `ToolGateway`; tested in `test_autonomy_profile_enforcement_in_tool_gateway` | Phase 1 |
+| Plan Artifact & Multi-Turn Revision Lifecycle | PASS | `PlanArtifact` versioning, markdown export, `confirm_proceed`; tested in `test_plan_artifact_creation_revision_and_proceed` | Phase 1 |
+| Atomic File Editing & Disk Read-Back Verification | PASS | `write_file`, `verify_disk`, `DiffStore` rollback; tested in `test_edit_tools_write_file_and_verify_disk` | Phase 1 |
+| Deterministic Error Repair Loop & Stage Resumption | PASS | 5-attempt limit, 2-no-progress stop, DAG invalidation, upstream preservation; tested in `test_repair_engine_attempt_limits_and_cycle_prevention` and `test_forge_executor_stage_invalidation_and_resumption` | Phase 1 |
 | DAG planner, approvals, recovery | PASS | F-03 fixed in P0 WI-0.1 (evaluator-backed custom predicates, NO_EVIDENCE); M1 demos re-run | P2 replaces |
 | Native tool calling (4 local models) | PASS | `reports/native_tool_selftest.json` | — |
 | Hosted tier | BLOCKED (needs approval) | requires explicit user approval for paid API key and data egress | P9 |

@@ -5,12 +5,13 @@ Native file-system tree view bound directly to ToolService (no HTTP).
 
 from __future__ import annotations
 
+from functools import lru_cache
 import os
 from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -27,6 +28,52 @@ from ..services.tool_service import ToolService
 from ..styles import tokens
 
 
+@lru_cache(maxsize=32)
+def _make_type_icon(label: str, bg_color: str, fg_color: str = "#ffffff") -> QIcon:
+    """Generate a sharp, high-contrast 16x16 badge icon for file types."""
+    pm = QPixmap(16, 16)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setBrush(QColor(bg_color))
+    p.setPen(Qt.NoPen)
+    p.drawRoundedRect(0, 1, 16, 14, 3, 3)
+    p.setPen(QColor(fg_color))
+    font = p.font()
+    font.setPixelSize(7 if len(label) > 2 else 8)
+    font.setBold(True)
+    p.setFont(font)
+    p.drawText(pm.rect(), Qt.AlignCenter, label)
+    p.end()
+    return QIcon(pm)
+
+
+def _get_entry_icon(name: str, is_dir: bool) -> QIcon:
+    """Return crisp icon badge for directory or specific file type."""
+    if is_dir:
+        return _make_type_icon("DIR", tokens.BG_ACTIVE, tokens.ACCENT_PRIMARY)
+    lower = name.lower()
+    if lower.endswith((".cpp", ".cxx", ".cc")):
+        return _make_type_icon("C++", tokens.ACCENT_PRIMARY)
+    if lower.endswith((".h", ".hpp", ".inl")):
+        return _make_type_icon(".H", tokens.ACCENT_HOVER)
+    if lower.endswith(".py"):
+        return _make_type_icon("PY", tokens.ACCENT_SUCCESS, tokens.BG_ROOT)
+    if lower.endswith((".uproject", ".uplugin")):
+        return _make_type_icon("UE", tokens.ACCENT_WARNING, tokens.BG_ROOT)
+    if lower.endswith((".umap", ".uasset")):
+        return _make_type_icon("MAP" if lower.endswith(".umap") else "AST", tokens.ACCENT_WARNING, tokens.BG_ROOT)
+    if lower.endswith((".json", ".ini", ".cfg", ".toml", ".yaml", ".yml")):
+        return _make_type_icon("{}", tokens.BORDER_FOCUS)
+    if lower.endswith((".md", ".txt", ".rst")):
+        return _make_type_icon("MD", tokens.BG_ACTIVE, tokens.TEXT_SECONDARY)
+    if lower.endswith((".hlsl", ".usf", ".ush")):
+        return _make_type_icon("FX", tokens.ACCENT_HOVER)
+    if lower.endswith((".bat", ".ps1", ".sh", ".cmd")):
+        return _make_type_icon("CMD", tokens.ACCENT_ERROR)
+    return _make_type_icon("FILE", tokens.BG_SURFACE, tokens.TEXT_MUTED)
+
+
 class ExplorerPanel(QWidget):
     """Workspace file-system explorer with lazy directory expansion."""
 
@@ -35,6 +82,8 @@ class ExplorerPanel(QWidget):
 
     def __init__(self, tool_service: ToolService, workspace_root: Path, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("explorerPanel")
+        self.setAccessibleName("Workspace file explorer")
         self._tools = tool_service
         self._workspace = workspace_root
         self._build_ui()
@@ -68,36 +117,68 @@ class ExplorerPanel(QWidget):
 
         btn_refresh = QPushButton("↻")
         btn_refresh.setObjectName("btn_explorer_refresh")
+        btn_refresh.setAccessibleName("Refresh workspace files")
         btn_refresh.setFixedSize(24, 24)
-        btn_refresh.setStyleSheet(f"padding: 0px; font-size: 14px; border-radius: {tokens.RADIUS}px;")
+        btn_refresh.setStyleSheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 0px; font-size: 14px;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
         btn_refresh.setToolTip("Refresh workspace tree")
         btn_refresh.clicked.connect(self._populate_root)
         hdr_layout.addWidget(btn_refresh)
         layout.addWidget(header)
 
-
         # Search bar
         self._search = QLineEdit()
         self._search.setObjectName("explorer_search")
+        self._search.setAccessibleName("Filter files")
         self._search.setPlaceholderText("Search files…")
         self._search.setFixedHeight(30)
+        self._search.setStyleSheet(
+            f"QLineEdit {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px 8px; font-size: {tokens.FONT_BODY}px; margin: 4px 6px;"
+            f"}}"
+            f"QLineEdit:focus {{ border-color: {tokens.BORDER_FOCUS}; }}"
+        )
         self._search.textChanged.connect(self._on_search)
         layout.addWidget(self._search)
 
         # Tree widget
         self._tree = QTreeWidget()
         self._tree.setObjectName("explorer_tree")
+        self._tree.setAccessibleName("File hierarchy tree")
         self._tree.setHeaderHidden(True)
         self._tree.setRootIsDecorated(True)
         self._tree.setAnimated(True)
         self._tree.setExpandsOnDoubleClick(False)
+        self._tree.setStyleSheet(
+            f"QTreeWidget {{"
+            f"  background-color: {tokens.BG_ROOT};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: none;"
+            f"  font-size: {tokens.FONT_BODY}px;"
+            f"  padding: 2px 4px;"
+            f"}}"
+            f"QTreeWidget::item {{"
+            f"  padding: 3px 2px;"
+            f"  border-radius: 4px;"
+            f"}}"
+            f"QTreeWidget::item:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            f"QTreeWidget::item:selected {{ background-color: {tokens.BG_ACTIVE}; color: {tokens.TEXT_PRIMARY}; }}"
+        )
         self._tree.itemExpanded.connect(self._on_expand)
         self._tree.itemDoubleClicked.connect(self._on_double_click)
         layout.addWidget(self._tree, 1)
 
         # Bottom status
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; padding: 2px 8px;")
+        self._status_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; padding: 4px 8px; background: {tokens.BG_PANEL};")
         layout.addWidget(self._status_lbl)
 
     # ── Tree Population ─────────────────────────────────────────────────────
@@ -105,6 +186,7 @@ class ExplorerPanel(QWidget):
     def _populate_root(self) -> None:
         self._tree.clear()
         root_item = QTreeWidgetItem([self._workspace.name])
+        root_item.setIcon(0, _get_entry_icon(self._workspace.name, is_dir=True))
         root_item.setData(0, Qt.UserRole, str(self._workspace))
         root_item.setData(0, Qt.UserRole + 1, "dir")
         root_item.setToolTip(0, str(self._workspace))
@@ -112,10 +194,6 @@ class ExplorerPanel(QWidget):
         self._populate_children(root_item, self._workspace)
         root_item.setExpanded(True)
 
-    # Large folders (Blueprint v2 §8.1/§9): the first SYNC_BATCH entries appear immediately, the rest
-    # are appended in timer batches so the UI thread never blocks, and at most MAX_ITEMS rows are
-    # materialised per folder to bound memory. os.scandir entries carry cached metadata on Windows,
-    # so no extra stat call is made per file.
     SYNC_BATCH = 500
     ASYNC_BATCH = 500
     MAX_ITEMS = 5000
@@ -167,9 +245,11 @@ class ExplorerPanel(QWidget):
     def _add_entries(self, parent_item: QTreeWidgetItem, entries: list) -> None:
         items = []
         for entry in entries:
+            is_directory = _is_dir(entry)
             item = QTreeWidgetItem([entry.name])
+            item.setIcon(0, _get_entry_icon(entry.name, is_dir=is_directory))
             item.setData(0, Qt.UserRole, entry.path)
-            if _is_dir(entry):
+            if is_directory:
                 item.setData(0, Qt.UserRole + 1, "dir")
                 placeholder = QTreeWidgetItem(["…"])
                 placeholder.setData(0, Qt.UserRole + 1, "placeholder")
@@ -212,6 +292,8 @@ class ExplorerPanel(QWidget):
             child_has_match = self._filter_items(child, query)
             if not query or query in name or child_has_match:
                 child.setHidden(False)
+                if query and child_has_match:
+                    child.setExpanded(True)
                 visible_child = True
             else:
                 child.setHidden(True)

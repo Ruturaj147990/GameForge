@@ -1,17 +1,19 @@
 """Assets view for Studio UX v2 (spec §4.7, WI-4.10).
 
 QTableView over AssetRegistry.search() with filters by type and stage,
-and a detail drawer showing lifecycle events and evidence.
+and a detail drawer showing lifecycle events, thumbnail preview, and evidence.
 """
 from __future__ import annotations
 
 import datetime
+import json
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, QObject, QSize, Qt, Signal, Slot
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, QObject, QRect, QSize, Qt, Signal, Slot
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -32,15 +34,55 @@ from src.gameforge_ide.backend.assets.registry import ASSET_TYPES, STAGES, Asset
 
 logger = logging.getLogger(__name__)
 
-COLUMNS = ["Name", "Type", "Stage", "Provenance", "License", "Backend", "Updated"]
+COLUMNS = ["Name", "Type", "Stage", "Size", "License", "Provenance", "Backend", "Updated"]
+
+
+def _calc_size(row: Dict[str, Any], workspace: Optional[Path]) -> Tuple[int, str]:
+    """Return numeric size and human-readable string for an asset row."""
+    art = row.get("artifact_path")
+    if art:
+        p = Path(art)
+        if not p.is_absolute() and workspace:
+            p = workspace / art
+        if p.is_file():
+            try:
+                sz = p.stat().st_size
+                if sz < 1024:
+                    return sz, f"{sz} B"
+                elif sz < 1024 * 1024:
+                    return sz, f"{sz / 1024:.1f} KB"
+                else:
+                    return sz, f"{sz / (1024 * 1024):.1f} MB"
+            except Exception:
+                pass
+
+    spec = row.get("spec")
+    if isinstance(spec, str):
+        try:
+            spec = json.loads(spec)
+        except Exception:
+            spec = {}
+    if isinstance(spec, dict):
+        if "poly_count" in spec:
+            cnt = int(spec["poly_count"])
+            return cnt, f"{cnt:,} polys"
+        if "resolution" in spec:
+            res = int(spec["resolution"])
+            return res, f"{res}x{res}"
+
+    return 0, "—"
 
 
 class AssetsTableModel(QAbstractTableModel):
-    """Table model wrapping AssetRegistry rows."""
+    """Table model wrapping AssetRegistry rows with sortable columns."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, workspace: Optional[Path] = None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._workspace = workspace
         self._rows: List[Dict[str, Any]] = []
+
+    def set_workspace(self, workspace: Optional[Path]) -> None:
+        self._workspace = workspace
 
     def set_rows(self, rows: List[Any]) -> None:
         self.beginResetModel()
@@ -73,12 +115,14 @@ class AssetsTableModel(QAbstractTableModel):
             elif col == 2:
                 return row.get("stage", "")
             elif col == 3:
-                return row.get("provenance", "")
+                return _calc_size(row, self._workspace)[1]
             elif col == 4:
                 return row.get("license", "")
             elif col == 5:
-                return row.get("backend", "")
+                return row.get("provenance", "")
             elif col == 6:
+                return row.get("backend", "")
+            elif col == 7:
                 ts = row.get("updated_at", 0)
                 if ts:
                     return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
@@ -92,6 +136,8 @@ class AssetsTableModel(QAbstractTableModel):
                     return QColor(tokens.ACCENT_ERROR)
                 elif stage in ("VALIDATE", "ENGINE_VERIFY"):
                     return QColor(tokens.ACCENT_PRIMARY)
+            elif col == 3:
+                return QColor(tokens.TEXT_SECONDARY)
         return None
 
     def get_row_dict(self, row_idx: int) -> Optional[Dict[str, Any]]:
@@ -105,17 +151,24 @@ class AssetsTableModel(QAbstractTableModel):
             0: "name",
             1: "asset_type",
             2: "stage",
-            3: "provenance",
+            3: "size",
             4: "license",
-            5: "backend",
-            6: "updated_at",
+            5: "provenance",
+            6: "backend",
+            7: "updated_at",
         }
         key = col_key_map.get(column, "name")
         reverse = (order == Qt.DescendingOrder)
-        self._rows.sort(
-            key=lambda r: str(r.get(key, "")).lower() if key != "updated_at" else (r.get(key, 0) or 0),
-            reverse=reverse,
-        )
+
+        def _sort_key(r: Dict[str, Any]) -> Any:
+            if key == "size":
+                return _calc_size(r, self._workspace)[0]
+            elif key == "updated_at":
+                return r.get("updated_at", 0) or 0
+            else:
+                return str(r.get(key, "")).lower()
+
+        self._rows.sort(key=_sort_key, reverse=reverse)
         self.endResetModel()
 
 
@@ -156,6 +209,7 @@ class AssetsView(QWidget):
         self._search_input = QLineEdit(self)
         self._search_input.setObjectName("assetsSearchInput")
         self._search_input.setAccessibleName("Search assets by name or tag")
+        self._search_input.setToolTip("Search registered assets by keyword or tag")
         self._search_input.setPlaceholderText("Search assets...")
         self._search_input.setStyleSheet(
             f"QLineEdit#{self._search_input.objectName()} {{"
@@ -163,6 +217,9 @@ class AssetsView(QWidget):
             f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
             f"  padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;"
             f"  min-width: 180px;"
+            f"}}"
+            f"QLineEdit#{self._search_input.objectName()}:focus {{"
+            f"  border: 1px solid {tokens.BORDER_FOCUS};"
             f"}}"
         )
         self._search_input.textChanged.connect(self._on_filter_changed)
@@ -172,6 +229,7 @@ class AssetsView(QWidget):
         self._type_combo = QComboBox(self)
         self._type_combo.setObjectName("assetsTypeCombo")
         self._type_combo.setAccessibleName("Filter by asset type")
+        self._type_combo.setToolTip("Filter table rows by asset type")
         self._type_combo.addItem("All Types", None)
         for t in ASSET_TYPES:
             self._type_combo.addItem(t, t)
@@ -189,6 +247,7 @@ class AssetsView(QWidget):
         self._stage_combo = QComboBox(self)
         self._stage_combo.setObjectName("assetsStageCombo")
         self._stage_combo.setAccessibleName("Filter by asset stage")
+        self._stage_combo.setToolTip("Filter table rows by lifecycle stage")
         self._stage_combo.addItem("All Stages", None)
         for s in STAGES:
             self._stage_combo.addItem(s, s)
@@ -206,6 +265,7 @@ class AssetsView(QWidget):
         self._btn_refresh = QPushButton("Refresh", self)
         self._btn_refresh.setObjectName("btnAssetsRefresh")
         self._btn_refresh.setAccessibleName("Refresh asset table")
+        self._btn_refresh.setToolTip("Reload assets from SQLite registry")
         self._btn_refresh.setCursor(Qt.PointingHandCursor)
         self._btn_refresh.setStyleSheet(
             f"QPushButton#{self._btn_refresh.objectName()} {{"
@@ -213,7 +273,7 @@ class AssetsView(QWidget):
             f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
             f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
             f"}}"
-            f"QPushButton#{self._btn_refresh.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            f"QPushButton#{self._btn_refresh.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}"
         )
         self._btn_refresh.clicked.connect(self.refresh_assets)
         header.addWidget(self._btn_refresh)
@@ -234,7 +294,7 @@ class AssetsView(QWidget):
         splitter.setObjectName("assetsSplitter")
 
         # Table
-        self._model = AssetsTableModel(self)
+        self._model = AssetsTableModel(workspace=self._workspace, parent=self)
         self._table = QTableView(splitter)
         self._table.setObjectName("assetsTableView")
         self._table.setAccessibleName("Registered assets table")
@@ -249,6 +309,16 @@ class AssetsView(QWidget):
             f"QTableView#{self._table.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  gridline-color: {tokens.BORDER};"
+            f"  selection-background-color: {tokens.BG_ACTIVE}; selection-color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QTableView#{self._table.objectName()}:focus {{"
+            f"  border: 1px solid {tokens.BORDER_FOCUS};"
+            f"}}"
+            f"QHeaderView::section {{"
+            f"  background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER}; padding: 4px {tokens.SPACE_SM}px;"
+            f"  font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;"
             f"}}"
         )
         self._table.clicked.connect(self._on_asset_selected)
@@ -270,6 +340,22 @@ class AssetsView(QWidget):
         )
         detail_layout.addWidget(self._lbl_detail_header)
 
+        # Thumbnail Preview Widget
+        self._lbl_thumbnail = QLabel(detail_widget)
+        self._lbl_thumbnail.setObjectName("assetsThumbnailPreview")
+        self._lbl_thumbnail.setAccessibleName("Asset thumbnail preview")
+        self._lbl_thumbnail.setAlignment(Qt.AlignCenter)
+        self._lbl_thumbnail.setFixedHeight(120)
+        self._lbl_thumbnail.setStyleSheet(
+            f"QLabel#{self._lbl_thumbnail.objectName()} {{"
+            f"  background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  font-size: {tokens.FONT_HEADING}px;"
+            f"}}"
+        )
+        self._lbl_thumbnail.setText("No Asset Selected")
+        detail_layout.addWidget(self._lbl_thumbnail)
+
         self._detail_text = QTextEdit(detail_widget)
         self._detail_text.setObjectName("assetsDetailText")
         self._detail_text.setAccessibleName("Asset details and history")
@@ -279,6 +365,9 @@ class AssetsView(QWidget):
             f"  background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
             f"  padding: {tokens.SPACE_SM}px; font-family: monospace; font-size: 11px;"
+            f"}}"
+            f"QTextEdit#{self._detail_text.objectName()}:focus {{"
+            f"  border: 1px solid {tokens.BORDER_FOCUS};"
             f"}}"
         )
         detail_layout.addWidget(self._detail_text, 1)
@@ -299,6 +388,7 @@ class AssetsView(QWidget):
     def set_workspace(self, workspace_root: Path | str) -> None:
         """Switch workspace and re-initialize registry."""
         self._workspace = Path(workspace_root).resolve()
+        self._model.set_workspace(self._workspace)
         self._registry = AssetRegistry(self._workspace)
         self.refresh_assets()
 
@@ -308,6 +398,7 @@ class AssetsView(QWidget):
         p_dir = project_dir or self._workspace
         if p_dir and Path(p_dir).is_dir():
             self._workspace = Path(p_dir).resolve()
+            self._model.set_workspace(self._workspace)
             self._registry = AssetRegistry(self._workspace)
         self.refresh_assets()
 
@@ -337,6 +428,8 @@ class AssetsView(QWidget):
         self._lbl_summary.setText(f"{len(rows)} assets found.")
         self._detail_text.clear()
         self._lbl_detail_header.setText("Select an asset to view details")
+        self._lbl_thumbnail.setText("No Asset Selected")
+        self._lbl_thumbnail.setPixmap(QPixmap())
 
     @Slot()
     def _on_filter_changed(self) -> None:
@@ -352,18 +445,58 @@ class AssetsView(QWidget):
 
         name = row.get("name", "")
         asset_id = row.get("asset_id", "")
-        self._lbl_detail_header.setText(f"Asset: {name} ({row.get('asset_type', '')})")
+        asset_type = row.get("asset_type", "")
+        self._lbl_detail_header.setText(f"Asset: {name} ({asset_type})")
 
+        # Update thumbnail preview
+        thumb_loaded = False
+        img_cands = [row.get("preview_path"), row.get("artifact_path")]
+        for cand in img_cands:
+            if cand:
+                p = Path(cand)
+                if not p.is_absolute():
+                    p = self._workspace / cand
+                if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg", ".bmp", ".webp"):
+                    pm = QPixmap(str(p))
+                    if not pm.isNull():
+                        scaled = pm.scaled(
+                            QSize(220, 110),
+                            Qt.KeepAspectRatio,
+                            Qt.SmoothTransformation,
+                        )
+                        self._lbl_thumbnail.setPixmap(scaled)
+                        thumb_loaded = True
+                        break
+
+        if not thumb_loaded:
+            type_icons = {
+                "mesh": "🧊 Static Mesh",
+                "skeletal_mesh": "🏃 Skeletal Mesh",
+                "texture": "🖼 Texture",
+                "material": "🎨 Material",
+                "audio": "🔊 Audio",
+                "sound": "🔊 Sound",
+                "animation": "🎬 Animation",
+                "vfx": "✨ Niagara VFX",
+                "level": "🗺 Level Map",
+                "blueprint": "📐 Blueprint",
+            }
+            symbol = type_icons.get(asset_type, "📦 Asset")
+            self._lbl_thumbnail.setPixmap(QPixmap())
+            self._lbl_thumbnail.setText(f"{symbol}\n{name}")
+
+        sz_num, sz_str = _calc_size(row, self._workspace)
         lines = [
             f"ID:          {asset_id}",
             f"Name:        {name}",
-            f"Type:        {row.get('asset_type', '')}",
+            f"Type:        {asset_type}",
             f"Stage:       {row.get('stage', '')}",
+            f"Size:        {sz_str}",
             f"Provenance:  {row.get('provenance', '')}",
             f"License:     {row.get('license', '')}",
             f"Backend:     {row.get('backend', '')} (v{row.get('backend_version', '')})",
             f"Purpose:     {row.get('purpose', '')}",
-            f"Tags:        {row.get('tags', '')}",
+            f"Tags:        {row.get('tags', '') or '—'}",
             f"Artifact:    {row.get('artifact_path', 'None')}",
             f"Unreal Path: {row.get('unreal_path', 'None')}",
             "",

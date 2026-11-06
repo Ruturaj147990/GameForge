@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 class CodeHighlighter(QSyntaxHighlighter):
-    """Syntax highlighter for C++, Python, JSON, and shaders."""
+    """Syntax highlighter for C++, Unreal Engine macros, Python, and JSON."""
 
     def __init__(self, parent=None, language: str = "cpp") -> None:
         super().__init__(parent)
@@ -82,7 +82,7 @@ class CodeHighlighter(QSyntaxHighlighter):
         pre_format = QTextCharFormat()
         pre_format.setForeground(QColor(tokens.ACCENT_WARNING))
 
-        # Unreal macros
+        # Unreal macros format
         ue_format = QTextCharFormat()
         ue_format.setForeground(QColor(tokens.ACCENT_PRIMARY))
         ue_format.setFontWeight(QFont.Bold)
@@ -97,7 +97,28 @@ class CodeHighlighter(QSyntaxHighlighter):
             r"\bdo\b", r"\bswitch\b", r"\bcase\b", r"\bdefault\b", r"\bbreak\b",
             r"\bcontinue\b", r"\bgoto\b", r"\btry\b", r"\bcatch\b", r"\bthrow\b",
             r"\bnew\b", r"\bdelete\b", r"\bauto\b", r"\bnullptr\b", r"\btrue\b", r"\bfalse\b",
+            r"\boverride\b", r"\bfinal\b", r"\bconstexpr\b", r"\bnoexcept\b",
         ]
+
+        ue_macros = [
+            r"\bUPROPERTY\b", r"\bUFUNCTION\b", r"\bUCLASS\b", r"\bUSTRUCT\b",
+            r"\bUENUM\b", r"\bGENERATED_BODY\b", r"\bUPARAM\b", r"\bUINTERFACE\b",
+            r"\bFORCEINLINE\b", r"\bPURE_VIRTUAL\b", r"\bTEXT\b",
+            r"\bDECLARE_DYNAMIC_MULTICAST_DELEGATE\b", r"\bDECLARE_MULTICAST_DELEGATE\b",
+        ]
+
+        cpp_types = [
+            r"\bint\b", r"\bfloat\b", r"\bdouble\b", r"\bbool\b", r"\bchar\b", r"\bvoid\b",
+            r"\bint32\b", r"\bint64\b", r"\buint32\b", r"\buint64\b", r"\bsize_t\b",
+            r"\bFString\b", r"\bFName\b", r"\bFText\b", r"\bFVector\b", r"\bFRotator\b",
+            r"\bFTransform\b", r"\bFQuat\b", r"\bFColor\b", r"\bFLinearColor\b",
+            r"\bAActor\b", r"\bAPawn\b", r"\bACharacter\b", r"\bAGameModeBase\b", r"\bAGameStateBase\b",
+            r"\bUObject\b", r"\bUActorComponent\b", r"\bUSceneComponent\b",
+            r"\bUStaticMeshComponent\b", r"\bUSkeletalMeshComponent\b",
+            r"\bTArray\b", r"\bTMap\b", r"\bTSet\b", r"\bTSubclassOf\b",
+            r"\bTObjectPtr\b", r"\bTWeakObjectPtr\b", r"\bTSharedPtr\b",
+        ]
+
         py_keywords = [
             r"\band\b", r"\bas\b", r"\bassert\b", r"\basync\b", r"\bawait\b",
             r"\bbreak\b", r"\bclass\b", r"\bcontinue\b", r"\bdef\b", r"\bdel\b",
@@ -108,24 +129,41 @@ class CodeHighlighter(QSyntaxHighlighter):
             r"\bwith\b", r"\byield\b", r"\bTrue\b", r"\bFalse\b", r"\bNone\b", r"\bself\b",
         ]
 
-        if language in ("py", "python"):
+        lang_lower = language.lower()
+        if lang_lower in ("py", "python"):
             for kw in py_keywords:
                 self._rules.append((re.compile(kw), kw_format))
             self._rules.append((re.compile(r"#[^\n]*"), comment_format))
             self._rules.append((re.compile(r'"[^"\\]*(\\.[^"\\]*)*"'), str_format))
             self._rules.append((re.compile(r"'[^'\\]*(\\.[^'\\]*)*'"), str_format))
+            self._rules.append((re.compile(r"\b[0-9]+(?:\.[0-9]+)?\b"), num_format))
+        elif lang_lower == "json":
+            # JSON keys
+            key_format = QTextCharFormat()
+            key_format.setForeground(QColor(tokens.ACCENT_PRIMARY))
+            key_format.setFontWeight(QFont.Bold)
+            self._rules.append((re.compile(r'"[^"\\]*(\\.[^"\\]*)*"\s*:'), key_format))
+            # JSON values
+            self._rules.append((re.compile(r'"[^"\\]*(\\.[^"\\]*)*"'), str_format))
+            # JSON booleans and null
+            lit_format = QTextCharFormat()
+            lit_format.setForeground(QColor(tokens.ACCENT_HOVER))
+            lit_format.setFontWeight(QFont.DemiBold)
+            for lit in (r"\btrue\b", r"\bfalse\b", r"\bnull\b"):
+                self._rules.append((re.compile(lit), lit_format))
+            self._rules.append((re.compile(r"\b-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\b"), num_format))
         else:
+            # C++ & Unreal Engine
             for kw in cpp_keywords:
                 self._rules.append((re.compile(kw), kw_format))
-            for m in (r"\bUPROPERTY\b", r"\bUFUNCTION\b", r"\bUCLASS\b", r"\bUSTRUCT\b", r"\bUENUM\b", r"\bGENERATED_BODY\b"):
+            for m in ue_macros:
                 self._rules.append((re.compile(m), ue_format))
             self._rules.append((re.compile(r"#[a-zA-Z_]+[^\n]*"), pre_format))
-            for t in (r"\bint\b", r"\bfloat\b", r"\bdouble\b", r"\bbool\b", r"\bchar\b", r"\bvoid\b", r"\bFString\b", r"\bFName\b", r"\bFVector\b", r"\bFRotator\b", r"\bAActor\b", r"\bAPawn\b", r"\bACharacter\b", r"\bUObject\b"):
+            for t in cpp_types:
                 self._rules.append((re.compile(t), type_format))
             self._rules.append((re.compile(r"//[^\n]*"), comment_format))
             self._rules.append((re.compile(r'"[^"\\]*(\\.[^"\\]*)*"'), str_format))
-
-        self._rules.append((re.compile(r"\b[0-9]+(?:\.[0-9]+)?f?\b"), num_format))
+            self._rules.append((re.compile(r"\b[0-9]+(?:\.[0-9]+)?f?\b"), num_format))
 
     def highlightBlock(self, text: str) -> None:
         for pattern, fmt in self._rules:
@@ -134,7 +172,7 @@ class CodeHighlighter(QSyntaxHighlighter):
 
 
 class LineNumberArea(QWidget):
-    """Line number area beside CodePlainTextEdit."""
+    """Line number gutter area beside CodePlainTextEdit."""
 
     def __init__(self, editor: "CodePlainTextEdit") -> None:
         super().__init__(editor)
@@ -148,7 +186,7 @@ class LineNumberArea(QWidget):
 
 
 class CodePlainTextEdit(QPlainTextEdit):
-    """QPlainTextEdit with high-performance line numbering and active line highlighting."""
+    """QPlainTextEdit with aligned line numbering, active line highlight, and smooth scrolling."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -164,7 +202,7 @@ class CodePlainTextEdit(QPlainTextEdit):
         while m >= 10:
             m //= 10
             digits += 1
-        space = 16 + self.fontMetrics().horizontalAdvance("9") * max(digits, 3)
+        space = 20 + self.fontMetrics().horizontalAdvance("9") * max(digits, 3)
         return space
 
     def _update_line_number_area_width(self, _count: int) -> None:
@@ -239,6 +277,7 @@ class CodeEditor(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setObjectName("codeEditorContainer")
+        self.setAccessibleName("Code editor viewer")
         self._current_file: Optional[Path] = None
 
         layout = QVBoxLayout(self)
@@ -252,27 +291,28 @@ class CodeEditor(QWidget):
             f"background-color: {tokens.BG_PANEL}; border-bottom: 1px solid {tokens.BORDER};"
         )
         hdr_layout = QHBoxLayout(header)
-        hdr_layout.setContentsMargins(8, 4, 8, 4)
+        hdr_layout.setContentsMargins(10, 4, 10, 4)
         hdr_layout.setSpacing(8)
 
         self._lbl_filename = QLabel("No file open", header)
         self._lbl_filename.setObjectName("lblCodeFilename")
-        self._lbl_filename.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: 600; font-size: 12px;")
+        self._lbl_filename.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: 600; font-size: {tokens.FONT_BODY}px;")
         hdr_layout.addWidget(self._lbl_filename)
 
         self._lbl_status = QLabel("", header)
-        self._lbl_status.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: 11px;")
+        self._lbl_status.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
         hdr_layout.addWidget(self._lbl_status)
 
         hdr_layout.addStretch(1)
 
         self._btn_copy_path = QPushButton("Copy Path", header)
         self._btn_copy_path.setObjectName("btnCodeCopyPath")
+        self._btn_copy_path.setAccessibleName("Copy file path to clipboard")
         self._btn_copy_path.setCursor(Qt.PointingHandCursor)
         self._btn_copy_path.setStyleSheet(
             f"QPushButton {{"
             f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
-            f"  border: 1px solid {tokens.BORDER}; border-radius: 4px; padding: 2px 8px; font-size: 11px;"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 2px 10px; font-size: {tokens.FONT_BODY_SM}px;"
             f"}}"
             f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}"
         )
@@ -284,6 +324,7 @@ class CodeEditor(QWidget):
         # Editor
         self._edit = CodePlainTextEdit(self)
         self._edit.setObjectName("codePlainTextEdit")
+        self._edit.setAccessibleName("Source code text")
         self._edit.setReadOnly(True)
         self._edit.setStyleSheet(
             f"QPlainTextEdit#{self._edit.objectName()} {{"
@@ -336,7 +377,7 @@ class CodeEditor(QWidget):
                 content = raw_bytes.decode("utf-8", errors="replace")
 
         self._current_file = p
-        self._lbl_filename.setText(f"📄 {p.name}")
+        self._lbl_filename.setText(f"📄  {p.name}")
         self._lbl_status.setText(f"{p.parent}  ·  {len(content.splitlines())} lines (Read-Only)")
 
         ext = p.suffix.lower()
@@ -374,6 +415,7 @@ class CodeView(QMainWindow):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("studioView_code")
+        self.setAccessibleName("GameForge Code View Studio")
         self.setWindowFlags(Qt.Widget)
         self._workspace = Path(workspace_root).resolve()
         self._tools = tools
@@ -412,8 +454,21 @@ class CodeView(QMainWindow):
     def _create_dock(self, title: str, obj_name: str, widget: QWidget, area: Qt.DockWidgetArea) -> QDockWidget:
         dock = QDockWidget(title, self)
         dock.setObjectName(obj_name)
+        dock.setAccessibleName(f"{title} Dock Panel")
         dock.setWidget(widget)
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetClosable | QDockWidget.DockWidgetFloatable)
+        dock.setStyleSheet(
+            f"QDockWidget {{"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"  font-weight: 600;"
+            f"}}"
+            f"QDockWidget::title {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  border-bottom: 1px solid {tokens.BORDER};"
+            f"  padding: 4px 8px;"
+            f"}}"
+        )
         self.addDockWidget(area, dock)
         return dock
 
@@ -434,16 +489,24 @@ class CodeView(QMainWindow):
 
     def save_dock_state(self, settings: QSettings) -> None:
         """Persist dock positions and sizes."""
-        settings.setValue("studio/code_view_layout", self.saveState())
+        try:
+            settings.setValue("studio/code_view_layout", self.saveState())
+        except Exception as exc:
+            logger.warning("Failed to save code view dock state: %s", exc)
 
     def restore_dock_state(self, settings: QSettings) -> bool:
         """Restore dock positions and sizes if saved."""
-        saved = settings.value("studio/code_view_layout")
-        if saved:
-            return self.restoreState(saved)
+        try:
+            saved = settings.value("studio/code_view_layout")
+            if saved:
+                return self.restoreState(saved)
+        except Exception as exc:
+            logger.warning("Failed to restore code view dock state: %s", exc)
         return False
 
     def reset_dock_layout(self) -> None:
-        """Reset docks back to default layout."""
+        """Reset docks back to default layout, unhiding any closed docks."""
+        for dock in (self._dock_explorer, self._dock_unreal, self._dock_diff, self._dock_terminal):
+            dock.show()
         if hasattr(self, "_default_dock_layout"):
             self.restoreState(self._default_dock_layout)

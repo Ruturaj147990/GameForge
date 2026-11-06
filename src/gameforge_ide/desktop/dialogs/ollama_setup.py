@@ -250,6 +250,7 @@ class OllamaSetupDialog(QDialog):
 
         self._btn_start = QPushButton("▶ Start Ollama Service", self)
         self._btn_start.setObjectName("btn_start_ollama")
+        self._btn_start.setAccessibleName("Start Ollama service")
         self._btn_start.setCursor(Qt.PointingHandCursor)
         self._btn_start.setStyleSheet(
             f"QPushButton {{"
@@ -261,8 +262,9 @@ class OllamaSetupDialog(QDialog):
             f"  font-weight: 600;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
-            f"QPushButton:hover {{"
+            f"QPushButton:hover, QPushButton:focus {{"
             f"  background-color: {tokens.ACCENT_HOVER};"
+            f"  outline: none;"
             f"}}"
             f"QPushButton:disabled {{"
             f"  background-color: {tokens.BG_ACTIVE};"
@@ -274,6 +276,7 @@ class OllamaSetupDialog(QDialog):
 
         self._btn_settings = QPushButton("⚙ Configure Settings", self)
         self._btn_settings.setObjectName("btn_open_settings")
+        self._btn_settings.setAccessibleName("Open settings dialog")
         self._btn_settings.setCursor(Qt.PointingHandCursor)
         self._btn_settings.setStyleSheet(
             f"QPushButton {{"
@@ -284,14 +287,17 @@ class OllamaSetupDialog(QDialog):
             f"  padding: 8px 14px;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
-            f"QPushButton:hover {{"
+            f"QPushButton:hover, QPushButton:focus {{"
             f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
         )
         self._btn_settings.clicked.connect(self._on_settings_clicked)
         btn_layout.addWidget(self._btn_settings)
 
         self._btn_download = QPushButton("🌐 Download Ollama", self)
+        self._btn_download.setAccessibleName("Download Ollama installer from website")
         self._btn_download.setCursor(Qt.PointingHandCursor)
         self._btn_download.setStyleSheet(
             f"QPushButton {{"
@@ -302,8 +308,10 @@ class OllamaSetupDialog(QDialog):
             f"  padding: 8px 14px;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
-            f"QPushButton:hover {{"
+            f"QPushButton:hover, QPushButton:focus {{"
             f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
         )
         self._btn_download.clicked.connect(self._on_download_clicked)
@@ -313,6 +321,7 @@ class OllamaSetupDialog(QDialog):
         btn_layout.addStretch(1)
 
         self._btn_close = QPushButton("Close", self)
+        self._btn_close.setAccessibleName("Close Ollama setup dialog")
         self._btn_close.setCursor(Qt.PointingHandCursor)
         self._btn_close.setStyleSheet(
             f"QPushButton {{"
@@ -323,9 +332,11 @@ class OllamaSetupDialog(QDialog):
             f"  padding: 8px 16px;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
-            f"QPushButton:hover {{"
+            f"QPushButton:hover, QPushButton:focus {{"
             f"  background-color: {tokens.BG_HOVER};"
             f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
         )
         self._btn_close.clicked.connect(self.accept)

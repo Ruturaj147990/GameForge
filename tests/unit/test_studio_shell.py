@@ -56,9 +56,11 @@ def test_studio_shell_object_names(qapp, disposable_workspace):
         assert win._top_bar.findChild(object, "topBarPaletteBtn") is not None
 
         # Check rail buttons
-        for vid in ("home", "games", "design", "build", "play", "assets", "code", "settings"):
+        for vid in ("home", "games", "play", "assets", "code", "settings"):
             assert win._rail.button(vid) is not None
             assert win._rail.button(vid).objectName() == f"railButton_{vid}"
+        assert win._rail.button("design") is None
+        assert win._rail.button("build") is None
         assert win._rail.button("evidence") is None
     finally:
         win.close()

@@ -15,16 +15,22 @@ from PySide6.QtWidgets import (
 from ..icons import icon
 from ..styles import tokens
 
+# Primary active navigation items for the Studio Activity Rail.
+# Note: Separate Design and Build views are retired from the primary rail
+# per GameForge 1.0 architecture (all requests flow directly through the assistant chat).
 RAIL_ITEMS = [
     ("home", "Home", "Ctrl+1"),
     ("games", "Games", "Ctrl+2"),
+    ("play", "Play", "Ctrl+3"),
+    ("assets", "Assets", "Ctrl+4"),
+    ("separator", "", ""),
+    ("code", "Code", "Ctrl+5"),
+    ("settings", "Settings", "Ctrl+,"),
+]
+
+RETIRED_RAIL_ITEMS = [
     ("design", "Design", "Ctrl+3"),
     ("build", "Build", "Ctrl+4"),
-    ("play", "Play", "Ctrl+5"),
-    ("assets", "Assets", "Ctrl+6"),
-    ("separator", "", ""),
-    ("code", "Code", "Ctrl+7"),
-    ("settings", "Settings", "Ctrl+,"),
 ]
 
 
@@ -43,7 +49,7 @@ class RailButton(QToolButton):
         self.setFixedSize(56, 48)
         self.setIconSize(QSize(22, 22))
         self.setIcon(icon(view_id, role="secondary", size=22))
-        self.setFocusPolicy(Qt.NoFocus)
+        self.setFocusPolicy(Qt.TabFocus)
         self.setToolTip(f"{label} ({shortcut})" if shortcut else label)
         self._apply_style()
 
@@ -55,11 +61,23 @@ class RailButton(QToolButton):
                 border-left: 3px solid transparent;
                 padding: 0px;
                 margin: 0px;
+                border-radius: 4px;
             }}
             QToolButton:hover {{
                 background: {tokens.BG_HOVER};
             }}
+            QToolButton:focus {{
+                outline: 2px solid {tokens.BORDER_FOCUS};
+                outline-offset: -2px;
+                background: {tokens.BG_HOVER};
+            }}
             QToolButton:checked {{
+                background: {tokens.BG_ACTIVE};
+                border-left: 3px solid {tokens.ACCENT_PRIMARY};
+            }}
+            QToolButton:checked:focus {{
+                outline: 2px solid {tokens.BORDER_FOCUS};
+                outline-offset: -2px;
                 background: {tokens.BG_ACTIVE};
                 border-left: 3px solid {tokens.ACCENT_PRIMARY};
             }}
@@ -89,7 +107,14 @@ class Rail(QWidget):
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
         self._buttons: Dict[str, RailButton] = {}
+        self._retired_buttons: Dict[str, RailButton] = {}
         self._separators: List[QFrame] = []
+
+        for item in RETIRED_RAIL_ITEMS:
+            view_id, label, shortcut = item
+            r_btn = RailButton(view_id, label, shortcut, self)
+            r_btn.setVisible(False)
+            self._retired_buttons[view_id] = r_btn
 
         for item in RAIL_ITEMS:
             view_id, label, shortcut = item

@@ -131,6 +131,7 @@ class BuildView(QWidget):
         self._runs_combo = QComboBox(self)
         self._runs_combo.setObjectName("buildRunsCombo")
         self._runs_combo.setAccessibleName("Select active or past run")
+        self._runs_combo.setToolTip("Select a build run to inspect timeline and logs")
         self._runs_combo.setMinimumWidth(320)
         self._runs_combo.setStyleSheet(
             f"QComboBox#{self._runs_combo.objectName()} {{"
@@ -148,6 +149,7 @@ class BuildView(QWidget):
         self._btn_cancel = QPushButton("Cancel", self)
         self._btn_cancel.setObjectName("btnBuildCancel")
         self._btn_cancel.setAccessibleName("Cancel active run")
+        self._btn_cancel.setToolTip("Cancel currently running build")
         self._btn_cancel.setCursor(Qt.PointingHandCursor)
         self._btn_cancel.setStyleSheet(
             f"QPushButton#{self._btn_cancel.objectName()} {{"
@@ -157,6 +159,7 @@ class BuildView(QWidget):
             f"}}"
             f"QPushButton#{self._btn_cancel.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
             f"QPushButton#{self._btn_cancel.objectName()}:disabled {{ color: {tokens.TEXT_MUTED}; }}"
+            f"QPushButton#{self._btn_cancel.objectName()}:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
         )
         self._btn_cancel.clicked.connect(self._on_cancel_clicked)
         header_layout.addWidget(self._btn_cancel)
@@ -165,6 +168,7 @@ class BuildView(QWidget):
         self._btn_resume = QPushButton("Resume", self)
         self._btn_resume.setObjectName("btnBuildResume")
         self._btn_resume.setAccessibleName("Resume failed or cancelled run")
+        self._btn_resume.setToolTip("Resume failed or cancelled build run")
         self._btn_resume.setCursor(Qt.PointingHandCursor)
         self._btn_resume.setStyleSheet(
             f"QPushButton#{self._btn_resume.objectName()} {{"
@@ -174,6 +178,7 @@ class BuildView(QWidget):
             f"}}"
             f"QPushButton#{self._btn_resume.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
             f"QPushButton#{self._btn_resume.objectName()}:disabled {{ color: {tokens.TEXT_MUTED}; }}"
+            f"QPushButton#{self._btn_resume.objectName()}:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
         )
         self._btn_resume.clicked.connect(self._on_resume_clicked)
         header_layout.addWidget(self._btn_resume)
@@ -182,6 +187,7 @@ class BuildView(QWidget):
         self._btn_rollback = QPushButton("Roll back ▾", self)
         self._btn_rollback.setObjectName("btnBuildRollback")
         self._btn_rollback.setAccessibleName("Roll back to earlier checkpoint")
+        self._btn_rollback.setToolTip("Select a recorded checkpoint commit to roll back project state")
         self._btn_rollback.setCursor(Qt.PointingHandCursor)
         self._btn_rollback.setStyleSheet(
             f"QPushButton#{self._btn_rollback.objectName()} {{"
@@ -190,6 +196,7 @@ class BuildView(QWidget):
             f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
             f"}}"
             f"QPushButton#{self._btn_rollback.objectName()}:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            f"QPushButton#{self._btn_rollback.objectName()}:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
         )
         self._btn_rollback.clicked.connect(self._show_rollback_menu)
         header_layout.addWidget(self._btn_rollback)
@@ -234,6 +241,7 @@ class BuildView(QWidget):
 
         # Left pane: Timeline
         left_widget = QWidget(splitter)
+        left_widget.setMinimumWidth(240)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(6)
@@ -246,6 +254,7 @@ class BuildView(QWidget):
         self._timeline_view = QListView(left_widget)
         self._timeline_view.setObjectName("buildTimelineView")
         self._timeline_view.setAccessibleName("Run steps timeline")
+        self._timeline_view.setToolTip("Select a step to view execution logs, diagnostics, and artifacts")
         self._timeline_view.setModel(self._timeline_model)
         self._timeline_delegate = StepRowDelegate(self._timeline_view)
         self._timeline_view.setItemDelegate(self._timeline_delegate)
@@ -258,12 +267,16 @@ class BuildView(QWidget):
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
             f"}}"
+            f"QListView#{self._timeline_view.objectName()}:focus {{"
+            f"  border: 1px solid {tokens.BORDER_FOCUS};"
+            f"}}"
         )
         left_layout.addWidget(self._timeline_view, 1)
         splitter.addWidget(left_widget)
 
         # Right pane: Step details
         right_widget = QWidget(splitter)
+        right_widget.setMinimumWidth(400)
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(8)
@@ -279,14 +292,17 @@ class BuildView(QWidget):
         # Vertical splitter for log view and lower tabs
         right_splitter = QSplitter(Qt.Vertical, right_widget)
         right_splitter.setObjectName("buildRightSplitter")
+        self._right_splitter = right_splitter
 
         # Log view
         self._log_view = LogView(right_splitter)
+        self._log_view.setMinimumHeight(160)
         right_splitter.addWidget(self._log_view)
 
         # Lower tabs: Problems & Artifacts
         self._lower_tabs = QTabWidget(right_splitter)
         self._lower_tabs.setObjectName("buildLowerTabs")
+        self._lower_tabs.setAccessibleName("Problems and Artifacts tabs")
         self._lower_tabs.setStyleSheet(
             f"QTabWidget::pane {{"
             f"  border: 1px solid {tokens.BORDER};"
@@ -302,7 +318,7 @@ class BuildView(QWidget):
             f"  background-color: {tokens.BG_ACTIVE}; color: {tokens.TEXT_PRIMARY};"
             f"}}"
         )
-        self._lower_tabs.setMinimumHeight(150)
+        self._lower_tabs.setMinimumHeight(160)
 
         # Problems tab
         self._problems_table = ProblemsTable(self._lower_tabs)
@@ -312,6 +328,7 @@ class BuildView(QWidget):
         # Artifacts tab
         self._artifacts_text = QTextEdit(self._lower_tabs)
         self._artifacts_text.setObjectName("buildArtifactsText")
+        self._artifacts_text.setAccessibleName("Step artifacts output")
         self._artifacts_text.setReadOnly(True)
         self._artifacts_text.setStyleSheet(
             f"background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY};"
@@ -327,6 +344,8 @@ class BuildView(QWidget):
         right_layout.addWidget(right_splitter, 1)
         splitter.addWidget(right_widget)
 
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
         splitter.setSizes([320, 680])
         main_layout.addWidget(splitter, 1)
 
@@ -576,6 +595,10 @@ class BuildView(QWidget):
                 self._display_step(records[failed_idx])
 
             self._lower_tabs.setCurrentIndex(0)
+            if hasattr(self, "_right_splitter") and self._right_splitter:
+                sizes = self._right_splitter.sizes()
+                if len(sizes) == 2 and sizes[1] < 160:
+                    self._right_splitter.setSizes([max(180, sizes[0] - 160), max(180, sizes[1] + 160)])
 
     @Slot(QModelIndex)
     def _on_step_selected(self, index: QModelIndex) -> None:

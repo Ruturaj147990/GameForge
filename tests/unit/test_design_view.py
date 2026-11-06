@@ -363,3 +363,80 @@ def test_overview_players_range_validation():
     with pytest.raises(pydantic.ValidationError):
         Overview(genre=Genre.GRID_BOARD, camera=CameraKind.FIXED_BOARD, players=9)
 
+
+def test_rule_editor_conditions_and_live_preview(qapp):
+    """Verify RuleEditorDialog supports condition visual building, validation, and live preview."""
+    dlg = RuleEditorDialog(entity_ids=["coin", "player"])
+    try:
+        dlg._id_input.setText("rule_health_bonus")
+        dlg._event_combo.setCurrentText("pickup.collected")
+        dlg._source_combo.setCurrentText("coin")
+
+        # Set Condition: Stat Comparison
+        dlg._cond_type_combo.setCurrentText("Stat Comparison")
+        dlg._cond_stat_input.setText("player.health")
+        dlg._cond_op_combo.setCurrentText(">=")
+        dlg._cond_val_spin.setValue(50)
+
+        # Set Effect
+        dlg._delta_spin.setValue(100)
+
+        # Check live sentence preview
+        preview_text = dlg._lbl_sentence_preview.text()
+        assert "When" in preview_text
+        assert "pickup is collected" in preview_text
+        assert "coin" in preview_text
+        assert "player.health reaches 50" in preview_text
+
+        # Test validation rejection on empty ID
+        dlg._id_input.setText("")
+        dlg._on_save_clicked()
+        assert not dlg._lbl_val_error.isHidden()
+        assert "cannot be empty" in dlg._lbl_val_error.text()
+
+        # Fix ID and save
+        dlg._id_input.setText("rule_health_bonus")
+        dlg._on_save_clicked()
+        assert dlg._lbl_val_error.isHidden()
+
+        rule = dlg.get_rule_spec()
+        assert rule.rule_id == "rule_health_bonus"
+        assert len(rule.conditions) == 1
+        assert rule.conditions[0].stat == "player.health"
+        assert rule.conditions[0].op == ">="
+        assert rule.conditions[0].value == 50.0
+    finally:
+        dlg.deleteLater()
+
+
+def test_design_view_prompt_suggestions_and_diff_badges(qapp, tmp_path, monkeypatch):
+    """Verify prompt suggestions set text and preview shows colored operation badges."""
+    monkeypatch.setattr(
+        "src.gameforge_ide.desktop.views.design_view.get_settings",
+        lambda: type("SettingsMock", (), {"projects_root": str(tmp_path)})(),
+    )
+    proj_dir = tmp_path / "SugTestGame"
+    proj_dir.mkdir(parents=True)
+    from src.gameforge_ide.design.presets import preset_relic_hunt
+    spec = preset_relic_hunt(title="SugTestGame")
+    spec.meta.project_name = "SugTestGame"
+    gds_store.save(proj_dir, spec)
+
+    view = DesignView()
+    try:
+        assert view.load_project("SugTestGame") is True
+
+        # Click suggestion
+        view._apply_prompt_suggestion("Make guards faster")
+        assert view._txt_change.text() == "Make guards faster"
+        assert not view._diff_preview_box.isHidden()
+
+        # Check badges in diff preview
+        preview_html = view._lbl_diff_preview.text()
+        assert "500.0" in preview_html
+        assert "[~ MODIFY]" in preview_html or "[+ ADD]" in preview_html
+    finally:
+        view.deleteLater()
+
+
+

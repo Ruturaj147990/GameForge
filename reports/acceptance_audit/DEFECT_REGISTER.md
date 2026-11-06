@@ -91,6 +91,20 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 | **DEF-135** | High | Forge / Packaging | Scenario package validation failure when mock executable was missing on disk | `validate_stage_output("package")` verifies file existence on disk | `VERIFIED_LIVE` | `tests/unit/test_ide_scenario_execution.py` |
 | **DEF-136** | High | Core / Projects | Python 3.14 + PySide6 C-runtime crash on background thread project directory discovery | Direct `pathlib.Path.iterdir()` in background threads while main thread operates Qt widgets | `VERIFIED_LIVE` | `src/gameforge_ide/core/projects.py` |
 | **DEF-137** | Critical | Desktop Views / Settings | Fatal Access Violation during `save_settings()` when applying theme concurrently | `apply_theme` executed full QSS re-parsing on main thread while background worker threads were in socket/IO calls | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/views/settings_view.py`, `src/gameforge_ide/unreal/discovery.py` |
+| **DEF-191** | High | Content / Props | Procedural CSG Prop Recipes Malformed Dimensions and Misaligned Seams | Coordinate space mismatch (`origin=BASE` vs `origin=CENTER`) | `VERIFIED_LIVE` | `src/gameforge_ide/content/procedural_props.py` |
+| **DEF-192** | Medium | Content / Themes | Theme Contrast Calculation Failure on Edge Colors and Non-Standard Ranges | Precision truncation in relative luminance | `VERIFIED_LIVE` | `src/gameforge_ide/content/themes.py` |
+| **DEF-193** | Medium | Content / Library | License Declaration Rejection of Valid Local and Custom Project Assets | Overly restrictive enum validation | `VERIFIED_LIVE` | `src/gameforge_ide/content/library.py` |
+| **DEF-194** | Medium | Content / VFX | Niagara VFX Presets Referencing Engine-Inaccessible Paths | Templates referenced non-existent paths | `VERIFIED_LIVE` | `src/gameforge_ide/content/vfx_presets.py` |
+| **DEF-195** | Low | Content / Audio | Ambient Audio Seam Pops, Silence Dips, and Waveform Truncation | Linear fades instead of circular crossfading | `VERIFIED_LIVE` | `src/gameforge_ide/content/ambience.py` |
+| **DEF-196** | Low | Content / Audio | Music Loop Note Frequency Fallback Corruption | Hardcoded natural notes table lacking accidentals | `VERIFIED_LIVE` | `src/gameforge_ide/content/music.py` |
+| **DEF-197** | Medium | Content / Audio | Missing Central Content Audio Manager and Resampling Coordinator | No centralized audio coordinator | `VERIFIED_LIVE` | `src/gameforge_ide/content/audio.py` |
+| **DEF-198** | Low | Content / Packs | Epic Pack Asset Type Inference and Cook Directory Parsing Fragility | Incomplete regex and path handling | `VERIFIED_LIVE` | `src/gameforge_ide/content/epic_packs.py` |
+| **DEF-199** | Critical | Universal Chat / Agent | False Capability Refusal Disclaimers in Assistant Chat | Conversational classification stripped tools, triggering default RLHF refusal | `VERIFIED_LIVE` | `src/gameforge_ide/backend/agent/context_manager.py`, `runtime.py` |
+| **DEF-200** | Critical | Universal Chat / Agent | Raw Code-Dump Chat Substitution Without File Tool Execution | `"think": True` corrupted Ollama tool calling parser, dumping raw text | `VERIFIED_LIVE` | `src/gameforge_ide/backend/providers/ollama_provider.py`, `runtime.py` |
+| **DEF-201** | Critical | Desktop Shell / UX | Retired Design/Build Interfaces Remaining Visible in Shell & Home Dashboard | Competing prompt entry points in Home view and Rail | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/shell/rail.py`, `home_view.py`, `main_window.py` |
+| **DEF-202** | High | LLM Provider | Ollama Provider Forcing `"think": True` Breaking Native Tool Calling | Native Ollama tool caller breaks when thinking enabled | `VERIFIED_LIVE` | `src/gameforge_ide/backend/providers/ollama_provider.py` |
+| **DEF-203** | High | Universal Chat / Agent | Proceed Command Swallowed by Conversational Intent Classifier | Single-word commands <= 5 words marked conversational | `VERIFIED_LIVE` | `src/gameforge_ide/backend/agent/runtime.py` |
+| **DEF-204** | Critical | Universal Chat / Desktop | `AgentService` Instantiating `AgentRuntime` with `studio_mode=True` Emitting `[Open in Design]` | `agent_service.py` hardcoded `studio_mode=True`, causing `AgentRuntime` to detour to retired `open_design` card instead of autonomous planning and execution | `VERIFIED_LIVE` | `src/gameforge_ide/desktop/services/agent_service.py` |
 
 ---
 
@@ -648,49 +662,49 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Root Cause:** `EventBus.publish()` used `logger.debug` for caught exceptions, and subscription matching was limited to strict string equality.
 - **Fix:** Upgraded logging to `logger.exception()`, introduced an error tracking deque in `EventBus`, and implemented wildcard/pattern matching with `fnmatch.fnmatch()` for hierarchical topic subscriptions.
 
-### DEF-114: Procedural CSG Prop Recipes Malformed Dimensions and Misaligned Seams
+### DEF-191: Procedural CSG Prop Recipes Malformed Dimensions and Misaligned Seams
 - **Symptom:** Procedural CSG props (altar, pillar, crate, barrel, fence, stylized_tree, chest) generated in Unreal Engine via `mesh_generate_prop` had floating parts, disjoint internal geometry gaps, and elevated ground offsets.
 - **Root Cause:** In `_core.py`, `_append_part` executes `append_box`, `append_cylinder`, and `append_cone` with `origin = BASE`, but `procedural_props.py` defined CSG part coordinates assuming `origin = CENTER`, shifting box/cylinder elements upward by `height / 2.0`. Furthermore, raw part dictionaries lacked dimension validation, and `_cone` was missing.
 - **Fix:** Added base origin coordinate translation in `PropRecipe.to_op_args()`, added strict shape dimension validation in `validate()`, implemented `_cone()` CSG helper, and added `compute_bounds()` and `verify_recipe_watertight()`.
 - **Resolution File:** `src/gameforge_ide/content/procedural_props.py`
 
-### DEF-115: Theme Contrast Calculation Failure on Edge Colors and Non-Standard Ranges
+### DEF-192: Theme Contrast Calculation Failure on Edge Colors and Non-Standard Ranges
 - **Symptom:** WCAG contrast verification produced invalid results or returned failing color ratios on edge colors, HDR values, and mid-tone floors.
 - **Root Cause:** `relative_luminance` divided values by 255 if `v > 1.0`, corrupting floating point precision (e.g. `1.0001` -> `0.00392`). When `palette_candidates` lacked an eligible candidate, `validate_and_adjust_palette` returned the failing accent color with a warning.
 - **Fix:** Refactored `relative_luminance` to safely distinguish 0-255 vs 0-1 scales with tolerance clamping, and implemented guaranteed polarity fallback to pure white or pure black in `validate_and_adjust_palette`, mathematically guaranteeing `>= 3.0:1` on any floor.
 - **Resolution File:** `src/gameforge_ide/content/themes.py`
 
-### DEF-116: License Declaration Rejection of Valid Local and Custom Project Assets
+### DEF-193: License Declaration Rejection of Valid Local and Custom Project Assets
 - **Symptom:** Importing user-created or proprietary project assets failed with `ValueError: Invalid licence class` or `ValueError: CUSTOM licence requires licence text`.
 - **Root Cause:** `LicenceDecl.validate()` strictly required exact uppercase strings in `("EPIC_CONTENT", "FAB_STANDARD", "CC0", "CC_BY", "CUSTOM")`, rejecting `"LOCAL"`, `"PROPRIETARY"`, `"PUBLIC_DOMAIN"`, and lowercase/hyphenated variations. Furthermore, `import_into_project` forced all assets to `asset_type="mesh"`.
 - **Fix:** Expanded valid licence classes, added alias mapping and case normalization, permitted empty attribution text for local/proprietary assets, and dynamically inferred `asset_type` via `infer_asset_type_from_path()`.
 - **Resolution File:** `src/gameforge_ide/content/library.py`
 
-### DEF-117: Niagara VFX Presets Referencing Engine-Inaccessible Paths and Missing Template Integration
+### DEF-194: Niagara VFX Presets Referencing Engine-Inaccessible Paths and Missing Template Integration
 - **Symptom:** Content pipeline could not instantiate Niagara VFX presets into projects via `vfx_create_system`.
 - **Root Cause:** `VFXPreset.template_path` referenced `/Game/GameForge/VFX/NS_*` instead of valid engine template systems (`/Niagara/DefaultAssets/Templates/Systems/*`) or template emitters (`/Niagara/DefaultAssets/Templates/Emitters/*`), and lacked `to_create_args` integration.
 - **Fix:** Added `template_system`, `template_emitters`, `target_asset_path`, `to_create_args()`, and engine template validation to `VFXPreset` across all 8 presets.
 - **Resolution File:** `src/gameforge_ide/content/vfx_presets.py`
 
-### DEF-118: Ambient Audio Seam Pops, Silence Dips, and Waveform Truncation at Loop Boundaries
+### DEF-195: Ambient Audio Seam Pops, Silence Dips, and Waveform Truncation at Loop Boundaries
 - **Symptom:** Environmental ambience loops (wind, forest, dungeon) dipped to complete silence at every loop boundary or popped due to waveform slope discontinuities.
 - **Root Cause:** `generate_ambience_loop` linearly faded the audio buffer to zero at the start and end rather than circularly crossfading the continuous bed.
 - **Fix:** Implemented circular crossfading (`audio[:fade] = head * ramp + tail * (1 - ramp)` and truncated overlapped tail), ensuring continuous RMS energy and zero-pop loop boundaries. Added `analyze_ambience_loop()`.
 - **Resolution File:** `src/gameforge_ide/content/ambience.py`
 
-### DEF-119: Music Loop Note Frequency Fallback Corruption and Floating-Point Bar Duration Drift
+### DEF-196: Music Loop Note Frequency Fallback Corruption and Floating-Point Bar Duration Drift
 - **Symptom:** Musical loop generation produced dissonant out-of-tune notes on accidentals and suffered cumulative sample timing drift across 16 bars.
 - **Root Cause:** `NOTE_FREQS` only contained natural diatonic notes; any accidental note fell back to `440.0 Hz`. Furthermore, bar durations were truncated independently using `int(duration_s * sample_rate)`.
 - **Fix:** Implemented exact 12-TET frequency formula $f(note) = 440.0 \times 2^{(MIDI - 69) / 12}$, computed exact integer sample intervals per bar to eliminate timing drift, and applied loop boundary crossfading. Added `analyze_music_loop()`.
 - **Resolution File:** `src/gameforge_ide/content/music.py`
 
-### DEF-120: Missing Central Content Audio Manager and Resampling Coordinator
+### DEF-197: Missing Central Content Audio Manager and Resampling Coordinator
 - **Symptom:** Audio synthesis was fragmented across modules with no unified entry point, no loop seam verification, and no engine sample rate conversion (44.1 kHz vs 48 kHz).
 - **Root Cause:** `src/gameforge_ide/content/audio.py` did not exist in the codebase.
 - **Fix:** Created `src/gameforge_ide/content/audio.py` with `AudioService`, `resample_audio()`, `crossfade_loop()`, `verify_audio_loop()`, and full project asset registry integration.
 - **Resolution File:** `src/gameforge_ide/content/audio.py`
 
-### DEF-121: Epic Pack Asset Type Inference and Cook Directory Parsing Fragility
+### DEF-198: Epic Pack Asset Type Inference and Cook Directory Parsing Fragility
 - **Symptom:** Epic pack assets in subdirectories failed asset type detection, cooker configuration ignored single-asset packages, and Windows CRLF line endings were stripped on save.
 - **Root Cause:** `_infer_asset_type` checked `lower.startswith("m_")` on full paths; `collect_cook_directories` required 3 parts and broke on package dots; `update_default_game_ini_cook_dirs` did not preserve `\r\n`.
 - **Fix:** Updated `_infer_asset_type` to inspect filename stems and prefixes, cleaned package extensions in `collect_cook_directories`, and preserved `\r\n` line endings in INI writes.
@@ -866,6 +880,12 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Symptom:** Occasional access violation when background jobs enumerated project directories using `Path.iterdir()` concurrently with Qt C++ events.
 - **Root Cause:** C-runtime ABI race between Python 3.14 `pathlib` and PySide6 Qt event loop.
 - **Fix:** Refactored `list_all_project_dirs` and `find_uproject` in `projects.py` to use `os.path`/`os.listdir` and added a main-thread guard when `QApplication.instance()` is active.
+
+### DEF-137: Fatal Access Violation during save_settings() when applying theme concurrently
+- **Symptom:** Fatal access violation or crash in `save_settings()` when updating user settings while the desktop application theme was concurrently applied.
+- **Root Cause:** `apply_theme` executed full QSS re-parsing on the main GUI thread while background worker threads were actively executing socket/IO calls or settings serialization, creating an unprotected memory collision across Qt stylesheets and background worker thread allocations.
+- **Fix:** Added thread-safe synchronization locks across `SettingsView.save_settings()`, serialized stylesheet application on the main GUI event loop via `QMetaObject.invokeMethod(..., Qt.QueuedConnection)`, and ensured engine path discovery in `discovery.py` safely guards concurrent filesystem operations.
+- **Resolution File:** `src/gameforge_ide/desktop/views/settings_view.py`, `src/gameforge_ide/unreal/discovery.py`
 
 ### DEF-138: Missing GDS Pitch in Composition Inputs
 - **Symptom:** Validation rejected composition outputs due to missing pitch metadata.
@@ -1122,6 +1142,46 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 - **Root Cause:** Cancellation check broke while loop without setting `ctx.cancel`, and post-processing lacked fail-closed exception handlers.
 - **Fix:** Signalled `ctx.cancel.set()` immediately upon run cancellation, eliminated dangerous global `terminate_all_children` invocations during step checks, and wrapped step execution and post-processing in fail-closed handlers transitioning cleanly to `FAILED`/`CANCELLED` in `executor.py`.
 
+### DEF-189: Approve Button Text Contrast in Midnight Purple Dark
+- **Symptom:** `#ffffff` text on `QPushButton#btn_approve` gradient stop `#059669` had a contrast ratio of 3.77:1, which failed WCAG 2.2 AA (4.5:1).
+- **Root Cause:** Emerald gradient stop was too bright for pure white foreground text.
+- **Fix:** Darkened the dark theme gradient stop to `#047857` (4.88:1) and `#065f46` (7.68:1), exceeding the 4.5:1 standard while keeping emerald visual semantic identity in `dark_theme.py`.
+
+### DEF-199: False Capability Refusal Disclaimers in Universal Assistant Chat
+- **Symptom:** Assistant emitted self-disclaimers stating *"What I Cannot Do: Execute Unreal Engine build pipelines... compile code... access your file system..."*, asserting it is merely a text bot without tool access.
+- **Root Cause:** `_is_conversational` treated meta-questions, capability inquiries, or phrasing ending in `?` as conversational. `runtime.py` stripped tool schemas and capability context from the system prompt, causing the base model to fall back to default pre-training refusal disclaimers.
+- **Fix:** Injected dynamic `GAMEFORGE RUNTIME CAPABILITIES` manifest into `context_manager.py` explicitly declaring active filesystem tools, UE 5.7 integration, 11-stage pipeline, and execution gateway. Mandated that capability disclaimers are forbidden when tools are available.
+- **Resolution File:** `src/gameforge_ide/backend/agent/context_manager.py`, `src/gameforge_ide/backend/agent/runtime.py`
+
+### DEF-200: Raw Code-Dump Chat Substitution Without File Tool Execution
+- **Symptom:** Assistant dumped raw C++ class implementations (e.g. `Weapon_Rifle.h`, `Weapon_Rifle.cpp`) into chat Markdown prose instead of creating actual files on disk via `write_file` or `propose_edit`.
+- **Root Cause:** In `ollama_provider.py`, `"think": True` was passed to the Ollama API, corrupting Ollama's tool parser and causing the model to emit raw C++ code blocks in message content rather than `tool_calls`.
+- **Fix:** Passed `"think": False` across all Ollama provider methods per `AGENTS.md` Rule 2.6. Implemented fallback regex extractor `_extract_code_block_as_write_file` in `runtime.py` that intercepts structured code blocks containing file path headers and executes atomic `write_file` tool actions with disk read-back and SHA-256 verification.
+- **Resolution File:** `src/gameforge_ide/backend/providers/ollama_provider.py`, `src/gameforge_ide/backend/agent/runtime.py`
+
+### DEF-201: Retired Design/Build Interfaces Remaining Visible in Shell & Home Dashboard
+- **Symptom:** Retired Design navigation button remained visible on the rail; Home View retained "Make a game" prompt composer, preset chips, and "Design it →" button, creating competing prompt-entry workflows.
+- **Root Cause:** Legacy UI controls were retained in `home_view.py` and `rail.py` instead of routing all natural-language requests into the single universal assistant chat.
+- **Fix:** Retired Design and Build buttons from primary `RAIL_ITEMS` (`rail.button("design") is None`). Replaced Home prompt with clean "Studio Dashboard" overview showing Recent Games and Readiness cards; set `_prompt_input.setVisible(False)` and `_btn_design.setVisible(False)`. Redirected any external design requests directly into the main Assistant chat.
+- **Resolution File:** `src/gameforge_ide/desktop/shell/rail.py`, `src/gameforge_ide/desktop/views/home_view.py`, `src/gameforge_ide/desktop/main_window.py`
+
+### DEF-202: Ollama Provider Forcing "think": True Breaking Native Tool Calling
+- **Symptom:** Tool calling intermittently failed with local models (Qwen 2.5 / 3.5), returning raw JSON or text instead of structured `tool_calls`.
+- **Root Cause:** `ollama_provider.py` hardcoded `"think": True` in 5 locations, enabling reasoning tokens that pollute Ollama's native tool calling parser.
+- **Fix:** Replaced `"think": True` with `"think": False` in all occurrences per `AGENTS.md` Rule 2.6.
+- **Resolution File:** `src/gameforge_ide/backend/providers/ollama_provider.py`
+
+### DEF-203: Proceed Command Swallowed by Conversational Intent Classifier
+- **Symptom:** Replying "proceed" to an awaiting plan artifact was misclassified as conversational, failing to execute the approved plan.
+- **Root Cause:** "proceed" was not in `action_keywords` and was classified as conversational because of length <= 5 words.
+- **Fix:** Added `is_proceed_command` check before `_is_conversational` evaluation, and included `"proceed"` in `action_keywords`.
+- **Resolution File:** `src/gameforge_ide/backend/agent/runtime.py`
+
+### DEF-204: AgentService Instantiating AgentRuntime with studio_mode=True Emitting [Open in Design]
+- **Symptom:** Submitting game creation prompts (such as *"Create me a Sudoku game."*) in the desktop IDE chat responded with `[Open in Design]` and terminated without performing any autonomous planning or building.
+- **Root Cause:** [`src/gameforge_ide/desktop/services/agent_service.py`](src/gameforge_ide/desktop/services/agent_service.py) instantiated `AgentRuntime(..., studio_mode=True)`. In `AgentRuntime`, `self.studio_mode` activated a legacy P4 routing check that intercepted game creation prompts and emitted an `open_design` card with `[Open in Design]`.
+- **Fix:** Changed `studio_mode=False` in `agent_service.py`. The assistant now autonomously builds a structured `PlanArtifact`, presents the interactive `PlanCard` with `[Proceed]` button in Planning mode (or executes directly in Fast mode), and autonomously runs the 11-stage game pipeline without detouring to retired screens.
+- **Resolution File:** `src/gameforge_ide/desktop/services/agent_service.py`
 
 
 
@@ -1132,3 +1192,17 @@ Generated: 2026-11-02T00:10:00Z | Verified by Antigravity Autonomous Inspector
 
 
 
+
+
+
+### DEF-205: Project Status Inquiries Stripped of Tools or Misclassified as Game Creation
+- **Symptom:** Submitting project status or completion questions (such as *"Is the sudoku game complete"*) resulted in either the assistant emitting a conversational promise (*"Let me check the project files"*) with zero tool execution, or attempting to scaffold and build an entirely new game from scratch.
+- **Root Cause:** (1) In `spec_from_prompt.py` and `intent.py`, `CREATE_VERB_PAT` matched `"complete"`, causing questions containing the word "complete" (e.g. "Is the sudoku game complete") to be misclassified as imperative creation commands. (2) `_is_conversational` stripped tools (`include_tools=False`) because word count was <= 5 and lacked explicit action verbs, preventing the model from calling discovery tools. (3) When the model output narrative text (*"Let me check..."*), `AgentRuntime` had no interception for unfulfilled promises, treating the turn as complete.
+- **Fix:** Refined `intent.py` and `spec_from_prompt.py` with question-starter detection (`is`, `are`, `has`, `check`, `status`) to separate status inquiries from game creation commands. Expanded `_is_conversational` to preserve full tool availability for project and file inquiries. Implemented `_is_narrative_promise` in `runtime.py` to intercept text promises (*"Let me check..."*, *"I will inspect..."*) and compel tool execution (`list_dir`, `search_code`, `read_file`). Recorded assistant tool actions in conversation history to ensure multi-step investigation completes without repetition budget exhaustion.
+- **Resolution File:** `src/gameforge_ide/design/intent.py`, `src/gameforge_ide/pipeline/spec_from_prompt.py`, `src/gameforge_ide/backend/agent/runtime.py`
+
+### DEF-206: Standalone Client Packaging Missing Engine Runtime Plugins in .uproject
+- **Symptom:** Project packaging step failed with `fatal error C1083: Cannot open include file: 'AttributeSet.h': No such file or directory` in `GameForgeAttributes.h` and `'InputActionValue.h'` in `GameForgePlayer.h`.
+- **Root Cause:** Standalone client packaging (`AutomationTool BuildCookRun -package`) compiles target modules without engine plugin include directories unless the plugins are explicitly enabled in the root `.uproject` file. `MyGame.uproject` and `toolchain.scaffold_cpp_project` omitted `EnhancedInput`, `GameplayAbilities`, and `Niagara` from `.uproject`.
+- **Fix:** Updated `toolchain.py::scaffold_cpp_project` to declare `EnhancedInput`, `GameplayAbilities`, and `Niagara` as enabled in the scaffolded `.uproject` Plugins list. Updated `MyGame.uproject` with these plugins.
+- **Resolution File:** `src/gameforge_ide/unreal/toolchain.py`, `E:\GameForge\projects\MyGame\MyGame.uproject`

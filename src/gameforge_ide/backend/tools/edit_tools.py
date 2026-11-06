@@ -1121,3 +1121,79 @@ class EditTools:
             "files": rolled_back_files,
             "message": f"Successfully rolled back batch of {len(rolled_back_ids)} diffs.",
         }
+
+    def write_file(
+        self,
+        subpath: str = "",
+        content: str = "",
+        overwrite: bool = True,
+        session_id: Optional[str] = None,
+        file_path: str = "",
+        path: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Atomically writes or overwrites a file with full rollback journal and hash tracking."""
+        effective_path = subpath or file_path or path or kwargs.get("filepath", "") or kwargs.get("file", "")
+        if not effective_path:
+            return {"status": "ERROR", "error": "No file path specified for write_file."}
+
+        effective_content = content if content is not None else kwargs.get("text", "")
+        effective_content = self._unwrap_markdown_fences(effective_content)
+
+        # Use propose_edit to construct the diff record, then apply immediately
+        prop_res = self.propose_edit(
+            subpath=effective_path,
+            target_content="",
+            replacement_content=effective_content,
+            session_id=session_id,
+        )
+        if prop_res.get("status") != "PENDING_APPROVAL":
+            return prop_res
+
+        diff_id = prop_res.get("diff_id")
+        apply_res = self.apply_diff(diff_id)
+        if apply_res.get("status") == "SUCCESS":
+            apply_res["diff_id"] = diff_id
+            apply_res["diff"] = prop_res.get("diff", "")
+        return apply_res
+
+    def verify_disk_contents(self, subpath: str, expected_fragment: str = "") -> Dict[str, Any]:
+        """Verifies that the target file exists on disk and contains expected_fragment."""
+        try:
+            target_path = Path(subpath)
+            if not target_path.is_absolute():
+                target_path = self.boundary.workspace_root / target_path
+            resolved = self.boundary.validate_path(target_path, allow_write=False)
+            if not resolved.is_file():
+                return {"status": "ERROR", "verified": False, "error": f"File does not exist: {subpath}"}
+            data = resolved.read_text(encoding="utf-8", errors="replace")
+            verified = (expected_fragment in data) if expected_fragment else True
+            return {
+                "status": "SUCCESS",
+                "verified": verified,
+                "file_path": str(resolved.relative_to(self.boundary.workspace_root)).replace("\\", "/"),
+                "bytes": resolved.stat().st_size,
+                "sha256": self._digest(resolved.read_bytes()),
+            }
+        except Exception as exc:
+            return {"status": "ERROR", "verified": False, "error": str(exc)}
+
+    def begin_transaction(self, files: List[str]) -> Dict[str, Any]:
+        """Captures baseline SHA-256 hashes for all target files before a multi-file edit."""
+        tx_id = f"tx_{uuid.uuid4().hex[:10]}"
+        baselines: Dict[str, str] = {}
+        for f in files:
+            p = Path(f)
+            if not p.is_absolute():
+                p = self.boundary.workspace_root / p
+            try:
+                resolved = self.boundary.validate_path(p, allow_write=True)
+                baselines[f] = self._digest(resolved.read_bytes()) if resolved.is_file() else "EMPTY"
+            except Exception as e:
+                return {"status": "ERROR", "error": f"Invalid path {f}: {e}", "tx_id": tx_id}
+        return {"status": "SUCCESS", "tx_id": tx_id, "baselines": baselines}
+
+    # Backward-compatible method aliases
+    apply_edit = apply_diff
+    rollback_edit = rollback_diff
+

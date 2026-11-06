@@ -47,6 +47,7 @@ def test_chat_panel_open_design_card(qapp, tmp_path):
     finally:
         agent.shutdown()
 
+
 def test_chat_panel_no_duplicate_assistant_bubble_on_card(qapp, tmp_path):
     """Verify ChatPanel displays token notice once and does not duplicate text below card."""
     agent = AgentService(tmp_path)
@@ -65,5 +66,61 @@ def test_chat_panel_no_duplicate_assistant_bubble_on_card(qapp, tmp_path):
             and panel._msg_layout.itemAt(i).widget().role == "assistant"
         ]
         assert len(assistant_bubbles) == 1, f"Expected exactly 1 assistant bubble, got {len(assistant_bubbles)}"
+    finally:
+        agent.shutdown()
+
+
+def test_chat_panel_streaming_suppresses_raw_json_tool_leaks(qapp, tmp_path):
+    """Verify raw JSON tool calls streamed as tokens do not leak into assistant bubbles."""
+    agent = AgentService(tmp_path)
+    panel = ChatPanel(agent, workspace_root=tmp_path)
+    try:
+        from src.gameforge_ide.desktop.panels.chat_panel import _MessageBubble
+
+        # Stream raw JSON tool call tokens
+        raw_call = '{"tool": "unreal_editor", "args": {"op": "new_level"}}'
+        for ch in raw_call:
+            panel._on_token(ch)
+
+        # Confirm no assistant bubble was created leaking this raw JSON
+        assistant_bubbles = [
+            panel._msg_layout.itemAt(i).widget()
+            for i in range(panel._msg_layout.count())
+            if isinstance(panel._msg_layout.itemAt(i).widget(), _MessageBubble)
+            and panel._msg_layout.itemAt(i).widget().role == "assistant"
+        ]
+        assert len(assistant_bubbles) == 0, f"Expected 0 assistant bubbles for raw tool call, got {len(assistant_bubbles)}"
+
+        # Complete tool call turn
+        panel._on_tool_called("unreal_editor", {"op": "new_level"})
+        panel._on_tool_result("unreal_editor", {"status": "SUCCESS"})
+        panel._on_done("")
+    finally:
+        agent.shutdown()
+
+
+def test_chat_panel_status_bar_indeterminate_busy_and_reset(qapp, tmp_path):
+    """Verify status bar transitions between ready and busy animated states and clean reset."""
+    agent = AgentService(tmp_path)
+    panel = ChatPanel(agent, workspace_root=tmp_path)
+    try:
+        sb = panel._status_bar
+        assert sb._label.text() == "Ready"
+        assert not sb._pulse_timer.isActive()
+
+        sb.set_busy("THINKING")
+        assert sb._label.text() == "THINKING"
+        assert sb._pulse_timer.isActive()
+
+        sb.set_ready()
+        assert sb._label.text() == "Ready"
+        assert not sb._pulse_timer.isActive()
+
+        # Add message bubble and test clean reset
+        panel._add_bubble("user", "Hello GameForge")
+        assert panel._msg_layout.count() > 1
+        panel._clear_chat()
+        assert panel._token_buffer == ""
+        assert panel._active_bubble is None
     finally:
         agent.shutdown()

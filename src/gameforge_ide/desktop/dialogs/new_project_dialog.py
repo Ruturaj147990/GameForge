@@ -127,8 +127,13 @@ class NewProjectDialog(QDialog):
         btn_browse.setAccessibleName("Browse project directory")
         btn_browse.setCursor(Qt.PointingHandCursor)
         btn_browse.setStyleSheet(
-            f"background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
-            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 14px;"
+            f"QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY}; "
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 14px;"
+            f"}}"
+            f"QPushButton:hover, QPushButton:focus {{"
+            f"  background-color: {tokens.BG_HOVER}; border-color: {tokens.BORDER_FOCUS}; outline: none;"
+            f"}}"
         )
         btn_browse.clicked.connect(self._on_browse_clicked)
 
@@ -167,8 +172,13 @@ class NewProjectDialog(QDialog):
         self._btn_cancel.setAccessibleName("Cancel project creation")
         self._btn_cancel.setCursor(Qt.PointingHandCursor)
         self._btn_cancel.setStyleSheet(
-            f"background-color: transparent; color: {tokens.TEXT_MUTED}; "
-            f"border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px 14px;"
+            f"QPushButton#{self._btn_cancel.objectName()} {{"
+            f"  background-color: transparent; color: {tokens.TEXT_SECONDARY}; "
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px {tokens.SPACE_LG}px;"
+            f"}}"
+            f"QPushButton#{self._btn_cancel.objectName()}:hover, QPushButton#{self._btn_cancel.objectName()}:focus {{"
+            f"  background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; border-color: {tokens.BORDER_FOCUS}; outline: none;"
+            f"}}"
         )
         self._btn_cancel.clicked.connect(self.reject)
 
@@ -177,8 +187,16 @@ class NewProjectDialog(QDialog):
         self._btn_confirm.setAccessibleName("Confirm project root directory")
         self._btn_confirm.setCursor(Qt.PointingHandCursor)
         self._btn_confirm.setStyleSheet(
-            f"background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY}; "
-            f"border: none; border-radius: {tokens.RADIUS}px; padding: 6px 18px; font-weight: 600;"
+            f"QPushButton#{self._btn_confirm.objectName()} {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY}; "
+            f"  border: none; border-radius: {tokens.RADIUS}px; padding: 6px 18px; font-weight: 600;"
+            f"}}"
+            f"QPushButton#{self._btn_confirm.objectName()}:hover, QPushButton#{self._btn_confirm.objectName()}:focus {{"
+            f"  background-color: {tokens.ACCENT_HOVER}; outline: none;"
+            f"}}"
+            f"QPushButton#{self._btn_confirm.objectName()}:disabled {{"
+            f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_MUTED};"
+            f"}}"
         )
         self._btn_confirm.clicked.connect(self._on_confirm_clicked)
 

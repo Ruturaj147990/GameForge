@@ -162,3 +162,86 @@ def test_play_view_no_raw_hex_colors():
     text = f.read_text(encoding="utf-8")
     matches = pattern.findall(text)
     assert not matches, f"Raw hex color literals found in {f}: {matches}"
+
+
+def test_play_view_skip_status_badge(qapp, tmp_path):
+    """Verify scenario table renders SKIP status badge correctly."""
+    view = PlayView(workspace_root=tmp_path)
+    try:
+        res_skip = ScenarioResult.model_validate({
+            "schema": "scenario_result/1",
+            "scenario_id": "optional_side_quest",
+            "passed": False,
+            "status": "SKIP",
+            "duration_s": 0.0,
+            "start_delay_s": 0.0,
+            "failures": ["Skipped due to missing prerequisite"],
+        })
+        view._results = [res_skip]
+        view._populate_table()
+
+        assert view._results_table.rowCount() == 1
+        status_item = view._results_table.item(0, 0)
+        assert "SKIP" in status_item.text()
+    finally:
+        view.deleteLater()
+
+
+def test_play_view_keyboard_navigation_updates_inspector(qapp, tmp_path):
+    """Verify arrow keys and Return update the detail inspector."""
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtCore import QEvent
+
+    view = PlayView(workspace_root=tmp_path)
+    try:
+        r1 = ScenarioResult.model_validate({
+            "schema": "scenario_result/1",
+            "scenario_id": "scen_one",
+            "passed": True,
+            "duration_s": 2.5,
+            "start_delay_s": 0.1,
+            "failures": [],
+        })
+        r2 = ScenarioResult.model_validate({
+            "schema": "scenario_result/1",
+            "scenario_id": "scen_two",
+            "passed": False,
+            "duration_s": 4.1,
+            "start_delay_s": 0.2,
+            "failures": ["Assertion failed: target not reached"],
+        })
+        view._results = [r1, r2]
+        view._populate_table()
+
+        # Select row 0
+        view._results_table.setCurrentCell(0, 0)
+        view._on_result_selected()
+        assert "scen_one" in view._lbl_detail_header.text()
+
+        # Navigate down
+        view._results_table.setCurrentCell(1, 0)
+        ev_down = QKeyEvent(QEvent.KeyPress, Qt.Key_Down, Qt.NoModifier)
+        handled = view.eventFilter(view._results_table, ev_down)
+        assert "scen_two" in view._lbl_detail_header.text()
+    finally:
+        view.deleteLater()
+
+
+def test_play_view_packaged_exe_detection(qapp, tmp_path):
+    """Verify PlayView detects packaged executable and updates launch button and banner."""
+    view = PlayView(workspace_root=tmp_path)
+    try:
+        proj_dir = tmp_path / "MyAdventure"
+        exe_file = proj_dir / "Packaged" / "Windows" / "MyAdventure.exe"
+        exe_file.parent.mkdir(parents=True, exist_ok=True)
+        exe_file.write_bytes(b"MZfake_exe_bytes")
+
+        view.set_project("MyAdventure", project_dir=proj_dir)
+        view._populate_table()
+
+        assert "MyAdventure.exe" in view._lbl_summary.text()
+        assert "MyAdventure.exe" in view._btn_launch.text()
+        assert "MyAdventure.exe" in view._btn_launch.toolTip()
+    finally:
+        view.deleteLater()
+

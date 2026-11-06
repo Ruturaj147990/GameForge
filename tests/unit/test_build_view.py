@@ -304,3 +304,117 @@ def test_build_view_no_raw_hex_colors():
         text = f.read_text(encoding="utf-8")
         matches = pattern.findall(text)
         assert not matches, f"Raw hex color literals found in {f}: {matches}"
+
+
+def test_problems_table_extended_columns_and_icons(qapp):
+    """Verify ProblemsTable has 6 columns, severity icons, and navigation from any cell."""
+    table = ProblemsTable()
+    try:
+        assert table.columnCount() == 6
+        assert [table.horizontalHeaderItem(i).text() for i in range(6)] == [
+            "Severity", "Location", "Message", "Code", "Source File", "Line"
+        ]
+
+        problems = [
+            {
+                "severity": "Error",
+                "file": "Source/Game/Player.cpp",
+                "line": 105,
+                "message": "Undefined reference to AHeroCharacter",
+                "code": "C2065",
+            },
+            {
+                "severity": "Warning",
+                "file": "Config/DefaultEngine.ini",
+                "line": 12,
+                "message": "Deprecated render setting",
+                "code": "W1002",
+            },
+            {
+                "severity": "Info",
+                "file": "Source/Game.Build.cs",
+                "line": 5,
+                "message": "Module optimization enabled",
+                "code": "I0010",
+            },
+        ]
+        table.set_problems(problems)
+        assert table.rowCount() == 3
+
+        # Row 0 (Error)
+        assert table.item(0, 0).text() == "ERROR"
+        assert not table.item(0, 0).icon().isNull()
+        assert table.item(0, 1).text() == "Source/Game/Player.cpp:105"
+        assert table.item(0, 2).text() == "Undefined reference to AHeroCharacter"
+        assert table.item(0, 3).text() == "C2065"
+        assert table.item(0, 4).text() == "Source/Game/Player.cpp"
+        assert table.item(0, 5).text() == "105"
+
+        # Row 1 (Warning)
+        assert table.item(1, 0).text() == "WARNING"
+        assert not table.item(1, 0).icon().isNull()
+        assert table.item(1, 3).text() == "W1002"
+
+        # Row 2 (Info)
+        assert table.item(2, 0).text() == "INFO"
+        assert not table.item(2, 0).icon().isNull()
+        assert table.item(2, 3).text() == "I0010"
+
+        # Navigation signal triggered from double clicking Message cell (col 2)
+        nav_received = []
+        table.openLocationRequested.connect(lambda f, l: nav_received.append((f, l)))
+        table._on_row_double_clicked(table.model().index(0, 2))
+        assert nav_received == [("Source/Game/Player.cpp", 105)]
+
+        # Navigation triggered from Source File cell (col 4)
+        table._on_row_double_clicked(table.model().index(1, 4))
+        assert nav_received[-1] == ("Config/DefaultEngine.ini", 12)
+    finally:
+        table.deleteLater()
+
+
+def test_log_view_floating_autoscroll_button(qapp):
+    """Verify LogView creates amber floating resume autoscroll button and manages visibility."""
+    log_view = LogView()
+    try:
+        log_view.resize(500, 350)
+        log_view.show()
+
+        assert hasattr(log_view, "_floating_resume_btn")
+        assert log_view._floating_resume_btn.isHidden()
+
+        # Add lines to populate scrollbar
+        for i in range(150):
+            log_view.append_log(f"Line {i:03d} execution trace log output\n")
+        log_view._flush_queue()
+
+        # Scroll up
+        scrollbar = log_view._scrollbar
+        assert log_view._auto_scroll is True
+        scrollbar.setValue(10)
+
+        # Trigger value changed
+        log_view._on_scroll_value_changed(10)
+        assert log_view._auto_scroll is False
+        assert not log_view._floating_resume_btn.isHidden()
+
+        # Click floating button
+        log_view._floating_resume_btn.click()
+        assert log_view._auto_scroll is True
+        assert log_view._floating_resume_btn.isHidden()
+        assert scrollbar.value() == scrollbar.maximum()
+    finally:
+        log_view.deleteLater()
+
+
+def test_build_view_splitter_minimum_heights_and_collapsible(qapp):
+    """Verify vertical QSplitter enforces minimum heights and prevents collapse."""
+    view = BuildView()
+    try:
+        assert view._right_splitter.isCollapsible(0) is False
+        assert view._right_splitter.isCollapsible(1) is False
+        assert view._log_view.minimumHeight() >= 160
+        assert view._lower_tabs.minimumHeight() >= 160
+    finally:
+        view.deleteLater()
+

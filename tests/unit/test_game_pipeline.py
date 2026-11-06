@@ -167,7 +167,7 @@ def test_runtime_fast_path_suspends_for_approval(tmp_path):
 
     sm = SessionManager(tmp_path)
     rt = AgentRuntime(tmp_path, sm, ModelRouter())
-    sid = sm.create_session(name="t", model_name="none", provider_type="ollama").session_id
+    sid = sm.create_session(name="t", model_name="none", provider_type="ollama", task_mode="fast", autonomy_profile="manual").session_id
 
     async def collect():
         return [e async for e in rt.execute_task_stream(sid, "create a tic tac toe game in unreal engine")]

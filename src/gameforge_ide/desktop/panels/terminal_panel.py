@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..styles import tokens
 from ..styles.dark_theme import theme_color
 
 
@@ -29,7 +30,9 @@ class TerminalPanel(QWidget):
 
     def __init__(self, workspace_root: Path, parent=None) -> None:
         super().__init__(parent)
-        self._workspace = workspace_root
+        self.setObjectName("terminalPanel")
+        self.setAccessibleName("Embedded PowerShell Terminal")
+        self._workspace = Path(workspace_root).resolve()
         self._process: QProcess | None = None
         self._build_ui()
         # Lazy start (Blueprint v2 §8.1): no shell process exists until the user runs a command.
@@ -45,25 +48,44 @@ class TerminalPanel(QWidget):
         # Header
         header = QWidget()
         header.setObjectName("panel_header")
-        header.setStyleSheet("background: #0d0b14; border-bottom: 1px solid #231c34;")
+        header.setStyleSheet(f"background: {tokens.BG_PANEL}; border-bottom: 1px solid {tokens.BORDER};")
         header.setFixedHeight(36)
         hdr_layout = QHBoxLayout(header)
         hdr_layout.setContentsMargins(8, 4, 8, 4)
         title = QLabel("⬛  Terminal — PowerShell")
-        title.setStyleSheet("color: #9d95b0; font-size: 11px; font-weight: 600; letter-spacing: 0.6px;")
+        title.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600; letter-spacing: 0.6px;")
         hdr_layout.addWidget(title)
         hdr_layout.addStretch()
+
         btn_clear = QPushButton("Clear")
         btn_clear.setObjectName("btn_term_clear")
+        btn_clear.setAccessibleName("Clear terminal output")
+        btn_clear.setToolTip("Clear all terminal output text")
         btn_clear.setMinimumWidth(58)
         btn_clear.setFixedHeight(26)
-        btn_clear.clicked.connect(self._output.clear if hasattr(self, "_output") else lambda: None)
+        btn_clear.setStyleSheet(
+            f"QPushButton {{"
+            f"  background: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 2px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;"
+            f"}}"
+            f"QPushButton:hover {{ background: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}"
+        )
         hdr_layout.addWidget(btn_clear)
+
         btn_restart = QPushButton("↺")
         btn_restart.setObjectName("btn_term_restart")
-        btn_restart.setToolTip("Restart shell")
+        btn_restart.setAccessibleName("Restart PowerShell process")
+        btn_restart.setToolTip("Restart shell process")
         btn_restart.setFixedSize(30, 26)
-        btn_restart.setStyleSheet("padding: 0px; font-size: 14px; border-radius: 6px;")
+        btn_restart.setStyleSheet(
+            f"QPushButton {{"
+            f"  background: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};"
+            f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 0px; font-size: 14px;"
+            f"}}"
+            f"QPushButton:hover {{ background: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}"
+        )
         btn_restart.clicked.connect(self._restart_shell)
         hdr_layout.addWidget(btn_restart)
         layout.addWidget(header)
@@ -71,6 +93,7 @@ class TerminalPanel(QWidget):
         # Output area
         self._output = QPlainTextEdit()
         self._output.setObjectName("terminal_output")
+        self._output.setAccessibleName("PowerShell terminal output")
         self._output.setReadOnly(True)
         font = QFont("Cascadia Code")
         if not font.exactMatch():
@@ -78,45 +101,51 @@ class TerminalPanel(QWidget):
         font.setPointSize(11)
         self._output.setFont(font)
         self._output.setStyleSheet(
-            "background: #08070d; color: #f5f3ff; border: none;"
-            " selection-background-color: #7c3aed;"
+            f"background: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY}; border: none;"
+            f" selection-background-color: {tokens.ACCENT_PRIMARY}; selection-color: {tokens.TEXT_PRIMARY};"
         )
         layout.addWidget(self._output, 1)
 
         # Input row
         input_row = QWidget()
         input_row.setObjectName("panel_action_bar")
-        input_row.setStyleSheet("background: #0d0b14; border-top: 1px solid #231c34;")
+        input_row.setStyleSheet(f"background: {tokens.BG_PANEL}; border-top: 1px solid {tokens.BORDER};")
         input_row.setFixedHeight(36)
         input_layout = QHBoxLayout(input_row)
         input_layout.setContentsMargins(8, 4, 8, 4)
         input_layout.setSpacing(6)
 
         prompt_lbl = QLabel("PS❯")
-        prompt_lbl.setStyleSheet("color: #7c3aed; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 11px;")
+        prompt_lbl.setStyleSheet(f"color: {tokens.ACCENT_HOVER}; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: {tokens.FONT_BODY_SM}px; font-weight: bold;")
         input_layout.addWidget(prompt_lbl)
 
         self._cmd_input = QLineEdit()
         self._cmd_input.setObjectName("terminal_input")
+        self._cmd_input.setAccessibleName("Terminal command input")
         self._cmd_input.setPlaceholderText("Enter PowerShell command…")
         self._cmd_input.setStyleSheet(
-            "background: transparent; border: none; color: #f5f3ff;"
-            " font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 13px;"
+            f"background: transparent; border: none; color: {tokens.TEXT_PRIMARY};"
+            f" font-family: 'Cascadia Code', 'Consolas', monospace; font-size: {tokens.FONT_BODY}px;"
         )
         self._cmd_input.returnPressed.connect(self._on_send_command)
         input_layout.addWidget(self._cmd_input, 1)
 
         btn_run = QPushButton("▶")
         btn_run.setObjectName("btn_term_run")
-        btn_run.setFixedSize(28, 28)
-        btn_run.setStyleSheet("padding: 0px; font-size: 14px; border-radius: 6px;")
+        btn_run.setAccessibleName("Execute command")
         btn_run.setToolTip("Run command (Enter)")
+        btn_run.setFixedSize(28, 28)
+        btn_run.setStyleSheet(
+            f"QPushButton {{"
+            f"  background: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: none; border-radius: {tokens.RADIUS}px; padding: 0px; font-size: 14px;"
+            f"}}"
+            f"QPushButton:hover {{ background: {tokens.ACCENT_HOVER}; }}"
+        )
         btn_run.clicked.connect(self._on_send_command)
         input_layout.addWidget(btn_run)
         layout.addWidget(input_row)
 
-        # Reconnect clear after _output is created
-        btn_clear.clicked.disconnect()
         btn_clear.clicked.connect(self._output.clear)
 
     # ── Shell lifecycle ──────────────────────────────────────────────────────
@@ -132,27 +161,39 @@ class TerminalPanel(QWidget):
         self._process.waitForStarted(5000)
 
     def _restart_shell(self) -> None:
-        if self._process:
-            self._process.kill()
-            self._process.waitForFinished(1000)
-            self._process = None
-            self._output.appendPlainText("\n--- Shell stopped; it restarts with your next command ---\n")
+        self.shutdown()
+        self._output.appendPlainText("\n--- Shell stopped; it restarts with your next command ---\n")
 
     def set_workspace(self, new_workspace: Path) -> None:
-        """Switch active terminal directory to new workspace."""
+        """Switch active terminal directory to new workspace with clean exit."""
         self._workspace = Path(new_workspace).resolve()
-        self._restart_shell()
+        self.shutdown()
+        self._write_info(f"\n--- Switched to workspace: {self._workspace} ---\nPowerShell starts with your next command.\n")
 
+    def shutdown(self) -> None:
+        """Cleanly terminate shell process on shutdown or workspace change."""
+        if self._process is not None:
+            try:
+                if self._process.state() != QProcess.NotRunning:
+                    self._process.kill()
+                    self._process.waitForFinished(1000)
+            except Exception:
+                pass
+            self._process = None
 
     # ── Output handlers ──────────────────────────────────────────────────────
 
     @Slot()
     def _on_stdout(self) -> None:
+        if not self._process:
+            return
         data = self._process.readAllStandardOutput().data().decode("utf-8", errors="replace")
         self._write_out(data)
 
     @Slot()
     def _on_stderr(self) -> None:
+        if not self._process:
+            return
         data = self._process.readAllStandardError().data().decode("utf-8", errors="replace")
         self._write_err(data)
 
@@ -213,6 +254,5 @@ class TerminalPanel(QWidget):
         self._output.setTextCursor(cursor)
 
     def closeEvent(self, event) -> None:
-        if self._process:
-            self._process.kill()
+        self.shutdown()
         super().closeEvent(event)

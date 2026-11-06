@@ -31,18 +31,19 @@ from PySide6.QtWidgets import (
 
 from ...backend.agent.plan_executor import PlanEvent
 from ...backend.agent.task_plan import TaskNode, TaskPlan
+from ..styles import tokens
 
 STATUS_COLORS = {
-    "PLANNED": "#9d95b0",
-    "READY": "#8b5cf6",
-    "RUNNING": "#3b82f6",
-    "WAITING_APPROVAL": "#f59e0b",
-    "VERIFYING": "#06b6d4",
-    "REPAIRING": "#f97316",
-    "COMPLETED": "#00d9a3",
-    "BLOCKED": "#ef4444",
-    "FAILED": "#ef4444",
-    "CANCELLED": "#6b7280",
+    "PLANNED": tokens.TEXT_MUTED,
+    "READY": tokens.ACCENT_HOVER,
+    "RUNNING": tokens.ACCENT_PRIMARY,
+    "WAITING_APPROVAL": tokens.ACCENT_WARNING,
+    "VERIFYING": tokens.ACCENT_HOVER,
+    "REPAIRING": tokens.ACCENT_WARNING,
+    "COMPLETED": tokens.ACCENT_SUCCESS,
+    "BLOCKED": tokens.ACCENT_ERROR,
+    "FAILED": tokens.ACCENT_ERROR,
+    "CANCELLED": tokens.TEXT_MUTED,
 }
 
 
@@ -55,6 +56,8 @@ class PlanPanel(QWidget):
 
     def __init__(self, workspace_root: Path, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self.setObjectName("planPanel")
+        self.setAccessibleName("Execution Plan Panel")
         self._workspace = Path(workspace_root).resolve()
         self._active_plan: Optional[TaskPlan] = None
         self._runner = None  # PlanRunner, created on first Run/Resume
@@ -67,7 +70,7 @@ class PlanPanel(QWidget):
         header_card = QFrame()
         header_card.setObjectName("planHeaderCard")
         header_card.setStyleSheet(
-            "QFrame#planHeaderCard { background-color: #120f1d; border: 1px solid #231c34; border-radius: 6px; padding: 6px; }"
+            f"QFrame#planHeaderCard {{ background-color: {tokens.BG_SURFACE}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px; }}"
         )
         hl = QVBoxLayout(header_card)
         hl.setContentsMargins(8, 8, 8, 8)
@@ -75,12 +78,10 @@ class PlanPanel(QWidget):
 
         top_row = QHBoxLayout()
         self._lbl_plan_id = QLabel("No active plan")
-        f = self._lbl_plan_id.font()
-        f.setBold(True)
-        self._lbl_plan_id.setFont(f)
+        self._lbl_plan_id.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: {tokens.FONT_BODY}px;")
         self._lbl_status = QLabel("IDLE")
         self._lbl_status.setStyleSheet(
-            "background-color: #231c34; color: #9d95b0; padding: 2px 8px; border-radius: 4px; font-weight: bold;"
+            f"background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_MUTED}; border: 1px solid {tokens.BORDER}; padding: 2px 8px; border-radius: {tokens.RADIUS}px; font-weight: bold;"
         )
 
         top_row.addWidget(self._lbl_plan_id)
@@ -90,24 +91,49 @@ class PlanPanel(QWidget):
 
         self._lbl_goal = QLabel("Enter a task or slash command (/plan) to generate an execution plan.")
         self._lbl_goal.setWordWrap(True)
-        self._lbl_goal.setStyleSheet("color: #9d95b0;")
+        self._lbl_goal.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         hl.addWidget(self._lbl_goal)
 
         # Progress bar
         self._progress = QProgressBar()
         self._progress.setRange(0, 100)
         self._progress.setValue(0)
-        self._progress.setFixedHeight(14)
+        self._progress.setFixedHeight(16)
         self._progress.setTextVisible(True)
+        self._progress.setStyleSheet(
+            f"QProgressBar {{ background-color: {tokens.BG_PANEL}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; text-align: center; color: {tokens.TEXT_PRIMARY}; font-size: 10px; font-weight: bold; }}"
+            f"QProgressBar::chunk {{ background-color: {tokens.ACCENT_PRIMARY}; border-radius: 4px; }}"
+        )
         hl.addWidget(self._progress)
 
         # Controls row
         btn_row = QHBoxLayout()
         self._btn_resume = QPushButton("▶ Run / Resume")
+        self._btn_resume.setAccessibleName("Run or resume plan")
+        self._btn_resume.setCursor(Qt.PointingHandCursor)
+        self._btn_resume.setStyleSheet(
+            f"QPushButton {{ background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY}; border: none; border-radius: {tokens.RADIUS}px; padding: 4px {tokens.SPACE_MD}px; font-weight: 600; font-size: {tokens.FONT_BODY_SM}px; }}"
+            f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+            f"QPushButton:disabled {{ background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_MUTED}; }}"
+        )
         self._btn_resume.clicked.connect(self._on_run_clicked)
+
         self._btn_cancel = QPushButton("⏹ Cancel")
+        self._btn_cancel.setAccessibleName("Cancel plan")
+        self._btn_cancel.setCursor(Qt.PointingHandCursor)
+        self._btn_cancel.setStyleSheet(
+            f"QPushButton {{ background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_ERROR}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px; }}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+        )
         self._btn_cancel.clicked.connect(self._on_cancel_clicked)
+
         self._btn_refresh = QPushButton("⟳ Refresh")
+        self._btn_refresh.setAccessibleName("Refresh plan from disk")
+        self._btn_refresh.setCursor(Qt.PointingHandCursor)
+        self._btn_refresh.setStyleSheet(
+            f"QPushButton {{ background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px; }}"
+            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}"
+        )
         self._btn_refresh.clicked.connect(self.refresh_from_disk)
 
         btn_row.addWidget(self._btn_resume)
@@ -123,6 +149,8 @@ class PlanPanel(QWidget):
 
         # Task Tree
         self._tree = QTreeWidget()
+        self._tree.setObjectName("planTaskTree")
+        self._tree.setAccessibleName("Plan tasks hierarchy")
         self._tree.setHeaderLabels(["Status", "ID", "Task Title", "Type", "Prerequisites", "Tools"])
         self._tree.header().setSectionResizeMode(QHeaderView.Interactive)
         self._tree.header().resizeSection(0, 120)
@@ -130,6 +158,12 @@ class PlanPanel(QWidget):
         self._tree.header().resizeSection(2, 220)
         self._tree.header().resizeSection(3, 80)
         self._tree.header().resizeSection(4, 110)
+        self._tree.setStyleSheet(
+            f"QTreeWidget {{ background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; }}"
+            f"QTreeWidget::item:selected {{ background-color: {tokens.BG_ACTIVE}; color: {tokens.TEXT_PRIMARY}; }}"
+            f"QTreeWidget:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
+            f"QHeaderView::section {{ background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_SECONDARY}; border: 1px solid {tokens.BORDER}; padding: 4px; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600; }}"
+        )
         self._tree.itemSelectionChanged.connect(self._on_task_selected)
         splitter.addWidget(self._tree)
 
@@ -139,11 +173,17 @@ class PlanPanel(QWidget):
         dl.setContentsMargins(0, 4, 0, 0)
         dl.setSpacing(4)
 
-        dl.addWidget(QLabel("Task Details & Acceptance Evidence:"))
+        lbl_insp = QLabel("Task Details & Acceptance Evidence:")
+        lbl_insp.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-weight: 600; font-size: {tokens.FONT_BODY_SM}px;")
+        dl.addWidget(lbl_insp)
+
         self._detail_browser = QTextBrowser()
+        self._detail_browser.setObjectName("planDetailBrowser")
+        self._detail_browser.setAccessibleName("Task details inspector")
         self._detail_browser.setOpenExternalLinks(False)
         self._detail_browser.setStyleSheet(
-            "QTextBrowser { background-color: #0d0b14; border: 1px solid #231c34; border-radius: 4px; padding: 6px; font-family: Consolas, monospace; font-size: 12px; }"
+            f"QTextBrowser {{ background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_PRIMARY}; border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px; padding: 6px; font-family: Consolas, monospace; font-size: 12px; }}"
+            f"QTextBrowser:focus {{ border: 1px solid {tokens.BORDER_FOCUS}; }}"
         )
         dl.addWidget(self._detail_browser)
         splitter.addWidget(detail_widget)
@@ -182,10 +222,10 @@ class PlanPanel(QWidget):
         self._on_task_selected()
 
     def _update_status_badge(self, status: str) -> None:
-        color = STATUS_COLORS.get(status, "#9d95b0")
+        color = STATUS_COLORS.get(status, tokens.TEXT_MUTED)
         self._lbl_status.setText(status)
         self._lbl_status.setStyleSheet(
-            f"background-color: {color}22; color: {color}; border: 1px solid {color}; padding: 2px 8px; border-radius: 4px; font-weight: bold;"
+            f"background-color: {tokens.BG_PANEL}; color: {color}; border: 1px solid {color}; padding: 2px 8px; border-radius: {tokens.RADIUS}px; font-weight: bold;"
         )
 
     def _populate_task_tree(self) -> None:
@@ -210,7 +250,7 @@ class PlanPanel(QWidget):
                 break
 
     def _apply_item_data(self, item: QTreeWidgetItem, task: TaskNode) -> None:
-        color = STATUS_COLORS.get(task.status, "#9d95b0")
+        color = STATUS_COLORS.get(task.status, tokens.TEXT_MUTED)
         item.setText(0, f"● {task.status}")
         item.setForeground(0, QColor(color))
         item.setText(1, task.task_id)
@@ -235,7 +275,7 @@ class PlanPanel(QWidget):
     def _on_task_selected(self) -> None:
         items = self._tree.selectedItems()
         if not items or not self._active_plan:
-            self._detail_browser.setHtml("<span style='color: #9d95b0;'>Select a task above to view details.</span>")
+            self._detail_browser.setHtml(f"<span style='color: {tokens.TEXT_MUTED};'>Select a task above to view details.</span>")
             return
 
         task_id = items[0].data(0, Qt.UserRole)
@@ -243,42 +283,42 @@ class PlanPanel(QWidget):
         if not task:
             return
 
-        color = STATUS_COLORS.get(task.status, "#9d95b0")
+        color = STATUS_COLORS.get(task.status, tokens.TEXT_MUTED)
         html = [
-            f"<h3 style='margin: 0; color: #f5f3ff;'>{task.title} <span style='color: {color}; font-size: 12px;'>[{task.status}]</span></h3>",
-            f"<p style='color: #9d95b0; margin: 4px 0;'><b>Objective:</b> {task.objective}</p>",
-            f"<p style='color: #9d95b0; margin: 4px 0;'><b>Expected Result:</b> {task.expected_result}</p>",
-            f"<p style='color: #9d95b0; margin: 4px 0;'>Type: <code>{task.task_type}</code> | Reversibility: <code>{task.reversibility}</code> | Approval Required: <code>{task.requires_approval}</code></p>",
-            f"<p style='color: #9d95b0; margin: 4px 0;'>Permitted Tools: <code>{', '.join(task.permitted_tools) or 'None'}</code></p>",
+            f"<h3 style='margin: 0; color: {tokens.TEXT_PRIMARY};'>{task.title} <span style='color: {color}; font-size: 12px;'>[{task.status}]</span></h3>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'><b>Objective:</b> {task.objective}</p>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'><b>Expected Result:</b> {task.expected_result}</p>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'>Type: <code>{task.task_type}</code> | Reversibility: <code>{task.reversibility}</code> | Approval Required: <code>{task.requires_approval}</code></p>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'>Permitted Tools: <code>{', '.join(task.permitted_tools) or 'None'}</code></p>",
         ]
 
         if task.error_message:
-            html.append(f"<div style='background: #ef444422; border: 1px solid #ef4444; color: #ef4444; padding: 6px; border-radius: 4px; margin: 6px 0;'><b>Error/Blocker:</b> {task.error_message}</div>")
+            html.append(f"<div style='background: {tokens.BG_PANEL}; border: 1px solid {tokens.ACCENT_ERROR}; color: {tokens.ACCENT_ERROR}; padding: 6px; border-radius: {tokens.RADIUS}px; margin: 6px 0;'><b>Error/Blocker:</b> {task.error_message}</div>")
 
         if task.approval_id:
-            html.append(f"<p style='color: #f59e0b; margin: 4px 0;'><b>Pending Approval ID:</b> <code>{task.approval_id}</code></p>")
+            html.append(f"<p style='color: {tokens.ACCENT_WARNING}; margin: 4px 0;'><b>Pending Approval ID:</b> <code>{task.approval_id}</code></p>")
 
         # Acceptance Criteria
-        html.append("<h4 style='color: #f5f3ff; margin: 8px 0 4px 0;'>Acceptance Criteria & Evidence:</h4>")
+        html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Acceptance Criteria & Evidence:</h4>")
         if task.acceptance:
             html.append("<ul style='margin: 0; padding-left: 20px;'>")
             for pred in task.acceptance:
-                mark = "<span style='color: #00d9a3;'>✔ SATISFIED</span>" if pred.satisfied else "<span style='color: #ef4444;'>✘ UNMET</span>"
-                ev = f"<br/><span style='color: #9d95b0;'>Evidence: {pred.evidence}</span>" if pred.evidence else ""
-                html.append(f"<li style='color: #f5f3ff; margin-bottom: 4px;'>{mark} <b>{pred.predicate_type}</b>(<code>{pred.target}</code>){ev}</li>")
+                mark = f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ SATISFIED</span>" if pred.satisfied else f"<span style='color: {tokens.ACCENT_ERROR};'>✘ UNMET</span>"
+                ev = f"<br/><span style='color: {tokens.TEXT_MUTED};'>Evidence: {pred.evidence}</span>" if pred.evidence else ""
+                html.append(f"<li style='color: {tokens.TEXT_PRIMARY}; margin-bottom: 4px;'>{mark} <b>{pred.predicate_type}</b>(<code>{pred.target}</code>){ev}</li>")
             html.append("</ul>")
         else:
-            html.append("<p style='color: #9d95b0;'>No explicit machine predicates attached.</p>")
+            html.append(f"<p style='color: {tokens.TEXT_MUTED};'>No explicit machine predicates attached.</p>")
 
         # Tool Call / Output
         if task.tool_call:
-            html.append("<h4 style='color: #f5f3ff; margin: 8px 0 4px 0;'>Tool Call:</h4>")
-            html.append(f"<pre style='background: #120f1d; padding: 6px; border-radius: 4px; color: #f5f3ff;'>{json.dumps(task.tool_call, indent=2)}</pre>")
+            html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Tool Call:</h4>")
+            html.append(f"<pre style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; color: {tokens.TEXT_PRIMARY};'>{json.dumps(task.tool_call, indent=2)}</pre>")
 
         if task.evidence:
-            html.append("<h4 style='color: #f5f3ff; margin: 8px 0 4px 0;'>Execution Observations:</h4>")
+            html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Execution Observations:</h4>")
             for idx, ev in enumerate(task.evidence):
-                html.append(f"<div style='background: #120f1d; padding: 6px; border-radius: 4px; margin-bottom: 4px; color: #f5f3ff;'><b>Attempt {ev.get('attempt')}:</b><pre>{json.dumps(ev.get('output', {}), indent=2, default=str)[:600]}</pre></div>")
+                html.append(f"<div style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; margin-bottom: 4px; color: {tokens.TEXT_PRIMARY};'><b>Attempt {ev.get('attempt')}:</b><pre>{json.dumps(ev.get('output', {}), indent=2, default=str)[:600]}</pre></div>")
 
         self._detail_browser.setHtml("".join(html))
 

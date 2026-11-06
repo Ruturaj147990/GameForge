@@ -424,8 +424,9 @@ class GamesView(QWidget):
         self._search_input = QLineEdit(self)
         self._search_input.setObjectName("gamesSearchInput")
         self._search_input.setAccessibleName("Search games")
-        self._search_input.setPlaceholderText("Search games…")
-        self._search_input.setFixedWidth(220)
+        self._search_input.setPlaceholderText("Search games… (Esc to clear)")
+        self._search_input.setClearButtonEnabled(True)
+        self._search_input.setFixedWidth(240)
         self._search_input.setStyleSheet(
             f"QLineEdit#{self._search_input.objectName()} {{"
             f"  background-color: {tokens.BG_SURFACE};"
@@ -435,8 +436,13 @@ class GamesView(QWidget):
             f"  padding: 4px {tokens.SPACE_SM}px;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
+            f"QLineEdit#{self._search_input.objectName()}:focus {{"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
+            f"}}"
         )
         self._search_input.textChanged.connect(self._model.set_search_query)
+        self._search_input.installEventFilter(self)
         tb_layout.addWidget(self._search_input)
 
         # Filter combo
@@ -480,6 +486,7 @@ class GamesView(QWidget):
         self._btn_mode = QPushButton("Grid", self)
         self._btn_mode.setObjectName("gamesBtnViewMode")
         self._btn_mode.setAccessibleName("Toggle Grid and List View Mode")
+        self._btn_mode.setToolTip("View mode: Grid. Click to switch to List view.")
         self._btn_mode.setCursor(Qt.PointingHandCursor)
         self._btn_mode.setStyleSheet(
             f"QPushButton#{self._btn_mode.objectName()} {{"
@@ -489,6 +496,12 @@ class GamesView(QWidget):
             f"  border-radius: {tokens.RADIUS}px;"
             f"  padding: 4px {tokens.SPACE_MD}px;"
             f"  font-size: {tokens.FONT_BODY_SM}px;"
+            f"  font-weight: 500;"
+            f"}}"
+            f"QPushButton#{self._btn_mode.objectName()}:hover, QPushButton#{self._btn_mode.objectName()}:focus {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"  outline: none;"
             f"}}"
         )
         self._btn_mode.clicked.connect(self._toggle_view_mode)
@@ -562,6 +575,7 @@ class GamesView(QWidget):
         self._list_view.setResizeMode(QListView.Adjust)
         self._list_view.setSpacing(12)
         self._list_view.setUniformItemSizes(True)
+        self._list_view.setFocusPolicy(Qt.StrongFocus)
         self._list_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list_view.customContextMenuRequested.connect(self._show_context_menu)
         self._list_view.doubleClicked.connect(self._on_item_double_clicked)
@@ -577,8 +591,17 @@ class GamesView(QWidget):
             self._list_view.selectionModel().currentChanged.connect(self._on_selection_changed)
         main_layout.addWidget(self._list_view)
 
-        # Empty state placeholder
-        self._lbl_empty = QLabel("No games found. Click '+ New Project…' to create a game or 'Open…' to import an existing project.", self)
+        # Empty state placeholder with call-to-action button
+        self._empty_container = QWidget(self)
+        self._empty_container.setObjectName("gamesEmptyContainer")
+        empty_layout = QVBoxLayout(self._empty_container)
+        empty_layout.setAlignment(Qt.AlignCenter)
+        empty_layout.setSpacing(tokens.SPACE_MD)
+
+        self._lbl_empty = QLabel(
+            "No games found. Click '+ New Project…' to create a game or 'Open…' to import an existing project.",
+            self._empty_container,
+        )
         self._lbl_empty.setObjectName("gamesEmptyLabel")
         self._lbl_empty.setAlignment(Qt.AlignCenter)
         self._lbl_empty.setStyleSheet(
@@ -586,8 +609,32 @@ class GamesView(QWidget):
             f"font-size: {tokens.FONT_BODY}px;"
             f"padding: {tokens.SPACE_LG}px;"
         )
+        empty_layout.addWidget(self._lbl_empty)
+
+        self._btn_empty_new = QPushButton("+ New Project…", self._empty_container)
+        self._btn_empty_new.setObjectName("gamesBtnEmptyNewProject")
+        self._btn_empty_new.setAccessibleName("Create new project from empty catalog")
+        self._btn_empty_new.setCursor(Qt.PointingHandCursor)
+        self._btn_empty_new.setStyleSheet(
+            f"QPushButton#{self._btn_empty_new.objectName()} {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: none;"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 8px {tokens.SPACE_LG}px;"
+            f"  font-size: {tokens.FONT_BODY}px;"
+            f"  font-weight: 600;"
+            f"}}"
+            f"QPushButton#{self._btn_empty_new.objectName()}:hover {{"
+            f"  background-color: {tokens.ACCENT_HOVER};"
+            f"}}"
+        )
+        self._btn_empty_new.clicked.connect(self._on_new_project_clicked)
+        empty_layout.addWidget(self._btn_empty_new, 0, Qt.AlignCenter)
+
+        self._empty_container.setVisible(False)
         self._lbl_empty.setVisible(False)
-        main_layout.addWidget(self._lbl_empty)
+        main_layout.addWidget(self._empty_container)
 
         # Initial refresh
         self.refresh_games()
@@ -597,7 +644,14 @@ class GamesView(QWidget):
         self.refresh_games()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if watched is self._list_view and event.type() == QEvent.KeyPress:
+        if watched is self._search_input and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Escape:
+                self._search_input.clear()
+                return True
+            elif event.key() in (Qt.Key_Down, Qt.Key_Return, Qt.Key_Enter):
+                self._list_view.setFocus()
+                return True
+        elif watched is self._list_view and event.type() == QEvent.KeyPress:
             if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
                 index = self._list_view.currentIndex()
                 if index.isValid():
@@ -640,7 +694,13 @@ class GamesView(QWidget):
 
     def set_projects_root(self, root: Optional[Union[str, Path]]) -> None:
         """Update candidate projects root and refresh view."""
-        self._projects_root = Path(root).resolve() if (root and str(root).strip()) else None
+        resolved = Path(root).resolve() if (root and str(root).strip()) else None
+        if resolved is not None:
+            from src.gameforge_ide.core.projects import is_gameforge_project
+            self._projects_root = resolved.parent if is_gameforge_project(resolved) else resolved
+        else:
+            self._projects_root = None
+
         if hasattr(self, "_projects_service") and self._projects_service is not None:
             if hasattr(self._projects_service, "_projects_root"):
                 self._projects_service._projects_root = self._projects_root
@@ -694,7 +754,9 @@ class GamesView(QWidget):
         has_games = self._model.rowCount() > 0
         if hasattr(self, "_lbl_empty"):
             self._lbl_empty.setVisible(not has_games)
-            self._list_view.setVisible(has_games)
+        if hasattr(self, "_empty_container"):
+            self._empty_container.setVisible(not has_games)
+        self._list_view.setVisible(has_games)
 
         # Restore selection or select first game for instant keyboard navigation
         sel_name = getattr(self, "_selected_game_name", None)
@@ -762,9 +824,11 @@ class GamesView(QWidget):
         if self._list_view.viewMode() == QListView.IconMode:
             self._list_view.setViewMode(QListView.ListMode)
             self._btn_mode.setText("List")
+            self._btn_mode.setToolTip("View mode: List. Click to switch to Grid.")
         else:
             self._list_view.setViewMode(QListView.IconMode)
             self._btn_mode.setText("Grid")
+            self._btn_mode.setToolTip("View mode: Grid. Click to switch to List.")
         self._list_view.update()
 
     @Slot(QModelIndex)

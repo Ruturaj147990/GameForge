@@ -25,8 +25,10 @@ class _AgentWorker(QObject):
 
     token_received = Signal(str)           # incremental token text
     status_changed = Signal(str, dict)     # (status_label, metadata)
+    plan_received = Signal(dict)           # structured PlanArtifact payload
     tool_called = Signal(str, dict)        # (tool_name, args)
     tool_result = Signal(str, dict)        # (tool_name, result)
+    file_changed = Signal(str, dict)       # (content_or_path, metadata)
     diff_pending = Signal(str, dict)       # (diff_id, metadata)
     error_occurred = Signal(str)           # error message
     task_done = Signal(str)                # final full text
@@ -61,7 +63,7 @@ class _AgentWorker(QObject):
             workspace_root=self.workspace_root,
             session_manager=self._session_manager,
             model_router=self._router,
-            studio_mode=True,
+            studio_mode=False,
         )
 
     def set_task(self, session_id: str, prompt: str) -> None:
@@ -119,6 +121,10 @@ class _AgentWorker(QObject):
                 elif etype == "status":
                     print(f"[GameForge Agent Status] {event.content}", flush=True)
                     self.status_changed.emit(event.content, event.metadata)
+                elif etype == "plan":
+                    print(f"[GameForge Agent Plan] Plan event received", flush=True)
+                    plan_data = event.metadata.get("plan") or event.metadata
+                    self.plan_received.emit(plan_data if isinstance(plan_data, dict) else {"content": event.content})
                 elif etype == "tool_call":
                     tool = event.metadata.get("tool", "")
                     args = event.metadata.get("args", {})
@@ -130,6 +136,9 @@ class _AgentWorker(QObject):
                     status = res.get("status", "SUCCESS") if isinstance(res, dict) else "OK"
                     print(f"[GameForge Agent Tool] <<< `{tool}` returned status: {status}", flush=True)
                     self.tool_result.emit(tool, res)
+                elif etype == "file_changed":
+                    print(f"[GameForge Agent FileChanged] {event.content}", flush=True)
+                    self.file_changed.emit(event.content, event.metadata)
                 elif etype == "diff_pending":
                     print(f"[GameForge Agent Diff] Diff pending: {event.metadata.get('diff_id', '')}", flush=True)
                     self.diff_pending.emit(
@@ -171,13 +180,31 @@ class _AgentWorker(QObject):
         name: str = "Chat Session",
         model_name: str = "gameforge-27b-sft:latest",
         provider_type: str = "ollama",
+        **kwargs,
     ) -> str:
         """Creates a new session and returns its ID."""
         self._ensure_runtime()
         session = self._session_manager.create_session(
-            name=name, model_name=model_name, provider_type=provider_type
+            name=name, model_name=model_name, provider_type=provider_type, **kwargs
         )
         return session.session_id
+
+    def set_session_mode(
+        self,
+        session_id: str,
+        task_mode: Optional[Any] = None,
+        autonomy_profile: Optional[Any] = None,
+    ) -> bool:
+        """Update task_mode and/or autonomy_profile on an existing session."""
+        self._ensure_runtime()
+        return self._session_manager.set_session_mode(
+            session_id, task_mode=task_mode, autonomy_profile=autonomy_profile
+        )
+
+    def get_session(self, session_id: str):
+        """Retrieve a session by its ID."""
+        self._ensure_runtime()
+        return self._session_manager.get_session(session_id)
 
     def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
         """Update model for an existing session."""
@@ -207,8 +234,10 @@ class AgentService(QObject):
     # Mirror worker signals at service level for ergonomic connection
     token_received = Signal(str)
     status_changed = Signal(str, dict)
+    plan_received = Signal(dict)
     tool_called = Signal(str, dict)
     tool_result = Signal(str, dict)
+    file_changed = Signal(str, dict)
     diff_pending = Signal(str, dict)
     error_occurred = Signal(str)
     task_done = Signal(str)
@@ -225,8 +254,10 @@ class AgentService(QObject):
         # Wire worker → service signals
         self._worker.token_received.connect(self.token_received)
         self._worker.status_changed.connect(self.status_changed)
+        self._worker.plan_received.connect(self.plan_received)
         self._worker.tool_called.connect(self.tool_called)
         self._worker.tool_result.connect(self.tool_result)
+        self._worker.file_changed.connect(self.file_changed)
         self._worker.diff_pending.connect(self.diff_pending)
         self._worker.error_occurred.connect(self.error_occurred)
         self._worker.task_done.connect(self.task_done)
@@ -251,6 +282,10 @@ class AgentService(QObject):
     @property
     def is_busy(self) -> bool:
         return self._busy
+
+    @is_busy.setter
+    def is_busy(self, value: bool) -> None:
+        self._busy = bool(value)
 
     @property
     def is_stopping(self) -> bool:
@@ -292,6 +327,17 @@ class AgentService(QObject):
 
     def create_session(self, **kwargs) -> str:
         return self._worker.create_session(**kwargs)
+
+    def set_session_mode(
+        self,
+        session_id: str,
+        task_mode: Optional[Any] = None,
+        autonomy_profile: Optional[Any] = None,
+    ) -> bool:
+        return self._worker.set_session_mode(session_id, task_mode=task_mode, autonomy_profile=autonomy_profile)
+
+    def get_session(self, session_id: str):
+        return self._worker.get_session(session_id)
 
     def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
         return self._worker.set_session_model(session_id, model_name, provider_type=provider_type)

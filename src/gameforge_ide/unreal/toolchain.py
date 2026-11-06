@@ -324,8 +324,9 @@ class UnrealToolchain:
                                                                   ("Core", "CoreUObject", "Engine", "InputCore")]
         plugin_list = [{"Name": "PythonScriptPlugin", "Enabled": True},
                        {"Name": "EditorScriptingUtilities", "Enabled": True}]
-        if "EnhancedInput" in deps and not any(p.get("Name") == "EnhancedInput" for p in plugin_list):
-            plugin_list.append({"Name": "EnhancedInput", "Enabled": True})
+        for req_plugin in ("EnhancedInput", "GameplayAbilities", "Niagara"):
+            if not any(p.get("Name") == req_plugin for p in plugin_list):
+                plugin_list.append({"Name": req_plugin, "Enabled": True})
         if plugins:
             for p_item in plugins:
                 p_name = p_item if isinstance(p_item, str) else p_item.get("Name", "")
