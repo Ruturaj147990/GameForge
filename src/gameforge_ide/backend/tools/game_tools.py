@@ -66,7 +66,7 @@ class GameTools:
         self._clock = time.monotonic
 
     def _configured_projects_root(self) -> Path:
-        """Workspace setting > GAMEFORGE_PROJECTS_ROOT > <workspace>/Games."""
+        """Workspace setting > Core Settings > GAMEFORGE_PROJECTS_ROOT > <workspace>/Games."""
         settings = self.workspace_root / ".gameforge" / "settings.json"
         if settings.is_file():
             try:
@@ -76,7 +76,16 @@ class GameTools:
             except (OSError, json.JSONDecodeError):
                 pass
         env = os.environ.get("GAMEFORGE_PROJECTS_ROOT")
-        return Path(env) if env else self.workspace_root / "Games"
+        if env:
+            return Path(env)
+        try:
+            from ...core.settings import get_settings
+            core_root = get_settings().projects_root
+            if core_root and Path(core_root).exists():
+                return Path(core_root)
+        except Exception:
+            pass
+        return self.workspace_root / "Games"
 
     def _get_complete_json(self):
         if "PYTEST_CURRENT_TEST" in os.environ:
