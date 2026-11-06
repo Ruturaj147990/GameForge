@@ -494,6 +494,12 @@ class SettingsView(QWidget):
         self._validate_engine_path()
         self._validate_storage_paths()
 
+    def _safe_reset_save_text(self) -> None:
+        try:
+            self._btn_save.setText("Save Settings")
+        except (RuntimeError, Exception):
+            pass
+
     @Slot()
     def save_settings(self) -> None:
         cfg_path = user_settings_path()
@@ -553,7 +559,7 @@ class SettingsView(QWidget):
             logger.error("Failed to save settings: %s", exc)
             self._btn_save.setText("Save Failed ✗")
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(3000, lambda: self._btn_save.setText("Save Settings"))
+            QTimer.singleShot(3000, self._safe_reset_save_text)
             return
 
         # Appearance persistence and live application
@@ -580,6 +586,6 @@ class SettingsView(QWidget):
             apply_theme(app_inst, new_theme)
 
         self._btn_save.setText("Saved ✓")
-        QTimer.singleShot(2000, lambda: self._btn_save.setText("Save Settings"))
+        QTimer.singleShot(2000, self._safe_reset_save_text)
         print(f"[GameForge Settings] Saved: Theme='{new_theme}', FontScale={self._font_scale_spin.value()}%, Engine='{eng or 'None'}', Projects='{proj}'", flush=True)
         self.settingsChanged.emit()

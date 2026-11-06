@@ -331,9 +331,22 @@ def validate_stage_output(
                 issues.append(f"Assemble level file '{result['level_file']}' is empty (0 bytes)")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. SCENARIOS STAGE (Packaged QA Acceptance Scenarios)
+    # 3. SCENARIO_GEN STAGE (QA Scenario Generation)
     # ──────────────────────────────────────────────────────────────────────────
-    elif any(k in s_norm for k in ("scenario", "acceptance")):
+    elif s_norm == "scenario_gen":
+        scs = result.get("scenarios") or []
+        count = result.get("count", len(scs))
+        if count == 0 and not scs:
+            issues.append("Scenario generation produced no QA scenarios")
+        if pdir is not None:
+            sc_dir = pdir / "Saved" / "GameForge" / "evidence" / "scenarios"
+            if not sc_dir.is_dir() and count > 0:
+                issues.append(f"Scenario output directory '{sc_dir}' not found on disk")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 3b. SCENARIOS STAGE (Packaged QA Acceptance Scenarios)
+    # ──────────────────────────────────────────────────────────────────────────
+    elif any(k in s_norm for k in ("scenario", "acceptance")) and s_norm != "scenario_gen":
         test_results = (
             result.get("results")
             or result.get("scenarios")

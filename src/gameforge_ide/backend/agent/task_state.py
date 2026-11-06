@@ -43,6 +43,123 @@ CUSTOM_PREDICATE_EVALUATORS: dict[str, Callable[[list[dict]], tuple[bool, str]]]
 }
 
 
+UNREAL_ENGINE_HEADER_PREFIXES = (
+    "Engine/",
+    "GameFramework/",
+    "Kismet/",
+    "Components/",
+    "UObject/",
+    "Templates/",
+    "Containers/",
+    "Misc/",
+    "Math/",
+    "HAL/",
+    "Modules/",
+    "Internationalization/",
+    "Delegates/",
+    "Blueprint/",
+    "Slate/",
+    "SlateCore/",
+    "UMG/",
+    "Niagara/",
+    "GameplayAbilities/",
+    "EnhancedInput/",
+    "Navigation/",
+    "AI/",
+    "Audio/",
+    "Render/",
+    "RHI/",
+    "Physics/",
+    "Animation/",
+    "Camera/",
+    "Materials/",
+    "Particles/",
+    "Sound/",
+    "Subsystems/",
+    "Net/",
+)
+
+UNREAL_ENGINE_ROOT_HEADERS = {
+    "coreminimal.h",
+    "engine.h",
+    "engineminimal.h",
+    "unrealengine.h",
+    "gameframework.h",
+    "coreuobject.h",
+    "actor.h",
+}
+
+SYSTEM_HEADERS = {
+    "stdio.h",
+    "stdlib.h",
+    "string.h",
+    "windows.h",
+    "iostream",
+    "iostream.h",
+    "vector",
+    "map",
+    "string",
+    "memory",
+    "algorithm",
+    "cmath",
+}
+
+
+def is_ignorable_header_or_system_file(path_str: str) -> bool:
+    """Returns True if the path represents an Unreal Engine engine header,
+    a UHT-generated header (*.generated.h), or a C++ standard library header.
+    These must never be treated as mandatory project file modifications or missing targets.
+    """
+    if not path_str:
+        return False
+    norm = str(path_str).replace("\\", "/").strip("`'\" \t\r\n")
+    lower = norm.lower()
+
+    # 1. Unreal Header Tool generated headers
+    if lower.endswith(".generated.h"):
+        return True
+
+    # 2. Check engine prefixes
+    for prefix in UNREAL_ENGINE_HEADER_PREFIXES:
+        if lower.startswith(prefix.lower()):
+            return True
+
+    # 3. Check engine root headers
+    base = Path(lower).name
+    if base in UNREAL_ENGINE_ROOT_HEADERS:
+        return True
+
+    # 4. Check system headers
+    if base in SYSTEM_HEADERS:
+        return True
+
+    return False
+
+
+def _matches_target(fpath: str, target: str) -> bool:
+    """Matches a file path against an acceptance predicate target pattern.
+    Supports glob patterns, full relative paths, basename equality, and subpath suffixes.
+    """
+    if not fpath or not target:
+        return False
+    if target == "*":
+        return True
+    f_norm = str(fpath).replace("\\", "/").strip("/").lower()
+    t_norm = str(target).replace("\\", "/").strip("/").lower()
+    if f_norm == t_norm:
+        return True
+    if fnmatch.fnmatch(f_norm, t_norm) or fnmatch.fnmatch(f_norm, f"*/{t_norm}"):
+        return True
+    f_name = Path(f_norm).name
+    t_name = Path(t_norm).name
+    if f_name and t_name:
+        if f_name == t_name or fnmatch.fnmatch(f_name, t_name):
+            return True
+    if f_norm.endswith("/" + t_norm) or t_norm.endswith("/" + f_norm):
+        return True
+    return False
+
+
 TaskIntent = Literal["answer", "inspect", "plan", "mutate", "validate"]
 TaskPhase = Literal["discover", "plan", "author", "validate", "repair"]
 TerminalStatus = Literal["COMPLETED", "BLOCKED", "FAILED", "CANCELLED"]
@@ -174,19 +291,57 @@ class TaskState(BaseModel):
         for pred in self.acceptance:
             pred.evaluated_at = now
             if pred.predicate_type == "file_exists":
-                target_path = (workspace_root / pred.target).resolve()
-                if target_path.exists():
+                if is_ignorable_header_or_system_file(pred.target):
                     pred.satisfied = True
-                    pred.evidence = f"File exists at {pred.target} ({target_path.stat().st_size} bytes)"
+                    pred.evidence = f"Ignored engine/system header {pred.target}"
+                    continue
+
+                target_path = (workspace_root / pred.target).resolve()
+                found_path = None
+                if target_path.exists():
+                    found_path = target_path
+                else:
+                    t_name = Path(pred.target).name
+                    if t_name and workspace_root.is_dir():
+                        for p in workspace_root.rglob(t_name):
+                            p_parts = p.parts
+                            if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
+                                continue
+                            if p.is_file():
+                                found_path = p
+                                break
+
+                if found_path:
+                    pred.satisfied = True
+                    try:
+                        rel = str(found_path.relative_to(workspace_root)).replace("\\", "/")
+                    except ValueError:
+                        rel = found_path.name
+                    pred.evidence = f"File exists at {rel} ({found_path.stat().st_size} bytes)"
                 else:
                     pred.satisfied = False
                     unmet.append(f"file_exists({pred.target}): File does not exist on disk")
 
             elif pred.predicate_type == "file_changed":
+                if is_ignorable_header_or_system_file(pred.target):
+                    pred.satisfied = True
+                    pred.evidence = f"Ignored engine/system header {pred.target}"
+                    continue
+
                 # Check for genuine state change: preimage vs postimage hash, or approved diff, or verified creation
                 matched = False
                 matched_reason = ""
                 target_path = (workspace_root / pred.target).resolve()
+                if not target_path.exists():
+                    t_name = Path(pred.target).name
+                    if t_name and workspace_root.is_dir():
+                        for p in workspace_root.rglob(t_name):
+                            p_parts = p.parts
+                            if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
+                                continue
+                            if p.is_file():
+                                target_path = p
+                                break
 
                 # 1. Check tool history for diff application or edits with hash evidence
                 for th in tool_history:
@@ -198,7 +353,7 @@ class TaskState(BaseModel):
                             pass
                     if isinstance(out, dict):
                         fpath = out.get("file_path") or th.get("arguments", {}).get("subpath") or th.get("arguments", {}).get("path")
-                        if fpath and (fnmatch.fnmatch(fpath, pred.target) or fpath == pred.target):
+                        if fpath and _matches_target(str(fpath), pred.target):
                             pre_h = out.get("original_sha256") or th.get("pre_state_hash")
                             post_h = out.get("new_sha256") or th.get("post_state_hash")
                             # If hashes are available, require genuine state comparison: pre_hash != post_hash
@@ -210,7 +365,7 @@ class TaskState(BaseModel):
                                             matched = True
                                             matched_reason = f"Verified content hash change ({pre_h[:8]} -> {post_h[:8]}) matches disk"
                                             break
-                            elif th.get("status") in ("SUCCESS", "APPLIED"):
+                            elif th.get("status") in ("SUCCESS", "APPLIED") or th.get("tool_name") in ("write_file", "apply_diff", "propose_edit"):
                                 matched = True
                                 matched_reason = f"Verified edit applied via tool '{th.get('tool_name')}'"
                                 break
@@ -218,7 +373,7 @@ class TaskState(BaseModel):
                 # 2. Check if file was in modified_files set from an actual edit action
                 if not matched:
                     for mf in modified_files:
-                        if fnmatch.fnmatch(mf, pred.target) or mf == pred.target:
+                        if _matches_target(str(mf), pred.target):
                             matched = True
                             matched_reason = f"Observed in approved modification list ({mf})"
                             break

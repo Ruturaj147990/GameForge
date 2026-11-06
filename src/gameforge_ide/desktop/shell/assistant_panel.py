@@ -19,6 +19,19 @@ from ..icons import icon
 from ..styles import tokens
 
 
+class _ModelComboBox(QComboBox):
+    """ComboBox that automatically refreshes the available models before showing its popup."""
+
+    def __init__(self, panel_ref: AssistantPanel, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._panel_ref = panel_ref
+
+    def showPopup(self) -> None:
+        if self._panel_ref and hasattr(self._panel_ref, "_refresh_models_from_source"):
+            self._panel_ref._refresh_models_from_source()
+        super().showPopup()
+
+
 class AssistantPanel(QWidget):
     """Studio UX collapsible assistant panel wrapping ChatPanel."""
 
@@ -51,7 +64,7 @@ class AssistantPanel(QWidget):
         h_layout.addWidget(title_lbl)
 
         # Model selector
-        self.model_combo = QComboBox(header)
+        self.model_combo = _ModelComboBox(self, header)
         self.model_combo.setObjectName("assistantModelCombo")
         self.model_combo.setAccessibleName("Assistant Model")
         self.model_combo.setToolTip("Select active assistant model")
@@ -63,11 +76,24 @@ class AssistantPanel(QWidget):
                 border-radius: {tokens.RADIUS}px;
                 padding: 2px 6px;
                 font-size: 12px;
-                max-width: 140px;
+                min-width: 150px;
+                max-width: 220px;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {tokens.BG_SURFACE};
+                color: {tokens.TEXT_PRIMARY};
+                selection-background-color: {tokens.BG_HOVER};
+                selection-color: {tokens.TEXT_PRIMARY};
+                border: 1px solid {tokens.BORDER};
+                min-width: 260px;
             }}
         """)
         self.model_combo.currentTextChanged.connect(self._on_model_changed)
         h_layout.addWidget(self.model_combo)
+
+        # Connect model loaded updates from chat_panel if available
+        if hasattr(self.chat_panel, "models_loaded"):
+            self.chat_panel.models_loaded.connect(self._on_models_loaded)
 
         h_layout.addStretch(1)
 
@@ -122,6 +148,13 @@ class AssistantPanel(QWidget):
         # Embed ChatPanel
         layout.addWidget(self.chat_panel, 1)
 
+        self.setStyleSheet(f"""
+            QWidget#studioAssistantPanel {{
+                background: {tokens.BG_PANEL};
+                border-left: 1px solid {tokens.BORDER};
+            }}
+        """)
+
     @property
     def task_mode_combo(self):
         return getattr(self.chat_panel, "task_mode_combo", None)
@@ -142,27 +175,50 @@ class AssistantPanel(QWidget):
     def autonomyCombo(self):
         return getattr(self.chat_panel, "autonomy_combo", None)
 
-        self.setStyleSheet(f"""
-            QWidget#studioAssistantPanel {{
-                background: {tokens.BG_PANEL};
-                border-left: 1px solid {tokens.BORDER};
-            }}
-        """)
+    def _on_models_loaded(self, models: List[str]) -> None:
+        """Slot triggered when ChatPanel discovers available models."""
+        if models:
+            self.set_models(models, getattr(self.chat_panel, "_current_model", None))
+
+    def _refresh_models_from_source(self) -> None:
+        """Query available models from agent service or chat panel."""
+        agent = getattr(self.chat_panel, "_agent", None)
+        if not agent and self.parent() and hasattr(self.parent(), "_agent"):
+            agent = getattr(self.parent(), "_agent")
+        if agent and hasattr(agent, "list_models"):
+            try:
+                models = [m.get("id", m.get("name", "unknown")) for m in agent.list_models()]
+                if models:
+                    self.set_models(models, self.model_combo.currentText())
+            except Exception:
+                pass
 
     def set_models(self, models: List[str], current: Optional[str] = None) -> None:
-        """Populate model selector dropdown."""
+        """Populate model selector dropdown with tooltips and deduplication."""
+        seen = set()
+        unique_models = []
+        for m in models:
+            if m and m not in seen:
+                seen.add(m)
+                unique_models.append(m)
+
         self.model_combo.blockSignals(True)
         self.model_combo.clear()
-        for m in models:
+        for idx, m in enumerate(unique_models):
             self.model_combo.addItem(m)
-        if current and current in models:
-            self.model_combo.setCurrentText(current)
-        elif models:
+            self.model_combo.setItemData(idx, m, Qt.ToolTipRole)
+
+        target = current or (getattr(self.chat_panel, "_current_model", None) if hasattr(self, "chat_panel") else None)
+        if target and target in unique_models:
+            self.model_combo.setCurrentText(target)
+        elif unique_models:
             self.model_combo.setCurrentIndex(0)
+        self.model_combo.setToolTip(f"Active Model: {self.model_combo.currentText()}")
         self.model_combo.blockSignals(False)
 
     def _on_model_changed(self, text: str) -> None:
         if text:
+            self.model_combo.setToolTip(f"Active Model: {text}")
             # Sync with underlying chat panel if available
             if hasattr(self.chat_panel, "set_model"):
                 self.chat_panel.set_model(text)

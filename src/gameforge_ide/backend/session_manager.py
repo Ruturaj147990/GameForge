@@ -137,20 +137,35 @@ class SessionManager:
 
     def get_session(self, session_id: str) -> Optional[Session]:
         path = self.storage_dir / f"{session_id}.json"
-        if not path.exists():
-            return None
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return Session(**data)
-        except Exception:
-            return None
+        bak_path = path.with_suffix(".json.bak")
+        for target in (path, bak_path):
+            if not target.exists():
+                continue
+            try:
+                from ..storage.atomic import safe_read_json
+                data = safe_read_json(target, max_retries=3)
+                if data and isinstance(data, dict):
+                    return Session(**data)
+            except Exception:
+                pass
+            try:
+                with open(target, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return Session(**data)
+            except Exception:
+                continue
+        return None
 
     def save_session(self, session: Session) -> None:
         session.updated_at = time.time()
         path = self.storage_dir / f"{session.session_id}.json"
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(session.model_dump(), f, indent=2)
+        try:
+            from ..storage.atomic import atomic_write_text
+            payload = json.dumps(session.model_dump(), indent=2)
+            atomic_write_text(path, payload, sync=True, backup=True)
+        except Exception:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(session.model_dump(), f, indent=2)
 
     def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
         """Update model_name (and optionally provider_type) on an existing session."""

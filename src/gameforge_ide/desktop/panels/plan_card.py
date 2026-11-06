@@ -115,6 +115,19 @@ class PlanCard(QFrame):
         """)
         header_row.addWidget(self._lbl_version)
 
+        self._lbl_progress = QLabel("", self)
+        self._lbl_progress.setObjectName("planCardProgress")
+        self._lbl_progress.setStyleSheet(f"""
+            background-color: #064e3b;
+            color: #6ee7b7;
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-size: 11px;
+            font-weight: 700;
+        """)
+        self._lbl_progress.setVisible(False)
+        header_row.addWidget(self._lbl_progress)
+
         self._lbl_status = QLabel(self.status.replace("_", " ").upper(), self)
         self._lbl_status.setObjectName("planCardStatus")
         self._lbl_status.setStyleSheet(f"""
@@ -368,8 +381,35 @@ class PlanCard(QFrame):
                 lbl_meta.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: 10px;")
                 s_layout.addWidget(lbl_meta)
 
+            # Output summary or error if present
+            s_out = step.get("output_summary")
+            if s_out:
+                lbl_out = QLabel(f"✓ {s_out}", step_frame)
+                lbl_out.setObjectName(f"stepOutput_{s_id}")
+                lbl_out.setStyleSheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 11px; font-weight: 500;")
+                s_layout.addWidget(lbl_out)
+            s_err = step.get("error")
+            if s_err:
+                lbl_err = QLabel(f"✗ {s_err}", step_frame)
+                lbl_err.setObjectName(f"stepError_{s_id}")
+                lbl_err.setStyleSheet(f"color: {tokens.ACCENT_ERROR}; font-size: 11px; font-weight: 600;")
+                s_layout.addWidget(lbl_err)
+
             self._steps_layout.addWidget(step_frame)
             self._step_widgets[s_id] = step_frame
+
+        self._update_progress()
+
+    def _update_progress(self) -> None:
+        """Update live execution progress indicators across the plan steps."""
+        total = len(self.steps)
+        if total == 0:
+            self._lbl_progress.setVisible(False)
+            return
+        completed = sum(1 for s in self.steps if s.get("status") == "completed")
+        pct = int((completed / total) * 100)
+        self._lbl_progress.setText(f"{completed}/{total} steps ({pct}%)")
+        self._lbl_progress.setVisible(True)
 
     def update_plan(self, plan_data: Dict[str, Any]) -> None:
         """Update plan fields and step checklist in place."""
@@ -439,6 +479,30 @@ class PlanCard(QFrame):
             if lbl_badge:
                 lbl_badge.setText(status.replace("_", " "))
                 lbl_badge.setStyleSheet(f"color: {icon_col}; font-size: 10px; font-weight: bold;")
+
+            if output_summary:
+                lbl_out = step_frame.findChild(QLabel, f"stepOutput_{step_id}")
+                if lbl_out:
+                    lbl_out.setText(f"✓ {output_summary}")
+                    lbl_out.setVisible(True)
+                else:
+                    lbl_out = QLabel(f"✓ {output_summary}", step_frame)
+                    lbl_out.setObjectName(f"stepOutput_{step_id}")
+                    lbl_out.setStyleSheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 11px; font-weight: 500;")
+                    step_frame.layout().addWidget(lbl_out)
+
+            if error:
+                lbl_err = step_frame.findChild(QLabel, f"stepError_{step_id}")
+                if lbl_err:
+                    lbl_err.setText(f"✗ {error}")
+                    lbl_err.setVisible(True)
+                else:
+                    lbl_err = QLabel(f"✗ {error}", step_frame)
+                    lbl_err.setObjectName(f"stepError_{step_id}")
+                    lbl_err.setStyleSheet(f"color: {tokens.ACCENT_ERROR}; font-size: 11px; font-weight: 600;")
+                    step_frame.layout().addWidget(lbl_err)
+
+        self._update_progress()
 
     def _on_proceed_clicked(self) -> None:
         self.btn_proceed.setEnabled(False)

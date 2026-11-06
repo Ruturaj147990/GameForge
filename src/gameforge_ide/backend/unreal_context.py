@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,10 +52,20 @@ def persist_unreal_context(workspace_root: Path, context: UnrealEditorContext) -
     temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
     try:
         temporary.write_text(serialized, encoding="utf-8")
-        temporary.replace(destination)
+        for attempt in range(5):
+            try:
+                temporary.replace(destination)
+                break
+            except (PermissionError, OSError):
+                if attempt == 4:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
     finally:
         if temporary.exists():
-            temporary.unlink()
+            try:
+                temporary.unlink()
+            except Exception:
+                pass
     return payload
 
 

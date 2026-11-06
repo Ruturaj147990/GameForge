@@ -359,3 +359,11 @@ class ApprovalCard(QFrame):
     def _open_folder(self) -> None:
         if self._project_dir and Path(self._project_dir).is_dir():
             os.startfile(self._project_dir)  # noqa: S606 - opens Explorer on a GameForge-created folder
+
+    def deleteLater(self) -> None:
+        try:
+            if hasattr(self, "_tick") and self._tick.isActive():
+                self._tick.stop()
+        except Exception:
+            pass
+        super().deleteLater()

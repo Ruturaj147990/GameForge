@@ -32,7 +32,7 @@
 #include "Serialization/JsonWriter.h"
 #include "UObject/Package.h"
 
-static FString BuildJsonEnvelope(bool bOk, const TSharedPtr<FJsonObject>& Data, const TArray<FString>& Errors)
+static FString BuildAnimJsonEnvelope(bool bOk, const TSharedPtr<FJsonObject>& Data, const TArray<FString>& Errors)
 {
 	TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetBoolField(TEXT("ok"), bOk);
@@ -59,19 +59,19 @@ FString UGameForgeAnimationLibrary::InspectAnimationSequence(const FString& Para
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObj) || !JsonObj.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 
 	FString SeqPath = JsonObj->GetStringField(TEXT("anim_sequence_path"));
 	if (SeqPath.IsEmpty())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("anim_sequence_path is required") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("anim_sequence_path is required") });
 	}
 
 	UAnimSequence* AnimSeq = LoadObject<UAnimSequence>(nullptr, *SeqPath);
 	if (!AnimSeq)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load UAnimSequence at path: %s"), *SeqPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load UAnimSequence at path: %s"), *SeqPath) });
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -105,7 +105,7 @@ FString UGameForgeAnimationLibrary::InspectAnimationSequence(const FString& Para
 	}
 	Data->SetArrayField(TEXT("bone_tracks"), TrackNamesArray);
 
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildAnimJsonEnvelope(true, Data, {});
 }
 
 FString UGameForgeAnimationLibrary::InspectAnimationBlueprint(const FString& ParamsJson)
@@ -114,19 +114,19 @@ FString UGameForgeAnimationLibrary::InspectAnimationBlueprint(const FString& Par
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObj) || !JsonObj.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 
 	FString BpPath = JsonObj->GetStringField(TEXT("anim_blueprint_path"));
 	if (BpPath.IsEmpty())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("anim_blueprint_path is required") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("anim_blueprint_path is required") });
 	}
 
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, *BpPath);
 	if (!AnimBP)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load UAnimBlueprint at path: %s"), *BpPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load UAnimBlueprint at path: %s"), *BpPath) });
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -152,7 +152,7 @@ FString UGameForgeAnimationLibrary::InspectAnimationBlueprint(const FString& Par
 	Data->SetStringField(TEXT("compile_status"), CompileStatusStr);
 	Data->SetBoolField(TEXT("is_compiled"), AnimBP->Status == BS_UpToDate || AnimBP->Status == BS_UpToDateWithWarnings);
 
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildAnimJsonEnvelope(true, Data, {});
 }
 
 FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString& ParamsJson)
@@ -161,7 +161,7 @@ FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString&
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObj) || !JsonObj.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 
 	FString BpName = JsonObj->GetStringField(TEXT("blueprint_name"));
@@ -170,20 +170,20 @@ FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString&
 
 	if (BpName.IsEmpty() || DestPath.IsEmpty() || SkeletonPath.IsEmpty())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("blueprint_name, destination_path, and skeleton_path are required") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("blueprint_name, destination_path, and skeleton_path are required") });
 	}
 
 	USkeleton* TargetSkeleton = LoadObject<USkeleton>(nullptr, *SkeletonPath);
 	if (!TargetSkeleton)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeleton at: %s"), *SkeletonPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeleton at: %s"), *SkeletonPath) });
 	}
 
 	FString PackagePath = FString::Printf(TEXT("%s/%s"), *DestPath, *BpName);
 	UPackage* Package = CreatePackage(*PackagePath);
 	if (!Package)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to create package: %s"), *PackagePath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to create package: %s"), *PackagePath) });
 	}
 
 	UAnimBlueprintFactory* Factory = NewObject<UAnimBlueprintFactory>();
@@ -201,7 +201,7 @@ FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString&
 
 	if (!AnimBP)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("FactoryCreateNew failed to create UAnimBlueprint") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("FactoryCreateNew failed to create UAnimBlueprint") });
 	}
 
 	// Compile the blueprint
@@ -303,7 +303,7 @@ FString UGameForgeAnimationLibrary::CreateLocomotionAnimBlueprint(const FString&
 	{
 		ClipErrors.Add(TEXT("AnimBP failed to compile"));
 	}
-	return BuildJsonEnvelope(ClipErrors.Num() == 0, Data, ClipErrors);
+	return BuildAnimJsonEnvelope(ClipErrors.Num() == 0, Data, ClipErrors);
 }
 
 FString UGameForgeAnimationLibrary::RetargetAnimationSequence(const FString& ParamsJson)
@@ -312,7 +312,7 @@ FString UGameForgeAnimationLibrary::RetargetAnimationSequence(const FString& Par
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObj) || !JsonObj.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 
 	FString SourceSeqPath = JsonObj->GetStringField(TEXT("source_sequence_path"));
@@ -323,27 +323,27 @@ FString UGameForgeAnimationLibrary::RetargetAnimationSequence(const FString& Par
 	UAnimSequence* SrcSeq = LoadObject<UAnimSequence>(nullptr, *SourceSeqPath);
 	if (!SrcSeq)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load source UAnimSequence: %s"), *SourceSeqPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load source UAnimSequence: %s"), *SourceSeqPath) });
 	}
 
 	USkeleton* TargetSkeleton = LoadObject<USkeleton>(nullptr, *TargetSkeletonPath);
 	if (!TargetSkeleton)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load target USkeleton: %s"), *TargetSkeletonPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load target USkeleton: %s"), *TargetSkeletonPath) });
 	}
 
 	FString FullDestPath = FString::Printf(TEXT("%s/%s"), *DestPath, *DestName);
 	UPackage* DestPackage = CreatePackage(*FullDestPath);
 	if (!DestPackage)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to create package: %s"), *FullDestPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to create package: %s"), *FullDestPath) });
 	}
 
 	// Duplicate asset and assign target skeleton
 	UAnimSequence* DuplicateSeq = Cast<UAnimSequence>(StaticDuplicateObject(SrcSeq, DestPackage, FName(*DestName)));
 	if (!DuplicateSeq)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("StaticDuplicateObject failed") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("StaticDuplicateObject failed") });
 	}
 
 	DuplicateSeq->SetSkeleton(TargetSkeleton);
@@ -356,7 +356,7 @@ FString UGameForgeAnimationLibrary::RetargetAnimationSequence(const FString& Par
 	Data->SetStringField(TEXT("target_skeleton_path"), TargetSkeletonPath);
 	Data->SetNumberField(TEXT("duration_seconds"), DuplicateSeq->GetPlayLength());
 
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildAnimJsonEnvelope(true, Data, {});
 }
 
 FString UGameForgeAnimationLibrary::ImportMotionClip(const FString& ParamsJson)
@@ -365,7 +365,7 @@ FString UGameForgeAnimationLibrary::ImportMotionClip(const FString& ParamsJson)
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, Params) || !Params.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 	const FString SkeletonPath = Params->GetStringField(TEXT("skeleton_path"));
 	const FString MotionPath = Params->GetStringField(TEXT("motion_json_path"));
@@ -375,19 +375,19 @@ FString UGameForgeAnimationLibrary::ImportMotionClip(const FString& ParamsJson)
 	USkeleton* Skeleton = LoadObject<USkeleton>(nullptr, *SkeletonPath);
 	if (!Skeleton)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeleton at: %s"), *SkeletonPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeleton at: %s"), *SkeletonPath) });
 	}
 	FString MotionText;
 	TSharedPtr<FJsonObject> Motion;
 	if (!FFileHelper::LoadFileToString(MotionText, *MotionPath)
 		|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(MotionText), Motion) || !Motion.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to read motion bundle: %s"), *MotionPath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to read motion bundle: %s"), *MotionPath) });
 	}
 	const TSharedPtr<FJsonObject>* Tracks = nullptr;
 	if (!Motion->TryGetObjectField(TEXT("tracks"), Tracks) || !Tracks)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Motion bundle has no tracks") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Motion bundle has no tracks") });
 	}
 	const int32 SampleRate = FMath::Max(1, (int32)Motion->GetNumberField(TEXT("sample_rate_hz")));
 	const FReferenceSkeleton& RefSkel = Skeleton->GetReferenceSkeleton();
@@ -422,7 +422,7 @@ FString UGameForgeAnimationLibrary::ImportMotionClip(const FString& ParamsJson)
 		if (Frames.Num() != NumKeys)
 		{
 			Controller.CloseBracket(false);
-			return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Track '%s' has %d keys, expected %d"), *Track.Key, Frames.Num(), NumKeys) });
+			return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Track '%s' has %d keys, expected %d"), *Track.Key, Frames.Num(), NumKeys) });
 		}
 		const FTransform& Bind = RefPose[BoneIndex];
 		TArray<FVector3f> Pos;
@@ -454,7 +454,7 @@ FString UGameForgeAnimationLibrary::ImportMotionClip(const FString& ParamsJson)
 		{
 			Errors.Add(TEXT("missing bone: ") + M);
 		}
-		return BuildJsonEnvelope(false, nullptr, Errors);
+		return BuildAnimJsonEnvelope(false, nullptr, Errors);
 	}
 
 	Seq->MarkPackageDirty();
@@ -468,7 +468,7 @@ FString UGameForgeAnimationLibrary::ImportMotionClip(const FString& ParamsJson)
 	Data->SetNumberField(TEXT("keys"), NumKeys);
 	Data->SetNumberField(TEXT("sample_rate_hz"), SampleRate);
 	Data->SetNumberField(TEXT("play_length_s"), Seq->GetPlayLength());
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildAnimJsonEnvelope(true, Data, {});
 }
 
 static UWorld* GFFindPIEWorld()
@@ -495,18 +495,18 @@ FString UGameForgeAnimationLibrary::StartLocomotionTest(const FString& ParamsJso
 	TSharedPtr<FJsonObject> P;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(ParamsJson), P) || !P.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 	UWorld* World = GFFindPIEWorld();
 	if (!World)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("No active PIE world") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("No active PIE world") });
 	}
 	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, *P->GetStringField(TEXT("skeletal_mesh_path")));
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, *P->GetStringField(TEXT("anim_blueprint_path")));
 	if (!Mesh || !AnimBP || !AnimBP->GeneratedClass)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("skeletal_mesh_path or anim_blueprint_path did not load") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("skeletal_mesh_path or anim_blueprint_path did not load") });
 	}
 	FVector Location(0, 0, 200);
 	const TSharedPtr<FJsonObject>* Loc = nullptr;
@@ -525,7 +525,7 @@ FString UGameForgeAnimationLibrary::StartLocomotionTest(const FString& ParamsJso
 	ACharacter* Character = World->SpawnActor<ACharacter>(ACharacter::StaticClass(), Location, FRotator::ZeroRotator, SpawnParams);
 	if (!Character)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to spawn ACharacter") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to spawn ACharacter") });
 	}
 	Character->GetCapsuleComponent()->SetCapsuleSize(34.0f, 90.0f);
 	USkeletalMeshComponent* MeshComp = Character->GetMesh();
@@ -549,7 +549,7 @@ FString UGameForgeAnimationLibrary::StartLocomotionTest(const FString& ParamsJso
 	Data->SetStringField(TEXT("controller"), Character->GetController() ? Character->GetController()->GetClass()->GetName() : TEXT("None"));
 	Data->SetStringField(TEXT("anim_instance"), MeshComp->GetAnimInstance() ? MeshComp->GetAnimInstance()->GetClass()->GetName() : TEXT("None"));
 	Data->SetStringField(TEXT("driver"), Driver->GetName());
-	return BuildJsonEnvelope(Character->GetController() != nullptr && MeshComp->GetAnimInstance() != nullptr, Data,
+	return BuildAnimJsonEnvelope(Character->GetController() != nullptr && MeshComp->GetAnimInstance() != nullptr, Data,
 		Character->GetController() ? TArray<FString>() : TArray<FString>{ TEXT("Character has no controller") });
 }
 
@@ -558,7 +558,7 @@ FString UGameForgeAnimationLibrary::FinalizeBlendSpace(const FString& BlendSpace
 	UBlendSpace* BS = LoadObject<UBlendSpace>(nullptr, *BlendSpacePath);
 	if (!BS)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("not a BlendSpace: %s"), *BlendSpacePath) });
+		return BuildAnimJsonEnvelope(false, nullptr, { FString::Printf(TEXT("not a BlendSpace: %s"), *BlendSpacePath) });
 	}
 	BS->Modify();
 	BS->ValidateSampleData();
@@ -569,7 +569,7 @@ FString UGameForgeAnimationLibrary::FinalizeBlendSpace(const FString& BlendSpace
 	Data->SetNumberField(TEXT("samples"), BS->GetNumberOfBlendSamples());
 	Data->SetNumberField(TEXT("runtime_segments"), Runtime.Segments.Num());
 	Data->SetNumberField(TEXT("runtime_triangles"), Runtime.Triangles.Num());
-	return BuildJsonEnvelope(!Runtime.IsEmpty(), Data,
+	return BuildAnimJsonEnvelope(!Runtime.IsEmpty(), Data,
 		Runtime.IsEmpty() ? TArray<FString>{ TEXT("blend space has no runtime segments/triangles after ResampleData") } : TArray<FString>());
 }
 
@@ -578,7 +578,7 @@ FString UGameForgeAnimationLibrary::GetLocomotionTestResult()
 	UWorld* World = GFFindPIEWorld();
 	if (!World)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("No active PIE world") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("No active PIE world") });
 	}
 	AGameForgeLocomotionDriver* Driver = nullptr;
 	for (TActorIterator<AGameForgeLocomotionDriver> It(World); It; ++It)
@@ -588,7 +588,7 @@ FString UGameForgeAnimationLibrary::GetLocomotionTestResult()
 	}
 	if (!Driver || !Driver->Target)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("No locomotion test is running") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("No locomotion test is running") });
 	}
 	const UGameForgeLocomotionAnimInstance* Anim = Cast<UGameForgeLocomotionAnimInstance>(Driver->Target->GetMesh()->GetAnimInstance());
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -618,7 +618,7 @@ FString UGameForgeAnimationLibrary::GetLocomotionTestResult()
 		const FQuat Ref = MeshComp->GetSkinnedAsset()->GetRefSkeleton().GetRefBonePose()[Thigh].GetRotation();
 		Data->SetNumberField(TEXT("thigh_l_deviation_deg"), FMath::RadiansToDegrees(Live.AngularDistance(Ref)));
 	}
-	return BuildJsonEnvelope(Anim != nullptr, Data, Anim ? TArray<FString>() : TArray<FString>{ TEXT("Mesh is not driven by a GameForge locomotion anim instance") });
+	return BuildAnimJsonEnvelope(Anim != nullptr, Data, Anim ? TArray<FString>() : TArray<FString>{ TEXT("Mesh is not driven by a GameForge locomotion anim instance") });
 }
 
 FString UGameForgeAnimationLibrary::MovePIEPlayerTo(const FString& ParamsJson)
@@ -626,14 +626,14 @@ FString UGameForgeAnimationLibrary::MovePIEPlayerTo(const FString& ParamsJson)
 	TSharedPtr<FJsonObject> P;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(ParamsJson), P) || !P.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 	UWorld* World = GFFindPIEWorld();
 	APlayerController* PC = World ? UGameplayStatics::GetPlayerController(World, 0) : nullptr;
 	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
 	if (!Pawn)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("No PIE player pawn") });
+		return BuildAnimJsonEnvelope(false, nullptr, { TEXT("No PIE player pawn") });
 	}
 	const FVector Goal(P->GetNumberField(TEXT("x")), P->GetNumberField(TEXT("y")), P->GetNumberField(TEXT("z")));
 	UAIBlueprintHelperLibrary::SimpleMoveToLocation(PC, Goal);
@@ -641,5 +641,5 @@ FString UGameForgeAnimationLibrary::MovePIEPlayerTo(const FString& ParamsJson)
 	const FVector From = Pawn->GetActorLocation();
 	Data->SetStringField(TEXT("pawn"), Pawn->GetClass()->GetName());
 	Data->SetStringField(TEXT("from"), FString::Printf(TEXT("%.0f,%.0f,%.0f"), From.X, From.Y, From.Z));
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildAnimJsonEnvelope(true, Data, {});
 }

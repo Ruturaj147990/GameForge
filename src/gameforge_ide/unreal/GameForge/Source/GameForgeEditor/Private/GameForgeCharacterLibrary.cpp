@@ -14,7 +14,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 
-static FString BuildJsonEnvelope(bool bOk, const TSharedPtr<FJsonObject>& Data, const TArray<FString>& Errors)
+static FString BuildCharJsonEnvelope(bool bOk, const TSharedPtr<FJsonObject>& Data, const TArray<FString>& Errors)
 {
 	TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetBoolField(TEXT("ok"), bOk);
@@ -41,19 +41,19 @@ FString UGameForgeCharacterLibrary::InspectSkeletalMesh(const FString& ParamsJso
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObj) || !JsonObj.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 
 	FString MeshPath = JsonObj->GetStringField(TEXT("skeletal_mesh_path"));
 	if (MeshPath.IsEmpty())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("skeletal_mesh_path is required") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("skeletal_mesh_path is required") });
 	}
 
 	USkeletalMesh* SkelMesh = LoadObject<USkeletalMesh>(nullptr, *MeshPath);
 	if (!SkelMesh)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeletalMesh at path: %s"), *MeshPath) });
+		return BuildCharJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeletalMesh at path: %s"), *MeshPath) });
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -106,7 +106,7 @@ FString UGameForgeCharacterLibrary::InspectSkeletalMesh(const FString& ParamsJso
 	// LODs
 	Data->SetNumberField(TEXT("lod_count"), SkelMesh->GetLODNum());
 
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildCharJsonEnvelope(true, Data, {});
 }
 
 FString UGameForgeCharacterLibrary::SpawnCharacterPreviewActor(const FString& ParamsJson)
@@ -115,7 +115,7 @@ FString UGameForgeCharacterLibrary::SpawnCharacterPreviewActor(const FString& Pa
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, JsonObj) || !JsonObj.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 
 	FString MeshPath = JsonObj->GetStringField(TEXT("skeletal_mesh_path"));
@@ -128,13 +128,13 @@ FString UGameForgeCharacterLibrary::SpawnCharacterPreviewActor(const FString& Pa
 	USkeletalMesh* SkelMesh = LoadObject<USkeletalMesh>(nullptr, *MeshPath);
 	if (!SkelMesh)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeletalMesh at path: %s"), *MeshPath) });
+		return BuildCharJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Failed to load USkeletalMesh at path: %s"), *MeshPath) });
 	}
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 	if (!World)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("No active editor world context found") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("No active editor world context found") });
 	}
 
 	// Coordinates
@@ -162,7 +162,7 @@ FString UGameForgeCharacterLibrary::SpawnCharacterPreviewActor(const FString& Pa
 	AActor* SpawnedActor = World->SpawnActor<AActor>(Location, Rotation, SpawnParams);
 	if (!SpawnedActor)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to spawn preview actor in world") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("Failed to spawn preview actor in world") });
 	}
 
 	USkeletalMeshComponent* MeshComp = NewObject<USkeletalMeshComponent>(SpawnedActor, TEXT("CharacterSkeletalMesh"));
@@ -179,7 +179,7 @@ FString UGameForgeCharacterLibrary::SpawnCharacterPreviewActor(const FString& Pa
 	Data->SetNumberField(TEXT("location_y"), Location.Y);
 	Data->SetNumberField(TEXT("location_z"), Location.Z);
 
-	return BuildJsonEnvelope(true, Data, {});
+	return BuildCharJsonEnvelope(true, Data, {});
 }
 
 FString UGameForgeCharacterLibrary::MeasureSkinDeformation(const FString& ParamsJson)
@@ -187,12 +187,12 @@ FString UGameForgeCharacterLibrary::MeasureSkinDeformation(const FString& Params
 	TSharedPtr<FJsonObject> P;
 	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(ParamsJson), P) || !P.IsValid())
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("Failed to parse ParamsJson") });
 	}
 	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, *P->GetStringField(TEXT("skeletal_mesh_path")));
 	if (!Mesh || !Mesh->GetImportedModel() || Mesh->GetImportedModel()->LODModels.Num() == 0)
 	{
-		return BuildJsonEnvelope(false, nullptr, { TEXT("Skeletal mesh (with imported LOD model) not found") });
+		return BuildCharJsonEnvelope(false, nullptr, { TEXT("Skeletal mesh (with imported LOD model) not found") });
 	}
 	const FName BoneName(*P->GetStringField(TEXT("bone_name")));
 	const FString AxisStr = P->GetStringField(TEXT("axis"));
@@ -203,7 +203,7 @@ FString UGameForgeCharacterLibrary::MeasureSkinDeformation(const FString& Params
 	const int32 Bone = Ref.FindBoneIndex(BoneName);
 	if (Bone == INDEX_NONE)
 	{
-		return BuildJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Bone '%s' not in skeleton"), *BoneName.ToString()) });
+		return BuildCharJsonEnvelope(false, nullptr, { FString::Printf(TEXT("Bone '%s' not in skeleton"), *BoneName.ToString()) });
 	}
 	const int32 NumBones = Ref.GetNum();
 	const TArray<FTransform>& Local = Ref.GetRefBonePose();
@@ -293,5 +293,5 @@ FString UGameForgeCharacterLibrary::MeasureSkinDeformation(const FString& Params
 	}
 
 	const bool bOk = Vertices > 0 && BadValues == 0 && SubtreeVerts > 0 && Moved > 0 && MaxOutsideDisp < 0.01;
-	return BuildJsonEnvelope(bOk, Data, bOk ? TArray<FString>() : TArray<FString>{ TEXT("Deformation check failed (see data)") });
+	return BuildCharJsonEnvelope(bOk, Data, bOk ? TArray<FString>() : TArray<FString>{ TEXT("Deformation check failed (see data)") });
 }

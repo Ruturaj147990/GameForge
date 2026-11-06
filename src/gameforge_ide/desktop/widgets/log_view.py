@@ -181,6 +181,11 @@ class LogView(QWidget):
             self._flush_timer.stop()
         super().closeEvent(event)
 
+    def deleteLater(self) -> None:
+        if hasattr(self, "_flush_timer") and self._flush_timer.isActive():
+            self._flush_timer.stop()
+        super().deleteLater()
+
     @Slot()
     def _flush_queue(self) -> None:
         if not self._queue:

@@ -43,7 +43,7 @@
 
 namespace
 {
-	FString MakeJsonString(TSharedPtr<FJsonObject> JsonObj)
+	FString MakeWidgetJsonString(TSharedPtr<FJsonObject> JsonObj)
 	{
 		FString Output;
 		TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
@@ -51,7 +51,7 @@ namespace
 		return Output;
 	}
 
-	FString MakeEnvelope(bool bSuccess, TSharedPtr<FJsonObject> Data, const TArray<FString>& Errors = {}, const TArray<FString>& Warnings = {})
+	FString MakeWidgetEnvelope(bool bSuccess, TSharedPtr<FJsonObject> Data, const TArray<FString>& Errors = {}, const TArray<FString>& Warnings = {})
 	{
 		TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
 		Root->SetBoolField(TEXT("success"), bSuccess);
@@ -79,7 +79,7 @@ namespace
 		}
 		Root->SetArrayField(TEXT("warnings"), WarnVals);
 
-		return MakeJsonString(Root);
+		return MakeWidgetJsonString(Root);
 	}
 
 	UWidgetBlueprint* ResolveWidgetBlueprint(const FString& AssetPath, FString& OutError)
@@ -370,7 +370,7 @@ FString UGameForgeWidgetLibrary::InspectWidgetBlueprint(const FString& AssetPath
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -413,7 +413,7 @@ FString UGameForgeWidgetLibrary::InspectWidgetBlueprint(const FString& AssetPath
 		Data->SetNumberField(TEXT("widget_count"), 0);
 	}
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::ReadbackWidgetTree(const FString& AssetPath)
@@ -422,12 +422,12 @@ FString UGameForgeWidgetLibrary::ReadbackWidgetTree(const FString& AssetPath)
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	if (!BP->WidgetTree)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -450,14 +450,14 @@ FString UGameForgeWidgetLibrary::ReadbackWidgetTree(const FString& AssetPath)
 		Data->SetNumberField(TEXT("widget_count"), 0);
 	}
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::CreateWidgetBlueprint(const FString& AssetPath, const FString& ParentClassName, const FString& RootWidgetClassName)
 {
 	if (AssetPath.IsEmpty())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("AssetPath cannot be empty.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("AssetPath cannot be empty.")});
 	}
 
 	FString PackagePath = AssetPath;
@@ -472,14 +472,14 @@ FString UGameForgeWidgetLibrary::CreateWidgetBlueprint(const FString& AssetPath,
 			TSharedPtr<FJsonObject> ExistsData = MakeShared<FJsonObject>();
 			ExistsData->SetStringField(TEXT("asset_path"), AssetPath);
 			ExistsData->SetBoolField(TEXT("already_existed"), true);
-			return MakeEnvelope(true, ExistsData);
+			return MakeWidgetEnvelope(true, ExistsData);
 		}
 	}
 
 	UPackage* Package = CreatePackage(*PackagePath);
 	if (!Package)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to create package '%s'."), *PackagePath)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to create package '%s'."), *PackagePath)});
 	}
 	Package->FullyLoad();
 
@@ -489,7 +489,7 @@ FString UGameForgeWidgetLibrary::CreateWidgetBlueprint(const FString& AssetPath,
 		TSharedPtr<FJsonObject> ExistsData = MakeShared<FJsonObject>();
 		ExistsData->SetStringField(TEXT("asset_path"), AssetPath);
 		ExistsData->SetBoolField(TEXT("already_existed"), true);
-		return MakeEnvelope(true, ExistsData);
+		return MakeWidgetEnvelope(true, ExistsData);
 	}
 
 	UClass* ParentClass = UUserWidget::StaticClass();
@@ -513,7 +513,7 @@ FString UGameForgeWidgetLibrary::CreateWidgetBlueprint(const FString& AssetPath,
 
 	if (!NewBP)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("FKismetEditorUtilities::CreateBlueprint failed for WidgetBlueprint '%s'."), *AssetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("FKismetEditorUtilities::CreateBlueprint failed for WidgetBlueprint '%s'."), *AssetName)});
 	}
 
 	if (!RootWidgetClassName.IsEmpty() && NewBP->WidgetTree && NewBP->WidgetTree->RootWidget == nullptr)
@@ -544,7 +544,7 @@ FString UGameForgeWidgetLibrary::CreateWidgetBlueprint(const FString& AssetPath,
 	Data->SetStringField(TEXT("parent_class"), ParentClass->GetName());
 	Data->SetBoolField(TEXT("has_root_widget"), NewBP->WidgetTree && NewBP->WidgetTree->RootWidget != nullptr);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::CreateWidget(const FString& AssetPath, const FString& WidgetClassName, const FString& WidgetName, const FString& ParentName)
@@ -553,35 +553,35 @@ FString UGameForgeWidgetLibrary::CreateWidget(const FString& AssetPath, const FS
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	if (!BP->WidgetTree)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
 	}
 
 	UClass* WidgetClass = GetSupportedWidgetClass(WidgetClassName, Error);
 	if (!WidgetClass)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	FName DesiredName = *WidgetName;
 	if (DesiredName.IsNone())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetName cannot be empty.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetName cannot be empty.")});
 	}
 
 	if (BP->WidgetTree->FindWidget(DesiredName) != nullptr)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("A widget with name '%s' already exists in this WidgetTree."), *WidgetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("A widget with name '%s' already exists in this WidgetTree."), *WidgetName)});
 	}
 
 	UWidget* NewWidget = BP->WidgetTree->ConstructWidget<UWidget>(WidgetClass, DesiredName);
 	if (!NewWidget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to construct widget '%s' of class '%s'."), *WidgetName, *WidgetClassName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to construct widget '%s' of class '%s'."), *WidgetName, *WidgetClassName)});
 	}
 	NewWidget->bIsVariable = true;
 
@@ -595,7 +595,7 @@ FString UGameForgeWidgetLibrary::CreateWidget(const FString& AssetPath, const FS
 		}
 		else
 		{
-			return MakeEnvelope(false, nullptr, {TEXT("WidgetTree already has a RootWidget. Specify a ParentName to add as a child.")});
+			return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetTree already has a RootWidget. Specify a ParentName to add as a child.")});
 		}
 	}
 	else
@@ -603,19 +603,19 @@ FString UGameForgeWidgetLibrary::CreateWidget(const FString& AssetPath, const FS
 		UWidget* ParentWidget = BP->WidgetTree->FindWidget(*ParentName);
 		if (!ParentWidget)
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Parent widget '%s' was not found in the WidgetTree."), *ParentName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Parent widget '%s' was not found in the WidgetTree."), *ParentName)});
 		}
 
 		UPanelWidget* Panel = Cast<UPanelWidget>(ParentWidget);
 		if (!Panel)
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Parent widget '%s' is of class '%s', which is not a PanelWidget and cannot hold children."), *ParentName, *ParentWidget->GetClass()->GetName())});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Parent widget '%s' is of class '%s', which is not a PanelWidget and cannot hold children."), *ParentName, *ParentWidget->GetClass()->GetName())});
 		}
 
 		UPanelSlot* Slot = Panel->AddChild(NewWidget);
 		if (!Slot)
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to add child '%s' to panel '%s'."), *WidgetName, *ParentName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to add child '%s' to panel '%s'."), *WidgetName, *ParentName)});
 		}
 		SlotClassName = Slot->GetClass()->GetName();
 	}
@@ -630,7 +630,7 @@ FString UGameForgeWidgetLibrary::CreateWidget(const FString& AssetPath, const FS
 	Data->SetStringField(TEXT("parent_name"), ParentName);
 	Data->SetStringField(TEXT("slot_class"), SlotClassName);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, const FString& WidgetName, const FString& PropertyName, const FString& ValueJson)
@@ -639,25 +639,25 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	if (!BP->WidgetTree)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
 	}
 
 	UWidget* Widget = BP->WidgetTree->FindWidget(*WidgetName);
 	if (!Widget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found."), *WidgetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found."), *WidgetName)});
 	}
 
 	TSharedPtr<FJsonObject> ParsedObj;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ValueJson);
 	if (!FJsonSerializer::Deserialize(Reader, ParsedObj) || !ParsedObj.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to parse ValueJson: '%s'."), *ValueJson)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to parse ValueJson: '%s'."), *ValueJson)});
 	}
 
 	FString PropLower = PropertyName.ToLower();
@@ -713,7 +713,7 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 		}
 		else
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on TextBlock."), *PropertyName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on TextBlock."), *PropertyName)});
 		}
 	}
 	else if (UProgressBar* Bar = Cast<UProgressBar>(Widget))
@@ -733,7 +733,7 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 		}
 		else
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on ProgressBar."), *PropertyName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on ProgressBar."), *PropertyName)});
 		}
 	}
 	else if (UImage* Img = Cast<UImage>(Widget))
@@ -754,7 +754,7 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 		}
 		else
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on Image."), *PropertyName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on Image."), *PropertyName)});
 		}
 	}
 	else if (USizeBox* SB = Cast<USizeBox>(Widget))
@@ -771,7 +771,7 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 		}
 		else
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on SizeBox."), *PropertyName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on SizeBox."), *PropertyName)});
 		}
 	}
 	else if (UButton* Btn = Cast<UButton>(Widget))
@@ -791,12 +791,12 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 		}
 		else
 		{
-			return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on Button."), *PropertyName)});
+			return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on Button."), *PropertyName)});
 		}
 	}
 	else
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on class '%s'."), *PropertyName, *Widget->GetClass()->GetName())});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Property '%s' not supported on class '%s'."), *PropertyName, *Widget->GetClass()->GetName())});
 	}
 
 	FBlueprintEditorUtils::MarkBlueprintAsModified(BP);
@@ -806,7 +806,7 @@ FString UGameForgeWidgetLibrary::SetWidgetProperty(const FString& AssetPath, con
 	Data->SetStringField(TEXT("property_name"), PropertyName);
 	Data->SetBoolField(TEXT("applied"), true);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 namespace
@@ -860,31 +860,31 @@ FString UGameForgeWidgetLibrary::SetWidgetSlotProperty(const FString& AssetPath,
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	if (!BP->WidgetTree)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
 	}
 
 	UWidget* Widget = BP->WidgetTree->FindWidget(*WidgetName);
 	if (!Widget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found."), *WidgetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found."), *WidgetName)});
 	}
 
 	UPanelSlot* Slot = Widget->Slot;
 	if (!Slot)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' has no parent slot."), *WidgetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' has no parent slot."), *WidgetName)});
 	}
 
 	TSharedPtr<FJsonObject> ParsedObj;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(SlotPropertiesJson);
 	if (!FJsonSerializer::Deserialize(Reader, ParsedObj) || !ParsedObj.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to parse SlotPropertiesJson: '%s'."), *SlotPropertiesJson)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to parse SlotPropertiesJson: '%s'."), *SlotPropertiesJson)});
 	}
 
 	TArray<FString> SlotErrors;
@@ -1023,12 +1023,12 @@ FString UGameForgeWidgetLibrary::SetWidgetSlotProperty(const FString& AssetPath,
 	}
 	else
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Slot class '%s' does not support property configuration in V1."), *Slot->GetClass()->GetName())});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Slot class '%s' does not support property configuration in V1."), *Slot->GetClass()->GetName())});
 	}
 
 	if (SlotErrors.Num() > 0)
 	{
-		return MakeEnvelope(false, nullptr, SlotErrors);
+		return MakeWidgetEnvelope(false, nullptr, SlotErrors);
 	}
 
 	FBlueprintEditorUtils::MarkBlueprintAsModified(BP);
@@ -1046,7 +1046,7 @@ FString UGameForgeWidgetLibrary::SetWidgetSlotProperty(const FString& AssetPath,
 			A.Minimum.X, A.Minimum.Y, A.Maximum.X, A.Maximum.Y, Pos.X, Pos.Y, Size.X, Size.Y, Align.X, Align.Y));
 	}
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::RemoveWidget(const FString& AssetPath, const FString& WidgetName)
@@ -1055,18 +1055,18 @@ FString UGameForgeWidgetLibrary::RemoveWidget(const FString& AssetPath, const FS
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	if (!BP->WidgetTree)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
 	}
 
 	UWidget* Widget = BP->WidgetTree->FindWidget(*WidgetName);
 	if (!Widget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found."), *WidgetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found."), *WidgetName)});
 	}
 
 	if (Widget == BP->WidgetTree->RootWidget)
@@ -1088,7 +1088,7 @@ FString UGameForgeWidgetLibrary::RemoveWidget(const FString& AssetPath, const FS
 	Data->SetStringField(TEXT("removed_widget"), WidgetName);
 	Data->SetBoolField(TEXT("removed"), true);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::CompileWidgetBlueprint(const FString& AssetPath)
@@ -1097,7 +1097,7 @@ FString UGameForgeWidgetLibrary::CompileWidgetBlueprint(const FString& AssetPath
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	FKismetEditorUtilities::CompileBlueprint(BP);
@@ -1130,7 +1130,7 @@ FString UGameForgeWidgetLibrary::CompileWidgetBlueprint(const FString& AssetPath
 	Data->SetBoolField(TEXT("compiled_successfully"), bSuccess);
 	Data->SetStringField(TEXT("generated_class"), BP->GeneratedClass ? BP->GeneratedClass->GetPathName() : TEXT(""));
 
-	return MakeEnvelope(bSuccess, Data, bSuccess ? TArray<FString>() : TArray<FString>{TEXT("Widget Blueprint compilation failed with status ") + StatusStr});
+	return MakeWidgetEnvelope(bSuccess, Data, bSuccess ? TArray<FString>() : TArray<FString>{TEXT("Widget Blueprint compilation failed with status ") + StatusStr});
 }
 
 FString UGameForgeWidgetLibrary::SaveWidgetBlueprint(const FString& AssetPath)
@@ -1139,13 +1139,13 @@ FString UGameForgeWidgetLibrary::SaveWidgetBlueprint(const FString& AssetPath)
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	UPackage* Package = BP->GetPackage();
 	if (!Package)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Asset has no outer package.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("Asset has no outer package.")});
 	}
 
 	TArray<UPackage*> PackagesToSave = { Package };
@@ -1157,7 +1157,7 @@ FString UGameForgeWidgetLibrary::SaveWidgetBlueprint(const FString& AssetPath)
 	Data->SetBoolField(TEXT("saved"), bSaved);
 	Data->SetBoolField(TEXT("is_dirty"), Package->IsDirty());
 
-	return MakeEnvelope(bSaved && !Package->IsDirty(), Data);
+	return MakeWidgetEnvelope(bSaved && !Package->IsDirty(), Data);
 }
 
 FString UGameForgeWidgetLibrary::DisplayWidgetInGame(const FString& AssetPath, int32 ZOrder)
@@ -1182,7 +1182,7 @@ FString UGameForgeWidgetLibrary::DisplayWidgetInGame(const FString& AssetPath, i
 
 	if (!PlayWorld)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active PIE / Game World found. Launch PIE before displaying widget.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("No active PIE / Game World found. Launch PIE before displaying widget.")});
 	}
 
 	FString GeneratedClassPath = AssetPath;
@@ -1195,13 +1195,13 @@ FString UGameForgeWidgetLibrary::DisplayWidgetInGame(const FString& AssetPath, i
 	UClass* WidgetClass = StaticLoadClass(UUserWidget::StaticClass(), nullptr, *GeneratedClassPath);
 	if (!WidgetClass)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to load widget class at '%s'."), *GeneratedClassPath)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to load widget class at '%s'."), *GeneratedClassPath)});
 	}
 
 	UUserWidget* CreatedWidget = UUserWidget::CreateWidgetInstance(*PlayWorld, WidgetClass, NAME_None);
 	if (!CreatedWidget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("CreateWidget returned nullptr for class '%s'."), *WidgetClass->GetName())});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("CreateWidget returned nullptr for class '%s'."), *WidgetClass->GetName())});
 	}
 
 	CreatedWidget->AddToViewport(ZOrder);
@@ -1213,7 +1213,7 @@ FString UGameForgeWidgetLibrary::DisplayWidgetInGame(const FString& AssetPath, i
 	Data->SetNumberField(TEXT("viewport_zorder"), ZOrder);
 	Data->SetBoolField(TEXT("is_in_viewport"), CreatedWidget->IsInViewport());
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const FString& WidgetName, const FString& DelegateName, const FString& ActionTypeJson)
@@ -1222,18 +1222,18 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	if (!BP->WidgetTree)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("WidgetBlueprint has no WidgetTree.")});
 	}
 
 	UWidget* Widget = BP->WidgetTree->FindWidget(FName(*WidgetName));
 	if (!Widget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found in WidgetTree."), *WidgetName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Widget '%s' not found in WidgetTree."), *WidgetName)});
 	}
 
 	Widget->bIsVariable = true;
@@ -1252,7 +1252,7 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 
 	if (!EventGraph)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to locate or create EventGraph in WidgetBlueprint.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("Failed to locate or create EventGraph in WidgetBlueprint.")});
 	}
 
 	UK2Node_ComponentBoundEvent* BoundEvent = nullptr;
@@ -1333,7 +1333,7 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 		const FString Action = ActionObj->GetStringField(TEXT("action"));
 		if (Action.IsEmpty())
 		{
-			return MakeEnvelope(false, nullptr, {TEXT("GameplayAction binding requires action_params.action (e.g. HealBoost, ToggleHUD, CloseMenu).")});
+			return MakeWidgetEnvelope(false, nullptr, {TEXT("GameplayAction binding requires action_params.action (e.g. HealBoost, ToggleHUD, CloseMenu).")});
 		}
 		ActionNode = NewObject<UK2Node_CallFunction>(EventGraph);
 		ActionNode->FunctionReference.SetExternalMember(GET_FUNCTION_NAME_CHECKED(UGameForgeGameplayStateComponent, ExecuteMenuActionInWorld),
@@ -1373,7 +1373,7 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 	}
 	else if (!ActionType.IsEmpty())
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Unsupported action_type '%s' (use GameplayAction or PrintString)."), *ActionType)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Unsupported action_type '%s' (use GameplayAction or PrintString)."), *ActionType)});
 	}
 
 	if (ActionNode)
@@ -1382,7 +1382,7 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 		UEdGraphPin* ExecPin = ActionNode->FindPin(UEdGraphSchema_K2::PN_Execute);
 		if (!ThenPin || !ExecPin || !GetDefault<UEdGraphSchema_K2>()->TryCreateConnection(ThenPin, ExecPin))
 		{
-			return MakeEnvelope(false, nullptr, {TEXT("Failed to connect bound event to its action node.")});
+			return MakeWidgetEnvelope(false, nullptr, {TEXT("Failed to connect bound event to its action node.")});
 		}
 	}
 
@@ -1401,7 +1401,7 @@ FString UGameForgeWidgetLibrary::BindWidgetEvent(const FString& AssetPath, const
 	Data->SetStringField(TEXT("compile_status"), BP->Status == BS_UpToDate ? TEXT("UpToDate")
 		: BP->Status == BS_UpToDateWithWarnings ? TEXT("UpToDateWithWarnings") : BP->Status == BS_Error ? TEXT("Error") : TEXT("Dirty"));
 
-	return bCompiled ? MakeEnvelope(true, Data) : MakeEnvelope(false, Data, {TEXT("Widget Blueprint failed to compile after binding.")});
+	return bCompiled ? MakeWidgetEnvelope(true, Data) : MakeWidgetEnvelope(false, Data, {TEXT("Widget Blueprint failed to compile after binding.")});
 }
 
 FString UGameForgeWidgetLibrary::InspectWidgetEvents(const FString& AssetPath)
@@ -1410,7 +1410,7 @@ FString UGameForgeWidgetLibrary::InspectWidgetEvents(const FString& AssetPath)
 	UWidgetBlueprint* BP = ResolveWidgetBlueprint(AssetPath, Error);
 	if (!BP)
 	{
-		return MakeEnvelope(false, nullptr, {Error});
+		return MakeWidgetEnvelope(false, nullptr, {Error});
 	}
 
 	TArray<TSharedPtr<FJsonValue>> EventsArray;
@@ -1449,7 +1449,7 @@ FString UGameForgeWidgetLibrary::InspectWidgetEvents(const FString& AssetPath)
 	Data->SetArrayField(TEXT("bound_events"), EventsArray);
 	Data->SetNumberField(TEXT("event_count"), EventsArray.Num());
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::TriggerButtonClick(const FString& AssetPath, const FString& ButtonName)
@@ -1479,7 +1479,7 @@ FString UGameForgeWidgetLibrary::TriggerButtonClickRealInput(const FString& Asse
 
 	if (!PlayWorld)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
 	UButton* TargetButton = nullptr;
@@ -1505,28 +1505,28 @@ FString UGameForgeWidgetLibrary::TriggerButtonClickRealInput(const FString& Asse
 
 	if (!TargetButton)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' not found on any active viewport widget in PIE world."), *ButtonName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' not found on any active viewport widget in PIE world."), *ButtonName)});
 	}
 
 	// 1. Verify visibility & hit-test eligibility (both owning widget container and button)
 	if (OwningWidget && (OwningWidget->GetVisibility() == ESlateVisibility::Collapsed || OwningWidget->GetVisibility() == ESlateVisibility::Hidden))
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Owning widget '%s' is not visible or hit-test eligible (visibility: %s)."), *OwningWidget->GetName(), *UEnum::GetValueAsString(OwningWidget->GetVisibility()))});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Owning widget '%s' is not visible or hit-test eligible (visibility: %s)."), *OwningWidget->GetName(), *UEnum::GetValueAsString(OwningWidget->GetVisibility()))});
 	}
 	if (!TargetButton->IsVisible() || TargetButton->GetVisibility() != ESlateVisibility::Visible)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' is not visible or hit-test eligible (visibility: %s)."), *ButtonName, *UEnum::GetValueAsString(TargetButton->GetVisibility()))});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' is not visible or hit-test eligible (visibility: %s)."), *ButtonName, *UEnum::GetValueAsString(TargetButton->GetVisibility()))});
 	}
 	if (!TargetButton->GetIsEnabled())
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' is disabled."), *ButtonName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' is disabled."), *ButtonName)});
 	}
 
 	// 2. Query Slate cached geometry and calculate absolute pointer coordinates
 	TSharedPtr<SWidget> SlateWidget = TargetButton->GetCachedWidget();
 	if (!SlateWidget.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' has no live Slate widget (not yet painted)."), *ButtonName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' has no live Slate widget (not yet painted)."), *ButtonName)});
 	}
 	FGeometry Geometry = SlateWidget->GetTickSpaceGeometry();
 	FVector2D LocalCenter = Geometry.GetLocalSize() * 0.5f;
@@ -1570,7 +1570,7 @@ FString UGameForgeWidgetLibrary::TriggerButtonClickRealInput(const FString& Asse
 
 	if (!bHitPathContainsButton)
 	{
-		return MakeEnvelope(false, HitDiag, {FString::Printf(TEXT("Hit-test at (%.1f, %.1f) does not reach button '%s' (topmost: %s)."),
+		return MakeWidgetEnvelope(false, HitDiag, {FString::Printf(TEXT("Hit-test at (%.1f, %.1f) does not reach button '%s' (topmost: %s)."),
 			AbsoluteCenter.X, AbsoluteCenter.Y, *ButtonName, *HitDiag->GetStringField(TEXT("topmost_hit_widget")))});
 	}
 
@@ -1615,10 +1615,10 @@ FString UGameForgeWidgetLibrary::TriggerButtonClickRealInput(const FString& Asse
 
 	if (OnClickedCount != 1)
 	{
-		return MakeEnvelope(false, Data, {FString::Printf(TEXT("Routed click reached '%s' but OnClicked fired %d times (expected exactly 1)."),
+		return MakeWidgetEnvelope(false, Data, {FString::Printf(TEXT("Routed click reached '%s' but OnClicked fired %d times (expected exactly 1)."),
 			*ButtonName, OnClickedCount)});
 	}
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::TriggerButtonDelegateDiagnostic(const FString& AssetPath, const FString& ButtonName)
@@ -1642,7 +1642,7 @@ FString UGameForgeWidgetLibrary::TriggerButtonDelegateDiagnostic(const FString& 
 
 	if (!PlayWorld)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
 	UButton* TargetButton = nullptr;
@@ -1668,7 +1668,7 @@ FString UGameForgeWidgetLibrary::TriggerButtonDelegateDiagnostic(const FString& 
 
 	if (!TargetButton)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' not found on any active viewport widget."), *ButtonName)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Button '%s' not found on any active viewport widget."), *ButtonName)});
 	}
 
 	TargetButton->OnClicked.Broadcast();
@@ -1683,7 +1683,7 @@ FString UGameForgeWidgetLibrary::TriggerButtonDelegateDiagnostic(const FString& 
 	Data->SetBoolField(TEXT("slate_input_routed"), false);
 	Data->SetStringField(TEXT("warning"), TEXT("Direct delegate invocation diagnostic only; does not establish real Slate input routing or UI hit-testing."));
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::GetWidgetRuntimeState(const FString& AssetPath)
@@ -1707,7 +1707,7 @@ FString UGameForgeWidgetLibrary::GetWidgetRuntimeState(const FString& AssetPath)
 
 	if (!PlayWorld)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
 	FString BaseName = FPaths::GetBaseFilename(AssetPath);
@@ -1728,7 +1728,7 @@ FString UGameForgeWidgetLibrary::GetWidgetRuntimeState(const FString& AssetPath)
 
 	if (!TargetWidget)
 	{
-		return MakeEnvelope(false, nullptr, {FString::Printf(TEXT("Active widget instance for '%s' not found in viewport."), *AssetPath)});
+		return MakeWidgetEnvelope(false, nullptr, {FString::Printf(TEXT("Active widget instance for '%s' not found in viewport."), *AssetPath)});
 	}
 
 	TSharedPtr<FJsonObject> WidgetsMap = MakeShared<FJsonObject>();
@@ -1772,7 +1772,7 @@ FString UGameForgeWidgetLibrary::GetWidgetRuntimeState(const FString& AssetPath)
 	Data->SetBoolField(TEXT("is_in_viewport"), TargetWidget->IsInViewport());
 	Data->SetObjectField(TEXT("widgets"), WidgetsMap);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::GetGameplayState()
@@ -1796,14 +1796,14 @@ FString UGameForgeWidgetLibrary::GetGameplayState()
 
 	if (!PlayWorld)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
 	UGameForgeGameplayStateComponent* Comp = UGameForgeGameplayStateComponent::FindOrCreateInWorld(PlayWorld);
 
 	if (!Comp)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to locate or spawn UGameForgeGameplayStateComponent in PIE world.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("Failed to locate or spawn UGameForgeGameplayStateComponent in PIE world.")});
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -1814,7 +1814,7 @@ FString UGameForgeWidgetLibrary::GetGameplayState()
 	Data->SetStringField(TEXT("active_menu_state"), Comp->ActiveMenuState);
 	Data->SetStringField(TEXT("last_executed_action"), Comp->LastExecutedAction);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 FString UGameForgeWidgetLibrary::ModifyGameplayState(float DeltaHealth, float DeltaStamina, const FString& MenuAction)
@@ -1838,14 +1838,14 @@ FString UGameForgeWidgetLibrary::ModifyGameplayState(float DeltaHealth, float De
 
 	if (!PlayWorld)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("No active PIE world found.")});
 	}
 
 	UGameForgeGameplayStateComponent* Comp = UGameForgeGameplayStateComponent::FindOrCreateInWorld(PlayWorld);
 
 	if (!Comp)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to locate or spawn UGameForgeGameplayStateComponent in PIE world.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("Failed to locate or spawn UGameForgeGameplayStateComponent in PIE world.")});
 	}
 
 	float BeforeH = Comp->Health;
@@ -1880,7 +1880,7 @@ FString UGameForgeWidgetLibrary::ModifyGameplayState(float DeltaHealth, float De
 	Data->SetStringField(TEXT("last_executed_action"), Comp->LastExecutedAction);
 	Data->SetNumberField(TEXT("updated_widgets_count"), UpdatedWidgets);
 
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }
 
 
@@ -1888,12 +1888,12 @@ FString UGameForgeWidgetLibrary::CaptureViewportWithUI(const FString& OutputPath
 {
 	if (OutputPath.IsEmpty())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("OutputPath is required.")});
+		return MakeWidgetEnvelope(false, nullptr, {TEXT("OutputPath is required.")});
 	}
 	FScreenshotRequest::RequestScreenshot(OutputPath, /*bShowUI=*/true, /*bAddFilenameSuffix=*/false);
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("requested_path"), OutputPath);
 	Data->SetBoolField(TEXT("show_ui"), true);
 	Data->SetBoolField(TEXT("async"), true);
-	return MakeEnvelope(true, Data);
+	return MakeWidgetEnvelope(true, Data);
 }

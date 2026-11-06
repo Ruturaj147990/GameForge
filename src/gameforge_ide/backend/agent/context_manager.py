@@ -218,30 +218,23 @@ class ContextManager:
             f"{files_note}"
         )
 
-        capabilities_manifest = (
-            "=== GAMEFORGE RUNTIME CAPABILITIES ===\n"
-            "You are the central reasoning engine of GameForge IDE, an autonomous game development and software engineering environment.\n"
-            "You are directly connected to the following verified runtime capabilities:\n"
-            "- Filesystem & Code Editing: Inspect directories, read source files, propose atomic diffs, write and overwrite files, verify disk contents, and compute SHA-256 digests with full rollback tracking.\n"
-            "- Unreal Engine 5.7 Integration: Local loopback IPC bridge to Unreal Editor (unreal_editor), UBT compilation (unreal_build), automated test execution (unreal_run_tests), and standalone packaging (unreal_package).\n"
-            "- Autonomous 11-Stage Forge Pipeline: Full prompt-to-game creation pipeline (design, scaffold, build_editor, content, assemble_level_1, scenario_gen, automation, package, scenarios, review, report) with automatic error repair (RepairEngine).\n"
-            "- Execution Gateway: Allowlisted shell-free command runner (run_command) with strict boundary containment and task autonomy enforcement (Manual, Auto-Edit, Agentic).\n"
-            "TRUTHFULNESS & CAPABILITY MANDATE:\n"
-            "- NEVER state or imply that you are 'only an AI text assistant', that you 'cannot access the filesystem', that you 'cannot compile code', or that you 'cannot run Unreal Engine pipelines'. You have direct access to these capabilities through GameForge runtime tools.\n"
-            "- When an actionable request is submitted, choose and execute the appropriate tools.\n"
-            "- If a requested tool is missing, report the specific missing tool or service rather than claiming a general inability to act.\n"
-        )
+        from ..models.capability import RuntimeCapabilityRegistry
+        cap_registry = RuntimeCapabilityRegistry(self.workspace_root)
+        capabilities_manifest = cap_registry.format_prompt_block()
 
         if not include_tools or not tools_description:
             return (
-                f"{base_header}\n"
-                f"{capabilities_manifest}\n"
-                "=== CONVERSATIONAL MODE ===\n"
+                f"{base_header}\n\n"
+                f"{capabilities_manifest}\n\n"
+                "=== CONVERSATIONAL & CAPABILITY INQUIRY MODE ===\n"
                 "The user is asking an informational, architectural, or explanatory question.\n"
                 "Respond conversationally and directly in clean markdown.\n"
                 "Answer questions about game mechanics, C++, Unreal Engine architecture, or GameForge capabilities accurately.\n"
-                "If the user asks about your capabilities, describe the GameForge runtime capabilities listed above truthfully.\n"
-                "Do not emit tool calls or raw JSON blocks in conversational mode."
+                "TRUTHFUL CAPABILITY RULES:\n"
+                "- If the user asks whether you can access files, run commands, compile code, build games, or execute tests, answer YES truthfully.\n"
+                "- Explain that GameForge IDE provides you with direct access to runtime tools to inspect and modify files, build projects, and package games.\n"
+                "- NEVER produce false refusal disclaimers claiming you are a text-only assistant or that you cannot access files or execute processes.\n"
+                "- Do not emit raw JSON tool call blocks when the user is asking an informational question."
             )
 
         return (

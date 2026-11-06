@@ -8,7 +8,9 @@ and intelligent scroll tracking.
 
 from __future__ import annotations
 
+import html
 import json
+import re
 import time
 from pathlib import Path
 from typing import Optional
@@ -37,6 +39,12 @@ from ..services.agent_service import AgentService
 from .approval_card import ApprovalCard
 from .diff_card import DiffApprovalCard, FileChangedNotification
 from .plan_card import PlanCard
+from .activity_card import (
+    StatusActivityItem,
+    ToolActivityItem,
+    format_target_path,
+    format_tool_activity,
+)
 from ...backend.models.modes import AutonomyProfile, TaskMode
 from ..styles import tokens
 from ..styles.dark_theme import theme_color, theme_stylesheet
@@ -104,6 +112,18 @@ class _MessageBubble(QFrame):
         }
         li {
             margin: 2px 0;
+        }
+        blockquote {
+            border-left: 3px solid #7c3aed;
+            margin: 6px 0 6px 6px;
+            padding-left: 8px;
+            color: #9d95b0;
+            font-style: italic;
+        }
+        hr {
+            border: 0;
+            border-top: 1px solid #231c34;
+            margin: 8px 0;
         }
         a {
             color: #7c3aed;
@@ -209,11 +229,121 @@ class _MessageBubble(QFrame):
         for widget in [self, *self.findChildren(QWidget)]:
             widget.setProperty("gameforgeTheme", active_theme or "dark")
 
+    @staticmethod
+    def _markdown_to_html(text: str) -> str:
+        blocks = []
+        def sub_block(m):
+            code = m.group(2)
+            escaped = html.escape(code.rstrip())
+            idx = len(blocks)
+            blocks.append(f"<pre><code>{escaped}</code></pre>")
+            return f"___GF_CODE_BLOCK_{idx}___"
+
+        pattern = r"```([a-zA-Z0-9_\-\+]*)[^\S\r\n]*\n(.*?)```"
+        text_with_blocks = re.sub(pattern, sub_block, text, flags=re.DOTALL)
+
+        # Handle unclosed/trailing code block during active streaming
+        unclosed_match = re.search(r"```([a-zA-Z0-9_\-\+]*)(?:[^\S\r\n]*\n(.*))?$", text_with_blocks, flags=re.DOTALL)
+        if unclosed_match:
+            code_content = unclosed_match.group(2) or ""
+            escaped = html.escape(code_content)
+            idx = len(blocks)
+            blocks.append(f"<pre><code>{escaped}</code></pre>")
+            text_with_blocks = text_with_blocks[:unclosed_match.start()] + f"___GF_CODE_BLOCK_{idx}___"
+
+        def _format_inline(raw: str) -> str:
+            res = html.escape(raw)
+            # inline code
+            res = re.sub(r"`([^`]+)`", r"<code>\1</code>", res)
+            # bold
+            res = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", res)
+            res = re.sub(r"__([^_]+)__", r"<b>\1</b>", res)
+            # links
+            res = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', res)
+            return res
+
+        lines = text_with_blocks.split("\n")
+        out = []
+        in_ul = False
+        in_ol = False
+
+        def _flush_lists():
+            nonlocal in_ul, in_ol
+            if in_ul:
+                out.append("</ul>")
+                in_ul = False
+            if in_ol:
+                out.append("</ol>")
+                in_ol = False
+
+        for line in lines:
+            if "___GF_CODE_BLOCK_" in line:
+                _flush_lists()
+                out.append(line)
+                continue
+
+            s = line.strip()
+            if not s:
+                _flush_lists()
+                out.append("<p></p>")
+                continue
+
+            if s in ("---", "***", "___"):
+                _flush_lists()
+                out.append("<hr>")
+                continue
+
+            if s.startswith("> "):
+                _flush_lists()
+                out.append(f"<blockquote>{_format_inline(s[2:])}</blockquote>")
+                continue
+
+            if s.startswith(("- ", "* ")):
+                if in_ol:
+                    out.append("</ol>")
+                    in_ol = False
+                if not in_ul:
+                    out.append("<ul>")
+                    in_ul = True
+                out.append(f"<li>{_format_inline(s[2:])}</li>")
+                continue
+
+            ol_match = re.match(r"^(\d+)\.\s+(.*)$", s)
+            if ol_match:
+                if in_ul:
+                    out.append("</ul>")
+                    in_ul = False
+                if not in_ol:
+                    out.append("<ol>")
+                    in_ol = True
+                out.append(f"<li>{_format_inline(ol_match.group(2))}</li>")
+                continue
+
+            _flush_lists()
+
+            if s.startswith("#### "):
+                out.append(f"<h5>{html.escape(s[5:])}</h5>")
+            elif s.startswith("### "):
+                out.append(f"<h4>{html.escape(s[4:])}</h4>")
+            elif s.startswith("## "):
+                out.append(f"<h3>{html.escape(s[3:])}</h3>")
+            elif s.startswith("# "):
+                out.append(f"<h2>{html.escape(s[2:])}</h2>")
+            else:
+                out.append(f"<p>{_format_inline(line)}</p>")
+
+        _flush_lists()
+
+        html_out = "\n".join(out)
+        for idx, b in enumerate(blocks):
+            html_out = html_out.replace(f"___GF_CODE_BLOCK_{idx}___", b)
+        return html_out
+
     def _render_text(self, text: str) -> None:
         self._raw_text = text
-        # If it contains markdown indicators, render markdown; else plain text
+        # If it contains markdown indicators, render rich high-contrast HTML; else plain text
         if any(tok in text for tok in ("```", "#", "*", "_", "`", "[", "\n")):
-            self._content.setMarkdown(text)
+            self._content.setHtml(self._markdown_to_html(text))
         else:
             self._content.setPlainText(text)
         self._adjust_height()
@@ -254,7 +384,13 @@ class _MessageBubble(QFrame):
         QApplication.clipboard().setText(self._raw_text)
         if hasattr(self, "_btn_copy"):
             self._btn_copy.setText("Copied! ✓")
-            QTimer.singleShot(1500, lambda: self._btn_copy.setText("Copy") if hasattr(self, "_btn_copy") else None)
+            def _reset_btn():
+                try:
+                    if hasattr(self, "_btn_copy") and self._btn_copy:
+                        self._btn_copy.setText("Copy")
+                except (RuntimeError, Exception):
+                    pass
+            QTimer.singleShot(1500, _reset_btn)
 
 
 # ── Status indicator widget ────────────────────────────────────────────────────
@@ -469,6 +605,7 @@ class ChatPanel(QWidget):
     action_finished = Signal(str, dict)
     slash_command_executed = Signal(str, str)
     model_changed = Signal(str)
+    models_loaded = Signal(list)
     unreal_status_changed = Signal(bool, str, str)
     open_project_requested = Signal()
 
@@ -488,6 +625,8 @@ class ChatPanel(QWidget):
         self._workspace = workspace_root or getattr(agent_service, "workspace_root", None)
         self._session_id: Optional[str] = None
         self._active_bubble: Optional[_MessageBubble] = None
+        self._active_tool_item: Optional[ToolActivityItem] = None
+        self._active_status_item: Optional[StatusActivityItem] = None
         self._start_screen: Optional[_StartScreen] = None
         self._current_model = get_settings().model_for("chat")
         self._last_prompt = ""
@@ -521,10 +660,32 @@ class ChatPanel(QWidget):
         self._check_unreal_context_sync()
 
     def deleteLater(self) -> None:
-        """Cleanly terminate background runner and any internally-owned AgentService."""
+        """Cleanly terminate background runner, timers, and any internally-owned AgentService."""
+        try:
+            if hasattr(self, "_ue_sync_timer") and self._ue_sync_timer.isActive():
+                self._ue_sync_timer.stop()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_status_bar") and hasattr(self._status_bar, "_pulse_timer") and self._status_bar._pulse_timer.isActive():
+                self._status_bar._pulse_timer.stop()
+        except Exception:
+            pass
         try:
             if getattr(self, "_owns_agent", False) and hasattr(self, "_agent") and self._agent:
                 self._agent.shutdown()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_active_tool_item") and self._active_tool_item:
+                self._active_tool_item.deleteLater()
+                self._active_tool_item = None
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "_active_status_item") and self._active_status_item:
+                self._active_status_item.deleteLater()
+                self._active_status_item = None
         except Exception:
             pass
         try:
@@ -567,7 +728,9 @@ class ChatPanel(QWidget):
         self.task_mode_combo.setAccessibleName("Task Approach Mode Selector")
         self.task_mode_combo.setToolTip("Task Approach: Planning (deliberative with interactive plan) vs Fast (immediate autonomous execution)")
         self.task_mode_combo.addItems(["Planning", "Fast"])
-        self.task_mode_combo.setCurrentText("Planning")
+        cfg_settings = get_settings()
+        default_mode = "Planning" if getattr(cfg_settings, "default_task_mode", "planning").lower() == "planning" else "Fast"
+        self.task_mode_combo.setCurrentText(default_mode)
         self.task_mode_combo.setStyleSheet(f"""
             QComboBox#task_mode_combo {{
                 background-color: {tokens.BG_SURFACE};
@@ -597,7 +760,9 @@ class ChatPanel(QWidget):
         self.autonomy_combo.setAccessibleName("Autonomy Profile Selector")
         self.autonomy_combo.setToolTip("Autonomy Profile: Manual (explicit approval for edits/commands), Auto-Edit (auto file edits), Agentic (fully autonomous safe ops)")
         self.autonomy_combo.addItems(["Manual", "Auto-Edit", "Agentic"])
-        self.autonomy_combo.setCurrentText("Agentic")
+        default_autonomy_raw = getattr(cfg_settings, "default_autonomy_profile", "agentic").lower()
+        default_autonomy = "Manual" if default_autonomy_raw == "manual" else ("Auto-Edit" if "auto" in default_autonomy_raw else "Agentic")
+        self.autonomy_combo.setCurrentText(default_autonomy)
         self.autonomy_combo.setStyleSheet(f"""
             QComboBox#autonomy_combo {{
                 background-color: {tokens.BG_SURFACE};
@@ -809,6 +974,10 @@ class ChatPanel(QWidget):
         finally:
             self._model_combo.blockSignals(False)
         self.model_changed.emit(self._current_model)
+        names = [m.get("id", m.get("name", "unknown")) for m in models]
+        if not names and self._current_model:
+            names = [self._current_model]
+        self.models_loaded.emit(names)
 
     def set_model_server_available(self, available: bool) -> None:
         """Called with the main window's real Ollama health check. (list_models() returns the configured roster
@@ -1135,6 +1304,8 @@ class ChatPanel(QWidget):
             self._status_bar.set_ready()
         return ok
 
+    _on_prompt_submitted = send_prompt  # Compatibility alias for studio routing
+
     @Slot()
     def _on_send(self) -> None:
         # Preserve the exact composer payload; whitespace-only detection must
@@ -1173,6 +1344,7 @@ class ChatPanel(QWidget):
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
         self._tokens_streamed_in_turn = True
+        self._finalize_status_activity()
 
         if not self._active_bubble:
             self._token_buffer += token
@@ -1339,6 +1511,14 @@ class ChatPanel(QWidget):
             bubble.setVisible(False)
             bubble.deleteLater()
 
+    def _finalize_status_activity(self) -> None:
+        if getattr(self, "_active_status_item", None):
+            try:
+                self._active_status_item.finalise()
+            except Exception:
+                pass
+            self._active_status_item = None
+
     @Slot(str, dict)
     def _on_status(self, status: str, _meta: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
@@ -1350,6 +1530,7 @@ class ChatPanel(QWidget):
                 else:
                     self._active_bubble.finalise()
                 self._active_bubble = None
+            self._finalize_status_activity()
             self._add_approval_card(_meta["approval"])
         elif status == "READY" and isinstance(_meta.get("card"), dict):
             if self._active_bubble:
@@ -1358,7 +1539,24 @@ class ChatPanel(QWidget):
                 else:
                     self._active_bubble.finalise()
                 self._active_bubble = None
+            self._finalize_status_activity()
             # In GameForge 1.0, all tasks execute autonomously in chat; retired open_design cards are omitted
+        elif status in ("THINKING", "PLANNING", "REPAIRING"):
+            if self._active_bubble:
+                if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                    self._remove_bubble(self._active_bubble)
+                else:
+                    self._active_bubble.finalise()
+                self._active_bubble = None
+            if not getattr(self, "_active_status_item", None):
+                s_item = StatusActivityItem(status.lower(), _meta, parent=self)
+                self._msg_layout.insertWidget(self._msg_layout.count() - 1, s_item)
+                self._active_status_item = s_item
+                self._scroll_to_bottom()
+            else:
+                self._active_status_item.meta.update(_meta)
+                self._active_status_item.status_kind = status.lower()
+                self._active_status_item._refresh_display()
         omitted = int(_meta.get("omitted_history_messages", 0) or 0)
         if status == "PLANNING" and omitted:
             used = _meta.get("estimated_input_tokens", "?")
@@ -1381,23 +1579,31 @@ class ChatPanel(QWidget):
             else:
                 self._active_bubble.finalise()
             self._active_bubble = None
-        summary = f"🔧 **Tool Call:** `{tool_name}`"
-        if args:
-            summary += f"\n```json\n{json.dumps(args, indent=2)}\n```"
-        self._add_bubble("tool", summary)
+        self._finalize_status_activity()
+        if getattr(self, "_active_tool_item", None):
+            try:
+                self._active_tool_item.finalise()
+            except Exception:
+                pass
+            self._active_tool_item = None
+        item = ToolActivityItem(tool_name, args, parent=self)
+        self._msg_layout.insertWidget(self._msg_layout.count() - 1, item)
+        self._active_tool_item = item
+        self._scroll_to_bottom()
 
     @Slot(str, dict)
     def _on_tool_result(self, tool_name: str, result: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
-        status = result.get("status", "?")
-        err = result.get("error", "")
-        summary = f"✅ **Tool `{tool_name}` → `{status}`**"
-        if err:
-            summary += f"\n> ⚠️ Error: {err}"
-        self._add_bubble("tool", summary)
+        if getattr(self, "_active_tool_item", None) and self._active_tool_item.tool_name == tool_name:
+            self._active_tool_item.set_result(result)
+            self._active_tool_item = None
+        else:
+            item = ToolActivityItem(tool_name, {}, result=result, parent=self)
+            self._msg_layout.insertWidget(self._msg_layout.count() - 1, item)
         # Start new assistant bubble for continued response
         self._active_bubble = self._add_bubble("assistant", "")
+        self._scroll_to_bottom()
 
     @Slot(dict)
     def _on_plan_received(self, plan_data: dict) -> None:
@@ -1501,6 +1707,10 @@ class ChatPanel(QWidget):
     @Slot(str)
     def _on_error(self, error: str) -> None:
         self._tokens_streamed_in_turn = False
+        if getattr(self, "_active_tool_item", None):
+            self._active_tool_item.finalise()
+            self._active_tool_item = None
+        self._finalize_status_activity()
         if self._ignore_active_task_events or self._agent.is_stopping:
             self._ignore_active_task_events = False
             self._active_bubble = None
@@ -1522,6 +1732,10 @@ class ChatPanel(QWidget):
 
     @Slot(str)
     def _on_done(self, _full_text: str) -> None:
+        if getattr(self, "_active_tool_item", None):
+            self._active_tool_item.finalise()
+            self._active_tool_item = None
+        self._finalize_status_activity()
         if self._ignore_active_task_events:
             self._ignore_active_task_events = False
             self._active_bubble = None
@@ -1575,14 +1789,24 @@ class ChatPanel(QWidget):
 
     def set_model(self, model_name: str) -> None:
         """Programmatically switch active model and synchronize UI."""
-        if not model_name or model_name == self._current_model:
+        if not model_name:
             return
+        self._current_model = model_name
+        self._status_bar.set_model(model_name)
+        if self._session_id:
+            try:
+                self._agent.set_session_model(self._session_id, model_name)
+            except Exception:
+                pass
         idx = self._model_combo.findText(model_name)
+        self._model_combo.blockSignals(True)
         if idx >= 0:
             self._model_combo.setCurrentIndex(idx)
         else:
             self._model_combo.addItem(model_name)
             self._model_combo.setCurrentText(model_name)
+        self._model_combo.blockSignals(False)
+        self.model_changed.emit(model_name)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1610,8 +1834,13 @@ class ChatPanel(QWidget):
 
         def _do_scroll():
             self._scroll_pending = False
-            sb = self._scroll_area.verticalScrollBar()
-            sb.setValue(sb.maximum())
+            try:
+                if hasattr(self, "_scroll_area") and self._scroll_area:
+                    sb = self._scroll_area.verticalScrollBar()
+                    if sb:
+                        sb.setValue(sb.maximum())
+            except (RuntimeError, Exception):
+                pass
 
         QTimer.singleShot(20, _do_scroll)
 
@@ -1635,6 +1864,8 @@ class ChatPanel(QWidget):
                 w.setParent(None)
                 w.deleteLater()
         self._active_bubble = None
+        self._active_tool_item = None
+        self._active_status_item = None
         self._plan_cards.clear()
         self._cards.clear()
         self._status_bar.set_ready()
@@ -1643,6 +1874,8 @@ class ChatPanel(QWidget):
     def _new_session(self) -> None:
         self._token_buffer = ""
         self._tokens_streamed_in_turn = False
+        self._active_tool_item = None
+        self._active_status_item = None
         try:
             if self._agent.is_busy:
                 self._ignore_active_task_events = True

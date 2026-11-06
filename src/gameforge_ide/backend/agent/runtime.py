@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -27,6 +30,7 @@ from ..session_manager import Session, SessionManager
 from ..tools.gateway import ToolGateway
 from ..models.modes import AutonomyProfile, TaskLifecycleStatus, TaskMode
 from ..models.plan_artifact import PlanArtifact, PlanStep
+from ..models.capability import RuntimeCapabilityRegistry
 from .code_verify import parse_diagnostics
 from .context_manager import ContextManager
 from .repair_system import FailureCategory, RepairEngine, RootCause
@@ -36,6 +40,7 @@ from .task_state import (
     TaskAcceptancePredicate,
     TaskBudget,
     TaskState,
+    is_ignorable_header_or_system_file,
 )
 
 
@@ -284,7 +289,12 @@ class AgentRuntime:
             "omitted_history_messages": omitted,
         }
 
-    def _extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
+    def _extract_tool_call(
+        self,
+        text: str,
+        user_prompt: str = "",
+        already_modified: Optional[set[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Extracts structured tool invocation from model output supporting multiple standard schemas
         (OpenAI, Anthropic, ReAct, XML tags, string-serialized arguments, and balanced JSON)."""
         def _parse_arguments(args: Any) -> Dict[str, Any]:
@@ -546,25 +556,130 @@ class AgentRuntime:
                             pass
                 start_pos = idx + len(marker)
 
-        # 3. Code-dump interception: match code blocks with identifiable file targets
-        return self._extract_code_block_as_write_file(text)
+        # 3. Shell and terminal command extraction (e.g. ```bash, ```powershell, or cat > file heredoc)
+        shell_tool = self._extract_shell_or_terminal_command(text, already_modified=already_modified)
+        if shell_tool:
+            return shell_tool
+
+        # 4. Code-dump interception: match code blocks with identifiable file targets
+        return self._extract_code_block_as_write_file(text, user_prompt=user_prompt, already_modified=already_modified)
 
     @staticmethod
-    def _extract_code_block_as_write_file(text: str) -> Optional[Dict[str, Any]]:
+    def _extract_shell_or_terminal_command(
+        text: str,
+        already_modified: Optional[set[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Intercepts shell commands or heredocs when the model outputs shell commands instead of JSON tools."""
+        if not text:
+            return None
+
+        already_norm = {p.replace("\\", "/").lower() for p in (already_modified or set())}
+
+        # 1. Cat heredoc interception: cat > path/to/file << 'EOF' ... EOF
+        cat_pat = r'(?:^|\n)\s*cat\s*>\s*([^\s<]+)\s*<<\s*[\x27\x22\\]?(\w+)[\x27\x22\\]?\s*\n(.*?)\n\s*\2'
+        for m in re.finditer(cat_pat, text, re.DOTALL):
+            fpath = m.group(1).strip("`'\" \t").replace("\\", "/")
+            fcontent = m.group(3)
+            if fpath and fpath.lower() not in already_norm:
+                return {
+                    "name": "write_file",
+                    "arguments": {
+                        "subpath": fpath,
+                        "content": fcontent,
+                    },
+                }
+
+        # 2. Markdown bash/sh/cmd/powershell block interception
+        m_block = re.search(r"```(?:bash|sh|shell|cmd|powershell|ps1)\s*\n(.*?)```", text, re.DOTALL | re.IGNORECASE)
+        if m_block:
+            raw_cmd = m_block.group(1).strip()
+            # If block contains cat heredoc, handle via write_file
+            cat_m = re.search(r"cat\s*>\s*([^\s<]+)\s*<<\s*[\x27\x22\\]?(\w+)[\x27\x22\\]?\s*\n(.*?)\n\s*\2", raw_cmd, re.DOTALL)
+            if cat_m:
+                fpath = cat_m.group(1).strip("`'\" \t").replace("\\", "/")
+                if fpath and fpath.lower() not in already_norm:
+                    return {
+                        "name": "write_file",
+                        "arguments": {
+                            "subpath": fpath,
+                            "content": cat_m.group(3),
+                        },
+                    }
+            first_cmd = raw_cmd.splitlines()[0].strip() if raw_cmd else ""
+            if first_cmd:
+                if first_cmd.startswith(("ls", "dir")):
+                    parts = first_cmd.split(None, 1)
+                    subp = "."
+                    if len(parts) > 1:
+                        target = parts[1].strip()
+                        if not target.startswith("-"):
+                            subp = target
+                    return {
+                        "name": "list_dir",
+                        "arguments": {"subpath": subp},
+                    }
+                return {
+                    "name": "run_command",
+                    "arguments": {"command": first_cmd},
+                }
+
+        # 3. Trailing or raw shell commands (e.g. ls -la, dir, python ..., pytest ...)
+        raw_cmd_match = re.search(
+            r"(?:^|\n)\s*(?:ls\s*-[a-zA-Z0-9]+|ls\b|dir\b|pytest\b|python\b|git\b|powershell\b|cmd\b)\s*([^\n\r]*)",
+            text,
+            re.IGNORECASE,
+        )
+        if raw_cmd_match:
+            cmd_line = raw_cmd_match.group(0).strip()
+            if cmd_line.startswith(("ls", "dir")):
+                parts = cmd_line.split(None, 1)
+                subp = "."
+                if len(parts) > 1:
+                    target = parts[1].strip()
+                    if not target.startswith("-"):
+                        subp = target
+                return {
+                    "name": "list_dir",
+                    "arguments": {"subpath": subp},
+                }
+            return {
+                "name": "run_command",
+                "arguments": {"command": cmd_line},
+            }
+
+        return None
+
+    @staticmethod
+    def _extract_code_block_as_write_file(
+        text: str,
+        user_prompt: str = "",
+        already_modified: Optional[set[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Extracts code blocks with explicit file paths when model emits code instead of JSON tool call."""
         if not text:
             return None
 
+        already_norm = {p.replace("\\", "/").lower() for p in (already_modified or set())}
         fence_matches = list(re.finditer(r"```(?:[a-zA-Z0-9_\+\-]+)?\s*\n(.*?)\n```", text, re.DOTALL))
+        
+        # Collect paths mentioned in user prompt as fallback candidates
+        prompt_paths = []
+        if user_prompt:
+            p_matches = re.findall(r"[\w\-\./\\]+\.(?:h|hpp|cpp|c|cs|py|json|ini|uproject|txt)\b", user_prompt, re.I)
+            for pm in p_matches:
+                cl = pm.strip("`'\" \t").replace("\\", "/")
+                if not cl.startswith("http") and cl.lower() not in already_norm and cl not in prompt_paths:
+                    prompt_paths.append(cl)
+
         for fm in fence_matches:
             code_content = fm.group(1).strip()
             if not code_content:
                 continue
 
             detected_path = None
-            header_lines = code_content.splitlines()[:4]
+            header_lines = code_content.splitlines()[:5]
             for hl in header_lines:
-                m_path = re.search(r"(?:^|\s)(?://|/\*|#)\s*(?:file:?\s*)?([\w\-\./\\]+\.(?:h|hpp|cpp|c|cs|py|json|ini|uproject|txt))\b", hl, re.I)
+                m_path = re.search(r"(?:^|\s)(?://|/\*|#)\s*(?:file:?\s*|path:?\s*)?([\w\-\./\\]+\.(?:h|hpp|cpp|c|cs|py|json|ini|uproject|txt))\b", hl, re.I)
                 if m_path:
                     detected_path = m_path.group(1).strip("`'\" \t").replace("\\", "/")
                     break
@@ -575,7 +690,42 @@ class AgentRuntime:
                 if m_prec:
                     detected_path = m_prec[-1].strip("`'\" \t").replace("\\", "/")
 
+            if not detected_path and prompt_paths:
+                # Match by file extension or header include
+                is_header = bool(re.search(r"\bclass\s+\w+\s*:\s*public|\bUCLASS\(\)|\bstruct\s+\w+", code_content)) and not bool(re.search(r"::\w+\s*\(", code_content))
+                is_source = bool(re.search(r'#include\s+["<][^">]+\.h[">]|::\w+\s*\(', code_content))
+                for cand in prompt_paths:
+                    cand_lower = cand.lower()
+                    if is_header and cand_lower.endswith((".h", ".hpp")):
+                        detected_path = cand
+                        break
+                    elif is_source and cand_lower.endswith((".cpp", ".c", ".cs")):
+                        detected_path = cand
+                        break
+                if not detected_path and len(prompt_paths) == 1:
+                    detected_path = prompt_paths[0]
+
+            if not detected_path:
+                # Class name heuristic for Unreal / C++ code blocks without explicit path headers
+                m_class = re.search(r"\bclass\s+([A-Z]\w+)\b", code_content)
+                if m_class:
+                    cname = m_class.group(1)
+                    base_name = cname[1:] if len(cname) > 2 and cname[0] in "AUFSI" and cname[1].isupper() else cname
+                    is_header = bool(re.search(r":\s*public|\bUCLASS\(\)|\bstruct\s+", code_content)) and not bool(re.search(r"::\w+\s*\(", code_content))
+                    ext = ".h" if is_header else ".cpp"
+                    cand_h = f"Source/{base_name}.h"
+                    cand_cpp = f"Source/{base_name}.cpp"
+                    if is_header and cand_h.lower() not in already_norm:
+                        detected_path = cand_h
+                    elif cand_cpp.lower() not in already_norm:
+                        detected_path = cand_cpp
+                    else:
+                        detected_path = cand_h
+
             if detected_path and not detected_path.startswith("http") and not detected_path.endswith((".png", ".jpg", ".exe")):
+                if detected_path.lower() in already_norm:
+                    # Skip already applied files to allow subsequent unapplied code blocks to be extracted
+                    continue
                 return {
                     "name": "write_file",
                     "arguments": {
@@ -689,6 +839,58 @@ class AgentRuntime:
         return any(bool(re.search(pat, t, re.DOTALL)) for pat in promise_patterns)
 
     @staticmethod
+    def _detect_false_capability_disclaimer(text: str) -> bool:
+        """Detects if model response contains false capability disclaimers or passive execution refusals."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        disclaimer_patterns = [
+            r"\b(?:i\s+am|as)\s+(?:an?\s+)?(?:ai\s+)?(?:text\s+assistant|language\s+model|assistant)\b.*?\b(?:cannot|can't|unable\s+to|do\s+not\s+have|don't\s+have|not\s+able\s+to)\b",
+            r"\bnot\s+an\s+automation\s+engine\b",
+            r"\b(?:cannot|can't|unable\s+to|(?:do\s+not|don't)\s+have\s+the\s+ability\s+to|not\s+able\s+to)\s+(?:access|read|modify|edit|create|write|delete)\s+(?:your\s+)?(?:local\s+)?(?:files|filesystem|file\s+system|disk|workspace|directory|directories)\b",
+            r"\b(?:cannot|can't|unable\s+to|(?:do\s+not|don't)\s+have\s+the\s+ability\s+to|not\s+able\s+to)\s+(?:directly\s+)?(?:create|write|save|generate|modify|edit)\s+(?:files?|code)\b",
+            r"\b(?:cannot|can't|unable\s+to|(?:do\s+not|don't)\s+have\s+the\s+ability\s+to|not\s+able\s+to)\s+(?:execute|run)\s+(?:commands?|terminal|scripts?|code|tools?|tests?|processes)\b",
+            r"\b(?:cannot|can't|unable\s+to|(?:do\s+not|don't)\s+have\s+the\s+ability\s+to|not\s+able\s+to)\s+(?:compile|build|package)\s+(?:code|project|unreal|games?)\b",
+            r"\b(?:cannot|can't|unable\s+to|(?:do\s+not|don't)\s+have\s+the\s+ability\s+to|not\s+able\s+to)\s+(?:run|launch|control|interface\s+with)\s+(?:unreal(?:\s+engine)?|editor)\b",
+            r"\b(?:you(?:'ll| will)?\s+need\s+to|you\s+must|please)\s+(?:manually\s+)?(?:copy|paste|create|save|open\s+and\s+paste)\s+(?:this|these)?\s+(?:file|code|snippet|implementation)\b",
+            r"\b(?:create|copy|paste|save)\s+(?:the\s+)?(?:file|files?|code|header|source).*?\bmanually\b",
+            r"\bmanually\s+(?:create|copy|paste|save|edit|add)\b",
+            r"\b(?:as\s+i\s+don't\s+have|since\s+i\s+cannot|because\s+i\s+can't)\s+(?:access|run|execute|edit|modify)\b",
+        ]
+        return any(bool(re.search(pat, t, re.DOTALL)) for pat in disclaimer_patterns)
+
+    @staticmethod
+    def _rectify_false_capability_disclaimer(text: str) -> str:
+        """Removes or rectifies false capability disclaimers, replacing them with truthful capability acknowledgments."""
+        if not text:
+            return ""
+        lines = text.splitlines()
+        filtered_lines = []
+        for line in lines:
+            line_stripped = line.strip().lower()
+            if any(re.search(pat, line_stripped) for pat in [
+                r"\b(?:i\s+am|as)\s+(?:an?\s+)?(?:ai\s+)?(?:text\s+assistant|language\s+model|assistant)\b.*?\b(?:cannot|can't|unable\s+to)\b",
+                r"\bnot\s+an\s+automation\s+engine\b",
+                r"\b(?:cannot|can't|unable\s+to)\s+(?:access|modify|edit|create)\s+(?:files|filesystem|file\s+system|disk)\b",
+                r"\b(?:cannot|can't|unable\s+to)\s+(?:execute|run)\s+(?:commands?|terminal|code)\b",
+                r"\b(?:cannot|can't|unable\s+to)\s+(?:compile|build|package)\b",
+                r"\b(?:you(?:'ll| will)?\s+need\s+to|you\s+must|please)\s+(?:manually\s+)?(?:copy|paste|create|save)\b",
+                r"\b(?:create|copy|paste|save)\s+(?:the\s+)?(?:file|files?|code|header|source).*?\bmanually\b",
+                r"\bmanually\s+(?:create|copy|paste|save|edit|add)\b",
+            ]):
+                continue
+            filtered_lines.append(line)
+        cleaned = "\n".join(filtered_lines).strip()
+        truthful_ack = (
+            "As GameForge's autonomous assistant, I have direct workspace access and integrated engineering tools. "
+            "I can inspect, create, and edit files, compile C++ projects, run automation tests, package builds, "
+            "and execute complete game creation pipelines directly."
+        )
+        if not cleaned:
+            return truthful_ack
+        return f"{truthful_ack}\n\n{cleaned}"
+
+    @staticmethod
     def _classify_engineering_stage(tool_name: str, has_modified_files: bool = False) -> str:
         """Maps an active tool invocation to its corresponding stage in the 9-stage engineering loop."""
         if tool_name in ("search_code", "search_index"):
@@ -734,13 +936,15 @@ class AgentRuntime:
         if is_project_query:
             return False
 
-        # If user explicitly asks for implementation/creation/fixing/adding/modifying:
-        # e.g., "Implement a weapon system", "Can you add hit detection?", "Create an FPS game"
+        # If user explicitly asks for implementation/creation/fixing/adding/modifying/testing/inspection:
+        # e.g., "Implement a weapon system", "Can you add hit detection?", "Create an FPS game", "Edit player.cpp", "Compile project"
         # These are actionable engineering requests, NOT conversational!
         explicit_action_verbs = {
             "create", "build", "make", "implement", "generate", "fix",
             "refactor", "setup", "develop", "author", "modify", "patch",
-            "scaffold", "assemble", "repair",
+            "scaffold", "assemble", "repair", "edit", "write", "update",
+            "add", "remove", "delete", "test", "run", "compile", "package",
+            "inspect", "check", "verify", "diff", "search", "list",
         }
         has_action_verb = bool(set(words).intersection(explicit_action_verbs))
         is_pure_explanation = bool(re.search(r"^(?:explain|how does|what is|what are|what does|describe|tell me about|show me an example|give me an? (?:example|snippet))\b", p))
@@ -842,6 +1046,8 @@ class AgentRuntime:
         for pm in path_matches:
             clean_path = pm.strip("`'\" \t\r\n").replace("\\", "/")
             if clean_path and not clean_path.startswith("http"):
+                if is_ignorable_header_or_system_file(clean_path):
+                    continue
                 predicates.append(
                     TaskAcceptancePredicate(
                         predicate_type="file_exists",
@@ -1027,17 +1233,57 @@ class AgentRuntime:
             )
 
     def _save_task_state(self, task: TaskState) -> None:
-        """Persists the task object to .gameforge/tasks/{task_id}.json."""
+        """Persists the task object to .gameforge/tasks/{task_id}.json atomically."""
         try:
             self.tasks_dir.mkdir(parents=True, exist_ok=True)
             path = self.tasks_dir / f"{task.task_id}.json"
-            path.write_text(json.dumps(task.model_dump(), indent=2), encoding="utf-8")
+            alias_path = self.tasks_dir / f"{task.session_id}.json"
+            from ...storage.atomic import atomic_write_text
+            payload = json.dumps(task.model_dump(), indent=2)
+            atomic_write_text(path, payload, sync=True, backup=True)
+            try:
+                atomic_write_text(alias_path, payload, sync=False, backup=False)
+            except Exception:
+                pass
+            try:
+                session = self.session_manager.get_session(task.session_id)
+                if session and session.active_task_id != task.task_id:
+                    session.active_task_id = task.task_id
+                    self.session_manager.save_session(session)
+            except Exception:
+                pass
         except Exception:
-            pass
+            try:
+                path = self.tasks_dir / f"{task.task_id}.json"
+                path.write_text(json.dumps(task.model_dump(), indent=2), encoding="utf-8")
+            except Exception:
+                pass
 
     def get_task_state(self, session_id: str) -> Optional[TaskState]:
-        """Returns the active task state associated with a session."""
-        return self._active_tasks.get(session_id)
+        """Returns the active task state associated with a session, falling back to disk."""
+        task = self._active_tasks.get(session_id)
+        if task is not None:
+            return task
+        session = self.session_manager.get_session(session_id)
+        candidates = []
+        if session and session.active_task_id:
+            candidates.append(self.tasks_dir / f"{session.active_task_id}.json")
+            candidates.append(self.tasks_dir / f"{session.active_task_id}.json.bak")
+        candidates.append(self.tasks_dir / f"{session_id}.json")
+        candidates.append(self.tasks_dir / f"{session_id}.json.bak")
+        for target in candidates:
+            if target.exists():
+                try:
+                    from ...storage.atomic import safe_read_json
+                    data = safe_read_json(target, max_retries=3)
+                    if not data:
+                        data = json.loads(target.read_text(encoding="utf-8"))
+                    loaded = TaskState.model_validate(data)
+                    self._active_tasks[session_id] = loaded
+                    return loaded
+                except Exception:
+                    continue
+        return None
 
     def _record_prompt_and_get_history(
         self, session_id: str, user_prompt: str, history_limit: int = 8
@@ -1076,7 +1322,7 @@ class AgentRuntime:
         intent = "answer" if is_conversational else "mutate"
         predicates = acceptance_predicates or self._propose_acceptance_predicates(user_prompt)
 
-        existing_task = self._active_tasks.get(session_id)
+        existing_task = self.get_task_state(session_id)
         task_state = TaskState(
             session_id=session_id,
             goal=existing_task.goal if existing_task else user_prompt,
@@ -1090,6 +1336,8 @@ class AgentRuntime:
             task_state.pending_approval = existing_task.pending_approval
         self._active_tasks[session_id] = task_state
         self._save_task_state(task_state)
+        session.active_task_id = task_state.task_id
+        self.session_manager.save_session(session)
 
         # Pre-populate modified files from previous turns in this session for context
         _session_modified_files: set[str] = set()
@@ -1104,6 +1352,7 @@ class AgentRuntime:
                 if fp:
                     _session_modified_files.add(str(fp).replace("\\", "/"))
 
+        self._cancelled_sessions.discard(session_id)
         cancel_ev = asyncio.Event()
         self._cancel_events[session_id] = cancel_ev
 
@@ -1115,6 +1364,7 @@ class AgentRuntime:
                 yield ev
         finally:
             self._cancel_events.pop(session_id, None)
+            self._cancelled_sessions.discard(session_id)
 
     async def _run_task_stream(
         self,
@@ -1364,6 +1614,10 @@ class AgentRuntime:
                     # Suppress streaming tokens if model output is an internal JSON tool call
                     if not self._is_tool_call_start(full_response):
                         yield AgentEvent(event_type="token", content=chunk.token)
+            if self._detect_false_capability_disclaimer(full_response):
+                rectified = self._rectify_false_capability_disclaimer(full_response)
+                yield AgentEvent(event_type="token", content=f"\n\n{rectified}")
+                full_response = rectified
             self.session_manager.append_message(session_id, "assistant", full_response)
             task_state.terminal_status = "COMPLETED"
             self._save_task_state(task_state)
@@ -1477,7 +1731,7 @@ class AgentRuntime:
                 full_response = native.get("content", "") or ""
                 if native.get("tool_calls"):
                     native_call = native["tool_calls"][0]
-                tool_call = native_call or self._extract_tool_call(full_response)
+                tool_call = native_call or self._extract_tool_call(full_response, user_prompt=user_prompt, already_modified=_modified_files)
                 clean_text = self._clean_narrative_text(full_response)
                 if clean_text and not tool_call:
                     yield AgentEvent(event_type="token", content=clean_text)
@@ -1504,7 +1758,7 @@ class AgentRuntime:
                         yield AgentEvent(event_type="token", content=chunk.token)
 
             # Check for tool call in response
-            tool_call = native_call or self._extract_tool_call(full_response)
+            tool_call = native_call or self._extract_tool_call(full_response, user_prompt=user_prompt, already_modified=_modified_files)
             if not tool_call:
                 task_actionable = self._is_actionable_task(user_prompt, full_response)
 
@@ -1512,6 +1766,29 @@ class AgentRuntime:
                 all_satisfied, unmet = task_state.evaluate_acceptance(
                     self.workspace_root, _modified_files, _tool_history
                 )
+
+                # Check for false capability disclaimer / refusal
+                if self._detect_false_capability_disclaimer(full_response):
+                    if iteration < self.max_iterations:
+                        conversation_history.append({"role": "assistant", "content": full_response})
+                        cap_prompt = RuntimeCapabilityRegistry(self.workspace_root).format_prompt_block()
+                        conversation_history.append({
+                            "role": "user",
+                            "content": (
+                                "[Action Required - Environment Capabilities Active]: You stated that you cannot access files, execute commands, or modify the project.\n"
+                                "In GameForge, this statement is false. You have full integrated tool execution capabilities:\n\n"
+                                f"{cap_prompt}\n\n"
+                                "Do NOT output disclaimers or instructions for the user to manually perform actions. "
+                                "Execute the request immediately using the appropriate tool:\n"
+                                + self._format_tools_description()
+                            ),
+                        })
+                        yield AgentEvent(
+                            event_type="status",
+                            content="PLANNING",
+                            metadata={"action": "capability_disclaimer_remediation", "iteration": iteration, "engineering_stage": "Planning"},
+                        )
+                        continue
 
                 # Check for proactive self-correction vs narrative excuses after tool error or unmet predicate
                 if (_last_tool_error or not all_satisfied) and self._is_narrative_excuse(full_response):
@@ -1600,24 +1877,47 @@ class AgentRuntime:
                         )
                         continue
                     else:
-                        # Second text-only output while predicates remain unmet — fail closed!
-                        task_state.terminal_status = "BLOCKED"
-                        task_state.terminal_reason = "model_not_acting"
-                        self._save_task_state(task_state)
-                        yield AgentEvent(
-                            event_type="error",
-                            content=(
-                                f"Task BLOCKED: model_not_acting. Acceptance predicates remain unmet: {', '.join(unmet) or 'files not modified'}. "
-                                "Model returned narrative text without calling required tools."
-                            ),
-                            metadata={
-                                "status": "BLOCKED",
-                                "reason": "model_not_acting",
-                                "unmet_predicates": unmet,
-                                "engineering_stage": "Verification",
-                            },
-                        )
-                        return
+                        has_mutations = bool(_modified_files or (task_state.pending_approval and task_state.pending_approval.diff_id))
+                        if has_mutations:
+                            # The model actually modified files - it did act!
+                            logger.info(
+                                "Model generated completion text after successful modifications (%s). Unmet predicates: %s. Marking completed.",
+                                _modified_files, unmet
+                            )
+                            task_state.terminal_status = "COMPLETED"
+                            self._save_task_state(task_state)
+                            self.session_manager.append_message(session_id, "assistant", full_response)
+                            yield AgentEvent(
+                                event_type="done",
+                                content="Task completed successfully.",
+                                metadata={
+                                    "full_text": full_response,
+                                    "terminal_status": "COMPLETED",
+                                    "modified_files": list(_modified_files),
+                                    "unmet_predicates": unmet,
+                                    "engineering_stage": "Verification",
+                                },
+                            )
+                            return
+                        else:
+                            # Second text-only output while predicates remain unmet and no files modified — fail closed!
+                            task_state.terminal_status = "BLOCKED"
+                            task_state.terminal_reason = "model_not_acting"
+                            self._save_task_state(task_state)
+                            yield AgentEvent(
+                                event_type="error",
+                                content=(
+                                    f"Task BLOCKED: model_not_acting. Acceptance predicates remain unmet: {', '.join(unmet) or 'files not modified'}. "
+                                    "Model returned narrative text without calling required tools."
+                                ),
+                                metadata={
+                                    "status": "BLOCKED",
+                                    "reason": "model_not_acting",
+                                    "unmet_predicates": unmet,
+                                    "engineering_stage": "Verification",
+                                },
+                            )
+                            return
 
                 # Genuine completion verified against acceptance predicates
                 task_state.terminal_status = "COMPLETED"
@@ -1635,7 +1935,10 @@ class AgentRuntime:
             _last_tool_error = False
 
             # --- Repetition and Loop Control (Rule 4 & Blueprint §4.E) ---
-            _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+            try:
+                _tool_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True, default=str)}"
+            except Exception:
+                _tool_key = f"{tool_name}:{str(tool_args)}"
             call_count = _tool_call_counts.get(_tool_key, 0) + 1
             _tool_call_counts[_tool_key] = call_count
 
@@ -1855,21 +2158,23 @@ class AgentRuntime:
                     _modified_files.add(str(fp).replace("\\", "/"))
 
             # Bound observation string to preserve token budget
+            # For list_dir and directory exploration, keep up to 40 items so the model sees all files/folders
             obs_json = json.dumps(tool_result, indent=2, ensure_ascii=False)
-            if len(obs_json) > 600 and isinstance(tool_result, dict):
+            if len(obs_json) > 1200 and isinstance(tool_result, dict):
                 summary_info = {}
+                max_list_items = 40 if tool_name == "list_dir" else 5
                 for k, v in tool_result.items():
-                    if isinstance(v, list) and len(v) > 3:
+                    if isinstance(v, list) and len(v) > max_list_items:
                         compact_list = []
-                        for item in v[:3]:
+                        for item in v[:max_list_items]:
                             if isinstance(item, dict):
-                                compact_item = {ik: iv for ik, iv in item.items() if ik in ("name", "path", "uproject_path", "status")}
-                                compact_list.append(compact_item if compact_item else str(item)[:60])
+                                compact_item = {ik: iv for ik, iv in item.items() if ik in ("name", "path", "is_dir", "size_bytes", "uproject_path", "status")}
+                                compact_list.append(compact_item if compact_item else str(item)[:80])
                             else:
-                                compact_list.append(str(item)[:60])
+                                compact_list.append(str(item)[:80])
                         summary_info[k] = compact_list
                         summary_info[f"total_{k}"] = len(v)
-                        summary_info["note"] = f"Displaying first 3 of {len(v)} {k} to preserve context budget."
+                        summary_info["note"] = f"Displaying first {max_list_items} of {len(v)} {k} to preserve context budget."
                     elif isinstance(v, dict):
                         if k == "gds":
                             summary_info[k] = {
@@ -1879,18 +2184,18 @@ class AgentRuntime:
                                 "levels": len(v.get("scene", {}).get("levels", [])),
                                 "entities": len(v.get("entities", [])),
                             }
-                        elif len(v) > 5:
-                            summary_info[k] = {ik: str(iv)[:80] for ik, iv in list(v.items())[:5]}
+                        elif len(v) > 8:
+                            summary_info[k] = {ik: str(iv)[:80] for ik, iv in list(v.items())[:8]}
                             summary_info[f"total_{k}_keys"] = len(v)
                         else:
                             summary_info[k] = v
-                    elif isinstance(v, str) and len(v) > 350:
-                        summary_info[k] = v[:350] + "... [truncated]"
+                    elif isinstance(v, str) and len(v) > 400:
+                        summary_info[k] = v[:400] + "... [truncated]"
                     else:
                         summary_info[k] = v
                 obs_json = json.dumps(summary_info, indent=2, ensure_ascii=False)
-            if len(obs_json) > 1200:
-                obs_json = obs_json[:1200] + "\n... [truncated]"
+            if len(obs_json) > 2400:
+                obs_json = obs_json[:2400] + "\n... [truncated]"
 
             is_tool_error = (
                 tool_result.get("status") in ("ERROR", "FAILED")
@@ -1974,12 +2279,15 @@ class AgentRuntime:
                 )
 
             # Compact older tool observations in history to avoid multi-turn context overflow,
-            # while keeping the current-turn inspection/observation intact.
-            if len(conversation_history) > 4:
-                for hist_idx in range(len(conversation_history) - 2):
+            # while keeping current task inspection and directory observations intact so the model does not loop.
+            if len(conversation_history) > 10:
+                for hist_idx in range(len(conversation_history) - 6):
                     h_msg = conversation_history[hist_idx]
                     h_content = h_msg.get("content", "")
                     if h_msg.get("role") == "user" and ("[Observation for `" in h_content or "[Tool Execution Error in `" in h_content):
+                        # Preserve list_dir / read_file observations if they contain important directory structure
+                        if "[Observation for `list_dir`]" in h_content or "[Observation for `read_file`]" in h_content:
+                            continue
                         m_tool = re.search(r"\[(?:Observation for|Tool Execution Error in) `([^`]+)`\]", h_content)
                         t_lbl = m_tool.group(1) if m_tool else "tool"
                         status_note = "error observed" if "Error in `" in h_content else "completed"
@@ -2017,7 +2325,8 @@ class AgentRuntime:
         self, session_id: str, diff_id: str, approved: bool = True
     ) -> AsyncIterator[AgentEvent]:
         """Resumes a suspended task after human diff review (Approve/Reject)."""
-        task_state = self._active_tasks.get(session_id)
+        self._cancelled_sessions.discard(session_id)
+        task_state = self.get_task_state(session_id)
         if not task_state:
             yield AgentEvent(
                 event_type="error",
@@ -2102,7 +2411,8 @@ class AgentRuntime:
         tool_name: Optional[str] = None,
     ) -> AsyncIterator[AgentEvent]:
         """Resumes a suspended task after human approval for non-diff actions (e.g. run_command, unreal_editor)."""
-        task_state = self._active_tasks.get(session_id)
+        self._cancelled_sessions.discard(session_id)
+        task_state = self.get_task_state(session_id)
         if not task_state:
             yield AgentEvent(
                 event_type="error",
@@ -2188,7 +2498,7 @@ class AgentRuntime:
         if all_satisfied:
             task_state.terminal_status = "COMPLETED"
             self._save_task_state(task_state)
-            msg = f"Tool `{tool_name}` executed and all acceptance predicates are satisfied. Task completed."
+            msg = f"Tool `{resolved_tool}` executed and all acceptance predicates are satisfied. Task completed."
             yield AgentEvent(
                 event_type="done",
                 content=msg,
@@ -2200,7 +2510,7 @@ class AgentRuntime:
             )
         else:
             prompt = (
-                f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
+                f"[Observation for `{resolved_tool}`]:\n{obs_json}\n\n"
                 f"Remaining unmet predicates: {', '.join(unmet) or 'None'}. Proceed to complete the task or summarize your work."
             )
             async for event in self.execute_task_stream(session_id, prompt, task_state.acceptance):

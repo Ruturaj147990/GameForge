@@ -380,8 +380,14 @@ class UnrealPanel(QWidget):
                 self_._signals = signals
 
             def run(self_):
-                result = self_._runner()
-                self_._signals.done.emit(result)
+                try:
+                    result = self_._runner()
+                except Exception as exc:
+                    result = {"status": "ERROR", "error": str(exc)}
+                try:
+                    self_._signals.done.emit(result)
+                except (RuntimeError, Exception):
+                    pass
 
         self._build_signals = _BuildSignals(self)
         self._build_signals.done.connect(self._on_build_done)

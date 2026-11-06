@@ -175,6 +175,10 @@ class TerminalTools:
                             )
                         except Exception:
                             pass
+                    try:
+                        jobs.kill_process_tree(proc)
+                    except Exception:
+                        pass
                     proc.kill()
                     rem_out, rem_err = proc.communicate(timeout=2)
                     stdout_str = exc.stdout or rem_out or ""

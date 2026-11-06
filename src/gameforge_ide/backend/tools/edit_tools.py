@@ -652,6 +652,7 @@ class EditTools:
             "diff_id": diff_id,
             "file_path": rel_path,
             "diff_patch": diff_patch,
+            "diff": diff_patch,
             "message": "Diff generated successfully. Requires developer approval to apply.",
         }
 
@@ -1154,7 +1155,8 @@ class EditTools:
         apply_res = self.apply_diff(diff_id)
         if apply_res.get("status") == "SUCCESS":
             apply_res["diff_id"] = diff_id
-            apply_res["diff"] = prop_res.get("diff", "")
+            apply_res["diff"] = prop_res.get("diff") or prop_res.get("diff_patch", "")
+            apply_res["diff_patch"] = prop_res.get("diff_patch") or prop_res.get("diff", "")
         return apply_res
 
     def verify_disk_contents(self, subpath: str, expected_fragment: str = "") -> Dict[str, Any]:

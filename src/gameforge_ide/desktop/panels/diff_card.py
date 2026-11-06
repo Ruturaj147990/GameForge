@@ -101,6 +101,16 @@ class DiffApprovalCard(QFrame):
         lbl_id = QLabel(f"Diff ID: {self.diff_id}", self)
         lbl_id.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: 10px;")
         info_row.addWidget(lbl_id)
+
+        # Diff additions / deletions stats
+        additions = sum(1 for line in self.diff_patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
+        deletions = sum(1 for line in self.diff_patch.splitlines() if line.startswith("-") and not line.startswith("---"))
+        if additions > 0 or deletions > 0:
+            lbl_stats = QLabel(f"<span style='color: #00d9a3;'>+{additions}</span> / <span style='color: #ff6b6b;'>-{deletions}</span> lines", self)
+            lbl_stats.setTextFormat(Qt.RichText)
+            lbl_stats.setStyleSheet("font-size: 11px; font-weight: 600;")
+            info_row.addWidget(lbl_stats)
+
         info_row.addStretch(1)
         layout.addLayout(info_row)
 
@@ -272,6 +282,12 @@ class FileChangedNotification(QFrame):
         detail_text = f"Applied automatically ({stage}) with SHA-256 rollback journal"
         if diff_id:
             detail_text += f" | Diff: {diff_id}"
+        patch = meta.get("diff_patch", "")
+        if patch:
+            additions = sum(1 for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
+            deletions = sum(1 for line in patch.splitlines() if line.startswith("-") and not line.startswith("---"))
+            if additions > 0 or deletions > 0:
+                detail_text += f" | +{additions}/-{deletions} lines"
         lbl_detail = QLabel(detail_text, self)
         lbl_detail.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: 10px;")
         info_box.addWidget(lbl_detail)

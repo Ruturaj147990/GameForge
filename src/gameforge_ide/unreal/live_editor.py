@@ -113,7 +113,12 @@ class LiveEditorLink:
         cfg = self.project_dir / "Config" / "DefaultEngine.ini"
         cfg.parent.mkdir(parents=True, exist_ok=True)
         text = cfg.read_text(encoding="utf-8") if cfg.exists() else ""
-        if "bRemoteExecution=True" not in text:
+        needs_settings = (
+            "bRemoteExecution=True" not in text
+            or "RemoteExecutionMulticastBindAddress=127.0.0.1" not in text
+            or "RemoteExecutionMulticastTtl=0" not in text
+        )
+        if needs_settings:
             cfg.write_text(text.rstrip() + "\n\n" + _REMOTE_EXEC_SETTINGS, encoding="utf-8")
         self._ensure_python_plugin_enabled()
         py_dir = self.project_dir / "Content" / "Python"
@@ -219,8 +224,13 @@ class LiveEditorLink:
             self._token = self.token_file.read_text(encoding="utf-8").strip()
         if not self._token:
             raise LiveEditorError("no session token: call prepare_project() before launching the editor")
+        self.disconnect()
         self._rx_module = self._rx_module or load_engine_remote_execution(self.engine_root)
         cfg = self._rx_module.RemoteExecutionConfig()  # defaults: 239.0.0.1:6766, bind 127.0.0.1, TTL 0
+        if hasattr(cfg, "multicast_bind_address"):
+            cfg.multicast_bind_address = "127.0.0.1"
+        if hasattr(cfg, "multicast_ttl"):
+            cfg.multicast_ttl = 0
         self._rx = self._rx_module.RemoteExecution(cfg)
         self._rx.start()
         deadline = time.monotonic() + discovery_timeout_s

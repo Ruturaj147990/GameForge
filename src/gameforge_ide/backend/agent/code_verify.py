@@ -423,7 +423,7 @@ def run_code_repair_loop(
     apply_fix_fn: Callable[[Dict[str, Any]], bool],
     build_verify_fn: Callable[[], bool],
     model_caller: Optional[Callable[[str, str], str]] = None,
-    max_attempts: int = 3,
+    max_attempts: int = 5,
     rollback_fn: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
     """Autonomous bounded code repair loop with cycle detection and retry limits.
@@ -438,6 +438,8 @@ def run_code_repair_loop(
     hard_cap = min(max(1, int(max_attempts)), 5)
     seen_diffs: Set[str] = set()
     history: List[Dict[str, Any]] = []
+    prev_diag_count: Optional[int] = None
+    no_progress_count: int = 0
 
     def _execute_rollback() -> bool:
         if rollback_fn is not None:
@@ -458,6 +460,23 @@ def run_code_repair_loop(
                 "history": history,
                 "rolled_back": False,
                 "message": "No diagnostics reported; code is clean.",
+            }
+
+        curr_diag_count = len(diags)
+        if prev_diag_count is not None and curr_diag_count >= prev_diag_count:
+            no_progress_count += 1
+        else:
+            no_progress_count = 0
+        prev_diag_count = curr_diag_count
+
+        if no_progress_count >= 2:
+            did_rollback = _execute_rollback()
+            return {
+                "status": "BLOCKED",
+                "attempt": attempt,
+                "error": "Repair halted: 2 consecutive attempts without measurable progress.",
+                "history": history,
+                "rolled_back": did_rollback,
             }
 
         fix = propose_assistant_fix(

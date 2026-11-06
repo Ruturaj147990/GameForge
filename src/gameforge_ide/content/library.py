@@ -11,6 +11,7 @@ import re
 import shutil
 import sqlite3
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -121,8 +122,37 @@ class ContentLibrary:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
+    @contextmanager
+    def _connect(self):
+        """Short-lived SQLite connection with WAL mode, busy timeout, and retry on lock."""
+        for attempt in range(5):
+            try:
+                conn = sqlite3.connect(self.db_path, timeout=30.0)
+                try:
+                    conn.execute("PRAGMA journal_mode = WAL;")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    conn.execute("PRAGMA busy_timeout = 30000;")
+                    conn.execute("PRAGMA synchronous = NORMAL;")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    with conn:
+                        yield conn
+                    return
+                finally:
+                    conn.close()
+            except sqlite3.OperationalError as exc:
+                if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+                else:
+                    raise
+
     def _init_db(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
             CREATE TABLE IF NOT EXISTS packs (
                 pack_name TEXT PRIMARY KEY,
@@ -171,7 +201,7 @@ class ContentLibrary:
                     })
 
         now = time.time()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO packs VALUES (?, ?, ?, ?, ?, ?)",
                 (pack_name, str(source_dir), licence.licence_class, licence.attribution_text, len(indexed_assets), now)
@@ -198,7 +228,7 @@ class ContentLibrary:
     ) -> Dict[str, Any]:
         """Import library pack into <project>/Content/Library/<pack_name>."""
         project_dir = Path(project_dir)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             pack_row = conn.execute("SELECT * FROM packs WHERE pack_name=?", (pack_name,)).fetchone()
             if not pack_row:
                 raise KeyError(f"Pack {pack_name} not registered in content library")

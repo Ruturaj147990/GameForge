@@ -256,3 +256,7 @@ class TerminalPanel(QWidget):
     def closeEvent(self, event) -> None:
         self.shutdown()
         super().closeEvent(event)
+
+    def deleteLater(self) -> None:
+        self.shutdown()
+        super().deleteLater()

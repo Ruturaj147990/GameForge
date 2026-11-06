@@ -30,8 +30,11 @@ HANDLERS: Dict[str, Handler] = {
     "sources": legacy_stages.legacy_sources,
     "build_editor": legacy_stages.legacy_build,
     "assemble_level": legacy_stages.legacy_assemble,
+    "assemble_level_1": legacy_stages.legacy_assemble,
+    "scenario_gen": scenario.scenario_gen_handler,
     "automation_tests": legacy_stages.legacy_tests,
     "package": legacy_stages.legacy_package,
+    "scenarios": scenario.scenario_handler,
     "packaged_smoke": legacy_stages.legacy_smoke,
     "report": report_handler,
     # StepKind enums

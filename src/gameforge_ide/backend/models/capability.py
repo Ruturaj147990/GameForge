@@ -12,8 +12,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field
 from ...core.settings import get_settings_safe as get_settings
 
@@ -146,3 +147,105 @@ class CapabilityRegistry:
 
     def list_records(self) -> List[CapabilityRecord]:
         return list(self._records.values())
+
+
+class RuntimeCapabilityStatus(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    RESTRICTED = "RESTRICTED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class RuntimeCapabilityRegistry:
+    """Truthful runtime capability registry reflecting live environment state.
+
+    Prevents false refusal disclaimers ("I cannot access your filesystem", "I cannot compile code")
+    by grounding the model with authoritative, live-probed environment status.
+    """
+
+    def __init__(self, workspace_root: Optional[Path] = None):
+        self.workspace_root = (workspace_root or Path.cwd()).resolve()
+
+    def probe_unreal_installed(self) -> Tuple[bool, str]:
+        """Probes whether Unreal Engine 5.7 or compatible toolchain is installed."""
+        try:
+            from ...core.settings import discover_engines
+            engines = discover_engines()
+            if engines:
+                primary = engines[0]
+                return True, f"Unreal Engine {primary.version} detected at {primary.root}"
+        except Exception:
+            pass
+        return False, "Unreal Engine not detected on host system."
+
+    def get_capabilities_manifest(self, autonomy_profile: Optional[Any] = None) -> Dict[str, Any]:
+        """Returns the current live capabilities manifest with status and permitted actions."""
+        ue_installed, ue_details = self.probe_unreal_installed()
+        profile_str = str(autonomy_profile.value if hasattr(autonomy_profile, "value") else (autonomy_profile or "agentic")).lower()
+
+        return {
+            "filesystem_and_editing": {
+                "status": RuntimeCapabilityStatus.AVAILABLE.value,
+                "description": "Inspect directories, read source files, propose atomic diffs, write and overwrite files, and verify disk contents with SHA-256 rollback tracking.",
+                "tools": ["list_dir", "read_file", "search_code", "search_index", "propose_edit", "apply_edit", "write_file", "verify_disk", "rollback_edit"],
+                "requires_approval": profile_str == "manual",
+            },
+            "command_execution": {
+                "status": RuntimeCapabilityStatus.AVAILABLE.value,
+                "description": "Allowlisted shell-free execution of compilers, pytest, git, and project build tools inside the workspace.",
+                "tools": ["run_command"],
+                "requires_approval": profile_str != "agentic",
+            },
+            "unreal_engine_integration": {
+                "status": RuntimeCapabilityStatus.AVAILABLE.value if ue_installed else RuntimeCapabilityStatus.UNAVAILABLE.value,
+                "description": f"Unreal Engine toolchain integration: {ue_details}",
+                "tools": ["unreal_find_projects", "unreal_engine_info", "unreal_build", "unreal_run_tests", "unreal_package", "unreal_editor"],
+                "requires_approval": profile_str == "manual",
+            },
+            "forge_pipeline": {
+                "status": RuntimeCapabilityStatus.AVAILABLE.value,
+                "description": "Autonomous 11-stage game generation pipeline (design, scaffold, build_editor, content, assemble_level_1, scenario_gen, automation, package, scenarios, review, report) with automatic error repair.",
+                "tools": ["plan_game", "create_game", "play_game"],
+                "requires_approval": profile_str == "manual",
+            },
+            "error_repair_engine": {
+                "status": RuntimeCapabilityStatus.AVAILABLE.value,
+                "description": "Automated compiler diagnostic extraction, root cause analysis, and bounded repair loop.",
+                "tools": ["propose_edit", "write_file", "run_command", "verify_disk"],
+                "requires_approval": False,
+            },
+        }
+
+    def format_prompt_block(
+        self,
+        autonomy_profile: Optional[Any] = None,
+        workspace_dir: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Formats an authoritative runtime capabilities block for system prompts."""
+        if workspace_dir:
+            try:
+                self.workspace_root = Path(workspace_dir).resolve()
+            except Exception:
+                pass
+        manifest = self.get_capabilities_manifest(autonomy_profile)
+        ue_status = manifest["unreal_engine_integration"]["status"]
+        ue_desc = manifest["unreal_engine_integration"]["description"]
+
+        lines = [
+            "=== GAMEFORGE RUNTIME CAPABILITIES ===",
+            "You are the reasoning intelligence inside GameForge IDE, an autonomous game development environment.",
+            "You have DIRECT ACCESS to the following verified runtime capabilities in this workspace:",
+            f"- Filesystem & Code Editing: [{manifest['filesystem_and_editing']['status']}] — {manifest['filesystem_and_editing']['description']}",
+            f"- Command Execution Gateway: [{manifest['command_execution']['status']}] — {manifest['command_execution']['description']}",
+            f"- Unreal Engine 5.7 Integration: [{ue_status}] — {ue_desc}",
+            f"- Autonomous 11-Stage Forge Pipeline: [{manifest['forge_pipeline']['status']}] — {manifest['forge_pipeline']['description']}",
+            f"- Automated Diagnosis & Repair Engine: [{manifest['error_repair_engine']['status']}] — {manifest['error_repair_engine']['description']}",
+            "",
+            "TRUTHFULNESS & CAPABILITY MANDATE:",
+            "1. NEVER state or imply that you are 'only an AI text assistant', that you 'cannot access the file system', that you 'cannot execute processes', that you 'cannot compile code', or that you 'cannot run Unreal pipelines'. You have direct access to these capabilities through GameForge runtime tools.",
+            "2. When the user asks you to inspect files, search code, implement features, or modify projects: INVOKE THE CORRESPONDING TOOL. Do not ask the user to perform it manually.",
+            "3. If asked about your capabilities, answer YES truthfully and describe the available GameForge runtime tools.",
+            "4. If an environmental dependency is genuinely unavailable (e.g. Unreal Engine not installed on host), report the exact missing path or dependency rather than claiming a general inability to act.",
+        ]
+        return "\n".join(lines)
+

@@ -53,6 +53,7 @@ RepairHook = Callable[[StepContext, StepOutcome], bool]  # returns True if it ch
 
 class ForgeExecutor:
     _active_executors: Dict[str, "ForgeExecutor"] = {}
+    _executors_lock: threading.Lock = threading.Lock()
 
     def __init__(
         self,
@@ -68,7 +69,8 @@ class ForgeExecutor:
 
     @classmethod
     def cancel_run(cls, run_id: str) -> bool:
-        ex = cls._active_executors.get(run_id)
+        with cls._executors_lock:
+            ex = cls._active_executors.get(run_id)
         if ex is not None:
             ex.request_cancel()
             return True
@@ -93,11 +95,28 @@ class ForgeExecutor:
             pass
 
     # -- public -------------------------------------------------------------------------------
-    def invalidate_stage_and_downstream(self, state: RunState, stage_id: str) -> List[str]:
+    def invalidate_stage_and_downstream(
+        self,
+        state: RunState,
+        stage_id: str,
+        store: Optional[RunStore] = None,
+    ) -> List[str]:
         """Invalidate the given stage and all downstream stages in the DAG, resetting them to PENDING.
         Upstream completed stages remain DONE and will be skipped on resume."""
+        from ..backend.agent.repair_system import RepairEngine
+        canonical_stage = RepairEngine.STAGE_ALIASES.get(stage_id, stage_id)
+
+        target_ids = set()
+        for s in state.run.steps:
+            if s.step_id in (stage_id, canonical_stage) or s.kind.value in (stage_id, canonical_stage):
+                target_ids.add(s.step_id)
+            elif stage_id.startswith("assemble_") and s.step_id.startswith("assemble_"):
+                target_ids.add(s.step_id)
+        if not target_ids:
+            target_ids.add(stage_id)
+
         dependants: set[str] = set()
-        to_visit = [stage_id]
+        to_visit = list(target_ids)
         while to_visit:
             curr = to_visit.pop()
             dependants.add(curr)
@@ -113,7 +132,14 @@ class ForgeExecutor:
                 rec.finished_at = None
                 rec.errors = []
                 rec.artifacts = []
+                rec.data = {}
         state.status = "PENDING"
+        if store is not None:
+            self._persist(
+                state,
+                store,
+                {"kind": "stage_invalidated", "stage_id": stage_id, "downstream": sorted(list(dependants))},
+            )
         return sorted(list(dependants))
 
     def resume_from_stage(
@@ -125,7 +151,7 @@ class ForgeExecutor:
     ) -> RunState:
         """Resume execution specifically from the failed/repaired stage, invalidating downstream stages
         while preserving upstream artifacts and completed stages."""
-        self.invalidate_stage_and_downstream(state, stage_id)
+        self.invalidate_stage_and_downstream(state, stage_id, store=store)
         return self.run(state, store, editor_running)
 
     def resume(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
@@ -138,11 +164,13 @@ class ForgeExecutor:
 
     def run(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
         """Execute until DONE, FAILED, CANCELLED, BLOCKED or WAITING_APPROVAL. Safe to call again to resume."""
-        ForgeExecutor._active_executors[state.run.run_id] = self
+        with ForgeExecutor._executors_lock:
+            ForgeExecutor._active_executors[state.run.run_id] = self
         try:
             return self._run_internal(state, store, editor_running)
         finally:
-            ForgeExecutor._active_executors.pop(state.run.run_id, None)
+            with ForgeExecutor._executors_lock:
+                ForgeExecutor._active_executors.pop(state.run.run_id, None)
 
     def _run_internal(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
         """Execute until DONE, FAILED, CANCELLED, BLOCKED or WAITING_APPROVAL. Safe to call again to resume."""
@@ -223,6 +251,8 @@ class ForgeExecutor:
     # -- internals ----------------------------------------------------------------------------
     def _run_step(self, state: RunState, store: RunStore, step: StepSpec, rec: StepRecord, repo: Optional[ProjectRepo], editor_running: Callable[[], bool], eff_hash: str) -> None:
         handler = self.handlers.get(step.step_id) or self.handlers.get(step.kind.value)
+        if handler is None and step.step_id.startswith("assemble_"):
+            handler = self.handlers.get("assemble") or self.handlers.get("assemble_level")
         if handler is None:
             rec.status, rec.errors = StepStatus.BLOCKED, [f"no handler for step {step.step_id} (kind {step.kind.value})"]
             self._persist(state, store, {"kind": "step_blocked", "step_id": step.step_id})
@@ -414,11 +444,21 @@ class ForgeExecutor:
 
         if timed_out:
             ctx.cancel.set()
+            try:
+                from ..core.jobs import terminate_all_children
+                terminate_all_children()
+            except Exception:
+                pass
             t.join(timeout=1.0)
             return StepOutcome(False, errors=[f"TIMEOUT after {timeout_s:.1f}s"])
 
         if self._run_cancel.is_set():
             ctx.cancel.set()
+            try:
+                from ..core.jobs import terminate_all_children
+                terminate_all_children()
+            except Exception:
+                pass
             t.join(timeout=1.0)
             if "out" in box and box["out"].ok:
                 return box["out"]

@@ -75,14 +75,33 @@ class AssetRegistry:
 
     @contextmanager
     def _connect(self):
-        # One short-lived connection per call: no handle outlives it, so Windows never sees the file locked.
-        db = sqlite3.connect(self.path)
-        db.row_factory = sqlite3.Row
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        # One short-lived connection per call with WAL mode and lock retry: no handle outlives it, so Windows never sees the file locked.
+        for attempt in range(5):
+            try:
+                db = sqlite3.connect(self.path, timeout=30.0)
+                db.row_factory = sqlite3.Row
+                try:
+                    db.execute("PRAGMA journal_mode = WAL;")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    db.execute("PRAGMA busy_timeout = 30000;")
+                    db.execute("PRAGMA synchronous = NORMAL;")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    with db:
+                        yield db
+                    return
+                finally:
+                    db.close()
+            except sqlite3.OperationalError as exc:
+                if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+                else:
+                    raise
 
     def close(self) -> None:
         """Kept for API symmetry; connections are already closed after every call."""

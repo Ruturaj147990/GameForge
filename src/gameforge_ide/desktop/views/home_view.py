@@ -424,14 +424,15 @@ class HomeView(QWidget):
         self._edit_project_dir.setText(str(default_root))
         self._edit_project_dir.textChanged.connect(self._on_project_dir_text_changed)
 
-        # ── 2. Primary Dashboard: Recent Games + Readiness ───────────────────
+        # ── 2. Primary Dashboard: Readiness (Game catalog is consolidated in Games View) ──
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(tokens.SPACE_LG)
 
-        # Recent Games
+        # Recent Games (retained hidden for backward-compatibility and tests; authoritative catalog is in GamesView)
         self._recent_section = QFrame(self)
         self._recent_section.setObjectName("homeRecentGamesSection")
         self._recent_section.setAccessibleName("Recent Games Section")
+        self._recent_section.setVisible(False)
         self._recent_section.setStyleSheet(
             f"QFrame#{self._recent_section.objectName()} {{"
             f"  background-color: {tokens.BG_PANEL};"
@@ -458,9 +459,7 @@ class HomeView(QWidget):
         recent_vbox.addLayout(self._cards_layout)
         recent_vbox.addStretch(1)
 
-        bottom_layout.addWidget(self._recent_section, 3)
-
-        # Readiness
+        # Readiness (Expanded across full dashboard width on Home)
         self._readiness_section = QFrame(self)
         self._readiness_section.setObjectName("homeReadinessSection")
         self._readiness_section.setAccessibleName("Readiness Section")
@@ -490,7 +489,7 @@ class HomeView(QWidget):
         readiness_vbox.addLayout(self._readiness_rows_layout)
         readiness_vbox.addStretch(1)
 
-        bottom_layout.addWidget(self._readiness_section, 2)
+        bottom_layout.addWidget(self._readiness_section, 1)
         main_layout.addLayout(bottom_layout, 1)
 
         # Initial data loading

@@ -27,7 +27,7 @@
 
 namespace
 {
-	FString MakeJsonString(TSharedPtr<FJsonObject> JsonObj)
+	FString MakeLandscapeJsonString(TSharedPtr<FJsonObject> JsonObj)
 	{
 		FString Output;
 		TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
@@ -35,7 +35,7 @@ namespace
 		return Output;
 	}
 
-	FString MakeEnvelope(bool bSuccess, TSharedPtr<FJsonObject> Data, const TArray<FString>& Errors = {}, const TArray<FString>& Warnings = {})
+	FString MakeLandscapeEnvelope(bool bSuccess, TSharedPtr<FJsonObject> Data, const TArray<FString>& Errors = {}, const TArray<FString>& Warnings = {})
 	{
 		TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
 		Root->SetBoolField(TEXT("success"), bSuccess);
@@ -55,7 +55,7 @@ namespace
 		}
 		Root->SetArrayField(TEXT("warnings"), WarnVals);
 
-		return MakeJsonString(Root);
+		return MakeLandscapeJsonString(Root);
 	}
 
 	UWorld* GetActiveEditorWorld()
@@ -129,14 +129,14 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	UWorld* World = GetActiveEditorWorld();
 	if (!World)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
 	}
 
 	TSharedPtr<FJsonObject> Json;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
 	}
 
 	const int32 ComponentCountX = Json->HasField(TEXT("component_count_x")) ? Json->GetIntegerField(TEXT("component_count_x")) : 2;
@@ -212,7 +212,7 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	ALandscape* Landscape = World->SpawnActor<ALandscape>(OriginOffset, FRotator::ZeroRotator, SpawnParams);
 	if (!Landscape)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to spawn ALandscape actor in world.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to spawn ALandscape actor in world.")});
 	}
 
 	Landscape->SetActorRelativeScale3D(Scale);
@@ -335,7 +335,7 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	Data->SetNumberField(TEXT("seed"), Seed);
 	Data->SetStringField(TEXT("terrain_type"), TerrainType);
 
-	return MakeEnvelope(true, Data, {}, LayerWarnings);
+	return MakeLandscapeEnvelope(true, Data, {}, LayerWarnings);
 }
 
 FString UGameForgeLandscapeLibrary::InspectLandscapeLayers()
@@ -343,7 +343,7 @@ FString UGameForgeLandscapeLibrary::InspectLandscapeLayers()
 	UWorld* World = GetActiveEditorWorld();
 	if (!World)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
 	}
 	ALandscape* Landscape = nullptr;
 	for (TActorIterator<ALandscape> It(World); It; ++It)
@@ -354,12 +354,12 @@ FString UGameForgeLandscapeLibrary::InspectLandscapeLayers()
 	ULandscapeInfo* Info = Landscape ? Landscape->GetLandscapeInfo() : nullptr;
 	if (!Info)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No landscape in the editor world.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No landscape in the editor world.")});
 	}
 	int32 MinX = 0, MinY = 0, MaxX = 0, MaxY = 0;
 	if (!Info->GetLandscapeExtent(MinX, MinY, MaxX, MaxY))
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Landscape has no extent.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Landscape has no extent.")});
 	}
 	const int32 W = MaxX - MinX + 1;
 	const int32 H = MaxY - MinY + 1;
@@ -393,7 +393,7 @@ FString UGameForgeLandscapeLibrary::InspectLandscapeLayers()
 	Data->SetStringField(TEXT("material"), Landscape->LandscapeMaterial ? Landscape->LandscapeMaterial->GetPathName() : TEXT(""));
 	Data->SetNumberField(TEXT("vertices"), W * H);
 	Data->SetArrayField(TEXT("layers"), Layers);
-	return MakeEnvelope(Layers.Num() > 0, Data, Layers.Num() > 0 ? TArray<FString>() : TArray<FString>{TEXT("landscape has no paint layers")});
+	return MakeLandscapeEnvelope(Layers.Num() > 0, Data, Layers.Num() > 0 ? TArray<FString>() : TArray<FString>{TEXT("landscape has no paint layers")});
 }
 
 FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
@@ -401,14 +401,14 @@ FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
 	UWorld* World = GetActiveEditorWorld();
 	if (!World)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
 	}
 
 	TSharedPtr<FJsonObject> Json;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
 	}
 
 	const FString RoadName = Json->HasField(TEXT("road_name")) ? Json->GetStringField(TEXT("road_name")) : TEXT("Road_MainTrail");
@@ -435,7 +435,7 @@ FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
 	AActor* SplineActor = World->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (!SplineActor)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to spawn spline road actor.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to spawn spline road actor.")});
 	}
 
 	USceneComponent* RootComp = NewObject<USceneComponent>(SplineActor, TEXT("RootSceneComponent"));
@@ -514,7 +514,7 @@ FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
 	Data->SetNumberField(TEXT("total_length_cm"), SplineComp->GetSplineLength());
 	Data->SetNumberField(TEXT("road_width_cm"), RoadWidth);
 
-	return MakeEnvelope(true, Data);
+	return MakeLandscapeEnvelope(true, Data);
 }
 
 FString UGameForgeLandscapeLibrary::CreateFoliageScatter(const FString& ParamsJson)
@@ -522,14 +522,14 @@ FString UGameForgeLandscapeLibrary::CreateFoliageScatter(const FString& ParamsJs
 	UWorld* World = GetActiveEditorWorld();
 	if (!World)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
 	}
 
 	TSharedPtr<FJsonObject> Json;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
 	}
 
 	const FString ClusterName = Json->HasField(TEXT("cluster_name")) ? Json->GetStringField(TEXT("cluster_name")) : TEXT("Foliage_PineForest");
@@ -571,7 +571,7 @@ FString UGameForgeLandscapeLibrary::CreateFoliageScatter(const FString& ParamsJs
 	AActor* ClusterActor = World->SpawnActor<AActor>(AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (!ClusterActor)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to spawn foliage cluster actor.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to spawn foliage cluster actor.")});
 	}
 
 	USceneComponent* RootComp = NewObject<USceneComponent>(ClusterActor, TEXT("RootComponent"));
@@ -657,7 +657,7 @@ FString UGameForgeLandscapeLibrary::CreateFoliageScatter(const FString& ParamsJs
 	Data->SetNumberField(TEXT("seed"), Seed);
 	Data->SetNumberField(TEXT("area_radius"), AreaRadius);
 
-	return MakeEnvelope(true, Data);
+	return MakeLandscapeEnvelope(true, Data);
 }
 
 FString UGameForgeLandscapeLibrary::CreateLandmark(const FString& ParamsJson)
@@ -665,14 +665,14 @@ FString UGameForgeLandscapeLibrary::CreateLandmark(const FString& ParamsJson)
 	UWorld* World = GetActiveEditorWorld();
 	if (!World)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
 	}
 
 	TSharedPtr<FJsonObject> Json;
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
 	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
 	}
 
 	const FString LandmarkName = Json->HasField(TEXT("landmark_name")) ? Json->GetStringField(TEXT("landmark_name")) : TEXT("Landmark_AncientRuins");
@@ -708,7 +708,7 @@ FString UGameForgeLandscapeLibrary::CreateLandmark(const FString& ParamsJson)
 	AActor* LandmarkActor = World->SpawnActor<AActor>(AActor::StaticClass(), FVector(PosX, PosY, PosZ), FRotator::ZeroRotator, SpawnParams);
 	if (!LandmarkActor)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("Failed to spawn landmark actor.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to spawn landmark actor.")});
 	}
 
 	USceneComponent* RootComp = NewObject<USceneComponent>(LandmarkActor, TEXT("RootComponent"));
@@ -774,7 +774,7 @@ FString UGameForgeLandscapeLibrary::CreateLandmark(const FString& ParamsJson)
 	Data->SetNumberField(TEXT("location_z"), PosZ);
 	Data->SetBoolField(TEXT("has_trigger_box"), true);
 
-	return MakeEnvelope(true, Data);
+	return MakeLandscapeEnvelope(true, Data);
 }
 
 FString UGameForgeLandscapeLibrary::InspectProceduralWorld()
@@ -782,7 +782,7 @@ FString UGameForgeLandscapeLibrary::InspectProceduralWorld()
 	UWorld* World = GetActiveEditorWorld();
 	if (!World)
 	{
-		return MakeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
 	}
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
@@ -875,5 +875,5 @@ FString UGameForgeLandscapeLibrary::InspectProceduralWorld()
 	}
 	Data->SetBoolField(TEXT("has_navmesh"), bHasNavMesh);
 
-	return MakeEnvelope(true, Data);
+	return MakeLandscapeEnvelope(true, Data);
 }

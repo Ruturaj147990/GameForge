@@ -2,6 +2,7 @@
 created with KILL_ON_JOB_CLOSE, so all children die with the IDE even if it crashes (Blueprint §8.1)."""
 from __future__ import annotations
 
+import atexit
 import concurrent.futures
 import ctypes
 import logging
@@ -9,8 +10,9 @@ import subprocess
 import sys
 import threading
 import time
+import weakref
 from ctypes import wintypes
-from typing import Any, Callable, List, Optional, Sequence, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +120,44 @@ def adopt(proc: subprocess.Popen) -> bool:
         return False
 
 
+def kill_process_tree(proc: subprocess.Popen) -> None:
+    """Kill a process and all its descendants to prevent orphaned child processes."""
+    if proc is None:
+        return
+    pid = getattr(proc, "pid", None)
+    if pid is not None:
+        try:
+            import psutil
+            parent = psutil.Process(pid)
+            for child in parent.children(recursive=True):
+                try:
+                    child.kill()
+                except Exception:
+                    pass
+            parent.kill()
+        except Exception:
+            pass
+
+        if sys.platform == "win32":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+            except Exception:
+                pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=0.2)
+    except Exception:
+        pass
+
+
 def terminate_all_children(exit_code: int = 1) -> bool:
     """Terminate all child processes running in the IDE job object and fallback registry."""
     terminated_job = False
@@ -144,7 +184,7 @@ def terminate_all_children(exit_code: int = 1) -> bool:
     for p in procs:
         try:
             if p.poll() is None:
-                p.terminate()
+                kill_process_tree(p)
         except Exception:
             pass
 
@@ -248,6 +288,39 @@ class JobHandle:
         self._future.add_done_callback(_wrapper)
 
 
+class _DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
+    """ThreadPoolExecutor variant that creates daemon worker threads.
+    Daemon threads do not prevent interpreter exit and eliminate shutdown access violations.
+    """
+    def _adjust_thread_count(self) -> None:
+        try:
+            if hasattr(self, "_idle_semaphore") and self._idle_semaphore.acquire(timeout=0):
+                return
+            from concurrent.futures.thread import _worker, _threads_queues
+
+            def weakref_cb(_, q=self._work_queue):
+                try:
+                    q.put(None)
+                except Exception:
+                    pass
+
+            num_threads = len(self._threads)
+            if num_threads < self._max_workers:
+                thread_name = f"{self._thread_name_prefix or 'job'}_{num_threads}"
+                t = threading.Thread(
+                    name=thread_name,
+                    target=_worker,
+                    args=(weakref.ref(self, weakref_cb), self._create_worker_context(), self._work_queue),
+                    daemon=True,
+                )
+                t.start()
+                self._threads.add(t)
+                _threads_queues[t] = self._work_queue
+        except Exception:
+            # Fallback to base ThreadPoolExecutor thread creation if internals change
+            super()._adjust_thread_count()
+
+
 class JobManager:
     @classmethod
     def instance(cls) -> JobManager:
@@ -255,10 +328,16 @@ class JobManager:
 
     def __init__(self, max_workers: int = 4):
         self._max_workers = max_workers
-        self._executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=max_workers,
-            thread_name_prefix="gameforge-job",
-        )
+        try:
+            self._executor = _DaemonThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="gameforge-job",
+            )
+        except Exception:
+            self._executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="gameforge-job",
+            )
         self._jobs_lock = threading.Lock()
         self._jobs: Dict[str, JobHandle] = {}
         self._failed_jobs: List[Tuple[str, BaseException]] = []
@@ -294,7 +373,7 @@ class JobManager:
         with self._jobs_lock:
             active = [h for h in self._jobs.values() if not h.done()]
             # Prune completed jobs from dictionary
-            self._jobs = {h.name: h for h in self._jobs.values() if not h.done()}
+            self._jobs = {h.name: h for h in active}
             return active
 
     def failed_jobs(self) -> List[Tuple[str, BaseException]]:
@@ -316,7 +395,12 @@ class JobManager:
         try:
             self._executor.shutdown(wait=wait, cancel_futures=cancel_futures)
         except TypeError:
-            self._executor.shutdown(wait=wait)
+            try:
+                self._executor.shutdown(wait=wait)
+            except Exception:
+                pass
+        except Exception:
+            pass
 
 
 _DEFAULT_MANAGER: Optional[JobManager] = None
@@ -341,4 +425,19 @@ def reset_default_job_manager(wait: bool = False) -> None:
             except Exception:
                 pass
             _DEFAULT_MANAGER = None
+
+
+def _cleanup_at_exit() -> None:
+    """Clean up background workers and child processes upon process exit."""
+    try:
+        reset_default_job_manager(wait=False)
+    except Exception:
+        pass
+    try:
+        terminate_all_children()
+    except Exception:
+        pass
+
+
+atexit.register(_cleanup_at_exit)
 

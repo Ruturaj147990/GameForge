@@ -16,9 +16,9 @@
 
 namespace
 {
-	const TCHAR* LabelTagPrefix = TEXT("GF_VFX:");
+	const TCHAR* VFXLabelTagPrefix = TEXT("GF_VFX:");
 
-	FString Envelope(bool bSuccess, TSharedPtr<FJsonObject> Data, const TArray<FString>& Errors = {})
+	FString VFXEnvelope(bool bSuccess, TSharedPtr<FJsonObject> Data, const TArray<FString>& Errors = {})
 	{
 		TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
 		Root->SetBoolField(TEXT("success"), bSuccess);
@@ -35,7 +35,7 @@ namespace
 		return Out;
 	}
 
-	TSharedPtr<FJsonObject> Parse(const FString& Json)
+	TSharedPtr<FJsonObject> VFXParseJson(const FString& Json)
 	{
 		TSharedPtr<FJsonObject> Obj;
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
@@ -63,21 +63,21 @@ namespace
 
 FString UGameForgeVFXLibrary::SpawnSystem(const FString& ParamsJson)
 {
-	const TSharedPtr<FJsonObject> Params = Parse(ParamsJson);
+	const TSharedPtr<FJsonObject> Params = VFXParseJson(ParamsJson);
 	if (!Params.IsValid())
 	{
-		return Envelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+		return VFXEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
 	}
 	UWorld* World = ResolveWorld(Params);
 	if (!World)
 	{
-		return Envelope(false, nullptr, {TEXT("Requested world is not running (start PIE for world=pie).")});
+		return VFXEnvelope(false, nullptr, {TEXT("Requested world is not running (start PIE for world=pie).")});
 	}
 	const FString SystemPath = Params->GetStringField(TEXT("system_path"));
 	UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *SystemPath);
 	if (!System)
 	{
-		return Envelope(false, nullptr, {FString::Printf(TEXT("Not a NiagaraSystem: %s"), *SystemPath)});
+		return VFXEnvelope(false, nullptr, {FString::Printf(TEXT("Not a NiagaraSystem: %s"), *SystemPath)});
 	}
 	FVector Location = FVector::ZeroVector;
 	const TSharedPtr<FJsonObject>* Loc = nullptr;
@@ -89,29 +89,29 @@ FString UGameForgeVFXLibrary::SpawnSystem(const FString& ParamsJson)
 		FVector(1.0f), /*bAutoDestroy=*/false, /*bAutoActivate=*/true, ENCPoolMethod::None, /*bPreCullCheck=*/false);
 	if (!Comp)
 	{
-		return Envelope(false, nullptr, {TEXT("SpawnSystemAtLocation returned null.")});
+		return VFXEnvelope(false, nullptr, {TEXT("SpawnSystemAtLocation returned null.")});
 	}
 	const FString Label = Params->HasField(TEXT("label")) ? Params->GetStringField(TEXT("label")) : TEXT("GF_VFX");
-	Comp->ComponentTags.Add(FName(*(FString(LabelTagPrefix) + Label)));
+	Comp->ComponentTags.Add(FName(*(FString(VFXLabelTagPrefix) + Label)));
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("label"), Label);
 	Data->SetStringField(TEXT("system"), System->GetPathName());
 	Data->SetStringField(TEXT("world"), World->GetName());
 	Data->SetBoolField(TEXT("active"), Comp->IsActive());
-	return Envelope(true, Data);
+	return VFXEnvelope(true, Data);
 }
 
 FString UGameForgeVFXLibrary::InspectParticles(const FString& ParamsJson)
 {
-	const TSharedPtr<FJsonObject> Params = Parse(ParamsJson.IsEmpty() ? TEXT("{}") : ParamsJson);
+	const TSharedPtr<FJsonObject> Params = VFXParseJson(ParamsJson.IsEmpty() ? TEXT("{}") : ParamsJson);
 	if (!Params.IsValid())
 	{
-		return Envelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+		return VFXEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
 	}
 	UWorld* World = ResolveWorld(Params);
 	if (!World)
 	{
-		return Envelope(false, nullptr, {TEXT("Requested world is not running.")});
+		return VFXEnvelope(false, nullptr, {TEXT("Requested world is not running.")});
 	}
 	const FString Filter = Params->HasField(TEXT("label")) ? Params->GetStringField(TEXT("label")) : TEXT("");
 	TArray<TSharedPtr<FJsonValue>> Components;
@@ -127,9 +127,9 @@ FString UGameForgeVFXLibrary::InspectParticles(const FString& ParamsJson)
 		for (const FName& Tag : Comp->ComponentTags)
 		{
 			const FString TagString = Tag.ToString();
-			if (TagString.StartsWith(LabelTagPrefix))
+			if (TagString.StartsWith(VFXLabelTagPrefix))
 			{
-				Label = TagString.RightChop(FCString::Strlen(LabelTagPrefix));
+				Label = TagString.RightChop(FCString::Strlen(VFXLabelTagPrefix));
 			}
 		}
 		if (!Filter.IsEmpty() && Label != Filter)
@@ -168,5 +168,5 @@ FString UGameForgeVFXLibrary::InspectParticles(const FString& ParamsJson)
 	Data->SetStringField(TEXT("world"), World->GetName());
 	Data->SetArrayField(TEXT("components"), Components);
 	Data->SetNumberField(TEXT("total_particles"), (double)Total);
-	return Envelope(Components.Num() > 0, Data, Components.Num() > 0 ? TArray<FString>() : TArray<FString>{TEXT("no Niagara components in that world")});
+	return VFXEnvelope(Components.Num() > 0, Data, Components.Num() > 0 ? TArray<FString>() : TArray<FString>{TEXT("no Niagara components in that world")});
 }

@@ -163,9 +163,9 @@ class OllamaProvider(ModelProvider):
 
     def budget_num_ctx(self, model_id: str, estimated_input_tokens: int = 0, requested_ctx: Optional[int] = None) -> int:
         """Dynamically budgets num_ctx based on model family and input size, respecting hardware bounds."""
-        caps = self.get_capabilities(model_id)
         if requested_ctx and requested_ctx > 0:
             return requested_ctx
+        caps = self.get_capabilities(model_id)
         needed = max(8192, estimated_input_tokens + 2048)
         return min(needed, caps.max_context)
 

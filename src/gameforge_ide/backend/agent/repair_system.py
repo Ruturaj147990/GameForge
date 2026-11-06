@@ -205,11 +205,14 @@ class RepairEngine:
     ) -> RepairAttempt:
         """Records a repair attempt and checks for cycles or repetition."""
         diff_h = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:16]
+        norm_lines = [l.strip() for l in (diff_text or "").splitlines() if l.strip()]
+        norm_h = hashlib.sha256("\n".join(norm_lines).encode("utf-8")).hexdigest()[:16]
         history = self._history_by_cause.setdefault(cause.signature, [])
         attempt_no = len(history) + 1
 
         seen_diffs = self._diff_hashes_by_cause.setdefault(cause.signature, set())
         seen_diffs.add(diff_h)
+        seen_diffs.add(norm_h)
 
         attempt = RepairAttempt(
             attempt_number=attempt_no,
@@ -225,6 +228,14 @@ class RepairEngine:
         history.append(attempt)
         return attempt
 
+    def is_cyclic_diff(self, cause: RootCause, diff_text: str) -> bool:
+        """Returns True if the proposed diff was already attempted for this root cause."""
+        diff_h = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:16]
+        norm_lines = [l.strip() for l in (diff_text or "").splitlines() if l.strip()]
+        norm_h = hashlib.sha256("\n".join(norm_lines).encode("utf-8")).hexdigest()[:16]
+        seen = self._diff_hashes_by_cause.get(cause.signature, set())
+        return diff_h in seen or norm_h in seen
+
     STANDARD_FORGE_STAGES: List[str] = [
         "design",
         "scaffold",
@@ -239,10 +250,23 @@ class RepairEngine:
         "report",
     ]
 
+    STAGE_ALIASES: Dict[str, str] = {
+        "spec": "design",
+        "codegen": "build_editor",
+        "sources": "build_editor",
+        "build": "build_editor",
+        "assemble": "assemble_level_1",
+        "assemble_level": "assemble_level_1",
+        "automation_tests": "automation",
+        "scenario": "scenarios",
+        "packaged_smoke": "scenarios",
+    }
+
     def affected_downstream_stages(self, failed_stage_id: str) -> List[str]:
         """Calculates downstream stages in the canonical 11-stage pipeline."""
-        if failed_stage_id in self.STANDARD_FORGE_STAGES:
-            idx = self.STANDARD_FORGE_STAGES.index(failed_stage_id)
+        canonical_id = self.STAGE_ALIASES.get(failed_stage_id, failed_stage_id)
+        if canonical_id in self.STANDARD_FORGE_STAGES:
+            idx = self.STANDARD_FORGE_STAGES.index(canonical_id)
             return self.STANDARD_FORGE_STAGES[idx:]
         return [failed_stage_id]
 

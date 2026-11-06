@@ -190,8 +190,6 @@ class BoundaryManager:
 
         return resolved
 
-        return resolved
-
     def is_safe(self, target_path: Path | str, allow_write: bool = False) -> bool:
         """Returns True if path is safe, False otherwise."""
         try:

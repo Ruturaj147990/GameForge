@@ -239,3 +239,131 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         artifacts=[{"path": str(a), "kind": "scenario_result"} for a in artifacts],
         errors=errors,
     )
+
+
+def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
+    """Forge SCENARIO_GEN step: generate QA playtest scenarios from GDS, manifests, or composer inputs."""
+    base_dir = Path(ctx.project_dir) if ctx.project_dir else Path(ctx.workspace_dir)
+    p_name = base_dir.name
+    scenarios_dir = base_dir / "GameForge" / "scenarios"
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
+
+    scenarios: List[Scenario] = []
+
+    # 1. Inputs from composer plan
+    input_scenarios = ctx.step.inputs.get("scenarios") or []
+    for sc_data in input_scenarios:
+        try:
+            if isinstance(sc_data, Scenario):
+                scenarios.append(sc_data)
+            elif isinstance(sc_data, dict):
+                scenarios.append(Scenario.model_validate(sc_data))
+        except Exception:
+            pass
+
+    # 2. GDS-driven scenario generation
+    gds = None
+    gds_candidates = [
+        base_dir / "GameForge" / "design" / "game.gds.json",
+        base_dir / "GameForge" / "gds.json",
+        base_dir / "Saved" / "GameForge" / "gds.json",
+        ctx.workspace_dir / "GameForge" / "gds.json",
+    ]
+    for g_path in gds_candidates:
+        if g_path.is_file():
+            try:
+                gds = GameDesignSpec.model_validate_json(g_path.read_text(encoding="utf-8"))
+                break
+            except Exception:
+                pass
+
+    if gds is None and "gds" in ctx.step.inputs:
+        try:
+            gds_input = ctx.step.inputs["gds"]
+            gds = GameDesignSpec.model_validate(gds_input) if isinstance(gds_input, dict) else gds_input
+        except Exception:
+            pass
+
+    if gds is None:
+        for sh in ctx.shared.values():
+            if isinstance(sh, dict) and "gds" in sh:
+                try:
+                    gds = GameDesignSpec.model_validate(sh["gds"]) if isinstance(sh["gds"], dict) else sh["gds"]
+                    if gds:
+                        break
+                except Exception:
+                    pass
+
+    # Find level manifests
+    manifests: List[LevelManifest] = []
+    manifest_dirs = [
+        base_dir / "GameForge" / "levels",
+        base_dir / "Saved" / "GameForge" / "levels",
+        ctx.workspace_dir / "GameForge" / "levels",
+    ]
+    for m_dir in manifest_dirs:
+        if m_dir.is_dir():
+            for mf in m_dir.glob("*.manifest.json"):
+                try:
+                    manifests.append(LevelManifest.from_file(mf))
+                except Exception:
+                    pass
+
+    if gds is not None:
+        try:
+            scs, _ = generate(gds, manifests)
+            existing_ids = {s.scenario_id for s in scenarios}
+            for s in scs:
+                if s.scenario_id not in existing_ids:
+                    scenarios.append(s)
+                    existing_ids.add(s.scenario_id)
+        except Exception:
+            pass
+
+        try:
+            from ...qa.game_spec_tests import (
+                acceptance_tests_to_scenarios,
+                generate_acceptance_tests,
+            )
+            spec_tests = generate_acceptance_tests(gds)
+            spec_scs = acceptance_tests_to_scenarios(spec_tests)
+            existing_ids = {s.scenario_id for s in scenarios}
+            for s in spec_scs:
+                if s.scenario_id not in existing_ids:
+                    scenarios.append(s)
+                    existing_ids.add(s.scenario_id)
+        except Exception:
+            pass
+
+    if not scenarios:
+        # Default fallback smoke scenario
+        scenarios.append(
+            Scenario(
+                scenario_id="smoke",
+                description=f"Smoke test for {p_name}: launch and stay alive",
+                timeout_s=30.0,
+                steps=[WaitStep(wait_s=WaitArgs(seconds=5.0))],
+                expect=[
+                    EventExpectation(event="game.started"),
+                    NoEventExpectation(no_event="player.died"),
+                ],
+                captures=[],
+            )
+        )
+
+    # Write generated scenarios to disk
+    artifacts = []
+    for s in scenarios:
+        sc_path = scenarios_dir / f"{s.scenario_id}.json"
+        try:
+            sc_path.write_text(s.model_dump_json(indent=2), encoding="utf-8")
+            artifacts.append(sc_path)
+        except Exception:
+            pass
+
+    ctx.log(f"Generated {len(scenarios)} QA playtest scenarios in {scenarios_dir}")
+    return StepOutcome(
+        ok=True,
+        data={"scenarios": [s.model_dump() for s in scenarios], "count": len(scenarios)},
+        artifacts=[{"path": str(a), "kind": "scenario_result"} for a in artifacts],
+    )

@@ -157,22 +157,17 @@ def is_gameforge_project(folder: Union[str, Path]) -> bool:
         if folder_name in REPO_INFRASTRUCTURE_DIRS:
             return False
 
-        # 1. Direct or stem-matching .uproject
+        # 1. Direct or nested .uproject
         up = find_uproject(folder_str)
         if up is not None:
-            # A folder is ONLY an Unreal project if the .uproject is directly inside it,
-            # or if the uproject stem matches the folder name (e.g. MyGame/.../MyGame.uproject)
-            up_str = str(Path(up).resolve())
-            real_folder = os.path.realpath(folder_str)
-            if os.path.dirname(up_str) == real_folder or up.stem.lower() == folder_name.lower():
-                return True
+            return True
 
         # 2. GDS specification file
         if find_gds(folder_str) is not None:
             return True
-        # .gameforge/project_graph.json sentinel
-        graph_json = os.path.join(folder_str, ".gameforge", "project_graph.json")
-        if os.path.isfile(graph_json):
+
+        # 3. .gameforge workspace directory (tasks, sessions, diffs, etc.)
+        if os.path.isdir(os.path.join(folder_str, ".gameforge")):
             return True
     except (OSError, PermissionError):
         pass

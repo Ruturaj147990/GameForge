@@ -320,8 +320,8 @@ class UnrealToolchain:
             raise ValueError(f"project name must be PascalCase alphanumeric (got {name!r})")
         title = "".join(c for c in (display_title or name) if c not in '"\\\r\n')[:60]
         project_dir = Path(project_dir)
-        deps = ["Core", "CoreUObject", "Engine", "InputCore"] + [d for d in (module_deps or []) if d not in
-                                                                  ("Core", "CoreUObject", "Engine", "InputCore")]
+        base_deps = ["Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayAbilities", "GameplayTags"]
+        deps = base_deps + [d for d in (module_deps or []) if d not in base_deps]
         plugin_list = [{"Name": "PythonScriptPlugin", "Enabled": True},
                        {"Name": "EditorScriptingUtilities", "Enabled": True}]
         for req_plugin in ("EnhancedInput", "GameplayAbilities", "Niagara"):

@@ -901,24 +901,30 @@ class MainWindow(QMainWindow):
             ))
 
     def _sync_models_to_toolbar(self) -> None:
-        """Populate the top toolbar model combo with available models."""
+        """Populate the top toolbar model combo and assistant panel model combo with available models."""
         try:
             models = self._agent.list_models()
         except Exception:
             return
-        current = self._tb_model_combo.currentText() or self._chat_panel._current_model
-        self._tb_model_combo.blockSignals(True)
-        try:  # always unblock: an exception here used to leave the toolbar combo's signals blocked
-            self._tb_model_combo.clear()
-            for m in models:
-                self._tb_model_combo.addItem(m.get("id", m.get("name", "unknown")))
-            idx = self._tb_model_combo.findText(current)
-            if idx >= 0:
-                self._tb_model_combo.setCurrentIndex(idx)
-            elif self._tb_model_combo.count() > 0:
-                self._tb_model_combo.setCurrentIndex(0)
-        finally:
-            self._tb_model_combo.blockSignals(False)
+        model_names = [m.get("id", m.get("name", "unknown")) for m in models]
+        current = getattr(self._chat_panel, "_current_model", None)
+        if hasattr(self, "_tb_model_combo"):
+            current = self._tb_model_combo.currentText() or current
+            self._tb_model_combo.blockSignals(True)
+            try:
+                self._tb_model_combo.clear()
+                for name in model_names:
+                    self._tb_model_combo.addItem(name)
+                idx = self._tb_model_combo.findText(current) if current else -1
+                if idx >= 0:
+                    self._tb_model_combo.setCurrentIndex(idx)
+                elif self._tb_model_combo.count() > 0:
+                    self._tb_model_combo.setCurrentIndex(0)
+            finally:
+                self._tb_model_combo.blockSignals(False)
+
+        if hasattr(self, "_assistant_panel") and hasattr(self._assistant_panel, "set_models"):
+            self._assistant_panel.set_models(model_names, current)
 
     @Slot(str)
     def _on_top_model_changed(self, model_name: str) -> None:
@@ -928,16 +934,27 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_model_status"):
             self._model_status.setText(f"Model: {model_name}")
         self._chat_panel.set_model(model_name)
+        if hasattr(self, "_assistant_panel") and hasattr(self._assistant_panel, "model_combo"):
+            combo = self._assistant_panel.model_combo
+            if combo.currentText() != model_name:
+                combo.blockSignals(True)
+                idx = combo.findText(model_name)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+                else:
+                    combo.addItem(model_name)
+                    combo.setCurrentText(model_name)
+                combo.blockSignals(False)
         self.statusBar().showMessage(f"Active model set to: {model_name}", 3000)
 
     @Slot(str)
     def _on_chat_model_changed(self, model_name: str) -> None:
-        """When model is changed inside ChatPanel (e.g. via combo or /model command)."""
-        if not hasattr(self, "_tb_model_combo") or not model_name:
+        """When model is changed inside ChatPanel or AssistantPanel."""
+        if not model_name:
             return
         if hasattr(self, "_model_status"):
             self._model_status.setText(f"Model: {model_name}")
-        if self._tb_model_combo.currentText() != model_name:
+        if hasattr(self, "_tb_model_combo") and self._tb_model_combo.currentText() != model_name:
             self._tb_model_combo.blockSignals(True)
             idx = self._tb_model_combo.findText(model_name)
             if idx >= 0:
@@ -946,6 +963,17 @@ class MainWindow(QMainWindow):
                 self._tb_model_combo.addItem(model_name)
                 self._tb_model_combo.setCurrentText(model_name)
             self._tb_model_combo.blockSignals(False)
+        if hasattr(self, "_assistant_panel") and hasattr(self._assistant_panel, "model_combo"):
+            combo = self._assistant_panel.model_combo
+            if combo.currentText() != model_name:
+                combo.blockSignals(True)
+                idx = combo.findText(model_name)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+                else:
+                    combo.addItem(model_name)
+                    combo.setCurrentText(model_name)
+                combo.blockSignals(False)
 
     @Slot(str, dict)
     def _on_diff_pending(self, diff_id: str, meta: dict) -> None:
@@ -1211,8 +1239,16 @@ class MainWindow(QMainWindow):
         self._assistant_panel = AssistantPanel(self._chat_panel, self)
         self._assistant_panel.closeRequested.connect(lambda: self._set_assistant_visible(False))
         self._assistant_panel.modelChanged.connect(self._on_chat_model_changed)
-        models = [get_settings().model_for("chat")]
-        self._assistant_panel.set_models(models, models[0])
+        try:
+            available_models = [m.get("id", m.get("name", "unknown")) for m in self._agent.list_models()]
+        except Exception:
+            available_models = []
+        default_model = get_settings().model_for("chat")
+        if not available_models:
+            available_models = [default_model]
+        elif default_model not in available_models:
+            available_models.insert(0, default_model)
+        self._assistant_panel.set_models(available_models, default_model)
 
         # Mode selector synchronization
         if hasattr(self, "_top_bar"):
@@ -1657,8 +1693,12 @@ class MainWindow(QMainWindow):
 
     def _on_assistant_open_design(self, prompt: str) -> None:
         """Route design requests directly into the universal assistant chat without bouncing to retired views."""
-        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_on_prompt_submitted"):
-            self._chat_panel._on_prompt_submitted(prompt)
+        self._set_assistant_visible(True)
+        if hasattr(self, "_chat_panel") and self._chat_panel:
+            if hasattr(self._chat_panel, "send_prompt"):
+                self._chat_panel.send_prompt(prompt)
+            elif hasattr(self._chat_panel, "_on_prompt_submitted"):
+                self._chat_panel._on_prompt_submitted(prompt)
 
     def _on_home_design_ready(self, gds: Any, questions: List[str]) -> None:
         p_dir = None
