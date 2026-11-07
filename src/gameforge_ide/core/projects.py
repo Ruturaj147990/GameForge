@@ -448,7 +448,6 @@ def find_packaged_executable(
             target_dir / "Packaged" / "WindowsNoEditor" / f"{target_name}.exe",
             target_dir / "package_dev" / "Windows" / f"{target_name}.exe",
             target_dir / "package_ship" / "Windows" / f"{target_name}.exe",
-            target_dir / "Binaries" / "Win64" / f"{target_name}.exe",
             target_dir / "Packaged" / "Windows" / f"{name}.exe",
         ):
             if exe_candidate.is_file():

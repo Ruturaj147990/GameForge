@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..core.settings import get_settings
-from .models.modes import AutonomyProfile, TaskLifecycleStatus, TaskMode
+from .models.modes import AutonomyProfile, PermissionsMode, TaskLifecycleStatus, TaskMode
 from .models.plan_artifact import PlanArtifact
 
 
@@ -59,6 +59,7 @@ class Session(BaseModel):
     provider_type: str = "ollama"
     task_mode: TaskMode = Field(default=TaskMode.PLANNING)
     autonomy_profile: AutonomyProfile = Field(default=AutonomyProfile.AGENTIC)
+    permissions_mode: PermissionsMode = Field(default=PermissionsMode.AUTO)
     active_plan: Optional[PlanArtifact] = None
     active_task_id: Optional[str] = None
     task_status: TaskLifecycleStatus = Field(default=TaskLifecycleStatus.CREATED)
@@ -86,11 +87,19 @@ class SessionManager:
         provider_type: str = "ollama",
         task_mode: Optional[TaskMode | str] = None,
         autonomy_profile: Optional[AutonomyProfile | str] = None,
+        permissions_mode: Optional[PermissionsMode | str] = None,
         project_dir: Optional[str | Path] = None,
     ) -> Session:
         settings = get_settings()
         m_mode = TaskMode(task_mode) if task_mode else TaskMode(getattr(settings, "default_task_mode", "planning"))
         a_profile = AutonomyProfile(autonomy_profile) if autonomy_profile else AutonomyProfile(getattr(settings, "default_autonomy_profile", "agentic"))
+        if permissions_mode is not None:
+            p_mode = PermissionsMode.from_str(permissions_mode)
+        elif autonomy_profile is not None:
+            p_mode = PermissionsMode.from_str(autonomy_profile)
+        else:
+            p_mode = PermissionsMode.from_str(getattr(settings, "default_permissions_mode", "auto"))
+
         session = Session(
             name=name,
             workspace_path=str(self.workspace_path),
@@ -98,6 +107,7 @@ class SessionManager:
             provider_type=provider_type,
             task_mode=m_mode,
             autonomy_profile=a_profile,
+            permissions_mode=p_mode,
             project_dir=str(project_dir) if project_dir else None,
         )
         self.save_session(session)
@@ -108,8 +118,9 @@ class SessionManager:
         session_id: str,
         task_mode: Optional[TaskMode | str] = None,
         autonomy_profile: Optional[AutonomyProfile | str] = None,
+        permissions_mode: Optional[PermissionsMode | str] = None,
     ) -> bool:
-        """Update task_mode and/or autonomy_profile on an existing session."""
+        """Update task_mode, autonomy_profile, and/or permissions_mode on an existing session."""
         session = self.get_session(session_id)
         if not session:
             return False
@@ -117,6 +128,10 @@ class SessionManager:
             session.task_mode = TaskMode(task_mode)
         if autonomy_profile:
             session.autonomy_profile = AutonomyProfile(autonomy_profile)
+        if permissions_mode is not None:
+            session.permissions_mode = PermissionsMode.from_str(permissions_mode)
+        elif autonomy_profile is not None:
+            session.permissions_mode = PermissionsMode.from_str(autonomy_profile)
         self.save_session(session)
         return True
 

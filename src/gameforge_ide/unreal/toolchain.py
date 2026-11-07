@@ -19,8 +19,9 @@ import sys
 import threading
 import time
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from ..core.settings import engine_root_or_missing
 from ..core import jobs
 
@@ -57,6 +58,83 @@ class StepResult:
         d["error_count"] = sum(1 for x in self.diagnostics if x.severity == "error")
         d["warning_count"] = sum(1 for x in self.diagnostics if x.severity == "warning")
         return d
+
+
+class PackagingPhase(str, Enum):
+    PHASE_1_EDITOR_COMPILE = "Phase 1: Editor target compilation"
+    PHASE_2_GAME_COMPILE = "Phase 2: Standalone game target compilation"
+    PHASE_3_COOK = "Phase 3: Cook"
+    PHASE_4_STAGE = "Phase 4: Stage"
+    PHASE_5_PACKAGE = "Phase 5: Package"
+    PHASE_6_VERIFICATION = "Phase 6: Verification of packaged output"
+
+
+def verify_packaged_output(
+    archive_dir: Path,
+    project_name: str,
+    platform: str = "Win64",
+    project_source_dir: Optional[Path] = None,
+) -> Tuple[bool, List[str], Dict[str, Any]]:
+    """Strictly verify packaged game output structure in <archive_dir>/Windows/.
+    
+    CRITICAL INVARIANT (DEF-308):
+    A raw executable in <project_source_dir>/Binaries/Win64/ is NEVER accepted
+    or reported as proof of a packaged game. The packaged game must exist in
+    <archive_dir>/Windows/ with complete valid staging structure.
+    """
+    archive_dir = Path(archive_dir).resolve()
+    win_dir = archive_dir / "Windows"
+    if not win_dir.is_dir():
+        alt_win = archive_dir / "WindowsNoEditor"
+        if alt_win.is_dir():
+            win_dir = alt_win
+        else:
+            return False, [f"Packaging output directory '{win_dir}' does not exist on disk"], {"verified": False}
+
+    issues: List[str] = []
+    root_exe = win_dir / f"{project_name}.exe"
+    if not root_exe.is_file():
+        issues.append(f"Root packaged executable '{root_exe}' not found in {win_dir}")
+    elif root_exe.stat().st_size == 0:
+        issues.append(f"Root packaged executable '{root_exe}' is empty (0 bytes)")
+
+    # Staged project directory
+    staged_pdir = win_dir / project_name
+    if not staged_pdir.is_dir():
+        issues.append(f"Staged project directory '{staged_pdir}' not found in {win_dir}")
+    else:
+        staged_bin_dir = staged_pdir / "Binaries" / platform
+        staged_exes = [
+            staged_bin_dir / f"{project_name}.exe",
+            staged_bin_dir / f"{project_name}-{platform}-Development.exe",
+            staged_bin_dir / f"{project_name}-{platform}-Shipping.exe",
+        ]
+        if not any(c.is_file() and c.stat().st_size > 0 for c in staged_exes):
+            issues.append(f"Staged monolithic executable not found in '{staged_bin_dir}'")
+
+        staged_content = staged_pdir / "Content"
+        if not staged_content.is_dir() or not any(staged_content.iterdir()):
+            issues.append(f"Staged content directory '{staged_content}' missing or empty")
+
+    # Anti-confusion check: ensure root_exe is not inside project_source_dir/Binaries
+    if project_source_dir:
+        src_bin = Path(project_source_dir).resolve() / "Binaries"
+        try:
+            if root_exe.is_relative_to(src_bin):
+                issues.append(f"REJECTED: '{root_exe}' is inside source Binaries/Win64, not a valid packaged output")
+        except AttributeError:
+            if str(src_bin) in str(root_exe):
+                issues.append(f"REJECTED: '{root_exe}' is inside source Binaries/Win64, not a valid packaged output")
+
+    ok = (len(issues) == 0)
+    data = {
+        "verified": ok,
+        "archive_dir": str(archive_dir),
+        "packaged_exe": str(root_exe) if root_exe.is_file() else None,
+        "staged_project_dir": str(staged_pdir) if staged_pdir.is_dir() else None,
+        "issues": issues,
+    }
+    return ok, issues, data
 
 
 # ── diagnostics ─────────────────────────────────────────────────────────────
@@ -399,96 +477,98 @@ class UnrealToolchain:
         return {"uproject": str(project_dir / f"{name}.uproject"), "files": written}
 
     def deploy_gameforge_plugin(self, project_dir: Path) -> Path:
-        """Ensure GameForge plugin is deployed and synchronized into <project_dir>/Plugins/GameForge."""
+        """Ensure GameForge plugin is deployed and synchronized into <project_dir>/Plugins/GameForge.
+        
+        Enforces authoritative plugin synchronization and pre-deployment drift detection (DEF-309).
+        If the target project's Plugins/GameForge has drifted, is outdated, or contains mismatched hashes
+        or stale orphaned files, cleanly synchronizes it with authoritative sources.
+        """
         with self._DEPLOY_LOCK:
+            from .plugin_manifest import detect_plugin_drift, synchronize_plugin, get_authoritative_plugin_root
+
             project_dir = Path(project_dir)
             target = project_dir / "Plugins" / "GameForge"
-            repo_plugin = Path(__file__).resolve().parent / "GameForge"
+            auth_root = get_authoritative_plugin_root()
 
-            # Candidates for full plugin with precompiled binaries
-            candidates = [
-                repo_plugin,
-                Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
-            ]
-            try:
-                from ..core.settings import get_settings
-                s = get_settings()
-                if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build != repo_plugin:
-                    candidates.append(s.plugin_build)
-                if s.validation_root:
-                    candidates.append(s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
-            except Exception:
-                pass
+            # Pre-deployment drift detection (DEF-309)
+            drift = detect_plugin_drift(auth_root, target)
+            if drift.has_drift or not target.is_dir():
+                logger.info("Plugin drift or missing deployment for %s: %s; synchronizing authoritative plugin...", target, drift.summary)
+                sync_res = synchronize_plugin(auth_root, target, remove_stale=True)
+                logger.info("Authoritative plugin synchronized to %s: %d new, %d updated, %d stale removed",
+                            target, sync_res["copied_count"], sync_res["updated_count"], sync_res["removed_stale_count"])
 
-            best_source = next((c for c in candidates if c.is_dir() and (c / "GameForge.uplugin").is_file()), None)
-
-            # If target does not exist, do full initial deployment
-            if not target.is_dir():
-                if not best_source:
-                    logger.warning("Could not find GameForge plugin source to deploy into %s", project_dir)
-                    return target
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(best_source, target, dirs_exist_ok=True)
-                logger.info("Deployed GameForge plugin from %s to %s", best_source, target)
-                return target
-
-            # Target exists: synchronize latest Python ops, C++ sources, config, uplugin, and binaries
-            if repo_plugin.is_dir():
-                # 1. Sync Python ops and scripts
-                repo_python = repo_plugin / "Content" / "Python"
-                if repo_python.is_dir():
-                    target_python = target / "Content" / "Python"
-                    target_python.mkdir(parents=True, exist_ok=True)
-                    try:
-                        shutil.copytree(repo_python, target_python, dirs_exist_ok=True)
-                    except Exception as exc:
-                        logger.warning("Could not sync Python ops to %s: %s", target, exc)
-
-                # 2. Sync C++ sources
-                repo_source = repo_plugin / "Source"
-                if repo_source.is_dir():
-                    try:
-                        shutil.copytree(repo_source, target / "Source", dirs_exist_ok=True)
-                    except Exception as exc:
-                        logger.warning("Could not sync C++ source to %s: %s", target, exc)
-
-                # 3. Sync GameForge.uplugin descriptor
-                repo_uplugin = repo_plugin / "GameForge.uplugin"
-                if repo_uplugin.is_file():
-                    try:
-                        shutil.copy2(repo_uplugin, target / "GameForge.uplugin")
-                    except Exception as exc:
-                        logger.warning("Could not sync GameForge.uplugin to %s: %s", target, exc)
-
-                # 4. Sync Config
-                repo_cfg = repo_plugin / "Config"
-                if repo_cfg.is_dir():
-                    try:
-                        shutil.copytree(repo_cfg, target / "Config", dirs_exist_ok=True)
-                    except Exception as exc:
-                        logger.warning("Could not sync plugin Config to %s: %s", target, exc)
-
-            # 5. Sync Binaries from binary_source into target
-            binary_source = next((c for c in candidates if c.is_dir() and (c / "Binaries" / "Win64").is_dir() and any((c / "Binaries" / "Win64").glob("*.dll"))), None)
-            if not binary_source and best_source and (best_source / "Binaries" / "Win64").is_dir():
-                binary_source = best_source
-
-            if binary_source and (binary_source / "Binaries" / "Win64").is_dir():
-                target_bin = target / "Binaries" / "Win64"
-                target_bin.mkdir(parents=True, exist_ok=True)
+            # Also ensure precompiled binaries exist in target if available from fallback candidates
+            target_bin = target / "Binaries" / "Win64"
+            if not target_bin.is_dir() or not any(target_bin.glob("*.dll")):
+                candidates = [
+                    Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
+                ]
                 try:
-                    src_bin = binary_source / "Binaries" / "Win64"
-                    for src_item in src_bin.iterdir():
-                        dst_item = target_bin / src_item.name
-                        if not dst_item.exists() or src_item.stat().st_mtime > dst_item.stat().st_mtime:
-                            if src_item.is_file():
-                                shutil.copy2(src_item, dst_item)
-                            elif src_item.is_dir():
-                                shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
-                except Exception as exc:
-                    logger.warning("Could not sync plugin Binaries to %s: %s", target, exc)
+                    from ..core.settings import get_settings
+                    s = get_settings()
+                    if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build != auth_root:
+                        candidates.append(s.plugin_build)
+                    if s.validation_root:
+                        candidates.append(s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+                except Exception:
+                    pass
+
+                binary_source = next((c for c in candidates if c.is_dir() and (c / "Binaries" / "Win64").is_dir() and any((c / "Binaries" / "Win64").glob("*.dll"))), None)
+                if binary_source and (binary_source / "Binaries" / "Win64").is_dir():
+                    target_bin.mkdir(parents=True, exist_ok=True)
+                    try:
+                        src_bin = binary_source / "Binaries" / "Win64"
+                        for src_item in src_bin.iterdir():
+                            dst_item = target_bin / src_item.name
+                            if not dst_item.exists() or src_item.stat().st_mtime > dst_item.stat().st_mtime:
+                                if src_item.is_file():
+                                    shutil.copy2(src_item, dst_item)
+                                elif src_item.is_dir():
+                                    shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
+                    except Exception as exc:
+                        logger.warning("Could not sync fallback plugin Binaries to %s: %s", target, exc)
 
             return target
+
+    # ── target separation: editor vs standalone game ─────────────────────────
+    def build_editor_target(self, uproject: Path, configuration: str = "Development",
+                            platform: str = "Win64", timeout_s: float = 3600,
+                            log_dir: Optional[Path] = None) -> StepResult:
+        """Phase 1: Compile Editor target (<Project>Editor Win64 Development)."""
+        uproject = Path(uproject)
+        target = f"{uproject.stem}Editor"
+        res = self.build(uproject, target=target, configuration=configuration, platform=platform,
+                         timeout_s=timeout_s, log_dir=log_dir)
+        res.data["phase"] = PackagingPhase.PHASE_1_EDITOR_COMPILE.value
+        return res
+
+    def build_game_target(self, uproject: Path, configuration: str = "Development",
+                          platform: str = "Win64", timeout_s: float = 3600,
+                          log_dir: Optional[Path] = None) -> StepResult:
+        """Phase 2: Compile Standalone monolithic game target (<Project> Win64 Development).
+        
+        Verifies that the compiled standalone binary exists on disk after compilation.
+        """
+        uproject = Path(uproject)
+        target = uproject.stem
+        res = self.build(uproject, target=target, configuration=configuration, platform=platform,
+                         timeout_s=timeout_s, log_dir=log_dir)
+        res.data["phase"] = PackagingPhase.PHASE_2_GAME_COMPILE.value
+
+        # Verify compiled binary on disk
+        bin_dir = uproject.parent / "Binaries" / platform
+        candidates = [
+            bin_dir / f"{target}.exe",
+            bin_dir / f"{target}-{platform}-{configuration}.exe",
+            bin_dir / f"{target}-{configuration}.exe",
+        ]
+        found_exe = next((c for c in candidates if c.is_file() and c.stat().st_size > 0), None)
+        if res.ok and not found_exe:
+            res.ok = False
+            res.errors.append(f"Game target compiled successfully but monolithic executable not found in '{bin_dir}'")
+        res.data["game_target_exe"] = str(found_exe) if found_exe else None
+        return res
 
     # ── build ──────────────────────────────────────────────────────────────
     def build(self, uproject: Path, target: str, configuration: str = "Development", platform: str = "Win64",
@@ -540,15 +620,24 @@ class UnrealToolchain:
 
     # ── package ────────────────────────────────────────────────────────────
     def package(self, uproject: Path, archive_dir: Path, configuration: str = "Development",
-                platform: str = "Win64", timeout_s: float = 7200, profile: str = "default") -> StepResult:
+                platform: str = "Win64", timeout_s: float = 7200, profile: str = "default",
+                skip_game_target_compile: bool = False) -> StepResult:
+        """Execute UAT BuildCookRun packaging with strict phase modeling and Exit Code 25 prevention (DEF-308).
+        
+        Phases modeled and enforced:
+        Phase 1: Editor target compilation (<Project>Editor Win64 Development) [run earlier or pre-requisite]
+        Phase 2: Standalone game target compilation (<Project> Win64 Development) [enforced prior to UAT]
+        Phase 3: Cook (-cook)
+        Phase 4: Stage (-stage)
+        Phase 5: Package (-pak -package, targeting <Project>/Packaged/Windows/<Project>.exe)
+        Phase 6: Verification of packaged output
+        """
         uproject = Path(uproject)
-        # Ensure GameForge plugin exists and is synchronized before packaging
+        name = uproject.stem
+
+        # Ensure GameForge plugin exists and is synchronized before packaging (DEF-309)
         try:
-            if uproject.is_file():
-                uproj_data = json.loads(uproject.read_text(encoding="utf-8", errors="replace"))
-                plugins = uproj_data.get("Plugins", [])
-                if any(p.get("Name") == "GameForge" for p in plugins):
-                    self.deploy_gameforge_plugin(uproject.parent)
+            self.deploy_gameforge_plugin(uproject.parent)
         except Exception as exc:
             logger.warning("Could not check/deploy plugin before package: %s", exc)
 
@@ -583,18 +672,77 @@ class UnrealToolchain:
                         text = f"{text}\n\n{header}\n{oodle_lines}"
                     game_ini.write_text(text, encoding="utf-8")
 
+        # DEF-308: Enforce standalone game target compilation before invoking UAT packaging with -skipbuildeditor.
+        # In run_20261107_103542_96db5b, UAT BuildCookRun failed with ExitCode=25 (Error_MissingExecutable)
+        # because UAT was invoked with -skipbuildeditor before the standalone monolithic game target was compiled.
+        bin_dir = uproject.parent / "Binaries" / platform
+        candidate_game_exes = [
+            bin_dir / f"{name}.exe",
+            bin_dir / f"{name}-{platform}-{configuration}.exe",
+            bin_dir / f"{name}-{configuration}.exe",
+        ]
+        game_exe_found = any(c.is_file() and c.stat().st_size > 0 for c in candidate_game_exes)
+
+        if not game_exe_found and not skip_game_target_compile:
+            logger.info("Standalone game executable missing in %s; compiling game target '%s' %s %s before UAT packaging...",
+                        bin_dir, name, platform, configuration)
+            game_build_res = self.build_game_target(uproject, configuration=configuration, platform=platform, timeout_s=timeout_s)
+            if not game_build_res.ok:
+                err_msg = (
+                    f"DEF-308: Standalone game target compilation failed for '{name} {platform} {configuration}'. "
+                    f"Cannot invoke UAT packaging with -skipbuildeditor without monolithic game executable in Binaries/{platform}. "
+                    f"ExitCode=25 (Error_MissingExecutable) intercepted and prevented."
+                )
+                return StepResult(
+                    ok=False,
+                    step="package",
+                    exit_code=25,
+                    duration_s=game_build_res.duration_s,
+                    log_path=game_build_res.log_path,
+                    diagnostics=game_build_res.diagnostics,
+                    data={"phase": PackagingPhase.PHASE_2_GAME_COMPILE.value, "target": name, "configuration": configuration},
+                    errors=[err_msg] + game_build_res.errors,
+                )
+
         log = uproject.parent / "Saved" / "GameForge" / "logs" / f"package_{platform}_{configuration}.log"
         argv = [str(self.uat), "BuildCookRun", f"-project={uproject}", "-noP4", f"-platform={platform}",
                 f"-clientconfig={configuration}", "-build", "-cook", "-stage", "-pak", "-archive",
                 f"-archivedirectory={archive_dir}", "-unattended", "-utf8output", "-nocompileeditor",
                 "-skipbuildeditor"]
         res = self._run("package", argv, log, timeout_s, cwd=self.engine_root / "Engine")
-        name = uproject.stem
-        exe = Path(archive_dir) / "Windows" / f"{name}.exe"
-        res.data = {"archive_dir": str(archive_dir), "exe": str(exe), "exe_exists": exe.is_file()}
-        if exe.is_file():
+
+        # Phase 6: Verification of packaged output
+        verified_ok, issues, v_data = verify_packaged_output(
+            archive_dir=archive_dir,
+            project_name=name,
+            platform=platform,
+            project_source_dir=uproject.parent,
+        )
+
+        res.data.update({
+            "archive_dir": str(archive_dir),
+            "exe": v_data.get("packaged_exe"),
+            "exe_exists": bool(v_data.get("packaged_exe")),
+            "verified_structure": verified_ok,
+            "verification_issues": issues,
+            "phases": [
+                PackagingPhase.PHASE_1_EDITOR_COMPILE.value,
+                PackagingPhase.PHASE_2_GAME_COMPILE.value,
+                PackagingPhase.PHASE_3_COOK.value,
+                PackagingPhase.PHASE_4_STAGE.value,
+                PackagingPhase.PHASE_5_PACKAGE.value,
+                PackagingPhase.PHASE_6_VERIFICATION.value,
+            ],
+        })
+        if v_data.get("packaged_exe"):
             res.data["archive_bytes"] = sum(f.stat().st_size for f in (Path(archive_dir) / "Windows").rglob("*") if f.is_file())
-        res.ok = res.ok and exe.is_file()
+
+        if not verified_ok:
+            res.ok = False
+            for iss in issues:
+                if iss not in res.errors:
+                    res.errors.append(iss)
+
         return res
 
     # ── world partition hlod builder ───────────────────────────────────────

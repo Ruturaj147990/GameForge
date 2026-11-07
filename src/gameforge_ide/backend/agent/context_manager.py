@@ -5,10 +5,18 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Union
 
 from ...core.settings import get_settings
+from ..models.context_usage import ContextBreakdown, ContextUsageReport
 from ..unreal_context import load_unreal_context
+
+MODEL_NOMINAL_CAPACITIES: Dict[str, int] = {
+    "gameforge-qwen3.5-9b": 32768,
+    "gameforge-qwen3.5-4b": 32768,
+    "gameforge-27b-sft": 16384,
+    "llama3.1:8b": 16384,
+}
 
 
 class ContextManager:
@@ -137,19 +145,42 @@ class ContextManager:
             intermediate = compacted[1:-preserve_recent]
             
             snippets = []
+            file_pattern = re.compile(r"\b[\w\-\./\\]+\.(?:cpp|h|hpp|py|cs|json|ini|uproject)\b", re.IGNORECASE)
+            mentioned_files: Set[str] = set()
+            decisions: List[str] = []
+
             for m in intermediate:
                 role = m.get("role", "turn")
                 c = m.get("content", "").strip()
                 if not c:
                     continue
+                # Extract file paths
+                for fmatch in file_pattern.findall(c):
+                    if not fmatch.startswith((".", "http")):
+                        mentioned_files.add(fmatch.replace("\\", "/"))
+                # Extract key decisions and conclusions
+                for line in c.splitlines():
+                    lower_line = line.lower()
+                    if any(k in lower_line for k in ("decided", "agreed", "selected", "switched to", "using", "configured", "error:", "failed:", "completed:")):
+                        clean_l = line.strip()[:80]
+                        if clean_l and clean_l not in decisions:
+                            decisions.append(clean_l)
+
                 first_line = c.splitlines()[0]
                 if len(first_line) > 60:
                     first_line = first_line[:57] + "..."
                 snippets.append(f"{role}: {first_line}")
             
+            summary_parts = []
+            if mentioned_files:
+                summary_parts.append(f"Referenced files: {', '.join(sorted(mentioned_files)[:6])}")
+            if decisions:
+                summary_parts.append(f"Key facts: {'; '.join(decisions[:3])}")
+            summary_parts.extend(snippets[:3])
+
             summary_msg = {
                 "role": "user" if initial_msg.get("role") != "user" else "assistant",
-                "content": "[Earlier conversation compacted: " + " | ".join(snippets[:5]) + "]",
+                "content": "[Earlier conversation compacted without amnesia: " + " | ".join(summary_parts) + "]",
             }
             compacted = [initial_msg, summary_msg] + recent_msgs
 
@@ -290,6 +321,7 @@ class ContextManager:
             "- You MUST NOT dump large C++ or source code files into the chat message as a substitute for editing workspace files.\n"
             "- You MUST call `propose_edit` or `write_file` to write the files to disk in the workspace.\n"
             "- Every code modification task requires real files created or modified on disk. Text in chat without tool execution will be rejected.\n\n"
+            f"{self._build_model_specific_instructions(active_model)}"
             "=== PROTOCOL ===\n"
             "1. Follow the strict 9-stage autonomous engineering loop: Prompt -> Understanding -> Codebase Inspection -> Planning -> Actual Source Changes -> Diff/Approval -> Application -> Testing -> Verification.\n"
             "2. Inspect & Read: Inspect existing files before modifying them so you have exact target_content blocks.\n"
@@ -299,4 +331,103 @@ class ContextManager:
             "6. Machine Acceptance: Actionable code modification tasks require real diffs on disk and passing verification; narrative explanations alone cannot complete tasks.\n"
             "7. Repetition Budget: Never call the same tool with the same arguments repeatedly.\n"
             "8. Be concise and direct."
+        )
+
+    @staticmethod
+    def _build_model_specific_instructions(active_model: Optional[str]) -> str:
+        """Provides model-specific prompt guidance ensuring Qwen 9B/4B invoke structured editing tools."""
+        model_lower = (active_model or "").lower()
+        if "qwen" in model_lower or "9b" in model_lower or "4b" in model_lower:
+            return (
+                "=== MODEL-SPECIFIC INSTRUCTION (Qwen 9B/4B Native Tool Calling) ===\n"
+                "- You MUST call editing tools (`propose_edit`, `write_file`) via structured JSON tool invocations.\n"
+                "- NEVER output large markdown code blocks (e.g. ```cpp ... ```) or conversational narrative as a substitute for tool calls.\n"
+                "- Every implementation, bugfix, or refactoring action MUST be dispatched through tool calls.\n"
+                "- If you emit code in prose without calling a tool, your response will be rejected by the validation harness.\n\n"
+            )
+        return ""
+
+    def get_context_usage(
+        self,
+        session_id: str,
+        model_id: Optional[str] = None,
+        session_manager: Optional[Any] = None,
+        active_project_dir: Optional[Union[str, Path]] = None,
+        tool_definitions: Optional[List[Any]] = None,
+    ) -> ContextUsageReport:
+        """Calculates precise or conservative context token consumption across all prompt categories."""
+        settings = get_settings()
+        active_model = model_id or settings.model_for("chat")
+        base_model = str(active_model).split(":")[0] if active_model else ""
+        nominal = MODEL_NOMINAL_CAPACITIES.get(active_model) or MODEL_NOMINAL_CAPACITIES.get(base_model, 32768)
+
+        def _count_tokens(text: str) -> int:
+            if not text:
+                return 0
+            return max(1, (len(text.encode("utf-8")) + 2) // 3)
+
+        # 1. System Prompt Tokens
+        tools_desc = ""
+        if tool_definitions:
+            tool_items = []
+            for t in tool_definitions:
+                p_schema = t.parameters if hasattr(t, "parameters") else {}
+                desc = t.description if hasattr(t, "description") else ""
+                t_name = t.name if hasattr(t, "name") else str(t)
+                tool_items.append(f"- {t_name}: {desc} | args={json.dumps(p_schema, separators=(',', ':'))}")
+            tools_desc = "\n".join(tool_items)
+
+        sys_prompt = self.build_system_prompt(
+            tools_description=tools_desc,
+            active_model=active_model,
+            include_tools=bool(tool_definitions),
+            active_project_dir=active_project_dir,
+        )
+        sys_tokens = _count_tokens(sys_prompt)
+
+        # 2. Conversation Tokens & Session Context
+        conv_tokens = 0
+        diff_tokens = 0
+        if session_manager is not None:
+            sess = session_manager.get_session(session_id)
+            if sess:
+                for msg in sess.messages:
+                    conv_tokens += _count_tokens(msg.content) + 4  # role overhead
+                for diff in sess.diff_history:
+                    diff_tokens += _count_tokens(diff.diff_patch or diff.new_content)
+                for tool in sess.tool_history:
+                    conv_tokens += _count_tokens(tool.output)
+
+        # 3. Memory Tokens (canonical context summary & engine knowledge)
+        canon_ctx = self.summarize_context(self.read_canonical_context(), max_chars=4000)
+        invariants = self.read_engine_invariants()
+        mem_tokens = _count_tokens(canon_ctx) + _count_tokens(json.dumps(invariants))
+
+        # 4. Tool Definitions Tokens
+        tools_tokens = _count_tokens(tools_desc) if tool_definitions else 0
+
+        # 5. Other Overhead (role framing, delimiters, JSON formatting)
+        other_tokens = 256
+
+        # 6. Reserved Output Headroom
+        reserved_out = 2048
+
+        breakdown = ContextBreakdown(
+            system_prompt=sys_tokens,
+            conversation=conv_tokens,
+            memory=mem_tokens,
+            retrieved_docs=diff_tokens,
+            tool_definitions=tools_tokens,
+            other_overhead=other_tokens,
+            reserved_output=reserved_out,
+        )
+
+        return ContextUsageReport.create(
+            model_id=active_model,
+            nominal_capacity=nominal,
+            breakdown=breakdown,
+            reserved_output=reserved_out,
+            is_exact=False,
+            estimation_method="conservative_byte_ratio",
+            session_id=session_id,
         )

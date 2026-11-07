@@ -68,6 +68,7 @@ class Settings:
     engine_channel: str = "pinned"  # "pinned" (5.7.4) | "next" (5.8)
     default_task_mode: str = "planning"  # "planning" | "fast"
     default_autonomy_profile: str = "agentic"  # "manual" | "auto_edit" | "agentic"
+    default_permissions_mode: str = "auto"  # "request_all" | "auto" | "unrestricted"
 
     @property
     def engine_root(self) -> Path:
@@ -280,6 +281,7 @@ def get_settings() -> Settings:
         engine_channel=channel,
         default_task_mode=str(pick("GAMEFORGE_TASK_MODE", "default_task_mode") or "planning"),
         default_autonomy_profile=str(pick("GAMEFORGE_AUTONOMY_PROFILE", "default_autonomy_profile") or "agentic"),
+        default_permissions_mode=str(pick("GAMEFORGE_PERMISSIONS_MODE", "default_permissions_mode") or "auto"),
     )
 
 

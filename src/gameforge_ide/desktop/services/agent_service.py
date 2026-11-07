@@ -30,6 +30,7 @@ class _AgentWorker(QObject):
     tool_result = Signal(str, dict)        # (tool_name, result)
     file_changed = Signal(str, dict)       # (content_or_path, metadata)
     diff_pending = Signal(str, dict)       # (diff_id, metadata)
+    context_usage_updated = Signal(object) # ContextUsageReport payload
     error_occurred = Signal(str)           # error message
     task_done = Signal(str)                # final full text
 
@@ -43,6 +44,9 @@ class _AgentWorker(QObject):
         self._session_id: Optional[str] = None
         self._prompt: str = ""
         self._resume_diff_id: Optional[str] = None
+        self._resume_approval_id: Optional[str] = None
+        self._resume_tool_result: Dict[str, Any] = {}
+        self._resume_tool_name: Optional[str] = None
         self._resume_approved: bool = True
         self._stop_flag = threading.Event()
         # Lazy imports to avoid loading heavy deps until first use
@@ -78,12 +82,34 @@ class _AgentWorker(QObject):
         self._session_id = session_id
         self._prompt = prompt
         self._resume_diff_id = None
+        self._resume_approval_id = None
+        self._resume_tool_result = {}
+        self._resume_tool_name = None
         self._resume_approved = True
         self._stop_flag.clear()
 
     def set_resume_task(self, session_id: str, diff_id: str, approved: bool = True) -> None:
         self._session_id = session_id
         self._resume_diff_id = diff_id
+        self._resume_approval_id = None
+        self._resume_tool_result = {}
+        self._resume_tool_name = None
+        self._resume_approved = approved
+        self._stop_flag.clear()
+
+    def set_resume_approval_task(
+        self,
+        session_id: str,
+        approval_id: str,
+        tool_result: Dict[str, Any],
+        approved: bool = True,
+        tool_name: Optional[str] = None,
+    ) -> None:
+        self._session_id = session_id
+        self._resume_diff_id = None
+        self._resume_approval_id = approval_id
+        self._resume_tool_result = tool_result or {}
+        self._resume_tool_name = tool_name
         self._resume_approved = approved
         self._stop_flag.clear()
 
@@ -111,6 +137,17 @@ class _AgentWorker(QObject):
                 self._session_id, self._resume_diff_id, approved=self._resume_approved
             )
             self._resume_diff_id = None
+        elif self._resume_approval_id is not None:
+            stream_gen = self._runtime.resume_task_after_approval(
+                self._session_id,
+                self._resume_approval_id,
+                self._resume_tool_result,
+                approved=self._resume_approved,
+                tool_name=self._resume_tool_name,
+            )
+            self._resume_approval_id = None
+            self._resume_tool_result = {}
+            self._resume_tool_name = None
         else:
             stream_gen = self._runtime.execute_task_stream(
                 self._session_id, self._prompt
@@ -133,6 +170,10 @@ class _AgentWorker(QObject):
                     print(f"[GameForge Agent Plan] Plan event received", flush=True)
                     plan_data = event.metadata.get("plan") or event.metadata
                     self.plan_received.emit(plan_data if isinstance(plan_data, dict) else {"content": event.content})
+                elif etype == "context_usage":
+                    report = event.metadata.get("report") if isinstance(event.metadata, dict) else None
+                    if report is not None:
+                        self.context_usage_updated.emit(report)
                 elif etype == "tool_call":
                     tool = event.metadata.get("tool", "")
                     args = event.metadata.get("args", {})
@@ -159,10 +200,24 @@ class _AgentWorker(QObject):
                 elif etype == "done":
                     print(f"[GameForge Agent Done] Task turn complete. ({len(full_text)} chars generated)", flush=True)
                     self.task_done.emit(full_text or event.content)
+                    if self._session_id:
+                        try:
+                            usage = self.get_context_usage(self._session_id)
+                            if usage:
+                                self.context_usage_updated.emit(usage)
+                        except Exception:
+                            pass
                     return
             if not self._stop_flag.is_set():
                 print(f"[GameForge Agent Done] Stream finished. ({len(full_text)} chars)", flush=True)
                 self.task_done.emit(full_text)
+                if self._session_id:
+                    try:
+                        usage = self.get_context_usage(self._session_id)
+                        if usage:
+                            self.context_usage_updated.emit(usage)
+                    except Exception:
+                        pass
         except asyncio.CancelledError:
             print("[GameForge Agent] Task cancelled.", flush=True)
             self.task_done.emit(full_text or "[Cancelled by user]")
@@ -195,9 +250,15 @@ class _AgentWorker(QObject):
         self._ensure_runtime()
         if not project_dir and hasattr(self, "_projects_service") and self._projects_service:
             project_dir = getattr(self._projects_service, "active_project_dir", None)
-        session = self._session_manager.create_session(
-            name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
-        )
+        try:
+            session = self._session_manager.create_session(
+                name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
+            )
+        except TypeError:
+            kwargs.pop("permissions_mode", None)
+            session = self._session_manager.create_session(
+                name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
+            )
         return session.session_id
 
     def set_session_mode(
@@ -205,12 +266,48 @@ class _AgentWorker(QObject):
         session_id: str,
         task_mode: Optional[Any] = None,
         autonomy_profile: Optional[Any] = None,
+        permissions_mode: Optional[Any] = None,
+        **kwargs,
     ) -> bool:
-        """Update task_mode and/or autonomy_profile on an existing session."""
+        """Update task_mode, autonomy_profile, and/or permissions_mode on an existing session."""
         self._ensure_runtime()
-        return self._session_manager.set_session_mode(
-            session_id, task_mode=task_mode, autonomy_profile=autonomy_profile
-        )
+        call_kwargs = {}
+        if task_mode is not None:
+            call_kwargs["task_mode"] = task_mode
+        if autonomy_profile is not None:
+            call_kwargs["autonomy_profile"] = autonomy_profile
+        if permissions_mode is not None:
+            call_kwargs["permissions_mode"] = permissions_mode
+        try:
+            return self._session_manager.set_session_mode(session_id, **call_kwargs)
+        except TypeError:
+            call_kwargs.pop("permissions_mode", None)
+            return self._session_manager.set_session_mode(session_id, **call_kwargs)
+
+    def get_context_usage(self, session_id: str) -> Optional[Any]:
+        """Query runtime or context manager for active context usage report."""
+        self._ensure_runtime()
+        if hasattr(self._runtime, "get_context_usage"):
+            try:
+                model_name = None
+                if self._session_manager:
+                    sess = self._session_manager.get_session(session_id)
+                    if sess:
+                        model_name = sess.model_name
+                return self._runtime.get_context_usage(session_id, model_id=model_name)
+            except Exception:
+                pass
+        if hasattr(self._runtime, "context_manager") and hasattr(self._runtime.context_manager, "get_context_usage"):
+            try:
+                return self._runtime.context_manager.get_context_usage(session_id)
+            except TypeError:
+                try:
+                    return self._runtime.context_manager.get_context_usage()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        return None
 
     def get_session(self, session_id: str):
         """Retrieve a session by its ID."""
@@ -255,6 +352,7 @@ class AgentService(QObject):
     tool_result = Signal(str, dict)
     file_changed = Signal(str, dict)
     diff_pending = Signal(str, dict)
+    context_usage_updated = Signal(object)
     error_occurred = Signal(str)
     task_done = Signal(str)
     _trigger_run = Signal()
@@ -275,6 +373,7 @@ class AgentService(QObject):
         self._worker.tool_result.connect(self.tool_result)
         self._worker.file_changed.connect(self.file_changed)
         self._worker.diff_pending.connect(self.diff_pending)
+        self._worker.context_usage_updated.connect(self.context_usage_updated)
         self._worker.error_occurred.connect(self.error_occurred)
         self._worker.task_done.connect(self.task_done)
         self._trigger_run.connect(self._worker.run)
@@ -325,6 +424,24 @@ class AgentService(QObject):
         self._trigger_run.emit()
         return True
 
+    def resume_after_approval(
+        self,
+        session_id: str,
+        approval_id: str,
+        tool_result: Dict[str, Any],
+        approved: bool = True,
+        tool_name: Optional[str] = None,
+    ) -> bool:
+        """Resume a suspended agent task following user approval or rejection of a command/tool."""
+        if self._busy:
+            return False
+        self._busy = True
+        self._worker.set_resume_approval_task(
+            session_id, approval_id, tool_result, approved=approved, tool_name=tool_name
+        )
+        self._trigger_run.emit()
+        return True
+
     def attach_projects_service(self, projects_service: Any) -> None:
         """Connect to shared ProjectsService to ground active project context."""
         self._projects_service = projects_service
@@ -355,8 +472,19 @@ class AgentService(QObject):
         session_id: str,
         task_mode: Optional[Any] = None,
         autonomy_profile: Optional[Any] = None,
+        permissions_mode: Optional[Any] = None,
+        **kwargs,
     ) -> bool:
-        return self._worker.set_session_mode(session_id, task_mode=task_mode, autonomy_profile=autonomy_profile)
+        return self._worker.set_session_mode(
+            session_id,
+            task_mode=task_mode,
+            autonomy_profile=autonomy_profile,
+            permissions_mode=permissions_mode,
+            **kwargs,
+        )
+
+    def get_context_usage(self, session_id: str) -> Optional[Any]:
+        return self._worker.get_context_usage(session_id)
 
     def get_session(self, session_id: str):
         return self._worker.get_session(session_id)

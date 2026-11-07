@@ -8,7 +8,9 @@ from typing import Any, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
-from ..models.modes import AutonomyProfile
+from ..models.modes import AutonomyProfile, PermissionsMode
+from ..models.command_contract import RiskCategory
+from .command_broker import CommandExecutionBroker
 from .asset_tools import ProceduralMeshGenerator
 from .edit_tools import EditTools
 from .fs_tools import tool_list_dir, tool_read_file, tool_search_code
@@ -45,6 +47,7 @@ class ToolGateway:
     def __init__(self, workspace_root: Path):
         self.workspace_root = workspace_root.resolve()
         self.boundary = BoundaryManager(self.workspace_root)
+        self.command_broker = CommandExecutionBroker(self.workspace_root)
         self.edit_tools = EditTools(self.boundary)
         self.terminal_tools = TerminalTools(self.workspace_root)
         self.git_tools = GitTools(self.workspace_root)
@@ -383,11 +386,37 @@ class ToolGateway:
         name: str,
         arguments: Optional[Dict[str, Any]] = None,
         autonomy_profile: Optional[AutonomyProfile | str] = None,
+        permissions_mode: Optional[PermissionsMode | str] = None,
     ) -> bool:
-        """True when dispatching ``name`` with ``arguments`` needs explicit user approval under active autonomy profile."""
+        """True when dispatching ``name`` with ``arguments`` needs explicit user approval under active permissions mode."""
         canonical_name = TOOL_ALIASES.get(name, name)
         args = dict(arguments) if isinstance(arguments, dict) else {}
-        profile = AutonomyProfile(autonomy_profile) if autonomy_profile else AutonomyProfile.MANUAL
+        
+        # Resolve permissions mode (fail-closed: default to REQUEST_ALL / MANUAL if not specified)
+        if permissions_mode is not None:
+            pm = PermissionsMode.from_str(permissions_mode)
+        elif autonomy_profile is not None:
+            pm = PermissionsMode.from_str(autonomy_profile)
+        else:
+            pm = PermissionsMode.REQUEST_ALL
+
+        # Central command broker governs run_command
+        if canonical_name == "run_command":
+            # In legacy AUTO_EDIT profile: commands always require approval
+            if autonomy_profile is not None and AutonomyProfile(autonomy_profile) == AutonomyProfile.AUTO_EDIT:
+                return True
+            cmd = str(args.get("command", "")).strip()
+            shell = str(args.get("shell", "powershell"))
+            cwd = args.get("subpath") or args.get("working_directory") or "."
+            working_dir = self.workspace_root / cwd
+            _, req_approval, _ = self.command_broker.classify_risk(
+                cmd, shell=shell, working_directory=working_dir, permissions_mode=pm
+            )
+            return req_approval
+
+        profile = AutonomyProfile(autonomy_profile) if autonomy_profile else (
+            AutonomyProfile.MANUAL if pm == PermissionsMode.REQUEST_ALL else AutonomyProfile.AGENTIC
+        )
 
         # Read-only operations never require approval in any profile
         read_only_tools = {
@@ -405,8 +434,8 @@ class ToolGateway:
             # propose_edit produces diff preview without mutating disk
             return False
 
-        # In MANUAL profile: all mutations, commands, builds require approval
-        if profile == AutonomyProfile.MANUAL:
+        # In REQUEST_ALL / MANUAL profile: all mutations, commands, builds require approval
+        if pm == PermissionsMode.REQUEST_ALL or profile == AutonomyProfile.MANUAL:
             return True
 
         # In AUTO_EDIT profile: safe file modifications inside workspace proceed automatically
@@ -416,19 +445,12 @@ class ToolGateway:
             # Commands, builds, packages, unreal editor mutations still require approval
             return True
 
-        # In AGENTIC profile: safe file edits, allowlisted project commands, safe builds & tests proceed automatically
-        if profile == AutonomyProfile.AGENTIC:
+        # In AGENTIC / AUTO / UNRESTRICTED: safe file edits, safe builds & tests proceed automatically
+        if pm in (PermissionsMode.AUTO, PermissionsMode.UNRESTRICTED) or profile == AutonomyProfile.AGENTIC:
             if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch", "delete_file"):
                 return False
             if canonical_name in ("unreal_run_tests", "unreal_build"):
                 return False
-            if canonical_name == "run_command":
-                cmd = str(args.get("command", "")).strip().lower()
-                # Allowlisted non-destructive dev commands
-                allowlist_starts = ("pytest", "python -m pytest", "git ", "git.exe ", "cargo test", "ctest")
-                if any(cmd.startswith(p) for p in allowlist_starts):
-                    return False
-                return True
 
         definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
         if definition is None:
@@ -574,6 +596,10 @@ class ToolGateway:
                     normalized["timeout_seconds"] = int(to)
                 except (ValueError, TypeError):
                     pass
+            if "shell" in normalized:
+                normalized["shell"] = str(normalized["shell"])
+            if "reason" in normalized:
+                normalized["reason"] = str(normalized["reason"])
 
         return normalized
 
@@ -584,6 +610,7 @@ class ToolGateway:
         *,
         approval_granted: bool = False,
         autonomy_profile: Optional[AutonomyProfile | str] = None,
+        permissions_mode: Optional[PermissionsMode | str] = None,
     ) -> Dict[str, Any]:
         """Dispatch a tool, requiring explicit approval for marked actions.
 
@@ -599,7 +626,12 @@ class ToolGateway:
         if definition is None:
             return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
 
-        if self.tool_requires_approval(canonical_name, args, autonomy_profile=autonomy_profile) and not approval_granted:
+        if self.tool_requires_approval(
+            canonical_name,
+            args,
+            autonomy_profile=autonomy_profile,
+            permissions_mode=permissions_mode,
+        ) and not approval_granted:
             return {
                 "status": "PENDING_APPROVAL",
                 "tool": name,
@@ -679,6 +711,11 @@ class ToolGateway:
             elif canonical_name == "rollback_batch":
                 res = self.edit_tools.rollback_batch(**args)
             elif canonical_name == "run_command":
+                pm = PermissionsMode.from_str(permissions_mode) if permissions_mode else (
+                    PermissionsMode.from_str(autonomy_profile) if autonomy_profile else PermissionsMode.AUTO
+                )
+                args["permissions_mode"] = pm
+                args["approval_granted"] = approval_granted
                 res = self.terminal_tools.run_command(**args)
             elif canonical_name == "git_status":
                 res = self.git_tools.get_status()

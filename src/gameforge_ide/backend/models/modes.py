@@ -22,11 +22,41 @@ class TaskMode(str, Enum):
         return str(self.value)
 
 
+class PermissionsMode(str, Enum):
+    """Authoritative user control defining permission and approval boundaries for terminal commands and actions.
+    
+    Exactly three modes:
+    1. REQUEST_ALL: Every command requires explicit user approval before execution.
+    2. AUTO: Automatically executes routine safe workspace development operations; asks for sensitive/risky/uncertain operations.
+    3. UNRESTRICTED: Maximum application autonomy without routine approval prompts; platform OS boundaries still apply.
+    """
+    REQUEST_ALL = "request_all"
+    AUTO = "auto"
+    UNRESTRICTED = "unrestricted"
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+    @classmethod
+    def from_str(cls, val: str | PermissionsMode) -> PermissionsMode:
+        if isinstance(val, PermissionsMode):
+            return val
+        clean = str(val).lower().strip().replace("-", "_").replace(" ", "_")
+        if clean in ("request_all", "requestall", "manual"):
+            return cls.REQUEST_ALL
+        if clean in ("unrestricted", "full"):
+            return cls.UNRESTRICTED
+        return cls.AUTO
+
+
 class AutonomyProfile(str, Enum):
-    """Independent user control defining permission boundaries for execution."""
-    MANUAL = "manual"        # Read-only automatically; ask before all file edits, commands, builds
-    AUTO_EDIT = "auto_edit"  # Auto-inspect and auto-edit project files; ask before commands, builds, external ops
-    AGENTIC = "agentic"      # Auto safe edits, allowlisted project commands, builds, tests, Unreal ops; ask only for high-risk/destructive
+    """Legacy compatibility profile defining permission boundaries for execution.
+    
+    Deprecated in favor of PermissionsMode, but retained for backward compatibility.
+    """
+    MANUAL = "manual"        # Maps to PermissionsMode.REQUEST_ALL
+    AUTO_EDIT = "auto_edit"  # Maps to PermissionsMode.AUTO
+    AGENTIC = "agentic"      # Maps to PermissionsMode.AUTO or UNRESTRICTED
 
     def __str__(self) -> str:
         return str(self.value)

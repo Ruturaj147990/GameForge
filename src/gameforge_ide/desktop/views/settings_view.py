@@ -121,6 +121,10 @@ class SettingsView(QWidget):
         sec_models = self._build_models_section()
         content_layout.addWidget(sec_models)
 
+        # 4. Permissions & Approach Section (DEF-306)
+        sec_perms = self._build_permissions_section()
+        content_layout.addWidget(sec_perms)
+
         # 4. Storage & Appearance Section
         sec_app = self._build_appearance_section()
         content_layout.addWidget(sec_app)
@@ -277,6 +281,34 @@ class SettingsView(QWidget):
         self._font_scale_spin.setMinimumHeight(32)
         self._font_scale_spin.valueChanged.connect(self._on_font_scale_changed)
         form.addRow("Font Scale:", self._font_scale_spin)
+
+        layout.addLayout(form)
+        return box
+
+    def _build_permissions_section(self) -> QGroupBox:
+        box = QGroupBox("Execution & Permissions (DEF-306)", self)
+        box.setObjectName("groupSettingsPermissions")
+        box.setStyleSheet(self._group_box_style())
+        layout = QVBoxLayout(box)
+
+        form = QFormLayout()
+        form.setContentsMargins(12, 8, 12, 8)
+        form.setVerticalSpacing(14)
+        form.setHorizontalSpacing(16)
+
+        self._task_mode_combo = QComboBox(box)
+        self._task_mode_combo.setObjectName("settingsTaskModeCombo")
+        self._task_mode_combo.setAccessibleName("Default task approach mode")
+        self._task_mode_combo.addItems(["Planning", "Fast"])
+        self._task_mode_combo.setMinimumHeight(32)
+        form.addRow("Default Approach Mode:", self._task_mode_combo)
+
+        self._permissions_mode_combo = QComboBox(box)
+        self._permissions_mode_combo.setObjectName("settingsPermissionsModeCombo")
+        self._permissions_mode_combo.setAccessibleName("Default permissions mode")
+        self._permissions_mode_combo.addItems(["Request All", "Auto", "Unrestricted"])
+        self._permissions_mode_combo.setMinimumHeight(32)
+        form.addRow("Default Permissions Mode:", self._permissions_mode_combo)
 
         layout.addLayout(form)
         return box
@@ -478,6 +510,30 @@ class SettingsView(QWidget):
         self._font_scale_spin.setValue(scale_val)
         self._font_scale_spin.blockSignals(False)
 
+        # Permissions Mode & Task Mode
+        default_perm = getattr(s, "default_permissions_mode", "auto")
+        stored_perm = default_perm
+        default_task = getattr(s, "default_task_mode", "planning")
+        stored_task = default_task
+        if ws_ini.is_file():
+            ws_settings = QSettings(str(ws_ini), QSettings.IniFormat)
+            stored_perm = ws_settings.value("preferences/permissions_mode", ide_settings.value("preferences/permissions_mode", default_perm))
+            stored_task = ws_settings.value("preferences/task_mode", ide_settings.value("preferences/task_mode", default_task))
+        else:
+            stored_perm = ide_settings.value("preferences/permissions_mode", default_perm)
+            stored_task = ide_settings.value("preferences/task_mode", default_task)
+
+        clean_perm = str(stored_perm).lower().strip().replace("-", "_").replace(" ", "_")
+        perm_text = "Request All" if clean_perm in ("request_all", "requestall", "manual") else ("Unrestricted" if clean_perm in ("unrestricted", "full") else "Auto")
+        self._permissions_mode_combo.blockSignals(True)
+        self._permissions_mode_combo.setCurrentText(perm_text)
+        self._permissions_mode_combo.blockSignals(False)
+
+        task_text = "Planning" if str(stored_task).lower() == "planning" else "Fast"
+        self._task_mode_combo.blockSignals(True)
+        self._task_mode_combo.setCurrentText(task_text)
+        self._task_mode_combo.blockSignals(False)
+
         # Routing Source info
         try:
             r_cfg = Path(__file__).resolve().parents[2] / "config" / "model_routing.json"
@@ -571,12 +627,21 @@ class SettingsView(QWidget):
         ide_settings.setValue("appearance/theme", new_theme)
         ide_settings.setValue("appearance/font_scale", self._font_scale_spin.value())
 
+        # Permissions & Task mode persistence
+        perm_text = self._permissions_mode_combo.currentText()
+        clean_perm = "request_all" if perm_text == "Request All" else ("unrestricted" if perm_text == "Unrestricted" else "auto")
+        task_text = "planning" if self._task_mode_combo.currentText() == "Planning" else "fast"
+        ide_settings.setValue("preferences/permissions_mode", clean_perm)
+        ide_settings.setValue("preferences/task_mode", task_text)
+
         ws_ini = self._workspace / ".gameforge" / "ide_settings.ini"
         try:
             ws_ini.parent.mkdir(parents=True, exist_ok=True)
             ws_settings = QSettings(str(ws_ini), QSettings.IniFormat)
             ws_settings.setValue("appearance/theme", new_theme)
             ws_settings.setValue("appearance/font_scale", self._font_scale_spin.value())
+            ws_settings.setValue("preferences/permissions_mode", clean_perm)
+            ws_settings.setValue("preferences/task_mode", task_text)
             ws_settings.sync()
         except Exception as exc:
             logger.debug("Could not write workspace ini settings: %s", exc)

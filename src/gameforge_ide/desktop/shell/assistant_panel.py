@@ -164,6 +164,18 @@ class AssistantPanel(QWidget):
         return getattr(self.chat_panel, "task_mode_combo", None)
 
     @property
+    def permissions_mode_combo(self):
+        return getattr(self.chat_panel, "permissions_mode_combo", None)
+
+    @property
+    def permissions_combo(self):
+        return getattr(self.chat_panel, "permissions_mode_combo", None)
+
+    @property
+    def permissionsModeCombo(self):
+        return getattr(self.chat_panel, "permissions_mode_combo", None)
+
+    @property
     def autonomy_combo(self):
         return getattr(self.chat_panel, "autonomy_combo", None)
 

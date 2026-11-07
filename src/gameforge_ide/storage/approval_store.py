@@ -47,6 +47,7 @@ class ApprovalStore:
         consequence: str,
         session_id: Optional[str] = None,
         plan_id: Optional[str] = None,
+        **extra: Any,
     ) -> Dict[str, Any]:
         """plan_id marks a plan-task approval: approving it unblocks the plan, which runs the tool."""
         self._ensure_dir()
@@ -59,6 +60,7 @@ class ApprovalStore:
             "session_id": session_id,
             "status": "PENDING",
             "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            **extra,
         }
         if plan_id:
             rec["plan_id"] = plan_id

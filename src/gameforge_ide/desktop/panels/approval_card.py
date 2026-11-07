@@ -6,6 +6,7 @@ States: PENDING (Approve / Reject) -> RUNNING (live stage checklist) -> DONE / F
 
 from __future__ import annotations
 
+import html
 import os
 from pathlib import Path
 import time
@@ -72,26 +73,117 @@ class ApprovalCard(QFrame):
         lay.setContentsMargins(14, 12, 14, 12)
         lay.setSpacing(tokens.SPACE_SM)
 
-        # Header Title
-        title_str = approval.get('tool', 'action').replace('_', ' ')
-        title = QLabel(f"<b style='color: {tokens.TEXT_PRIMARY}; font-size: 13px;'>Approval required — {title_str}</b>")
-        title.setTextFormat(Qt.RichText)
-        lay.addWidget(title)
-
-        summary = QLabel(approval.get("summary", ""))
-        summary.setWordWrap(True)
-        summary.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 12px;")
-        lay.addWidget(summary)
-
-        consequence = QLabel(f"<i>{approval.get('consequence', '')}</i>")
-        consequence.setWordWrap(True)
-        consequence.setTextFormat(Qt.RichText)
-        consequence.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px;")
-        lay.addWidget(consequence)
-        self._consequence = consequence
-
-        # Authoritative Project Root row (Two-Location Storage Architecture)
         args = approval.get("args", {})
+        tool_name = str(approval.get("tool") or approval.get("action") or "").lower()
+        raw_cmd = approval.get("command") or args.get("command") or approval.get("commands") or args.get("commands")
+        is_cmd = bool(raw_cmd) or tool_name in ("run_command", "terminal_run", "command", "execute_command")
+        self.is_command_request = is_cmd
+        self.command_payload = raw_cmd
+
+        # Header Title and Risk Badge
+        hdr_row = QHBoxLayout()
+        hdr_row.setContentsMargins(0, 0, 0, 0)
+        hdr_row.setSpacing(tokens.SPACE_SM)
+
+        if is_cmd:
+            is_batch = isinstance(raw_cmd, (list, tuple))
+            title_text = "Command batch approval required" if is_batch else "Command approval required"
+        else:
+            title_text = f"Approval required — {approval.get('tool', 'action').replace('_', ' ')}"
+
+        title = QLabel(f"<b style='color: {tokens.TEXT_PRIMARY}; font-size: 13px;'>{title_text}</b>")
+        title.setTextFormat(Qt.RichText)
+        hdr_row.addWidget(title)
+        hdr_row.addStretch()
+
+        # Risk category badge
+        risk = str(approval.get("risk_category") or args.get("risk_category") or ("routine_read" if not is_cmd else "development_test")).lower()
+        self.risk_category = risk
+        risk_colors = {
+            "destructive_delete": (tokens.ACCENT_ERROR, "#ffffff"),
+            "system_modification": (tokens.ACCENT_ERROR, "#ffffff"),
+            "elevated_admin": (tokens.ACCENT_ERROR, "#ffffff"),
+            "outside_workspace": (tokens.ACCENT_PRIMARY, "#ffffff"),
+            "uncertain_script": (tokens.ACCENT_WARNING, "#000000"),
+            "project_build": (tokens.ACCENT_HOVER, "#ffffff"),
+            "development_test": (tokens.ACCENT_SUCCESS, "#000000"),
+            "workspace_edit": (tokens.ACCENT_PRIMARY, "#ffffff"),
+            "routine_read": (tokens.BG_ACTIVE, tokens.TEXT_SECONDARY),
+        }
+        bg_col, fg_col = risk_colors.get(risk, (tokens.BG_ACTIVE, tokens.TEXT_SECONDARY))
+        risk_label = QLabel(f"<span style='background-color:{bg_col}; color:{fg_col}; border-radius:3px; padding:2px 6px; font-weight:bold; font-size:10px;'>{risk.upper().replace('_', ' ')}</span>")
+        risk_label.setTextFormat(Qt.RichText)
+        risk_label.setObjectName("approvalRiskBadge")
+        hdr_row.addWidget(risk_label)
+        lay.addLayout(hdr_row)
+
+        # Command-specific display: shell, working directory, reason, and command code block
+        if is_cmd:
+            shell_name = str(approval.get("shell") or args.get("shell") or "powershell")
+            cwd = str(approval.get("working_directory") or args.get("working_directory") or args.get("cwd") or args.get("working_dir") or ".")
+            reason_text = str(approval.get("reason") or args.get("reason") or approval.get("summary") or "")
+
+            meta_frame = QFrame(self)
+            meta_frame.setObjectName("commandMetaFrame")
+            meta_frame.setStyleSheet(
+                f"background-color: {tokens.BG_SURFACE}; border: 1px solid {tokens.BORDER}; border-radius: 4px; padding: 4px 8px;"
+            )
+            meta_lay = QVBoxLayout(meta_frame)
+            meta_lay.setContentsMargins(4, 4, 4, 4)
+            meta_lay.setSpacing(3)
+
+            lbl_shell_cwd = QLabel(
+                f"<span style='color:{tokens.TEXT_SECONDARY};'>Shell:</span> <code style='color:{tokens.ACCENT_HOVER};'>{shell_name}</code> &nbsp;|&nbsp; "
+                f"<span style='color:{tokens.TEXT_SECONDARY};'>Working Directory:</span> <code style='color:{tokens.ACCENT_PRIMARY};'>{cwd}</code>"
+            )
+            lbl_shell_cwd.setTextFormat(Qt.RichText)
+            lbl_shell_cwd.setStyleSheet("font-size: 11px;")
+            meta_lay.addWidget(lbl_shell_cwd)
+
+            if reason_text:
+                lbl_reason = QLabel(f"<span style='color:{tokens.TEXT_SECONDARY};'>Reason:</span> <i>{html.escape(reason_text)}</i>")
+                lbl_reason.setTextFormat(Qt.RichText)
+                lbl_reason.setStyleSheet("font-size: 11px;")
+                meta_lay.addWidget(lbl_reason)
+
+            lay.addWidget(meta_frame)
+
+            # Monospace Command box
+            cmd_frame = QFrame(self)
+            cmd_frame.setObjectName("commandCodeBlock")
+            cmd_frame.setStyleSheet(f"""
+                QFrame#commandCodeBlock {{
+                    background-color: #0c0e14;
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {tokens.RADIUS}px;
+                    padding: 8px;
+                }}
+            """)
+            cmd_lay = QVBoxLayout(cmd_frame)
+            cmd_lay.setContentsMargins(6, 4, 6, 4)
+
+            if isinstance(raw_cmd, (list, tuple)):
+                cmd_display = "\n".join(str(c) for c in raw_cmd)
+            else:
+                cmd_display = str(raw_cmd or "")
+
+            self._lbl_command = QLabel(f"<pre style='margin:0; font-family:Consolas, Cascadia Code, monospace; font-size:12px; color:#f5f3ff;'>{html.escape(cmd_display)}</pre>")
+            self._lbl_command.setTextFormat(Qt.RichText)
+            self._lbl_command.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+            cmd_lay.addWidget(self._lbl_command)
+            lay.addWidget(cmd_frame)
+        else:
+            summary = QLabel(approval.get("summary", ""))
+            summary.setWordWrap(True)
+            summary.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 12px;")
+            lay.addWidget(summary)
+
+            consequence = QLabel(f"<i>{approval.get('consequence', '')}</i>")
+            consequence.setWordWrap(True)
+            consequence.setTextFormat(Qt.RichText)
+            consequence.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px;")
+            lay.addWidget(consequence)
+            self._consequence = consequence
         proj_dir = args.get("project_dir") or args.get("project_root")
         if not proj_dir and approval.get("tool") in ("create_game", "create_game_freeform"):
             from ...core.settings import get_settings
@@ -186,7 +278,8 @@ class ApprovalCard(QFrame):
         row = QHBoxLayout()
         row.setSpacing(tokens.SPACE_SM)
 
-        self._btn_approve = QPushButton("Approve and build")
+        btn_approve_text = "Approve and build" if approval.get("tool") in ("create_game", "create_game_freeform") else ("Approve Batch" if is_cmd and isinstance(raw_cmd, (list, tuple)) else "Approve")
+        self._btn_approve = QPushButton(btn_approve_text)
         self._btn_approve.setObjectName("approvalApprove")
         self._btn_approve.setAccessibleName("Approve action and begin execution")
         self._btn_approve.setStyleSheet(
@@ -281,12 +374,21 @@ class ApprovalCard(QFrame):
         self._btn_approve.setVisible(False)
         self._btn_reject.setVisible(False)
         self._btn_cancel.setVisible(True)
-        self._consequence.setVisible(False)  # collapse once running
+        if hasattr(self, "_consequence") and self._consequence is not None:
+            self._consequence.setVisible(False)  # collapse once running
         self._started = time.monotonic()
         self._elapsed.setVisible(True)
         self._update_elapsed()
         self._tick.start()
         self._stage_box.setVisible(True)
+
+    def set_rejected(self) -> None:
+        self._btn_approve.setVisible(False)
+        self._btn_reject.setVisible(False)
+        self._btn_cancel.setVisible(False)
+        if hasattr(self, "_consequence") and self._consequence is not None:
+            self._consequence.setVisible(False)
+        self._show_result(f"<b style='color: {tokens.ACCENT_ERROR};'>✖ Action rejected by developer.</b>")
 
     def on_progress(self, kind: str, data: Dict) -> None:
         stage = data.get("stage")

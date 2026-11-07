@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QSettings, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -45,9 +45,13 @@ from .activity_card import (
     format_target_path,
     format_tool_activity,
 )
-from ...backend.models.modes import AutonomyProfile, TaskMode
+from ...backend.models.modes import AutonomyProfile, PermissionsMode, TaskMode
+from ...backend.models.context_usage import ContextBreakdown, ContextUsageReport
+from ..widgets.context_indicator import ContextBreakdownDialog, ContextUsageIndicator
 from ..styles import tokens
 from ..styles.dark_theme import theme_color, theme_stylesheet
+
+MAX_CHAT_BUBBLES = 200
 
 
 # ── Message bubble widget ──────────────────────────────────────────────────────
@@ -611,6 +615,7 @@ class ChatPanel(QWidget):
     plan_received = Signal(dict)
     file_changed = Signal(str, dict)
     task_mode_changed = Signal(str)
+    permissions_mode_changed = Signal(str)
     autonomy_changed = Signal(str)
     action_finished = Signal(str, dict)
     slash_command_executed = Signal(str, str)
@@ -633,6 +638,7 @@ class ChatPanel(QWidget):
             self._owns_agent = False
         self._agent = agent_service
         self._workspace = workspace_root or getattr(agent_service, "workspace_root", None)
+        self._workspace_root = Path(workspace_root) if workspace_root else (Path(self._workspace) if self._workspace else None)
         self._session_id: Optional[str] = None
         self._active_bubble: Optional[_MessageBubble] = None
         self._active_tool_item: Optional[ToolActivityItem] = None
@@ -664,6 +670,7 @@ class ChatPanel(QWidget):
         self._runner = ActionRunner(self._workspace, parent=self)
         self._runner.progress.connect(self._on_action_progress)
         self._runner.finished.connect(self._on_action_finished)
+        self._connect_signals()
         self._cards = {}
         self._new_session()
         QTimer.singleShot(0, self._restore_pending_approvals)
@@ -758,23 +765,28 @@ class ChatPanel(QWidget):
         self.task_mode_combo.currentTextChanged.connect(self._on_task_mode_changed)
         tbar_layout.addWidget(self.task_mode_combo)
 
-        self.lbl_autonomy = QLabel("Autonomy:", toolbar)
-        self.lbl_autonomy.setObjectName("lbl_autonomy_profile")
-        self.lbl_autonomy.setStyleSheet("color: #9ca3af; font-size: 11px; font-weight: 600;")
-        tbar_layout.addWidget(self.lbl_autonomy)
+        # ── 3b. Permissions Mode Selector (DEF-306) ──────────────────────────
+        self.lbl_permissions_mode = QLabel("Permissions Mode:", toolbar)
+        self.lbl_permissions_mode.setObjectName("lbl_permissions_mode")
+        self.lbl_permissions_mode.setStyleSheet("color: #9ca3af; font-size: 11px; font-weight: 600;")
+        tbar_layout.addWidget(self.lbl_permissions_mode)
 
-        self.autonomy_combo = QComboBox(toolbar)
-        self.autonomy_combo.setObjectName("autonomy_combo")
-        self.autonomy_profile_combo = self.autonomy_combo
-        self.autonomyCombo = self.autonomy_combo
-        self.autonomy_combo.setAccessibleName("Autonomy Profile Selector")
-        self.autonomy_combo.setToolTip("Autonomy Profile: Manual (explicit approval for edits/commands), Auto-Edit (auto file edits), Agentic (fully autonomous safe ops)")
-        self.autonomy_combo.addItems(["Manual", "Auto-Edit", "Agentic"])
-        default_autonomy_raw = getattr(cfg_settings, "default_autonomy_profile", "agentic").lower()
-        default_autonomy = "Manual" if default_autonomy_raw == "manual" else ("Auto-Edit" if "auto" in default_autonomy_raw else "Agentic")
-        self.autonomy_combo.setCurrentText(default_autonomy)
-        self.autonomy_combo.setStyleSheet(f"""
-            QComboBox#autonomy_combo {{
+        self.permissions_mode_combo = QComboBox(toolbar)
+        self.permissions_mode_combo.setObjectName("permissions_mode_combo")
+        self.permissionsModeCombo = self.permissions_mode_combo
+        self.permissions_combo = self.permissions_mode_combo
+        self.permissions_mode_combo.setAccessibleName("Permissions Mode Selector")
+        self.permissions_mode_combo.setToolTip(
+            "Permissions Mode:\n"
+            "- Request All: Every command and file edit requires explicit user approval\n"
+            "- Auto: Routine safe workspace operations run automatically; asks for sensitive actions\n"
+            "- Unrestricted: Maximum application autonomy without routine approval prompts"
+        )
+        self.permissions_mode_combo.addItems(["Request All", "Auto", "Unrestricted"])
+        persisted_mode = self._get_persisted_permissions_mode()
+        self.permissions_mode_combo.setCurrentText(persisted_mode)
+        self.permissions_mode_combo.setStyleSheet(f"""
+            QComboBox#permissions_mode_combo {{
                 background-color: {tokens.BG_SURFACE};
                 color: {tokens.TEXT_PRIMARY};
                 border: 1px solid {tokens.BORDER};
@@ -783,12 +795,43 @@ class ChatPanel(QWidget):
                 font-size: 12px;
                 font-weight: 600;
             }}
-            QComboBox#autonomy_combo:hover {{
+            QComboBox#permissions_mode_combo:hover {{
                 border-color: {tokens.BORDER_FOCUS};
             }}
         """)
+        self.permissions_mode_combo.currentTextChanged.connect(self._on_permissions_mode_changed)
+        tbar_layout.addWidget(self.permissions_mode_combo)
+
+        # ── Legacy Autonomy Profile Selector (Retained hidden for backward compatibility) ──
+        self.lbl_autonomy = QLabel("Autonomy:", toolbar)
+        self.lbl_autonomy.setObjectName("lbl_autonomy_profile")
+        self.lbl_autonomy.setVisible(False)
+
+        self.autonomy_combo = QComboBox(toolbar)
+        self.autonomy_combo.setObjectName("autonomy_combo")
+        self.autonomy_profile_combo = self.autonomy_combo
+        self.autonomyCombo = self.autonomy_combo
+        self.autonomy_combo.setAccessibleName("Autonomy Profile Selector")
+        self.autonomy_combo.setVisible(False)
+        self.autonomy_combo.addItems(["Manual", "Auto-Edit", "Agentic"])
+        default_autonomy_raw = getattr(cfg_settings, "default_autonomy_profile", "agentic").lower()
+        if persisted_mode == "Request All":
+            compat_autonomy = "Manual"
+        elif persisted_mode == "Unrestricted":
+            compat_autonomy = "Agentic"
+        elif default_autonomy_raw == "manual":
+            compat_autonomy = "Manual"
+        elif default_autonomy_raw in ("auto_edit", "auto-edit"):
+            compat_autonomy = "Auto-Edit"
+        else:
+            compat_autonomy = "Agentic"
+        self.autonomy_combo.setCurrentText(compat_autonomy)
         self.autonomy_combo.currentTextChanged.connect(self._on_autonomy_changed)
-        tbar_layout.addWidget(self.autonomy_combo)
+
+        # ── Mandatory Context-Usage Indicator (DEF-303) ──────────────────────
+        self.context_indicator = ContextUsageIndicator(toolbar)
+        self.context_indicator.setObjectName("chatContextIndicator")
+        tbar_layout.addWidget(self.context_indicator)
 
         model_lbl = QLabel("Model:")
         model_lbl.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 600;")
@@ -941,21 +984,30 @@ class ChatPanel(QWidget):
         self._agent.error_occurred.connect(self._on_error)
         self._agent.task_done.connect(self._on_done)
         self._model_combo.currentTextChanged.connect(self._on_model_changed)
+        if hasattr(self._agent, "context_usage_updated"):
+            try:
+                self._agent.context_usage_updated.connect(self.set_context_usage)
+            except Exception:
+                pass
 
     def _init_session(self) -> None:
         """Create initial session asynchronously."""
         try:
             t_mode = "planning" if self.task_mode_combo.currentText() == "Planning" else "fast"
-            a_prof = self.autonomy_combo.currentText().lower().replace("-", "_")
+            p_text = self.permissions_mode_combo.currentText() if hasattr(self, "permissions_mode_combo") else "Auto"
+            p_mode = "request_all" if p_text == "Request All" else ("unrestricted" if p_text == "Unrestricted" else "auto")
+            a_prof = self.autonomy_combo.currentText().lower().replace("-", "_") if hasattr(self, "autonomy_combo") else ("manual" if p_mode == "request_all" else "agentic")
             self._session_id = self._agent.create_session(
                 name="Default Session",
                 model_name=get_settings().model_for("chat"),
                 provider_type="ollama",
                 task_mode=t_mode,
                 autonomy_profile=a_prof,
+                permissions_mode=p_mode,
             )
             self._show_start_screen()
             self._status_bar.set_ready()
+            self._refresh_context_usage()
             QTimer.singleShot(500, self._load_models)
         except Exception as exc:
             self._add_error_message(f"Failed to initialise session: {exc}")
@@ -1303,6 +1355,7 @@ class ChatPanel(QWidget):
         self._hide_start_screen()
         self._last_prompt = prompt
         self._add_bubble("user", prompt)
+        self._refresh_context_usage()
         self._active_bubble = self._add_bubble("assistant", "")
         self._btn_send.setEnabled(False)
         self._btn_stop.setEnabled(True)
@@ -1463,6 +1516,17 @@ class ChatPanel(QWidget):
     @Slot(str)
     def _on_reject_action(self, approval_id: str) -> None:
         self._runner.reject(approval_id)
+        card = self._cards.get(approval_id)
+        if card:
+            if hasattr(card, "set_rejected"):
+                card.set_rejected()
+            else:
+                card.show_already_handled("REJECTED")
+        if self._session_id and hasattr(self, "_agent") and self._agent and hasattr(self._agent, "resume_after_approval"):
+            try:
+                self._agent.resume_after_approval(self._session_id, approval_id, {"status": "REJECTED"}, approved=False)
+            except Exception:
+                pass
 
     @Slot(str, str, dict)
     def _on_action_progress(self, approval_id: str, kind: str, data: dict) -> None:
@@ -1489,6 +1553,11 @@ class ChatPanel(QWidget):
             self._add_bubble("assistant", "✅ **Your game is ready.** Every acceptance check passed in the real engine "
                                           "(compile, automation tests, packaged play-test with screenshot). "
                                           "Press **▶ Play game** on the card to play it.")
+        if self._session_id and hasattr(self, "_agent") and self._agent and hasattr(self._agent, "resume_after_approval"):
+            try:
+                self._agent.resume_after_approval(self._session_id, approval_id, result, approved=True)
+            except Exception:
+                pass
 
     @Slot(str)
     def _on_play_game(self, exe: str) -> None:
@@ -1700,18 +1769,91 @@ class ChatPanel(QWidget):
         self.diff_pending.emit(diff_id, meta)
         self._scroll_to_bottom()
 
+    def _get_settings_obj(self) -> QSettings:
+        ws = getattr(self, "_workspace_root", None) or getattr(self, "_workspace", None) or Path.cwd()
+        settings_path = Path(ws) / ".gameforge" / "ide_settings.ini"
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            return QSettings(str(settings_path), QSettings.IniFormat)
+        except Exception:
+            return QSettings("GameForge", "GameForgeIDE")
+
+    def _get_persisted_permissions_mode(self) -> str:
+        s = self._get_settings_obj()
+        default_mode = getattr(get_settings(), "default_permissions_mode", "auto")
+        stored = s.value("preferences/permissions_mode", default_mode)
+        clean = str(stored).lower().strip().replace("-", "_").replace(" ", "_")
+        if clean in ("request_all", "requestall", "manual"):
+            return "Request All"
+        elif clean in ("unrestricted", "full"):
+            return "Unrestricted"
+        return "Auto"
+
+    def _save_persisted_permissions_mode(self, mode: str) -> None:
+        try:
+            s = self._get_settings_obj()
+            clean = str(mode).lower().strip().replace("-", "_").replace(" ", "_")
+            val = "request_all" if clean in ("request_all", "requestall", "manual") else ("unrestricted" if clean in ("unrestricted", "full") else "auto")
+            s.setValue("preferences/permissions_mode", val)
+            s.sync()
+        except Exception:
+            pass
+
     def _on_task_mode_changed(self, text: str) -> None:
         val = "planning" if text.lower() == "planning" else "fast"
         if self._session_id and hasattr(self._agent, "set_session_mode"):
             self._agent.set_session_mode(self._session_id, task_mode=val)
         self.task_mode_changed.emit(val)
 
+    def _on_permissions_mode_changed(self, text: str) -> None:
+        clean = str(text).lower().strip().replace("-", "_").replace(" ", "_")
+        val = "request_all" if clean in ("request_all", "requestall", "manual") else ("unrestricted" if clean in ("unrestricted", "full") else "auto")
+        compat_prof = "manual" if val == "request_all" else ("auto_edit" if val == "auto" else "agentic")
+
+        # Keep legacy autonomy combo in sync
+        if hasattr(self, "autonomy_combo"):
+            legacy_text = "Manual" if val == "request_all" else ("Auto-Edit" if val == "auto" else "Agentic")
+            self.autonomy_combo.blockSignals(True)
+            self.autonomy_combo.setCurrentText(legacy_text)
+            self.autonomy_combo.blockSignals(False)
+
+        if self._session_id and hasattr(self, "_agent") and self._agent:
+            try:
+                self._agent.set_session_mode(
+                    self._session_id,
+                    permissions_mode=val,
+                    autonomy_profile=compat_prof,
+                )
+            except Exception:
+                pass
+
+        self._save_persisted_permissions_mode(val)
+        self.permissions_mode_changed.emit(val)
+        self.autonomy_changed.emit(compat_prof)
+
     def _on_autonomy_changed(self, text: str) -> None:
-        prof_map = {"manual": "manual", "auto-edit": "auto_edit", "auto_edit": "auto_edit", "agentic": "agentic"}
-        val = prof_map.get(text.lower(), "agentic")
-        if self._session_id and hasattr(self._agent, "set_session_mode"):
-            self._agent.set_session_mode(self._session_id, autonomy_profile=val)
+        val = text.lower().replace("-", "_")
+        perm_text = "Request All" if val == "manual" else ("Auto" if "auto" in val else "Unrestricted")
+        perm_val = "request_all" if val == "manual" else ("auto" if "auto" in val else "unrestricted")
+
+        if hasattr(self, "permissions_mode_combo"):
+            self.permissions_mode_combo.blockSignals(True)
+            self.permissions_mode_combo.setCurrentText(perm_text)
+            self.permissions_mode_combo.blockSignals(False)
+
+        if self._session_id and hasattr(self, "_agent") and self._agent:
+            try:
+                self._agent.set_session_mode(
+                    self._session_id,
+                    permissions_mode=perm_val,
+                    autonomy_profile=val,
+                )
+            except Exception:
+                pass
+
+        self._save_persisted_permissions_mode(perm_val)
         self.autonomy_changed.emit(val)
+        self.permissions_mode_changed.emit(perm_val)
 
     def set_task_mode(self, mode: str) -> None:
         normalized = "Planning" if mode.lower() == "planning" else "Fast"
@@ -1722,15 +1864,113 @@ class ChatPanel(QWidget):
         if self._session_id and hasattr(self._agent, "set_session_mode"):
             self._agent.set_session_mode(self._session_id, task_mode=val)
 
+    def set_permissions_mode(self, mode: str) -> None:
+        """Update Permissions Mode combo box without re-emitting signals."""
+        clean = str(mode).lower().strip().replace("-", "_").replace(" ", "_")
+        perm_text = "Request All" if clean in ("request_all", "requestall", "manual") else ("Unrestricted" if clean in ("unrestricted", "full") else "Auto")
+        val = "request_all" if perm_text == "Request All" else ("unrestricted" if perm_text == "Unrestricted" else "auto")
+        compat_prof = "manual" if val == "request_all" else ("auto_edit" if val == "auto" else "agentic")
+
+        if hasattr(self, "permissions_mode_combo"):
+            self.permissions_mode_combo.blockSignals(True)
+            self.permissions_mode_combo.setCurrentText(perm_text)
+            self.permissions_mode_combo.blockSignals(False)
+
+        if hasattr(self, "autonomy_combo"):
+            legacy_text = "Manual" if val == "request_all" else ("Auto-Edit" if val == "auto" else "Agentic")
+            self.autonomy_combo.blockSignals(True)
+            self.autonomy_combo.setCurrentText(legacy_text)
+            self.autonomy_combo.blockSignals(False)
+
+        if self._session_id and hasattr(self, "_agent") and self._agent:
+            try:
+                self._agent.set_session_mode(
+                    self._session_id,
+                    permissions_mode=val,
+                    autonomy_profile=compat_prof,
+                )
+            except Exception:
+                pass
+
     def set_autonomy_profile(self, profile: str) -> None:
         prof_map = {"manual": "Manual", "auto_edit": "Auto-Edit", "auto-edit": "Auto-Edit", "agentic": "Agentic"}
         normalized = prof_map.get(profile.lower(), "Agentic")
         val = "auto_edit" if "auto" in profile.lower() else ("manual" if profile.lower() == "manual" else "agentic")
-        self.autonomy_combo.blockSignals(True)
-        self.autonomy_combo.setCurrentText(normalized)
-        self.autonomy_combo.blockSignals(False)
-        if self._session_id and hasattr(self._agent, "set_session_mode"):
-            self._agent.set_session_mode(self._session_id, autonomy_profile=val)
+        perm_text = "Request All" if normalized == "Manual" else ("Auto" if normalized == "Auto-Edit" else "Unrestricted")
+        perm_val = "request_all" if perm_text == "Request All" else ("auto" if perm_text == "Auto" else "unrestricted")
+
+        if hasattr(self, "autonomy_combo"):
+            self.autonomy_combo.blockSignals(True)
+            self.autonomy_combo.setCurrentText(normalized)
+            self.autonomy_combo.blockSignals(False)
+
+        if hasattr(self, "permissions_mode_combo"):
+            self.permissions_mode_combo.blockSignals(True)
+            self.permissions_mode_combo.setCurrentText(perm_text)
+            self.permissions_mode_combo.blockSignals(False)
+
+        if self._session_id and hasattr(self, "_agent") and self._agent:
+            try:
+                self._agent.set_session_mode(
+                    self._session_id,
+                    permissions_mode=perm_val,
+                    autonomy_profile=val,
+                )
+            except Exception:
+                pass
+
+    def _refresh_context_usage(self) -> None:
+        """Update context indicator from active session or calculation."""
+        if not hasattr(self, "context_indicator") or not self.context_indicator:
+            return
+        if hasattr(self, "_agent") and hasattr(self._agent, "get_context_usage") and self._session_id:
+            try:
+                report = self._agent.get_context_usage(self._session_id)
+                if report:
+                    self.context_indicator.update_report(report)
+                    return
+            except Exception:
+                pass
+
+        # Local fallback calculation based on model and dialogue history
+        model_name = getattr(self, "_current_model", None) or get_settings().model_for("chat")
+        nominal = 32768
+        reserved = 2048
+
+        conv_chars = 0
+        if hasattr(self, "_msg_layout"):
+            for i in range(self._msg_layout.count()):
+                w = self._msg_layout.itemAt(i).widget()
+                if isinstance(w, _MessageBubble):
+                    conv_chars += len(getattr(w, "_raw_text", ""))
+
+        conv_tokens = max(0, conv_chars // 4)
+        breakdown = ContextBreakdown(
+            system_prompt=1250,
+            conversation=conv_tokens,
+            memory=350,
+            retrieved_docs=0,
+            tool_definitions=1800,
+            other_overhead=200,
+            reserved_output=reserved,
+        )
+        sess_id = getattr(self, "_session_id", None)
+        sess_str = sess_id if isinstance(sess_id, str) else ""
+        report = ContextUsageReport.create(
+            model_id=model_name,
+            nominal_capacity=nominal,
+            breakdown=breakdown,
+            reserved_output=reserved,
+            is_exact=False,
+            estimation_method="char_ratio",
+            session_id=sess_str,
+        )
+        self.context_indicator.update_report(report)
+
+    def set_context_usage(self, report: Union[ContextUsageReport, dict]) -> None:
+        """Update context usage indicator directly from an external report."""
+        if hasattr(self, "context_indicator") and self.context_indicator:
+            self.context_indicator.update_report(report)
 
     @Slot(str)
     def _on_error(self, error: str) -> None:
@@ -1806,6 +2046,7 @@ class ChatPanel(QWidget):
         self._btn_send.setEnabled(True)
         self._btn_stop.setEnabled(False)
         self._status_bar.set_ready()
+        self._refresh_context_usage()
 
     @Slot(str)
     def _on_model_changed(self, model_name: str) -> None:
@@ -1818,6 +2059,7 @@ class ChatPanel(QWidget):
                 self._agent.set_session_model(self._session_id, model_name)
             except Exception:
                 pass
+        self._refresh_context_usage()
         self.model_changed.emit(model_name)
 
     def set_model(self, model_name: str) -> None:
@@ -1839,6 +2081,7 @@ class ChatPanel(QWidget):
             self._model_combo.addItem(model_name)
             self._model_combo.setCurrentText(model_name)
         self._model_combo.blockSignals(False)
+        self._refresh_context_usage()
         self.model_changed.emit(model_name)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
@@ -1848,10 +2091,27 @@ class ChatPanel(QWidget):
         return sb.value() >= (sb.maximum() - 40)
 
     def _add_bubble(self, role: str, text: str) -> _MessageBubble:
+        # Bounded rendering: keep at most MAX_CHAT_BUBBLES active in layout
+        bubble_count = 0
+        for i in range(self._msg_layout.count()):
+            w = self._msg_layout.itemAt(i).widget()
+            if isinstance(w, _MessageBubble):
+                bubble_count += 1
+
+        if bubble_count >= MAX_CHAT_BUBBLES:
+            for i in range(self._msg_layout.count()):
+                w = self._msg_layout.itemAt(i).widget()
+                if isinstance(w, _MessageBubble):
+                    self._msg_layout.removeWidget(w)
+                    w.setParent(None)
+                    w.deleteLater()
+                    break
+
         bubble = _MessageBubble(role, text)
         count = self._msg_layout.count()
         self._msg_layout.insertWidget(count - 1, bubble)
         self._scroll_to_bottom()
+        self._refresh_context_usage()
         return bubble
 
     def _add_system_message(self, text: str) -> None:
@@ -1903,6 +2163,7 @@ class ChatPanel(QWidget):
         self._plan_cards.clear()
         self._cards.clear()
         self._status_bar.set_ready()
+        self._refresh_context_usage()
         self._show_start_screen()
 
     def _new_session(self) -> None:
@@ -1917,15 +2178,19 @@ class ChatPanel(QWidget):
                 self._agent.stop()
                 self._active_bubble = None
             t_mode = "planning" if self.task_mode_combo.currentText() == "Planning" else "fast"
-            a_prof = self.autonomy_combo.currentText().lower().replace("-", "_")
+            p_text = self.permissions_mode_combo.currentText() if hasattr(self, "permissions_mode_combo") else "Auto"
+            p_mode = "request_all" if p_text == "Request All" else ("unrestricted" if p_text == "Unrestricted" else "auto")
+            a_prof = self.autonomy_combo.currentText().lower().replace("-", "_") if hasattr(self, "autonomy_combo") else ("manual" if p_mode == "request_all" else "agentic")
             self._session_id = self._agent.create_session(
                 name="New Session",
                 model_name=self._current_model,
                 provider_type="ollama",
                 task_mode=t_mode,
                 autonomy_profile=a_prof,
+                permissions_mode=p_mode,
             )
             self._clear_chat()
+            self._refresh_context_usage()
             self._btn_send.setEnabled(not self._agent.is_busy)
             self._btn_stop.setEnabled(self._agent.is_busy)
             self._show_start_screen()

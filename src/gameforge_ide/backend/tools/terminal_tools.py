@@ -1,4 +1,7 @@
-"""Terminal Command Execution for GameForge IDE."""
+"""Terminal Command Execution for GameForge IDE.
+
+Wired through the central CommandExecutionBroker (DEF-301) and ProcessLifecycleManager (DEF-305).
+"""
 
 from __future__ import annotations
 
@@ -9,18 +12,21 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
+from ..models.command_contract import (
+    CommandExecutionRequest,
+    CommandExecutionResult,
+    CommandStatus,
+    RiskCategory,
+)
+from ..models.modes import PermissionsMode
+from .command_broker import CommandExecutionBroker
 
 
 class TerminalTools:
-    """Executes a deliberately small set of non-shell workspace commands.
-
-    This is the agent tool, not the user-controlled interactive terminal.  It
-    never invokes a command shell: compound PowerShell/cmd expressions and
-    redirection are rejected before process creation.
-    """
+    """Executes commands within the workspace governed by CommandExecutionBroker."""
 
     FORBIDDEN_COMMANDS: List[str] = [
         "format",
@@ -30,9 +36,6 @@ class TerminalTools:
         "rmdir /s /q c:",
     ]
 
-    # These commands are useful for inspected project work and have predictable
-    # argument parsing when launched without a shell.  Adding a command is a
-    # security review decision, not a model prompt change.
     ALLOWED_EXECUTABLES = {
         "python", "python.exe", "py", "py.exe", "pytest", "pytest.exe",
         "git", "git.exe", "cmake", "cmake.exe", "dotnet", "dotnet.exe",
@@ -44,6 +47,7 @@ class TerminalTools:
     def __init__(self, workspace_root: Path):
         self.boundary = BoundaryManager(workspace_root)
         self.workspace_root = self.boundary.workspace_root
+        self.broker = CommandExecutionBroker(self.workspace_root)
 
     def _blocked(self, message: str) -> Dict[str, Any]:
         return {
@@ -106,8 +110,12 @@ class TerminalTools:
         command: str,
         subpath: str = ".",
         timeout_seconds: int = 60,
+        permissions_mode: Optional[Union[PermissionsMode, str]] = None,
+        approval_granted: bool = False,
+        shell: Optional[str] = None,
+        reason: str = "",
     ) -> Dict[str, Any]:
-        """Executes a command within the workspace directory."""
+        """Executes a command within the workspace directory via CommandExecutionBroker."""
         cmd_lower = command.lower().strip()
         for forbidden in self.FORBIDDEN_COMMANDS:
             if forbidden in cmd_lower:
@@ -126,8 +134,8 @@ class TerminalTools:
             )
         timeout_seconds = timeout_val
 
+        # Resolve working directory
         try:
-            args = self._parse_command(command)
             working_dir = self.boundary.validate_path(subpath, allow_write=False)
         except (ValueError, SecurityViolationError) as exc:
             return self._blocked(str(exc))
@@ -135,99 +143,53 @@ class TerminalTools:
         if not working_dir.exists() or not working_dir.is_dir():
             return self._blocked(f"Working directory is not an existing directory: '{subpath}'.")
 
-        t0 = time.time()
-        proc: Optional[subprocess.Popen] = None
-        try:
-            from ...core import jobs
-            proc = jobs.spawn(
-                args,
-                cwd=str(working_dir),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
+        # Resolve permissions mode
+        pm = PermissionsMode.from_str(permissions_mode) if permissions_mode else PermissionsMode.AUTO
+
+        # If shell is not explicitly passed, check if direct execution validation is needed
+        if shell is None or shell == "direct":
+            # Direct shell-free agent execution check
+            try:
+                args = self._parse_command(command)
+                target_shell = "direct"
+            except (ValueError, SecurityViolationError) as exc:
+                return self._blocked(str(exc))
+        else:
+            target_shell = shell
+
+        request = CommandExecutionRequest(
+            command=command,
+            shell=target_shell,
+            working_directory=str(working_dir),
+            permissions_mode=pm,
+            reason=reason,
+            timeout_seconds=timeout_seconds,
+        )
+
+        res = self.broker.execute(request, approval_granted=approval_granted)
+
+        # Map to dict format expected by callers
+        status_label = "SUCCESS" if res.status == CommandStatus.SUCCEEDED else (
+            "BLOCKED" if res.status == CommandStatus.BLOCKED else (
+                "TIMEOUT" if "timed out after" in (res.error_message or "").lower() else (
+                    "PENDING_APPROVAL" if res.status == CommandStatus.AWAITING_APPROVAL else (
+                        "FAILED" if res.status == CommandStatus.FAILED else str(res.status.value)
+                    )
+                )
             )
-            # Explicitly guarantee process joins the IDE Windows Job Object
-            jobs.adopt(proc)
+        )
 
-            stdout, stderr = proc.communicate(timeout=timeout_seconds)
-            duration = round(time.time() - t0, 3)
-            return {
-                "status": "SUCCESS" if proc.returncode == 0 else "FAILED",
-                "exit_code": proc.returncode,
-                "stdout": stdout,
-                "stderr": stderr,
-                "output": stdout,
-                "duration_seconds": duration,
-                "command": command,
-                "argv": args,
-            }
-        except subprocess.TimeoutExpired as exc:
-            stdout_str = ""
-            stderr_str = ""
-            if proc is not None:
-                try:
-                    if sys.platform == "win32":
-                        try:
-                            si = subprocess.STARTUPINFO()
-                            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                            si.wShowWindow = subprocess.SW_HIDE
-                            subprocess.run(
-                                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                                capture_output=True,
-                                timeout=5,
-                                creationflags=subprocess.CREATE_NO_WINDOW,
-                                startupinfo=si,
-                            )
-                        except Exception:
-                            pass
-                    try:
-                        jobs.kill_process_tree(proc)
-                    except Exception:
-                        pass
-                    proc.kill()
-                    rem_out, rem_err = proc.communicate(timeout=2)
-                    stdout_str = exc.stdout or rem_out or ""
-                    stderr_str = exc.stderr or rem_err or ""
-                except Exception:
-                    stdout_str = exc.stdout or ""
-                    stderr_str = exc.stderr or ""
-
-            return {
-                "status": "TIMEOUT",
-                "exit_code": -1,
-                "error": f"Command timed out after {timeout_seconds} seconds.",
-                "stdout": stdout_str if isinstance(stdout_str, str) else stdout_str.decode("utf-8", errors="replace"),
-                "stderr": stderr_str if isinstance(stderr_str, str) else stderr_str.decode("utf-8", errors="replace"),
-                "command": command,
-            }
-        except Exception as e:
-            return {
-                "status": "ERROR",
-                "exit_code": -1,
-                "error": f"Execution failed: {str(e)}",
-                "stdout": "",
-                "stderr": "",
-                "command": command,
-            }
-        finally:
-            if proc is not None and proc.poll() is None:
-                try:
-                    if sys.platform == "win32":
-                        try:
-                            si = subprocess.STARTUPINFO()
-                            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                            si.wShowWindow = subprocess.SW_HIDE
-                            subprocess.run(
-                                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                                capture_output=True,
-                                timeout=2,
-                                creationflags=subprocess.CREATE_NO_WINDOW,
-                                startupinfo=si,
-                            )
-                        except Exception:
-                            pass
-                    proc.kill()
-                except Exception:
-                    pass
+        return {
+            "status": status_label,
+            "exit_code": res.exit_code if res.exit_code is not None else -1,
+            "stdout": res.stdout,
+            "stderr": res.stderr,
+            "output": res.stdout,
+            "error": res.error_message or (res.stderr if res.status == CommandStatus.FAILED else ""),
+            "duration_seconds": res.duration_s,
+            "command": res.command,
+            "argv": args if "args" in locals() else [command],
+            "requires_approval": res.requires_approval,
+            "risk_category": res.risk_category.value,
+            "execution_id": res.execution_id,
+        }

@@ -35,17 +35,17 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
     p_name = base_dir.name
 
     if not exe_path or not exe_path.is_file():
-        # Fallback search in project_dir and workspace
+        # Fallback search strictly for packaged executables in Packaged/ (DEF-308: NEVER accept raw Binaries/Win64)
         candidates = [
             base_dir / "Packaged" / "Windows" / f"{p_name}.exe",
-            base_dir / "Binaries" / "Win64" / f"{p_name}.exe",
+            base_dir / "Packaged" / "WindowsNoEditor" / f"{p_name}.exe",
+            base_dir / "package_dev" / "Windows" / f"{p_name}.exe",
+            base_dir / "package_ship" / "Windows" / f"{p_name}.exe",
         ]
-        candidates += list(base_dir.glob(f"**/{cfg}/**/{p_name}.exe")) + \
-                      list(base_dir.glob(f"**/Windows/**/{p_name}.exe")) + \
-                      list(base_dir.glob(f"**/Packaged/**/{p_name}.exe")) + \
-                      list(ctx.workspace_dir.glob(f"**/{p_name}.exe"))
+        candidates += list(base_dir.glob(f"**/Packaged/**/{p_name}.exe")) + \
+                      list(base_dir.glob(f"**/package_*/**/{p_name}.exe"))
         for c in candidates:
-            if c.is_file():
+            if c.is_file() and "binaries" not in c.as_posix().lower() and not c.name.lower().endswith("crashreportclient.exe"):
                 exe_path = c
                 break
 

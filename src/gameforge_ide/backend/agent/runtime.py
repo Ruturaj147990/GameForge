@@ -76,16 +76,17 @@ class AgentRuntime:
     def __init__(
         self,
         workspace_root: Path,
-        session_manager: SessionManager,
-        model_router: ModelRouter,
+        session_manager: Optional[SessionManager] = None,
+        model_router: Optional[ModelRouter] = None,
         max_iterations: int = 12,
         studio_mode: bool = False,
         projects_service: Optional[Any] = None,
     ):
         self.studio_mode = studio_mode
         self.workspace_root = workspace_root.resolve()
-        self.session_manager = session_manager
-        self.router = model_router
+        self.session_manager = session_manager or SessionManager(self.workspace_root)
+        self.router = model_router or ModelRouter()
+        self.model_router = self.router
         self.tool_gateway = ToolGateway(self.workspace_root)
         self.context_manager = ContextManager(self.workspace_root)
         self.repair_engine = RepairEngine(self.workspace_root)
@@ -1257,404 +1258,28 @@ class AgentRuntime:
         return is_game_creation_request(user_prompt)
 
     def _build_plan_artifact(self, session_id: str, prompt: str, is_game: bool = False) -> PlanArtifact:
-        """Constructs a structured, actionable technical plan artifact via semantic strategy evaluation."""
-        import hashlib
-        clean_goal = prompt.strip()
-        if len(clean_goal) > 100:
-            clean_goal = clean_goal[:97] + "..."
+        """Constructs a structured, actionable technical plan artifact via genuine LLM planning."""
+        from .plan_generator import PlanGenerator
+        generator = PlanGenerator(
+            workspace_root=self.workspace_root,
+            tool_gateway=self.tool_gateway,
+            model_router=self.model_router,
+        )
+        existing_plan = None
+        if self.session_manager:
+            sess = self.session_manager.get_session(session_id)
+            if sess:
+                existing_plan = sess.active_plan
 
-        plan_id = f"plan_{hashlib.sha256(f'{session_id}:{prompt.strip()}'.encode()).hexdigest()[:10]}"
-
-        if is_game:
-            from ...design.template_registry import default_registry, GenerationStrategy
-            decision = default_registry.evaluate_strategy(prompt)
-            gds_payload = None
-            try:
-                from ...design.prompt_to_gds import prompt_to_gds
-                res = prompt_to_gds(clean_goal, allow_model=True)
-                if res.status == "OK" and res.gds is not None:
-                    gds_payload = res.gds.model_dump()
-            except Exception:
-                pass
-
-            if decision.strategy == GenerationStrategy.SCRATCH:
-                arch = decision.suggested_architecture
-                plan_kind = arch.get("plan_kind", "scratch_custom")
-                genre_name = str(arch.get("genre", "custom")).replace("Genre.", "")
-
-                if plan_kind == "scratch_puzzle":
-                    steps = [
-                        PlanStep(
-                            step_id="step_1_spec",
-                            title="1. Game Design Specification (GDS)",
-                            description="Generate typed GameDesignSpec for Sudoku 9x9 grid, 3x3 subgrid rules, and solver constraint model.",
-                            target_files=["GameForge/design/sudoku.gds.json"],
-                            tools=["write_file"],
-                            verification="Valid GDS schema and Sudoku rule definitions",
-                        ),
-                        PlanStep(
-                            step_id="step_2_scaffold",
-                            title="2. Project Scaffold & C++ Core Headers",
-                            description="Scaffold Unreal project structure and declare SudokuGameMode, SudokuGameInstance, and SudokuGridManager.",
-                            target_files=[
-                                "Source/MyGame/SudokuGameMode.h",
-                                "Source/MyGame/SudokuGameInstance.h",
-                                "Source/MyGame/SudokuGridManager.h",
-                            ],
-                            tools=["write_file"],
-                            verification="Headers define UCLASS and UFUNCTION interfaces",
-                        ),
-                        PlanStep(
-                            step_id="step_3_logic",
-                            title="3. Sudoku Grid & Solver Implementation",
-                            description="Implement 9x9 grid state, cell move validation (rows, columns, boxes), and puzzle solver algorithm in C++.",
-                            target_files=[
-                                "Source/MyGame/SudokuGameMode.cpp",
-                                "Source/MyGame/SudokuGameInstance.cpp",
-                                "Source/MyGame/SudokuGridManager.cpp",
-                            ],
-                            tools=["write_file"],
-                            verification="C++ logic compiles cleanly and handles move validation",
-                        ),
-                        PlanStep(
-                            step_id="step_4_build_editor",
-                            title="4. Compile Editor Target (UnrealBuildTool)",
-                            description="Compile project C++ modules and GameForgeRuntime plugin in Development configuration.",
-                            target_files=["Binaries/Win64/"],
-                            tools=["unreal_build"],
-                            verification="UBT zero-error compilation",
-                        ),
-                        PlanStep(
-                            step_id="step_5_ui",
-                            title="5. UMG Sudoku Grid & NumberPad Widgets",
-                            description="Construct interactive 9x9 cell grid interface, digit selector buttons (1-9), and solve/hint actions.",
-                            target_files=["Content/UI/"],
-                            tools=["write_file", "unreal_editor"],
-                            verification="UI widgets bind correctly to SudokuGridManager",
-                        ),
-                        PlanStep(
-                            step_id="step_6_automation",
-                            title="6. Automated Logic Verification",
-                            description="Execute unit tests verifying puzzle generation, move validation rules, and victory state detection.",
-                            target_files=["tests/test_sudoku.py"],
-                            tools=["run_command", "unreal_run_tests"],
-                            verification="All Sudoku solver and validation assertions pass",
-                        ),
-                        PlanStep(
-                            step_id="step_7_package",
-                            title="7. Package Standalone Executable",
-                            description="Cook assets and package standalone Win64 executable for Windows.",
-                            target_files=["Packaged/Windows/MyGame.exe"],
-                            tools=["unreal_package"],
-                            verification="Standalone .exe exists on disk",
-                        ),
-                        PlanStep(
-                            step_id="step_8_play",
-                            title="8. Playtest & Gameplay Verification",
-                            description="Launch packaged game executable and verify interactive playability.",
-                            target_files=[],
-                            tools=["play_game"],
-                            verification="Game launches cleanly in standalone window",
-                        ),
-                    ]
-                else:
-                    classes = arch.get("target_classes", ["CustomGameMode"])
-                    files = arch.get("source_files", ["Source/MyGame/CustomGameMode.h"])
-                    steps = [
-                        PlanStep(
-                            step_id="step_1_spec",
-                            title=f"1. Game Design Specification ({genre_name.title()})",
-                            description=f"Generate typed GameDesignSpec for {clean_goal} with custom rule sets.",
-                            target_files=["GameForge/design/game.gds.json"],
-                            tools=["write_file"],
-                            verification="Valid GDS schema and rule definitions",
-                        ),
-                        PlanStep(
-                            step_id="step_2_scaffold",
-                            title="2. Project Scaffold & Architecture",
-                            description=f"Scaffold C++ project structure and declare {', '.join(classes[:3])}.",
-                            target_files=files[:3],
-                            tools=["write_file"],
-                            verification="Scaffold directory structure intact",
-                        ),
-                        PlanStep(
-                            step_id="step_3_logic",
-                            title="3. Custom Gameplay Mechanics Implementation",
-                            description=f"Implement core gameplay logic and rules in C++ ({', '.join(classes[:3])}).",
-                            target_files=files,
-                            tools=["write_file"],
-                            verification="C++ sources compile cleanly",
-                        ),
-                        PlanStep(
-                            step_id="step_4_build_editor",
-                            title="4. Compile Editor Target",
-                            description="Compile project C++ modules and GameForgeRuntime plugin in Development configuration.",
-                            target_files=["Binaries/Win64/"],
-                            tools=["unreal_build"],
-                            verification="UBT zero-error compilation",
-                        ),
-                        PlanStep(
-                            step_id="step_5_ui_assemble",
-                            title="5. UI & Level Assembly",
-                            description="Assemble level geometry, HUD widgets, and game mode bindings.",
-                            target_files=["Content/Maps/Level_1.umap"],
-                            tools=["unreal_editor"],
-                            verification="Level read-back confirms all entities placed",
-                        ),
-                        PlanStep(
-                            step_id="step_6_automation",
-                            title="6. Automated Gameplay Verification",
-                            description="Execute automated tests validating gameplay win/loss rules.",
-                            target_files=[],
-                            tools=["run_command", "unreal_run_tests"],
-                            verification="All gameplay assertions pass",
-                        ),
-                        PlanStep(
-                            step_id="step_7_package",
-                            title="7. Package Standalone Executable",
-                            description="Cook assets and package standalone Win64 executable with Oodle compression.",
-                            target_files=["Packaged/Windows/"],
-                            tools=["unreal_package"],
-                            verification="Standalone .exe exists on disk",
-                        ),
-                        PlanStep(
-                            step_id="step_8_play",
-                            title="8. Playtest & Gameplay Verification",
-                            description="Launch and verify standalone packaged game.",
-                            target_files=[],
-                            tools=["play_game"],
-                            verification="Game launches cleanly",
-                        ),
-                    ]
-
-                return PlanArtifact(
-                    plan_id=plan_id,
-                    session_id=session_id,
-                    goal=clean_goal,
-                    summary=f"Approach C (Generate from Scratch): Dedicated C++ & UI architecture for {clean_goal}",
-                    implementation_method="game_creation",
-                    steps=steps,
-                    status="awaiting_approval",
-                    metadata={"gds": gds_payload} if gds_payload else {},
-                )
-
-            elif decision.strategy == GenerationStrategy.HYBRID:
-                tmpl_title = decision.template.title if decision.template else "Base Template"
-                steps = [
-                    PlanStep(
-                        step_id="step_1_spec",
-                        title=f"1. Hybrid Design Specification ({tmpl_title})",
-                        description=f"Generate typed GameDesignSpec extending {tmpl_title} with custom gameplay rules.",
-                        target_files=["GameForge/design/game.gds.json"],
-                        tools=["plan_game", "write_file"],
-                        verification="Valid GDS schema with custom rule bindings",
-                    ),
-                    PlanStep(
-                        step_id="step_2_scaffold",
-                        title="2. Project Scaffold & Build Rules",
-                        description="Scaffold Unreal C++ project with custom module dependencies.",
-                        target_files=["Source/", "Config/DefaultGame.ini"],
-                        tools=["create_game"],
-                        verification="Scaffold directory structure intact",
-                    ),
-                    PlanStep(
-                        step_id="step_3_rules",
-                        title="3. Implement Custom Gameplay Rules",
-                        description="Implement custom C++ mechanics extending the base template capabilities.",
-                        target_files=["Source/MyGame/"],
-                        tools=["write_file"],
-                        verification="Custom rules compile cleanly",
-                    ),
-                    PlanStep(
-                        step_id="step_4_build_editor",
-                        title="4. Compile Editor Target",
-                        description="Compile project C++ modules and GameForgeRuntime plugin in Development configuration.",
-                        target_files=["Binaries/Win64/"],
-                        tools=["unreal_build"],
-                        verification="UBT zero-error compilation",
-                    ),
-                    PlanStep(
-                        step_id="step_5_assemble",
-                        title="5. Assemble Level & Place Actors",
-                        description="Instantiate level geometry, PlayerStart, and custom gameplay entities.",
-                        target_files=["Content/Maps/Level_1.umap"],
-                        tools=["unreal_editor"],
-                        verification="Level read-back confirms all entities placed",
-                    ),
-                    PlanStep(
-                        step_id="step_6_automation",
-                        title="6. Automated Scenario Testing",
-                        description="Execute scenario tests validating custom win/loss conditions.",
-                        target_files=[],
-                        tools=["unreal_run_tests"],
-                        verification="All scenario assertions pass",
-                    ),
-                    PlanStep(
-                        step_id="step_7_package",
-                        title="7. Package Standalone Executable",
-                        description="Cook assets and package standalone Win64 executable with Oodle compression.",
-                        target_files=["Packaged/Windows/"],
-                        tools=["unreal_package"],
-                        verification="Standalone .exe exists on disk",
-                    ),
-                    PlanStep(
-                        step_id="step_8_play",
-                        title="8. Playtest & Gameplay Verification",
-                        description="Launch and verify standalone packaged game.",
-                        target_files=[],
-                        tools=["play_game"],
-                        verification="Game launches cleanly",
-                    ),
-                ]
-                return PlanArtifact(
-                    plan_id=plan_id,
-                    session_id=session_id,
-                    goal=clean_goal,
-                    summary=f"Approach B (Hybrid Generation): Combining {tmpl_title} environment with custom C++ rules for: {clean_goal}",
-                    implementation_method="game_creation",
-                    steps=steps,
-                    status="awaiting_approval",
-                    metadata={"gds": gds_payload} if gds_payload else {},
-                )
-
-            else:
-                tmpl_title = decision.template.title if decision.template else "Template"
-                steps = [
-                    PlanStep(
-                        step_id="step_1_spec",
-                        title=f"1. Game Design Specification ({tmpl_title})",
-                        description=f"Generate typed GameDesignSpec adapting {tmpl_title} with genre, camera, and objectives.",
-                        target_files=["GameForge/design/game.gds.json"],
-                        tools=["plan_game"],
-                        verification="Valid GDS schema and parameter bounds",
-                    ),
-                    PlanStep(
-                        step_id="step_2_scaffold",
-                        title="2. Project Scaffold & Build Rules",
-                        description="Generate C++ project structure, Target.cs/Build.cs rules, and plugin bindings.",
-                        target_files=["Source/", "Config/DefaultGame.ini"],
-                        tools=["create_game"],
-                        verification="Scaffold directory structure intact",
-                    ),
-                    PlanStep(
-                        step_id="step_3_build_editor",
-                        title="3. Compile Editor Target",
-                        description="Compile project C++ modules and GameForgeRuntime plugin in Development configuration.",
-                        target_files=["Binaries/Win64/"],
-                        tools=["unreal_build"],
-                        verification="UBT zero-error compilation",
-                    ),
-                    PlanStep(
-                        step_id="step_4_content",
-                        title="4. Content & Asset Preparation",
-                        description="Generate and link procedural props, materials, audio loops, and Niagara VFX presets.",
-                        target_files=["Content/"],
-                        tools=["create_game"],
-                        verification="Assets registered with verified provenance",
-                    ),
-                    PlanStep(
-                        step_id="step_5_assemble",
-                        title="5. Assemble Level & Actors",
-                        description="Instantiate level geometry, PlayerStart, NavMesh bounds, and gameplay entities.",
-                        target_files=["Content/Maps/Level_1.umap"],
-                        tools=["unreal_editor"],
-                        verification="Level read-back confirms all entities placed",
-                    ),
-                    PlanStep(
-                        step_id="step_6_scenario_gen",
-                        title="6. Generate QA Playtest Scenarios",
-                        description="Generate deterministic scenario specifications validating gameplay win/loss conditions.",
-                        target_files=["Saved/GameForge/scenarios/"],
-                        tools=["create_game"],
-                        verification="Scenario JSON matching scenario/1 schema",
-                    ),
-                    PlanStep(
-                        step_id="step_7_automation",
-                        title="7. In-Engine Automation Testing",
-                        description="Execute in-engine C++ automation test suite against the compiled project.",
-                        target_files=[],
-                        tools=["unreal_run_tests"],
-                        verification="All automation tests pass cleanly",
-                    ),
-                    PlanStep(
-                        step_id="step_8_package",
-                        title="8. Package Standalone Executable",
-                        description="Cook assets and package standalone Win64 executable with Oodle compression.",
-                        target_files=["Packaged/Windows/"],
-                        tools=["unreal_package"],
-                        verification="Standalone .exe exists on disk",
-                    ),
-                    PlanStep(
-                        step_id="step_9_scenarios",
-                        title="9. Execute Packaged QA Scenarios",
-                        description="Run headless packaged gameplay replay with injected inputs and verify win criteria.",
-                        target_files=["Saved/GameForge/evidence/"],
-                        tools=["create_game"],
-                        verification="Scenario checks PASS in under time budget",
-                    ),
-                    PlanStep(
-                        step_id="step_10_review",
-                        title="10. Visual Rubric & Quality Review",
-                        description="Run vision rubric scoring and mesh audit ensuring zero missing textures or black frames.",
-                        target_files=["reports/"],
-                        tools=["create_game"],
-                        verification="Vision rubric >= 0.85 and 0 placeholder assets",
-                    ),
-                    PlanStep(
-                        step_id="step_11_report",
-                        title="11. Compile Evidence Report",
-                        description="Compile comprehensive pipeline and verification report with artifact digests.",
-                        target_files=["Saved/GameForge/evidence/pipeline_report.json"],
-                        tools=["create_game"],
-                        verification="Complete evidence manifest written",
-                    ),
-                ]
-                return PlanArtifact(
-                    plan_id=plan_id,
-                    session_id=session_id,
-                    goal=clean_goal,
-                    summary=f"Approach A (Adapt Template): Adapting {tmpl_title} pipeline for: {clean_goal}",
-                    implementation_method="game_creation",
-                    steps=steps,
-                    status="awaiting_approval",
-                    metadata={"gds": gds_payload} if gds_payload else {},
-                )
-        else:
-            steps = [
-                PlanStep(
-                    step_id="step_1_inspect",
-                    title="1. Inspect Codebase & Symbols",
-                    description="Inspect existing source files, symbols, and architecture relevant to the request.",
-                    target_files=[],
-                    tools=["search_index", "search_code", "read_file", "list_dir"],
-                    verification="Relevant source lines identified with exact context",
-                ),
-                PlanStep(
-                    step_id="step_2_propose_edits",
-                    title="2. Apply Code Modifications",
-                    description="Generate atomic source code edits conforming to language and framework standards.",
-                    target_files=[],
-                    tools=["propose_edit", "write_file", "apply_edit"],
-                    verification="Diff applied and verified on disk with rollback snapshot",
-                ),
-                PlanStep(
-                    step_id="step_3_verify",
-                    title="3. Targeted Verification & Regression Tests",
-                    description="Execute targeted tests, compiler checks, or automation suites to verify zero regressions.",
-                    target_files=[],
-                    tools=["run_command", "unreal_run_tests"],
-                    verification="All acceptance checks and tests pass with exit code 0",
-                ),
-            ]
-            return PlanArtifact(
-                plan_id=plan_id,
-                session_id=session_id,
-                goal=clean_goal,
-                summary=f"Autonomous source-code engineering and verification plan for: {clean_goal}",
-                implementation_method="direct_code_edit",
-                steps=steps,
-                status="awaiting_approval",
-            )
+        plan = generator.generate_llm_plan_artifact(
+            prompt=prompt,
+            session_id=session_id,
+            is_game=is_game,
+            model_name=getattr(self, "active_model", None),
+            active_project_dir=getattr(self, "active_project_dir", None),
+            existing_plan=existing_plan,
+        )
+        return plan
 
     def _save_task_state(self, task: TaskState) -> None:
         """Persists the task object to .gameforge/tasks/{task_id}.json atomically."""
@@ -1682,6 +1307,18 @@ class AgentRuntime:
                 path.write_text(json.dumps(task.model_dump(), indent=2), encoding="utf-8")
             except Exception:
                 pass
+
+    def get_context_usage(self, session_id: str, model_id: Optional[str] = None) -> Any:
+        """Returns the active context usage report for the given session and model."""
+        from ..models.context_usage import ContextUsageReport
+        tools = self.tool_gateway.get_definitions()
+        return self.context_manager.get_context_usage(
+            session_id=session_id,
+            model_id=model_id or getattr(self, "active_model", None),
+            session_manager=self.session_manager,
+            active_project_dir=getattr(self, "active_project_dir", None),
+            tool_definitions=tools,
+        )
 
     def get_task_state(self, session_id: str) -> Optional[TaskState]:
         """Returns the active task state associated with a session, falling back to disk."""
@@ -1860,6 +1497,12 @@ class AgentRuntime:
                 **budget,
             },
         )
+        try:
+            init_usage = self.get_context_usage(session_id)
+            if init_usage:
+                yield AgentEvent(event_type="context_usage", content="Context usage initialized", metadata={"report": init_usage})
+        except Exception:
+            pass
 
         # Determine active task mode and autonomy profile from session
         raw_mode = getattr(session, "task_mode", TaskMode.PLANNING)
@@ -2547,9 +2190,12 @@ class AgentRuntime:
                 (item for item in self.tool_gateway.get_definitions() if item.name == tool_name),
                 None,
             )
+            perm_mode = getattr(session, "permissions_mode", None)
             requires_approval = (
                 definition is not None
-                and self.tool_gateway.tool_requires_approval(tool_name, tool_args, autonomy_profile=autonomy_profile)
+                and self.tool_gateway.tool_requires_approval(
+                    tool_name, tool_args, autonomy_profile=autonomy_profile, permissions_mode=perm_mode
+                )
                 and tool_name != "propose_edit"
             )
             if definition and requires_approval:
@@ -2562,12 +2208,34 @@ class AgentRuntime:
                     if op_name
                     else f"Executes approval-gated tool '{tool_name}' inside project"
                 )
+                extra_approval_fields = {}
+                if tool_name == "run_command":
+                    cmd_str = str(tool_args.get("command", "")).strip()
+                    shell_str = str(tool_args.get("shell", "powershell"))
+                    subpath = tool_args.get("subpath") or tool_args.get("working_directory") or "."
+                    working_dir = self.workspace_root / subpath
+                    pm = getattr(session, "permissions_mode", None)
+                    from ..models.modes import PermissionsMode
+                    pm_mode = PermissionsMode.from_str(pm) if pm else PermissionsMode.REQUEST_ALL
+                    risk_cat, _, r_reason = self.tool_gateway.command_broker.classify_risk(
+                        cmd_str, shell=shell_str, working_directory=working_dir, permissions_mode=pm_mode
+                    )
+                    summary = f"Run command: `{cmd_str}`"
+                    consequence = f"Executes `{cmd_str}` via `{shell_str}` in `{subpath}`"
+                    extra_approval_fields = {
+                        "command": cmd_str,
+                        "shell": shell_str,
+                        "working_directory": str(subpath),
+                        "risk_category": risk_cat.value if hasattr(risk_cat, "value") else str(risk_cat),
+                        "reason": str(tool_args.get("reason") or r_reason or "Developer command execution"),
+                    }
                 approval_rec = store.create(
                     tool=tool_name,
                     args=tool_args,
                     summary=summary,
                     consequence=consequence,
                     session_id=session_id,
+                    **extra_approval_fields,
                 )
 
                 tool_result = {
@@ -2605,7 +2273,10 @@ class AgentRuntime:
                     tool_result = _cached_observations[_tool_key]
                 else:
                     tool_result = self.tool_gateway.execute_tool(
-                        tool_name, tool_args, autonomy_profile=autonomy_profile
+                        tool_name,
+                        tool_args,
+                        autonomy_profile=autonomy_profile,
+                        permissions_mode=perm_mode,
                     )
                     _cached_observations[_tool_key] = tool_result
             except Exception as exc:

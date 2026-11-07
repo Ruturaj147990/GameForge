@@ -482,10 +482,18 @@ def validate_stage_output(
         cook_dirs = result.get("cook_dirs") or []
         if artifacts_count == 0 and not installed and not cook_dirs:
             issues.append("Content stage produced neither installed template packs nor configured assets")
-        if pdir is not None and cook_dirs:
-            dg_ini = pdir / "Config" / "DefaultGame.ini"
-            if dg_ini.is_file() and dg_ini.stat().st_size == 0:
-                issues.append(f"Config/DefaultGame.ini in '{pdir}' is empty (0 bytes)")
+        if pdir is not None:
+            if cook_dirs:
+                dg_ini = pdir / "Config" / "DefaultGame.ini"
+                if dg_ini.is_file() and dg_ini.stat().st_size == 0:
+                    issues.append(f"Config/DefaultGame.ini in '{pdir}' is empty (0 bytes)")
+            # Asset integrity and mock asset contamination audit (Mandate 4)
+            content_dir = pdir / "Content"
+            if content_dir.is_dir():
+                from ..unreal.asset_integrity import validate_content_directory
+                c_valid, c_issues, _ = validate_content_directory(content_dir)
+                if not c_valid:
+                    issues.extend(c_issues)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 8. PACKAGE STAGE
@@ -496,7 +504,15 @@ def validate_stage_output(
             ep = Path(exe_path)
             if not ep.is_absolute() and pdir is not None:
                 ep = pdir / ep
-            if ep.suffix.lower() == ".exe":
+
+            # CRITICAL DEF-308 REJECTION: Raw executable in Binaries/Win64 is NEVER proof of packaging
+            norm_path = ep.as_posix().lower()
+            if "binaries" in norm_path and "packaged" not in norm_path:
+                issues.append(
+                    f"REJECTED: Raw executable '{exe_path}' in Binaries/Win64 is not proof of a packaged game. "
+                    f"Valid packaged staging structure in Packaged/Windows/ is strictly required."
+                )
+            elif ep.suffix.lower() == ".exe":
                 if not ep.is_file():
                     issues.append(f"Packaged executable '{exe_path}' does not exist on disk")
                 elif ep.stat().st_size == 0:
@@ -507,10 +523,17 @@ def validate_stage_output(
             elif not ep.exists():
                 issues.append(f"Packaged path '{exe_path}' does not exist on disk")
         elif pdir is not None:
-            # Check for candidate exe in project dir
-            exes = [e for e in (list(pdir.glob("Packaged/**/*.exe")) + list(pdir.glob("Binaries/Win64/*.exe"))) if e.is_file() and e.stat().st_size > 0]
+            # Check for candidate exe strictly in Packaged/ or package_* dirs (NEVER Binaries/Win64)
+            exes = [
+                e for e in (
+                    list(pdir.glob("Packaged/**/*.exe")) +
+                    list(pdir.glob("package_dev/**/*.exe")) +
+                    list(pdir.glob("package_ship/**/*.exe"))
+                )
+                if e.is_file() and e.stat().st_size > 0 and not e.name.lower().endswith("crashreportclient.exe")
+            ]
             if not exes:
-                issues.append("Package stage produced no packaged executable on disk")
+                issues.append("Package stage produced no packaged executable on disk in Packaged/")
         else:
             issues.append("Package stage outcome missing executable path ('exe')")
 

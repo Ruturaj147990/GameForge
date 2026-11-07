@@ -193,8 +193,10 @@ class MainWindow(QMainWindow):
         # ── Sync Mode Selectors between TopBar and ChatPanel ──────────────
         if hasattr(self, "_top_bar") and hasattr(self, "_chat_panel"):
             self._top_bar.taskModeChanged.connect(self._chat_panel.set_task_mode)
+            self._top_bar.permissionsModeChanged.connect(self._chat_panel.set_permissions_mode)
             self._top_bar.autonomyProfileChanged.connect(self._chat_panel.set_autonomy_profile)
             self._chat_panel.task_mode_changed.connect(self._top_bar.set_task_mode)
+            self._chat_panel.permissions_mode_changed.connect(self._top_bar.set_permissions_mode)
             self._chat_panel.autonomy_changed.connect(self._top_bar.set_autonomy_profile)
 
         # ── Deferred startup health-check ────────────────────────────────
@@ -1045,6 +1047,18 @@ class MainWindow(QMainWindow):
         return self.task_mode_combo
 
     @property
+    def permissions_mode_combo(self):
+        return getattr(getattr(self, "_chat_panel", None), "permissions_mode_combo", None) or getattr(getattr(self, "_top_bar", None), "permissions_mode_combo", None)
+
+    @property
+    def permissions_combo(self):
+        return self.permissions_mode_combo
+
+    @property
+    def permissionsModeCombo(self):
+        return self.permissions_mode_combo
+
+    @property
     def autonomy_combo(self):
         return getattr(getattr(self, "_chat_panel", None), "autonomy_combo", None) or getattr(getattr(self, "_top_bar", None), "autonomy_combo", None)
 
@@ -1255,8 +1269,10 @@ class MainWindow(QMainWindow):
         # Mode selector synchronization
         if hasattr(self, "_top_bar"):
             self._top_bar.taskModeChanged.connect(self._chat_panel.set_task_mode)
+            self._top_bar.permissionsModeChanged.connect(self._chat_panel.set_permissions_mode)
             self._top_bar.autonomyProfileChanged.connect(self._chat_panel.set_autonomy_profile)
             self._chat_panel.task_mode_changed.connect(self._top_bar.set_task_mode)
+            self._chat_panel.permissions_mode_changed.connect(self._top_bar.set_permissions_mode)
             self._chat_panel.autonomy_changed.connect(self._top_bar.set_autonomy_profile)
 
         # Center splitter: ViewHost + AssistantPanel

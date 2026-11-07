@@ -36,6 +36,7 @@ class TopBar(QWidget):
     paletteRequested = Signal()
     fixActionRequested = Signal(str)
     taskModeChanged = Signal(str)
+    permissionsModeChanged = Signal(str)
     autonomyProfileChanged = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -129,7 +130,22 @@ class TopBar(QWidget):
         self.task_mode_combo.setCurrentText("Planning")
         self.task_mode_combo.currentTextChanged.connect(self._on_task_mode_changed)
 
-        # 3b. Autonomy Profile Selector (Authoritative controls in Chat header; hidden in TopBar to eliminate duplicate UI)
+        # 3b. Permissions Mode Selector (Replaces Autonomy per DEF-306; authoritative in Chat header)
+        self.lbl_permissions_mode = QLabel("Permissions Mode:", self)
+        self.lbl_permissions_mode.setObjectName("topBarLblPermissionsMode")
+        self.lbl_permissions_mode.setVisible(False)
+
+        self.permissions_mode_combo = QComboBox(self)
+        self.permissions_mode_combo.setObjectName("permissions_mode_combo")
+        self.permissionsModeCombo = self.permissions_mode_combo
+        self.permissions_combo = self.permissions_mode_combo
+        self.permissions_mode_combo.setAccessibleName("Permissions Mode")
+        self.permissions_mode_combo.setVisible(False)
+        self.permissions_mode_combo.addItems(["Request All", "Auto", "Unrestricted"])
+        self.permissions_mode_combo.setCurrentText("Auto")
+        self.permissions_mode_combo.currentTextChanged.connect(self._on_permissions_mode_changed)
+
+        # 3c. Legacy Autonomy Profile Selector (retained for backward compatibility)
         self.lbl_autonomy = QLabel("Autonomy:", self)
         self.lbl_autonomy.setObjectName("topBarLblAutonomy")
         self.lbl_autonomy.setVisible(False)
@@ -416,8 +432,30 @@ class TopBar(QWidget):
     def _on_task_mode_changed(self, text: str) -> None:
         self.taskModeChanged.emit(text)
 
+    def _on_permissions_mode_changed(self, text: str) -> None:
+        # Map to canonical enum values
+        val_map = {"request all": "request_all", "auto": "auto", "unrestricted": "unrestricted"}
+        canon = val_map.get(text.lower(), "auto")
+        # Keep legacy autonomy combo in sync
+        legacy_map = {"request_all": "Manual", "auto": "Auto-Edit", "unrestricted": "Agentic"}
+        legacy_val = legacy_map.get(canon, "Agentic")
+        self.autonomy_combo.blockSignals(True)
+        self.autonomy_combo.setCurrentText(legacy_val)
+        self.autonomy_combo.blockSignals(False)
+
+        self.permissionsModeChanged.emit(canon)
+        self.autonomyProfileChanged.emit(legacy_val)
+
     def _on_autonomy_profile_changed(self, text: str) -> None:
+        # Keep permissions combo in sync
+        perm_map = {"manual": "Request All", "auto-edit": "Auto", "auto_edit": "Auto", "agentic": "Agentic"}
+        perm_text = "Request All" if text.lower() == "manual" else ("Auto" if "auto" in text.lower() else "Unrestricted")
+        self.permissions_mode_combo.blockSignals(True)
+        self.permissions_mode_combo.setCurrentText(perm_text)
+        self.permissions_mode_combo.blockSignals(False)
+
         self.autonomyProfileChanged.emit(text)
+        self.permissionsModeChanged.emit("request_all" if perm_text == "Request All" else ("unrestricted" if perm_text == "Unrestricted" else "auto"))
 
     def set_task_mode(self, mode: str) -> None:
         """Update the Task Mode combo box without re-emitting signals."""
@@ -426,6 +464,20 @@ class TopBar(QWidget):
         self.task_mode_combo.setCurrentText(normalized)
         self.task_mode_combo.blockSignals(False)
 
+    def set_permissions_mode(self, mode: str) -> None:
+        """Update the Permissions Mode combo box without re-emitting signals."""
+        clean = str(mode).lower().strip().replace("-", "_").replace(" ", "_")
+        perm_text = "Request All" if clean in ("request_all", "requestall", "manual") else ("Unrestricted" if clean in ("unrestricted", "agentic", "full") else "Auto")
+        self.permissions_mode_combo.blockSignals(True)
+        self.permissions_mode_combo.setCurrentText(perm_text)
+        self.permissions_mode_combo.blockSignals(False)
+
+        # Sync legacy autonomy combo
+        legacy_text = "Manual" if perm_text == "Request All" else ("Auto-Edit" if perm_text == "Auto" else "Agentic")
+        self.autonomy_combo.blockSignals(True)
+        self.autonomy_combo.setCurrentText(legacy_text)
+        self.autonomy_combo.blockSignals(False)
+
     def set_autonomy_profile(self, profile: str) -> None:
         """Update the Autonomy Profile combo box without re-emitting signals."""
         prof_map = {"manual": "Manual", "auto_edit": "Auto-Edit", "auto-edit": "Auto-Edit", "agentic": "Agentic"}
@@ -433,3 +485,9 @@ class TopBar(QWidget):
         self.autonomy_combo.blockSignals(True)
         self.autonomy_combo.setCurrentText(normalized)
         self.autonomy_combo.blockSignals(False)
+
+        # Sync permissions mode combo
+        perm_text = "Request All" if normalized == "Manual" else ("Auto" if normalized == "Auto-Edit" else "Unrestricted")
+        self.permissions_mode_combo.blockSignals(True)
+        self.permissions_mode_combo.setCurrentText(perm_text)
+        self.permissions_mode_combo.blockSignals(False)

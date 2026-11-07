@@ -155,14 +155,15 @@ def list_games(
             if ws != repo_real and ws != p_root_resolved:
                 if is_gameforge_project(ws):
                     project_dirs_map[ws.name] = ws
-                ws_proj = ws / "Projects"
-                if ws_proj.is_dir():
-                    try:
-                        for d in ws_proj.iterdir():
-                            if d.is_dir() and not d.name.startswith(".") and is_gameforge_project(d):
-                                project_dirs_map[d.name] = d.resolve()
-                    except OSError:
-                        pass
+                for p_sub in ("Projects", "projects"):
+                    ws_proj = ws / p_sub
+                    if ws_proj.is_dir():
+                        try:
+                            for d in ws_proj.iterdir():
+                                if d.is_dir() and not d.name.startswith(".") and is_gameforge_project(d):
+                                    project_dirs_map[d.name] = d.resolve()
+                        except OSError:
+                            pass
 
     if not project_dirs_map and not projects_root:
         project_dirs_map = list_all_project_dirs(workspace_dir)
@@ -480,6 +481,14 @@ class ProjectsService(QObject):
             logger.info("ProjectsService active project set to '%s' -> %s", project_name, pdir)
             self.activeProjectChanged.emit(project_name, pdir)
         return pdir
+
+    def list_games_sync(self) -> List[GameSummary]:
+        """Synchronously scan and return games list."""
+        return list_games(self._projects_root, self._workspace_dir)
+
+    def list_projects(self) -> List[GameSummary]:
+        """Alias for list_games_sync conforming to unified service interface."""
+        return self.list_games_sync()
 
     def refresh(self) -> None:
         """Fetch games asynchronously and emit gamesLoaded."""
