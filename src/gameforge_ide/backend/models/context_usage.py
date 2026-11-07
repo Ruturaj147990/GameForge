@@ -68,7 +68,7 @@ class ContextUsageReport(BaseModel):
         used = breakdown.total_prompt_tokens()
         remaining = max(0, effective_budget - used)
         utilization = round((used / effective_budget) * 100.0, 1) if effective_budget > 0 else 100.0
-        utilization = min(100.0, max(0.0, utilization))
+        utilization = max(0.0, utilization)
 
         clean_session_id = str(session_id) if session_id is not None else ""
 

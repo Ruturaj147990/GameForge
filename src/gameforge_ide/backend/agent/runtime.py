@@ -1827,7 +1827,8 @@ class AgentRuntime:
             # providers without a native tools API.
             full_response = ""
             native_call = None
-            if self.native_tools and hasattr(provider, "chat_with_tools"):
+            used_native = self.native_tools and hasattr(provider, "chat_with_tools")
+            if used_native:
                 try:
                     native = await asyncio.to_thread(
                         provider.chat_with_tools,
@@ -1838,22 +1839,29 @@ class AgentRuntime:
                         0.2,
                         output_tokens,
                     )
+                    full_response = native.get("content", "") or ""
+                    if native.get("tool_calls"):
+                        native_call = native["tool_calls"][0]
+                    tool_call = native_call or self._extract_tool_call(full_response, user_prompt=user_prompt, already_modified=_modified_files)
+                    clean_text = self._clean_narrative_text(full_response)
+                    if clean_text and not tool_call:
+                        yield AgentEvent(event_type="token", content=clean_text)
+                    elif clean_text and tool_call and not self._is_tool_call_start(clean_text):
+                        yield AgentEvent(event_type="token", content=clean_text)
                 except Exception as exc:
-                    task_state.terminal_status = "FAILED"
-                    task_state.terminal_reason = f"provider_error: {exc}"
-                    self._save_task_state(task_state)
-                    yield AgentEvent(event_type="error", content=f"Model call failed: {exc}")
-                    return
-                full_response = native.get("content", "") or ""
-                if native.get("tool_calls"):
-                    native_call = native["tool_calls"][0]
-                tool_call = native_call or self._extract_tool_call(full_response, user_prompt=user_prompt, already_modified=_modified_files)
-                clean_text = self._clean_narrative_text(full_response)
-                if clean_text and not tool_call:
-                    yield AgentEvent(event_type="token", content=clean_text)
-                elif clean_text and tool_call and not self._is_tool_call_start(clean_text):
-                    yield AgentEvent(event_type="token", content=clean_text)
-            used_native = self.native_tools and hasattr(provider, "chat_with_tools")
+                    err_msg = str(exc)
+                    if any(frag in err_msg for frag in ("unexpected end of JSON input", "invalid tool call arguments", "HTTP 500")):
+                        logger.warning(
+                            "[AgentRuntime] Native tool calling returned grammar truncation error (%s); falling back to stream_chat",
+                            err_msg,
+                        )
+                        used_native = False
+                    else:
+                        task_state.terminal_status = "FAILED"
+                        task_state.terminal_reason = f"provider_error: {exc}"
+                        self._save_task_state(task_state)
+                        yield AgentEvent(event_type="error", content=f"Model call failed: {exc}")
+                        return
             _in_think = False
             async for chunk in (_no_chunks() if used_native else provider.stream_chat(
                 model_id=session.model_name,
@@ -2538,8 +2546,13 @@ class AgentRuntime:
                     h_msg = conversation_history[hist_idx]
                     h_content = h_msg.get("content", "")
                     if h_msg.get("role") == "user" and ("[Observation for `" in h_content or "[Tool Execution Error in `" in h_content):
-                        # Preserve list_dir / read_file observations if they contain important directory structure
-                        if "[Observation for `list_dir`]" in h_content or "[Observation for `read_file`]" in h_content:
+                        # Preserve list_dir observations if they contain important directory structure
+                        if "[Observation for `list_dir`]" in h_content:
+                            continue
+                        if "[Observation for `read_file`]" in h_content:
+                            m_file = re.search(r"\[Observation for `read_file` \(([^)]+)\)", h_content)
+                            f_lbl = m_file.group(1) if m_file else "file"
+                            h_msg["content"] = f"[Observation for `read_file` ({f_lbl}): full contents compacted for context]"
                             continue
                         m_tool = re.search(r"\[(?:Observation for|Tool Execution Error in) `([^`]+)`\]", h_content)
                         t_lbl = m_tool.group(1) if m_tool else "tool"

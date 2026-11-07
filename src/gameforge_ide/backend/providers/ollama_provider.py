@@ -152,7 +152,7 @@ class OllamaProvider(ModelProvider):
         is_vision = "vision" in model_lower or "27b-sft" in model_lower
         is_27b = "27b" in model_lower
         is_mid = "9b" in model_lower or "8b" in model_lower or "qwen" in model_lower
-        ctx = 32768 if is_27b else (16384 if is_mid else 4096)
+        ctx = 32768 if (is_27b or is_mid) else 4096
         return ProviderCapabilities(
             supports_streaming=True,
             supports_tools=True,  # Native tool calling supported via chat_with_tools (/api/chat)
@@ -163,10 +163,12 @@ class OllamaProvider(ModelProvider):
 
     def budget_num_ctx(self, model_id: str, estimated_input_tokens: int = 0, requested_ctx: Optional[int] = None) -> int:
         """Dynamically budgets num_ctx based on model family and input size, respecting hardware bounds."""
-        if requested_ctx and requested_ctx > 0:
-            return requested_ctx
         caps = self.get_capabilities(model_id)
-        needed = max(8192, estimated_input_tokens + 2048)
+        base_needed = max(8192, estimated_input_tokens + 4096)
+        if requested_ctx and requested_ctx > 0:
+            needed = max(requested_ctx, base_needed)
+        else:
+            needed = base_needed
         return min(needed, caps.max_context)
 
     def _request_with_retry(
@@ -270,7 +272,8 @@ class OllamaProvider(ModelProvider):
         always False and `num_ctx` is always explicit (Master Blueprint v2 §6).
         """
         est_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 3
-        effective_ctx = self.budget_num_ctx(model_id, est_tokens, max(8192, num_ctx) if tools else num_ctx)
+        needed = max(8192, num_ctx, est_tokens + max_tokens + 512)
+        effective_ctx = self.budget_num_ctx(model_id, est_tokens, needed)
         payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
@@ -328,7 +331,7 @@ class OllamaProvider(ModelProvider):
     ) -> Optional[str]:
         """Structured output via /api/chat `format` (JSON schema). Returns clean JSON text or None on transport errors."""
         est_tokens = (len(system) + len(user)) // 3
-        effective_ctx = self.budget_num_ctx(model_id, est_tokens, num_ctx)
+        effective_ctx = max(num_ctx, self.budget_num_ctx(model_id, est_tokens, num_ctx))
         payload = {
             "model": model_id,
             "stream": False,

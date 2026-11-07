@@ -52,10 +52,14 @@ def to_legacy_params(
             p2_color = props.get("player2_color") or _hex_to_rgb(gds.art.palette[1])
             board_color = props.get("board_color") or _hex_to_rgb(gds.art.palette[2])
 
+        raw_size = int(props.get("board_size", 3))
+        if raw_size > 15:
+            raise LegacyUnsupported(f"board_size {raw_size} outside legacy range 3..15, routes to modern composer")
+
         params = GridBoardParams(
             project_name=gds.meta.project_name,
             display_title=gds.meta.title,
-            board_size=int(props.get("board_size", 3)),
+            board_size=raw_size,
             win_length=int(props.get("win_length", 3)),
             vs_ai=bool(props.get("vs_ai", True)),
             gravity=bool(props.get("gravity", False)),

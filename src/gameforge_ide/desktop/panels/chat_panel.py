@@ -664,9 +664,20 @@ class ChatPanel(QWidget):
 
     def set_workspace(self, agent_service: AgentService, new_workspace: Path) -> None:
         """Switch chat panel to a new workspace and start a fresh session."""
+        target_path = Path(new_workspace).resolve()
+        if getattr(self, "_workspace", None) == target_path and getattr(self, "_agent", None) is agent_service:
+            # Already active on this workspace; preserve active chat and avoid duplicate connections
+            return
+
         self._agent = agent_service
-        self._workspace = Path(new_workspace).resolve()
-        self._runner.shutdown()
+        self._workspace = target_path
+        if hasattr(self, "_runner") and self._runner:
+            try:
+                self._runner.progress.disconnect(self._on_action_progress)
+                self._runner.finished.disconnect(self._on_action_finished)
+            except Exception:
+                pass
+            self._runner.shutdown()
         self._runner = ActionRunner(self._workspace, parent=self)
         self._runner.progress.connect(self._on_action_progress)
         self._runner.finished.connect(self._on_action_finished)
@@ -828,6 +839,8 @@ class ChatPanel(QWidget):
         self.autonomy_combo.setCurrentText(compat_autonomy)
         self.autonomy_combo.currentTextChanged.connect(self._on_autonomy_changed)
 
+        tbar_layout.addStretch()
+
         # ── Mandatory Context-Usage Indicator (DEF-303) ──────────────────────
         self.context_indicator = ContextUsageIndicator(toolbar)
         self.context_indicator.setObjectName("chatContextIndicator")
@@ -973,7 +986,40 @@ class ChatPanel(QWidget):
         input_layout.addLayout(btn_col)
         root.addWidget(input_widget)
 
+    def _disconnect_signals(self) -> None:
+        """Safely disconnect existing agent and UI widget signals to prevent duplicate event delivery."""
+        if not getattr(self, "_signals_connected", False):
+            return
+        if hasattr(self, "_agent") and self._agent:
+            for sig, slot in [
+                (self._agent.token_received, self._on_token),
+                (self._agent.status_changed, self._on_status),
+                (self._agent.plan_received, self._on_plan_received),
+                (self._agent.tool_called, self._on_tool_called),
+                (self._agent.tool_result, self._on_tool_result),
+                (self._agent.file_changed, self._on_file_changed),
+                (self._agent.diff_pending, self._on_diff_pending),
+                (self._agent.error_occurred, self._on_error),
+                (self._agent.task_done, self._on_done),
+            ]:
+                try:
+                    sig.disconnect(slot)
+                except Exception:
+                    pass
+            if hasattr(self._agent, "context_usage_updated"):
+                try:
+                    self._agent.context_usage_updated.disconnect(self.set_context_usage)
+                except Exception:
+                    pass
+        if hasattr(self, "_model_combo"):
+            try:
+                self._model_combo.currentTextChanged.disconnect(self._on_model_changed)
+            except Exception:
+                pass
+        self._signals_connected = False
+
     def _connect_signals(self) -> None:
+        self._disconnect_signals()
         self._agent.token_received.connect(self._on_token)
         self._agent.status_changed.connect(self._on_status)
         self._agent.plan_received.connect(self._on_plan_received)
@@ -989,6 +1035,7 @@ class ChatPanel(QWidget):
                 self._agent.context_usage_updated.connect(self.set_context_usage)
             except Exception:
                 pass
+        self._signals_connected = True
 
     def _init_session(self) -> None:
         """Create initial session asynchronously."""
@@ -1354,6 +1401,9 @@ class ChatPanel(QWidget):
             return False
         self._hide_start_screen()
         self._last_prompt = prompt
+        self._tokens_streamed_in_turn = False
+        self._plan_received_in_turn = False
+        self._token_buffer = ""
         self._add_bubble("user", prompt)
         self._refresh_context_usage()
         self._active_bubble = self._add_bubble("assistant", "")
@@ -1699,7 +1749,7 @@ class ChatPanel(QWidget):
     def _on_plan_received(self, plan_data: dict) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
-        self._tokens_streamed_in_turn = False
+        self._plan_received_in_turn = True
         if self._active_bubble:
             if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
                 self._remove_bubble(self._active_bubble)
@@ -2035,13 +2085,14 @@ class ChatPanel(QWidget):
                 self._active_bubble._render_text(clean)
                 self._active_bubble.finalise()
             self._active_bubble = None
-        elif _full_text and not self._tokens_streamed_in_turn:
+        elif _full_text and not self._tokens_streamed_in_turn and not getattr(self, "_plan_received_in_turn", False):
             from ...backend.agent.runtime import AgentRuntime
             clean_text = AgentRuntime._clean_narrative_text(_full_text.strip())
             if clean_text and not self._is_raw_tool_json(clean_text):
                 b = self._add_bubble("assistant", clean_text)
                 b.finalise()
         self._tokens_streamed_in_turn = False
+        self._plan_received_in_turn = False
         self._token_buffer = ""
         self._btn_send.setEnabled(True)
         self._btn_stop.setEnabled(False)

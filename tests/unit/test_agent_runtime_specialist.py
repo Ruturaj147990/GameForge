@@ -363,7 +363,7 @@ def test_ollama_provider_get_capabilities():
 
     cap_9b = prov.get_capabilities("gameforge-qwen3.5-9b")
     assert cap_9b.supports_tools is True
-    assert cap_9b.max_context == 16384
+    assert cap_9b.max_context == 32768
 
     cap_default = prov.get_capabilities("custom-small")
     assert cap_default.supports_tools is True

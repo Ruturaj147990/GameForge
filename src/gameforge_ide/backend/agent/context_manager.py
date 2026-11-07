@@ -385,18 +385,18 @@ class ContextManager:
         )
         sys_tokens = _count_tokens(sys_prompt)
 
-        # 2. Conversation Tokens & Session Context
+        # 2. Conversation Tokens & Session Context (active prompt window)
         conv_tokens = 0
         diff_tokens = 0
         if session_manager is not None:
             sess = session_manager.get_session(session_id)
             if sess:
-                for msg in sess.messages:
+                active_msgs = sess.messages[-20:] if len(sess.messages) > 20 else sess.messages
+                for msg in active_msgs:
                     conv_tokens += _count_tokens(msg.content) + 4  # role overhead
-                for diff in sess.diff_history:
+                active_diffs = sess.diff_history[-3:] if len(sess.diff_history) > 3 else sess.diff_history
+                for diff in active_diffs:
                     diff_tokens += _count_tokens(diff.diff_patch or diff.new_content)
-                for tool in sess.tool_history:
-                    conv_tokens += _count_tokens(tool.output)
 
         # 3. Memory Tokens (canonical context summary & engine knowledge)
         canon_ctx = self.summarize_context(self.read_canonical_context(), max_chars=4000)

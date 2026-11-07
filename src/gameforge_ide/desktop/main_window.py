@@ -1633,6 +1633,10 @@ class MainWindow(QMainWindow):
     def set_active_project(self, project_name: str, project_dir: Optional[Union[str, Path]] = None) -> Optional[Path]:
         """Authoritative coordinator for setting active project and propagating across all IDE components."""
         p_dir = Path(project_dir).resolve() if project_dir else self._resolve_project_dir(project_name)
+        agent_synced = (not hasattr(self, "_agent") or not self._agent or getattr(self._agent, "workspace_root", None) == p_dir)
+        if getattr(self, "_current_project", None) == project_name and getattr(self, "_current_project_dir", None) == p_dir and agent_synced:
+            # Already active on this project; avoid duplicate re-propagation across views
+            return p_dir
         self._current_project = project_name
         self._current_project_dir = p_dir
         logger.info("[GameForge Studio] Setting active project: '%s' -> %s", project_name, p_dir)

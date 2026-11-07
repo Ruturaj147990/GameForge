@@ -244,8 +244,9 @@ def validate_stage_output(
             issues.append("Expected 'player' actor missing from assemble read-back")
 
         # 2. Goal / Objective check
-        # For platformers and board games, a physical goal/checkpoint actor is expected.
+        # For platformers, a physical goal/checkpoint actor is expected.
         # For combat / shooter / FPS games, enemies, spawners, bomb sites, and objectives are the targets.
+        # For grid board games, card battlers, and puzzles, the board or table actor itself is the primary objective container.
         has_goal = any(
             k in all_actor_text
             for k in ("goal", "finish", "target", "win", "gf_goal", "checkpoint", "landmark", "relic")
@@ -267,6 +268,23 @@ def validate_stage_output(
             has_goal = has_goal or any(
                 k in all_actor_text
                 for k in ("enemy", "spawner", "bot", "site", "bomb", "bombsite", "objective", "wave", "hazard", "boss", "guard")
+            )
+
+        is_board_or_table = (
+            genre_val in (
+                Genre.GRID_BOARD.value,
+                Genre.CARD_BATTLER.value,
+                "grid_board",
+                "card_battler",
+                "board",
+                "puzzle",
+            )
+            or any(k in all_actor_text for k in ("board", "grid", "gameforgegridboard", "card_table", "gameforgecardtable"))
+        )
+        if is_board_or_table:
+            has_goal = has_goal or any(
+                k in all_actor_text
+                for k in ("board", "grid", "gameforgegridboard", "card_table", "gameforgecardtable", "table")
             )
 
         if not has_goal:

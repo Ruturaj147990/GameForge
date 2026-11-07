@@ -322,7 +322,7 @@ class GameTools:
             try:
                 recipe_params = to_legacy_params(gds)
                 hook = _save_gds_auto_advance
-            except LegacyUnsupported:
+            except (LegacyUnsupported, ValueError):
                 # Modern Composer + Forge DAG path
                 from ...composer import compose, composition_to_run_spec
                 from ...forge.store import RunStore

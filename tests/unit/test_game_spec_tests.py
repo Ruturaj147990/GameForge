@@ -235,6 +235,7 @@ def test_validate_stage_output_design():
 def test_validate_stage_output_assemble():
     """Verify assemble stage checks player, goal, and main game actors from read-back."""
     gds = _make_snakes_and_ladders_gds()
+    gds_plat = preset_platformer(title="PlatformerGoalTest")
 
     # Passing case: read-back contains player, goal, and board
     pass_assemble = {
@@ -248,14 +249,25 @@ def test_validate_stage_output_assemble():
     assert passed is True
     assert len(issues) == 0
 
-    # Failing case: missing goal actor
-    missing_goal = {
+    # Passing case for board games without separate 3D goal actor: board fulfills objective
+    board_only = {
         "read_back_actors": [
             {"label": "PlayerStart_1", "class": "PlayerStart"},
             {"label": "GridBoard_1", "class": "GameForgeGridBoard"},
         ]
     }
-    passed, issues = validate_stage_output("assemble", missing_goal, gds)
+    passed, issues = validate_stage_output("assemble", board_only, gds)
+    assert passed is True
+    assert len(issues) == 0
+
+    # Failing case: platformer missing goal actor
+    missing_goal_plat = {
+        "read_back_actors": [
+            {"label": "PlayerStart_1", "class": "PlayerStart"},
+            {"label": "Pickup_1", "class": "GameForgePickup"},
+        ]
+    }
+    passed, issues = validate_stage_output("assemble", missing_goal_plat, gds_plat)
     assert passed is False
     assert any("goal" in i.lower() for i in issues)
 

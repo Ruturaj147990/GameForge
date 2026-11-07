@@ -165,7 +165,7 @@ def test_projects_service_helpers(tmp_path):
 
     # Has package check
     assert check_project_has_package(proj_dir, "MyGame") is False
-    bin_dir = proj_dir / "Binaries" / "Win64"
+    bin_dir = proj_dir / "Packaged" / "Windows"
     bin_dir.mkdir(parents=True)
     (bin_dir / "MyGame.exe").write_text("dummy", encoding="utf-8")
     assert check_project_has_package(proj_dir, "MyGame") is True

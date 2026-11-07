@@ -189,22 +189,25 @@ class ContextUsageIndicator(QFrame):
 
     def _init_ui(self) -> None:
         self.setFrameShape(QFrame.StyledPanel)
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.setFixedHeight(28)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 2, 8, 2)
         layout.setSpacing(6)
+        layout.setSizeConstraint(QHBoxLayout.SetFixedSize)
 
         # Icon / Label
         self._lbl_icon = QLabel("📊", self)
         self._lbl_icon.setStyleSheet("font-size: 11px;")
+        self._lbl_icon.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         layout.addWidget(self._lbl_icon)
 
         # Numerical label (e.g. "4.2k / 32k (13%)")
         self._lbl_tokens = QLabel("0 / 32k (0%)", self)
         self._lbl_tokens.setObjectName("lblContextTokens")
         self._lbl_tokens.setStyleSheet(f"font-size: {tokens.FONT_BODY_SM}px; font-weight: 600; color: {tokens.TEXT_PRIMARY};")
+        self._lbl_tokens.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         layout.addWidget(self._lbl_tokens)
 
         # Visual progress bar
@@ -303,7 +306,10 @@ class ContextUsageIndicator(QFrame):
         used_fmt = _format_token_count(self._report.used_tokens)
         nom_fmt = _format_token_count(self._report.nominal_capacity)
         pct = self._report.utilization_pct
-        self._lbl_tokens.setText(f"{used_fmt} / {nom_fmt} ({pct:.0f}%)")
+        if pct > 100.0:
+            self._lbl_tokens.setText(f"{used_fmt} / {nom_fmt} ({pct:.0f}% - Overflow)")
+        else:
+            self._lbl_tokens.setText(f"{used_fmt} / {nom_fmt} ({pct:.0f}%)")
 
         # Update progress bar
         val = int(min(100, max(0, round(pct))))
@@ -379,9 +385,24 @@ class ContextUsageIndicator(QFrame):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
             if self._report:
+                if hasattr(self, "_active_dialog") and self._active_dialog and self._active_dialog.isVisible():
+                    self._active_dialog.close()
+                    self._active_dialog = None
+                    return
                 dialog = ContextBreakdownDialog(self._report, self)
+                self._active_dialog = dialog
                 # Position near indicator
                 pos = self.mapToGlobal(QPoint(0, self.height() + 4))
+                screen = self.screen() or (self.window().screen() if self.window() else None)
+                if screen:
+                    s_geom = screen.availableGeometry()
+                    d_w = dialog.sizeHint().width()
+                    d_h = dialog.sizeHint().height()
+                    if pos.x() + d_w > s_geom.right():
+                        pos.setX(max(s_geom.left(), s_geom.right() - d_w - 10))
+                    if pos.y() + d_h > s_geom.bottom():
+                        pos.setY(max(s_geom.top(), pos.y() - self.height() - d_h - 8))
                 dialog.move(pos)
                 dialog.show()
+                dialog.raise_()
         super().mousePressEvent(event)
