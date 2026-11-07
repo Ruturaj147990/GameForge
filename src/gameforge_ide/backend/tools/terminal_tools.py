@@ -79,6 +79,8 @@ class TerminalTools:
         if len(Path(args[0]).parts) > 1:
             raise ValueError(f"Path-qualified executable '{args[0]}' is not permitted.")
         executable = Path(args[0]).name.lower()
+        if executable in ("del", "rm", "erase"):
+            raise ValueError(f"Executable '{args[0]}' is a shell command. Use the 'delete_file' tool to delete workspace files.")
         if executable not in self.ALLOWED_EXECUTABLES:
             raise ValueError(f"Executable '{args[0]}' is not in the approved agent command allowlist.")
         for arg in args[1:]:

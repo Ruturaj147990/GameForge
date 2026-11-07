@@ -313,9 +313,15 @@ class GameTools:
 
         hook = None
         if gds is not None:
+            def _save_gds_auto_advance(pdir_path: Path) -> Path:
+                stored = design_store.load(pdir_path)
+                if stored is not None and gds.meta.revision <= stored.meta.revision:
+                    gds.meta.revision = stored.meta.revision + 1
+                return design_store.save(pdir_path, gds)
+
             try:
                 recipe_params = to_legacy_params(gds)
-                hook = lambda pdir: design_store.save(pdir, gds)
+                hook = _save_gds_auto_advance
             except LegacyUnsupported:
                 # Modern Composer + Forge DAG path
                 from ...composer import compose, composition_to_run_spec
@@ -335,7 +341,7 @@ class GameTools:
                 else:
                     pdir = self.projects_root / gds.meta.project_name
                 pdir.mkdir(parents=True, exist_ok=True)
-                design_store.save(pdir, gds)
+                _save_gds_auto_advance(pdir)
 
                 freed = self.release_llm_vram()
                 if on_event and freed:
@@ -651,6 +657,20 @@ class GameTools:
                 if pkg and pkg.is_file() and (pkg.name.lower() == raw.name.lower() or raw.stem in ("MyGame", pdir.name)):
                     resolved_exe = pkg.resolve()
                     break
+
+        # If the resolved path points to un-cooked Binaries/Win64/<Project>.exe, redirect to Packaged/Windows/<Project>.exe
+        if resolved_exe and "Binaries" in resolved_exe.parts and "Win64" in resolved_exe.parts:
+            curr = resolved_exe.parent
+            while curr != curr.parent and curr.name in ("Win64", "Binaries"):
+                curr = curr.parent
+            packaged = find_packaged_executable(curr, project_name=resolved_exe.stem)
+            if packaged and packaged.is_file():
+                resolved_exe = packaged
+            else:
+                return {
+                    "status": "ERROR",
+                    "error": f"'{resolved_exe.name}' in Binaries/Win64 is an un-cooked binary, not a packaged standalone game. Please run 'unreal_package' or package the game to create {curr / 'Packaged' / 'Windows' / resolved_exe.name}.",
+                }
 
         if not resolved_exe or not resolved_exe.is_file() or resolved_exe.suffix.lower() != ".exe":
             return {

@@ -413,10 +413,10 @@ class UnrealToolchain:
             try:
                 from ..core.settings import get_settings
                 s = get_settings()
-                if s.plugin_build and s.plugin_build.is_dir():
-                    candidates.insert(0, s.plugin_build)
+                if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build != repo_plugin:
+                    candidates.append(s.plugin_build)
                 if s.validation_root:
-                    candidates.insert(1, s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+                    candidates.append(s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
             except Exception:
                 pass
 
@@ -477,7 +477,14 @@ class UnrealToolchain:
                 target_bin = target / "Binaries" / "Win64"
                 target_bin.mkdir(parents=True, exist_ok=True)
                 try:
-                    shutil.copytree(binary_source / "Binaries" / "Win64", target_bin, dirs_exist_ok=True)
+                    src_bin = binary_source / "Binaries" / "Win64"
+                    for src_item in src_bin.iterdir():
+                        dst_item = target_bin / src_item.name
+                        if not dst_item.exists() or src_item.stat().st_mtime > dst_item.stat().st_mtime:
+                            if src_item.is_file():
+                                shutil.copy2(src_item, dst_item)
+                            elif src_item.is_dir():
+                                shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
                 except Exception as exc:
                     logger.warning("Could not sync plugin Binaries to %s: %s", target, exc)
 

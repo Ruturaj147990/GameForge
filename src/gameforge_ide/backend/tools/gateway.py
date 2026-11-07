@@ -32,6 +32,10 @@ TOOL_ALIASES: Dict[str, str] = {
     "reject_diff": "reject_edit",
     "rollback_diff": "rollback_edit",
     "rollback_diffs_batch": "rollback_batch",
+    "del": "delete_file",
+    "rm": "delete_file",
+    "unlink": "delete_file",
+    "remove_file": "delete_file",
 }
 
 
@@ -233,6 +237,20 @@ class ToolGateway:
                 requires_approval=True,
             ),
             ToolDefinition(
+                name="delete_file",
+                description="Safely delete a file in the workspace with security boundary checks (aliases: rm, del, unlink, remove_file).",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "subpath": {"type": "string", "description": "Target file path relative to workspace (aliases: file_path, path)."},
+                        "file_path": {"type": "string"},
+                        "path": {"type": "string"},
+                    },
+                    "required": ["subpath"],
+                },
+                requires_approval=True,
+            ),
+            ToolDefinition(
                 name="verify_disk",
                 description="Verify that a file exists on disk and optionally contains an expected content fragment.",
                 parameters={
@@ -393,14 +411,14 @@ class ToolGateway:
 
         # In AUTO_EDIT profile: safe file modifications inside workspace proceed automatically
         if profile == AutonomyProfile.AUTO_EDIT:
-            if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch"):
+            if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch", "delete_file"):
                 return False
             # Commands, builds, packages, unreal editor mutations still require approval
             return True
 
         # In AGENTIC profile: safe file edits, allowlisted project commands, safe builds & tests proceed automatically
         if profile == AutonomyProfile.AGENTIC:
-            if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch"):
+            if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch", "delete_file"):
                 return False
             if canonical_name in ("unreal_run_tests", "unreal_build"):
                 return False
@@ -652,6 +670,8 @@ class ToolGateway:
                 res = self.edit_tools.reject_diff(**args)
             elif canonical_name == "write_file":
                 res = self.edit_tools.write_file(**args)
+            elif canonical_name == "delete_file":
+                res = self.edit_tools.delete_file(**args)
             elif canonical_name == "verify_disk":
                 res = self.edit_tools.verify_disk_contents(**args)
             elif canonical_name == "rollback_edit":

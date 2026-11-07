@@ -138,10 +138,12 @@ class LiveEditorLink:
         try:
             from ..core.settings import get_settings
             s = get_settings()
-            if s.plugin_build and s.plugin_build.is_dir():
-                candidates.insert(0, s.plugin_build)
+            if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build != candidates[0]:
+                candidates.append(s.plugin_build)
             if s.validation_root:
-                candidates.insert(1, s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+                cand = s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge"
+                if cand.is_dir():
+                    candidates.append(cand)
         except Exception:
             pass
 

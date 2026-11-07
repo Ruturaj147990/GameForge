@@ -124,11 +124,15 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         base_dir / "Saved" / "GameForge" / "scenarios",
         ctx.workspace_dir / "GameForge" / "scenarios",
     ]
+    existing_ids = {s.scenario_id for s in scenarios}
     for sc_dir in sc_dirs:
         if sc_dir.is_dir():
             for sf in sc_dir.glob("*.json"):
                 try:
-                    scenarios.append(Scenario.from_file(sf))
+                    sc_obj = Scenario.from_file(sf)
+                    if sc_obj.scenario_id not in existing_ids:
+                        scenarios.append(sc_obj)
+                        existing_ids.add(sc_obj.scenario_id)
                 except Exception:
                     pass
 

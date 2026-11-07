@@ -741,6 +741,16 @@ class AgentRuntime:
                         "name": "list_dir",
                         "arguments": {"subpath": subp},
                     }
+                if first_cmd.startswith(("del ", "rm ", "erase ")):
+                    parts = first_cmd.split(None, 1)
+                    if len(parts) > 1:
+                        target_f = parts[1].strip().strip("\"'")
+                        tokens = [t for t in target_f.split() if not t.startswith(("-", "/"))]
+                        if tokens:
+                            return {
+                                "name": "delete_file",
+                                "arguments": {"subpath": tokens[-1]},
+                            }
                 return {
                     "name": "run_command",
                     "arguments": {"command": first_cmd},
@@ -748,7 +758,7 @@ class AgentRuntime:
 
         # 3. Trailing or raw shell commands (e.g. ls -la, dir, python ..., pytest ...)
         raw_cmd_match = re.search(
-            r"(?:^|\n)\s*(?:ls\s*-[a-zA-Z0-9]+|ls\b|dir\b|pytest\b|python\b|git\b|powershell\b|cmd\b)\s*([^\n\r]*)",
+            r"(?:^|\n)\s*(?:ls\s*-[a-zA-Z0-9]+|ls\b|dir\b|del\b|rm\b|erase\b|pytest\b|python\b|git\b|powershell\b|cmd\b)\s*([^\n\r]*)",
             text,
             re.IGNORECASE,
         )
@@ -765,6 +775,16 @@ class AgentRuntime:
                     "name": "list_dir",
                     "arguments": {"subpath": subp},
                 }
+            if cmd_line.startswith(("del ", "rm ", "erase ")):
+                parts = cmd_line.split(None, 1)
+                if len(parts) > 1:
+                    target_f = parts[1].strip().strip("\"'")
+                    tokens = [t for t in target_f.split() if not t.startswith(("-", "/"))]
+                    if tokens:
+                        return {
+                            "name": "delete_file",
+                            "arguments": {"subpath": tokens[-1]},
+                        }
             return {
                 "name": "run_command",
                 "arguments": {"command": cmd_line},
@@ -2436,7 +2456,7 @@ class AgentRuntime:
             _tool_call_counts[_tool_key] = call_count
 
             if call_count >= 3:
-                # 3rd identical request terminates as BLOCKED
+                # 3rd identical request terminates closed as BLOCKED (Rule 4 & Blueprint §4.E)
                 task_state.terminal_status = "BLOCKED"
                 task_state.terminal_reason = "repetition_budget_exhausted"
                 self._save_task_state(task_state)
@@ -2444,7 +2464,7 @@ class AgentRuntime:
                     event_type="error",
                     content=(
                         f"Task BLOCKED: repetition_budget_exhausted. Tool '{tool_name}' was invoked "
-                        f"3 times with identical arguments. Harness terminates execution to prevent loop runaway."
+                        f"{call_count} times with identical arguments. Harness terminates execution to prevent loop runaway."
                     ),
                     metadata={
                         "status": "BLOCKED",
@@ -2578,10 +2598,10 @@ class AgentRuntime:
                 yield AgentEvent(event_type="done", content=msg)
                 return
 
-            # Execute tool (or return cached observation if second repeat)
+            # Execute tool (or return cached observation if repeat)
             yield AgentEvent(event_type="status", content="EXECUTING_TOOL", metadata={"tool": tool_name})
             try:
-                if call_count == 2 and _tool_key in _cached_observations:
+                if call_count >= 2 and _tool_key in _cached_observations:
                     tool_result = _cached_observations[_tool_key]
                 else:
                     tool_result = self.tool_gateway.execute_tool(
@@ -2703,6 +2723,7 @@ class AgentRuntime:
 
             # Bound observation string to preserve token budget
             # For list_dir and directory exploration, keep up to 40 items so the model sees all files/folders
+            # For read_file, keep code content intact up to 12,000 characters so the model can inspect and edit accurately
             obs_json = json.dumps(tool_result, indent=2, ensure_ascii=False)
             if len(obs_json) > 1200 and isinstance(tool_result, dict):
                 summary_info = {}
@@ -2733,13 +2754,19 @@ class AgentRuntime:
                             summary_info[f"total_{k}_keys"] = len(v)
                         else:
                             summary_info[k] = v
-                    elif isinstance(v, str) and len(v) > 400:
-                        summary_info[k] = v[:400] + "... [truncated]"
+                    elif isinstance(v, str):
+                        # Preserve code content for read_file up to 12,000 chars; truncate other strings at 2,000 chars
+                        max_str_len = 12000 if (tool_name == "read_file" and k in ("content", "formatted")) else 2000
+                        if len(v) > max_str_len:
+                            summary_info[k] = v[:max_str_len] + "... [truncated]"
+                        else:
+                            summary_info[k] = v
                     else:
                         summary_info[k] = v
                 obs_json = json.dumps(summary_info, indent=2, ensure_ascii=False)
-            if len(obs_json) > 2400:
-                obs_json = obs_json[:2400] + "\n... [truncated]"
+            max_obs_total = 16000 if tool_name == "read_file" else 8000
+            if len(obs_json) > max_obs_total:
+                obs_json = obs_json[:max_obs_total] + "\n... [truncated]"
 
             is_tool_error = (
                 tool_result.get("status") in ("ERROR", "FAILED")
@@ -2750,14 +2777,25 @@ class AgentRuntime:
 
             # Build continuation nudge
             if call_count >= 2:
-                continuation_nudge = (
-                    f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"
-                    f"NOTE: You have already called `{tool_name}` with these same arguments. "
-                    "Do NOT call it again. You have enough information. "
-                    "Proceed to the NEXT step: if you need to create project files, call `propose_edit`. "
-                    "If you need to inspect a directory, call `list_dir`. If you need engine info, call `unreal_engine_info`. "
-                    "Otherwise synthesize your final answer."
-                )
+                if tool_name == "read_file":
+                    file_snippet = tool_result.get("formatted") or tool_result.get("content") or obs_json
+                    continuation_nudge = (
+                        f"[Observation for `read_file` ({tool_args.get('subpath', '')}) (Attempt {call_count})]:\n"
+                        f"```cpp\n{file_snippet}\n```\n\n"
+                        f"MANDATORY DIRECTIVE: You have already inspected '{tool_args.get('subpath', '')}' {call_count} times. "
+                        f"The full file content with line numbers is provided above. Do NOT call `read_file` or directory listing tools again. "
+                        f"You MUST now proceed to make the actual source modifications. Invoke `propose_edit` or `write_file` "
+                        f"with the exact file path and code changes to satisfy the task."
+                    )
+                else:
+                    continuation_nudge = (
+                        f"[Observation for `{tool_name}` (Attempt {call_count})]:\n{obs_json}\n\n"
+                        f"NOTE: You have already called `{tool_name}` with these same arguments {call_count} times. "
+                        "Do NOT call it again. You have enough information. "
+                        "Proceed to the NEXT step: if you need to create or modify project files, call `propose_edit` or `write_file`. "
+                        "If you need to inspect a directory, call `list_dir`. If you need engine info, call `unreal_engine_info`. "
+                        "Otherwise synthesize your final answer."
+                    )
             elif is_tool_error:
                 err_text = str(tool_result.get("error", "")) or str(tool_result)
                 root_cause = self.repair_engine.extract_root_cause(err_text, stage_id=tool_name)

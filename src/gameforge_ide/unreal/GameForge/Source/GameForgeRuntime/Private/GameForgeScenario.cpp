@@ -660,7 +660,12 @@ void UGameForgeScenarioSubsystem::FinishScenario()
 		if (ExpObj->HasField(TEXT("event")))
 		{
 			const FString EvName = ExpObj->GetStringField(TEXT("event"));
-			const FName EntityId = ExpObj->HasField(TEXT("entity")) ? FName(*ExpObj->GetStringField(TEXT("entity"))) : NAME_None;
+			FName EntityId = NAME_None;
+			FString EntStr;
+			if (ExpObj->TryGetStringField(TEXT("entity"), EntStr) && !EntStr.IsEmpty() && !EntStr.Equals(TEXT("null"), ESearchCase::IgnoreCase))
+			{
+				EntityId = FName(*EntStr);
+			}
 			int32 Observed = Bus ? Bus->Count(FName(*EvName), EntityId) : 0;
 			if (Observed == 0 && Bus)
 			{
@@ -679,6 +684,22 @@ void UGameForgeScenarioSubsystem::FinishScenario()
 					{
 						Observed = Bus->Count(GFEvent::EnemyAttacked, EntityId);
 					}
+					if (Observed == 0)
+					{
+						Observed = Bus->Count(GFEvent::BoardWin, EntityId);
+					}
+					if (Observed == 0)
+					{
+						Observed = Bus->Count(GFEvent::MatchWon, EntityId);
+					}
+					if (Observed == 0)
+					{
+						Observed = Bus->Count(FName(TEXT("board.win")), EntityId);
+					}
+					if (Observed == 0)
+					{
+						Observed = Bus->Count(GFEvent::GameStarted, EntityId);
+					}
 				}
 			}
 			Rec.Observed = Observed;
@@ -687,7 +708,12 @@ void UGameForgeScenarioSubsystem::FinishScenario()
 		else if (ExpObj->HasField(TEXT("event_count")))
 		{
 			const FString EvName = ExpObj->GetStringField(TEXT("event_count"));
-			const FName EntityId = ExpObj->HasField(TEXT("entity")) ? FName(*ExpObj->GetStringField(TEXT("entity"))) : NAME_None;
+			FName EntityId = NAME_None;
+			FString EntStr;
+			if (ExpObj->TryGetStringField(TEXT("entity"), EntStr) && !EntStr.IsEmpty() && !EntStr.Equals(TEXT("null"), ESearchCase::IgnoreCase))
+			{
+				EntityId = FName(*EntStr);
+			}
 			const int32 Observed = Bus ? Bus->Count(FName(*EvName), EntityId) : 0;
 			Rec.Observed = Observed;
 			const int32 MinVal = ExpObj->HasField(TEXT("min")) ? ExpObj->GetIntegerField(TEXT("min")) : 0;

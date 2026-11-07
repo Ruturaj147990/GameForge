@@ -171,9 +171,9 @@ def format_tool_activity(
             if is_error:
                 badge = "failed"
             else:
-                entries = result.get("entries") or result.get("files") or []
-                count = len(entries) if isinstance(entries, list) else 0
-                badge = f"{count} items"
+                entries = result.get("items") or result.get("entries") or result.get("files") or []
+                count = result.get("count") if ("count" in result and isinstance(result["count"], int)) else (len(entries) if isinstance(entries, list) else 0)
+                badge = f"{count} item{'s' if count != 1 else ''}"
 
     elif tool_name in ("run_command", "terminal_run"):
         cmd = str(args.get("command") or args.get("cmd") or "").strip()

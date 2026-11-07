@@ -1159,6 +1159,41 @@ class EditTools:
             apply_res["diff_patch"] = prop_res.get("diff_patch") or prop_res.get("diff", "")
         return apply_res
 
+    def delete_file(
+        self,
+        subpath: str = "",
+        file_path: str = "",
+        path: str = "",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Safely deletes a file from the workspace with boundary validation."""
+        effective_path = subpath or file_path or path or kwargs.get("filepath", "") or kwargs.get("file", "")
+        if not effective_path:
+            return {"status": "ERROR", "error": "No file path specified for delete_file."}
+
+        try:
+            target_path = Path(effective_path)
+            if not target_path.is_absolute():
+                target_path = self.boundary.workspace_root / target_path
+            resolved = self.boundary.validate_path(target_path, allow_write=True)
+
+            if not resolved.exists():
+                return {"status": "ERROR", "error": f"File not found: {effective_path}"}
+            if resolved.is_dir():
+                return {"status": "ERROR", "error": f"Path is a directory, not a file: {effective_path}. Only individual files can be deleted."}
+
+            resolved.unlink()
+            rel_str = str(resolved.relative_to(self.boundary.workspace_root)).replace("\\", "/")
+            return {
+                "status": "SUCCESS",
+                "file_path": rel_str,
+                "message": f"Successfully deleted {rel_str}.",
+            }
+        except SecurityViolationError as sve:
+            return {"status": "BLOCKED", "error": f"Security boundary violation: {sve}"}
+        except Exception as exc:
+            return {"status": "ERROR", "error": f"Failed to delete {effective_path}: {exc}"}
+
     def verify_disk_contents(self, subpath: str, expected_fragment: str = "") -> Dict[str, Any]:
         """Verifies that the target file exists on disk and contains expected_fragment."""
         try:
