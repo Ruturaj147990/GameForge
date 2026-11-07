@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "gameforge_ide"
-MAP = {"PIL": "pillow", "yaml": "pyyaml", "PySide6": "pyside6", "numpy": "numpy", "pydantic": "pydantic",
+MAP = {"PIL": "pillow", "yaml": "pyyaml", "PySide6": "pyside6", "shiboken6": "pyside6", "numpy": "numpy", "pydantic": "pydantic",
        "fastapi": "fastapi", "uvicorn": "uvicorn", "httpx": "httpx", "psutil": "psutil", "rich": "rich"}
 OPTIONAL = {"keyring", "unreal", "torch", "torch_directml", "anyio", "starlette", "pytest"}
 

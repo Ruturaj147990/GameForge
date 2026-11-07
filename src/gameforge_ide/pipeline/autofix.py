@@ -85,6 +85,16 @@ def autofix(files: Dict[str, str]) -> Tuple[Dict[str, str], List[str]]:
             h = h[:end] + "\npublic:\n\tAGFGameImpl();" + h[end:]
             notes.append("declared the constructor")
 
+    # 5. Fix AActor::IsAlive() hallucinations -> IsValid()
+    if cpp and "->IsAlive()" in cpp:
+        cpp = re.sub(r'(\b\w+)->IsAlive\(\)', r'IsValid(\1)', cpp)
+        notes.append("replaced invalid AActor::IsAlive() with IsValid()")
+
+    # 6. Fix AActor::AddActorWorldRotation(FVector(...)) -> FRotator(...)
+    if cpp and re.search(r'AddActorWorldRotation\s*\(\s*FVector\(', cpp):
+        cpp = re.sub(r'AddActorWorldRotation\s*\(\s*FVector\(', 'AddActorWorldRotation(FRotator(', cpp)
+        notes.append("replaced invalid FVector with FRotator in AddActorWorldRotation")
+
     out = dict(files)
     if h:
         out["GFGameImpl.h"] = h

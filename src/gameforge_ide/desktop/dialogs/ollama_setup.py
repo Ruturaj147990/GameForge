@@ -111,15 +111,19 @@ def start_ollama_service(ollama_exe: Path) -> bool:
         env["OLLAMA_MODELS"] = str(models_dir)
 
     creationflags = 0
+    startupinfo = None
     if sys.platform == "win32":
-        # DETACHED_PROCESS | CREATE_NO_WINDOW
-        creationflags = 0x00000008 | 0x08000000
+        creationflags = subprocess.CREATE_NO_WINDOW
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
 
     try:
         subprocess.Popen(
             [str(ollama_exe), "serve"],
             env=env,
             creationflags=creationflags,
+            startupinfo=startupinfo,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

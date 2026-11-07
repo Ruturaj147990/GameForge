@@ -234,11 +234,16 @@ class UnrealToolchain:
 
         if pid and sys.platform == "win32":
             try:
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = subprocess.SW_HIDE
                 subprocess.run(
                     ["taskkill", "/F", "/T", "/PID", str(pid)],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     check=False,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    startupinfo=si,
                 )
             except Exception:
                 pass

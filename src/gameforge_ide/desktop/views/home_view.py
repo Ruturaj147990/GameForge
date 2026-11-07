@@ -428,11 +428,11 @@ class HomeView(QWidget):
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(tokens.SPACE_LG)
 
-        # Recent Games (retained hidden for backward-compatibility and tests; authoritative catalog is in GamesView)
+        # Recent Games section on HomeView
         self._recent_section = QFrame(self)
         self._recent_section.setObjectName("homeRecentGamesSection")
         self._recent_section.setAccessibleName("Recent Games Section")
-        self._recent_section.setVisible(False)
+        self._recent_section.setVisible(True)
         self._recent_section.setStyleSheet(
             f"QFrame#{self._recent_section.objectName()} {{"
             f"  background-color: {tokens.BG_PANEL};"
@@ -574,9 +574,17 @@ class HomeView(QWidget):
         handle.add_done_callback(self._on_design_job_done)
 
     def _on_design_job_done(self, handle: JobHandle) -> None:
-        # Deliver to UI thread via invokeMethod
-        from PySide6.QtCore import QMetaObject, Qt
-        QMetaObject.invokeMethod(self, "_handle_design_result", Qt.QueuedConnection)
+        try:
+            import shiboken6
+            if not shiboken6.isValid(self):
+                return
+        except Exception:
+            pass
+        try:
+            from PySide6.QtCore import QMetaObject, Qt
+            QMetaObject.invokeMethod(self, "_handle_design_result", Qt.QueuedConnection)
+        except Exception:
+            pass
 
     @Slot()
     def _handle_design_result(self) -> None:
@@ -718,6 +726,12 @@ class HomeView(QWidget):
         def done(handle: JobHandle):
             if current_gen != self._scan_generation:
                 return
+            try:
+                import shiboken6
+                if not shiboken6.isValid(self):
+                    return
+            except Exception:
+                pass
             from PySide6.QtCore import QMetaObject, Qt
             if handle.status == "DONE":
                 res = handle.result()
@@ -725,7 +739,10 @@ class HomeView(QWidget):
             else:
                 logger.error("Scan Recent Games failed: %s", handle.error)
                 self._latest_games = []
-            QMetaObject.invokeMethod(self, "_render_recent_games", Qt.QueuedConnection)
+            try:
+                QMetaObject.invokeMethod(self, "_render_recent_games", Qt.QueuedConnection)
+            except Exception:
+                pass
 
         handle = self._job_manager.submit(work, name="Scan Recent Games")
         handle.add_done_callback(done)
@@ -778,13 +795,22 @@ class HomeView(QWidget):
             return probe_all(get_settings())
 
         def done(handle: JobHandle):
+            try:
+                import shiboken6
+                if not shiboken6.isValid(self):
+                    return
+            except Exception:
+                pass
             from PySide6.QtCore import QMetaObject, Qt
             if handle.status == "DONE":
                 self._latest_snapshot = handle.result()
             else:
                 logger.error("Readiness probe failed: %s", handle.error)
                 self._latest_snapshot = None
-            QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)
+            try:
+                QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)
+            except Exception:
+                pass
 
         handle = self._job_manager.submit(work, name="Probe Readiness")
         handle.add_done_callback(done)

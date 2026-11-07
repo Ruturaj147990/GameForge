@@ -68,6 +68,7 @@ class Session(BaseModel):
     tool_history: List[ToolRecord] = Field(default_factory=list)
     diff_history: List[DiffRecord] = Field(default_factory=list)
     checkpoints: List[TaskCheckpoint] = Field(default_factory=list)
+    project_dir: Optional[str] = None
 
 
 class SessionManager:
@@ -85,6 +86,7 @@ class SessionManager:
         provider_type: str = "ollama",
         task_mode: Optional[TaskMode | str] = None,
         autonomy_profile: Optional[AutonomyProfile | str] = None,
+        project_dir: Optional[str | Path] = None,
     ) -> Session:
         settings = get_settings()
         m_mode = TaskMode(task_mode) if task_mode else TaskMode(getattr(settings, "default_task_mode", "planning"))
@@ -96,6 +98,7 @@ class SessionManager:
             provider_type=provider_type,
             task_mode=m_mode,
             autonomy_profile=a_profile,
+            project_dir=str(project_dir) if project_dir else None,
         )
         self.save_session(session)
         return session
@@ -114,6 +117,16 @@ class SessionManager:
             session.task_mode = TaskMode(task_mode)
         if autonomy_profile:
             session.autonomy_profile = AutonomyProfile(autonomy_profile)
+        self.save_session(session)
+        return True
+
+    def set_session_project_dir(self, session_id: str, project_dir: Optional[Union[str, Path]]) -> bool:
+        """Update active project directory on an existing session."""
+        session = self.get_session(session_id)
+        if not session:
+            return False
+        session.project_dir = str(project_dir) if project_dir else None
+        session.updated_at = time.time()
         self.save_session(session)
         return True
 

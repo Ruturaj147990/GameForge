@@ -49,6 +49,13 @@ class _AgentWorker(QObject):
         self._runtime = None
         self._session_manager = None
         self._router = None
+        self._projects_service = None
+
+    def attach_projects_service(self, projects_service: Any) -> None:
+        """Connect to shared ProjectsService to ground active project context."""
+        self._projects_service = projects_service
+        if self._runtime is not None:
+            self._runtime.projects_service = projects_service
 
     def _ensure_runtime(self) -> None:
         if self._runtime is not None:
@@ -64,6 +71,7 @@ class _AgentWorker(QObject):
             session_manager=self._session_manager,
             model_router=self._router,
             studio_mode=False,
+            projects_service=self._projects_service,
         )
 
     def set_task(self, session_id: str, prompt: str) -> None:
@@ -180,12 +188,15 @@ class _AgentWorker(QObject):
         name: str = "Chat Session",
         model_name: str = "gameforge-27b-sft:latest",
         provider_type: str = "ollama",
+        project_dir: Optional[Union[str, Path]] = None,
         **kwargs,
     ) -> str:
         """Creates a new session and returns its ID."""
         self._ensure_runtime()
+        if not project_dir and hasattr(self, "_projects_service") and self._projects_service:
+            project_dir = getattr(self._projects_service, "active_project_dir", None)
         session = self._session_manager.create_session(
-            name=name, model_name=model_name, provider_type=provider_type, **kwargs
+            name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
         )
         return session.session_id
 
@@ -210,6 +221,11 @@ class _AgentWorker(QObject):
         """Update model for an existing session."""
         self._ensure_runtime()
         return self._session_manager.set_session_model(session_id, model_name, provider_type=provider_type)
+
+    def set_session_project_dir(self, session_id: str, project_dir: Optional[Union[str, Path]]) -> bool:
+        """Update active project directory on an existing session."""
+        self._ensure_runtime()
+        return self._session_manager.set_session_project_dir(session_id, project_dir)
 
     def list_models(self) -> list:
         """Returns list of available model dicts."""
@@ -309,6 +325,12 @@ class AgentService(QObject):
         self._trigger_run.emit()
         return True
 
+    def attach_projects_service(self, projects_service: Any) -> None:
+        """Connect to shared ProjectsService to ground active project context."""
+        self._projects_service = projects_service
+        if hasattr(self, "_worker") and self._worker:
+            self._worker.attach_projects_service(projects_service)
+
     def stop(self) -> None:
         """Request cancellation; remain busy until the worker actually exits."""
         if not self._busy:
@@ -341,6 +363,9 @@ class AgentService(QObject):
 
     def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
         return self._worker.set_session_model(session_id, model_name, provider_type=provider_type)
+
+    def set_session_project_dir(self, session_id: str, project_dir: Optional[Union[str, Path]]) -> bool:
+        return self._worker.set_session_project_dir(session_id, project_dir=project_dir)
 
     def list_models(self) -> list:
         return self._worker.list_models()

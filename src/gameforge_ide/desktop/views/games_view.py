@@ -398,9 +398,6 @@ class GamesView(QWidget):
         self._job_manager = default_job_manager()
         self._delete_finished.connect(self._on_delete_finished)
 
-        if projects_service is not None:
-            self.attach_projects_service(projects_service)
-
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(24, 20, 24, 20)
         main_layout.setSpacing(tokens.SPACE_MD)
@@ -636,8 +633,11 @@ class GamesView(QWidget):
         self._lbl_empty.setVisible(False)
         main_layout.addWidget(self._empty_container)
 
-        # Initial refresh
-        self.refresh_games()
+        # Initial projects service connection or refresh
+        if projects_service is not None:
+            self.attach_projects_service(projects_service)
+        else:
+            self.refresh_games()
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -671,12 +671,17 @@ class GamesView(QWidget):
     def attach_projects_service(self, service: Any) -> None:
         """Connect to shared ProjectsService to consume project updates."""
         self._projects_service = service
+        if hasattr(service, "_projects_root") and service._projects_root:
+            self._projects_root = service._projects_root
+        if hasattr(service, "_workspace_dir") and service._workspace_dir:
+            self._workspace_dir = service._workspace_dir
         if hasattr(service, "gamesLoaded"):
             service.gamesLoaded.connect(self._on_service_games_loaded)
         if hasattr(service, "gameDeleted"):
             service.gameDeleted.connect(self._on_service_game_deleted)
         if hasattr(service, "operationFailed"):
             service.operationFailed.connect(self._on_service_operation_failed)
+        self.refresh_games()
 
     @Slot(list)
     def _on_service_games_loaded(self, games: List[GameSummary]) -> None:
@@ -715,8 +720,8 @@ class GamesView(QWidget):
             self._delegate.clear_cache()
 
         # Capture currently selected game to preserve selection across refresh
-        cur_idx = self._list_view.currentIndex()
-        if cur_idx.isValid():
+        cur_idx = self._list_view.currentIndex() if hasattr(self, "_list_view") else None
+        if cur_idx is not None and cur_idx.isValid():
             cur_game = self._model.get_game(cur_idx.row())
             self._selected_game_name = cur_game.name if cur_game else None
 
@@ -734,12 +739,21 @@ class GamesView(QWidget):
         def done(handle: JobHandle) -> None:
             if seq != self._refresh_seq:
                 return
+            try:
+                import shiboken6
+                if not shiboken6.isValid(self):
+                    return
+            except Exception:
+                pass
             if handle.status == "DONE":
                 res = handle.result()
                 if res is not None:
                     from PySide6.QtCore import QMetaObject, Qt
                     self._loaded_games = res
-                    QMetaObject.invokeMethod(self, "_on_games_loaded", Qt.QueuedConnection)
+                    try:
+                        QMetaObject.invokeMethod(self, "_on_games_loaded", Qt.QueuedConnection)
+                    except Exception:
+                        pass
             elif handle.status == "FAILED":
                 logger.error("Scan Games for GamesView failed: %s", handle.error)
 
@@ -919,11 +933,20 @@ class GamesView(QWidget):
             return True
 
         def done(handle: JobHandle) -> None:
-            if handle.status == "DONE" and handle.result():
-                self._delete_finished.emit(True, project_name, "", pdir or Path())
-            else:
-                err_msg = str(handle.error) if handle.error else f"Failed to delete project '{project_name}'."
-                self._delete_finished.emit(False, project_name, err_msg, pdir or Path())
+            try:
+                import shiboken6
+                if not shiboken6.isValid(self):
+                    return
+            except Exception:
+                pass
+            try:
+                if handle.status == "DONE" and handle.result():
+                    self._delete_finished.emit(True, project_name, "", pdir or Path())
+                else:
+                    err_msg = str(handle.error) if handle.error else f"Failed to delete project '{project_name}'."
+                    self._delete_finished.emit(False, project_name, err_msg, pdir or Path())
+            except Exception:
+                pass
 
         handle = self._job_manager.submit(work, name=f"Delete Project {project_name}")
         handle.add_done_callback(done)

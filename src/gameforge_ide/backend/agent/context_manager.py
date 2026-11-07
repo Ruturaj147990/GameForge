@@ -99,14 +99,15 @@ class ContextManager:
     def compact_conversation_history(
         cls,
         history: List[Dict[str, str]],
-        max_tokens: int = 4096,
-        preserve_recent: int = 4,
+        max_tokens: int = 16384,
+        preserve_recent: int = 6,
     ) -> List[Dict[str, str]]:
         """Compacts multi-turn history while preserving active prompt, task goal, and recent context.
 
         Older tool observation payloads are collapsed to concise single-line summaries
         to prevent token overflow and ensure long autonomous loops never drop active tasks.
         Preserves the initial task prompt/parameters (goal) and the most recent turns.
+        Defaults to 16,384 tokens supporting modern local and hosted context windows.
         """
         if not history:
             return []
@@ -170,6 +171,7 @@ class ContextManager:
         active_model: Optional[str] = None,
         include_tools: bool = True,
         modified_files: Optional[Set[str] | List[str]] = None,
+        active_project_dir: Optional[Union[str, Path]] = None,
     ) -> str:
         """Assembles a compact system prompt that stays well within the model's input budget."""
         active_model = active_model or get_settings().model_for("chat")
@@ -210,12 +212,41 @@ class ContextManager:
             file_items = "\n".join(f"- {f}" for f in sorted(modified_files))
             files_note = f"\n=== PREVIOUSLY MODIFIED FILES IN SESSION ===\nThe following files were created or modified in earlier turns of this session:\n{file_items}\n"
 
+        # Active project state grounding
+        proj_note = ""
+        if active_project_dir:
+            try:
+                from ...core.projects import find_uproject, find_gds, find_packaged_executable
+                p_path = Path(active_project_dir)
+                up_f = find_uproject(p_path)
+                gds_f = find_gds(p_path)
+                pkg_exe = find_packaged_executable(p_path)
+                is_playable = pkg_exe is not None and pkg_exe.is_file()
+                pkg_str = f"READY at {pkg_exe}" if is_playable else "NOT PACKAGED YET (Executable does not exist on disk)"
+                proj_note = (
+                    f"\n=== ACTIVE PROJECT STATE ===\n"
+                    f"- Project Name: {p_path.name}\n"
+                    f"- Project Directory: {p_path}\n"
+                    f"- Scaffold/UProject: {'FOUND (' + up_f.name + ')' if up_f else 'NOT FOUND (Not scaffolded)'}\n"
+                    f"- Game Design Spec: {'FOUND' if gds_f else 'NOT FOUND'}\n"
+                    f"- Packaged Executable: {pkg_str}\n"
+                    f"- Playable: {is_playable}\n"
+                    f"GROUNDING RULES:\n"
+                    f"- If the user asks whether the game is playable, finished, or ready: answer truthfully based on the Packaged Executable status above.\n"
+                    f"- NEVER claim the game is playable or located in Packaged/Windows if Packaged Executable is 'NOT PACKAGED YET'.\n"
+                    f"- If the game is not packaged yet, explain that it must be compiled and packaged first, and offer to package it.\n"
+                    f"- NEVER invoke `play_game` unless Packaged Executable is FOUND on disk.\n"
+                )
+            except Exception:
+                pass
+
         base_header = (
             "You are GameForge IDE Agent — autonomous expert game-dev assistant.\n"
             f"Workspace: {workspace_name} | Model: {active_model}\n"
             f"{context_snippet}\n"
             f"Engine rules: {ue_note}{ue_ctx_note}\n"
             f"{files_note}"
+            f"{proj_note}"
         )
 
         from ..models.capability import RuntimeCapabilityRegistry

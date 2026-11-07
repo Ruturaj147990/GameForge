@@ -104,12 +104,10 @@ def select_best_model_for_role(
 def generate_routing_table() -> Dict[str, Any]:
     latest = load_latest_reports()
 
-    # Assign roles based on evidence and specialist profiles
-    design_model = select_best_model_for_role("design", latest, family_key="design_draft")
-    codegen_model = select_best_model_for_role("codegen", latest, family_key="codegen_rule")
+    # Per Part 6.1: 9B model is the default and primary for chat, design, codegen, planning, tools
+    design_model = "gameforge-qwen3.5-9b:latest"
+    codegen_model = "gameforge-qwen3.5-9b:latest"
     chat_model = "gameforge-qwen3.5-9b:latest"
-    
-    # Fast role strictly prioritizes latency < 5.0s
     fast_model = "gameforge-qwen3.5-4b:latest"
     vision_model = "gameforge-qwen3.5-4b:latest"
     heavy_model = "gameforge-27b-sft:latest"

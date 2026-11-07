@@ -108,7 +108,7 @@ def find_uproject(folder: Union[str, Path]) -> Optional[Path]:
 
 
 def find_gds(folder: Union[str, Path]) -> Optional[Path]:
-    """Find game.gds.json specification file in folder.
+    """Find game.gds.json or any *.gds.json specification file in folder.
 
     Uses os.path instead of pathlib to avoid Python 3.14 + PySide6 C-runtime ABI collision
     when called from background threads (DEF-134).
@@ -123,6 +123,24 @@ def find_gds(folder: Union[str, Path]) -> Optional[Path]:
         alt_gds = os.path.join(folder_str, "game.gds.json")
         if os.path.isfile(alt_gds):
             return Path(alt_gds)
+
+        # Check for any *.gds.json in GameForge/design/
+        design_dir = os.path.join(folder_str, "GameForge", "design")
+        if os.path.isdir(design_dir):
+            try:
+                for entry in sorted(os.listdir(design_dir)):
+                    if entry.endswith(".gds.json") and os.path.isfile(os.path.join(design_dir, entry)):
+                        return Path(os.path.join(design_dir, entry))
+            except OSError:
+                pass
+
+        # Check for any *.gds.json in project root
+        try:
+            for entry in sorted(os.listdir(folder_str)):
+                if entry.endswith(".gds.json") and os.path.isfile(os.path.join(folder_str, entry)):
+                    return Path(os.path.join(folder_str, entry))
+        except OSError:
+            pass
     except (OSError, PermissionError):
         pass
     return None
@@ -141,10 +159,14 @@ def is_gameforge_project(folder: Union[str, Path]) -> bool:
 
         # Guard: Repository root itself is NEVER a game project
         try:
-            from .settings import REPO_ROOT
+            from .settings import REPO_ROOT, get_settings
             repo_real = os.path.realpath(str(REPO_ROOT))
             real_folder = os.path.realpath(folder_str)
             if real_folder == repo_real:
+                return False
+            # Guard: Configured projects_root is NEVER a single game project
+            s_root = get_settings().projects_root
+            if s_root and real_folder == os.path.realpath(str(s_root)):
                 return False
             # Immediate infrastructure subdirectories of REPO_ROOT are platform code/fixtures
             if os.path.dirname(real_folder) == repo_real:
@@ -407,32 +429,41 @@ def find_packaged_executable(
     project_dir: Union[str, Path],
     project_name: Optional[str] = None,
 ) -> Optional[Path]:
-    """Find packaged Win64 executable for project."""
+    """Find packaged Win64 executable for project, supporting nested uprojects and custom package dirs."""
     p_dir = Path(project_dir).resolve()
     if not p_dir.is_dir():
         return None
 
     name = project_name or p_dir.name
+    dirs_to_check = [p_dir]
 
-    for exe_candidate in (
-        p_dir / "Packaged" / "Windows" / f"{name}.exe",
-        p_dir / "Packaged" / "WindowsNoEditor" / f"{name}.exe",
-        p_dir / "package_dev" / "Windows" / f"{name}.exe",
-        p_dir / "package_ship" / "Windows" / f"{name}.exe",
-        p_dir / "Binaries" / "Win64" / f"{name}.exe",
-    ):
-        if exe_candidate.is_file():
-            return exe_candidate
+    up = find_uproject(p_dir)
+    if up is not None and up.parent != p_dir:
+        dirs_to_check.append(up.parent)
 
-    # Search Packaged/Windows/ for any .exe
-    pkg_win = p_dir / "Packaged" / "Windows"
-    if pkg_win.is_dir():
-        try:
-            for exe in pkg_win.glob("*.exe"):
-                if not exe.name.lower().endswith("crashreportclient.exe"):
-                    return exe
-        except OSError:
-            pass
+    for target_dir in dirs_to_check:
+        target_name = up.stem if (up is not None and target_dir == up.parent) else name
+        for exe_candidate in (
+            target_dir / "Packaged" / "Windows" / f"{target_name}.exe",
+            target_dir / "Packaged" / "WindowsNoEditor" / f"{target_name}.exe",
+            target_dir / "package_dev" / "Windows" / f"{target_name}.exe",
+            target_dir / "package_ship" / "Windows" / f"{target_name}.exe",
+            target_dir / "Binaries" / "Win64" / f"{target_name}.exe",
+            target_dir / "Packaged" / "Windows" / f"{name}.exe",
+        ):
+            if exe_candidate.is_file():
+                return exe_candidate
+
+        # Search Packaged/Windows/ for any valid game .exe
+        for pkg_sub in ("Packaged/Windows", "Packaged/WindowsNoEditor", "package_dev/Windows", "package_ship/Windows"):
+            pkg_win = target_dir / pkg_sub
+            if pkg_win.is_dir():
+                try:
+                    for exe in pkg_win.glob("*.exe"):
+                        if not exe.name.lower().endswith("crashreportclient.exe"):
+                            return exe
+                except OSError:
+                    pass
 
     return None
 

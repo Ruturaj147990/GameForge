@@ -2,7 +2,7 @@
   "schema": "model_routing/1",
   "source": {
     "description": "Generated from latest P9 empirical evaluation reports.",
-    "generated_at": "2026-11-06T19:08:55Z",
+    "generated_at": "2026-11-06T23:52:37Z",
     "reports": [
       {
         "path": "reports/P9/eval_gameforge-27b-sft_latest_20261101T112010Z.json",
@@ -28,8 +28,8 @@
   },
   "roles": {
     "chat": "gameforge-qwen3.5-9b:latest",
-    "design": "gameforge-qwen3.5-4b:latest",
-    "codegen": "gameforge-qwen3.5-4b:latest",
+    "design": "gameforge-qwen3.5-9b:latest",
+    "codegen": "gameforge-qwen3.5-9b:latest",
     "fast": "gameforge-qwen3.5-4b:latest",
     "vision": "gameforge-qwen3.5-4b:latest",
     "heavy_local": "gameforge-27b-sft:latest"

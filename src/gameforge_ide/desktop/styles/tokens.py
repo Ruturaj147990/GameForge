@@ -18,8 +18,11 @@ SPACE_MD = 12
 SPACE_LG = 16
 
 # Corner radius (pixels)
+RADIUS_SM = 4
 RADIUS = 6
 RADIUS_MD = 6
+RADIUS_LG = 8
+RADIUS_XL = 12
 
 # Typography scale (pixels, two per level)
 FONT_BODY_SM = 11      # Captions, badges, timestamps, secondary labels

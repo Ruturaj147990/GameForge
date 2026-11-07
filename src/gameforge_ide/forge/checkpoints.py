@@ -5,6 +5,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -66,6 +67,12 @@ class ProjectRepo:
         if not self.git:
             raise CheckpointError("git is not installed; checkpoints are disabled")
         self._clear_stale_index_lock()
+        extra_kw = {}
+        if sys.platform == "win32":
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            extra_kw = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": si}
         res = subprocess.run(
             [self.git, "-C", str(self.dir), *args],
             capture_output=True,
@@ -73,6 +80,7 @@ class ProjectRepo:
             encoding="utf-8",
             errors="replace",
             timeout=300,
+            **extra_kw,
         )
         if check and res.returncode != 0:
             raise CheckpointError(f"git {' '.join(args)} failed: {res.stderr.strip()[:500]}")

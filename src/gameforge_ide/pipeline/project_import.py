@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional
 
@@ -222,13 +223,19 @@ def enable_gameforge_management(
         # Initialize GameForge git repo
         try:
             import subprocess
-            subprocess.run(["git", "init"], cwd=str(p_dir), capture_output=True, check=True)
+            extra_kw = {}
+            if sys.platform == "win32":
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = subprocess.SW_HIDE
+                extra_kw = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": si}
+            subprocess.run(["git", "init"], cwd=str(p_dir), capture_output=True, check=True, **extra_kw)
             (p_dir / ".gitignore").write_text(
                 "Binaries/\nIntermediate/\nSaved/\n.vs/\n*.sln\n",
                 encoding="utf-8",
             )
-            subprocess.run(["git", "add", "."], cwd=str(p_dir), capture_output=True, check=True)
-            subprocess.run(["git", "commit", "-m", "Initial commit before GameForge management"], cwd=str(p_dir), capture_output=True, check=True)
+            subprocess.run(["git", "add", "."], cwd=str(p_dir), capture_output=True, check=True, **extra_kw)
+            subprocess.run(["git", "commit", "-m", "Initial commit before GameForge management"], cwd=str(p_dir), capture_output=True, check=True, **extra_kw)
         except Exception:
             pass
 

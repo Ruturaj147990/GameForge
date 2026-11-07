@@ -67,6 +67,12 @@ class SystemsService(QObject):
         handle.add_done_callback(self._on_probe_complete)
 
     def _on_probe_complete(self, handle: JobHandle) -> None:
+        try:
+            import shiboken6
+            if not shiboken6.isValid(self):
+                return
+        except Exception:
+            pass
         self._is_probing = False
         try:
             snapshot = handle.result()

@@ -145,6 +145,7 @@ class _MessageBubble(QFrame):
             theme_color(bg), theme_color(border_accent), theme_color(role_color)
         )
 
+        radius_lg = getattr(tokens, "RADIUS_LG", 8)
         self.setStyleSheet(theme_stylesheet(f"""
             _MessageBubble#chat_message_bubble {{
                 background-color: {bg};
@@ -152,8 +153,13 @@ class _MessageBubble(QFrame):
                 border-top: 1px solid {tokens.BORDER};
                 border-right: 1px solid {tokens.BORDER};
                 border-bottom: 1px solid {tokens.BORDER};
-                border-radius: {tokens.RADIUS}px;
-                margin: 4px 10px;
+                border-radius: {radius_lg}px;
+                margin: 6px 12px;
+            }}
+            _MessageBubble#chat_message_bubble:hover {{
+                border-top: 1px solid {tokens.BORDER_FOCUS};
+                border-right: 1px solid {tokens.BORDER_FOCUS};
+                border-bottom: 1px solid {tokens.BORDER_FOCUS};
             }}
         """))
 
@@ -212,6 +218,10 @@ class _MessageBubble(QFrame):
         self._content = QTextBrowser()
         self._content.setReadOnly(True)
         self._content.setOpenExternalLinks(True)
+        self._content.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard | Qt.LinksAccessibleByMouse
+        )
+        self._content.setContextMenuPolicy(Qt.DefaultContextMenu)
         self._content.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._content.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1343,14 +1353,16 @@ class ChatPanel(QWidget):
     def _on_token(self, token: str) -> None:
         if self._ignore_active_task_events or self._agent.is_stopping:
             return
+        if "<think>" in token or "</think>" in token:
+            return
         self._tokens_streamed_in_turn = True
         self._finalize_status_activity()
 
         if not self._active_bubble:
             self._token_buffer += token
             stripped = self._token_buffer.lstrip()
-            # Suppress raw JSON tool call leaks from appearing in assistant bubbles during streaming
-            if stripped.startswith(("{", "```json", "```\n{", "[TOOL_CALL]", "<tool_call>")):
+            # Suppress raw JSON tool call leaks and shell commands from appearing in assistant bubbles during streaming
+            if stripped.startswith(("{", "```json", "```\n{", "[TOOL_CALL]", "<tool_call>", "cat >", "mkdir -p", "mkdir ", "ls -", "dir ")):
                 if self._is_raw_tool_json(self._token_buffer):
                     return
                 if len(stripped) < 40:
@@ -1503,6 +1515,12 @@ class ChatPanel(QWidget):
                     return True
         if t.startswith("<tool_call>") or t.startswith("[TOOL_CALL]"):
             return True
+        if t.startswith(("cat >", "mkdir -p", "mkdir ")) or re.match(r"^(?:ls|dir)\b", t):
+            return True
+        if "<think>" in t or "</think>" in t:
+            subbed = re.sub(r"</?think>", "", t).strip()
+            if not subbed or re.match(r"^(?:ls|dir|cat|mkdir)\b", subbed):
+                return True
         return False
 
     def _remove_bubble(self, bubble: _MessageBubble) -> None:
@@ -1574,9 +1592,12 @@ class ChatPanel(QWidget):
             return
         self._token_buffer = ""
         if self._active_bubble:
-            if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+            from ...backend.agent.runtime import AgentRuntime
+            clean_text = AgentRuntime._clean_narrative_text(self._active_bubble._raw_text)
+            if not clean_text or self._is_raw_tool_json(self._active_bubble._raw_text):
                 self._remove_bubble(self._active_bubble)
             else:
+                self._active_bubble._render_text(clean_text)
                 self._active_bubble.finalise()
             self._active_bubble = None
         self._finalize_status_activity()
@@ -1601,8 +1622,8 @@ class ChatPanel(QWidget):
         else:
             item = ToolActivityItem(tool_name, {}, result=result, parent=self)
             self._msg_layout.insertWidget(self._msg_layout.count() - 1, item)
-        # Start new assistant bubble for continued response
-        self._active_bubble = self._add_bubble("assistant", "")
+        # Reset active bubble; continued narrative tokens will create bubble lazily
+        self._active_bubble = None
         self._scroll_to_bottom()
 
     @Slot(dict)
@@ -1618,13 +1639,20 @@ class ChatPanel(QWidget):
             self._active_bubble = None
 
         plan_id = plan_data.get("plan_id", "")
+        active_card = getattr(self, "_active_plan_card", None)
         if plan_id and plan_id in self._plan_cards:
             self._plan_cards[plan_id].update_plan(plan_data)
+            self._active_plan_card = self._plan_cards[plan_id]
+        elif active_card is not None and not getattr(active_card, "_is_completed", False):
+            active_card.update_plan(plan_data)
+            if plan_id:
+                self._plan_cards[plan_id] = active_card
         else:
             card = PlanCard(plan_data, parent=self)
             card.proceed_clicked.connect(self._on_plan_proceed)
             card.revision_requested.connect(self._on_plan_revision)
             self._msg_layout.insertWidget(self._msg_layout.count() - 1, card)
+            self._active_plan_card = card
             if plan_id:
                 self._plan_cards[plan_id] = card
 
@@ -1755,18 +1783,23 @@ class ChatPanel(QWidget):
 
         if self._active_bubble:
             if not self._active_bubble.has_tokens() and _full_text and not self._tokens_streamed_in_turn:
-                clean_text = _full_text.strip()
-                if not self._is_raw_tool_json(clean_text):
-                    self._active_bubble.append_token(_full_text)
-            if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
+                from ...backend.agent.runtime import AgentRuntime
+                clean_text = AgentRuntime._clean_narrative_text(_full_text.strip())
+                if clean_text and not self._is_raw_tool_json(clean_text):
+                    self._active_bubble.append_token(clean_text)
+            from ...backend.agent.runtime import AgentRuntime
+            clean = AgentRuntime._clean_narrative_text(self._active_bubble._raw_text)
+            if not clean or self._is_raw_tool_json(self._active_bubble._raw_text):
                 self._remove_bubble(self._active_bubble)
             else:
+                self._active_bubble._render_text(clean)
                 self._active_bubble.finalise()
             self._active_bubble = None
         elif _full_text and not self._tokens_streamed_in_turn:
-            clean_text = _full_text.strip()
-            if not self._is_raw_tool_json(clean_text):
-                b = self._add_bubble("assistant", _full_text)
+            from ...backend.agent.runtime import AgentRuntime
+            clean_text = AgentRuntime._clean_narrative_text(_full_text.strip())
+            if clean_text and not self._is_raw_tool_json(clean_text):
+                b = self._add_bubble("assistant", clean_text)
                 b.finalise()
         self._tokens_streamed_in_turn = False
         self._token_buffer = ""
@@ -1866,6 +1899,7 @@ class ChatPanel(QWidget):
         self._active_bubble = None
         self._active_tool_item = None
         self._active_status_item = None
+        self._active_plan_card = None
         self._plan_cards.clear()
         self._cards.clear()
         self._status_bar.set_ready()
@@ -1876,6 +1910,7 @@ class ChatPanel(QWidget):
         self._tokens_streamed_in_turn = False
         self._active_tool_item = None
         self._active_status_item = None
+        self._active_plan_card = None
         try:
             if self._agent.is_busy:
                 self._ignore_active_task_events = True

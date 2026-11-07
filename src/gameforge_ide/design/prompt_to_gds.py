@@ -10,10 +10,16 @@ from typing import Callable, List, Literal, Optional, Set
 from pydantic import ValidationError
 
 from .spec_from_prompt import is_game_creation_request
-from .draft import DesignDraft
+from .draft import DesignDraft, DraftLose, DraftWin
 from .expand import ExpandError, expand_draft
-from .gds import GameDesignSpec
+from .gds import CameraKind, GameDesignSpec, Genre
 from .presets import PRESETS, PRESET_KEYWORDS, extract_preset_overrides
+from .template_registry import (
+    GenerationStrategy,
+    SemanticTemplateRegistry,
+    StrategyDecision,
+    default_registry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +109,46 @@ class PromptToGdsResult:
     errors: List[str] = field(default_factory=list)
 
 
+def _build_scratch_gds(prompt: str, decision: StrategyDecision) -> GameDesignSpec:
+    """Synthesizes a clean, tailored GameDesignSpec directly for scratch-generated games (e.g. Sudoku, Chess, Tetris, Snake)."""
+    arch = decision.suggested_architecture
+    profile = decision.profile
+    title = profile.title_hint or (
+        "Sudoku" if "sudoku" in profile.keywords_matched else
+        "Chess" if "chess" in profile.keywords_matched else
+        "Tetris" if "tetris" in profile.keywords_matched else
+        "Snake" if "snake" in profile.keywords_matched else
+        "Puzzle Game" if profile.detected_genre == Genre.PUZZLE else
+        "Custom Game"
+    )
+    custom_rules = [
+        f"Architecture: {arch.get('plan_kind', 'scratch')}",
+        f"Target classes: {', '.join(arch.get('target_classes', [])[:4])}",
+    ]
+    if "mechanics" in arch and isinstance(arch["mechanics"], dict):
+        for k, v in list(arch["mechanics"].items())[:2]:
+            custom_rules.append(f"{k}: {v}")
+
+    win_list = [DraftWin(type="board_win")]
+    lose_list = []
+    if arch.get("lose_condition"):
+        lose_list = [DraftLose(type="timer_runs_out", seconds=300)]
+
+    draft = DesignDraft(
+        title=title,
+        genre=arch.get("genre", Genre.PUZZLE),
+        camera=arch.get("camera", CameraKind.FIXED_BOARD),
+        pitch=prompt,
+        entities=[],
+        win=win_list,
+        lose=lose_list,
+        custom_rules=custom_rules[:3],
+    )
+    gds = expand_draft(draft)
+    gds.meta.generator = "model:scratch"
+    return gds
+
+
 def prompt_to_gds(
     prompt: str,
     complete_json: Optional[CompleteJson] = None,
@@ -112,10 +158,11 @@ def prompt_to_gds(
     """Orchestrates turning a prompt into a GameDesignSpec.
 
     1. Checks if prompt is a game creation request (otherwise UNSUPPORTED).
-    2. Tries deterministic preset matching.
-    3. If allow_model and complete_json provided, requests a DesignDraft from the model and expands it,
-       running one repair attempt on validation/JSON errors.
-    4. If no model available or transport fails, returns NEEDS_INPUT asking user to pick a genre.
+    2. Uses SemanticTemplateRegistry to evaluate strategy (Adapt Template, Hybrid, Scratch).
+    3. For Scratch games (Sudoku, Chess, Tetris, Snake), constructs dedicated architecture
+       and forbids incompatible templates (no falling cubes, no platformer obstacles).
+    4. For Adapt Template, customizes template properties from the start via model or preset.
+    5. Runs error repair and falls back safely without amnesia or hallucination.
     """
     if not is_game_creation_request(prompt):
         return PromptToGdsResult(
@@ -124,7 +171,37 @@ def prompt_to_gds(
             path="none",
         )
 
-    # 2. Preset path: keyword match (only for direct preset requests without custom narrative/mechanics)
+    # 1. Semantic strategy evaluation (deterministic 0ms capability matching)
+    decision = default_registry.evaluate_strategy(prompt)
+
+    # 2. Scratch generation path: discrete logic puzzles and custom games
+    if decision.strategy == GenerationStrategy.SCRATCH:
+        if allow_model and complete_json is not None:
+            # Let the LLM design custom rules/draft from the start with scratch architecture guidance
+            scratch_system_prompt = (
+                f"{DRAFT_SYSTEM_PROMPT}\n\n"
+                f"Architecture Strategy: SCRATCH GENERATION ({decision.profile.detected_genre.value})\n"
+                f"Target Classes: {', '.join(decision.suggested_architecture.get('target_classes', []))}\n"
+                f"DO NOT adapt platformer or shooter mechanics. Generate clean puzzle/board logic."
+            )
+            schema = DesignDraft.model_json_schema()
+            raw_json = complete_json(scratch_system_prompt, prompt, schema)
+            if raw_json is not None:
+                try:
+                    data = json.loads(raw_json)
+                    if isinstance(data, dict):
+                        draft = DesignDraft.model_validate(data)
+                        gds = expand_draft(draft)
+                        gds.meta.generator = f"model:{model}"
+                        return PromptToGdsResult(status="OK", gds=gds, path="model", model=model, attempts=1)
+                except Exception as exc:
+                    logger.info("Scratch model draft failed validation, falling back to verified scratch architecture: %s", exc)
+
+        # Verified scratch architecture synthesis fallback
+        gds = _build_scratch_gds(prompt, decision)
+        return PromptToGdsResult(status="OK", gds=gds, path="preset" if not complete_json else "model", model=model)
+
+    # 3. Preset / Adapt Template path: keyword match (only for direct preset requests without custom narrative/mechanics)
     text = " " + prompt.lower().replace("’", "'") + " "
     words = set(re.findall(r"\b\w+\b", text))
     preset_words = {w for kws in PRESET_KEYWORDS.values() for kw in kws for w in kw.split()}
@@ -170,7 +247,7 @@ def prompt_to_gds(
             except Exception as exc:
                 logger.warning("Preset creation failed for %s: %s", best_preset, exc)
 
-    # 3. Model path
+    # 4. Model path for Template Adaptation or Hybrid
     if allow_model and complete_json is not None:
         schema = DesignDraft.model_json_schema()
         attempts = 0

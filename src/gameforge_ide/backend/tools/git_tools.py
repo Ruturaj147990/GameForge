@@ -3,8 +3,18 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict
+
+
+def _win32_extra_kw() -> Dict[str, Any]:
+    if sys.platform != "win32":
+        return {}
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": si}
 
 
 class GitTools:
@@ -16,6 +26,7 @@ class GitTools:
     def get_status(self) -> Dict[str, Any]:
         """Returns structured git status (branch, modified, untracked)."""
         try:
+            extra_kw = _win32_extra_kw()
             # Branch name
             branch_proc = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -23,6 +34,7 @@ class GitTools:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                **extra_kw,
             )
             branch = branch_proc.stdout.strip() if branch_proc.returncode == 0 else "unknown"
 
@@ -33,6 +45,7 @@ class GitTools:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                **extra_kw,
             )
             lines = stat_proc.stdout.splitlines()
             modified = []
@@ -68,12 +81,14 @@ class GitTools:
                 valid_path = bm.validate_path(effective_path, allow_write=False)
                 rel_path = str(valid_path.relative_to(self.workspace_root).as_posix())
                 cmd.append(rel_path)
+            extra_kw = _win32_extra_kw()
             diff_proc = subprocess.run(
                 cmd,
                 cwd=str(self.workspace_root),
                 capture_output=True,
                 text=True,
                 timeout=15,
+                **extra_kw,
             )
             return {
                 "status": "SUCCESS",

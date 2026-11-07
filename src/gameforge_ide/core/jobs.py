@@ -140,11 +140,16 @@ def kill_process_tree(proc: subprocess.Popen) -> None:
 
         if sys.platform == "win32":
             try:
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = subprocess.SW_HIDE
                 subprocess.run(
                     ["taskkill", "/F", "/T", "/PID", str(pid)],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     check=False,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    startupinfo=si,
                 )
             except Exception:
                 pass
@@ -219,6 +224,19 @@ def spawn(argv: Union[Sequence[str], str], **popen_kwargs) -> subprocess.Popen:
     if popen_kwargs.get("shell"):
         raise ValueError("shell=True is forbidden")
     args = argv if isinstance(argv, str) else list(argv)
+    if sys.platform == "win32":
+        if "creationflags" not in popen_kwargs:
+            popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        else:
+            popen_kwargs["creationflags"] |= subprocess.CREATE_NO_WINDOW
+        if "startupinfo" not in popen_kwargs:
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            popen_kwargs["startupinfo"] = si
+        elif popen_kwargs["startupinfo"] is not None:
+            popen_kwargs["startupinfo"].dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            popen_kwargs["startupinfo"].wShowWindow = subprocess.SW_HIDE
     proc = subprocess.Popen(args, **popen_kwargs)
     adopt(proc)
     return proc

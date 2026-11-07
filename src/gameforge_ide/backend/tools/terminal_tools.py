@@ -168,10 +168,15 @@ class TerminalTools:
                 try:
                     if sys.platform == "win32":
                         try:
+                            si = subprocess.STARTUPINFO()
+                            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                            si.wShowWindow = subprocess.SW_HIDE
                             subprocess.run(
                                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                                 capture_output=True,
                                 timeout=5,
+                                creationflags=subprocess.CREATE_NO_WINDOW,
+                                startupinfo=si,
                             )
                         except Exception:
                             pass
@@ -209,10 +214,15 @@ class TerminalTools:
                 try:
                     if sys.platform == "win32":
                         try:
+                            si = subprocess.STARTUPINFO()
+                            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                            si.wShowWindow = subprocess.SW_HIDE
                             subprocess.run(
                                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                                 capture_output=True,
                                 timeout=2,
+                                creationflags=subprocess.CREATE_NO_WINDOW,
+                                startupinfo=si,
                             )
                         except Exception:
                             pass

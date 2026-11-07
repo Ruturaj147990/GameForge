@@ -274,12 +274,42 @@ class GameTools:
             if spec.matched and spec.params:
                 params = spec.params
             else:
-                return self.create_game_freeform(
-                    prompt=prompt_input,
-                    on_event=on_event,
-                    cancel_event=cancel_event,
-                    project_dir=kwargs.get("project_dir"),
-                )
+                try:
+                    from ...design.prompt_to_gds import prompt_to_gds
+                    res = prompt_to_gds(prompt_input, allow_model=True)
+                    if res.status == "OK" and res.gds is not None:
+                        gds = res.gds
+                except Exception:
+                    pass
+
+                # If prompt is a proceed/continue confirmation command, resolve existing GDS from project_dir
+                if gds is None and prompt_input:
+                    norm_pi = prompt_input.strip().lower()
+                    if norm_pi in ("proceed", "continue", "start", "run", "go ahead", "apply", "confirm"):
+                        explicit_pdir = kwargs.get("project_dir") or (gds_or_params.get("project_dir") if isinstance(gds_or_params, dict) else None)
+                        if explicit_pdir:
+                            try:
+                                from ...core.projects import find_gds
+                                found_gds = find_gds(explicit_pdir)
+                                if found_gds and found_gds.is_file():
+                                    gds = GameDesignSpec.model_validate_json(found_gds.read_text(encoding="utf-8"))
+                            except Exception:
+                                pass
+                        if gds is None:
+                            return {
+                                "status": "FAILED",
+                                "ok": False,
+                                "error": f"No GameDesignSpec found to execute for '{prompt_input}'. Please specify the game to create.",
+                                "failed_stage": "spec",
+                            }
+
+                if gds is None:
+                    return self.create_game_freeform(
+                        prompt=prompt_input,
+                        on_event=on_event,
+                        cancel_event=cancel_event,
+                        project_dir=kwargs.get("project_dir"),
+                    )
 
         hook = None
         if gds is not None:
@@ -595,11 +625,48 @@ class GameTools:
         return {"status": "SUCCESS" if r.ok else "FAILED", **r.to_dict()}
 
     def play_game(self, exe: str) -> Dict[str, Any]:
-        path = Path(exe)
-        if not path.is_file() or path.suffix.lower() != ".exe":
-            return {"status": "ERROR", "error": f"not a packaged game executable: {exe}"}
-        if self.projects_root.resolve() not in path.resolve().parents:
-            return {"status": "BLOCKED", "error": "only games produced under the GameForge projects root can be launched"}
+        from ...core.projects import find_packaged_executable, list_all_project_dirs
+        raw = Path(exe)
+        resolved_exe: Optional[Path] = None
+
+        # 1. Direct path check
+        if raw.is_file() and raw.suffix.lower() == ".exe":
+            resolved_exe = raw.resolve()
+        # 2. Check relative to projects_root
+        elif (self.projects_root / raw).is_file():
+            resolved_exe = (self.projects_root / raw).resolve()
+        # 3. Check relative to workspace_root
+        elif (self.workspace_root / raw).is_file():
+            resolved_exe = (self.workspace_root / raw).resolve()
+        else:
+            # 4. Search across all known project directories
+            all_dirs = list_all_project_dirs(self.workspace_root)
+            for pdir in all_dirs.values():
+                cand = pdir / raw
+                if cand.is_file() and cand.suffix.lower() == ".exe":
+                    resolved_exe = cand.resolve()
+                    break
+                # Try finding packaged executable in that project
+                pkg = find_packaged_executable(pdir, project_name=raw.stem)
+                if pkg and pkg.is_file() and (pkg.name.lower() == raw.name.lower() or raw.stem in ("MyGame", pdir.name)):
+                    resolved_exe = pkg.resolve()
+                    break
+
+        if not resolved_exe or not resolved_exe.is_file() or resolved_exe.suffix.lower() != ".exe":
+            return {
+                "status": "ERROR",
+                "error": f"Not a packaged game executable: '{exe}'. The project has not been cooked and packaged into a standalone Windows executable yet. Please package the game first via Build or 'unreal_package'.",
+            }
+
+        # Allow execution only of games produced under projects_root or workspace Projects/Games subdirectories
+        p_root_res = self.projects_root.resolve()
+        ws_proj_res = (self.workspace_root / "Projects").resolve()
+        ws_games_res = (self.workspace_root / "Games").resolve()
+        in_projects = p_root_res in resolved_exe.parents
+        in_subprojects = (ws_proj_res in resolved_exe.parents) or (ws_games_res in resolved_exe.parents)
+        if not in_projects and not in_subprojects:
+            return {"status": "BLOCKED", "error": "Only games produced under the GameForge projects root or workspace can be launched"}
+
         # Kept as plain subprocess.Popen (not jobs.spawn): launched for the user to keep playing, so it must not die with the IDE job.
-        proc = subprocess.Popen([str(path), "-windowed", "-ResX=1280", "-ResY=800"], cwd=str(path.parent))
-        return {"status": "SUCCESS", "pid": proc.pid, "exe": str(path)}
+        proc = subprocess.Popen([str(resolved_exe), "-windowed", "-ResX=1280", "-ResY=800"], cwd=str(resolved_exe.parent))
+        return {"status": "SUCCESS", "pid": proc.pid, "exe": str(resolved_exe)}

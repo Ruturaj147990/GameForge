@@ -151,7 +151,8 @@ def list_games(
                 repo_real = Path(REPO_ROOT).resolve()
             except Exception:
                 pass
-            if ws != repo_real:
+            p_root_resolved = Path(projects_root).resolve() if projects_root else None
+            if ws != repo_real and ws != p_root_resolved:
                 if is_gameforge_project(ws):
                     project_dirs_map[ws.name] = ws
                 ws_proj = ws / "Projects"
@@ -194,8 +195,8 @@ def list_games(
         uproject_file = find_uproject(d)
         gds_file = find_gds(d)
 
-        # A game exists if either game.gds.json or .uproject exists
-        if not gds_file and not uproject_file:
+        # A game exists if either game.gds.json, .uproject, or .gameforge project workspace exists
+        if not gds_file and not uproject_file and not (d / ".gameforge").is_dir():
             continue
 
         title = d.name
@@ -486,12 +487,21 @@ class ProjectsService(QObject):
             return list_games(self._projects_root, self._workspace_dir)
 
         def done(handle):
-            if handle.status == "DONE":
-                res = handle.result()
-                if res is not None:
-                    self.gamesLoaded.emit(res)
-            elif handle.status == "FAILED":
-                self.operationFailed.emit(str(handle.error))
+            try:
+                import shiboken6
+                if not shiboken6.isValid(self):
+                    return
+            except Exception:
+                pass
+            try:
+                if handle.status == "DONE":
+                    res = handle.result()
+                    if res is not None:
+                        self.gamesLoaded.emit(res)
+                elif handle.status == "FAILED":
+                    self.operationFailed.emit(str(handle.error))
+            except Exception:
+                pass
 
         handle = self._job_manager.submit(work, name="Scan Projects")
         handle.add_done_callback(done)
@@ -505,12 +515,21 @@ class ProjectsService(QObject):
             return True
 
         def done(handle):
-            if handle.status == "DONE" and handle.result():
-                self.gameDeleted.emit(project_name)
-                self.refresh()
-            else:
-                err_msg = str(handle.error) if handle.error else f"Could not remove project '{project_name}'."
-                self.operationFailed.emit(err_msg)
+            try:
+                import shiboken6
+                if not shiboken6.isValid(self):
+                    return
+            except Exception:
+                pass
+            try:
+                if handle.status == "DONE" and handle.result():
+                    self.gameDeleted.emit(project_name)
+                    self.refresh()
+                else:
+                    err_msg = str(handle.error) if handle.error else f"Could not remove project '{project_name}'."
+                    self.operationFailed.emit(err_msg)
+            except Exception:
+                pass
 
         handle = self._job_manager.submit(work, name=f"Delete Project {project_name}")
         handle.add_done_callback(done)

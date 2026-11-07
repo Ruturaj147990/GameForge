@@ -1207,6 +1207,8 @@ class MainWindow(QMainWindow):
             workspace_dir=self._workspace,
             parent=self,
         )
+        if hasattr(self, "_agent") and self._agent:
+            self._agent.attach_projects_service(self._projects_service)
 
         # Pre-instantiate CodeView so all dock attributes and panels are available
         self._get_or_create_code_view()
@@ -1364,7 +1366,13 @@ class MainWindow(QMainWindow):
             return view
 
         def create_games_view() -> GamesView:
-            view = GamesView(parent=self)
+            p_root = getattr(self._projects_service, "_projects_root", None) if hasattr(self, "_projects_service") else get_settings().projects_root
+            view = GamesView(
+                projects_root=p_root,
+                workspace_dir=self._workspace,
+                parent=self,
+                projects_service=getattr(self, "_projects_service", None),
+            )
             if hasattr(self, "_projects_service"):
                 view.attach_projects_service(self._projects_service)
             view.openGameRequested.connect(self._on_games_open_requested)
@@ -1629,6 +1637,9 @@ class MainWindow(QMainWindow):
                 self._tools.set_workspace(p_dir)
             if hasattr(self, "_chat_panel") and self._chat_panel:
                 self._chat_panel.set_workspace(self._agent, p_dir)
+                sid = getattr(self._chat_panel, "_session_id", None)
+                if sid and hasattr(self, "_agent") and self._agent:
+                    self._agent.set_session_project_dir(sid, p_dir)
 
         # 4. Synchronize Code developer view & docks
         if hasattr(self, "_code_view") or hasattr(self, "_explorer"):

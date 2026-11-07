@@ -115,7 +115,10 @@ def test_home_view_unsupported_prompt_notice(qapp, monkeypatch):
         assert not view._notice_lbl.isHidden()
         assert "That doesn't look like a game request. Try the Assistant." in view._notice_lbl.text()
     finally:
+        if view._active_job:
+            view._active_job.cancel()
         view.deleteLater()
+        qapp.processEvents()
 
 
 def test_home_view_readiness_rows(qapp):
