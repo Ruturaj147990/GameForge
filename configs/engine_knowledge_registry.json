@@ -5,7 +5,11 @@
   "last_updated": "2026-10-24",
   "engines": {
     "unreal_engine": {
-      "versions": ["5.5", "5.6", "5.7"],
+      "versions": [
+        "5.5",
+        "5.6",
+        "5.7"
+      ],
       "primary_version": "5.7.4",
       "official_docs": "https://dev.epicgames.com/documentation/en-us/unreal-engine",
       "verification_status": "REAL_ENGINE_VERIFIED",
@@ -13,61 +17,115 @@
         "gameplay_framework": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-framework-in-unreal-engine",
-          "components": ["AActor", "UActorComponent", "ACharacter", "APawn", "APlayerController"],
+          "components": [
+            "AActor",
+            "UActorComponent",
+            "ACharacter",
+            "APawn",
+            "APlayerController"
+          ],
           "notes": "Tick avoidance with PrimaryActorTick.bCanEverTick = false. Subobject creation via CreateDefaultSubobject in constructor."
         },
         "gameplay_ability_system": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-ability-system-for-unreal-engine",
-          "components": ["UAbilitySystemComponent", "UGameplayAbility", "UAttributeSet", "FGameplayAttributeData", "ATTRIBUTE_ACCESSORS", "CommitAbility", "EndAbility"],
+          "components": [
+            "UAbilitySystemComponent",
+            "UGameplayAbility",
+            "UAttributeSet",
+            "FGameplayAttributeData",
+            "ATTRIBUTE_ACCESSORS",
+            "CommitAbility",
+            "EndAbility"
+          ],
           "notes": "Define attributes with ATTRIBUTE_ACCESSORS macro. In UGameplayAbility, invoke CommitAbility before effects, and terminate with EndAbility."
         },
         "multiplayer_and_rpcs": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/rpcs-in-unreal-engine",
-          "components": ["UFUNCTION(Server, Reliable, WithValidation)", "GetLifetimeReplicatedProps", "DOREPLIFETIME_CONDITION", "FNetDeltaSerializeInfo", "HasAuthority()"],
+          "components": [
+            "UFUNCTION(Server, Reliable, WithValidation)",
+            "GetLifetimeReplicatedProps",
+            "DOREPLIFETIME_CONDITION",
+            "FNetDeltaSerializeInfo",
+            "HasAuthority()"
+          ],
           "notes": "Server RPCs require bool _Validate() and void _Implementation(). Authority check with HasAuthority(). Replicate variables with ReplicatedUsing and DOREPLIFETIME."
         },
         "ai_and_navigation": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/behavior-trees-in-unreal-engine",
-          "components": ["UBTTaskNode", "ExecuteTask", "UNavigationSystemV1", "GetRandomReachablePointInRadius", "EBTNodeResult::Succeeded"],
+          "components": [
+            "UBTTaskNode",
+            "ExecuteTask",
+            "UNavigationSystemV1",
+            "GetRandomReachablePointInRadius",
+            "EBTNodeResult::Succeeded"
+          ],
           "notes": "Derive custom AI tasks from UBTTaskNode, override ExecuteTask, query UNavigationSystemV1 for reachable points, return EBTNodeResult::Succeeded."
         },
         "memory_and_subsystems": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/programming-subsystems-in-unreal-engine",
-          "components": ["TObjectPtr<T>", "UGameInstanceSubsystem", "UWorldSubsystem"],
+          "components": [
+            "TObjectPtr<T>",
+            "UGameInstanceSubsystem",
+            "UWorldSubsystem"
+          ],
           "notes": "UE 5.7 uses TObjectPtr for all UObject member variables to enable automatic access tracking and editor tooling."
         },
         "enhanced_input": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine",
-          "components": ["UEnhancedInputComponent", "UInputMappingContext", "UInputAction"],
+          "components": [
+            "UEnhancedInputComponent",
+            "UInputMappingContext",
+            "UInputAction"
+          ],
           "notes": "Replaces legacy input action bindings starting in UE 5.1"
         },
         "umg_ui": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/umg-ui-designer-for-unreal-engine",
-          "components": ["UUserWidget", "UProgressBar", "UTextBlock"],
+          "components": [
+            "UUserWidget",
+            "UProgressBar",
+            "UTextBlock"
+          ],
           "notes": "Requires UMG, Slate, SlateCore module dependencies in Build.cs"
         },
         "collision_and_physics": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/collision-in-unreal-engine",
-          "components": ["UPrimitiveComponent", "USphereComponent", "FHitResult", "LineTraceSingleByChannel"],
+          "components": [
+            "UPrimitiveComponent",
+            "USphereComponent",
+            "FHitResult",
+            "LineTraceSingleByChannel"
+          ],
           "notes": "Delegate OnComponentHit and OnComponentBeginOverlap require exact signature matches"
         },
         "math_and_input_invariants": {
           "status": "VERIFIED",
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine",
-          "components": ["FKey", "EKeys", "FVector", "FRotator", "FQuat"],
-          "notes": "FKey is a C++ struct (never switch(Key), use if/else with EKeys). FVector has no ToFloat() method; use Direction.Rotation() or Direction.GetSafeNormal()."
+          "components": [
+            "FKey",
+            "EKeys",
+            "FVector",
+            "FRotator",
+            "FQuat",
+            "FLinearColor",
+            "FColor"
+          ],
+          "notes": "FKey is a C++ struct (never switch(Key), use if/else with EKeys). FVector has no ToFloat() method; use Direction.Rotation() or Direction.GetSafeNormal(). FLinearColor uses American spelling FLinearColor::Gray (never Grey). FLinearColor has no Orange constant; construct it using FLinearColor(FColor::Orange)."
         }
       }
     },
     "unity": {
-      "versions": ["2022.3 LTS", "6.0 LTS"],
+      "versions": [
+        "2022.3 LTS",
+        "6.0 LTS"
+      ],
       "primary_version": "6.0 LTS",
       "official_docs": "https://docs.unity.com/Manual/index.html",
       "verification_status": "AUTHORED",
@@ -75,31 +133,53 @@
         "gameplay_core": {
           "status": "AUTHORED",
           "doc_url": "https://docs.unity.com/ScriptReference/MonoBehaviour.html",
-          "components": ["MonoBehaviour", "GameObject", "Transform", "Component"],
+          "components": [
+            "MonoBehaviour",
+            "GameObject",
+            "Transform",
+            "Component"
+          ],
           "notes": "Awake -> OnEnable -> Start lifecycle execution order"
         },
         "entities_dots": {
           "status": "AUTHORED",
           "doc_url": "https://docs.unity.com/Packages/com.unity.entities@latest",
-          "components": ["IJobEntity", "Baker<TAuthoring>", "NativeArray<T>", "[BurstCompile]"],
+          "components": [
+            "IJobEntity",
+            "Baker<TAuthoring>",
+            "NativeArray<T>",
+            "[BurstCompile]"
+          ],
           "notes": "Unity 6 Entities 1.3: Baker<T> uses AddComponent(GetEntity(TransformUsageFlags.Dynamic)). Always call NativeArray.Dispose()."
         },
         "physics": {
           "status": "AUTHORED",
           "doc_url": "https://docs.unity.com/ScriptReference/Rigidbody.html",
-          "components": ["Rigidbody", "Collider", "Collision", "RaycastHit"],
+          "components": [
+            "Rigidbody",
+            "Collider",
+            "Collision",
+            "RaycastHit"
+          ],
           "notes": "Unity units in meters (1 unit = 100 cm). Y-axis is up."
         },
         "ui_toolkit_ugui": {
           "status": "AUTHORED",
           "doc_url": "https://docs.unity.com/Packages/com.unity.ugui@latest",
-          "components": ["UnityEngine.UI.Image", "UnityEngine.UI.Text", "Canvas"],
+          "components": [
+            "UnityEngine.UI.Image",
+            "UnityEngine.UI.Text",
+            "Canvas"
+          ],
           "notes": "Event-driven updates preferred over polling in Update()"
         }
       }
     },
     "godot": {
-      "versions": ["4.2", "4.3"],
+      "versions": [
+        "4.2",
+        "4.3"
+      ],
       "primary_version": "4.3",
       "official_docs": "https://docs.godotengine.org/en/stable/",
       "verification_status": "SPECIFIED",
@@ -107,19 +187,32 @@
         "node_tree": {
           "status": "SPECIFIED",
           "doc_url": "https://docs.godotengine.org/en/stable/classes/class_node.html",
-          "components": ["Node", "Node3D", "CharacterBody3D", "Area3D"],
+          "components": [
+            "Node",
+            "Node3D",
+            "CharacterBody3D",
+            "Area3D"
+          ],
           "notes": "_ready -> _process -> _physics_process lifecycle"
         },
         "kinematic_movement": {
           "status": "SPECIFIED",
           "doc_url": "https://docs.godotengine.org/en/stable/classes/class_characterbody3d.html",
-          "components": ["CharacterBody3D", "move_and_slide()", "is_on_floor()", "velocity"],
+          "components": [
+            "CharacterBody3D",
+            "move_and_slide()",
+            "is_on_floor()",
+            "velocity"
+          ],
           "notes": "Godot 4.3 kinematic movement sets velocity and calls move_and_slide() in _physics_process."
         },
         "signals": {
           "status": "SPECIFIED",
           "doc_url": "https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html",
-          "components": ["Signal", "Callable"],
+          "components": [
+            "Signal",
+            "Callable"
+          ],
           "notes": "Decoupled observer pattern native to engine"
         }
       }

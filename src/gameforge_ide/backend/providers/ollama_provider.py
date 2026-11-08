@@ -238,13 +238,33 @@ class OllamaProvider(ModelProvider):
         req: urllib.request.Request,
         timeout: float,
         max_retries: int = 3,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Dict[str, Any]:
-        """Executes HTTP request to Ollama with exponential backoff on transient errors."""
+        """Executes HTTP request to Ollama with exponential backoff on transient errors and cooperative cancellation."""
         last_exc: Optional[Exception] = None
         for attempt in range(max_retries):
+            if cancel_event is not None and cancel_event.is_set():
+                raise RuntimeError("Operation cancelled by user")
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    raw_bytes = resp.read()
+                    if cancel_event is not None:
+                        monitor_stopped = threading.Event()
+                        def _monitor():
+                            while not monitor_stopped.wait(0.05):
+                                if cancel_event.is_set():
+                                    try:
+                                        resp.close()
+                                    except Exception:
+                                        pass
+                                    break
+                        t_mon = threading.Thread(target=_monitor, daemon=True)
+                        t_mon.start()
+                        try:
+                            raw_bytes = resp.read()
+                        finally:
+                            monitor_stopped.set()
+                    else:
+                        raw_bytes = resp.read()
                     if not raw_bytes or not raw_bytes.strip():
                         if attempt < max_retries - 1:
                             sleep_time = 0.5 * (2 ** attempt)
@@ -334,6 +354,7 @@ class OllamaProvider(ModelProvider):
         temperature: float = 0.0,
         max_tokens: int = 1024,
         keep_alive: Optional[str] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> Dict[str, Any]:
         """Native tool calling via /api/chat `tools`. Returns {content, tool_calls, usage}.
 
@@ -364,7 +385,7 @@ class OllamaProvider(ModelProvider):
             headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
             method="POST",
         )
-        data = self._request_with_retry(req, timeout=self.timeout)
+        data = self._request_with_retry(req, timeout=self.timeout, cancel_event=cancel_event)
         if "error" in data:
             raise RuntimeError(f"Ollama API error: {data['error']}")
         msg = data.get("message", {}) or {}

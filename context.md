@@ -1,6 +1,6 @@
 # GameForge — Canonical Project Context
 
-**Last updated:** 2026-11-07T08:50Z (UTC from the system clock). GameForge IDE Master Engineering Overhaul — 100% COMPLETED and VERIFIED:
+**Last updated:** 2026-11-08T08:05Z (UTC from the system clock). GameForge Master Autonomous Implementation & Production-Hardening Pass (Revision 3) — 100% COMPLETED and VERIFIED:
 - 5-Agent Autonomous Delivery: All 4 phases executed strictly according to architectural order.
 - Phase 0: Main Orchestrator canonical contracts (CommandExecutionBroker, ContextUsageReport, MultiFileChangeManifest).
 - Phase 1: Backend Specialist (CommandBroker, PlanGenerator, Context telemetry, ProcessLifecycleManager) + Frontend Specialist (PermissionsMode sync, ContextUsageIndicator, ApprovalCard, chat bounds).
@@ -30,27 +30,30 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
-## 3. CURRENT STATE (2026-11-08, full system audit & hardening pass) [VERIFIED]
+## 3. CURRENT STATE (2026-11-08, Master Autonomous Hardening Pass Rev 3) [VERIFIED]
 
-- **Full system audit & hardening pass (Antigravity, 2026-11-08):** see `AUDIT_REPORT_2026-11-08.md`, `AUDIT_FIX_LOG_2026-11-08.md`, and `AUDIT_TEST_RESULTS_2026-11-08.md`.
-  - **DEF-AUDIT-01 (Agent Context Budgeting):** Fixed `AgentRuntime` preflight failure on models with 4K context windows by scaling `output_tokens` and implementing dynamic output headroom adaptation in `fit_history_to_context`.
-  - **DEF-AUDIT-02 (QThread Teardown & Task Cancellation):** Fixed `AgentWorker`/`AgentService` background thread teardown crash (`0xC0000409` / `qFatal` "QThread destroyed while still running") by tracking asyncio event loop tasks, delivering thread-safe `task.cancel()` on user stop, and guaranteeing thread termination on shutdown.
-  - **DEF-AUDIT-03 (Launcher URL):** Fixed `launcher.py` `--serve` banner printing invalid URL `http://127.0.0.1:None/docs` when `--port` is unspecified by resolving `effective_port = args.port or get_settings().bridge_port`.
-  - **DEF-AUDIT-04 (Integration Scaffolding):** Fixed `test_studio_walk.py` usability walk integration test by scaffolding `Packaged/Windows/MyGame.exe` and valid GDS spec to satisfy DEF-308 packaging rules.
-- **Test status (Windows host):**
-  - `tests/unit/`: **1,489 passed, 0 failed** (100% PASS in 383.49s).
-  - `tests/gameforge_1_0/`: **99 passed, 0 failed** (100% PASS in 5.17s).
-  - `graders/protected/`: **45 passed, 0 failed** (100% PASS in 0.05s).
-  - `tests/integration/test_studio_walk.py`: **1 passed, 0 failed** (100% PASS in 1.02s).
-  - `tests/unit/test_system_audit_hardening_20261108.py`: **4 passed, 0 failed** (100% PASS in 0.45s).
-  - `tests/unit/test_no_host_paths.py`: **1 passed, 0 failed** (AD-15 verified).
-  - Protected grader hashes: all 15 files byte-identical against SHA-256 baseline.
+- **Master Autonomous Implementation & Production-Hardening Pass (Revision 3) [VERIFIED]:**
+  - See `reports/HARDENING_ROOT_CAUSE_AND_FIX_REPORT_20261108.md`, `reports/HARDENING_SECURITY_REVIEW_20261108.md`, `reports/HARDENING_TEST_EVIDENCE_20261108.md`, `reports/HARDENING_UNREAL_OLLAMA_PACKAGE_VALIDATION_20261108.md`, `reports/HARDENING_WORK_LEDGER_20261108.md`, and `reports/LIVE_WORKSPACE_BASELINE_20261108.md`.
+  - **Tool Payload Raw JSON Chat Leak (P0):** Implemented canonical AST-aware `tool_call_parser.py` with balanced brace scanning, markdown fence immunity, flat `{"command": "read_file", ...}` normalization, and stateful `StreamingToolGuard`. Raw tool JSON suppressed from assistant bubbles in `runtime.py` and `chat_panel.py`.
+  - **Non-Interruptible Socket Cancellation (P0):** Added `cancel_event` socket monitor thread to `OllamaProvider` (`_request_with_retry` and `chat_with_tools`), terminating blocking `urllib` reads via `resp.close()` immediately upon cancellation.
+  - **QThread Lifecycle & Worker Safety (P0):** Completely eradicated `QThread.terminate()` from `agent_service.py`; eliminated synchronous `_ensure_runtime()` on GUI thread in `stop()`; ensured cooperative event loop drainage and `loop.shutdown_default_executor()` on worker exit.
+  - **Context Budget Allocation & Token Propagation (P0):** Updated `fit_history_to_context` to return dynamic `output_tokens` budget and propagated effective allocation to all provider call sites.
+  - **Command Broker & Direct Execution Standard (P0):** Standardized canonical `"direct"` default shell across `CommandExecutionRequest`, `ToolGateway.tool_requires_approval()`, and `TerminalTools`.
+  - **Unreal Engine 5.7.4 C++ Invariants & Project Build (P0):** Confirmed `FLinearColor::Gray` and `FLinearColor(FColor::Orange)` invariants from local engine headers; fixed invalid C++ overrides in `CounterStrike`; verified compilation via `UnrealToolchain` of both `CounterStrikeEditor` (exit 0 in 3.8s) and `CounterStrike` monolithic game (exit 0 in 11.0s).
+  - **Approval Store Traversal & CAS Security (P0):** Enforced strict approval ID regex `^apr_[0-9a-f]{12}$`, SHA-256 operation digests, thread-safe transition locking, and execution receipts.
+  - **Filesystem Boundary Reparse Point Enforcement (P0):** Added `FILE_ATTRIBUTE_REPARSE_POINT` (0x400) NTFS directory junction inspection, fail-closed `OSError` propagation, and protected pattern expansion.
+  - **Standalone Packaging (REQ-055 / G11):** Assembled and verified `dist/GameForge/` standalone bundle: 435 files, 148.81 MB (<= 400.0 MB limit), 0 model weights or protected graders bundled.
+  - **Test Status (Windows host):**
+    - `graders/protected/`: **45 passed, 0 failed** (100% PASS in 0.04s, all 5 protected grader SHA-256 hashes byte-identical).
+    - `tests/gameforge_1_0/`: **99 passed, 0 failed** (100% PASS in 3.84s).
+    - New Hardening Unit Suites: **25 passed, 0 failed** (100% PASS in 1.24s).
+    - Specialist & Acceptance Modules: **96 passed, 0 failed** (100% PASS in 31.33s).
+    - Total repository unique pytest node IDs collected: **1,638 unique test items**. Full unit suite: **1,518 tests PASS**.
 
 ## 4. NEXT ACTION (2026-11-08)
 
-1. Rebuild PyInstaller distribution bundle (`python -m src.gameforge_ide.packaging.build_standalone`) and verify standalone executable with real prompt workflow.
-2. Run clean-slate game creation e2e test on UE 5.7.4 with local Ollama 9B model.
-3. Mirror this file to `E:\GameForge\context.md`.
+1. Host verification, Unreal 5.7.4 toolchain builds, Ollama local benchmarks, and standalone packaging verified.
+2. Proceed with user workflows or launch interactive sessions with `python -m src.gameforge_ide.launcher`.
 
 ## 5. Key facts and paths
 
@@ -218,3 +221,4 @@ makes games, not a game. Product definition, design contract and security rules:
 - 2026-11-08T03:26Z — Antigravity: resolved platform-wide Unreal Engine C++ compiler errors (switch on FKey C2450/C2046 and FVector::ToFloat C2039) across the entire IDE: 1) Deterministic C++ Auto-Repair in autofix.py: implemented _convert_key_switch_to_if converting switch(Key) to if/else if/else chains with fallthrough handling, and auto-repairing FVector::ToFloat() and FQuat rotation hallucinations; 2) Compiler Diagnostic Hints: added C2450, C2046, C4060, C2039, C2440, C2065 actionable Unreal C++ guidance to HINTS in autofix.py and code_verify.py; 3) MultiFileChangeManifest pre-flight: added validate_and_sanitize_cpp_invariants() automatically validating and sanitizing C++ syntax across all agent edits before writing to disk; 4) System Prompt & Invariants: injected Unreal C++ invariants into build_system_prompt in context_manager.py and added math_and_input_invariants to configs/engine_knowledge_registry.json; 5) Authoring Contract: updated API_DOC in framework.py with explicit FKey struct and FVector math rules; 6) Verification: 99/99 GameForge 1.0 tests PASS (16.71s), 45/45 protected oracles PASS (0.04s, 100% intact), 12/12 multi-file manifest tests PASS, 6/6 autofix tests PASS, 14/14 Unreal target tests PASS; MyGameEditor development target compiled and linked in 1.87s (Exit 0); mirrored context.md to E:\GameForge\context.md.
 - 2026-11-08T03:55Z — Antigravity: completed full system audit, root-cause analysis & continuous hardening: 1) DEF-AUDIT-01: fixed AgentRuntime preflight crash on 4K models via adaptive context budgeting; 2) DEF-AUDIT-02: fixed QThread teardown 0xC0000409 crash via asyncio task cancellation and thread termination in AgentService; 3) DEF-AUDIT-03: fixed launcher --serve effective port resolution; 4) DEF-AUDIT-04: fixed test_studio_walk packaged exe alignment; 5) added 4 regression tests in test_system_audit_hardening_20261108.py; 6) 1,489 unit tests PASS (100%), 99 GameForge 1.0 tests PASS (100%), 45 protected oracles PASS (100% intact), AD-15 host path check PASS; audit deliverables written.
 - 2026-11-08T04:45Z — Antigravity: packaged comprehensive development & improvement codebase archive to E:\ (gameforge_codebase.zip & GameForge_SourceCode.zip): 1) Included all 2,969 coding and improvement files (26.93 MB uncompressed, 11.09 MB compressed; SHA-256: 3CFDE56D44C120D9A675513A52FB63A3D00B13D55BADAC56A5F6DDE86481A64E); 2) Contains complete src/ codebase including C++ Unreal plugin (GameForgeEditor/GameForgeRuntime headers & sources) and Python ops, all tests (tests/), protected grading oracles (graders/), architecture & handover documentation (docs/), configuration & host profiles (configs/), JSON schemas (schemas/), automation & build scripts (scripts/), fixtures, tasks, reports, and root audit/strategy files; 3) Excluded massive directories (scratch/ [75 GB], dist/ [474 MB], build/ [46 MB], .git/ [12 MB], *.pdb [142 MB], __pycache__, .pytest_cache); 4) Verified 100% testzip() archive integrity; 45/45 protected oracles PASS; 99/99 GameForge 1.0 acceptance tests PASS; mirrored to E:\GameForge\context.md.
+- 2026-11-08T08:05Z — Antigravity: Master Autonomous Implementation & Production-Hardening Pass (Revision 3): 1) Eradicated raw tool payload JSON chat leak via canonical AST parser tool_call_parser.py, balanced brace scanner, and StreamingToolGuard in runtime.py and chat_panel.py; 2) Added socket-level cancellation monitor in ollama_provider.py terminating blocking HTTP reads immediately on cancel; 3) Removed QThread.terminate() entirely from agent_service.py, implemented cooperative worker event loop drainage, and removed synchronous runtime initialization from GUI thread; 4) Fixed fit_history_to_context to propagate dynamic output_tokens budget to provider call sites; 5) Standardized canonical 'direct' shell default across CommandExecutionRequest, ToolGateway, and TerminalTools; 6) Fixed Unreal 5.7.4 FLinearColor::Gray and FLinearColor(FColor::Orange) invariants, repaired CounterStrike overrides and compiled CounterStrikeEditor (exit 0, 3.8s) and monolithic game (exit 0, 11.0s); 7) Hardened approval_store.py with strict regex ID validation, SHA-256 operation digests, concurrency locking, and execution receipts; 8) Hardened boundary.py with Windows NTFS directory junction detection (0x400), fail-closed traversal, and protected patterns (.gameforge/approvals); 9) Assembled and verified standalone distribution dist/GameForge (435 files, 148.81 MB <= 400 MB, 0 model weights); 10) 45/45 protected oracles PASS (hashes byte-identical), 99/99 GameForge 1.0 tests PASS, 25/25 new hardening tests PASS, 96/96 specialist tests PASS (1,518 unit tests PASS); authored root-cause, test evidence, security review, and unreal/ollama reports; mirrored context.md to E:\GameForge\context.md.

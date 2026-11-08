@@ -111,6 +111,15 @@ def autofix(files: Dict[str, str]) -> Tuple[Dict[str, str], List[str]]:
         cpp = re.sub(r'(\b\w+)\.ToFloat\(\)', r'\1.Size()', cpp)
         notes.append("fixed invalid FVector::ToFloat() and FQuat construction")
 
+    # 9. Fix invalid Unreal color constants (UE 5.7.4 Math/Color.h invariants)
+    if cpp and ("FLinearColor::Grey" in cpp or "FLinearColor::Orange" in cpp):
+        if "FLinearColor::Grey" in cpp:
+            cpp = cpp.replace("FLinearColor::Grey", "FLinearColor::Gray")
+            notes.append("replaced invalid FLinearColor::Grey with FLinearColor::Gray")
+        if "FLinearColor::Orange" in cpp:
+            cpp = cpp.replace("FLinearColor::Orange", "FLinearColor(FColor::Orange)")
+            notes.append("replaced invalid FLinearColor::Orange with FLinearColor(FColor::Orange)")
+
     out = dict(files)
     if h:
         out["GFGameImpl.h"] = h
@@ -219,7 +228,7 @@ def _convert_key_switch_to_if(cpp_text: str) -> Tuple[str, bool]:
 
 
 HINTS = {
-    "C2039": "A member or function was not found (e.g. FVector has no .ToFloat(); or function defined in .cpp but not declared in GFGameImpl.h).",
+    "C2039": "A member or function was not found (e.g. FVector has no .ToFloat(); FLinearColor has no ::Grey or ::Orange -- use FLinearColor::Gray or FLinearColor(FColor::Orange); or function defined in .cpp but not declared in GFGameImpl.h).",
     "C3861": "An identifier is used but not declared. Declare helper functions as private members of AGFGameImpl.",
     "C2065": "A variable is undeclared. Member variables must be declared in the class in GFGameImpl.h; check naming (e.g. bBombPlanted vs BombPlanted).",
     "C3668": "An 'override' does not match the base signature. Copy the signature exactly from the contract, including const.",

@@ -117,6 +117,8 @@ class _AgentWorker(QObject):
 
     @Slot()
     def run(self) -> None:  # noqa: D102
+        if self._stop_flag.is_set():
+            return
         try:
             self._ensure_runtime()
             loop = asyncio.new_event_loop()
@@ -132,6 +134,10 @@ class _AgentWorker(QObject):
                 self._task = None
                 try:
                     loop.run_until_complete(loop.shutdown_asyncgens())
+                except Exception:
+                    pass
+                try:
+                    loop.run_until_complete(loop.shutdown_default_executor())
                 except Exception:
                     pass
                 loop.close()
@@ -252,12 +258,6 @@ class _AgentWorker(QObject):
         # next event arrives. cancel_task() is thread-safe.
         runtime = getattr(self, "_runtime", None)
         session_id = getattr(self, "_session_id", None)
-        if runtime is None:
-            try:
-                self._ensure_runtime()
-                runtime = getattr(self, "_runtime", None)
-            except Exception:
-                pass
         if runtime is not None and session_id and hasattr(runtime, "cancel_task"):
             try:
                 runtime.cancel_task(session_id)
@@ -488,8 +488,16 @@ class AgentService(QObject):
         self._worker.stop()
 
     def set_workspace(self, new_workspace: Path) -> None:
-        """Switch active workspace directory and reset runtime state."""
+        """Switch active workspace directory and reset runtime state safely."""
         self.stop()
+        if self._thread.isRunning() and self._busy:
+            app = QApplication.instance()
+            for _ in range(10):
+                if not self._busy:
+                    break
+                if app:
+                    app.processEvents()
+                time.sleep(0.05)
         self.workspace_root = Path(new_workspace).resolve()
         self._worker.workspace_root = self.workspace_root
         self._worker._runtime = None
@@ -535,14 +543,21 @@ class AgentService(QObject):
         return self._worker.session_manager
 
     def shutdown(self) -> None:
-        """Terminate background thread on application exit."""
+        """Gracefully shut down background thread with cooperative drainage."""
         self._busy = False
-        self._worker.stop()
-        if self._thread.isRunning():
+        self._stopping = True
+        if hasattr(self, "_worker") and self._worker:
+            self._worker.stop()
+        if hasattr(self, "_thread") and self._thread.isRunning():
             self._thread.quit()
             if not self._thread.wait(3000):
-                self._thread.terminate()
-                self._thread.wait(1000)
+                # Cooperative drainage with UI event processing instead of dangerous terminate()
+                app = QApplication.instance()
+                for _ in range(20):
+                    if self._thread.wait(100):
+                        break
+                    if app:
+                        app.processEvents()
         self._busy = False
         self._stopping = False
 

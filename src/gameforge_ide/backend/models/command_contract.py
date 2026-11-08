@@ -48,7 +48,7 @@ class RiskCategory(str, Enum):
 class CommandExecutionRequest(BaseModel):
     """Request payload sent to CommandExecutionBroker."""
     command: str = Field(..., description="Raw command line string")
-    shell: str = Field(default="powershell", description="Target shell: powershell, cmd, bash, or direct")
+    shell: str = Field(default="direct", description="Target shell: direct (default shell-free), powershell, cmd, or bash")
     working_directory: str = Field(default="", description="Working directory path")
     permissions_mode: PermissionsMode = Field(default=PermissionsMode.AUTO, description="Active permissions mode")
     reason: str = Field(default="", description="Engineering intent/purpose for executing this command")

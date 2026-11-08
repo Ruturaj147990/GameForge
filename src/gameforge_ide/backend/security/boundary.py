@@ -43,6 +43,22 @@ def expand_8_3_short_names(path: Path) -> Path:
     return path
 
 
+
+def is_junction_or_reparse(path: Path) -> bool:
+    """Checks if a path component is a Windows junction, reparse point, or symlink across Python 3.10-3.14."""
+    try:
+        if not path.exists():
+            return False
+        if hasattr(os.path, "isjunction") and os.path.isjunction(str(path)):
+            return True
+        st = os.lstat(str(path))
+        if getattr(st, "st_file_attributes", 0) & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT
+            return True
+        return path.is_symlink()
+    except (OSError, ValueError):
+        return True  # Fail closed on inspection error
+
+
 class BoundaryManager:
     """Enforces workspace boundaries, path traversal rejection, and protected file immunity."""
 
@@ -50,6 +66,10 @@ class BoundaryManager:
         "graders/protected",
         ".git",
         "models/ollama/models/blobs",
+        ".gameforge/approvals",
+        ".gameforge/settings.json",
+        ".gameforge/ide_settings.ini",
+        ".gameforge/credentials",
     ]
 
     RESERVED_DEVICE_NAMES = {
@@ -116,14 +136,14 @@ class BoundaryManager:
                     f"Reserved device violation: '{target_path}' contains Windows reserved device name '{part}'."
                 )
 
-        # Check for symlink traversal across existing path components
+        # Check for symlink and junction/reparse point traversal across existing path components
         try:
             curr = self.workspace_root
             for part in raw_path.parts:
                 if part in ("/", "\\", "") or (len(part) >= 2 and part[1] == ":"):
                     continue
                 curr = curr / part
-                if curr.is_symlink():
+                if is_junction_or_reparse(curr):
                     try:
                         symlink_target = curr.resolve()
                         norm_target = os.path.normcase(str(symlink_target))
@@ -132,10 +152,14 @@ class BoundaryManager:
                             raise ValueError()
                     except ValueError:
                         raise SecurityViolationError(
-                            f"Symlink traversal violation: '{curr}' is a symlink pointing outside workspace to '{symlink_target}'."
+                            f"Symlink/junction traversal violation: '{curr}' points outside workspace to '{symlink_target}'."
                         )
-        except OSError:
-            pass
+                    except OSError as exc:
+                        raise SecurityViolationError(f"Failed resolving link '{curr}': {exc}")
+        except SecurityViolationError:
+            raise
+        except OSError as exc:
+            raise SecurityViolationError(f"Path inspection failure for '{target_path}': {exc}")
 
         try:
             if not raw_path.is_absolute():

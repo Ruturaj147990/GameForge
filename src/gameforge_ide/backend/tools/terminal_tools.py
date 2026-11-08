@@ -147,7 +147,7 @@ class TerminalTools:
 
         # Default to direct shell-free execution for agent security (REQ-051).
         # Explicit shell choices (powershell, cmd, bash) can be passed when needed.
-        target_shell = shell or "direct"
+        target_shell = (shell or "direct").strip().lower()
         if target_shell == "direct":
             try:
                 args = self._parse_command(command)

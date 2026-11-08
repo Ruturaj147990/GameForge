@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field
 
+from .tool_call_parser import (
+    DEFAULT_ALIASES,
+    DEFAULT_KNOWN_TOOLS,
+    ParsedToolCall,
+    ParserResult,
+    StreamingToolGuard,
+    parse_text_for_tool_calls,
+)
 from ..providers.base import ModelProvider
 from ..providers.router import ModelRouter
 from ..session_manager import Session, SessionManager
@@ -143,17 +151,29 @@ class AgentRuntime:
         return bool(task and task.terminal_status == "CANCELLED")
 
     async def _await_cancellable(self, session_id: str, fn: Callable[..., Any], *args: Any, poll_s: float = 0.2) -> Any:
-        """Run a blocking provider call on a worker thread; return None as soon as the task is cancelled.
-
-        The blocking call itself cannot be interrupted, but the agent loop (and therefore the UI)
-        no longer waits up to the provider timeout after the user pressed Stop.
+        """Run a blocking provider call on a worker thread with active cooperative cancellation.
+        
+        Closes underlying network socket via cancel_event immediately when task is cancelled.
         """
-        fut = asyncio.ensure_future(asyncio.to_thread(fn, *args))
+        cancel_event = threading.Event()
+        import inspect
+        try:
+            sig = inspect.signature(fn)
+            has_cancel = "cancel_event" in sig.parameters
+        except Exception:
+            has_cancel = False
+
+        if has_cancel:
+            fut = asyncio.ensure_future(asyncio.to_thread(fn, *args, cancel_event=cancel_event))
+        else:
+            fut = asyncio.ensure_future(asyncio.to_thread(fn, *args))
+
         while True:
             done, _ = await asyncio.wait({fut}, timeout=poll_s)
             if done:
                 return fut.result()
             if self.is_task_cancelled(session_id):
+                cancel_event.set()
                 fut.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
                 return None
 
@@ -325,6 +345,9 @@ class AgentRuntime:
         return selected, {
             "estimated_input_tokens": used,
             "input_budget_tokens": input_budget,
+            "output_tokens": output_tokens,
+            "context_limit_tokens": max_context,
+            "safety_tokens": safety_tokens,
             "omitted_history_messages": omitted,
         }
 
@@ -336,6 +359,24 @@ class AgentRuntime:
     ) -> Optional[Dict[str, Any]]:
         """Extracts structured tool invocation from model output supporting multiple standard schemas
         (OpenAI, Anthropic, ReAct, XML tags, string-serialized arguments, and balanced JSON)."""
+        if not text:
+            return None
+
+        # 0. Canonical tool parser check (supports native, flat command, JSON, XML, ReAct)
+        try:
+            defs = self.tool_gateway.get_definitions() if hasattr(self, "tool_gateway") and self.tool_gateway else []
+            known_tools = {d.name for d in defs} | DEFAULT_KNOWN_TOOLS
+        except Exception:
+            known_tools = DEFAULT_KNOWN_TOOLS
+
+        parsed_res = parse_text_for_tool_calls(text, known_tools=known_tools)
+        if parsed_res.calls:
+            first_call = parsed_res.calls[0]
+            return {
+                "name": first_call.name,
+                "arguments": first_call.arguments,
+                "call_id": first_call.call_id,
+            }
         def _parse_arguments(args: Any) -> Dict[str, Any]:
             if isinstance(args, dict):
                 return args
@@ -922,8 +963,8 @@ class AgentRuntime:
         stripped = text.strip()
         tool_prefixes = (
             '{"tool"', '{"name"', '{"function"', '{"tool_name"', '{"action"', '{"type": "tool_use"',
-            '{"type":"tool_use"', '{"tool_calls"', '{"call"',
-            '{\n  "tool"', '{\n  "name"', '{\n  "function"', '{\n  "action"',
+            '{"type":"tool_use"', '{"tool_calls"', '{"call"', '{"command"',
+            '{\n  "tool"', '{\n  "name"', '{\n  "function"', '{\n  "action"', '{\n  "command"',
             '{\n "tool"', '{\n "name"', '{\n "function"', '{\n "action"',
             '```json\n{"tool"', '```json\n{"name"', '```json\n{"function"', '```json\n{"action"',
             '```json\n{\n  "tool"', '```json\n{\n  "name"', '```json\n{\n  "function"',
@@ -934,7 +975,7 @@ class AgentRuntime:
         )
         if any(stripped.startswith(pfx) for pfx in tool_prefixes):
             return True
-        if re.search(r"```(?:json)?\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type)\"", stripped):
+        if re.search(r"```(?:json)?\s*\{\s*\"(?:tool|name|function|action|tool_name|tool_calls|type|command)\"", stripped):
             return True
         if re.search(r"(?:^|\n)\s*Action\s*:\s*[a-zA-Z0-9_\-]+", stripped):
             return True
@@ -945,9 +986,9 @@ class AgentRuntime:
         """Removes raw tool invocation blocks, heredocs, and think tags from model response, leaving clean narrative prose."""
         if not text:
             return ""
-        # 0. Strip think tags
-        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
-        cleaned = re.sub(r"</?think>", "", cleaned, flags=re.IGNORECASE)
+        # 0. Delegate to canonical parser for exact tool span excision
+        parsed = parse_text_for_tool_calls(text)
+        cleaned = parsed.cleaned_text
 
         # 1. Strip raw tool JSON / XML / ReAct
         cleaned = re.sub(
@@ -1553,6 +1594,7 @@ class AgentRuntime:
                 output_tokens=output_tokens,
                 pinned_message=pinned_prompt,
             )
+            output_tokens = budget.get("output_tokens", output_tokens)
         except Exception as exc:
             task_state.terminal_status = "FAILED"
             task_state.terminal_reason = str(exc)
@@ -2758,7 +2800,7 @@ class AgentRuntime:
                         status_note = "error observed" if "Error in `" in h_content else "completed"
                         h_msg["content"] = f"[Tool `{t_lbl}`: {status_note} (compacted for context)]"
 
-            asst_text = full_response if full_response.strip() else f"Calling tool `{tool_name}` with arguments: {json.dumps(tool_args)}"
+            asst_text = full_response if full_response.strip() else f"Invoking tool `{tool_name}`."
             conversation_history.append({"role": "assistant", "content": asst_text})
             conversation_history.append({"role": "user", "content": continuation_nudge})
 
@@ -2770,6 +2812,7 @@ class AgentRuntime:
                     output_tokens=output_tokens,
                     pinned_message=pinned_prompt,
                 )
+                output_tokens = budget.get("output_tokens", output_tokens)
             except ValueError as exc:
                 task_state.terminal_status = "FAILED"
                 task_state.terminal_reason = f"Context budget exceeded: {exc}"
@@ -2899,7 +2942,21 @@ class AgentRuntime:
             )
             return
 
-        appr_entry = self.tool_gateway.game_tools.approvals.get(approval_id)
+        appr_entry = None
+        try:
+            appr_entry = self.tool_gateway.game_tools.approvals.get(approval_id)
+        except Exception:
+            pass
+
+        # If approval is persisted, strictly enforce APPROVED or DONE state
+        if appr_entry is not None and appr_entry.get("status") not in {"APPROVED", "DONE"}:
+            yield AgentEvent(
+                event_type="error",
+                content=f"Approval '{approval_id}' is in state {appr_entry.get('status')}; expected APPROVED or DONE.",
+                metadata={"status": "FAILED", "approval_id": approval_id},
+            )
+            return
+
         resolved_tool = (
             tool_name
             if tool_name

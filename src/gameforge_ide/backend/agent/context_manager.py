@@ -340,6 +340,7 @@ class ContextManager:
             "=== UNREAL ENGINE C++ SYNTAX INVARIANTS ===\n"
             "- FKey is a C++ struct, NOT an integer or enum: NEVER use `switch (Key)`. Always use `if (Key == EKeys::W)` / `else if (Key == EKeys::S)`.\n"
             "- FVector has NO `.ToFloat()` method. To set actor rotation from direction, use `Actor->SetActorRotation(Direction.Rotation());`. For length, use `Direction.Size()`.\n"
+            "- FLinearColor color constants: Use `FLinearColor::Gray` (American spelling, NOT `Grey`). For orange, use `FLinearColor(FColor::Orange)` (Orange is in `FColor`, NOT `FLinearColor`).\n"
             "- Headers with UCLASS() or USTRUCT() MUST contain `GENERATED_BODY()` and `#include \"<HeaderName>.generated.h\"` as the FINAL include.\n\n"
         )
         model_lower = (active_model or "").lower()

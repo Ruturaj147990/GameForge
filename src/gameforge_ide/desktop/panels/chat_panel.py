@@ -149,23 +149,45 @@ class _MessageBubble(QFrame):
             theme_color(bg), theme_color(border_accent), theme_color(role_color)
         )
 
+        self.setProperty("bubbleRole", role)
         radius_lg = getattr(tokens, "RADIUS_LG", 8)
-        self.setStyleSheet(theme_stylesheet(f"""
-            _MessageBubble#chat_message_bubble {{
-                background-color: {bg};
-                border-left: 3px solid {border_accent};
-                border-top: 1px solid {tokens.BORDER};
-                border-right: 1px solid {tokens.BORDER};
-                border-bottom: 1px solid {tokens.BORDER};
-                border-radius: {radius_lg}px;
-                margin: 6px 12px;
-            }}
-            _MessageBubble#chat_message_bubble:hover {{
-                border-top: 1px solid {tokens.BORDER_FOCUS};
-                border-right: 1px solid {tokens.BORDER_FOCUS};
-                border-bottom: 1px solid {tokens.BORDER_FOCUS};
-            }}
-        """))
+
+        # Polished desktop theme: Assistant messages are borderless on the canvas;
+        # User messages are soft distinct bubbles; Errors/System have subtle accent.
+        if role == "assistant":
+            bubble_css = f"""
+                _MessageBubble#chat_message_bubble {{
+                    background-color: transparent;
+                    border: none;
+                    border-left: 0px solid {border_accent};
+                    margin: 4px 14px 10px 14px;
+                }}
+            """
+        elif role == "user":
+            bubble_css = f"""
+                _MessageBubble#chat_message_bubble {{
+                    background-color: {tokens.BG_PANEL};
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {radius_lg + 2}px;
+                    margin: 6px 14px 6px 40px;
+                }}
+                _MessageBubble#chat_message_bubble:hover {{
+                    border-color: {tokens.BORDER_FOCUS};
+                }}
+            """
+        else:
+            bubble_css = f"""
+                _MessageBubble#chat_message_bubble {{
+                    background-color: {bg};
+                    border-left: 3px solid {border_accent};
+                    border-top: 1px solid {tokens.BORDER};
+                    border-right: 1px solid {tokens.BORDER};
+                    border-bottom: 1px solid {tokens.BORDER};
+                    border-radius: {radius_lg}px;
+                    margin: 6px 14px;
+                }}
+            """
+        self.setStyleSheet(theme_stylesheet(bubble_css))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 10, 14, 10)
@@ -197,13 +219,18 @@ class _MessageBubble(QFrame):
         btn_copy.setToolTip("Copy message text to clipboard")
         btn_copy.setStyleSheet(theme_stylesheet(f"""
             QPushButton#btn_copy_bubble {{
-                background: {tokens.BG_SURFACE};
-                border: 1px solid {tokens.BORDER};
+                background: transparent;
+                border: 1px solid transparent;
                 border-radius: 4px;
                 padding: 2px 8px;
-                color: {tokens.TEXT_SECONDARY};
+                color: {tokens.TEXT_MUTED};
                 font-size: 10px;
-                font-weight: 600;
+                font-weight: 500;
+            }}
+            QPushButton#btn_copy_bubble:hover {{
+                background: {tokens.BG_SURFACE};
+                border-color: {tokens.BORDER};
+                color: {tokens.TEXT_PRIMARY};
             }}
             QPushButton#btn_copy_bubble:hover {{
                 background: {tokens.BG_HOVER};
@@ -1509,10 +1536,19 @@ class ChatPanel(QWidget):
             self._active_bubble.append_token(self._token_buffer)
             self._token_buffer = ""
         else:
-            if self._is_raw_tool_json(self._active_bubble._raw_text + token):
+            candidate_full = self._active_bubble._raw_text + token
+            if self._is_raw_tool_json(candidate_full):
                 self._remove_bubble(self._active_bubble)
                 self._active_bubble = None
                 return
+            from ...backend.agent.tool_call_parser import parse_text_for_tool_calls
+            parsed_turn = parse_text_for_tool_calls(candidate_full)
+            if parsed_turn.calls:
+                # Excise tool call span from bubble while preserving preceding narrative
+                if not parsed_turn.cleaned_text.strip():
+                    self._remove_bubble(self._active_bubble)
+                    self._active_bubble = None
+                    return
             was_at_bottom = self._is_scrolled_to_bottom()
             self._active_bubble.append_token(token)
             if was_at_bottom:
@@ -1635,9 +1671,17 @@ class ChatPanel(QWidget):
             card.on_finished(result)
         self._status_bar.set_ready()
         if result.get("status") == "SUCCESS" and result.get("exe"):
-            self._add_bubble("assistant", "✅ **Your game is ready.** Every acceptance check passed in the real engine "
-                                          "(compile, automation tests, packaged play-test with screenshot). "
-                                          "Press **▶ Play game** on the card to play it.")
+            manifest = result.get("manifest") or result.get("acceptance_manifest") or {}
+            gates = manifest.get("gates") or []
+            if gates and all(g.get("status") == "PASS" for g in gates):
+                msg = (
+                    f"✅ **Your game is ready.** Every acceptance check passed in the real engine "
+                    f"({len(gates)} verified gates). Press **▶ Play game** on the card to launch."
+                )
+            else:
+                exe_name = Path(result.get("exe", "game")).name
+                msg = f"✅ **Target compiled and packaged:** `{exe_name}` is ready. Press **▶ Play game** on the card to launch."
+            self._add_bubble("assistant", msg)
         if self._session_id and hasattr(self, "_agent") and self._agent and hasattr(self._agent, "resume_after_approval"):
             try:
                 self._agent.resume_after_approval(self._session_id, approval_id, result, approved=True)
@@ -1659,15 +1703,19 @@ class ChatPanel(QWidget):
         t = text.strip()
         if not t:
             return False
+        from ...backend.agent.tool_call_parser import parse_text_for_tool_calls
+        parsed = parse_text_for_tool_calls(t)
+        if parsed.calls and not parsed.cleaned_text.strip():
+            return True
         if t.startswith("```json") and t.endswith("```"):
             t = t[7:-3].strip()
         elif t.startswith("```") and t.endswith("```"):
             t = t[3:-3].strip()
-        if t.startswith("{") and (t.endswith("}") or '"tool"' in t or '"tool_name"' in t):
-            for key in ('"tool"', '"tool_name"', '"function"', '"name"'):
+        if t.startswith("{") and (t.endswith("}") or any(k in t for k in ('"tool"', '"tool_name"', '"function"', '"name"', '"command"'))):
+            for key in ('"tool"', '"tool_name"', '"function"', '"name"', '"command"'):
                 if key in t:
                     return True
-        if t.startswith("<tool_call>") or t.startswith("[TOOL_CALL]"):
+        if t.startswith("<tool_call>") or t.startswith("[TOOL_CALL]") or t.startswith("<tool_use>"):
             return True
         if t.startswith(("cat >", "mkdir -p", "mkdir ")) or re.match(r"^(?:ls|dir)\b", t):
             return True

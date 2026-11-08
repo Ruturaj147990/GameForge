@@ -412,7 +412,7 @@ class ToolGateway:
             if autonomy_profile is not None and AutonomyProfile(autonomy_profile) == AutonomyProfile.AUTO_EDIT:
                 return True
             cmd = str(args.get("command", "")).strip()
-            shell = str(args.get("shell", "powershell"))
+            shell = str(args.get("shell", "direct")).strip().lower()
             cwd = args.get("subpath") or args.get("working_directory") or "."
             working_dir = self.workspace_root / cwd
             _, req_approval, _ = self.command_broker.classify_risk(
