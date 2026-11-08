@@ -49,6 +49,8 @@ class _AgentWorker(QObject):
         self._resume_tool_name: Optional[str] = None
         self._resume_approved: bool = True
         self._stop_flag = threading.Event()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._task: Optional[asyncio.Task] = None
         # Lazy imports to avoid loading heavy deps until first use
         self._runtime = None
         self._session_manager = None
@@ -119,9 +121,15 @@ class _AgentWorker(QObject):
             self._ensure_runtime()
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            self._loop = loop
             try:
-                loop.run_until_complete(self._stream())
+                self._task = loop.create_task(self._stream())
+                loop.run_until_complete(self._task)
+            except asyncio.CancelledError:
+                pass
             finally:
+                self._loop = None
+                self._task = None
                 try:
                     loop.run_until_complete(loop.shutdown_asyncgens())
                 except Exception:
@@ -132,6 +140,10 @@ class _AgentWorker(QObject):
 
     async def _stream(self) -> None:
         full_text = ""
+        if self._stop_flag.is_set():
+            print("[GameForge Agent] Task cancelled before stream start.", flush=True)
+            self.task_done.emit("[Cancelled by user]")
+            return
         if self._resume_diff_id is not None:
             stream_gen = self._runtime.resume_task_after_diff(
                 self._session_id, self._resume_diff_id, approved=self._resume_approved
@@ -240,11 +252,21 @@ class _AgentWorker(QObject):
         # next event arrives. cancel_task() is thread-safe.
         runtime = getattr(self, "_runtime", None)
         session_id = getattr(self, "_session_id", None)
+        if runtime is None:
+            try:
+                self._ensure_runtime()
+                runtime = getattr(self, "_runtime", None)
+            except Exception:
+                pass
         if runtime is not None and session_id and hasattr(runtime, "cancel_task"):
             try:
                 runtime.cancel_task(session_id)
             except Exception:
                 pass
+        loop = getattr(self, "_loop", None)
+        task = getattr(self, "_task", None)
+        if loop and not loop.is_closed() and task and not task.done():
+            loop.call_soon_threadsafe(task.cancel)
 
     # Public session helpers ---------------------------------------------------
 
@@ -518,7 +540,9 @@ class AgentService(QObject):
         self._worker.stop()
         if self._thread.isRunning():
             self._thread.quit()
-            self._thread.wait(3000)
+            if not self._thread.wait(3000):
+                self._thread.terminate()
+                self._thread.wait(1000)
         self._busy = False
         self._stopping = False
 

@@ -242,10 +242,11 @@ def main() -> None:
             parser.error("--serve requires GAMEFORGE_BRIDGE_TOKEN; set a shared secret before launching the Unreal bridge.")
         print("=" * 52)
         # Keep console output compatible with Windows terminals using CP1252.
+        effective_port = args.port or get_settings().bridge_port
         print("GameForge IDE - Backend Server Mode")
-        print(f"   API: http://{args.host}:{args.port}/docs")
+        print(f"   API: http://{args.host}:{effective_port}/docs")
         print("=" * 52)
-        _launch_server(args.host, args.port)
+        _launch_server(args.host, effective_port)
     else:
         # Native desktop is the default
         _launch_native_desktop(args.workspace, verbose=args.verbose, portable=args.portable)

@@ -221,10 +221,16 @@ class AgentRuntime:
         input_budget = max(0, max_context - output_tokens - safety_tokens)
         system_tokens = cls.estimate_tokens(system_prompt)
         if system_tokens > input_budget:
-            raise ValueError(
-                f"GameForge system context is estimated at {system_tokens} tokens, "
-                f"above the {input_budget}-token input budget for this model."
-            )
+            # If output_tokens can be adapted while retaining at least 256 tokens of output headroom,
+            # dynamically scale output reservation so the prompt fits the model's context window.
+            if max_context - system_tokens - safety_tokens >= 256:
+                output_tokens = max(256, max_context - system_tokens - safety_tokens - 128)
+                input_budget = max(0, max_context - output_tokens - safety_tokens)
+            else:
+                raise ValueError(
+                    f"GameForge system context is estimated at {system_tokens} tokens, "
+                    f"above the {input_budget}-token input budget for this model."
+                )
         remaining = input_budget - system_tokens
 
         # Handle pinned message (active user prompt)
@@ -1528,7 +1534,11 @@ class AgentRuntime:
         )
         provider = self.router.get_provider(session.provider_type)
         capabilities = provider.get_capabilities(session.model_name)
-        output_tokens = min(4096, max(1024, capabilities.max_context // 4))
+        max_ctx = getattr(capabilities, "max_context", 32768)
+        if max_ctx <= 4096:
+            output_tokens = min(512, max(256, max_ctx // 8))
+        else:
+            output_tokens = min(4096, max(1024, max_ctx // 4))
 
         # 2. Record user message and reload session
         try:

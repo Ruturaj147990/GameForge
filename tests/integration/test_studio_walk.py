@@ -46,9 +46,13 @@ def test_studio_usability_walk(qapp, tmp_path, monkeypatch):
     bin_dir = proj_dir / "Binaries" / "Win64"
     bin_dir.mkdir(parents=True, exist_ok=True)
     (bin_dir / "MyGame.exe").write_bytes(b"MZfake")
+    pkg_dir = proj_dir / "Packaged" / "Windows"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+    (pkg_dir / "MyGame.exe").write_bytes(b"MZfake")
+    from src.gameforge_ide.design.presets import preset_platformer
     gds_file = proj_dir / "GameForge" / "design" / "game.gds.json"
     gds_file.parent.mkdir(parents=True, exist_ok=True)
-    gds_file.write_text("{}", encoding="utf-8")
+    gds_file.write_text(preset_platformer().model_dump_json(), encoding="utf-8")
 
     monitor = StallMonitor(output_dir=tmp_path / "reports")
     monitor.start()
