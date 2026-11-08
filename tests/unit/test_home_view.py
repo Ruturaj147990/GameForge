@@ -117,6 +117,11 @@ def test_home_view_unsupported_prompt_notice(qapp, monkeypatch):
     finally:
         if view._active_job:
             view._active_job.cancel()
+            if hasattr(view._active_job, "_future"):
+                try:
+                    view._active_job._future.result(timeout=1.0)
+                except Exception:
+                    pass
         view.deleteLater()
         qapp.processEvents()
 

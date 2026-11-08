@@ -206,7 +206,53 @@ def prompt_to_gds(
                 errors=[f"Explicit preset {explicit_preset_id!r} failed: {exc}"],
             )
 
-    # 1. Strategy evaluation (uses model evaluation when callback is available)
+    # 1. Preset / Fast Template path: keyword match (only for direct preset requests without custom narrative/mechanics)
+    text = " " + prompt.lower().replace("’", "'").replace("'", "'") + " "
+    words = set(re.findall(r"\b\w+\b", text))
+    preset_words = {w for kws in PRESET_KEYWORDS.values() for kw in kws for w in kw.split()}
+    stop_words = {
+        "a", "an", "the", "in", "on", "at", "to", "for", "with", "and", "or", "of", "is", "are",
+        "you", "where", "game", "make", "create", "build", "called", "named", "titled", "against",
+        "friend", "ai", "easy", "medium", "hard", "vs", "versus", "i", "want", "please",
+    }
+    override_words = {
+        "coin", "coins", "pickups", "pickup", "collectibles", "collectible", "gems", "gem",
+        "points", "point", "stars", "star", "ring", "rings", "target", "targets", "waves",
+        "wave", "health", "hp", "seed", "size", "board", "grid", "rows", "columns",
+    }
+    m_title = re.search(r'\b(?:called|named|titled)\s+["\']?([^"\',.!?\n]+)["\']?', prompt, re.I)
+    title_words = set(re.findall(r"\b\w+\b", m_title.group(1).lower())) if m_title else set()
+
+    custom_words = {
+        w
+        for w in (words - preset_words - stop_words - override_words - title_words)
+        if not w.isdigit()
+    }
+    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS)) or len(custom_words) >= 1
+
+    best_preset: Optional[str] = None
+    best_kw: str = ""
+    if not (allow_model and complete_json is not None and has_custom_detail):
+        for preset_id, kws in PRESET_KEYWORDS.items():
+            for kw in kws:
+                if kw in text and len(kw) > len(best_kw):
+                    best_preset = preset_id
+                    best_kw = kw
+
+        if best_preset is not None and best_preset in PRESETS:
+            overrides = extract_preset_overrides(best_preset, prompt)
+            title = overrides.pop("title", None)
+            try:
+                gds = PRESETS[best_preset](title=title, **overrides)
+                return PromptToGdsResult(
+                    status="OK",
+                    gds=gds,
+                    path="preset",
+                )
+            except Exception as exc:
+                logger.warning("Preset creation failed for %s: %s", best_preset, exc)
+
+    # 2. Strategy evaluation (uses model evaluation when callback is available)
     if allow_model and complete_json is not None:
         decision = default_registry.evaluate_strategy_with_model(
             prompt, complete_json=complete_json, model=model

@@ -1,4 +1,6 @@
 #include "GameForgeRules.h"
+#include "GameForgeEvents.h"
+#include "GameForgeEventNames.h"
 #include "GameForgeGameDefinition.h"
 #include "GameForgeGameState.h"
 #include "GameForgePlayer.h"

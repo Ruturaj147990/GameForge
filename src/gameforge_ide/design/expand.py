@@ -328,9 +328,28 @@ def _extract_note_props(kind: EntityKind, note: str) -> Dict[str, Any]:
 
 def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     """Deterministically expand a DesignDraft into a validated GameDesignSpec."""
+    from ..kit.rules import get_layout_for_game_type, get_required_modules_for_game_type, GAME_TYPE_LAYOUT_MAP
     proj_name = _pascal(draft.title)
     tmpl = GENRE_TEMPLATES.get(draft.genre, GENRE_TEMPLATES[Genre.CUSTOM])
     layout = tmpl["layout"]
+
+    # Check for specific game type hints to resolve authoritative layout
+    pitch_title = f"{draft.title} {draft.pitch}".lower()
+    game_type_hint = ""
+    for gt in GAME_TYPE_LAYOUT_MAP:
+        if gt in pitch_title or gt.replace("_", " ") in pitch_title:
+            try:
+                resolved_l = get_layout_for_game_type(gt)
+                for lk in LayoutKind:
+                    if lk.value == resolved_l:
+                        layout = lk
+                        game_type_hint = gt
+                        break
+                if game_type_hint:
+                    break
+            except KeyError:
+                pass
+
     size_w, size_h = LEVEL_SIZES.get(draft.level_size, LEVEL_SIZES["small"])
 
     # 1. Level & Scene
@@ -385,6 +404,19 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     has_board = any(k == EntityKind.BOARD for k, _, _, _, _, _ in raw_entities)
     has_card = any(k == EntityKind.CARD_TABLE for k, _, _, _, _, _ in raw_entities)
     has_player = any(k == EntityKind.PLAYER for k, _, _, _, _, _ in raw_entities)
+
+    # If required game type modules imply entities not yet present, add them
+    if game_type_hint:
+        req_mods = get_required_modules_for_game_type(game_type_hint)
+        if "kit.grid_board" in req_mods and not has_board:
+            raw_entities.append((EntityKind.BOARD, 1, "board", {}, [], ""))
+            has_board = True
+        if "kit.goal" in req_mods and not has_goal:
+            raw_entities.append((EntityKind.GOAL, 1, "goal", {}, [], ""))
+            has_goal = True
+        if "kit.player_character" in req_mods and not has_player:
+            raw_entities.append((EntityKind.PLAYER, 1, "player_start", {}, [], ""))
+            has_player = True
 
     for w in draft.win:
         if w.type == "collect_all" and not has_pickup:

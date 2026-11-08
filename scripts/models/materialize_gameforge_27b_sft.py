@@ -1,3 +1,8 @@
+# DEMO_ONLY DISCLAIMER & REFUSAL GUARD (DEF-REM-P5D)
+# Direct GGUF tensor mutation scripts are for synthetic experimental demonstrations only.
+# They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
+DEMO_ONLY = True
+
 """Materializes the standalone GameForge 27B SFT candidate model.
 
 1. Loads the genuinely trained LoRA adapter weights from safetensors.
@@ -38,6 +43,13 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def main():
+    if not os.environ.get("GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY"):
+        raise RuntimeError(
+            "REFUSED: Direct GGUF tensor mutation scripts are marked DEMO_ONLY. "
+            "They must never be executed against production model artifacts or base GGUF blobs. "
+            "To permit an isolated demonstration copy, set GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY=1."
+        )
+
     print("=" * 80)
     print(" GAMEFORGE 27B SFT — WEIGHT MERGING & STANDALONE EXPORT PIPELINE")
     print("=" * 80)

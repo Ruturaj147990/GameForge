@@ -462,6 +462,28 @@ class SemanticTemplateRegistry:
                 Capability.VEHICLE_PHYSICS,
             })
 
+        if re.search(r"\b(?:roguelike|roguelite|dungeon\s+crawler)\b", text):
+            matched.append("roguelike")
+            req.update({
+                Capability.PHYSICS_CHARACTER,
+                Capability.REAL_TIME,
+                Capability.THIRD_PERSON,
+                Capability.COMBAT,
+                Capability.ENEMIES,
+            })
+
+        if re.search(r"\b(?:zombie\s+survival|zombie\s+wave|undead\s+survival)\b", text):
+            matched.append("zombie_survival")
+            req.update({
+                Capability.PHYSICS_CHARACTER,
+                Capability.REAL_TIME,
+                Capability.FIRST_PERSON,
+                Capability.COMBAT,
+                Capability.SHOOTING,
+                Capability.ENEMIES,
+                Capability.WAVE_SPAWNER,
+            })
+
         # Fallback to action adventure or custom if no strong genre matched
         if not req:
             req.update({Capability.PHYSICS_CHARACTER, Capability.REAL_TIME, Capability.THIRD_PERSON})
@@ -834,6 +856,129 @@ class SemanticTemplateRegistry:
                 ],
                 "win_condition": "score >= 50",
                 "lose_condition": "snake.self_collision == true",
+            }
+
+        if "racing" in profile.keywords_matched:
+            return {
+                "method": "scratch_generation",
+                "genre": Genre.PLATFORMER,
+                "camera": CameraKind.THIRD_PERSON,
+                "plan_kind": "scratch_racing",
+                "target_classes": [
+                    "ARaceGameMode",
+                    "AVehiclePawn",
+                    "ACheckpointTrigger",
+                    "URaceProgressionManager",
+                ],
+                "target_widgets": [
+                    "WRaceHUD",
+                    "WLapTimer",
+                    "WSpeedometer",
+                ],
+                "source_files": [
+                    "Source/MyGame/RaceGameMode.h",
+                    "Source/MyGame/RaceGameMode.cpp",
+                    "Source/MyGame/VehiclePawn.h",
+                    "Source/MyGame/VehiclePawn.cpp",
+                ],
+                "mechanics": {
+                    "lap_count": 3,
+                    "checkpoint_count": 4,
+                },
+                "win_condition": "race.finished == true",
+                "lose_condition": "timer_runs_out",
+            }
+
+        if "tower_defense" in profile.keywords_matched:
+            return {
+                "method": "scratch_generation",
+                "genre": Genre.ARENA_COMBAT,
+                "camera": CameraKind.TOP_DOWN,
+                "plan_kind": "scratch_tower_defense",
+                "target_classes": [
+                    "ATowerDefenseGameMode",
+                    "ATowerBase",
+                    "ACreepSpawner",
+                    "UTowerDefenseManager",
+                ],
+                "target_widgets": [
+                    "WTowerDefenseHUD",
+                    "WBuildMenu",
+                    "WWaveCounter",
+                ],
+                "source_files": [
+                    "Source/MyGame/TowerDefenseGameMode.h",
+                    "Source/MyGame/TowerDefenseGameMode.cpp",
+                    "Source/MyGame/TowerBase.h",
+                    "Source/MyGame/TowerBase.cpp",
+                ],
+                "mechanics": {
+                    "starting_gold": 250,
+                    "base_health": 100.0,
+                },
+                "win_condition": "waves_cleared >= 5",
+                "lose_condition": "base_health <= 0.0",
+            }
+
+        if "roguelike" in profile.keywords_matched:
+            return {
+                "method": "scratch_generation",
+                "genre": Genre.DUNGEON_CRAWLER,
+                "camera": CameraKind.THIRD_PERSON,
+                "plan_kind": "scratch_roguelike",
+                "target_classes": [
+                    "ARoguelikeGameMode",
+                    "ADungeonRoomManager",
+                    "ARoguelikeCharacter",
+                ],
+                "target_widgets": [
+                    "WRoguelikeHUD",
+                    "WInventoryWidget",
+                    "WRoomMapWidget",
+                ],
+                "source_files": [
+                    "Source/MyGame/RoguelikeGameMode.h",
+                    "Source/MyGame/RoguelikeGameMode.cpp",
+                    "Source/MyGame/DungeonRoomManager.h",
+                    "Source/MyGame/DungeonRoomManager.cpp",
+                ],
+                "mechanics": {
+                    "room_count": 6,
+                    "has_boss": True,
+                },
+                "win_condition": "boss_defeated == true",
+                "lose_condition": "player_health <= 0.0",
+            }
+
+        if "zombie_survival" in profile.keywords_matched or "zombie" in profile.keywords_matched:
+            return {
+                "method": "scratch_generation",
+                "genre": Genre.ARENA_COMBAT,
+                "camera": CameraKind.FIRST_PERSON,
+                "plan_kind": "scratch_zombie_survival",
+                "target_classes": [
+                    "AZombieSurvivalGameMode",
+                    "AZombieSpawner",
+                    "AZombieCharacter",
+                    "AWaveManager",
+                ],
+                "target_widgets": [
+                    "WZombieSurvivalHUD",
+                    "WWaveAnnouncer",
+                    "WAmmoCounter",
+                ],
+                "source_files": [
+                    "Source/MyGame/ZombieSurvivalGameMode.h",
+                    "Source/MyGame/ZombieSurvivalGameMode.cpp",
+                    "Source/MyGame/ZombieCharacter.h",
+                    "Source/MyGame/ZombieCharacter.cpp",
+                ],
+                "mechanics": {
+                    "starting_ammo": 30,
+                    "reserve_ammo": 90,
+                },
+                "win_condition": "waves_cleared >= 5",
+                "lose_condition": "player_health <= 0.0",
             }
 
         if profile.detected_genre == Genre.PUZZLE:

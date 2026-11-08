@@ -152,13 +152,13 @@ DOC_ANALYSIS_PAT = re.compile(
 GENRE_PATTERNS: List[Tuple[Genre, re.Pattern]] = [
     (Genre.GRID_BOARD, re.compile(r"\b(?:grid\s+board|board\s+game|tic[- ]tac[- ]toe|tictactoe|connect\s+(?:four|4)|four\s+in\s+a\s+row|gomoku|five\s+in\s+a\s+row|snakes?\s+and\s+ladders?|chutes\s+and\s+ladders?|ludo|chess|checkers|parcheesi|monopoly|dice\s+board|roll\s+and\s+move)\b", re.I)),
     (Genre.CARD_BATTLER, re.compile(r"\b(?:card\s+battler|card\s+game|deck\s*builder|deck\s*building|card\s+battle|deck\s+battler|lane\s+battler|collectible\s+card|tcg|ccg|hearthstone|slay\s+the\s+spire|balatro)\b", re.I)),
-    (Genre.TOP_DOWN_SHOOTER, re.compile(r"\b(?:top[- ]down\s+shooter|topdown\s+shooter|twin[- ]stick\s+shooter|arena\s+shooter|shmup|shoot\s*'?em\s*up|bullet\s+hell|danmaku)\b", re.I)),
-    (Genre.ARENA_COMBAT, re.compile(r"\b(?:arena\s+combat|combat\s+arena|gladiator\s+arena|wave\s+combat|action\s+arena|brawler|beat\s*'?em\s*up|hack\s+and\s+slash)\b", re.I)),
-    (Genre.PLATFORMER, re.compile(r"\b(?:platformer|3d\s+platformer|2d\s+platformer|jump\s+and\s+run|jumping\s+game|platform\s+game|parkour|speedrun\s+platformer|endless\s+runner|runner\s+game)\b", re.I)),
+    (Genre.TOP_DOWN_SHOOTER, re.compile(r"\b(?:top[- ]down\s+shooter|topdown\s+shooter|twin[- ]stick\s+shooter|arena\s+shooter|shmup|shoot\s*'?em\s*up|bullet\s+hell|danmaku|tower\s+defense|defend\s+the\s+base)\b", re.I)),
+    (Genre.ARENA_COMBAT, re.compile(r"\b(?:arena\s+combat|combat\s+arena|gladiator\s+arena|wave\s+combat|action\s+arena|brawler|beat\s*'?em\s*up|hack\s+and\s+slash|zombie\s+survival)\b", re.I)),
+    (Genre.PLATFORMER, re.compile(r"\b(?:platformer|3d\s+platformer|2d\s+platformer|jump\s+and\s+run|jumping\s+game|platform\s+game|parkour|speedrun\s+platformer|endless\s+runner|runner\s+game|racing|racer|race\s+track)\b", re.I)),
     (Genre.DUNGEON_CRAWLER, re.compile(r"\b(?:dungeon\s+crawler|dungeon\s+crawl|roguelike|roguelite|arpg|action\s+rpg|diablo|binding\s+of\s+isaac|enter\s+the\s+gungeon)\b", re.I)),
     (Genre.EXPLORATION, re.compile(r"\b(?:exploration|open\s+world|procedural\s+world|procedural\s+landscape|terrain\s+generation|hiking\s+trail|survival\s+craft|walking\s+simulator|sandbox)\b", re.I)),
     (Genre.ACTION_ADVENTURE, re.compile(r"\b(?:action\s+adventure|relic\s+hunt|adventure\s+game|quest|souls[- ]like|soulslike|metroidvania|stealth\s+adventure|third[- ]person\s+shooter)\b", re.I)),
-    (Genre.PUZZLE, re.compile(r"\b(?:puzzle\s+game|logic\s+puzzle|escape\s+room|physics\s+puzzle|match\s+3|sokoban|block\s+puzzle)\b", re.I)),
+    (Genre.PUZZLE, re.compile(r"\b(?:puzzle\s+game|logic\s+puzzle|escape\s+room|physics\s+puzzle|match\s+3|sokoban|block\s+puzzle|sudoku|tetris|snake)\b", re.I)),
 ]
 
 # Common gameplay mechanics keywords
@@ -262,7 +262,8 @@ def is_game_creation_request(prompt: str) -> bool:
     if clean_text in (
         "monopoly", "chess", "checkers", "gomoku", "ludo", "parcheesi",
         "snakes and ladders", "snake and ladders", "chutes and ladders",
-        "connect four", "tic tac toe",
+        "connect four", "tic tac toe", "sudoku", "tetris", "snake",
+        "racing", "tower defense", "zombie survival", "roguelike",
     ):
         return True
 

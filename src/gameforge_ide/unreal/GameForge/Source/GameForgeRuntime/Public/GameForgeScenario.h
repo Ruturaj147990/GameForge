@@ -5,6 +5,7 @@
 #include "Tickable.h"
 #include "GameForgeAutopilot.h"
 #include "GameForgeEvents.h"
+#include "Dom/JsonObject.h"
 #include "GameForgeScenario.generated.h"
 
 USTRUCT()

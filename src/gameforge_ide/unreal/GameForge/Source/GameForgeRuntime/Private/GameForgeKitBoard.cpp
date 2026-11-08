@@ -3,6 +3,7 @@
 #include "GameForgeEventNames.h"
 #include "GameForgeGameState.h"
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
 
 // ── Grid Cell Component ───────────────────────────────────────────────────────

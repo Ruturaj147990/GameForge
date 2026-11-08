@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+import hashlib
+import hmac
+import secrets
+
 import json
 import logging
 import time
@@ -76,6 +81,15 @@ class Session(BaseModel):
     project_dir: Optional[str] = None
 
 
+
+@dataclass
+class SessionTokenRecord:
+    token_hash: str
+    session_id: str
+    created_at: float
+    expires_at: float
+    revoked: bool = False
+
 class SessionManager:
     """Handles persistence of GameForge sessions to disk (.gameforge/sessions)."""
 
@@ -83,6 +97,40 @@ class SessionManager:
         self.workspace_path = Path(workspace_path).resolve()
         self.storage_dir = self.workspace_path / ".gameforge" / "sessions"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self._tokens: Dict[str, SessionTokenRecord] = {}
+
+
+    def issue_session_token(self, session_id: str, lifetime_seconds: float = 86400.0) -> str:
+        """Issue a cryptographically secure, high-entropy session bearer token (DEF-REM-P3A)."""
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        now = time.time()
+        self._tokens[session_id] = SessionTokenRecord(
+            token_hash=token_hash,
+            session_id=session_id,
+            created_at=now,
+            expires_at=now + lifetime_seconds,
+            revoked=False,
+        )
+        return raw_token
+
+    def validate_session_token(self, session_id: str, raw_token: str) -> bool:
+        """Validate bearer token for session_id with expiry, revocation, and constant-time check."""
+        if not session_id or not raw_token:
+            return False
+        rec = self._tokens.get(session_id)
+        if not rec or rec.revoked:
+            return False
+        if time.time() > rec.expires_at:
+            return False
+        expected_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(expected_hash, rec.token_hash)
+
+    def revoke_session_token(self, session_id: str) -> None:
+        """Revoke active token for session_id."""
+        rec = self._tokens.get(session_id)
+        if rec:
+            rec.revoked = True
 
     def create_session(
         self,
@@ -308,6 +356,7 @@ class SessionManager:
 
     def delete_session(self, session_id: str) -> bool:
         """Delete session checkpoint and backup sidecar from disk."""
+        self.revoke_session_token(session_id)
         path = self.storage_dir / f"{session_id}.json"
         backup_path = path.with_suffix(path.suffix + ".bak")
         removed = False

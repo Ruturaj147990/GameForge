@@ -640,16 +640,36 @@ GAME_TYPE_LAYOUT_MAP: Dict[str, str] = {
     "dungeon_crawler": "rooms",
     "platformer": "course",
     "exploration": "open_world",
+    "racing": "course",
+    "tower_defense": "lanes",
+    "roguelike": "rooms",
+    "zombie_survival": "arena",
+    "action_adventure": "open_world",
+    "top_down_shooter": "arena",
+    "puzzle": "board",
 }
 
 GAME_TYPE_REQUIRED_MODULES: Dict[str, List[str]] = {
     "tic_tac_toe": ["kit.grid_board"],
+    "sudoku": ["kit.grid_board"],
+    "chess": ["kit.grid_board"],
+    "tetris": ["kit.grid_board"],
+    "snake": ["kit.grid_board"],
+    "snakes_and_ladders": ["kit.grid_board"],
+    "ludo": ["kit.grid_board"],
+    "puzzle": ["kit.grid_board"],
     "platformer": ["kit.player_character", "kit.pickup", "kit.goal"],
+    "racing": ["kit.player_character", "kit.goal"],
     "arena_combat": ["kit.player_character", "kit.enemy_melee", "kit.spawner"],
+    "zombie_survival": ["kit.player_character", "kit.enemy_melee", "kit.spawner"],
     "card_battler": ["kit.card_match"],
     "tactical_fps": ["kit.player_character", "kit.guard"],
     "dungeon_crawler": ["kit.player_character", "kit.enemy_melee", "kit.door"],
+    "roguelike": ["kit.player_character", "kit.enemy_melee", "kit.door"],
     "exploration": ["kit.player_character", "kit.landmark", "kit.pickup"],
+    "action_adventure": ["kit.player_character", "kit.landmark", "kit.pickup"],
+    "top_down_shooter": ["kit.player_character", "kit.enemy_melee", "kit.spawner"],
+    "tower_defense": ["kit.spawner", "kit.goal"],
 }
 
 

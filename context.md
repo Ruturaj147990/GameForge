@@ -30,6 +30,38 @@ makes games, not a game. Product definition, design contract and security rules:
 - No installs, downloads, paid calls or data egress without the user's explicit approval.
 - Shutdown: when the user says to shut down the PC, run `shutdown /s /t 0` immediately.
 
+## 3. CURRENT STATE (2026-11-08, Phase 2 Remediation & Unreal Runtime Activation) [VERIFIED]
+
+- **Phase 2 Closeout & Unreal Engine 5.7.4 Runtime Activation [VERIFIED]:**
+  - **UE 5.7.4 C++ Plugin Build (P0):** Discovered host engine at `E:\UE\UE_5.7` with MSVC 14.44.35228. Executed RunUAT (`BuildPlugin -Plugin=GameForge.uplugin -Package=E:\GameForge\builds\GameForgePlugin -TargetPlatforms=Win64`). Successfully built, linked, and verified all three plugin targets:
+    1. `UnrealEditor Win64 Development` (`UnrealEditor-GameForgeRuntime.dll`, `UnrealEditor-GameForgeEditor.dll`) -> **ExitCode=0**.
+    2. `UnrealGame Win64 Development` -> **ExitCode=0**.
+    3. `UnrealGame Win64 Shipping` -> **ExitCode=0**.
+    Synchronized newly compiled binaries to `src/gameforge_ide/unreal/GameForge/Binaries/Win64` and `E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge\`. Regenerated authoritative `plugin_manifest.json` (85 files).
+  - **Native Unreal Automation Tests (P0):** Executed `UnrealEditor-Cmd.exe` on `E:\GameForge\validation\P3_kittest_20261031\GFKitTest.uproject` with `-ExecCmds="Automation RunTests GameForge;Quit" -NullRHI -NoSound -stdout`. All 3 native C++ automation tests passed:
+    - `GameForge.Kit.Rules.CountAtLeast` -> **Success**
+    - `GameForge.Kit.Rules.NestingAndDepth` -> **Success**
+    - `GameForge.Kit.Rules.StatOperators` -> **Success**
+    - Exit code: 0.
+  - **Backend Security & Process Isolation (Agent 4):**
+    - `core/process_manager.py`: Added `sanitize_environment()` scrubbing `GAMEFORGE_API_*`, `GAMEFORGE_BRIDGE_*`, `GAMEFORGE_TOKEN`, `GAMEFORGE_SECRET`, and `GAMEFORGE_AUTH` before passing `env` to child processes.
+    - `core/projects.py`: Replaced silent background thread bailout (`return {}`) with thread-safe pure OS filesystem string scanning.
+  - **Dynamic Auth & Lifespan State (Agent 3):**
+    - `backend/session_manager.py`: Implemented `SessionTokenRecord` and `issue_session_token()`, `validate_session_token()`, `revoke_session_token()` using `secrets.token_urlsafe(32)`, SHA-256 digests, and HMAC timing-safe validation. Auto-revokes on `delete_session()`.
+    - `backend/app.py`: Moved singletons into `lifespan(app)` context attached to `app.state`; updated `require_session_auth` and WebSocket auth; updated `create_session` returning `bearer_token`. Verified via `test_dynamic_auth_and_process_security.py` (3/3 PASS).
+  - **World Config, Fall/Respawn, Landscape & Training Safety (Agent 5):**
+    - `unreal/toolchain.py`: Added `ServerDefaultMap={effective_map}` to `DefaultEngine.ini` scaffolding.
+    - `composer/layouts/course.py`: Added `hazard_safety_floor` (`AGameForgeHazard` with `bInstantKill=True`, `shape_extent=10000.0` at $z=-430$) catching falling players to trigger checkpoint respawn.
+    - `composer/layouts/open_world.py`: Added `landscape_create` OpCall emitting schema-conforming parameters (`quads_per_section=63`, `component_count_x/y`, `elevation_scale=2000.0`, `terrain_type="Valley"`) for native `UGameForgeLandscapeLibrary`.
+    - `scripts/models/materialize_gameforge_27b_sft.py` & `weights.py`: Marked `DEMO_ONLY = True` with explicit runtime refusal guards checking `GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY`.
+  - **Tier B Gameplay Engine Integration (Agent 2):**
+    - Connected pure logic engines in `kit/rules.py` (Sudoku, Chess, Racing, Tetris, Snake, Tower Defense, Roguelike, Zombie Survival) into GameForge generation pipelines.
+    - Expanded `GAME_TYPE_LAYOUT_MAP` and `GAME_TYPE_REQUIRED_MODULES` in `kit/rules.py`.
+    - Updated `design/intent.py` classifying Tier B prompts and genres without hijacking.
+    - Updated `design/template_registry.py` with dedicated scratch architectures.
+    - Updated `design/expand.py` and `composer/compose.py` resolving authoritative layouts and required modules, with `check_composition_features(gds)` validation. Verified via `test_tier_b_gameplay_integration.py` (4/4 PASS).
+  - **Protected Grading Oracles:** 45/45 passed (100% PASS in 0.05s, 0 SHA-256 hash drift).
+
 ## 3. CURRENT STATE (2026-11-08, 5-Agent Master Implementation Directive) [VERIFIED]
 
 - **Child Agent 2 (Unreal Engine 5.7.4 Runtime, Layouts, Toolchain & C++ Specialist) Pass [VERIFIED]:**

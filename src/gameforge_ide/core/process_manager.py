@@ -33,6 +33,43 @@ CREATE_NO_WINDOW = 0x08000000
 STARTF_USESHOWWINDOW = 0x00000001
 SW_HIDE = 0
 
+# Sensitive environment prefixes and keys that must never leak to child processes
+SENSITIVE_ENV_PREFIXES = ("GAMEFORGE_API_", "GAMEFORGE_BRIDGE_", "GAMEFORGE_TOKEN", "GAMEFORGE_SECRET", "GAMEFORGE_AUTH")
+SENSITIVE_ENV_KEYS = frozenset({
+    "GAMEFORGE_API_TOKEN",
+    "GAMEFORGE_BRIDGE_TOKEN",
+    "GAMEFORGE_SESSION_TOKEN",
+    "GAMEFORGE_SECRET_KEY",
+})
+
+def sanitize_environment(
+    base_env: Optional[Dict[str, str]] = None,
+    extra_env: Optional[Dict[str, str]] = None,
+    allowlist_keys: Optional[Set[str]] = None,
+) -> Dict[str, str]:
+    """Sanitize environment variables for child process execution (DEF-REM-P4A).
+    
+    Removes administrative API tokens, secrets, and sensitive GAMEFORGE_* variables.
+    """
+    raw = dict(base_env if base_env is not None else os.environ)
+    clean: Dict[str, str] = {}
+    for k, v in raw.items():
+        k_upper = k.upper()
+        if allowlist_keys and k in allowlist_keys:
+            clean[k] = v
+            continue
+        if k_upper in SENSITIVE_ENV_KEYS or any(k_upper.startswith(prefix) for prefix in SENSITIVE_ENV_PREFIXES):
+            continue
+        clean[k] = v
+    if extra_env:
+        for k, v in extra_env.items():
+            k_upper = k.upper()
+            if not allowlist_keys or k not in allowlist_keys:
+                if k_upper in SENSITIVE_ENV_KEYS or any(k_upper.startswith(prefix) for prefix in SENSITIVE_ENV_PREFIXES):
+                    continue
+            clean[k] = v
+    return clean
+
 # Transient Windows error codes indicating sharing/locking violations
 SHARING_VIOLATION_ERRNOS = {13}  # PermissionError (EACCES)
 SHARING_VIOLATION_WINERRORS = {
@@ -98,11 +135,8 @@ class ProcessLifecycleManager:
 
         cwd_str = str(cwd) if cwd is not None else None
 
-        # Merge environment variables if provided
-        proc_env = None
-        if env is not None:
-            proc_env = os.environ.copy()
-            proc_env.update(env)
+        # Sanitize child environment to prevent administrative token leakage (DEF-REM-P4A)
+        proc_env = sanitize_environment(extra_env=env)
 
         proc = subprocess.Popen(
             args,

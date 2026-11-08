@@ -10,6 +10,7 @@
 #include "TimerManager.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
+#include "Sound/SoundBase.h"
 
 // ── HUD Widget ────────────────────────────────────────────────────────────────
 

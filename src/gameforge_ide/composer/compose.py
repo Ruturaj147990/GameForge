@@ -42,6 +42,10 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     if problems:
         raise CompositionError(problems, suggestions)
 
+    # 1b. Feature validation from acceptance requirements (kit/rules.py)
+    from ..kit.rules import check_composition_features
+    check_composition_features(gds)
+
     # 2. Plugins & module dependencies
     required_plugins: Set[str] = {"GameForge", "EnhancedInput", "GameplayAbilities", "Niagara"}
     required_deps: Set[str] = {"EnhancedInput", "GameForgeRuntime", "GameplayAbilities", "GameplayTags"}
@@ -86,6 +90,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     # Fallback default level if none specified
     if not levels:
         from ..design.gds import LevelSpec, Vec2
+        from ..kit.rules import get_layout_for_game_type, GAME_TYPE_LAYOUT_MAP
         genre_val = gds.overview.genre.value if hasattr(gds.overview.genre, "value") else str(gds.overview.genre)
         cam_val = getattr(gds.overview.camera, "value", str(gds.overview.camera)) if hasattr(gds.overview, "camera") else ""
         meta_title = getattr(gds.meta, "title", "") if hasattr(gds, "meta") else ""
@@ -94,22 +99,32 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         overview_pitch = getattr(gds.overview, "pitch", "") if hasattr(gds, "overview") else ""
         title_pitch = f"{meta_title} {meta_proj} {meta_prompt} {overview_pitch}".lower()
 
-        if "counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or (cam_val == "first_person" and "shoot" in title_pitch):
-            layout_name = "tactical_fps"
-        elif genre_val in ("grid_board", "board"):
-            layout_name = "board"
-        elif genre_val in ("card_battler", "card"):
-            layout_name = "lanes"
-        elif genre_val == "puzzle":
-            layout_name = "board"
-        elif genre_val == "dungeon_crawler":
-            layout_name = "rooms"
-        elif genre_val in ("exploration", "action_adventure"):
-            layout_name = "open_world"
-        elif genre_val == "platformer":
-            layout_name = "course"
-        else:
-            layout_name = "arena"
+        layout_name = None
+        for gt in GAME_TYPE_LAYOUT_MAP:
+            if gt in title_pitch or gt.replace("_", " ") in title_pitch:
+                try:
+                    layout_name = get_layout_for_game_type(gt)
+                    break
+                except KeyError:
+                    pass
+
+        if not layout_name:
+            if "counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or (cam_val == "first_person" and "shoot" in title_pitch):
+                layout_name = "tactical_fps"
+            elif genre_val in ("grid_board", "board"):
+                layout_name = "board"
+            elif genre_val in ("card_battler", "card"):
+                layout_name = "lanes"
+            elif genre_val == "puzzle":
+                layout_name = "board"
+            elif genre_val == "dungeon_crawler":
+                layout_name = "rooms"
+            elif genre_val in ("exploration", "action_adventure"):
+                layout_name = "open_world"
+            elif genre_val == "platformer":
+                layout_name = "course"
+            else:
+                layout_name = "arena"
         levels = [LevelSpec(level_id="level_1", layout=layout_name, size_m=Vec2(x=60.0, y=60.0), seed=2026)]
 
     for level in levels:

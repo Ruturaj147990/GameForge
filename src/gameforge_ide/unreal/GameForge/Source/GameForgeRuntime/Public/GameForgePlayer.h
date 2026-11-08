@@ -8,6 +8,7 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
 #include "GameForgeAttributes.h"
+#include "GameForgeEvents.h"
 #include "GameForgePlayer.generated.h"
 
 class UCameraComponent;

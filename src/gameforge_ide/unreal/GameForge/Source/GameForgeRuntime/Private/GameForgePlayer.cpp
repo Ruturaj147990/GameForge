@@ -20,6 +20,7 @@
 #include "InputModifiers.h"
 #include "Kismet/GameplayStatics.h"
 #include "CollisionQueryParams.h"
+#include "Components/SkeletalMeshComponent.h"
 
 // ── Character ─────────────────────────────────────────────────────────────────
 

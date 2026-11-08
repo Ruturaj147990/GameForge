@@ -302,23 +302,11 @@ def list_all_project_dirs(
 
     Returns an ordered mapping of project_name -> project_dir: Path.
 
-    THREADING SAFETY (DEF-134): Python 3.14 + PySide6 C-runtime ABI collision.
-    Any path-related OS call (os.path.realpath, os.listdir, etc.) from a
-    background thread while the main thread runs QApplication.allWidgets() causes
-    a fatal access violation. This function MUST only be called from the main
-    thread when PySide6 is active. If called from a background thread while a
-    QApplication is running, it immediately returns an empty dict.
+    THREADING SAFETY (DEF-134, DEF-REM-P4B): Decoupled pure filesystem discovery.
+    Filesystem scanning operates strictly via string-based os/os.path APIs without
+    interacting with QApplication or GUI widgets, enabling safe execution across
+    both main and worker threads.
     """
-    import threading
-    if threading.current_thread() is not threading.main_thread():
-        # Check if a QApplication is active (which triggers the ABI crash)
-        try:
-            from PySide6.QtWidgets import QApplication
-            if QApplication.instance() is not None:
-                # Cannot safely do filesystem I/O from background thread with active QApp
-                return {}
-        except ImportError:
-            pass  # No PySide6, safe to proceed
     projects: Dict[str, Path] = {}
     s = get_settings()
 

@@ -12,6 +12,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "GameForgeEvents.h"
+#include "Dom/JsonObject.h"
 #include "GameForgeKitUI.generated.h"
 
 class AGameForgeGameState;

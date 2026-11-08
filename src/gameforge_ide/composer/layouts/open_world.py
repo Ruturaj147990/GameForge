@@ -30,6 +30,24 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     geometry_ops: List[OpCall] = []
 
+    # Procedural Unreal Landscape with heightfield, biome materials, and terrain geometry (DEF-REM-P5C)
+    geometry_ops.append(
+        OpCall(
+            op="landscape_create",
+            args={
+                "component_count_x": max(1, min(64, int(half_x_cm * 2.0 / 6300.0))),
+                "component_count_y": max(1, min(64, int(half_y_cm * 2.0 / 6300.0))),
+                "quads_per_section": 63,
+                "sections_per_component": 1,
+                "elevation_scale": 2000.0,
+                "seed": seed,
+                "terrain_type": "Valley",
+                "material_path": "/Engine/BasicShapes/BasicShapeMaterial",
+            },
+            purpose="Generate genuine Unreal ALandscape with multi-octave heightfield and biome materials",
+        )
+    )
+
     # Floor / ground plane: 100cm cube scaled to match open world area
     floor_scale_x = (half_x_cm * 2.0) / 100.0
     floor_scale_y = (half_y_cm * 2.0) / 100.0

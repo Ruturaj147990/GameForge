@@ -11,6 +11,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "GameForgeAttributes.h"
+#include "GameForgeEvents.h"
 #include "GameForgeKitActors.generated.h"
 
 // ── Interface ─────────────────────────────────────────────────────────────────

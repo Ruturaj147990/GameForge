@@ -465,7 +465,7 @@ class UnrealToolchain:
         }
         effective_map = default_map or "/Game/Maps/Level_1"
         engine_ini = ["[/Script/EngineSettings.GameMapsSettings]"]
-        engine_ini += [f"GameDefaultMap={effective_map}", f"EditorStartupMap={effective_map}"]
+        engine_ini += [f"GameDefaultMap={effective_map}", f"EditorStartupMap={effective_map}", f"ServerDefaultMap={effective_map}"]
         if game_mode:
             engine_ini.append(f"GlobalDefaultGameMode={game_mode}")
         engine_ini += ["", "[/Script/Engine.RendererSettings]",
