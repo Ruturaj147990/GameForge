@@ -288,3 +288,35 @@ def test_manifest_full_file_replacement_for_recovered_prose(workspace: Path):
     )
     assert result.status == "applied"
     assert "int value = 7;" in target.read_text(encoding="utf-8")
+
+
+def test_manifest_sanitizes_switch_fkey_and_tofloat(workspace: Path):
+    """Manifest sanitizes switch(Key) and .ToFloat() before writing files."""
+    gateway = ToolGateway(workspace)
+    manifest = MultiFileChangeManifest(goal="Sanitize C++ syntax")
+    bad_code = (
+        "void AMyClass::OnKey(FKey Key)\n"
+        "{\n"
+        "\tswitch (Key)\n"
+        "\t{\n"
+        "\tcase EKeys::W:\n"
+        "\t\tMove();\n"
+        "\t\tbreak;\n"
+        "\t}\n"
+        "\tFQuat Rot = FQuat(FVector(0,0,1), Dir.ToFloat());\n"
+        "}\n"
+    )
+    manifest.add_operation(
+        FileChangeOperation.create(
+            "Source/MyGame/BadSyntax.cpp",
+            replacement_content=bad_code,
+            operation_kind="create",
+        )
+    )
+    notes = manifest.validate_and_sanitize_cpp_invariants()
+    assert len(notes) >= 2
+    sanitized = manifest.operations[0].replacement_content
+    assert "switch (Key)" not in sanitized
+    assert "if (Key == EKeys::W)" in sanitized
+    assert ".ToFloat()" not in sanitized
+    assert "Dir.Rotation().Quaternion()" in sanitized

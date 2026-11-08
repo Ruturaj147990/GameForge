@@ -57,6 +57,12 @@
           "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/collision-in-unreal-engine",
           "components": ["UPrimitiveComponent", "USphereComponent", "FHitResult", "LineTraceSingleByChannel"],
           "notes": "Delegate OnComponentHit and OnComponentBeginOverlap require exact signature matches"
+        },
+        "math_and_input_invariants": {
+          "status": "VERIFIED",
+          "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine",
+          "components": ["FKey", "EKeys", "FVector", "FRotator", "FQuat"],
+          "notes": "FKey is a C++ struct (never switch(Key), use if/else with EKeys). FVector has no ToFloat() method; use Direction.Rotation() or Direction.GetSafeNormal()."
         }
       }
     },

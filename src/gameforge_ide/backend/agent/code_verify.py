@@ -356,11 +356,21 @@ def propose_assistant_fix(
                 f"\nAvoid repeating previous failed attempts ({len(previous_diffs)} prior diffs recorded). "
                 "Provide an alternative resolution.\n"
             )
+        engine_hints = []
+        diag_text = json.dumps(top_diags)
+        if any(k in diag_text for k in ("C2450", "C2046", "C4060")) or "switch" in diag_text.lower():
+            engine_hints.append("- In Unreal C++, FKey is a struct (not an integer/enum). Never use switch (Key); replace with if (Key == EKeys::X) ... else if (Key == EKeys::Y)...")
+        if "ToFloat" in diag_text or "C2039" in diag_text:
+            engine_hints.append("- FVector has no .ToFloat() member. To rotate towards a direction, use Direction.Rotation() or Direction.Rotation().Quaternion(). For length, use .Size().")
+        if "C2065" in diag_text:
+            engine_hints.append("- Undeclared identifier: ensure all member variables and helpers are declared in the class definition in the header file.")
+        hints_block = ("\n\nEngine Invariants & Fix Hints:\n" + "\n".join(engine_hints)) if engine_hints else ""
+
         prompt = (
             f"You are GameForge's C++ codegen repair agent.\n"
             f"Build diagnostics:\n{json.dumps(top_diags, indent=2)}\n\n"
             f"Relevant file: {file_rel} around line {line_no}:\n{file_excerpt}\n\n"
-            f"Related symbols in index:\n{json.dumps(sym_context, indent=2)}\n{repetition_warning}\n"
+            f"Related symbols in index:\n{json.dumps(sym_context, indent=2)}\n{repetition_warning}{hints_block}\n"
             f"Provide unified diff fixing the compiler error."
         )
         try:

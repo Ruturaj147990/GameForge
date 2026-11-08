@@ -336,16 +336,23 @@ class ContextManager:
     @staticmethod
     def _build_model_specific_instructions(active_model: Optional[str]) -> str:
         """Provides model-specific prompt guidance ensuring Qwen 9B/4B invoke structured editing tools."""
+        ue_rules = (
+            "=== UNREAL ENGINE C++ SYNTAX INVARIANTS ===\n"
+            "- FKey is a C++ struct, NOT an integer or enum: NEVER use `switch (Key)`. Always use `if (Key == EKeys::W)` / `else if (Key == EKeys::S)`.\n"
+            "- FVector has NO `.ToFloat()` method. To set actor rotation from direction, use `Actor->SetActorRotation(Direction.Rotation());`. For length, use `Direction.Size()`.\n"
+            "- Headers with UCLASS() or USTRUCT() MUST contain `GENERATED_BODY()` and `#include \"<HeaderName>.generated.h\"` as the FINAL include.\n\n"
+        )
         model_lower = (active_model or "").lower()
         if "qwen" in model_lower or "9b" in model_lower or "4b" in model_lower:
             return (
-                "=== MODEL-SPECIFIC INSTRUCTION (Qwen 9B/4B Native Tool Calling) ===\n"
+                ue_rules
+                + "=== MODEL-SPECIFIC INSTRUCTION (Qwen 9B/4B Native Tool Calling) ===\n"
                 "- You MUST call editing tools (`propose_edit`, `write_file`) via structured JSON tool invocations.\n"
                 "- NEVER output large markdown code blocks (e.g. ```cpp ... ```) or conversational narrative as a substitute for tool calls.\n"
                 "- Every implementation, bugfix, or refactoring action MUST be dispatched through tool calls.\n"
                 "- If you emit code in prose without calling a tool, your response will be rejected by the validation harness.\n\n"
             )
-        return ""
+        return ue_rules
 
     def get_context_usage(
         self,

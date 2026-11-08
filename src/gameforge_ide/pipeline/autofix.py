@@ -95,6 +95,22 @@ def autofix(files: Dict[str, str]) -> Tuple[Dict[str, str], List[str]]:
         cpp = re.sub(r'AddActorWorldRotation\s*\(\s*FVector\(', 'AddActorWorldRotation(FRotator(', cpp)
         notes.append("replaced invalid FVector with FRotator in AddActorWorldRotation")
 
+    # 7. Convert switch on FKey (e.g. switch (Key)) to if/else if chain
+    if cpp and (re.search(r'\bswitch\s*\(\s*Key\s*\)', cpp) or 'case EKeys::' in cpp):
+        cpp, switch_fixed = _convert_key_switch_to_if(cpp)
+        if switch_fixed:
+            notes.append("converted invalid switch statement on FKey to if/else chains")
+
+    # 8. Fix FVector .ToFloat() and FQuat rotation hallucinations
+    if cpp and ".ToFloat()" in cpp:
+        cpp = re.sub(
+            r'FQuat\s*\(\s*(?:FVector(?:\([^)]*\)|::\w+))\s*,\s*(\w+)\.ToFloat\(\)\s*\)',
+            r'\1.Rotation().Quaternion()',
+            cpp,
+        )
+        cpp = re.sub(r'(\b\w+)\.ToFloat\(\)', r'\1.Size()', cpp)
+        notes.append("fixed invalid FVector::ToFloat() and FQuat construction")
+
     out = dict(files)
     if h:
         out["GFGameImpl.h"] = h
@@ -103,15 +119,117 @@ def autofix(files: Dict[str, str]) -> Tuple[Dict[str, str], List[str]]:
     return out, notes
 
 
+def _convert_key_switch_to_if(cpp_text: str) -> Tuple[str, bool]:
+    """Converts invalid C++ switch statements on FKey (e.g. switch (Key)) to if/else chains."""
+    switch_iter = list(re.finditer(r"\bswitch\s*\(\s*(\w+)\s*\)\s*\{", cpp_text))
+    if not switch_iter:
+        return cpp_text, False
+
+    offset = 0
+    modified = False
+    result_text = cpp_text
+
+    for m in switch_iter:
+        start_idx = m.start() + offset
+        var_name = m.group(1)
+
+        open_brace = m.end() - 1 + offset
+        depth = 1
+        pos = open_brace + 1
+        n = len(result_text)
+        while pos < n and depth > 0:
+            ch = result_text[pos]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            pos += 1
+
+        if depth != 0:
+            continue
+
+        close_brace = pos - 1
+        body = result_text[open_brace + 1 : close_brace]
+
+        if var_name.lower() != "key" and "EKeys::" not in body:
+            continue
+
+        label_pat = re.compile(r"(?:case\s+(.*?)(?<!:):(?!:)|default\s*(?<!:):(?!:))", re.DOTALL)
+        splits = list(label_pat.finditer(body))
+        if not splits:
+            continue
+
+        branches = []
+        pending_conditions = []
+        for i, split in enumerate(splits):
+            is_default = "default" in split.group(0)
+            val = split.group(1).strip() if not is_default and split.group(1) else None
+
+            start_pos = split.end()
+            end_pos = splits[i + 1].start() if i + 1 < len(splits) else len(body)
+            branch_content = body[start_pos:end_pos]
+
+            if val:
+                pending_conditions.append(f"{var_name} == {val}")
+
+            substantive = re.sub(r"//[^\n]*", "", branch_content).strip()
+            if substantive or is_default or (i + 1 == len(splits)):
+                lines = branch_content.strip().splitlines()
+                clean_lines = []
+                for l in lines:
+                    if re.match(r"^\s*break\s*;\s*$", l):
+                        continue
+                    clean_lines.append(l)
+                branch_clean = "\n".join(clean_lines).strip()
+                cond = " || ".join(pending_conditions)
+                branches.append((cond, is_default, branch_clean))
+                pending_conditions = []
+
+        if not branches:
+            continue
+
+        line_start = result_text.rfind("\n", 0, start_idx) + 1
+        switch_line = result_text[line_start:start_idx]
+        indent = re.match(r"^\s*", switch_line).group(0)
+
+        out_lines = []
+        first = True
+        for cond, is_def, code in branches:
+            if not cond and not is_def:
+                continue
+            if is_def:
+                if out_lines:
+                    if code:
+                        out_lines.append(f"{indent}else\n{indent}{{\n\t{code}\n{indent}}}")
+                else:
+                    if code:
+                        out_lines.append(f"{indent}{{\n\t{code}\n{indent}}}")
+            else:
+                prefix = f"{indent}if ({cond})" if first else f"{indent}else if ({cond})"
+                first = False
+                out_lines.append(f"{prefix}\n{indent}{{\n\t{code}\n{indent}}}")
+
+        replacement = "\n".join(l for l in out_lines if l)
+        old_slice_len = (close_brace + 1) - start_idx
+        result_text = result_text[:start_idx] + replacement + result_text[close_brace + 1:]
+        offset += len(replacement) - old_slice_len
+        modified = True
+
+    return result_text, modified
+
+
 HINTS = {
-    "C2039": "A function is defined as AGFGameImpl::X in the .cpp but X is not declared in the class in GFGameImpl.h. Declare it.",
+    "C2039": "A member or function was not found (e.g. FVector has no .ToFloat(); or function defined in .cpp but not declared in GFGameImpl.h).",
     "C3861": "An identifier is used but not declared. Declare helper functions as private members of AGFGameImpl.",
-    "C2065": "A variable is undeclared. Member variables must be declared in the class in GFGameImpl.h; inherited Rng exists only inside member functions.",
+    "C2065": "A variable is undeclared. Member variables must be declared in the class in GFGameImpl.h; check naming (e.g. bBombPlanted vs BombPlanted).",
     "C3668": "An 'override' does not match the base signature. Copy the signature exactly from the contract, including const.",
     "C1189": "GFGameImpl.generated.h may only be included once, in GFGameImpl.h, as the last include.",
     "C2511": "A definition's signature does not match its declaration; make them identical.",
     "C2662": "A const member function calls a non-const member or modifies state; remove the modification or the const.",
-    "C2440": "Type conversion error: check FString/TEXT usage and pointer vs object types.",
+    "C2440": "Type conversion error: check FString/TEXT usage, pointer vs object types, or FKey (FKey cannot convert to int; use if (Key == EKeys::X) instead).",
+    "C2450": "FKey cannot be used in a switch expression (it is a struct, not an integer or enum). In Unreal Engine, replace switch(Key) with if (Key == EKeys::X) { ... } else if (Key == EKeys::Y) { ... }.",
+    "C2046": "Illegal case label: if switching on FKey or a non-integral type, use if (Key == EKeys::X) instead of switch/case.",
+    "C4060": "Switch statement contains no valid case labels: switch on FKey fails type conversion. Replace switch with if/else chains using EKeys.",
     "LNK2019": "A declared function has no definition; define it in GFGameImpl.cpp or remove the declaration.",
     "LNK2001": "A declared function or static has no definition; define it in GFGameImpl.cpp.",
 }

@@ -187,6 +187,51 @@ class MultiFileChangeManifest(BaseModel):
 
         return len(errors) == 0, errors
 
+    def validate_and_sanitize_cpp_invariants(self) -> List[str]:
+        """Automatically sanitizes known invalid C++ syntax before writing/compilation."""
+        sanitized_notes = []
+        try:
+            from ...pipeline.autofix import _convert_key_switch_to_if
+        except Exception:
+            _convert_key_switch_to_if = None
+
+        for op in self.operations:
+            if op.file_type not in ("source", "header"):
+                continue
+
+            content = op.replacement_content
+            modified = False
+
+            # 1. Switch on FKey
+            if _convert_key_switch_to_if and (re.search(r"\bswitch\s*\(\s*Key\s*\)", content) or "case EKeys::" in content):
+                new_content, fixed = _convert_key_switch_to_if(content)
+                if fixed:
+                    content = new_content
+                    modified = True
+                    sanitized_notes.append(f"{op.subpath}: converted switch(Key) to if/else chain")
+
+            # 2. .ToFloat() on FVector
+            if ".ToFloat()" in content:
+                content = re.sub(
+                    r'FQuat\s*\(\s*(?:FVector(?:\([^)]*\)|::\w+))\s*,\s*(\w+)\.ToFloat\(\)\s*\)',
+                    r'\1.Rotation().Quaternion()',
+                    content,
+                )
+                content = re.sub(r'(\b\w+)\.ToFloat\(\)', r'\1.Size()', content)
+                modified = True
+                sanitized_notes.append(f"{op.subpath}: fixed invalid FVector::ToFloat() call")
+
+            # 3. AddActorWorldRotation FVector
+            if re.search(r'AddActorWorldRotation\s*\(\s*FVector\(', content):
+                content = re.sub(r'AddActorWorldRotation\s*\(\s*FVector\(', 'AddActorWorldRotation(FRotator(', content)
+                modified = True
+                sanitized_notes.append(f"{op.subpath}: replaced FVector with FRotator in AddActorWorldRotation")
+
+            if modified:
+                op.replacement_content = content
+
+        return sanitized_notes
+
     def get_topological_execution_order(self) -> List[FileChangeOperation]:
         """Calculates safe edit ordering:
         1. Headers before sources (.h before .cpp).
@@ -295,6 +340,8 @@ class MultiFileChangeManifest(BaseModel):
             result.error_message = "Reflection consistency check failed."
             result.diagnostics = refl_errs
             return result
+
+        self.validate_and_sanitize_cpp_invariants()
 
         try:
             ordered_ops = self.get_topological_execution_order()

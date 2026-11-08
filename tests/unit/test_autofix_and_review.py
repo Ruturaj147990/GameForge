@@ -57,8 +57,56 @@ def test_autofix_is_idempotent_and_leaves_clean_code_alone():
 
 
 def test_hints_are_keyed_by_error_code_and_deduplicated():
-    text = hints_for([{"code": "C2039"}, {"code": "C2039"}, {"code": "C3668"}, {"code": "C9999"}])
-    assert text.count("C2039") == 1 and "C3668" in text and "C9999" not in text
+    text = hints_for([{"code": "C2039"}, {"code": "C2039"}, {"code": "C3668"}, {"code": "C2450"}, {"code": "C2046"}, {"code": "C9999"}])
+    assert text.count("C2039") == 1 and "C3668" in text and "C2450" in text and "C2046" in text and "C9999" not in text
+    assert "FKey cannot be used in a switch expression" in text
+
+
+def test_autofix_converts_fkey_switch_to_if_else():
+    cpp_bad = '''#include "GFGameImpl.h"
+void AGFGameImpl::OnKey(FKey Key)
+{
+	switch (Key)
+	{
+	case EKeys::W:
+		MoveUp();
+		break;
+	case EKeys::S:
+		MoveDown();
+		break;
+	case EKeys::A:
+	case EKeys::Left:
+		MoveLeft();
+		break;
+	default:
+		DoOther();
+		break;
+	}
+}
+'''
+    out, notes = autofix({"GFGameImpl.h": H, "GFGameImpl.cpp": cpp_bad})
+    cpp = out["GFGameImpl.cpp"]
+    assert "switch (Key)" not in cpp
+    assert "if (Key == EKeys::W)" in cpp
+    assert "else if (Key == EKeys::S)" in cpp
+    assert "Key == EKeys::A || Key == EKeys::Left" in cpp
+    assert "else" in cpp
+    assert any("switch statement on FKey" in n for n in notes)
+
+
+def test_autofix_repairs_tofloat_and_fquat_construction():
+    cpp_bad = '''#include "GFGameImpl.h"
+void AGFGameImpl::SpawnBullet(const FVector& Origin, const FVector& Direction)
+{
+	FQuat Rot = FQuat(FVector(0, 0, 1), Direction.ToFloat());
+	float speed = Direction.ToFloat();
+}
+'''
+    out, notes = autofix({"GFGameImpl.h": H, "GFGameImpl.cpp": cpp_bad})
+    cpp = out["GFGameImpl.cpp"]
+    assert ".ToFloat()" not in cpp
+    assert "Direction.Rotation().Quaternion()" in cpp
+    assert any("ToFloat" in n for n in notes)
 
 
 def test_vision_verdict_parsing():

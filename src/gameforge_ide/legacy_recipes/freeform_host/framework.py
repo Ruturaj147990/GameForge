@@ -73,6 +73,8 @@ AGFGameBase (already implemented; do not redefine) gives you:
     - World units are centimetres; +Z is up; the floor is at Z=0. Keep the play area within about 2000 cm.
     - Keep all game state in UPROPERTY() members or plain C++ members of AGFGameImpl.
     - Use only Engine/Core APIs already included by the framework (CoreMinimal, GameFramework, Math).
+    - FKey is a C++ struct, NOT an integer or enum: NEVER write switch (Key); you MUST use if (Key == EKeys::W) else if (Key == EKeys::S) instead.
+    - FVector has no .ToFloat() member: to rotate an actor towards a direction, use Actor->SetActorRotation(Direction.Rotation()); for vector length, use Direction.Size().
     - Do not create new UCLASSes, components, widgets, or assets. Do not use Blueprints.
     - RunSelfTest must not rely on real time passing; call OnTick(0.1f) in a loop if needed.
     - Use TEXT("...") for string literals and FString::Printf for formatting.
