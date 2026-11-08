@@ -42,7 +42,7 @@ def snapshot_directory_hashes(directory: Path) -> Dict[str, str]:
             full = r_path / f
             # Skip transient build/cache artifacts
             rel = full.relative_to(directory).as_posix()
-            if any(part in rel for part in ("Binaries", "Intermediate", "Saved", "DerivedDataCache", "Library", "Temp", ".git")):
+            if any(part in rel for part in ("Binaries", "Intermediate", "Saved", "DerivedDataCache", "Library", "Temp", ".git", "__pycache__")) or rel.endswith(".pyc"):
                 continue
             hashes[rel] = compute_file_hash(full)
 

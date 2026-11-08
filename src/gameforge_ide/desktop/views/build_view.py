@@ -48,14 +48,40 @@ from ..styles import tokens
 from ..widgets.log_view import LogView
 from ..widgets.problems_table import ProblemsTable
 from ..widgets.step_row import STEP_ROLE, StepRowDelegate, format_step_duration
-from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
-from src.gameforge_ide.core.settings import get_settings
-from src.gameforge_ide.core.projects import resolve_project_dir, open_folder_in_file_manager
-from src.gameforge_ide.forge.checkpoints import ProjectRepo
-from src.gameforge_ide.forge.model import RunState, StepRecord
-from src.gameforge_ide.forge.store import RunStore
+from ...core.jobs import JobHandle, default_job_manager
+from ...core.settings import get_settings
+from ...core.projects import resolve_project_dir, open_folder_in_file_manager
+from ...forge.checkpoints import ProjectRepo
+from ...forge.model import RunState, StepRecord
+from ...forge.store import RunStore
 
 logger = logging.getLogger(__name__)
+
+
+def _project_editor_running(project_dir: Path) -> bool:
+    """True when an Unreal Editor process has this project's .uproject open (best effort, never raises).
+
+    Rolling back while the editor holds the project's files corrupts the checkpoint, so ProjectRepo.reset_to
+    refuses in that case; previously the call omitted the flag entirely and every roll back failed with TypeError.
+    """
+    try:
+        import psutil  # optional dependency
+    except Exception:
+        return False
+    try:
+        uprojects = {p.name.lower() for p in Path(project_dir).glob("*.uproject")}
+        if not uprojects:
+            return False
+        for proc in psutil.process_iter(["name", "cmdline"]):
+            name = (proc.info.get("name") or "").lower()
+            if not name.startswith("unrealeditor"):
+                continue
+            cmd = " ".join(proc.info.get("cmdline") or []).lower()
+            if any(u in cmd for u in uprojects):
+                return True
+    except Exception:
+        return False
+    return False
 
 
 class TimelineListModel(QAbstractListModel):
@@ -411,7 +437,7 @@ class BuildView(QWidget):
         # 1. Obtain spec
         if spec is None:
             try:
-                from src.gameforge_ide.design import store as gds_store
+                from ...design import store as gds_store
                 spec = gds_store.load(p_dir)
             except Exception as exc:
                 logger.debug("Could not load design spec from %s: %s", p_dir, exc)
@@ -420,14 +446,14 @@ class BuildView(QWidget):
         if spec is not None:
             # Try composer first (WI-6.2)
             try:
-                from src.gameforge_ide.composer import compose, composition_to_run_spec
+                from ...composer import compose, composition_to_run_spec
                 comp = compose(spec, allow_partial=True)
                 run_spec = composition_to_run_spec(comp, str(self._workspace), str(p_dir), origin="prompt")
             except Exception as exc:
                 logger.debug("Composer planning failed, falling back to legacy: %s", exc)
                 try:
-                    from src.gameforge_ide.design.legacy import to_legacy_params
-                    from src.gameforge_ide.forge.legacy_adapter import plan_legacy
+                    from ...design.legacy import to_legacy_params
+                    from ...forge.legacy_adapter import plan_legacy
                     params = to_legacy_params(spec)
                     run_spec = plan_legacy(
                         params,
@@ -457,9 +483,9 @@ class BuildView(QWidget):
         # Run in background daemon thread
         def _worker():
             try:
-                from src.gameforge_ide.forge.executor import ForgeExecutor
-                from src.gameforge_ide.forge.handlers import HANDLERS
-                from src.gameforge_ide.core.events import default_bus
+                from ...forge.executor import ForgeExecutor
+                from ...forge.handlers import HANDLERS
+                from ...core.events import default_bus
                 executor = ForgeExecutor(HANDLERS, bus=default_bus())
                 executor.run(state, self._store)
             except Exception as exc:
@@ -798,7 +824,7 @@ class BuildView(QWidget):
         # Request cancel through forge executor
         cancelled = False
         try:
-            from src.gameforge_ide.forge.executor import ForgeExecutor
+            from ...forge.executor import ForgeExecutor
             cancelled = ForgeExecutor.cancel_run(self._current_run_id)
         except Exception:
             pass
@@ -821,7 +847,7 @@ class BuildView(QWidget):
         state = self._store.load(self._current_run_id)
         if not state:
             return
-        from src.gameforge_ide.forge.model import StepStatus
+        from ...forge.model import StepStatus
         for rec in state.records.values():
             if rec.status in (StepStatus.SKIPPED, StepStatus.FAILED, StepStatus.CANCELLED, StepStatus.BLOCKED):
                 rec.status = StepStatus.PENDING
@@ -832,9 +858,9 @@ class BuildView(QWidget):
 
         def _worker():
             try:
-                from src.gameforge_ide.forge.executor import ForgeExecutor
-                from src.gameforge_ide.forge.handlers import HANDLERS
-                from src.gameforge_ide.core.events import default_bus
+                from ...forge.executor import ForgeExecutor
+                from ...forge.handlers import HANDLERS
+                from ...core.events import default_bus
                 executor = ForgeExecutor(HANDLERS, bus=default_bus())
                 executor.run(state, self._store)
             except Exception as exc:
@@ -853,7 +879,7 @@ class BuildView(QWidget):
 
         # Check if editor link is open
         try:
-            from src.gameforge_ide.backend.tools.game_tools import GameTools
+            from ...backend.tools.game_tools import GameTools
             for link in GameTools.all_links():
                 if getattr(link, "project_name", "") == self._current_project:
                     QMessageBox.warning(
@@ -901,7 +927,7 @@ class BuildView(QWidget):
         reply = QMessageBox.question(self, "Confirm Roll Back", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
             try:
-                repo.reset_to(commit_sha)
+                repo.reset_to(commit_sha, editor_running=_project_editor_running(project_dir))
                 QMessageBox.information(self, "Roll Back Complete", f"Project state restored to checkpoint {commit_sha[:7]}.")
                 self.refresh_runs()
             except Exception as exc:

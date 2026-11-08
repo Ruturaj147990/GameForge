@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.core.settings import (
+from ...core.settings import (
     PINNED_ENGINE,
     discover_engines,
     engine_version,

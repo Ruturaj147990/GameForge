@@ -422,9 +422,12 @@ class OllamaProvider(ModelProvider):
         schema: dict,
         num_ctx: int = 8192,
         temperature: float = 0.2,
-        timeout_s: float = 120.0,
+        timeout_s: float = 300.0,
     ) -> Optional[str]:
-        """Structured output via /api/chat `format` (JSON schema). Returns clean JSON text or None on transport errors."""
+        """Structured output via /api/chat `format` (JSON schema). Returns clean JSON text or None on transport errors.
+
+        The default timeout is 300 s: a cold 14-27B model on a 12 GB GPU regularly needed more than the old 120 s to
+        load and answer a design request, which silently dropped every prompt to the offline fallback."""
         est_tokens = self.estimate_tokens(system, user, json.dumps(schema))
         effective_ctx = self.budget_num_ctx(model_id, est_tokens, num_ctx)
         payload = {

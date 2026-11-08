@@ -16,6 +16,8 @@ from .gds import (
     EndGame,
     EventOccurred,
     GameDesignSpec,
+    Message,
+    RuleSpec,
     SetStat,
     Spawn,
     StatCompare,
@@ -84,8 +86,39 @@ def _fmt_num(n: float | int) -> str:
     return str(n)
 
 
-def sentence(item: Union[Condition, Effect]) -> str:
-    """Format a Condition or Effect as a natural-language sentence."""
+_STAT_NAMES = {
+    "game.score": "the score", "game.time_s": "elapsed time", "player.health": "player health",
+    "player.lives": "lives", "game.counter.collected": "collected items",
+    "game.counter.waves_cleared": "cleared waves", "game.counter.enemies_killed": "enemies killed",
+}
+
+
+def _stat_name(stat: str) -> str:
+    if stat in _STAT_NAMES:
+        return _STAT_NAMES[stat]
+    parts = stat.split(".")
+    if len(parts) == 3 and parts[0] == "entity":
+        return f"{parts[1].replace('_', ' ')} {parts[2]}"
+    if stat.startswith("game.counter."):
+        return stat.split(".", 2)[2].replace("_", " ")
+    return stat
+
+
+def sentence(item: Union[Condition, Effect, RuleSpec]) -> str:
+    """Format a Condition, Effect or whole Rule as a natural-language sentence."""
+    if isinstance(item, RuleSpec):
+        # Rules used to fall through to str(rule) and showed as raw pydantic reprs in the Design view.
+        when = EVENT_PHRASES.get(item.when.event, item.when.event)
+        if item.when.source:
+            when += f" ({item.when.source.replace('_', ' ')})"
+        conds = [sentence(c) for c in item.conditions]
+        effects = [sentence(e) for e in item.effects]
+        text = f"When {when}" + (f" and {' and '.join(conds)}" if conds else "") + f", {'; '.join(effects)}"
+        return text[:1].upper() + text[1:]
+
+    if isinstance(item, Message):
+        return f'show "{item.text}"'
+
     if isinstance(item, CountAtLeast):
         if item.event == "pickup.collected":
             return f"the player has collected {item.n} pickups"
@@ -103,9 +136,9 @@ def sentence(item: Union[Condition, Effect]) -> str:
             ent_name = parts[1] if len(parts) > 1 else "target"
             return f"all {ent_name} are defeated"
         if item.op == "<=":
-            return f"{item.stat} drops to {val_str} or below"
+            return f"{_stat_name(item.stat)} drops to {val_str} or below"
         if item.op == ">=":
-            return f"{item.stat} reaches {val_str} or higher"
+            return f"{_stat_name(item.stat)} reaches {val_str} or higher"
         if item.op == "==":
             return f"{item.stat} equals {val_str}"
         if item.op == "<":
@@ -129,10 +162,12 @@ def sentence(item: Union[Condition, Effect]) -> str:
         return f"any of: {sub}"
 
     if isinstance(item, AddStat):
-        return f"add {_fmt_num(item.delta)} to {item.stat}"
+        if item.delta < 0:
+            return f"subtract {_fmt_num(-item.delta)} from {_stat_name(item.stat)}"
+        return f"add {_fmt_num(item.delta)} to {_stat_name(item.stat)}"
 
     if isinstance(item, SetStat):
-        return f"set {item.stat} to {_fmt_num(item.value) if isinstance(item.value, (int, float)) else item.value}"
+        return f"set {_stat_name(item.stat)} to {_fmt_num(item.value) if isinstance(item.value, (int, float)) else item.value}"
 
     if isinstance(item, EndGame):
         if item.outcome == "win":
@@ -168,6 +203,13 @@ def render_markdown(gds: GameDesignSpec) -> str:
     lines.append(f"- **Camera:** {gds.overview.camera.value}")
     lines.append(f"- **Players:** {gds.overview.players} (Multiplayer: {gds.tech.multiplayer})")
     lines.append(f"- **Target Session:** {gds.overview.session_minutes} minutes")
+    if getattr(gds.art, "material_theme", "default") != "default":
+        lines.append(f"- **Setting:** {gds.art.material_theme} theme, {gds.progression.difficulty} difficulty")
+    try:
+        from ..kit.runtime_def import describe_objective
+        lines.append(f"- **Objective:** {describe_objective(gds)}")
+    except Exception:
+        pass
     lines.append("")
 
     # Scene & Levels

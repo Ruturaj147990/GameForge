@@ -7,13 +7,13 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from src.gameforge_ide.design.gds import GameDesignSpec
+from ..design.gds import GameDesignSpec
 from .registry import get_module
 
 
 def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     """Generate gfdef/1 dictionary from GameDesignSpec."""
-    from src.gameforge_ide.design.gds import EntityKind
+    from ..design.gds import EntityKind
 
     # Player settings (WI-7.2: mesh, anim_class, material_tint)
     player_data = {
@@ -32,9 +32,18 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     player_ent = next((e for e in gds.entities if getattr(e, "kind", None) == EntityKind.PLAYER), None)
     if player_ent and getattr(player_ent, "props", None):
         p_props = player_ent.props if isinstance(player_ent.props, dict) else player_ent.props.model_dump()
+        # Legacy/preset spellings map onto the runtime keys (player_speed used to be dropped, so presets that tuned
+        # speed, health or damage had no effect in the composed game).
+        aliases = {"player_speed": "move_speed", "player_max_health": "max_health",
+                   "player_attack_damage": "attack_damage", "player_attack_range": "attack_range",
+                   "player_attack_cooldown": "attack_cooldown"}
+        allowed = ("move_speed", "jump_velocity", "max_health", "lives", "kill_z", "attack_damage", "attack_mode",
+                   "weapons", "projectile_speed", "attack_range", "attack_cooldown", "air_control", "gravity_scale",
+                   "max_jumps", "double_jump", "sprint_multiplier")
         for k, v in p_props.items():
-            if k in ("move_speed", "jump_velocity", "max_health", "lives", "kill_z", "attack_damage", "attack_mode", "weapons", "projectile_speed"):
-                player_data[k] = v
+            key = aliases.get(k, k)
+            if key in allowed and v is not None and not (key != k and key in p_props):
+                player_data[key] = v
 
     camera_str = str(player_data.get("camera", "")).lower()
     genre_str = str(getattr(gds.overview, "genre", "")).lower()
@@ -86,8 +95,13 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     player_max_health = float(player_data.get("max_health", 100.0))
     stats_data: Dict[str, Any] = {
         "player.health": {"initial": player_max_health, "min": 0.0, "max": player_max_health},
-        "game.score": {"initial": 0.0},
+        "player.max_health": {"initial": player_max_health},
+        "game.score": {"initial": 0.0, "min": 0.0},
+        "game.counter.waves_cleared": {"initial": 0.0, "min": 0.0},
     }
+    lives = int(player_data.get("lives", 0) or 0)
+    if lives > 0:
+        stats_data["player.lives"] = {"initial": float(lives), "min": 0.0}
 
     from ..design.gds import EntityKind
     for ent in gds.entities:
@@ -130,11 +144,20 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
                 "material_tint": [0.8, 0.2, 0.2, 1.0] if "enemy" in ent.entity_id.lower() or "guard" in ent.entity_id.lower() else [0.2, 0.5, 0.9, 1.0],
             }
 
+        props_out = dict(ent.props)
+        color_tag = next((t.split(":", 1)[1] for t in ent.tags if isinstance(t, str) and t.startswith("color:")), None)
+        if color_tag and len(color_tag) == 7:
+            rgb = [round(int(color_tag[i:i + 2], 16) / 255.0, 3) for i in (1, 3, 5)]
+            props_out["body_color"] = rgb + [1.0]
+            if visual_data:
+                visual_data["material_tint"] = rgb + [1.0]
+        label = next((t.split(":", 1)[1] for t in ent.tags if isinstance(t, str) and t.startswith("label:")), None)
         entities_data[ent.entity_id] = {
             "class": mod_cls,
             "spawn_tag": f"GF_SP_{ent.entity_id}",
             "count": ent.count,
-            "properties": dict(ent.props),
+            "label": label or ent.entity_id.replace("_", " ").title(),
+            "properties": props_out,
             "visual": visual_data,
         }
 
@@ -159,14 +182,15 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     win_data = [c.model_dump(exclude_none=True) for c in gds.goals.win]
     lose_data = [c.model_dump(exclude_none=True) for c in gds.goals.lose]
 
-    # Feedback
+    # Feedback: GDS stores preset ids ("vfx.sparkle_burst", "sfx.pickup_chime"); the runtime loads asset paths,
+    # so the ids are resolved here (previously LoadObject("vfx.sparkle_burst") failed and no feedback ever played).
     feedback_data: List[Dict[str, Any]] = []
     for fb in gds.feedback:
         evt = fb.on.event if hasattr(fb, "on") else getattr(fb, "trigger", None)
         feedback_data.append({
             "e": evt,
-            "vfx": fb.vfx,
-            "sfx": fb.sfx,
+            "vfx": _resolve_vfx(fb.vfx),
+            "sfx": _resolve_sfx(fb.sfx),
             "shake": fb.camera_shake,
             "msg": fb.ui_message,
         })
@@ -181,15 +205,34 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
             "msg": None,
         })
 
-    # HUD Elements
+    # HUD Elements ("of" = counter target / bar maximum / countdown length)
+    timer_limit = None
+    for c in list(gds.goals.lose) + list(gds.goals.win):
+        if getattr(c, "kind", None) == "timer":
+            timer_limit = float(c.seconds)
+            break
     hud_data: List[Dict[str, Any]] = []
     for elem in gds.ui.hud:
-        hud_data.append({
+        row: Dict[str, Any] = {
             "id": elem.element_id,
             "kind": elem.kind,
             "stat": elem.binds,
             "label": elem.label,
-        })
+        }
+        stat = elem.binds or ""
+        if elem.kind == "bar" and stat == "player.health":
+            row["of"] = player_max_health
+        elif elem.kind == "timer" and timer_limit:
+            row["of"] = timer_limit
+        elif stat.startswith("entity.") and stat.endswith(".collected"):
+            ent = next((e for e in gds.entities if e.entity_id == stat.split(".")[1]), None)
+            if ent is not None:
+                row["of"] = float(ent.count)
+        elif stat == "game.counter.waves_cleared":
+            sp = next((e for e in gds.entities if getattr(e, "module", "") == "kit.spawner"), None)
+            if sp is not None:
+                row["of"] = float(sp.props.get("wave_count", 3))
+        hud_data.append(row)
 
     # Menus
     menus_data = {
@@ -201,6 +244,9 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     gfdef: Dict[str, Any] = {
         "schema": "gfdef/1",
         "title": gds.meta.title,
+        "pitch": gds.overview.pitch,
+        "objective": describe_objective(gds),
+        "controls": describe_controls(gds, player_data),
         "seed": seed,
         "player": player_data,
         "input": input_bindings,
@@ -243,3 +289,115 @@ def validate_runtime_def(data: Dict[str, Any]) -> List[str]:
         errors.append("Missing or invalid 'lose' conditions")
 
     return errors
+
+
+_VFX_FALLBACK = {
+    "vfx.sparkle_burst": "/Game/GameForge/VFX/NS_Sparkle", "vfx.hit_flash": "/Game/GameForge/VFX/NS_HitFlash",
+    "vfx.poof": "/Game/GameForge/VFX/NS_Poof", "vfx.confetti": "/Game/GameForge/VFX/NS_Confetti",
+    "vfx.ring": "/Game/GameForge/VFX/NS_Ring", "vfx.magic_trail": "/Game/GameForge/VFX/NS_MagicTrail",
+}
+
+
+def _resolve_vfx(preset: Optional[str]) -> Optional[str]:
+    if not preset or preset.startswith("/"):
+        return preset
+    try:
+        from ..content.vfx_presets import VFX_PRESETS
+        p = VFX_PRESETS.get(preset)
+        if p is not None:
+            return getattr(p, "target_asset_path", None) or getattr(p, "template_path", None) or _VFX_FALLBACK.get(preset)
+    except Exception:
+        pass
+    return _VFX_FALLBACK.get(preset)
+
+
+def _resolve_sfx(preset: Optional[str]) -> Optional[str]:
+    """sfx.pickup_chime -> /Game/GameForge/SFX/S_PickupChime (the content step writes S_<TitleCase>)."""
+    if not preset or preset.startswith("/"):
+        return preset
+    name = preset.split(".", 1)[-1]
+    return f"/Game/GameForge/SFX/S_{name.title().replace('_', '')}"
+
+
+def _label(ent: Any, plural: bool = False) -> str:
+    lab = next((t.split(":", 1)[1] for t in getattr(ent, "tags", []) if isinstance(t, str) and t.startswith("label:")), None)
+    lab = lab or ent.entity_id.replace("_", " ").rstrip("s").title()
+    if plural and ent.count != 1 and not lab.endswith("s"):
+        lab = lab[:-1] + "ies" if lab.endswith("y") and lab[-2:-1] not in "aeiou" else lab + "s"
+    return lab
+
+
+def describe_objective(gds: GameDesignSpec) -> str:
+    """One readable sentence of what the player must do, built from the actual win/lose conditions."""
+    ents = {e.entity_id: e for e in gds.entities}
+    parts: List[str] = []
+
+    def cond_text(c: Any) -> Optional[str]:
+        kind = getattr(c, "kind", None)
+        if kind == "count_at_least" and c.event == "pickup.collected":
+            pick = next((e for e in gds.entities if e.module == "kit.pickup"), None)
+            return f"Collect {c.n} {_label(pick, True) if pick else 'items'}"
+        if kind == "event":
+            if c.event == "goal.reached":
+                goal = next((e for e in gds.entities if e.module == "kit.goal"), None)
+                req = goal.props.get("required_stat") if goal else None
+                if req == "game.counter.collected":
+                    picks = [e for e in gds.entities if e.module == "kit.pickup"]
+                    need = int(float(goal.props.get("required_value", 0)))
+                    names = " and ".join(_label(e, True) for e in picks[:3]) or "items"
+                    return f"Collect all {need} {names}, then reach the {_label(goal)}"
+                if req and str(req).endswith(".collected"):
+                    src = ents.get(str(req).split(".")[1])
+                    need = int(float(goal.props.get("required_value", 0)))
+                    return f"Collect {need} {_label(src, True) if src else 'items'}, then reach the {_label(goal)}"
+                return f"Reach the {_label(goal) if goal else 'goal'}"
+            return {"board.win": "Win the board", "match.won": "Win the match", "wave.cleared": None,
+                    "landmark.discovered": "Discover the landmark"}.get(c.event)
+        if kind == "stat":
+            if c.stat.endswith(".remaining") and c.op in ("<=", "<"):
+                e = ents.get(c.stat.split(".")[1])
+                return f"Defeat every {_label(e) if e else 'enemy'}"
+            if c.stat == "game.score":
+                return f"Score {int(c.value)} points"
+            if c.stat == "game.counter.waves_cleared":
+                return f"Clear {int(c.value)} waves"
+        if kind == "timer":
+            secs = int(c.seconds)
+            return f"Survive {secs // 60} min {secs % 60:02d} s" if secs >= 60 else f"Survive {secs} seconds"
+        if kind in ("all", "any"):
+            sub = [t for t in (cond_text(i) for i in c.items) if t]
+            return " and ".join(sub) if kind == "all" else " or ".join(sub)
+        return None
+
+    for c in gds.goals.win:
+        t = cond_text(c)
+        if t and t not in parts:
+            parts.append(t)
+    text = " - or - ".join(parts[:2]) if parts else "Explore"
+    lose_bits: List[str] = []
+    for c in gds.goals.lose:
+        k = getattr(c, "kind", None)
+        if k == "timer":
+            lose_bits.append(f"before {int(c.seconds)} s run out")
+        elif k == "event" and c.event == "guard.spotted_player":
+            lose_bits.append("without being spotted")
+    if lose_bits:
+        text += " " + " and ".join(lose_bits)
+    return text[:120]
+
+
+def describe_controls(gds: GameDesignSpec, player_data: Dict[str, Any]) -> str:
+    cam = str(player_data.get("camera", ""))
+    if cam in ("fixed_board",):
+        return "Click to play  -  P pause"
+    bits = ["WASD move", "Mouse look" if cam in ("third_person", "first_person") else ""]
+    if cam != "fixed_board":
+        bits.append("Space jump" + (" (x2)" if player_data.get("double_jump") or int(player_data.get("max_jumps", 1) or 1) > 1 else ""))
+        bits.append("Shift sprint")
+    has_combat = any(e.module in ("kit.enemy_melee", "kit.enemy_ranged", "kit.spawner") for e in gds.entities)
+    if has_combat:
+        bits.append("Click shoot" if player_data.get("attack_mode") == "projectile" else "Click attack")
+    if any(e.module in ("kit.door", "kit.switch", "kit.quest_giver") for e in gds.entities):
+        bits.append("E interact")
+    bits.append("P pause")
+    return "  -  ".join(b for b in bits if b)

@@ -32,9 +32,9 @@ from PySide6.QtWidgets import (
 from ..services.projects_service import GameSummary, list_games
 from ..services.systems_service import SystemsService
 from ..styles import tokens
-from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
-from src.gameforge_ide.core.systems import SystemRow, SystemsSnapshot, probe_all
-from src.gameforge_ide.design.presets import PRESETS
+from ...core.jobs import JobHandle, default_job_manager
+from ...core.systems import SystemRow, SystemsSnapshot, probe_all
+from ...design.presets import PRESETS
 
 logger = logging.getLogger(__name__)
 
@@ -364,6 +364,7 @@ class HomeView(QWidget):
         sub_lbl = QLabel("System readiness and project overview. All code creation, game generation, and modifications flow through the Assistant chat on the right.", self)
         sub_lbl.setObjectName("homeSubtitle")
         sub_lbl.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        sub_lbl.setWordWrap(True)   # long subtitle was cut off at the panel edge
         dash_header.addWidget(sub_lbl)
         main_layout.addLayout(dash_header)
         main_layout.addSpacing(tokens.SPACE_MD)
@@ -410,7 +411,7 @@ class HomeView(QWidget):
         self._edit_project_dir = QLineEdit(self)
         self._edit_project_dir.setObjectName("homeEditProjectDir")
         self._edit_project_dir.setVisible(False)
-        from src.gameforge_ide.core.settings import get_settings
+        from ...core.settings import get_settings
         s = get_settings()
         default_root = s.projects_root
         if not default_root:
@@ -518,7 +519,7 @@ class HomeView(QWidget):
                 resolved = p.resolve()
                 if hasattr(self, "_projects_service") and self._projects_service is not None:
                     if hasattr(self._projects_service, "_projects_root"):
-                        from src.gameforge_ide.core.projects import is_gameforge_project
+                        from ...core.projects import is_gameforge_project
                         p_root = resolved.parent if is_gameforge_project(resolved) else resolved
                         self._projects_service._projects_root = p_root
                 self.projectDirectoryChangeRequested.emit(resolved)
@@ -535,8 +536,11 @@ class HomeView(QWidget):
 
     @Slot()
     def _on_design_it_clicked(self) -> None:
-        if self._active_job and not self._active_job.done:
-            return
+        if self._active_job:
+            done_fn = getattr(self._active_job, 'done', None)
+            is_done = done_fn() if callable(done_fn) else bool(done_fn)
+            if not is_done:
+                return
         prompt_text = self._prompt_input.toPlainText().strip()
         if not prompt_text:
             return
@@ -544,23 +548,19 @@ class HomeView(QWidget):
         print(f"[GameForge Studio] Drafting design for prompt: '{prompt_text}'...", flush=True)
         self._notice_lbl.setVisible(False)
         self._btn_design.setEnabled(False)
-        self._status_lbl.setText("⏳ Drafting design spec with Ollama…")
+        self._status_lbl.setText("⏳ Drafting the game design…")
         self._status_lbl.setVisible(True)
         self._btn_cancel.setVisible(True)
         self._btn_cancel.setEnabled(True)
 
         def work():
-            from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds
-            from src.gameforge_ide.backend.providers.ollama_provider import OllamaProvider
-            from src.gameforge_ide.core.settings import get_settings
-            from src.gameforge_ide.pipeline.spec_from_prompt import is_game_creation_request
+            from ...design.prompt_to_gds import prompt_to_gds
+            from ...backend.tools.game_tools import resolve_design_model
+            from ...pipeline.spec_from_prompt import is_game_creation_request
 
-            settings = get_settings()
-            provider = OllamaProvider(host=settings.ollama_url.replace("http://", "").replace("https://", ""))
-            model = settings.model_for("design")
-
-            def complete_json(system: str, user: str, schema: dict):
-                return provider.complete_json(model, system, user, schema)
+            # Same resolver as the agent: probes Ollama first, so an offline model falls straight back to the
+            # deterministic prompt brief instead of waiting on failing calls.
+            complete_json, model = resolve_design_model()
 
             effective_prompt = prompt_text
             coding_hints = ("fix", "debug", "error", "bug", "refactor", "compile", "build error", ".cs", ".cpp")
@@ -633,7 +633,7 @@ class HomeView(QWidget):
                 if base_dir.name.lower() == proj_name.lower():
                     target_pdir = base_dir
                 else:
-                    from src.gameforge_ide.core.settings import get_settings
+                    from ...core.settings import get_settings
                     s_root = get_settings().projects_root
                     if s_root and (base_dir == Path(s_root).resolve() or base_dir.parent == Path(s_root).resolve()):
                         target_pdir = Path(s_root).resolve() / proj_name
@@ -703,7 +703,7 @@ class HomeView(QWidget):
         if hasattr(self, "_projects_service") and self._projects_service is not None:
             if hasattr(self._projects_service, "_projects_root"):
                 # If path is an individual game project, the projects root is its parent directory
-                from src.gameforge_ide.core.projects import is_gameforge_project
+                from ...core.projects import is_gameforge_project
                 p_root = resolved.parent if is_gameforge_project(resolved) else resolved
                 self._projects_service._projects_root = p_root
         self.refresh_recent_games()
@@ -790,7 +790,7 @@ class HomeView(QWidget):
 
     def refresh_readiness(self) -> None:
         """Probe system status on JobManager and populate readiness rows."""
-        from src.gameforge_ide.core.settings import get_settings
+        from ...core.settings import get_settings
 
         def work():
             return probe_all(get_settings())

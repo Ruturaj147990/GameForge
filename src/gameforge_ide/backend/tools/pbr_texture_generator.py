@@ -162,6 +162,8 @@ def read_png(path: Path) -> np.ndarray:
         elif kind == b"IDAT":
             idat += body
         pos += 12 + length
+    if header is None:
+        raise ValueError("PNG has no IHDR chunk")
     w, h, depth, color_type, _, _, interlace = header
     if depth != 8 or interlace:
         raise ValueError("only 8-bit non-interlaced PNGs are supported")
@@ -219,7 +221,7 @@ def generate_texture_set(spec: PBRTextureSpec, output_dir: str | Path, asset_reg
                 "normal_convention": "DirectX (Unreal)", "orm_packing": {"R": "AO", "G": "Roughness", "B": "Metallic"},
                 "files": files}
     if asset_registry is not None:
-        from src.gameforge_ide.backend.assets.registry import AssetRecord
+        from ...backend.assets.registry import AssetRecord
         ids = {}
         for role, info in files.items():
             rid = asset_registry.register(AssetRecord(

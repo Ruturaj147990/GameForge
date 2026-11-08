@@ -11,6 +11,15 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Components/CapsuleComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "GameForgeGameDefinition.h"
+#include "GameForgeVisuals.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 // ── Hazard ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +44,22 @@ AGameForgeHazard::AGameForgeHazard()
 void AGameForgeHazard::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
 	Trigger->SetBoxExtent(FVector(ShapeExtent, ShapeExtent, 50.f));
+	// The visual used to stay a 1 m tile whatever the damage area was; match it to the trigger and make it read as
+	// danger. Very large hazards are invisible kill volumes (fall catchers), so they are not drawn.
+	if (Mesh)
+	{
+		if (ShapeExtent > 2000.f)
+		{
+			Mesh->SetVisibility(false);
+		}
+		else
+		{
+			Mesh->SetRelativeScale3D(FVector(ShapeExtent / 50.f, ShapeExtent / 50.f, 0.1f));
+			GameForgeVisuals::Tint(Mesh, bInstantKill ? FLinearColor(0.9f, 0.05f, 0.02f) : FLinearColor(1.f, 0.35f, 0.f));
+		}
+	}
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGameForgeHazard::OnOverlapBegin);
 	Trigger->OnComponentEndOverlap.AddDynamic(this, &AGameForgeHazard::OnOverlapEnd);
 }
@@ -118,6 +142,8 @@ AGameForgeCheckpoint::AGameForgeCheckpoint()
 void AGameForgeCheckpoint::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	GameForgeVisuals::Tint(Mesh, FLinearColor(0.2f, 0.6f, 1.f));
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGameForgeCheckpoint::OnOverlapBegin);
 }
 
@@ -134,9 +160,17 @@ void AGameForgeCheckpoint::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, A
 		if (P->IsPlayerControlled())
 		{
 			bActivated = true;
+			// Checkpoints never told the game mode where to respawn, so a death after a checkpoint still sent the
+			// player back to the start (or nowhere at all).
+			if (AGameForgeGameMode* GM = GetWorld()->GetAuthGameMode<AGameForgeGameMode>())
+			{
+				GM->SetRespawnTransform(FTransform(P->GetActorRotation(), GetActorLocation() + FVector(0.f, 0.f, 100.f)));
+			}
+			GameForgeVisuals::Tint(Mesh, FLinearColor(0.2f, 1.f, 0.35f));
 			if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 			{
 				Bus->Emit(GFEvent::CheckpointReached, GetName(), TEXT("{}"), EntityId);
+				Bus->Emit(FName(TEXT("ui.message")), GetName(), TEXT("{\"text\":\"Checkpoint reached\",\"seconds\":2}"), EntityId);
 			}
 		}
 	}
@@ -164,6 +198,8 @@ AGameForgeGoal::AGameForgeGoal()
 void AGameForgeGoal::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	GameForgeVisuals::Tint(Mesh, FLinearColor(1.f, 0.82f, 0.1f));
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGameForgeGoal::OnOverlapBegin);
 }
 
@@ -196,6 +232,11 @@ void AGameForgeGoal::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor*
 					Bus->Emit(GFEvent::GoalReached, GetName(), TEXT("{}"), EntityId);
 				}
 			}
+			else if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+			{
+				// A locked goal used to do nothing at all; tell the player why.
+				Bus->Emit(FName(TEXT("ui.message")), GetName(), TEXT("{\"text\":\"Not yet - finish your objective first\",\"seconds\":2.5}"), EntityId);
+			}
 		}
 	}
 }
@@ -222,6 +263,10 @@ AGameForgeLandmark::AGameForgeLandmark()
 void AGameForgeLandmark::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	// DiscoverRadius is assigned after construction (gfdef / set_actor_property), so apply it here.
+	Trigger->SetSphereRadius(DiscoverRadius);
+	GameForgeVisuals::Tint(Mesh, FLinearColor(0.6f, 0.45f, 1.f));
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGameForgeLandmark::OnOverlapBegin);
 }
 
@@ -265,6 +310,7 @@ AGameForgeMovingPlatform::AGameForgeMovingPlatform()
 void AGameForgeMovingPlatform::BeginPlay()
 {
 	Super::BeginPlay();
+	GameForgeVisuals::Tint(Mesh, FLinearColor(0.25f, 0.8f, 0.75f));
 	StartLoc = GetActorLocation();
 }
 
@@ -322,6 +368,8 @@ AGameForgeDoor::AGameForgeDoor()
 void AGameForgeDoor::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	GameForgeVisuals::Tint(Mesh, FLinearColor(0.45f, 0.3f, 0.18f));
 	ClosedLoc = GetActorLocation();
 }
 
@@ -389,6 +437,8 @@ AGameForgeSwitch::AGameForgeSwitch()
 void AGameForgeSwitch::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	GameForgeVisuals::Tint(Mesh, FLinearColor(0.95f, 0.75f, 0.1f));
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGameForgeSwitch::OnOverlapBegin);
 }
 
@@ -441,16 +491,18 @@ AGameForgeProjectile::AGameForgeProjectile()
 void AGameForgeProjectile::BeginPlay()
 {
 	Super::BeginPlay();
+	// Never collide with whoever fired it (projectiles spawned inside the shooter's capsule used to explode instantly).
+	if (AActor* Shooter = GetInstigator())
+	{
+		Collision->IgnoreActorWhenMoving(Shooter, true);
+	}
 	if (Mesh && Mesh->GetStaticMesh() == nullptr)
 	{
-		if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere")))
+		if (GameForgeVisuals::SetBasicShape(Mesh, TEXT("Sphere")))
 		{
-			Mesh->SetStaticMesh(SM);
-			Mesh->SetWorldScale3D(FVector(0.15f, 0.15f, 0.15f));
-			if (UMaterialInterface* OrangeMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Orange")))
-			{
-				Mesh->SetMaterial(0, OrangeMat);
-			}
+			Mesh->SetWorldScale3D(FVector(0.18f, 0.18f, 0.18f));
+			const bool bEnemyShot = Cast<AGameForgeEnemy>(GetInstigator()) != nullptr;
+			GameForgeVisuals::Tint(Mesh, bEnemyShot ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(0.3f, 0.9f, 1.f));
 		}
 	}
 }
@@ -458,9 +510,17 @@ void AGameForgeProjectile::BeginPlay()
 void AGameForgeProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
-	if (OtherActor && OtherActor != GetInstigator())
+	AActor* Shooter = GetInstigator();
+	if (OtherActor && OtherActor != Shooter)
 	{
-		UGameForgeDamageLibrary::ApplyDamage(OtherActor, GetInstigator(), Damage);
+		// No friendly fire between enemies: a ranged enemy used to kill the melee enemies standing between it and
+		// the player, which also ended "defeat all" waves without the player doing anything.
+		const bool bShooterIsEnemy = Cast<AGameForgeEnemy>(Shooter) != nullptr;
+		const bool bTargetIsEnemy = Cast<AGameForgeEnemy>(OtherActor) != nullptr;
+		if (!(bShooterIsEnemy && bTargetIsEnemy))
+		{
+			UGameForgeDamageLibrary::ApplyDamage(OtherActor, Shooter, Damage);
+		}
 	}
 	Destroy();
 }
@@ -476,13 +536,37 @@ AGameForgeEnemy::AGameForgeEnemy()
 	WeaponMesh->SetupAttachment(GetMesh(), FName(TEXT("hand_rSocket")));
 	WeaponMesh->SetCollisionProfileName(TEXT("NoCollision"));
 
+	ProxyBody = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProxyBody"));
+	ProxyBody->SetupAttachment(RootComponent);
+	ProxyBody->SetCollisionProfileName(TEXT("NoCollision"));
+	ProxyBody->SetRelativeLocation(FVector(0.f, 0.f, -20.f));
+	ProxyBody->SetRelativeScale3D(FVector(0.7f, 0.7f, 1.3f));
+	ProxyBody->SetVisibility(false);
+
+	ProxyHead = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProxyHead"));
+	ProxyHead->SetupAttachment(RootComponent);
+	ProxyHead->SetCollisionProfileName(TEXT("NoCollision"));
+	ProxyHead->SetRelativeLocation(FVector(0.f, 0.f, 70.f));
+	ProxyHead->SetRelativeScale3D(FVector(0.45f, 0.45f, 0.45f));
+	ProxyHead->SetVisibility(false);
+
 	AIControllerClass = AGameForgeEnemyAIController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+
+	bUseControllerRotationYaw = false;
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->bOrientRotationToMovement = true;
+		Move->RotationRate = FRotator(0.f, 480.f, 0.f);
+	}
 }
 
 void AGameForgeEnemy::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	HomeLocation = GetActorLocation();
+
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
@@ -491,7 +575,23 @@ void AGameForgeEnemy::BeginPlay()
 	}
 	GetCharacterMovement()->MaxWalkSpeed = MoveSpeed;
 
-	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset() == nullptr)
+	ApplyVisuals();
+
+	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+	{
+		Bus->Emit(GFEvent::EnemySpawned, GetName(), TEXT("{}"), EntityId);
+	}
+}
+
+void AGameForgeEnemy::ApplyVisuals()
+{
+	if (bRanged && BodyColor.Equals(FLinearColor(0.85f, 0.15f, 0.12f, 1.f)))
+	{
+		BodyColor = FLinearColor(0.75f, 0.2f, 0.85f, 1.f);   // ranged enemies read differently from melee ones
+	}
+
+	bool bHasSkeletal = GetMesh() && GetMesh()->GetSkeletalMeshAsset() != nullptr;
+	if (GetMesh() && !bHasSkeletal)
 	{
 		USkeletalMesh* SKM = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple"));
 		if (!SKM)
@@ -503,31 +603,155 @@ void AGameForgeEnemy::BeginPlay()
 			GetMesh()->SetSkeletalMeshAsset(SKM);
 			GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 			GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
-			if (UMaterialInterface* EnemyMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/LevelPrototyping/Materials/MI_PrototypeGrid_Orange")))
+			if (UClass* AnimClass = LoadClass<UAnimInstance>(nullptr,
+				TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C")))
 			{
-				GetMesh()->SetMaterial(0, EnemyMat);
+				GetMesh()->SetAnimInstanceClass(AnimClass);
 			}
+			bHasSkeletal = true;
+		}
+	}
+
+	BodyMaterials.Reset();
+	if (bHasSkeletal)
+	{
+		for (int32 Slot = 0; Slot < GetMesh()->GetNumMaterials(); ++Slot)
+		{
+			if (UMaterialInstanceDynamic* MID = GetMesh()->CreateAndSetMaterialInstanceDynamic(Slot))
+			{
+				// Mannequin materials expose "Tint"; basic materials expose "Color". Setting both is harmless.
+				MID->SetVectorParameterValue(TEXT("Tint"), BodyColor);
+				MID->SetVectorParameterValue(TEXT("Color"), BodyColor);
+				BodyMaterials.Add(MID);
+			}
+		}
+	}
+	else
+	{
+		// No character content in the project: build a readable primitive body instead of an invisible capsule.
+		GameForgeVisuals::SetBasicShape(ProxyBody, TEXT("Cylinder"));
+		GameForgeVisuals::SetBasicShape(ProxyHead, TEXT("Sphere"));
+		ProxyBody->SetVisibility(true);
+		ProxyHead->SetVisibility(true);
+		for (UMaterialInstanceDynamic* MID : GameForgeVisuals::Tint(ProxyBody, BodyColor))
+		{
+			BodyMaterials.Add(MID);
+		}
+		for (UMaterialInstanceDynamic* MID : GameForgeVisuals::Tint(ProxyHead, BodyColor * 0.7f))
+		{
+			BodyMaterials.Add(MID);
 		}
 	}
 
 	if (WeaponMesh && WeaponMesh->GetStaticMesh() == nullptr)
 	{
-		if (UStaticMesh* GunSM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+		const bool bSocket = bHasSkeletal && GetMesh()->DoesSocketExist(FName(TEXT("hand_rSocket")));
+		if (bSocket && GameForgeVisuals::SetBasicShape(WeaponMesh, TEXT("Cube")))
 		{
-			WeaponMesh->SetStaticMesh(GunSM);
 			WeaponMesh->SetRelativeScale3D(FVector(0.10f, 0.35f, 0.12f));
+			GameForgeVisuals::Tint(WeaponMesh, FLinearColor(0.1f, 0.1f, 0.12f));
+		}
+		else
+		{
+			WeaponMesh->SetVisibility(false);
 		}
 	}
+}
 
-	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+void AGameForgeEnemy::FlashColor(const FLinearColor& Color, float Seconds)
+{
+	for (UMaterialInstanceDynamic* MID : BodyMaterials)
 	{
-		Bus->Emit(GFEvent::EnemySpawned, GetName(), TEXT("{}"), EntityId);
+		if (MID)
+		{
+			MID->SetVectorParameterValue(TEXT("Tint"), Color);
+			MID->SetVectorParameterValue(TEXT("Color"), Color);
+		}
 	}
+	if (UWorld* W = GetWorld())
+	{
+		TWeakObjectPtr<AGameForgeEnemy> WeakThis(this);
+		W->GetTimerManager().SetTimer(FlashTimer, [WeakThis]()
+		{
+			if (AGameForgeEnemy* Self = WeakThis.Get())
+			{
+				const FLinearColor Restore = Self->bDead ? Self->BodyColor * 0.3f : Self->BodyColor;
+				for (UMaterialInstanceDynamic* MID : Self->BodyMaterials)
+				{
+					if (MID)
+					{
+						MID->SetVectorParameterValue(TEXT("Tint"), Restore);
+						MID->SetVectorParameterValue(TEXT("Color"), Restore);
+					}
+				}
+			}
+		}, Seconds, false);
+	}
+}
+
+void AGameForgeEnemy::OnDamaged(AActor* DamageInstigator)
+{
+	if (bDead)
+	{
+		return;
+	}
+	FlashColor(FLinearColor::White, 0.12f);
+	// Small knock-back so hits are felt.
+	if (DamageInstigator)
+	{
+		FVector Away = GetActorLocation() - DamageInstigator->GetActorLocation();
+		Away.Z = 0.f;
+		LaunchCharacter(Away.GetSafeNormal() * 350.f + FVector(0.f, 0.f, 120.f), true, false);
+	}
+	// Being shot from outside the aggro range still makes the enemy react.
+	if (DamageInstigator)
+	{
+		AggroRange = FMath::Max(AggroRange, FVector::Dist(GetActorLocation(), DamageInstigator->GetActorLocation()) + 200.f);
+	}
+}
+
+void AGameForgeEnemy::HandleDeath()
+{
+	if (bDead)
+	{
+		return;
+	}
+	bDead = true;
+
+	if (AController* C = GetController())
+	{
+		C->StopMovement();
+	}
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->DisableMovement();
+		Move->StopMovementImmediately();
+	}
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	FlashColor(BodyColor * 0.3f, 0.01f);
+
+	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset() && GetMesh()->GetPhysicsAsset())
+	{
+		GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+		GetMesh()->SetSimulatePhysics(true);
+	}
+	else
+	{
+		// Primitive body: tip over.
+		SetActorRotation(GetActorRotation() + FRotator(0.f, 0.f, 80.f));
+	}
+
+	// A positive life span removes the enemy from entity.<id>.remaining immediately and destroys it shortly after.
+	SetLifeSpan(FMath::Max(0.5f, CorpseSeconds));
 }
 
 void AGameForgeEnemy::PerformAttack(AActor* Target)
 {
-	if (!Target)
+	if (!Target || bDead)
 	{
 		return;
 	}
@@ -539,22 +763,32 @@ void AGameForgeEnemy::PerformAttack(AActor* Target)
 	}
 	LastAttackTime = CurrentTime;
 
+	FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+	ToTarget.Z = 0.f;
+	if (!ToTarget.IsNearlyZero())
+	{
+		SetActorRotation(ToTarget.Rotation());
+	}
+
 	if (bRanged)
 	{
-		FVector SpawnLoc = GetActorLocation() + GetActorForwardVector() * 80.f;
+		FVector SpawnLoc = GetActorLocation() + GetActorForwardVector() * 80.f + FVector(0.f, 0.f, 30.f);
 		FRotator SpawnRot = (Target->GetActorLocation() - SpawnLoc).Rotation();
 		FActorSpawnParameters Params;
 		Params.Instigator = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		AGameForgeProjectile* Proj = GetWorld()->SpawnActor<AGameForgeProjectile>(AGameForgeProjectile::StaticClass(), SpawnLoc, SpawnRot, Params);
 		if (Proj)
 		{
 			Proj->Damage = AttackDamage;
 			Proj->Movement->InitialSpeed = ProjectileSpeed;
 			Proj->Movement->MaxSpeed = ProjectileSpeed;
+			Proj->Movement->Velocity = SpawnRot.Vector() * ProjectileSpeed;
 		}
 	}
 	else
 	{
+		FlashColor(FLinearColor(1.f, 0.85f, 0.2f), 0.15f);   // wind-up flash telegraphs the hit
 		UGameForgeDamageLibrary::ApplyDamage(Target, this, AttackDamage);
 	}
 }
@@ -571,42 +805,67 @@ void AGameForgeEnemyAIController::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	AGameForgeEnemy* EnemyPawn = Cast<AGameForgeEnemy>(GetPawn());
-	if (!EnemyPawn || EnemyPawn->AttributeSet->GetHealth() <= 0.f)
+	if (!EnemyPawn || EnemyPawn->IsDead() || EnemyPawn->AttributeSet->GetHealth() <= 0.f)
 	{
 		return;
 	}
 
-	if (!CurrentTarget.IsValid())
-	{
-		APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-		if (PC && PC->GetPawn())
-		{
-			CurrentTarget = PC->GetPawn();
-		}
-	}
+	// Re-acquire every tick: the player pawn changes on respawn and a stale weak pointer left enemies idle.
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
+	CurrentTarget = PlayerPawn;
 
 	AActor* Target = CurrentTarget.Get();
-	if (!Target)
+	const float DistSq = Target ? FVector::DistSquared(EnemyPawn->GetActorLocation(), Target->GetActorLocation()) : TNumericLimits<float>::Max();
+	const float AggroSq = FMath::Square(EnemyPawn->AggroRange);
+	// Keep chasing until the player is well outside the aggro radius (hysteresis avoids stutter at the edge).
+	const float LeashSq = FMath::Square(EnemyPawn->AggroRange * 1.5f);
+	const float AttackSq = FMath::Square(EnemyPawn->AttackRange);
+
+	if (Target && DistSq <= AttackSq)
 	{
+		bAggro = true;
+		StopMovement();
+		SetFocus(Target);
+		EnemyPawn->PerformAttack(Target);
 		return;
 	}
 
-	const float DistSq = FVector::DistSquared(EnemyPawn->GetActorLocation(), Target->GetActorLocation());
-	const float AggroSq = FMath::Square(EnemyPawn->AggroRange);
-	const float AttackSq = FMath::Square(EnemyPawn->AttackRange);
-
-	if (DistSq <= AttackSq)
+	if (Target && (DistSq <= AggroSq || (bAggro && DistSq <= LeashSq)))
 	{
-		StopMovement();
-		EnemyPawn->PerformAttack(Target);
-	}
-	else if (DistSq <= AggroSq)
-	{
+		bAggro = true;
+		SetFocus(Target);
 		MoveCooldown -= DeltaSeconds;
 		if (MoveCooldown <= 0.f)
 		{
-			MoveCooldown = 0.5f;
-			MoveToActor(Target, EnemyPawn->AttackRange * 0.8f);
+			MoveCooldown = 0.35f;
+			const EPathFollowingRequestResult::Type Res = MoveToActor(Target, EnemyPawn->AttackRange * 0.7f, true, true, true);
+			if (Res == EPathFollowingRequestResult::Failed)
+			{
+				// No navmesh path (e.g. navmesh still building): steer straight at the player.
+				FVector Dir = Target->GetActorLocation() - EnemyPawn->GetActorLocation();
+				Dir.Z = 0.f;
+				EnemyPawn->AddMovementInput(Dir.GetSafeNormal(), 1.f);
+			}
+		}
+		return;
+	}
+
+	// Idle: wander around the spawn point so the level feels alive instead of full of statues.
+	if (bAggro)
+	{
+		bAggro = false;
+		ClearFocus(EAIFocusPriority::Gameplay);
+	}
+	if (EnemyPawn->WanderRadius > 50.f)
+	{
+		WanderCooldown -= DeltaSeconds;
+		if (WanderCooldown <= 0.f)
+		{
+			WanderCooldown = FMath::FRandRange(2.5f, 5.0f);
+			const FVector2D Offset = FMath::RandPointInCircle(EnemyPawn->WanderRadius);
+			const FVector Dest = EnemyPawn->GetHomeLocation() + FVector(Offset.X, Offset.Y, 0.f);
+			MoveToLocation(Dest, 50.f, true, true, true, true);
 		}
 	}
 }
@@ -621,13 +880,62 @@ AGameForgeSpawner::AGameForgeSpawner()
 void AGameForgeSpawner::BeginPlay()
 {
 	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
 
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{
 		Bus->OnEvent.AddUObject(this, &AGameForgeSpawner::HandleEvent);
 	}
 
-	StartWave();
+	// Short grace period so the player can orient before the first wave arrives.
+	GetWorld()->GetTimerManager().SetTimer(WaveTimerHandle, this, &AGameForgeSpawner::StartWave,
+		FMath::Clamp(SecondsBetweenWaves * 0.5f, 1.5f, 4.f), false);
+}
+
+void AGameForgeSpawner::ConfigureSpawnedEnemy(AActor* Spawned) const
+{
+	AGameForgeEnemy* Enemy = Cast<AGameForgeEnemy>(Spawned);
+	if (!Enemy)
+	{
+		return;
+	}
+	Enemy->EntityId = EnemyEntityId;
+	Enemy->Tags.AddUnique(FName(*(FString(TEXT("GF_E_")) + EnemyEntityId.ToString())));
+	Enemy->Tags.AddUnique(FName(TEXT("GF_Owned")));
+	Enemy->Tags.AddUnique(FName(TEXT("enemy")));
+
+	UGameForgeGameDefinition* DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main.GD_Main"));
+	TSharedPtr<FJsonObject> Def;
+	if (DefAsset)
+	{
+		Def = DefAsset->GetParsed();
+	}
+	const TSharedPtr<FJsonObject>* Entities = nullptr;
+	const TSharedPtr<FJsonObject>* EntSpec = nullptr;
+	const TSharedPtr<FJsonObject>* Props = nullptr;
+	if (!Def.IsValid() || !Def->TryGetObjectField(TEXT("entities"), Entities) || !Entities ||
+		!(*Entities)->TryGetObjectField(EnemyEntityId.ToString(), EntSpec) || !EntSpec ||
+		!(*EntSpec)->TryGetObjectField(TEXT("properties"), Props) || !Props)
+	{
+		return;
+	}
+	double V = 0.0;
+	if ((*Props)->TryGetNumberField(TEXT("attack_damage"), V)) { Enemy->AttackDamage = static_cast<float>(V); }
+	if ((*Props)->TryGetNumberField(TEXT("attack_range"), V)) { Enemy->AttackRange = static_cast<float>(V); }
+	if ((*Props)->TryGetNumberField(TEXT("attack_cooldown"), V)) { Enemy->AttackCooldown = static_cast<float>(V); }
+	if ((*Props)->TryGetNumberField(TEXT("move_speed"), V)) { Enemy->MoveSpeed = static_cast<float>(V); }
+	if ((*Props)->TryGetNumberField(TEXT("aggro_range"), V)) { Enemy->AggroRange = static_cast<float>(V); }
+	if ((*Props)->TryGetNumberField(TEXT("max_health"), V)) { Enemy->MaxHealth = static_cast<float>(V); }
+	if ((*Props)->TryGetNumberField(TEXT("projectile_speed"), V)) { Enemy->ProjectileSpeed = static_cast<float>(V); Enemy->bRanged = true; }
+	// Wave enemies come to the player; wandering around the spawner would stall the wave.
+	Enemy->AggroRange = FMath::Max(Enemy->AggroRange, 6000.f);
+	const TArray<TSharedPtr<FJsonValue>>* ColorArr = nullptr;
+	if ((*Props)->TryGetArrayField(TEXT("body_color"), ColorArr) && ColorArr && ColorArr->Num() >= 3)
+	{
+		TArray<double> Values;
+		for (const TSharedPtr<FJsonValue>& C : *ColorArr) { Values.Add(C->AsNumber()); }
+		Enemy->BodyColor = GameForgeVisuals::ColorFromArray(Values, Enemy->BodyColor);
+	}
 }
 
 void AGameForgeSpawner::StartWave()
@@ -646,31 +954,50 @@ void AGameForgeSpawner::StartWave()
 
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{
-		Bus->Emit(GFEvent::WaveStarted, GetName(), FString::Printf(TEXT("{\"wave\":%d}"), CurrentWave), EntityId);
+		Bus->Emit(GFEvent::WaveStarted, GetName(), FString::Printf(TEXT("{\"wave\":%d,\"of\":%d}"), CurrentWave, WaveCount), EntityId);
+		TSharedRef<FJsonObject> Msg = MakeShared<FJsonObject>();
+		Msg->SetStringField(TEXT("text"), FString::Printf(TEXT("Wave %d of %d"), CurrentWave, WaveCount));
+		Msg->SetNumberField(TEXT("seconds"), 2.5);
+		FString MsgStr;
+		TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&MsgStr);
+		FJsonSerializer::Serialize(Msg, Writer);
+		Bus->Emit(FName(TEXT("ui.message")), GetName(), MsgStr, EntityId);
 	}
 
-	AliveEnemiesInWave = EnemiesPerWave;
 	UClass* Cls = EnemyClass ? EnemyClass.Get() : AGameForgeEnemy::StaticClass();
+	// Later waves are a little bigger so the fight escalates.
+	const int32 ThisWave = EnemiesPerWave + (CurrentWave - 1) / 2;
+	int32 Spawned = 0;
 
-	for (int32 i = 0; i < EnemiesPerWave; i++)
+	for (int32 i = 0; i < ThisWave; i++)
 	{
-		const float Angle = (static_cast<float>(i) / FMath::Max(1, EnemiesPerWave)) * 2.f * PI;
-		FVector Offset(FMath::Cos(Angle) * SpawnRadius, FMath::Sin(Angle) * SpawnRadius, 50.f);
+		const float Angle = (static_cast<float>(i) / FMath::Max(1, ThisWave)) * 2.f * PI + FMath::FRandRange(-0.2f, 0.2f);
+		FVector Offset(FMath::Cos(Angle) * SpawnRadius, FMath::Sin(Angle) * SpawnRadius, 90.f);
 		FTransform SpawnTransform(GetActorRotation(), GetActorLocation() + Offset);
 
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-		AActor* Spawned = W->SpawnActor<AActor>(Cls, SpawnTransform, Params);
-		if (Spawned)
+		AActor* NewActor = W->SpawnActorDeferred<AActor>(Cls, SpawnTransform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+		if (NewActor)
 		{
-			Spawned->Tags.AddUnique(FName(*(FString(TEXT("GF_E_")) + EnemyEntityId.ToString())));
+			ConfigureSpawnedEnemy(NewActor);
+			UGameplayStatics::FinishSpawningActor(NewActor, SpawnTransform);
+			WaveActorNames.Add(NewActor->GetName());
+			Spawned++;
 		}
+	}
+	// Count what actually spawned; a failed spawn used to leave the wave un-clearable forever.
+	AliveEnemiesInWave = Spawned;
+	if (Spawned == 0)
+	{
+		W->GetTimerManager().SetTimer(WaveTimerHandle, this, &AGameForgeSpawner::StartWave, SecondsBetweenWaves, false);
 	}
 }
 
 void AGameForgeSpawner::HandleEvent(const FGameForgeEvent& Event)
 {
-	if (Event.Name == GFEvent::EnemyKilled && (Event.Entity == EnemyEntityId || Event.Entity == NAME_None))
+	// Only this spawner's own wave members count: pre-placed enemies of the same entity, or another spawner's
+	// wave, used to clear this wave early while its enemies were still alive.
+	if (Event.Name == GFEvent::EnemyKilled && AliveEnemiesInWave > 0 && WaveActorNames.Remove(Event.Source) > 0)
 	{
 		AliveEnemiesInWave--;
 		if (AliveEnemiesInWave <= 0)

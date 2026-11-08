@@ -7,6 +7,9 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 // ── FGameForgeConditionEvaluator ──────────────────────────────────────────────
 
@@ -226,6 +229,12 @@ void UGameForgeRulesSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	StartTime = InWorld.GetTimeSeconds();
 	bGameEnded = false;
 	ReentrancyDepth = 0;
+
+	// Fresh counters for every play session / restart (the bus outlives the world).
+	if (UGameForgeEventBus* ResetBus = UGameForgeEventBus::Get(&InWorld))
+	{
+		ResetBus->ResetCounters();
+	}
 
 	// Load definition from settings
 	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
@@ -511,6 +520,43 @@ void UGameForgeRulesSubsystem::ApplyEffect(const TSharedPtr<FJsonObject>& Effect
 		Effect->TryGetStringField(TEXT("entity_id"), EntityId);
 		Effect->TryGetNumberField(TEXT("count"), Count);
 		SpawnEntity(EntityId, static_cast<int32>(Count));
+	}
+	else if (Kind == TEXT("message"))
+	{
+		// Previously ignored: rule messages ("The gate is open!") never reached the player.
+		FString Text;
+		double Seconds = 3.0;
+		Effect->TryGetStringField(TEXT("text"), Text);
+		Effect->TryGetNumberField(TEXT("seconds"), Seconds);
+		if (!Text.IsEmpty())
+		{
+			if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(W))
+			{
+				TSharedRef<FJsonObject> Payload = MakeShared<FJsonObject>();
+				Payload->SetStringField(TEXT("text"), Text);
+				Payload->SetNumberField(TEXT("seconds"), Seconds);
+				FString PayloadStr;
+				TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&PayloadStr);
+				FJsonSerializer::Serialize(Payload, Writer);
+				Bus->Emit(FName(TEXT("ui.message")), TEXT("RulesSubsystem"), PayloadStr);
+			}
+		}
+	}
+	else if (Kind == TEXT("end_game"))
+	{
+		// Previously ignored, so rule-driven endings (e.g. "the AI won the board -> lose") never ended the game.
+		FString Outcome;
+		Effect->TryGetStringField(TEXT("outcome"), Outcome);
+		if (!bGameEnded)
+		{
+			bGameEnded = true;
+			const bool bWon = Outcome.Equals(TEXT("win"), ESearchCase::IgnoreCase);
+			if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(W))
+			{
+				Bus->Emit(bWon ? GFEvent::GameWon : GFEvent::GameLost, TEXT("RulesSubsystem"),
+					FString::Printf(TEXT("{\"reason\":\"rule:%s\"}"), *TriggerEvent.Name.ToString()));
+			}
+		}
 	}
 }
 

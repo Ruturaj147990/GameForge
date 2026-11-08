@@ -188,8 +188,9 @@ def is_gameforge_project(folder: Union[str, Path]) -> bool:
         if find_gds(folder_str) is not None:
             return True
 
-        # 3. .gameforge workspace directory (tasks, sessions, diffs, etc.)
-        if os.path.isdir(os.path.join(folder_str, ".gameforge")):
+        # 3. A .gameforge folder alone is IDE bookkeeping (sessions, tasks, diffs) that every workspace gets; it
+        #    made the workspace itself show up as an empty "Unknown" game. Only a folder with Forge runs counts.
+        if os.path.isdir(os.path.join(folder_str, "Saved", "GameForge", "runs")):
             return True
     except (OSError, PermissionError):
         pass

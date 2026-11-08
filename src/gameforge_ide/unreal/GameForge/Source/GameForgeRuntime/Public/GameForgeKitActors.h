@@ -14,6 +14,8 @@
 #include "GameForgeEvents.h"
 #include "GameForgeKitActors.generated.h"
 
+class UMaterialInstanceDynamic;
+
 // ── Interface ─────────────────────────────────────────────────────────────────
 
 UINTERFACE(MinimalAPI, Blueprintable)
@@ -358,11 +360,43 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
 
+	/** Primitive body shown when no skeletal mesh is available (blank projects have no Mannequin content), so
+	 *  enemies are never invisible capsules. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> ProxyBody;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> ProxyHead;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FLinearColor BodyColor = FLinearColor(0.85f, 0.15f, 0.12f, 1.f);
+
+	/** Idle wander radius around the spawn point (0 = stand still until the player comes into range). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float WanderRadius = 600.f;
+
+	/** Seconds the corpse stays before it is removed. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float CorpseSeconds = 2.5f;
+
 	virtual void BeginPlay() override;
 	void PerformAttack(AActor* Target);
+	void HandleDeath();
+	void OnDamaged(AActor* DamageInstigator);
+	bool IsDead() const { return bDead; }
+	FVector GetHomeLocation() const { return HomeLocation; }
 
 private:
+	void ApplyVisuals();
+	void FlashColor(const FLinearColor& Color, float Seconds);
+
 	float LastAttackTime = -100.f;
+	bool bDead = false;
+	FVector HomeLocation = FVector::ZeroVector;
+	FTimerHandle FlashTimer;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> BodyMaterials;
 };
 
 // ── Enemy AIController ────────────────────────────────────────────────────────
@@ -378,6 +412,8 @@ public:
 private:
 	TWeakObjectPtr<AActor> CurrentTarget;
 	float MoveCooldown = 0.f;
+	float WanderCooldown = 0.f;
+	bool bAggro = false;
 };
 
 // ── Spawner ───────────────────────────────────────────────────────────────────
@@ -415,9 +451,13 @@ public:
 private:
 	void StartWave();
 	void HandleEvent(const FGameForgeEvent& Event);
+	/** Copies the enemy entity's GDS properties (attack_damage, max_health, ...) from the game definition onto a
+	 *  deferred-spawned enemy. Spawned wave enemies used to run with hard-coded defaults and no EntityId. */
+	void ConfigureSpawnedEnemy(AActor* Spawned) const;
 
 	int32 CurrentWave = 0;
 	int32 AliveEnemiesInWave = 0;
+	TSet<FString> WaveActorNames;
 	FTimerHandle WaveTimerHandle;
 };
 

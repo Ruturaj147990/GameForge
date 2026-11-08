@@ -130,7 +130,7 @@ def generate_sfx(spec: SFXSpec, output_dir: str | Path, asset_registry=None) -> 
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "analysis": analyze_wav(path, loop=spec.kind == "wind_loop"), "looping": spec.kind == "wind_loop"}
     if asset_registry is not None:
-        from src.gameforge_ide.backend.assets.registry import AssetRecord
+        from ...backend.assets.registry import AssetRecord
         rid = asset_registry.register(AssetRecord(name=f"SFX_{spec.name}", asset_type="sound", purpose=f"{spec.kind} SFX",
                                                   provenance="procedural", backend=GENERATOR, backend_version="1.0.0",
                                                   license="CC0-1.0", spec=asdict(spec), tags=[spec.kind]))

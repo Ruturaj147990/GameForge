@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...core.settings import artifacts_dir
-from src.gameforge_ide.backend.models.animation_spec import (
+from ...backend.models.animation_spec import (
     AnimationAction,
     AnimationSpec,
     LocomotionSetSpec,

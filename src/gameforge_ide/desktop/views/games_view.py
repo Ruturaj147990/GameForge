@@ -66,8 +66,8 @@ from ..services.projects_service import (
     list_games,
 )
 from ..styles import tokens
-from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
-from src.gameforge_ide.core.projects import resolve_project_dir
+from ...core.jobs import JobHandle, default_job_manager
+from ...core.projects import resolve_project_dir
 
 logger = logging.getLogger(__name__)
 
@@ -701,7 +701,7 @@ class GamesView(QWidget):
         """Update candidate projects root and refresh view."""
         resolved = Path(root).resolve() if (root and str(root).strip()) else None
         if resolved is not None:
-            from src.gameforge_ide.core.projects import is_gameforge_project
+            from ...core.projects import is_gameforge_project
             self._projects_root = resolved.parent if is_gameforge_project(resolved) else resolved
         else:
             self._projects_root = None
@@ -896,7 +896,7 @@ class GamesView(QWidget):
     def _confirm_delete(self, game: GameSummary) -> None:
         # Check active editor link first
         try:
-            from src.gameforge_ide.backend.tools.game_tools import GameTools
+            from ...backend.tools.game_tools import GameTools
             for link in GameTools.all_links():
                 link_name = getattr(link, "project_name", "")
                 if link_name and (

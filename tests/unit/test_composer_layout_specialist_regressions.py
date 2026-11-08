@@ -108,17 +108,19 @@ def test_def104_all_six_layouts_generate_watertight_geometry_with_mesh_and_mater
         ("lanes", plan_lanes_level),
     ]
 
+    from src.gameforge_ide.composer.theme import resolve_theme, paint_geometry_ops
+    theme = resolve_theme(gds)
     for name, factory in layout_factories:
         plan = factory(lvl, gds, rng)
+        paint_geometry_ops(plan.geometry_ops, theme)
         assert len(plan.geometry_ops) >= 1, f"Layout {name} has no geometry ops"
 
         for op in plan.geometry_ops:
             if op.op == "spawn_actor" and op.args.get("actor_class") == "StaticMeshActor":
                 label = op.args.get("label", "")
                 assert "static_mesh" in op.args, f"Layout {name} op {label} missing 'static_mesh'"
-                assert op.args["static_mesh"] == "/Engine/BasicShapes/Cube.Cube"
-                assert "material" in op.args, f"Layout {name} op {label} missing 'material'"
-                assert op.args["material"].startswith("/Game/LevelPrototyping/Materials/")
+                assert op.args["static_mesh"].startswith("/Engine/BasicShapes/")
+                assert "material" in op.args or "color" in op.args, f"Layout {name} op {label} missing 'material or color'"
 
 
 # ---------------------------------------------------------------------------

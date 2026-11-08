@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from src.gameforge_ide.core.jobs import JobManager, default_job_manager
-from src.gameforge_ide.core.settings import get_settings
-from src.gameforge_ide.core.projects import (
+from ...core.jobs import JobManager, default_job_manager
+from ...core.settings import get_settings
+from ...core.projects import (
     find_uproject,
     find_gds,
     is_gameforge_project,
@@ -147,7 +147,7 @@ def list_games(
         if ws.is_dir():
             repo_real = None
             try:
-                from src.gameforge_ide.core.settings import REPO_ROOT
+                from ...core.settings import REPO_ROOT
                 repo_real = Path(REPO_ROOT).resolve()
             except Exception:
                 pass
@@ -308,7 +308,7 @@ def delete_project(
 
     # 2. Check active Unreal Editor link
     try:
-        from src.gameforge_ide.backend.tools.game_tools import GameTools
+        from ...backend.tools.game_tools import GameTools
         for link in GameTools.all_links():
             link_name = getattr(link, "project_name", "")
             if link_name and (link_name == project_name or link_name == pdir.name):

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # DEMO_ONLY DISCLAIMER & REFUSAL GUARD (DEF-REM-P5D)
 # Direct GGUF tensor mutation scripts are for synthetic experimental demonstrations only.
 # They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
@@ -13,7 +15,6 @@ DEMO_ONLY = True
 6. Registers in Ollama as 'gameforge-27b-sft'.
 """
 
-from __future__ import annotations
 
 import hashlib
 import json

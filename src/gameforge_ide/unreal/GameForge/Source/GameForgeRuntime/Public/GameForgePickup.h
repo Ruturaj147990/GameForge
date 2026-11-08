@@ -56,6 +56,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
 
+	/** Points carried by the pickup (reported in the event payload; score rules read it). The kit module's
+	 *  property map always targeted Value / bRespawns / RespawnSeconds, but the class had none of them, so every
+	 *  set_actor_property for them was silently skipped. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	int32 Value = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	bool bRespawns = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	float RespawnSeconds = 10.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup|Visual")
+	FLinearColor PickupColor = FLinearColor(1.f, 0.78f, 0.1f, 1.f);
+
+	/** Degrees per second; pickups spin and bob so they read as collectibles. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup|Visual")
+	float SpinSpeed = 90.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup|Visual")
+	float BobHeight = 18.f;
+
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup|State")
 	bool bCollected = false;
 
@@ -74,6 +99,11 @@ public:
 	FOnCollected OnCollected;
 
 protected:
+	void Respawn();
+	FVector BaseVisualLocation = FVector::ZeroVector;
+	float Age = 0.f;
+	FTimerHandle RespawnTimer;
+
 	UFUNCTION()
 	void HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,
 		int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);

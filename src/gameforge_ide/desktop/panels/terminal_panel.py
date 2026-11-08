@@ -8,6 +8,7 @@ Does NOT use subprocess.Popen; uses Qt's QProcess for proper event-loop integrat
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtCore import QProcess, Qt, Slot
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor

@@ -26,8 +26,9 @@ def test_find_gds_matches_custom_gds_filename(tmp_path: Path):
 def test_list_games_includes_in_progress_projects_with_dot_gameforge(tmp_path: Path):
     proj_dir = tmp_path / "Sudoku"
     (proj_dir / ".gameforge").mkdir(parents=True)
+    (proj_dir / "Saved" / "GameForge" / "runs").mkdir(parents=True)
 
-    # Even with no .uproject and no GDS, it is recognized as a GameForge project
+    # In-progress project with Forge runs is recognized as a GameForge project
     assert is_gameforge_project(proj_dir)
 
     games = list_games(projects_root=tmp_path)

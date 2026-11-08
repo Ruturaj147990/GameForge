@@ -22,18 +22,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.settings import artifacts_dir, get_settings
-from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry
-from src.gameforge_ide.backend.models.character_spec import CharacterSpec
-from src.gameforge_ide.backend.models.provenance import (
+from ..backend.assets.registry import AssetRecord, AssetRegistry
+from ..backend.models.character_spec import CharacterSpec
+from ..backend.models.provenance import (
     AssetProvenanceRecord,
     LicenseRecord,
     LicenseRegistry,
 )
-from src.gameforge_ide.backend.tools.character_generator import (
+from ..backend.tools.character_generator import (
     ProceduralSkinnedCharacterGenerator,
     SkinnedMeshBundle,
 )
-from src.gameforge_ide.backend.tools.character_rig_validator import (
+from ..backend.tools.character_rig_validator import (
     CharacterRigValidator,
     RigValidationReport,
 )

@@ -96,6 +96,34 @@ class ExplorerPanel(QWidget):
         self._workspace = Path(new_workspace).resolve()
         self._populate_root()
 
+    def refresh(self) -> None:
+        """Reload the tree, preserving which directories were expanded (called after agent file edits).
+
+        MainWindow called ``refresh()`` on file-modified notifications but the method did not exist, so the
+        AttributeError was swallowed and the explorer never showed files the agent created.
+        """
+        expanded: set = set()
+
+        def _collect(item) -> None:
+            if item.isExpanded():
+                expanded.add(item.data(0, Qt.UserRole))
+            for i in range(item.childCount()):
+                _collect(item.child(i))
+
+        for i in range(self._tree.topLevelItemCount()):
+            _collect(self._tree.topLevelItem(i))
+        self._populate_root()
+
+        def _restore(item) -> None:
+            for i in range(item.childCount()):
+                child = item.child(i)
+                if child.data(0, Qt.UserRole) in expanded and child.data(0, Qt.UserRole + 1) == "dir":
+                    child.setExpanded(True)  # triggers lazy population via _on_expand
+                    _restore(child)
+
+        for i in range(self._tree.topLevelItemCount()):
+            _restore(self._tree.topLevelItem(i))
+
     # ── UI Construction ─────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:

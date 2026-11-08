@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.gameforge_ide.backend.models.character_spec import CharacterSpec
+from ...backend.models.character_spec import CharacterSpec
 from ...core.settings import artifacts_dir
 
 

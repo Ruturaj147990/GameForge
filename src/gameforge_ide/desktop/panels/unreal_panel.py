@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from ..services.tool_service import ToolService
 from ..styles import tokens
-from src.gameforge_ide.core.projects import open_folder_in_file_manager
+from ...core.projects import open_folder_in_file_manager
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ class UnrealPanel(QWidget):
 
         # Probe loopback Unreal bridge status
         try:
-            from src.gameforge_ide.backend.tools.game_tools import GameTools
+            from ...backend.tools.game_tools import GameTools
             links = GameTools.all_links()
             if links:
                 self._row_bridge.set_value(f"✅ Active ({len(links)} bridge session{'s' if len(links) > 1 else ''})")

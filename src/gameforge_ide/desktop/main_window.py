@@ -1330,6 +1330,9 @@ class MainWindow(QMainWindow):
     def _get_or_create_code_view(self) -> CodeView:
         if not hasattr(self, "_code_view") or self._code_view is None:
             self._code_view = CodeView(self._workspace, self._tools, parent=self)
+            # Pre-instantiated before the view host adopts it: as a bare child of the window it was shown at (0,0)
+            # on top of the top bar (the stray "Expl..." text over the logo). The view host shows it when used.
+            self._code_view.hide()
             self._dock_explorer = self._code_view._dock_explorer
             self._dock_unreal = self._code_view._dock_unreal
             self._dock_diff = self._code_view._dock_diff
@@ -1808,7 +1811,7 @@ class MainWindow(QMainWindow):
             from .styles.dark_theme import get_theme_display_name
             self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
 
-        from src.gameforge_ide.core.settings import get_settings
+        from ..core.settings import get_settings
         s = get_settings()
         if hasattr(self, "_projects_service") and self._projects_service and s.projects_root:
             self._projects_service._projects_root = Path(s.projects_root).resolve()
@@ -1863,7 +1866,7 @@ class MainWindow(QMainWindow):
                 return
         if hasattr(self, "_forge_service"):
             self._forge_service.cancel_run(run_id)
-        from src.gameforge_ide.forge.executor import ForgeExecutor
+        from ..forge.executor import ForgeExecutor
         ForgeExecutor.request_cancel(run_id)
         if hasattr(self, "_toasts"):
             self._toasts.warning("Run Cancelled", f"Cancelled run {run_id}")
@@ -1939,7 +1942,7 @@ class MainWindow(QMainWindow):
                 if run_id:
                     try:
                         forge_service.cancel_run(run_id)
-                        from src.gameforge_ide.forge.executor import ForgeExecutor
+                        from ..forge.executor import ForgeExecutor
                         ForgeExecutor.request_cancel(run_id)
                     except Exception as exc:
                         pass

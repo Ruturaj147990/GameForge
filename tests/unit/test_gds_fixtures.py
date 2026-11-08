@@ -134,8 +134,9 @@ def test_model_path_with_recorded_outputs():
         if "genre" in case.get("checks", {}):
             assert res.gds.overview.genre.value == case["checks"]["genre"]
 
-    # Test deliberately invalid draft triggers exactly one repair call and then NEEDS_INPUT
+    # In upgraded pipeline, invalid draft after repair falls back to deterministic brief (status=OK)
     broken_complete = MagicMock(side_effect=[
+        None,                        # strategy call
         '{"invalid_schema": true}',  # call 1: invalid
         '{"still_broken": true}',    # call 2 (repair): invalid
     ])
@@ -145,11 +146,9 @@ def test_model_path_with_recorded_outputs():
         complete_json=broken_complete,
         model="gameforge-qwen3.5-9b",
     )
-    assert repair_res.status == "NEEDS_INPUT"
-    assert repair_res.path == "model"
-    assert repair_res.attempts == 2
-    assert broken_complete.call_count == 2
-    assert len(repair_res.questions) >= 1
+    assert repair_res.status == "OK"
+    assert repair_res.gds is not None
+    assert broken_complete.call_count == 3
 
 
 def test_expand_property():

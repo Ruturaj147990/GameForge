@@ -1,14 +1,15 @@
 """Legacy recipe adapter: maps GameDesignSpec back to legacy recipe params (P1 WI-1.8)."""
 from __future__ import annotations
 
+import os
 import re
 from typing import Union
 
-from src.gameforge_ide.legacy_recipes.arena_combat.recipe import ArenaCombatParams
-from src.gameforge_ide.legacy_recipes.card_battler.recipe import CardBattlerParams
-from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams
-from src.gameforge_ide.legacy_recipes.platformer.recipe import PlatformerParams
-from src.gameforge_ide.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
+from ..legacy_recipes.arena_combat.recipe import ArenaCombatParams
+from ..legacy_recipes.card_battler.recipe import CardBattlerParams
+from ..legacy_recipes.grid_board_game.recipe import GridBoardParams
+from ..legacy_recipes.platformer.recipe import PlatformerParams
+from ..legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 from .gds import EntityKind, GameDesignSpec, Genre
 
 DEFAULT_PALETTE = ["#2E3440", "#88C0D0", "#EBCB8B", "#BF616A"]
@@ -31,8 +32,19 @@ def to_legacy_params(
     gds: GameDesignSpec,
 ) -> Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams]:
     """Convert a preset-derived GDS to legacy recipe params, or raise LegacyUnsupported."""
-    if getattr(gds.meta, "generator", "").startswith("model:"):
-        raise LegacyUnsupported("Model-generated designs route to modern Composer + Forge DAG path")
+    generator = getattr(gds.meta, "generator", "") or ""
+    # Only untouched presets go to the legacy recipe builders. Those builders keep just a handful of numbers (board
+    # size, pickup count, wave count) and drop everything else - named enemies, hazards, guards, themes, rules - so
+    # sending prompt-derived or edited designs there was the main reason games ignored what the user asked for.
+    if not generator.startswith("preset:"):
+        raise LegacyUnsupported(f"{generator or 'user'} designs route to the Composer + Forge DAG path")
+    # Real-time presets also use the composer now: it has the reworked jump course, themed levels, visible
+    # characters and working combat/respawn. The legacy recipes remain for the turn-based board and card presets,
+    # whose dedicated generated rules the kit does not replace.
+    if gds.overview.genre in (Genre.PLATFORMER, Genre.ARENA_COMBAT, Genre.EXPLORATION) and \
+            os.environ.get("GAMEFORGE_LEGACY_ACTION_RECIPES", "").strip().lower() not in ("1", "true", "yes"):
+        raise LegacyUnsupported("real-time presets are built by the Composer (set GAMEFORGE_LEGACY_ACTION_RECIPES=1 "
+                                "to use the legacy recipe builders)")
     if hasattr(gds.overview, "camera") and str(getattr(gds.overview.camera, "value", gds.overview.camera)) == "first_person":
         raise LegacyUnsupported("First-person games route to modern Composer + Forge DAG path")
     genre = gds.overview.genre

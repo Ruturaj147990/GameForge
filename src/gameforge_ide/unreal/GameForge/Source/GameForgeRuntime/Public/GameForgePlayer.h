@@ -74,8 +74,47 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	float ProjectileSpeed = 2500.f;
 
+	/** Movement feel (previously engine defaults: AirControl 0.05 made platforming nearly impossible). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float AirControl = 0.4f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float GravityScale = 1.2f;
+
+	/** 2 = double jump. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	int32 MaxJumps = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float SprintMultiplier = 1.6f;
+
+	/** Falling below this Z counts as a death (fall-out-of-world used to destroy the pawn and soft-lock the game). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float KillZ = -2000.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FLinearColor BodyColor = FLinearColor(0.15f, 0.45f, 1.f, 1.f);
+
+	/** Primitive body used when the project has no character content (the player used to be an invisible capsule). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> ProxyBody;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> ProxyHead;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> ProxyVisor;
+
 	UFUNCTION(BlueprintCallable, Category = "GameForge")
 	void ApplyCameraMode();
+
+	/** Loads MeshPath/AnimClassPath (falling back to the Mannequins, then to the primitive proxy body). */
+	void ApplyVisuals(const FString& MeshPath, const FString& AnimClassPath);
+	void ApplyMovementSettings();
+	void SetSprinting(bool bNewSprinting);
+	/** Restores health, re-arms death detection and re-enables movement after a respawn. */
+	void ResetForRespawn();
+	bool IsDead() const { return bDead; }
 
 	void PerformAttack();
 	void PerformMeleeAttack();
@@ -83,13 +122,20 @@ public:
 	void PerformInteract();
 
 	virtual void FellOutOfWorld(const UDamageType& dmgType) override;
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
 
 private:
+	/** Direction projectiles travel: camera aim in first/third person, cursor in top-down, facing in side view. */
+	FVector ComputeAimDirection(FVector& OutMuzzle) const;
+
 	float LastAttackTime = -100.f;
+	bool bSprinting = false;
+	bool bDead = false;
+	bool bVisualsApplied = false;
 };
 
 /** Builds its Enhanced Input actions at runtime (no input assets needed; works in cooked builds). */
@@ -122,6 +168,12 @@ protected:
 	void HandleSelect(const FInputActionValue& Value);
 	void HandleAttack(const FInputActionValue& Value);
 	void HandleInteract(const FInputActionValue& Value);
+	void HandleSprintStarted(const FInputActionValue& Value);
+	void HandleSprintCompleted(const FInputActionValue& Value);
+	void HandlePause(const FInputActionValue& Value);
+	void HandleRestart(const FInputActionValue& Value);
+	/** True while the game is over or paused: gameplay input (move, attack) is ignored, menu keys still work. */
+	bool IsGameplayBlocked() const;
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UInputAction>> Actions;
@@ -156,10 +208,19 @@ public:
 	void EndGame(bool bWon, const FString& Reason);
 	void RestartCurrentGame();
 	void SetRespawnTransform(const FTransform& NewTransform) { RespawnTransform = NewTransform; }
+	bool IsGameOver() const { return bEnded; }
+
+	/** Seconds between death and respawn when the game is not lost. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float RespawnDelay = 1.5f;
 
 private:
 	void HandleEvent(const FGameForgeEvent& Event);
+	void RespawnPlayerNow();
 
 	bool bEnded = false;
 	FTransform RespawnTransform;
+	FTransform InitialTransform;
+	bool bHasInitialTransform = false;
+	FTimerHandle RespawnTimer;
 };

@@ -25,7 +25,7 @@ def _configure_terminal_logging(verbose: bool = False) -> None:
     root.setLevel(level)
 
     # Also explicitly ensure gameforge loggers are set to INFO
-    logging.getLogger("src.gameforge_ide").setLevel(level)
+    logging.getLogger(__name__.rsplit(".", 1)[0]).setLevel(level)
     logging.getLogger("gameforge").setLevel(level)
 
     # Format with clean timestamps and module names

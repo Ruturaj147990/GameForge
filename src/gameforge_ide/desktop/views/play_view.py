@@ -28,15 +28,15 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.core.settings import get_settings
-from src.gameforge_ide.core.projects import (
+from ...core.settings import get_settings
+from ...core.projects import (
     find_packaged_executable,
     open_folder_in_file_manager,
     resolve_project_dir,
 )
-from src.gameforge_ide.forge.model import RunState
-from src.gameforge_ide.forge.store import RunStore
-from src.gameforge_ide.qa.scenario import ScenarioResult
+from ...forge.model import RunState
+from ...forge.store import RunStore
+from ...qa.scenario import ScenarioResult
 from PySide6.QtWidgets import QMessageBox
 
 logger = logging.getLogger(__name__)

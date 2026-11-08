@@ -1768,7 +1768,14 @@ class AgentRuntime:
                                          metadata={"stage": "Design", "message": "Drafting the game design spec..."})
                         try:
                             from ...design.prompt_to_gds import prompt_to_gds
-                            res = await asyncio.to_thread(prompt_to_gds, effective_game_prompt, allow_model=True)
+                            # Use the configured design model (this call used to pass no model at all, so every
+                            # Fast-mode game was designed without the LLM).
+                            try:
+                                _cj, _model = self.tool_gateway.game_tools._get_complete_json()
+                            except Exception:
+                                _cj, _model = None, None
+                            res = await asyncio.to_thread(prompt_to_gds, effective_game_prompt,
+                                                          complete_json=_cj, model=_model, allow_model=True)
                             if res.status == "OK" and res.gds is not None:
                                 gds_obj = res.gds
                             # Questions are asked during planning; after Proceed / in Fast mode
@@ -1782,6 +1789,22 @@ class AgentRuntime:
                         target_pdir = ps.active_project_dir
                     elif session and getattr(session, "project_dir", None):
                         target_pdir = session.project_dir
+                    # A *new* game must not overwrite the project that happens to be open: only build into the
+                    # active project when it is empty or already holds this same game.
+                    if target_pdir and gds_obj is not None and not is_proceed_command:
+                        try:
+                            from ...design import store as _design_store
+                            existing = _design_store.load(Path(target_pdir))
+                            if existing is not None and existing.meta.project_name != gds_obj.meta.project_name:
+                                target_pdir = None
+                        except Exception:
+                            pass
+
+                    if gds_obj is not None:
+                        design_md = _design_summary_md(gds_obj)
+                        if design_md:
+                            yield AgentEvent(event_type="token", content=design_md + "\n\n")
+                            self.session_manager.append_message(session_id, "assistant", design_md)
 
                     build_future = asyncio.ensure_future(asyncio.to_thread(
                         self.tool_gateway.game_tools.create_game,
@@ -3045,3 +3068,40 @@ class AgentRuntime:
             )
             async for event in self.execute_task_stream(session_id, prompt, task_state.acceptance):
                 yield event
+
+
+def _design_summary_md(gds: Any) -> str:
+    """Short, user-facing description of what is about to be built (so the user can see the prompt was understood)."""
+    try:
+        from ...kit.runtime_def import describe_objective
+        lines = [f"**Designing:** {gds.meta.title} - {gds.overview.genre.value.replace('_', ' ')}, "
+                 f"{gds.overview.camera.value.replace('_', ' ')} camera"
+                 + (f", {gds.art.material_theme} theme" if getattr(gds.art, "material_theme", "default") != "default" else "")]
+        lines.append(f"- **Objective:** {describe_objective(gds)}")
+        parts = []
+        for e in gds.entities:
+            if e.module in ("kit.player_character", "kit.spawner"):
+                continue
+            label = next((t.split(":", 1)[1] for t in e.tags if isinstance(t, str) and t.startswith("label:")),
+                         e.entity_id.replace("_", " "))
+            parts.append(f"{e.count} x {label}" if e.count > 1 else label)
+        spawner = next((e for e in gds.entities if e.module == "kit.spawner"), None)
+        if spawner is not None:
+            parts.append(f"{spawner.props.get('wave_count', 3)} waves")
+        if parts:
+            lines.append("- **Contents:** " + ", ".join(parts[:12]))
+        player = next((e for e in gds.entities if e.module == "kit.player_character"), None)
+        if player is not None:
+            feats = []
+            if player.props.get("attack_mode") == "projectile":
+                feats.append("ranged weapon")
+            if player.props.get("double_jump"):
+                feats.append("double jump")
+            if int(player.props.get("lives", 0) or 0) > 0:
+                feats.append(f"{player.props['lives']} lives")
+            if feats:
+                lines.append("- **Player:** " + ", ".join(feats))
+        return "\n".join(lines)
+    except Exception:
+        return ""
+

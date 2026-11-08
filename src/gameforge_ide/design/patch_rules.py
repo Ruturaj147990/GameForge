@@ -1146,7 +1146,7 @@ def _match_win_score_or_count(gds: GameDesignSpec, req: str) -> Optional[Propose
 
     # Update win condition count_at_least or add one
     win_cnt_idx = next((i for i, c in enumerate(gds.goals.win) if getattr(c, "kind", "") == "count_at_least"), None)
-    cond_val = {"kind": "count_at_least", "event": "kit.pickup/collected", "n": target_num}
+    cond_val = {"kind": "count_at_least", "event": "pickup.collected", "n": target_num}
     if win_cnt_idx is not None:
         ops.append({"op": "replace", "path": f"/goals/win/{win_cnt_idx}/n", "value": target_num})
     else:

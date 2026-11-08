@@ -20,22 +20,22 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.settings import artifacts_dir, get_settings
-from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry
-from src.gameforge_ide.backend.models.animation_spec import (
+from ..backend.assets.registry import AssetRecord, AssetRegistry
+from ..backend.models.animation_spec import (
     AnimationAction,
     AnimationSpec,
     LocomotionSetSpec,
 )
-from src.gameforge_ide.backend.models.provenance import (
+from ..backend.models.provenance import (
     AssetProvenanceRecord,
     LicenseRecord,
     LicenseRegistry,
 )
-from src.gameforge_ide.backend.tools.animation_validator import (
+from ..backend.tools.animation_validator import (
     AnimationValidator,
     ClipValidationReport,
 )
-from src.gameforge_ide.backend.tools.motion_generator import (
+from ..backend.tools.motion_generator import (
     MotionClipBundle,
     ProceduralKinematicMotionSynthesizer,
 )

@@ -6,6 +6,8 @@ States: PENDING (Approve / Reject) -> RUNNING (live stage checklist) -> DONE / F
 
 from __future__ import annotations
 
+import json
+
 import html
 import os
 from pathlib import Path
@@ -188,7 +190,15 @@ class ApprovalCard(QFrame):
         if not proj_dir and approval.get("tool") in ("create_game", "create_game_freeform"):
             from ...core.settings import get_settings
             from ...core.projects import resolve_project_dir
-            proj_name = args.get("project_name") or args.get("title") or "MyGame"
+            proj_name = args.get("project_name") or args.get("title")
+            if not proj_name and args.get("gds"):
+                try:
+                    gds_raw = args["gds"]
+                    gds_data = json.loads(gds_raw) if isinstance(gds_raw, str) else dict(gds_raw)
+                    proj_name = (gds_data.get("meta") or {}).get("project_name")
+                except Exception:
+                    proj_name = None
+            proj_name = proj_name or "MyGame"
             proj_dir = resolve_project_dir(proj_name) or (get_settings().projects_root / proj_name)
             args["project_dir"] = str(proj_dir)
 

@@ -45,6 +45,15 @@ class SpawnActorArgs(_Strict):
     mobility: Optional[str] = None
     material: Optional[str] = None
     light_intensity: Optional[float] = None   # read only for light actors
+    # Theme tint: linear RGB(A) 0..1. A cached MaterialInstanceConstant of BasicShapeMaterial ("Color" param)
+    # is created per unique colour, so prototype geometry carries the game's art direction instead of grey.
+    color: Optional[list[float]] = Field(None, min_length=3, max_length=4)
+    light_color: Optional[list[float]] = Field(None, min_length=3, max_length=4)
+    # Drop the actor onto the first blocking surface below it (landscape, floor) plus ground_offset cm.
+    snap_to_ground: bool = False
+    ground_offset: float = Field(0.0, ge=-1000.0, le=5000.0)
+    # Actors whose labels start with these prefixes are ignored by the ground trace (decoration must not stack).
+    snap_ignore_prefixes: list[str] = Field(default_factory=lambda: ["GF_Decor"], max_length=8)
 
 
 class NewLevelArgs(_Strict):

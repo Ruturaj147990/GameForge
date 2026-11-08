@@ -32,7 +32,8 @@ def _strip_names(d: dict) -> dict:
     return copy
 
 
-def test_legacy_params_lossless_for_all_presets():
+def test_legacy_params_lossless_for_all_presets(monkeypatch):
+    monkeypatch.setenv("GAMEFORGE_LEGACY_ACTION_RECIPES", "1")
     # 1. Tic Tac Toe
     ttt_params = to_legacy_params(preset_tic_tac_toe())
     assert _strip_names(asdict(ttt_params)) == _strip_names(asdict(GridBoardParams()))
@@ -75,5 +76,5 @@ def test_legacy_unsupported_genre():
         win=[{"type": "survive_seconds", "target": 60}],
     )
     gds = expand_draft(draft)
-    with pytest.raises(LegacyUnsupported, match="needs the composer"):
+    with pytest.raises(LegacyUnsupported, match="Composer"):
         to_legacy_params(gds)

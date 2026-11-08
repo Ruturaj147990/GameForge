@@ -271,6 +271,9 @@ class HostedSettingsDialog(QDialog):
             QMessageBox.information(self, "Test", "Add at least one model first.")
             return
         cls = PROVIDER_KINDS.get(prof.kind)
+        if cls is None:
+            QMessageBox.warning(self, "Test", f"Unknown provider kind {prof.kind!r}.")
+            return
         guarded = GuardedProvider(cls(prof), self._workspace)
         try:
             resp = guarded.complete(prof.models[0].id, "Reply with the single word: OK", max_tokens=5)

@@ -2,6 +2,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
@@ -80,6 +81,31 @@ int32 UGameForgeEventBus::Count(FName Name, FName Entity) const
 		const int32* Found = EventCountsByEntity.Find(EntityKey);
 		return Found ? *Found : 0;
 	}
+}
+
+void UGameForgeEventBus::ResetCounters()
+{
+	Events.Reset();
+	EventCountsByName.Reset();
+	EventCountsByEntity.Reset();
+}
+
+FName UGameForgeEventLibrary::ResolveEntityId(const AActor* Actor, FName Current)
+{
+	if (!Current.IsNone() || !Actor)
+	{
+		return Current;
+	}
+	static const FString Prefix(TEXT("GF_E_"));
+	for (const FName& Tag : Actor->Tags)
+	{
+		const FString TagStr = Tag.ToString();
+		if (TagStr.StartsWith(Prefix) && TagStr.Len() > Prefix.Len())
+		{
+			return FName(*TagStr.RightChop(Prefix.Len()));
+		}
+	}
+	return Current;
 }
 
 void UGameForgeEventLibrary::EmitGameForgeEvent(const UObject* WorldContextObject, FName Name, const FString& Source,

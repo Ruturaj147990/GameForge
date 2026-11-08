@@ -37,12 +37,43 @@ public:
 
 private:
 	void BuildRows(UCanvasPanel* Root);
+	/** Re-reads every bound stat (derived stats such as entity.<id>.collected never broadcast OnStatChanged, so
+	 *  pickup counters used to stay at "--" for the whole game). */
+	void RefreshRows();
+	void HandleBusEvent(const FGameForgeEvent& Event);
+	void ShowEndScreen(bool bWon);
+	UTextBlock* MakeText(const FName& Name, int32 Size, const FLinearColor& Color);
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> RowBox;
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> MessageText;
+
+	/** Game title + objective shown for a few seconds at start. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> TitleCardText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> ObjectiveText;
+
+	/** Persistent one-line objective / controls reminder (bottom of screen). */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> HintText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> EndTitleText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> EndSubtitleText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> CrosshairText;
+
+	TSharedPtr<FJsonObject> Def;
+	FDelegateHandle BusHandle;
+	FTimerHandle TitleCardHandle;
+	bool bEndShown = false;
 
 	struct FHudRow
 	{

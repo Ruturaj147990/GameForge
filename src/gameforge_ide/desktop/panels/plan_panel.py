@@ -318,6 +318,8 @@ class PlanPanel(QWidget):
         if task.evidence:
             html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Execution Observations:</h4>")
             for idx, ev in enumerate(task.evidence):
+                if not isinstance(ev, dict):  # older task stores persisted plain-string observations
+                    ev = {"attempt": idx + 1, "output": ev}
                 html.append(f"<div style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; margin-bottom: 4px; color: {tokens.TEXT_PRIMARY};'><b>Attempt {ev.get('attempt')}:</b><pre>{json.dumps(ev.get('output', {}), indent=2, default=str)[:600]}</pre></div>")
 
         self._detail_browser.setHtml("".join(html))

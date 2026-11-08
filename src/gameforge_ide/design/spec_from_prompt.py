@@ -9,7 +9,7 @@ Provides unified access to:
 """
 from __future__ import annotations
 
-from src.gameforge_ide.pipeline.spec_from_prompt import (
+from ..pipeline.spec_from_prompt import (
     RECIPES,
     GameSpec,
     RecipeEntry,

@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 
 from ..styles import tokens
 from .rule_editor import RuleEditorDialog
-from src.gameforge_ide.design.gds import (
+from ...design.gds import (
     CameraKind,
     Condition,
     CountAtLeast,
@@ -39,7 +39,7 @@ from src.gameforge_ide.design.gds import (
     LevelSpec,
     RuleSpec,
 )
-from src.gameforge_ide.design.render import sentence
+from ...design.render import sentence
 
 logger = logging.getLogger(__name__)
 

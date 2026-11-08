@@ -28,6 +28,8 @@ class PlacedActor(BaseModel):
     yaw: float = 0.0
     tags: List[str] = Field(default_factory=list)                     # always includes GF_E_<entity_id> and GF_Owned
     properties: Dict[str, Any] = Field(default_factory=dict)          # UPROPERTY name -> value
+    snap_to_ground: bool = False             # drop onto terrain at spawn (open world / uneven ground)
+    ground_offset: float = 0.0               # cm above the hit surface when snapping
 
 
 class LevelPlan(BaseModel):
@@ -42,6 +44,8 @@ class LevelPlan(BaseModel):
     actors: List[PlacedActor] = Field(default_factory=list)
     lighting: Literal["day", "dusk", "night", "indoor"] = "day"
     nav_checks: List[Tuple[str, str]] = Field(default_factory=list)        # (from actor_id | "player_start", to actor_id)
+    sun_color: Optional[List[float]] = None                                # theme tint for the key light (RGBA 0..1)
+    theme_id: str = "default"
 
 def map_package_path(level_id: str) -> str:
     """Canonical Unreal map package path preserving exact case."""

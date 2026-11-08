@@ -174,6 +174,8 @@ def test_generate_source_sanitizes_handler_name():
 def test_course_ramps_walkable_slope_under_35_deg():
     """Verify that all connecting walkway ramps in platformer courses maintain <= 35.0 deg slope."""
     gds = preset_platformer()
+    # Walkway bridges exist on easy difficulty (normal/hard have real jump gaps)
+    gds.progression.difficulty = "easy"
     rng = random.Random(1337)
     level_spec = LevelSpec(level_id="level_1", layout="course", size_m=Vec2(x=80.0, y=80.0), seed=1337)
     plan = plan_course_level(level_spec, gds, rng)

@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.backend.assets.registry import ASSET_TYPES, STAGES, AssetRegistry
+from ...backend.assets.registry import ASSET_TYPES, STAGES, AssetRegistry
 
 logger = logging.getLogger(__name__)
 

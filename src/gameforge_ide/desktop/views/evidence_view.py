@@ -33,10 +33,10 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.core.settings import get_settings
-from src.gameforge_ide.core.projects import resolve_project_dir, open_folder_in_file_manager
-from src.gameforge_ide.forge.model import ArtifactRef, RunState
-from src.gameforge_ide.forge.store import RunStore
+from ...core.settings import get_settings
+from ...core.projects import resolve_project_dir, open_folder_in_file_manager
+from ...forge.model import ArtifactRef, RunState
+from ...forge.store import RunStore
 
 logger = logging.getLogger(__name__)
 

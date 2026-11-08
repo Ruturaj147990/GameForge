@@ -694,11 +694,18 @@ class SemanticTemplateRegistry:
             try:
                 raw = complete_json(system, prompt, schema)
                 if raw:
-                    data = json.loads(raw)
-                    strat_str = data.get("strategy", "").lower() if isinstance(data, dict) else ""
+                    text = str(raw).strip()
+                    if text.startswith("```"):
+                        text = text.strip("`")
+                        text = text[4:] if text.lower().startswith("json") else text
+                    start, end = text.find("{"), text.rfind("}")
+                    data = json.loads(text[start:end + 1] if start >= 0 and end > start else text)
+                    strat_str = str(data.get("strategy", "") or "").lower() if isinstance(data, dict) else ""
                     if not strat_str and isinstance(data, dict):
                         det_decision = self.evaluate_strategy(prompt)
-                        det_decision.draft_preloaded = data
+                        # Only reuse the answer as a design draft when it actually looks like one.
+                        if "title" in data and "genre" in data and ("win" in data or "entities" in data):
+                            det_decision.draft_preloaded = data
                         return det_decision
                     if strat_str in ("adapt_template", "hybrid", "scratch"):
                         strategy = GenerationStrategy(strat_str)

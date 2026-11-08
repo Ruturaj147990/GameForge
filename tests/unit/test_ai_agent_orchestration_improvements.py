@@ -143,13 +143,13 @@ def test_patch_rule_health_adjustments():
     assert prop.status == "OK"
     patched = apply_patch(gds, prop.ops)
     player = next(e for e in patched.entities if e.kind == EntityKind.PLAYER)
-    assert player.props.get("player_max_health") == 250.0
+    assert player.props.get("max_health", player.props.get("player_max_health")) == 250.0
 
     prop_double = propose_patch(patched, "double player health")
     assert prop_double.status == "OK"
     patched_2 = apply_patch(patched, prop_double.ops)
     player_2 = next(e for e in patched_2.entities if e.kind == EntityKind.PLAYER)
-    assert player_2.props.get("player_max_health") == 500.0
+    assert player_2.props.get("max_health", player_2.props.get("player_max_health")) == 500.0
 
 
 def test_patch_rule_jump_velocity():

@@ -19,6 +19,74 @@ def actors_in_level(args):
     })
 
 
+_THEME_MAT_DIR = "/Game/GameForge/Materials/Theme"
+_THEME_MAT_CACHE = {}
+
+
+def _theme_color_material(color):
+    """Return (creating once) a MaterialInstanceConstant of BasicShapeMaterial tinted with ``color``."""
+    try:
+        rgba = [max(0.0, min(1.0, float(c))) for c in list(color)[:4]]
+        rgba += [1.0] * (4 - len(rgba))
+        key = "".join("%02X" % int(round(c * 255)) for c in rgba[:3])
+        if key in _THEME_MAT_CACHE:
+            return _THEME_MAT_CACHE[key]
+        path = "%s/MI_GF_Tint_%s" % (_THEME_MAT_DIR, key)
+        if unreal.EditorAssetLibrary.does_asset_exist(path):
+            mi = unreal.EditorAssetLibrary.load_asset(path)
+        else:
+            parent = unreal.EditorAssetLibrary.load_asset(
+                "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")
+            if parent is None:
+                return None
+            mi = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+                "MI_GF_Tint_%s" % key, _THEME_MAT_DIR, unreal.MaterialInstanceConstant,
+                unreal.MaterialInstanceConstantFactoryNew())
+            if mi is None:
+                return None
+            mel = unreal.MaterialEditingLibrary
+            mel.set_material_instance_parent(mi, parent)
+            mel.set_material_instance_vector_parameter_value(mi, "Color", unreal.LinearColor(*rgba))
+            mel.update_material_instance(mi)
+            unreal.EditorAssetLibrary.save_loaded_asset(mi)
+        _THEME_MAT_CACHE[key] = mi
+        return mi
+    except Exception:
+        return None
+
+
+def _snap_actor_to_ground(actor, offset, ignore_prefixes=("GF_Decor",)):
+    """Line-trace straight down (ignoring the actor and decoration) and move it onto the first blocking hit."""
+    try:
+        world = unreal.EditorLevelLibrary.get_editor_world()
+        loc = actor.get_actor_location()
+        ignore = [actor]
+        prefixes = tuple(p for p in (ignore_prefixes or ()) if p)
+        if prefixes:
+            for other in _actor_sub().get_all_level_actors():
+                try:
+                    if other is not actor and other.get_actor_label().startswith(prefixes):
+                        ignore.append(other)
+                except Exception:
+                    continue
+        start = unreal.Vector(loc.x, loc.y, loc.z + 20000.0)
+        end = unreal.Vector(loc.x, loc.y, loc.z - 40000.0)
+        hit = unreal.SystemLibrary.line_trace_single(
+            world, start, end, unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, ignore,
+            unreal.DrawDebugTrace.NONE, True)
+        if hit is None:
+            return False
+        tup = hit.to_tuple() if hasattr(hit, "to_tuple") else None
+        blocking = bool(tup[0]) if tup else bool(getattr(hit, "blocking_hit", False))
+        if not blocking:
+            return False
+        impact = tup[5] if tup else hit.impact_point  # (blocking, initial_overlap, time, distance, location, impact_point, ...)
+        actor.set_actor_location(unreal.Vector(loc.x, loc.y, impact.z + offset), False, False)
+        return True
+    except Exception:
+        return False
+
+
 @op("spawn_actor", mutates=True, reversibility="transactional")
 def spawn_actor(args):
     cls = _load_class(args.get("actor_class", "StaticMeshActor"))
@@ -50,17 +118,36 @@ def spawn_actor(args):
             actor.root_component.set_mobility(getattr(unreal.ComponentMobility, mobility.upper()))
         if "light_intensity" in args and hasattr(actor, "light_component") and actor.light_component:
             actor.light_component.set_intensity(float(args["light_intensity"]))
+        warnings_pre = []
         material = args.get("material")
-        if not material and isinstance(actor, unreal.StaticMeshActor):
-            material = "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"
-        if material and isinstance(actor, unreal.StaticMeshActor):
-            mat = unreal.EditorAssetLibrary.load_asset(material)
+        mat = unreal.EditorAssetLibrary.load_asset(material) if material else None
+        if material and mat is None:
+            warnings_pre.append("material not found, using theme colour/basic material: %s" % material)
+        color = args.get("color")
+        if isinstance(actor, unreal.StaticMeshActor):
+            if color and (mat is None or not material):
+                mat = _theme_color_material(color) or mat
+            if mat is None:
+                mat = unreal.EditorAssetLibrary.load_asset(
+                    "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")
             if mat:
                 actor.static_mesh_component.set_material(0, mat)
+        light_color = args.get("light_color")
+        if light_color and hasattr(actor, "light_component") and actor.light_component:
+            try:
+                lc = list(light_color) + [1.0] * (4 - len(light_color))
+                actor.light_component.set_light_color(unreal.LinearColor(*lc[:4]), True)
+            except Exception as exc:  # light colour is cosmetic; never fail the spawn for it
+                warnings_pre.append("light colour skipped: %s" % exc)
+        if args.get("snap_to_ground"):
+            snapped = _snap_actor_to_ground(actor, float(args.get("ground_offset", 0.0)),
+                                            args.get("snap_ignore_prefixes", ["GF_Decor"]))
+            if not snapped:
+                warnings_pre.append("snap_to_ground: no surface found below actor; kept requested height")
     # Direct readback from the spawned actor instance
     rec = _actor_record(actor)
-    warnings = []
-    if "location" in args:
+    warnings = list(warnings_pre)
+    if "location" in args and not args.get("snap_to_ground"):
         req = args["location"]
         act_loc = rec.get("location", {})
         dx = abs(act_loc.get("x", 0.0) - float(req.get("x", 0.0)))
@@ -104,6 +191,9 @@ def set_actor_property(args):
             value = [_vec(v) if isinstance(v, dict) and set(v) == {"x", "y", "z"} else v for v in value]
     elif isinstance(value, dict) and set(value) == {"x", "y", "z"}:
         value = _vec(value)
+    elif isinstance(value, dict) and {"r", "g", "b"} <= set(value) <= {"r", "g", "b", "a"}:
+        # Colour properties (PickupColor, BodyColor) used to be passed as raw dicts and silently skipped.
+        value = unreal.LinearColor(float(value["r"]), float(value["g"]), float(value["b"]), float(value.get("a", 1.0)))
     try:
         with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
             actor.set_editor_property(name, value)

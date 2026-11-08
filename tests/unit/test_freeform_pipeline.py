@@ -61,8 +61,11 @@ def test_framework_sources_are_project_specific():
 
 
 def test_unmatched_game_prompt_proposes_freeform(tmp_path):
-    rec = GameTools(tmp_path, projects_root=tmp_path / "Games").propose_create_game("create a whack-a-mole game")
-    assert rec["tool"] == "create_game_freeform" and rec["stages"] == FREEFORM_STAGES
+    from unittest.mock import patch
+    from src.gameforge_ide.design.prompt_to_gds import PromptToGdsResult
+    with patch("src.gameforge_ide.backend.tools.game_tools.prompt_to_gds", return_value=PromptToGdsResult(status="ERROR", gds=None)):
+        rec = GameTools(tmp_path, projects_root=tmp_path / "Games").propose_create_game("create a whack-a-mole game")
+        assert rec["tool"] == "create_game_freeform" and rec["stages"] == FREEFORM_STAGES
     assert "Experimental" in rec["consequence"] and rec["args"]["title"] == "Whack A Mole"
 
 

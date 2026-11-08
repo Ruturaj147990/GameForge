@@ -1,6 +1,6 @@
 """GameForge IDE — styles package init."""
 
-from src.gameforge_ide.desktop.styles.tokens import (
+from ...desktop.styles.tokens import (
     SPACE_XS,
     SPACE_SM,
     SPACE_MD,
@@ -28,7 +28,7 @@ from src.gameforge_ide.desktop.styles.tokens import (
     ACCENT_WARNING,
     ACCENT_ERROR,
 )
-from src.gameforge_ide.desktop.styles.dark_theme import (
+from ...desktop.styles.dark_theme import (
     GAMEFORGE_DARK_QSS,
     GAMEFORGE_LIGHT_QSS,
     apply_theme,

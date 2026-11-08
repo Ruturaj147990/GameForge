@@ -14,6 +14,7 @@ so they survive restarts and can only be executed by a trusted UI path.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import secrets
 import subprocess
@@ -28,8 +29,10 @@ from ...design.legacy import LegacyUnsupported, to_legacy_params
 from ...design.prompt_to_gds import PRESET_TITLES, prompt_to_gds
 from ...design.render import render_markdown
 from ...design import store as design_store
+
+logger = logging.getLogger(__name__)
 from ...pipeline.spec_from_prompt import is_game_creation_request, match_prompt
-from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams
+from ...legacy_recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
 from ...unreal import op_catalog, op_schemas
 from ...unreal.toolchain import UnrealToolchain
@@ -88,17 +91,8 @@ class GameTools:
         return self.workspace_root / "Games"
 
     def _get_complete_json(self):
-        if "PYTEST_CURRENT_TEST" in os.environ:
-            return None, None
-        try:
-            from ..providers.ollama_provider import OllamaProvider
-            from ...core.settings import get_settings
-            settings = get_settings()
-            provider = OllamaProvider(host=settings.ollama_url.replace("http://", "").replace("https://", ""))
-            model = settings.model_for("design")
-            return (lambda s, u, sch: provider.complete_json(model, s, u, sch)), model
-        except Exception:
-            return None, None
+        return resolve_design_model()
+
 
     # ── T1 ─────────────────────────────────────────────────────────────────
     def plan_game(self, prompt: str) -> Dict[str, Any]:
@@ -151,7 +145,10 @@ class GameTools:
             legacy_dict = to_legacy_params(gds).to_dict()
         except LegacyUnsupported:
             pass
-        args_payload = {"gds": gds.to_json(), "package": True}
+        # project_dir/project_name travel with the approval: without them the approval card guessed "MyGame",
+        # wrote that guess back into the args and the game was built into a folder called MyGame.
+        args_payload = {"gds": gds.to_json(), "package": True, "project_dir": str(project_dir),
+                        "project_name": gds.meta.project_name}
         if legacy_dict is not None:
             args_payload["params"] = legacy_dict
 
@@ -383,13 +380,30 @@ class GameTools:
                 if on_event and freed:
                     on_event("gpu_released", {"unloaded_models": freed})
 
-                comp = compose(gds, allow_partial=True)
-                run_spec = composition_to_run_spec(
-                    comp,
-                    str(self.workspace_root),
-                    str(pdir),
-                    origin="prompt",
-                )
+                try:
+                    comp = compose(gds, allow_partial=True)
+                    run_spec = composition_to_run_spec(
+                        comp,
+                        str(self.workspace_root),
+                        str(pdir),
+                        origin="prompt",
+                    )
+                except Exception as exc:
+                    # Composition problems used to escape as raw exceptions and abort the agent turn; report them
+                    # as a structured failure the chat can show (with the composer's own suggestions).
+                    problems = list(getattr(exc, "problems", []) or []) or [str(exc)]
+                    suggestions = list(getattr(exc, "suggestions", []) or [])
+                    logger.warning("Composition failed for %s: %s", gds.meta.project_name, "; ".join(problems))
+                    return {
+                        "status": "FAILED",
+                        "ok": False,
+                        "project_dir": str(pdir),
+                        "failed_stage": "compose",
+                        "error": "Could not compose the game: " + "; ".join(problems[:5]),
+                        "suggestions": suggestions[:5],
+                    }
+                if comp.warnings and on_event:
+                    on_event("compose_warnings", {"warnings": list(comp.warnings)[:10]})
                 if not package:
                     run_spec.steps = [s for s in run_spec.steps if s.step_id not in ("package", "scenarios")]
                     for s in run_spec.steps:
@@ -494,11 +508,11 @@ class GameTools:
                 return out
         elif params is not None:
             # Backward compatibility branch for pre-P1 approval records
-            from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams
-            from src.gameforge_ide.legacy_recipes.platformer.recipe import PlatformerParams
-            from src.gameforge_ide.legacy_recipes.arena_combat.recipe import ArenaCombatParams
-            from src.gameforge_ide.legacy_recipes.card_battler.recipe import CardBattlerParams
-            from src.gameforge_ide.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
+            from ...legacy_recipes.grid_board_game.recipe import GridBoardParams
+            from ...legacy_recipes.platformer.recipe import PlatformerParams
+            from ...legacy_recipes.arena_combat.recipe import ArenaCombatParams
+            from ...legacy_recipes.card_battler.recipe import CardBattlerParams
+            from ...legacy_recipes.procedural_world.recipe import ProceduralWorldParams
             if isinstance(params, (GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams)):
                 recipe_params = params
             elif isinstance(params, dict):
@@ -749,3 +763,47 @@ class GameTools:
         # Kept as plain subprocess.Popen (not jobs.spawn): launched for the user to keep playing, so it must not die with the IDE job.
         proc = subprocess.Popen([str(resolved_exe), "-windowed", "-ResX=1280", "-ResY=800"], cwd=str(resolved_exe.parent))
         return {"status": "SUCCESS", "pid": proc.pid, "exe": str(resolved_exe)}
+
+_MODEL_PROBE_CACHE: Dict[str, Any] = {}
+
+
+def _design_model_available(host: str, model: str, ttl_s: float = 30.0) -> bool:
+    """Cheap /api/tags probe (2 s timeout, cached for ttl_s) telling whether Ollama serves ``model``."""
+    key = f"{host}|{model}"
+    hit = _MODEL_PROBE_CACHE.get(key)
+    now = time.monotonic()
+    if hit and now - hit[0] < ttl_s:
+        return hit[1]
+    ok = False
+    try:
+        import urllib.request
+        with urllib.request.urlopen(f"http://{host}/api/tags", timeout=2.0) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace") or "{}")
+        names = {m.get("name", "") for m in data.get("models", []) if isinstance(m, dict)}
+        ok = model in names or f"{model}:latest" in names
+    except Exception:
+        ok = False
+    _MODEL_PROBE_CACHE[key] = (now, ok)
+    return ok
+
+
+def resolve_design_model():
+    """(complete_json callable, model id) for game design, or (None, None) when no design model is reachable.
+
+    Shared by the agent, the Home view and the /game command (no GameTools instance needed). Without a reachable
+    model the deterministic prompt brief builds the design immediately instead of waiting on failing calls.
+    """
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return None, None
+    try:
+        from ..providers.ollama_provider import OllamaProvider
+        from ...core.settings import get_settings
+        settings = get_settings()
+        host = settings.ollama_url.replace("http://", "").replace("https://", "").rstrip("/")
+        model = settings.model_for("design")
+        if not model or not _design_model_available(host, model):
+            return None, None
+        provider = OllamaProvider(host=host)
+        return (lambda s, u, sch: provider.complete_json(model, s, u, sch)), model
+    except Exception:
+        return None, None

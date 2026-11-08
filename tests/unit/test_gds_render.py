@@ -62,10 +62,10 @@ def test_sentence_conditions():
 
 def test_sentence_effects():
     e1 = AddStat(stat="game.score", delta=10)
-    assert sentence(e1) == "add 10 to game.score"
+    assert sentence(e1) == "add 10 to the score"
 
     e2 = SetStat(stat="player.health", value=100)
-    assert sentence(e2) == "set player.health to 100"
+    assert sentence(e2) == "set player health to 100"
 
     e3 = EndGame(outcome="win")
     assert sentence(e3) == "the player wins"

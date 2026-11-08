@@ -84,7 +84,7 @@ class SerializedMutationQueue:
                 result = await asyncio.wait_for(coro_func(), timeout=timeout)
                 self._last_execution_time = time.time() - t0
                 return result
-            except asyncio.TimeoutExpired:
+            except asyncio.TimeoutError:
                 return {
                     "ok": False,
                     "status": "TIMEOUT",

@@ -102,16 +102,17 @@ def plan_to_op_calls(
     has_spawned_player_start = geometry_has_player_start
 
     if not has_spawned_player_start and not actors_has_player_start and plan.player_start is not None:
-        emit(
-            "spawn_actor",
-            {
-                "actor_class": "PlayerStart",
-                "label": "GF_PlayerStart",
-                "location": {"x": plan.player_start[0], "y": plan.player_start[1], "z": plan.player_start[2]},
-            },
-            purpose="Spawn primary player start point",
-        )
+        ps_args: Dict[str, Any] = {
+            "actor_class": "PlayerStart",
+            "label": "GF_PlayerStart",
+            "location": {"x": plan.player_start[0], "y": plan.player_start[1], "z": plan.player_start[2]},
+        }
+        deferred_player_start = any(a.snap_to_ground for a in plan.actors)
+        if not deferred_player_start:
+            emit("spawn_actor", ps_args, purpose="Spawn primary player start point")
         has_spawned_player_start = True
+    else:
+        ps_args, deferred_player_start = {}, False
 
     # 2. Lighting preset
     light_key = plan.lighting
@@ -119,11 +120,19 @@ def plan_to_op_calls(
         light_key = "day_clear"
     if light_key in biomes.LIGHTING:
         for light in biomes.lighting_rig(light_key):
+            if plan.sun_color and light.get("actor_class") == "DirectionalLight":
+                light = {**light, "light_color": list(plan.sun_color)}
             emit("spawn_actor", light, purpose=f"Spawn {light.get('label', 'light')}")
 
     # 3. Geometry ops from the layout
     for g_op in plan.geometry_ops:
         emit(g_op.op, g_op.args, purpose=g_op.purpose, expect=g_op.expect)
+
+    # On terrain the player start is placed after the ground exists, snapped onto it (it used to be spawned at a
+    # fixed height and could end up inside a hill).
+    if deferred_player_start and ps_args:
+        emit("spawn_actor", {**ps_args, "snap_to_ground": True, "ground_offset": 110.0},
+             purpose="Spawn primary player start point (snapped to terrain)")
 
     # 4. Placed actors (filter out any duplicates of PlayerStart or duplicate labels)
     spawned_labels: Set[str] = {"GF_PlayerStart"} if has_spawned_player_start else set()
@@ -149,7 +158,16 @@ def plan_to_op_calls(
             "location": {"x": a.location[0], "y": a.location[1], "z": a.location[2]},
             "rotation": {"pitch": 0.0, "yaw": a.yaw, "roll": 0.0},
         }
+        if a.snap_to_ground:
+            spawn_args["snap_to_ground"] = True
+            spawn_args["ground_offset"] = float(a.ground_offset)
         emit("spawn_actor", spawn_args, purpose=f"Spawn placed actor {a.actor_id}")
+
+        # Kit actors identify themselves in events by EntityId; it was never assigned, so every pickup/enemy event
+        # carried Entity=None and per-entity HUD counters and rule filters never matched.
+        if a.entity_id and "EntityId" not in a.properties and a.runtime_class.startswith("/Script/GameForgeRuntime."):
+            emit("set_actor_property", {"label": a.actor_id, "property": "EntityId", "value": a.entity_id},
+                 purpose=f"Set EntityId on {a.actor_id}")
 
         if a.tags:
             emit("actor_set_tags", {"label": a.actor_id, "tags": a.tags}, purpose=f"Set tags for {a.actor_id}")
@@ -160,7 +178,10 @@ def plan_to_op_calls(
             if not isinstance(prop_name, str) or not prop_name.strip():
                 continue
             p_clean = prop_name.strip()
-            if p_clean.lower() in NON_UE_GDS_PROPS or p_clean.startswith("_"):
+            if p_clean in NON_UE_GDS_PROPS or p_clean.startswith("_"):
+                continue
+            # Unmapped snake_case GDS keys are not Unreal properties; sending them only produced "skipped" warnings.
+            if p_clean[0].islower() and not (p_clean[0] == "b" and len(p_clean) > 1 and p_clean[1].isupper()):
                 continue
             # Guard: property name must be a valid C++/Unreal identifier
             if not p_clean.isidentifier():
@@ -326,6 +347,8 @@ def verify_placed_actor_transforms(
         if coords:
             ax, ay, az = coords
             px, py, pz = a.location
+            if a.snap_to_ground:
+                az = pz   # snapped actors move vertically by design; only XY drift is a discrepancy
             dist = ((ax - px) ** 2 + (ay - py) ** 2 + (az - pz) ** 2) ** 0.5
             if dist > tolerance_cm:
                 prefix = "CRITICAL: " if dist > severe_tolerance_cm else ""

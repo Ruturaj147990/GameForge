@@ -28,6 +28,10 @@ class PlayerCharacterParams(BaseModel):
     kill_z: Optional[float] = Field(-2000.0, le=0.0)
     attack_mode: Optional[str] = Field("melee")
     weapons: Optional[List[str]] = Field(default_factory=list)
+    projectile_speed: Optional[float] = Field(None, ge=200.0, le=20000.0)
+    max_jumps: Optional[int] = Field(None, ge=1, le=4)
+    double_jump: Optional[bool] = None
+    sprint_multiplier: Optional[float] = Field(None, ge=1.0, le=3.0)
 
 
 register(

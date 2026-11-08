@@ -19,6 +19,8 @@
 #include "Sound/SoundAttenuation.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
+#include "TimerManager.h"
+#include "GameForgeVisuals.h"
 
 AGameForgePickup::AGameForgePickup()
 {
@@ -39,6 +41,36 @@ AGameForgePickup::AGameForgePickup()
 	}
 
 	Trigger->OnComponentBeginOverlap.AddDynamic(this, &AGameForgePickup::HandleOverlap);
+	PrimaryActorTick.bCanEverTick = true;
+}
+
+void AGameForgePickup::BeginPlay()
+{
+	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	BaseVisualLocation = Visual->GetRelativeLocation();
+	Age = FMath::FRandRange(0.f, 6.f);   // de-synchronise the bobbing of neighbouring pickups
+	GameForgeVisuals::Tint(Visual, PickupColor);
+}
+
+void AGameForgePickup::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (bCollected || !Visual)
+	{
+		return;
+	}
+	Age += DeltaSeconds;
+	Visual->SetRelativeLocation(BaseVisualLocation + FVector(0.f, 0.f, FMath::Sin(Age * 2.5f) * BobHeight));
+	Visual->AddLocalRotation(FRotator(0.f, SpinSpeed * DeltaSeconds, 0.f));
+}
+
+void AGameForgePickup::Respawn()
+{
+	bCollected = false;
+	SetActorHiddenInGame(false);
+	Visual->SetVisibility(true);
+	Trigger->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 }
 
 void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -53,6 +85,15 @@ void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, A
 	CollectedBy = Pawn->GetName();
 	Visual->SetVisibility(false);
 	Trigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (bRespawns)
+	{
+		GetWorldTimerManager().SetTimer(RespawnTimer, this, &AGameForgePickup::Respawn, FMath::Max(1.f, RespawnSeconds), false);
+	}
+	else
+	{
+		// Hidden actors drop out of the derived entity.<id>.remaining stat.
+		SetActorHiddenInGame(true);
+	}
 
 	if (CollectVFX)
 	{
@@ -83,9 +124,9 @@ void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, A
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT pickup actor=%s collected_by=%s vfx=%s spawned=%d sound=%s sound_playing=%d"),
 		*GetName(), *CollectedBy, CollectVFX ? *CollectVFX->GetName() : TEXT("None"), SpawnedVFX ? 1 : 0,
 		CollectSound ? *CollectSound->GetName() : TEXT("None"), SpawnedSound && SpawnedSound->IsPlaying() ? 1 : 0);
-	const FString DataJson = FString::Printf(TEXT("{\"objective\":\"%s\",\"by\":\"%s\"}"),
+	const FString DataJson = FString::Printf(TEXT("{\"objective\":\"%s\",\"by\":\"%s\",\"value\":%d}"),
 		*ObjectiveId.ToString().ReplaceCharWithEscapedChar(),
-		*CollectedBy.ReplaceCharWithEscapedChar());
+		*CollectedBy.ReplaceCharWithEscapedChar(), Value);
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PickupCollected, GetName(), DataJson, EntityId);
 	OnCollected.Broadcast(Pawn);
 }

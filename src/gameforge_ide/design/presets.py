@@ -142,7 +142,7 @@ def preset_platformer(title: Optional[str] = None, **overrides) -> GameDesignSpe
     gds = expand_draft(draft)
     player = _find_entity(gds, EntityKind.PLAYER)
     if player:
-        player.props = {
+        player.props = {**player.props,
             "player_speed": 600,
             "jump_velocity": 650,
             "gravity_scale": 1.2,
@@ -172,7 +172,7 @@ def preset_arena_combat(title: Optional[str] = None, **overrides) -> GameDesignS
     gds = expand_draft(draft)
     spawner = _find_entity(gds, EntityKind.SPAWNER)
     if spawner:
-        spawner.props = {
+        spawner.props = {**spawner.props,
             "wave_count": waves,
             "enemies_per_wave": enemies,
             "enemy_max_health": 50,
@@ -184,7 +184,7 @@ def preset_arena_combat(title: Optional[str] = None, **overrides) -> GameDesignS
         spawner.props.update(overrides.get("spawner_props", {}))
     player = _find_entity(gds, EntityKind.PLAYER)
     if player:
-        player.props = {
+        player.props = {**player.props,
             "player_max_health": 100,
             "player_attack_damage": 35,
             "player_attack_range": 250,
@@ -338,7 +338,7 @@ def preset_top_down_shooter(title: Optional[str] = None, **overrides) -> GameDes
 
     spawner = _find_entity(gds, EntityKind.SPAWNER)
     if spawner:
-        spawner.props = {
+        spawner.props = {**spawner.props,
             "wave_count": waves,
             "enemies_per_wave": enemies,
             "seconds_between_waves": 3.0,
@@ -546,4 +546,44 @@ def get_preset_spec(name: str) -> GameDesignSpec:
     if factory is None:
         raise KeyError(f"Unknown preset name: {name!r}")
     return factory()
+
+
+
+def _tag_generator(preset_id: str, factory: Callable[..., GameDesignSpec]) -> Callable[..., GameDesignSpec]:
+    """Every preset design carries generator "preset:<id>" so build routing can tell an untouched preset (which the
+    legacy recipe builders reproduce faithfully) from prompt-derived or edited designs (which need the composer)."""
+    canonical = {"board_game": "snake_and_ladders", "dice_board": "snake_and_ladders"}.get(preset_id, preset_id)
+
+    def _wrapped(*args: Any, **kwargs: Any) -> GameDesignSpec:
+        gds = factory(*args, **kwargs)
+        try:
+            gds.meta.generator = f"preset:{canonical}"
+        except Exception:
+            pass
+        return gds
+
+    _wrapped.__name__ = getattr(factory, "__name__", f"preset_{canonical}")
+    _wrapped.__doc__ = factory.__doc__
+    return _wrapped
+
+
+PRESETS = {pid: _tag_generator(pid, fn) for pid, fn in PRESETS.items()}
+_get_preset_spec_untagged = get_preset_spec
+
+
+def get_preset_spec(name: str) -> GameDesignSpec:  # noqa: F811  (re-defined to tag the generator)
+    """Retrieve a default GameDesignSpec for a named preset (generator tagged ``preset:<id>``)."""
+    return _tag_generator(name, lambda: _get_preset_spec_untagged(name))()
+
+# Re-bind module-level factory functions so direct calls also carry generator "preset:<id>"
+preset_tic_tac_toe = PRESETS["tic_tac_toe"]
+preset_connect_four = PRESETS["connect_four"]
+preset_gomoku = PRESETS["gomoku"]
+preset_platformer = PRESETS["platformer"]
+preset_arena_combat = PRESETS["arena_combat"]
+preset_card_battler = PRESETS["card_battler"]
+preset_procedural_world = PRESETS["procedural_world"]
+preset_relic_hunt = PRESETS["relic_hunt"]
+preset_top_down_shooter = PRESETS["top_down_shooter"]
+preset_snake_and_ladders = PRESETS["snake_and_ladders"]
 

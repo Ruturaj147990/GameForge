@@ -11,6 +11,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import threading
 import time
 from pathlib import Path
 from typing import List, Optional, Union
@@ -585,12 +586,16 @@ class _StartScreen(QWidget):
         lbl_title.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {tokens.TEXT_PRIMARY};")
         hero_box.addWidget(lbl_title)
 
-        lbl_sub = QLabel("Autonomous software engineering and game development for Unreal Engine 5.\nSubmit natural-language requests below to create, modify, inspect, or build.")
+        lbl_sub = QLabel("Describe the game you want - setting, enemies, things to collect, how to win - and GameForge "
+                         "designs, builds and tests it in Unreal Engine 5. You can also edit code, inspect the level or build.")
         lbl_sub.setObjectName("start_hero_subtitle")
         lbl_sub.setAlignment(Qt.AlignCenter)
         lbl_sub.setWordWrap(True)
+        # Word-wrapped labels inside a centred layout were given a single-line height and the text was clipped.
+        lbl_sub.setFixedWidth(420)
+        lbl_sub.setMinimumHeight(lbl_sub.heightForWidth(420) + 6)
         lbl_sub.setStyleSheet(f"font-size: 12px; color: {tokens.TEXT_SECONDARY}; line-height: 1.4;")
-        hero_box.addWidget(lbl_sub)
+        hero_box.addWidget(lbl_sub, 0, Qt.AlignHCenter)
         root_layout.addLayout(hero_box)
 
         # Quick Guidance & Prompt Suggestions Card
@@ -612,12 +617,15 @@ class _StartScreen(QWidget):
         hints_layout.addWidget(lbl_hints_hdr)
 
         examples = [
-            ("✨ Create Game", "Create a top-down roguelike with dash mechanics"),
-            ("🔧 Source Edit", "Add stamina consumption to dash in PlayerController.cpp"),
+            ("✨ Create Game", "Make a 3D platformer on a volcano: collect 12 gems, avoid lava, reach the portal, double jump"),
+            ("🧟 Create Game", "Make a top-down shooter in a haunted graveyard at night: survive 5 waves of zombies"),
+            ("🕵 Create Game", "Make a stealth game called Shadow Vault: sneak past guards and steal 3 diamonds, then escape"),
             ("🚀 Engine Build", "/build project and execute automation scenarios"),
         ]
         for icon_tag, prompt_text in examples:
-            btn_ex = QPushButton(f"{icon_tag}  •  \"{prompt_text}\"")
+            shown = prompt_text if len(prompt_text) <= 58 else prompt_text[:56].rstrip() + "..."
+            btn_ex = QPushButton(f"{icon_tag}  •  {shown}")
+            btn_ex.setToolTip(prompt_text)
             btn_ex.setCursor(Qt.PointingHandCursor)
             btn_ex.setStyleSheet(f"""
                 QPushButton {{
@@ -684,6 +692,7 @@ class ChatPanel(QWidget):
     models_loaded = Signal(list)
     unreal_status_changed = Signal(bool, str, str)
     open_project_requested = Signal()
+    _game_plan_ready = Signal(object)   # (rec | Exception) from the background /game planner
 
     def __init__(
         self,
@@ -692,6 +701,7 @@ class ChatPanel(QWidget):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        self._game_plan_ready.connect(self._on_game_plan_ready, Qt.QueuedConnection)
         if agent_service is None:
             agent_service = AgentService(Path(workspace_root or "."))
             self._owns_agent = True
@@ -800,8 +810,10 @@ class ChatPanel(QWidget):
         tbar_layout.setContentsMargins(12, 6, 12, 6)
         tbar_layout.setSpacing(10)
 
-        lbl = QLabel("🎮  GameForge Chat")
+        lbl = QLabel("🎮  Chat")
         lbl.setStyleSheet("color: #818cf8; font-weight: 800; font-size: 14px; letter-spacing: 0.5px;")
+        lbl.setMinimumWidth(lbl.sizeHint().width())   # never truncated by the controls on its right
+        lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         tbar_layout.addWidget(lbl)
         tbar_layout.addStretch()
 
@@ -1232,18 +1244,24 @@ class ChatPanel(QWidget):
             if not idea:
                 self._add_system_message("Usage: `/game <describe the game>` — e.g. `/game gomoku against the computer`.")
                 return True
-            try:
-                from ...backend.tools.game_tools import GameTools
-                rec = GameTools(Path(self._workspace or ".")).propose_create_game(
-                    f"create a {idea}" + ("" if "game" in idea.lower() else " game"), session_id=self._session_id)
-            except Exception as exc:
-                self._add_error_message(f"Game planner failed: {exc}")
-                return True
-            if rec and rec.get("approval_id"):
-                self._add_bubble("assistant", rec["plan_text"])
-                self._add_approval_card(rec)
-            else:
-                self._add_error_message("Could not plan that game.")
+            # Designing can take minutes with a local model; it used to run on the GUI thread and froze the IDE.
+            self._add_system_message("Designing the game from your description...")
+            workspace = Path(self._workspace or ".")
+            session_id = self._session_id
+            game_prompt = f"create a {idea}" + ("" if "game" in idea.lower() else " game")
+
+            def _plan() -> None:
+                try:
+                    from ...backend.tools.game_tools import GameTools
+                    result = GameTools(workspace).propose_create_game(game_prompt, session_id=session_id)
+                except Exception as exc:  # delivered to the GUI thread below
+                    result = exc
+                try:
+                    self._game_plan_ready.emit(result)
+                except RuntimeError:
+                    pass   # panel destroyed meanwhile
+
+            threading.Thread(target=_plan, name="gameforge-game-planner", daemon=True).start()
             return True
 
         if cmd == "/ue" or cmd == "/context":
@@ -1603,6 +1621,17 @@ class ChatPanel(QWidget):
         self._msg_layout.insertWidget(self._msg_layout.count() - 1, frame)
         self._scroll_to_bottom()
         return frame
+
+    @Slot(object)
+    def _on_game_plan_ready(self, rec: object) -> None:
+        if isinstance(rec, Exception):
+            self._add_error_message(f"Game planner failed: {rec}")
+            return
+        if isinstance(rec, dict) and rec.get("approval_id"):
+            self._add_bubble("assistant", rec.get("plan_text") or "Game design ready for review.")
+            self._add_approval_card(rec)
+        else:
+            self._add_error_message("Could not plan that game. Try describing the setting, enemies and goal.")
 
     def _add_approval_card(self, approval: dict) -> ApprovalCard:
         card = ApprovalCard(approval)
@@ -2241,6 +2270,10 @@ class ChatPanel(QWidget):
                     w.deleteLater()
                     break
 
+        if role in ("user", "assistant"):
+            # Slash commands and restored sessions add messages without going through the send path, which left the
+            # welcome screen sitting above the conversation.
+            self._hide_start_screen()
         bubble = _MessageBubble(role, text)
         count = self._msg_layout.count()
         self._msg_layout.insertWidget(count - 1, bubble)

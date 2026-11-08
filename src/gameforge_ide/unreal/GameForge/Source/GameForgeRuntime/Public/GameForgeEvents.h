@@ -4,6 +4,8 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "GameForgeEvents.generated.h"
 
+class AActor;
+
 GAMEFORGERUNTIME_API DECLARE_LOG_CATEGORY_EXTERN(LogGameForgeEvents, Log, All);
 
 USTRUCT(BlueprintType)
@@ -33,6 +35,10 @@ public:
 	int32 Count(FName Name, FName Entity = NAME_None) const;
 	const TArray<FGameForgeEvent>& History() const { return Events; }
 	const FString& SessionFile() const { return SessionPath; }
+	/** Clears the in-memory history and counters (the JSONL session log keeps everything). The bus lives on the
+	 *  GameInstance, so without this a level restart inherited every count and win conditions such as
+	 *  "collect 5 pickups" were met instantly after "Play again". Called at world begin play by the rules subsystem. */
+	void ResetCounters();
 
 	FOnGameForgeEvent OnEvent;
 
@@ -54,4 +60,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Events", meta = (WorldContext = "WorldContextObject"))
 	static void EmitGameForgeEvent(const UObject* WorldContextObject, FName Name, const FString& Source, const FString& DataJson,
 		FName Entity = NAME_None);
+
+	/** Returns Current when set, otherwise the GDS entity id carried by the actor's "GF_E_<entity_id>" tag.
+	 *  Placed kit actors were never given their EntityId property, so every pickup/enemy event was emitted with
+	 *  Entity=None and per-entity counters (entity.<id>.collected, rule "source" filters) never matched. */
+	UFUNCTION(BlueprintPure, Category = "GameForge|Events")
+	static FName ResolveEntityId(const AActor* Actor, FName Current);
 };

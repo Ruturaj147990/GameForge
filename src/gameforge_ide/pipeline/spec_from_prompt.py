@@ -18,11 +18,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Union
 
-from src.gameforge_ide.legacy_recipes.arena_combat.recipe import ArenaCombatParams
-from src.gameforge_ide.legacy_recipes.card_battler.recipe import CardBattlerParams
-from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams
-from src.gameforge_ide.legacy_recipes.platformer.recipe import PlatformerParams
-from src.gameforge_ide.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
+from ..legacy_recipes.arena_combat.recipe import ArenaCombatParams
+from ..legacy_recipes.card_battler.recipe import CardBattlerParams
+from ..legacy_recipes.grid_board_game.recipe import GridBoardParams
+from ..legacy_recipes.platformer.recipe import PlatformerParams
+from ..legacy_recipes.procedural_world.recipe import ProceduralWorldParams
 
 _CREATE = re.compile(
     r"\b(create|make|mak|mkae|maek|build|buid|biuld|generate|develop|design|give me|gimme|"
@@ -158,7 +158,7 @@ def is_game_creation_request(prompt: str) -> bool:
     coding requests keep going to the normal agent loop.
     """
     try:
-        from src.gameforge_ide.design.intent import is_game_creation_request as _intent_is_creation
+        from ..design.intent import is_game_creation_request as _intent_is_creation
         return _intent_is_creation(prompt)
     except ImportError:
         pass
@@ -199,7 +199,7 @@ def is_game_creation_request(prompt: str) -> bool:
     if any(k in text for r in RECIPES for k in r.keywords):
         return True
     try:
-        from src.gameforge_ide.design.presets import PRESET_KEYWORDS
+        from ..design.presets import PRESET_KEYWORDS
         if any(k in text for kws in PRESET_KEYWORDS.values() for k in kws):
             return True
     except ImportError:

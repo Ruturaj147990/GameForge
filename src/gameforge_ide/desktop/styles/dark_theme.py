@@ -7,7 +7,7 @@ Ensures maximum text legibility, balanced contrast hierarchy, and robust DPI sca
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QTextCursor
+from PySide6.QtGui import QColor, QPalette, QTextCursor
 from PySide6.QtWidgets import QApplication, QPlainTextEdit, QTextEdit
 
 GAMEFORGE_DARK_QSS = """
@@ -820,10 +820,36 @@ def get_theme_display_name(theme: str) -> str:
     return "Glossy Purple Light" if norm == "light" else "Midnight Purple Dark"
 
 
+def _build_palette(theme: str) -> QPalette:
+    """Base palette matching the stylesheet.
+
+    Only a stylesheet was applied on top of Fusion's default *light* palette, so every widget the stylesheet did not
+    cover (scroll-area viewports, table corner buttons, group-box backgrounds) rendered white in the dark theme -
+    visible as white bands in Settings and Design and as unreadable titles."""
+    pal = QPalette()
+    if theme == "light":
+        bg, base, alt, text, sub, btn = "#f7f5fc", "#ffffff", "#f1edf9", "#1d1730", "#5b5470", "#ece7f7"
+    else:
+        from . import tokens as t
+        bg, base, alt, text, sub, btn = t.BG_ROOT, t.BG_SURFACE, t.BG_PANEL, t.TEXT_PRIMARY, t.TEXT_SECONDARY, t.BG_SURFACE
+    roles = {
+        QPalette.Window: bg, QPalette.Base: base, QPalette.AlternateBase: alt, QPalette.Button: btn,
+        QPalette.Text: text, QPalette.WindowText: text, QPalette.ButtonText: text, QPalette.BrightText: "#ffffff",
+        QPalette.ToolTipBase: base, QPalette.ToolTipText: text, QPalette.PlaceholderText: sub,
+        QPalette.Highlight: "#7c3aed", QPalette.HighlightedText: "#ffffff", QPalette.Link: "#8b5cf6",
+    }
+    for role, colour in roles.items():
+        pal.setColor(role, QColor(colour))
+    for role in (QPalette.Text, QPalette.WindowText, QPalette.ButtonText):
+        pal.setColor(QPalette.Disabled, role, QColor(sub))
+    return pal
+
+
 def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
     """Apply a studio palette and convert existing inline widget styles."""
     theme = normalize_theme_name(theme)
     app.setStyle("Fusion")
+    app.setPalette(_build_palette(theme))
     app.setStyleSheet(GAMEFORGE_LIGHT_QSS if theme == "light" else GAMEFORGE_DARK_QSS)
     app.setProperty("gameforgeTheme", theme)
     try:

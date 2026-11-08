@@ -39,9 +39,11 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 "component_count_y": max(1, min(64, int(half_y_cm * 2.0 / 6300.0))),
                 "quads_per_section": 63,
                 "sections_per_component": 1,
-                "elevation_scale": 2000.0,
+                # Gentle rolling terrain: 20 m of relief buried most placed actors (which were spawned at z=100)
+                # and made the walk to the goal a climb over walls of rock. Actors now snap to the ground.
+                "elevation_scale": float(biomes.BIOMES[biome_name].elevation_scale) * 0.35 if biome_name in biomes.BIOMES else 600.0,
                 "seed": seed,
-                "terrain_type": "Valley",
+                "terrain_type": biomes.BIOMES[biome_name].terrain_type if biome_name in biomes.BIOMES else "Valley",
                 "material_path": "/Engine/BasicShapes/BasicShapeMaterial",
             },
             purpose="Generate genuine Unreal ALandscape with multi-octave heightfield and biome materials",
@@ -93,6 +95,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             "goal_0",
         ],
         properties={},
+        snap_to_ground=True,
+        ground_offset=60.0,
     )
 
     # Landmark mid-way
@@ -115,6 +119,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             "landmark_0",
         ],
         properties={},
+        snap_to_ground=True,
+        ground_offset=0.0,
     )
 
     actors: List[PlacedActor] = [goal_actor, landmark_actor]

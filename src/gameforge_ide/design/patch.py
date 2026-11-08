@@ -210,9 +210,13 @@ def apply_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> GameDesignSpe
         if isinstance(obj, dict):
             res = {}
             for k, v in obj.items():
-                if k == "event" and isinstance(v, str) and "." not in v and "_" in v:
-                    parts = v.split("_", 1)
-                    res[k] = f"{parts[0]}.{parts[1]}"
+                if k == "event" and isinstance(v, str):
+                    v_norm = v.replace("/", ".")
+                    if "." not in v_norm and "_" in v_norm:
+                        parts = v_norm.split("_", 1)
+                        res[k] = f"{parts[0]}.{parts[1]}"
+                    else:
+                        res[k] = v_norm
                 elif k == "kind" and isinstance(v, str):
                     kind_map = {
                         "count": "count_at_least",

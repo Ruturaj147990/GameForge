@@ -49,6 +49,11 @@ public:
 	FGameplayAttributeData Damage;
 	GAMEFORGE_ATTRIBUTE_ACCESSORS(UGameForgeAttributeSet, Damage)
 
+	/** Re-arms the one-shot death event after a respawn (previously a respawned player could never die again,
+	 *  so lose conditions and checkpoints silently stopped working after the first death). */
+	void ResetDeathState() { bDiedEmitted = false; }
+	bool HasDied() const { return bDiedEmitted; }
+
 private:
 	bool bDiedEmitted = false;
 };

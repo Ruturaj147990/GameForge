@@ -7,35 +7,35 @@ from typing import Any, Dict, Optional, Tuple, Type, Union
 
 from ...core.settings import engine_root_or_missing, get_settings
 from ...pipeline import stages as engine_stages
-from src.gameforge_ide.legacy_recipes.arena_combat.recipe import (
+from ...legacy_recipes.arena_combat.recipe import (
     RECIPE_ID as ARENA_RECIPE_ID,
     RECIPE_VERSION as ARENA_RECIPE_VERSION,
     SELFTEST_LOG_PASS as ARENA_SELFTEST_PASS,
     ArenaCombatParams,
     generate as arena_generate,
 )
-from src.gameforge_ide.legacy_recipes.card_battler.recipe import (
+from ...legacy_recipes.card_battler.recipe import (
     RECIPE_ID as CARD_RECIPE_ID,
     RECIPE_VERSION as CARD_RECIPE_VERSION,
     SELFTEST_LOG_PASS as CARD_SELFTEST_PASS,
     CardBattlerParams,
     generate as card_generate,
 )
-from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import (
+from ...legacy_recipes.grid_board_game.recipe import (
     RECIPE_ID as GRID_RECIPE_ID,
     RECIPE_VERSION as GRID_RECIPE_VERSION,
     SELFTEST_LOG_PASS as GRID_SELFTEST_PASS,
     GridBoardParams,
     generate as grid_generate,
 )
-from src.gameforge_ide.legacy_recipes.platformer.recipe import (
+from ...legacy_recipes.platformer.recipe import (
     RECIPE_ID as PLATFORMER_RECIPE_ID,
     RECIPE_VERSION as PLATFORMER_RECIPE_VERSION,
     SELFTEST_LOG_PASS as PLATFORMER_SELFTEST_PASS,
     PlatformerParams,
     generate as platformer_generate,
 )
-from src.gameforge_ide.legacy_recipes.procedural_world.recipe import (
+from ...legacy_recipes.procedural_world.recipe import (
     RECIPE_ID as PROCEDURAL_RECIPE_ID,
     RECIPE_VERSION as PROCEDURAL_RECIPE_VERSION,
     SELFTEST_LOG_PASS as PROCEDURAL_SELFTEST_PASS,
@@ -591,6 +591,37 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
             assembled_map = getattr(plan, "map_path", None) or map_package_path(str(level_id))
             if is_first:
                 _sync_project_map_settings(pdir, assembled_map)
+            # Write level manifest so downstream QA scenario generation has the placed actor inventory
+            try:
+                from ...qa.manifest import LevelManifest, ManifestActor
+                manifest_dir = pdir / "GameForge" / "levels"
+                manifest_dir.mkdir(parents=True, exist_ok=True)
+                manifest_actors = [
+                    ManifestActor(
+                        actor_id=str(getattr(a, "actor_id", "") or (a.get("actor_id", "") if isinstance(a, dict) else "")),
+                        tag=str(getattr(a, "tags", [""])[0] if getattr(a, "tags", None) else (a.get("tags", [""])[0] if isinstance(a, dict) and a.get("tags") else f"GF_{getattr(a, 'actor_id', '')}")),
+                        cls=str(getattr(a, "runtime_class", "") or (a.get("runtime_class", "") if isinstance(a, dict) else "")),
+                        entity_id=getattr(a, "entity_id", None) or (a.get("entity_id") if isinstance(a, dict) else None),
+                        location=(float(getattr(a, "location", (0, 0, 0))[0]), float(getattr(a, "location", (0, 0, 0))[1]), float(getattr(a, "location", (0, 0, 0))[2])),
+                        yaw=float(getattr(a, "yaw", 0.0) or (a.get("yaw", 0.0) if isinstance(a, dict) else 0.0)),
+                    )
+                    for a in getattr(plan, "actors", [])
+                ]
+                player_start = (0.0, 0.0, 100.0)
+                for op in getattr(plan, "geometry_ops", []):
+                    if getattr(op, "op", "") == "spawn_player_start":
+                        loc = getattr(op, "args", {}).get("location", {})
+                        player_start = (float(loc.get("x", 0)), float(loc.get("y", 0)), float(loc.get("z", 100)))
+                        break
+                lm = LevelManifest(
+                    level_id=str(level_id),
+                    map=assembled_map,
+                    player_start=player_start,
+                    actors=manifest_actors,
+                )
+                lm.to_file(manifest_dir / f"{level_id}.manifest.json")
+            except Exception as exc:
+                ctx.log(f"Warning: could not write level manifest: {exc}")
             # Output evidence verification for assemble stage
             if gds is not None:
                 try:

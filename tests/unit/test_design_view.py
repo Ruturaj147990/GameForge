@@ -386,7 +386,7 @@ def test_rule_editor_conditions_and_live_preview(qapp):
         assert "When" in preview_text
         assert "pickup is collected" in preview_text
         assert "coin" in preview_text
-        assert "player.health reaches 50" in preview_text
+        assert "player health reaches 50" in preview_text
 
         # Test validation rejection on empty ID
         dlg._id_input.setText("")

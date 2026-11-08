@@ -193,5 +193,8 @@ def scatter_graphs(biome: str, seed: int, graph_folder: str, extent_cm: float,
 def lighting_rig(preset: str, height_cm: float = 10000.0) -> list[dict]:
     rig = []
     for actor in LIGHTING[preset]:
-        rig.append({**actor, "location": {"x": 0, "y": 0, "z": height_cm}})
+        # Lights that declare their own location (indoor fill PointLight) keep it; previously every light was
+        # forced to z=height_cm, which put the 5000-lumen indoor fill light 100 m above the level.
+        loc = actor.get("location") or {"x": 0, "y": 0, "z": height_cm}
+        rig.append({**actor, "location": dict(loc)})
     return rig

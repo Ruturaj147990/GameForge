@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.core.settings import (
+from ...core.settings import (
     PINNED_ENGINE,
     discover_engines,
     engine_version,
@@ -105,6 +105,11 @@ class SettingsView(QWidget):
         )
 
         content = QWidget(scroll)
+        # The viewport/content widget inherited the light system palette, so group-box titles ("Engine Discovery",
+        # "Project Storage", ...) were drawn light-on-white and invisible between the dark section cards.
+        content.setObjectName("settingsScrollContent")
+        content.setStyleSheet(f"QWidget#settingsScrollContent {{ background-color: {tokens.BG_ROOT}; }}")
+        scroll.viewport().setStyleSheet(f"background-color: {tokens.BG_ROOT};")
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 16, 0)
         content_layout.setSpacing(tokens.SPACE_LG)

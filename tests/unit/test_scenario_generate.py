@@ -8,6 +8,8 @@ from src.gameforge_ide.qa.manifest import LevelManifest, ManifestActor
 
 def test_scenario_generation_smoke_and_pickups():
     gds = preset_platformer()
+    from src.gameforge_ide.design.gds import CountAtLeast
+    gds.goals.win = [CountAtLeast(kind="count_at_least", event="pickup.collected", n=5)]
     # Add explicit scenario refs
     gds.acceptance.scenarios = [
         ScenarioRef(scenario_id="smoke_test", derived_from="smoke"),
@@ -48,6 +50,12 @@ def test_scenario_generation_smoke_and_pickups():
                 tag="GF_Pickup_5",
                 cls="GameForgePickup",
                 location=(2500.0, 0.0, 100.0),
+            ),
+            ManifestActor(
+                actor_id="goal",
+                tag="GF_Goal",
+                cls="GameForgeGoal",
+                location=(3000.0, 0.0, 100.0),
             ),
         ],
     )

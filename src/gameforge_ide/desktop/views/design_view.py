@@ -39,13 +39,13 @@ from PySide6.QtWidgets import (
 from ..services.projects_service import GameSummary
 from ..styles import tokens
 from ..widgets.gds_form import GdsForm
-from src.gameforge_ide.core.jobs import JobHandle, default_job_manager
-from src.gameforge_ide.core.settings import get_settings
-from src.gameforge_ide.core.projects import resolve_project_dir
-from src.gameforge_ide.design.gds import GameDesignSpec
-from src.gameforge_ide.design.patch import apply_patch, propose_patch, summarize_patch
-from src.gameforge_ide.design.presets import PRESETS
-import src.gameforge_ide.design.store as gds_store
+from ...core.jobs import JobHandle, default_job_manager
+from ...core.settings import get_settings
+from ...core.projects import resolve_project_dir
+from ...design.gds import GameDesignSpec
+from ...design.patch import apply_patch, propose_patch, summarize_patch
+from ...design.presets import PRESETS
+from ...design import store as gds_store
 
 logger = logging.getLogger(__name__)
 
@@ -682,13 +682,13 @@ class DesignView(QWidget):
         p_dir = getattr(self, "_current_project_dir", None) or resolve_project_dir(self._current_project)
         if p_dir and self._current_project:
             try:
-                from src.gameforge_ide.forge.store import RunStore
+                from ...forge.store import RunStore
                 store = RunStore(project_dir=p_dir, workspace_dir=p_dir.parent)
                 prev_state = store.latest_for_project(p_dir)
                 if prev_state and self._current_spec:
-                    from src.gameforge_ide.composer.compose import compose
-                    from src.gameforge_ide.composer.plan import composition_to_run_spec
-                    from src.gameforge_ide.forge.impact import impact
+                    from ...composer.compose import compose
+                    from ...composer.plan import composition_to_run_spec
+                    from ...forge.impact import impact
                     comp = compose(self._current_spec, str(p_dir))
                     new_spec = composition_to_run_spec(comp, str(p_dir.parent), str(p_dir), origin="change_request")
                     rep = impact(prev_state, new_spec)

@@ -26,7 +26,7 @@ def test_expand_platformer_draft():
     assert any(e.kind == EntityKind.PLAYER for e in gds.entities)
     assert any(e.kind == EntityKind.PICKUP for e in gds.entities)
     assert any(e.kind == EntityKind.GOAL for e in gds.entities)
-    assert len(gds.goals.win) == 2
+    assert len(gds.goals.win) == 1 and gds.goals.win[0].event == "goal.reached"
     assert len(gds.goals.lose) == 1
     # Verify round-trip validation
     reloaded = GameDesignSpec.model_validate_json(gds.to_json())
@@ -95,7 +95,7 @@ def test_expand_custom_rules_and_acceptance():
         custom_rules=["Players gain stealth when crouching"],
     )
     gds = expand_draft(draft)
-    assert any(r.rule_id == "custom_1" for r in gds.rules)
+    assert any("briefing" in r.rule_id for r in gds.rules)
     assert any(s.scenario_id == "smoke" for s in gds.acceptance.scenarios)
     assert any(s.scenario_id == "win_1" for s in gds.acceptance.scenarios)
     reloaded = GameDesignSpec.model_validate_json(gds.to_json())

@@ -9,7 +9,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 from ..styles import tokens
-from src.gameforge_ide.forge.model import StepRecord
+from ...forge.model import StepRecord
 
 STEP_ROLE = Qt.UserRole + 1
 

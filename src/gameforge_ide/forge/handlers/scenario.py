@@ -241,6 +241,15 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         elif (base_dir / "Content" / "Maps" / f"{p_name}Map.umap").is_file():
             target_map = f"/Game/Maps/{p_name}Map"
 
+    # Scenarios the design marks must_pass=False (e.g. a jump course the navmesh autopilot cannot traverse) are
+    # advisory: their failures are reported but do not fail the build.
+    advisory_ids = set()
+    if gds is not None:
+        try:
+            advisory_ids = {r.scenario_id for r in gds.acceptance.scenarios if not getattr(r, "must_pass", True)}
+        except Exception:
+            advisory_ids = set()
+
     for sc in scenarios:
         if ctx.cancel.is_set():
             return StepOutcome(False, errors=["Cancelled by user"])
@@ -254,16 +263,21 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         if events_file.is_file():
             artifacts.append(events_file)
 
+        advisory = sc.scenario_id in advisory_ids
         results.append({
             "scenario_id": sc.scenario_id,
             "passed": res.passed,
             "duration_s": res.duration_s,
             "failures": res.failures,
+            "advisory": advisory,
         })
 
         if not res.passed:
-            all_passed = False
-            errors.extend([f"Scenario {sc.scenario_id} failed: {f}" for f in res.failures])
+            if advisory:
+                ctx.log(f"[ADVISORY] scenario {sc.scenario_id} not verified by autopilot: {'; '.join(res.failures)[:300]}")
+            else:
+                all_passed = False
+                errors.extend([f"Scenario {sc.scenario_id} failed: {f}" for f in res.failures])
 
     stage_data = {"results": results, "configuration": cfg}
     if all_passed and gds is not None:

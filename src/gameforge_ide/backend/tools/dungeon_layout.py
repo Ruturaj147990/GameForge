@@ -12,7 +12,7 @@ import random
 from collections import deque
 from dataclasses import dataclass
 
-from src.gameforge_ide.backend.tools.modular_kit import GRID_CM
+from ...backend.tools.modular_kit import GRID_CM
 
 
 @dataclass(frozen=True)

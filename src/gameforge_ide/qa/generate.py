@@ -167,12 +167,26 @@ def generate(
                 if not goals:
                     gaps.append(ScenarioGap(scenario_id, "no goal actor in manifest"))
                     continue
+                # A goal locked behind "collect N <entity>" must be preceded by collecting them.
+                pre_steps = []
+                goal_ent = next((e for e in gds.entities if e.module == "kit.goal"), None)
+                req = str(goal_ent.props.get("required_stat", "")) if goal_ent is not None else ""
+                if req.startswith("entity.") and req.endswith(".collected"):
+                    src_id = req.split(".")[1]
+                    need = int(float(goal_ent.props.get("required_value", 0) or 0))
+                    pool = [a for a in actors if a.entity_id == src_id]
+                    cur = player_start
+                    for _ in range(min(need, len(pool))):
+                        nearest = min(pool, key=lambda a: _dist2d(cur, a.location))
+                        pre_steps.append(NavigateToStep(navigate_to=NavigateToArgs(tag=nearest.tag)))
+                        cur = nearest.location
+                        pool.remove(nearest)
                 scenarios.append(
                     Scenario(
                         scenario_id=scenario_id,
-                        description="Navigate to goal actor",
-                        timeout_s=60.0,
-                        steps=[
+                        description="Navigate to goal actor" + (" after collecting the required pickups" if pre_steps else ""),
+                        timeout_s=60.0 + 15.0 * len(pre_steps),
+                        steps=pre_steps + [
                             NavigateToStep(navigate_to=NavigateToArgs(tag=goals[0].tag))
                         ],
                         expect=[
@@ -274,6 +288,8 @@ def generate(
                     or "Enemy" in a.cls
                     or a.tag.startswith("GF_Hazard")
                     or a.tag.startswith("GF_Enemy")
+                    or "Spawner" in a.cls
+                    or a.tag.startswith("GF_Spawner")
                 ]
                 if not hazards:
                     gaps.append(ScenarioGap(scenario_id, "no hazard or enemy actor in manifest"))

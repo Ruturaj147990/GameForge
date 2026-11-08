@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from src.gameforge_ide.design.gds import (
+from ...design.gds import (
     AddStat,
     Condition,
     CountAtLeast,
@@ -29,7 +29,7 @@ from src.gameforge_ide.design.gds import (
     SetStat,
     StatCompare,
 )
-from src.gameforge_ide.design.render import EVENT_PHRASES, sentence
+from ...design.render import EVENT_PHRASES, sentence
 
 
 def format_rule_sentence(rule: RuleSpec) -> str:

@@ -632,13 +632,18 @@ class SetViewportCameraArgs(BaseModel):
 class SpawnActorArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     actor_class: Any | None = None
+    color: Any | None = None
+    ground_offset: float | None = None
     label: Any | None = None
+    light_color: Any | None = None
     light_intensity: Any | None = None
     location: Any | None = None
     material: Any | None = None
     mobility: Any | None = None
     rotation: Any | None = None
     scale: Any | None = None
+    snap_ignore_prefixes: list | None = None
+    snap_to_ground: Any | None = None
     static_mesh: Any | None = None
 
 

@@ -13,7 +13,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.gameforge_ide.backend.tools.motion_generator import KeyframeTransform, MotionClipBundle
+from ...backend.tools.motion_generator import KeyframeTransform, MotionClipBundle
 
 
 @dataclass

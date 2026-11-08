@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "Engine/World.h"
 #include "AbilitySystemInterface.h"
+#include "GameForgeKitActors.h"
 
 UE_DEFINE_GAMEPLAY_TAG(TAG_GF_Data_Damage, "GameForge.Data.Damage");
 
@@ -43,6 +44,8 @@ void UGameForgeAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModC
 			{
 				bIsPlayer = P->IsPlayerControlled();
 			}
+			AGameForgeEnemy* Enemy = Cast<AGameForgeEnemy>(TargetActor);
+			const FName EntityId = UGameForgeEventLibrary::ResolveEntityId(TargetActor, Enemy ? Enemy->EntityId : NAME_None);
 
 			if (bIsPlayer)
 			{
@@ -61,7 +64,11 @@ void UGameForgeAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModC
 				if (Bus && TargetActor)
 				{
 					Bus->Emit(GFEvent::EnemyAttacked, TargetActor->GetName(),
-						FString::Printf(TEXT("{\"damage\":%f,\"health\":%f}"), LocalDamageDone, NewHealth));
+						FString::Printf(TEXT("{\"damage\":%f,\"health\":%f}"), LocalDamageDone, NewHealth), EntityId);
+				}
+				if (Enemy && NewHealth > 0.f)
+				{
+					Enemy->OnDamaged(Data.EffectSpec.GetContext().GetInstigator());
 				}
 			}
 
@@ -79,7 +86,17 @@ void UGameForgeAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModC
 				{
 					if (Bus && TargetActor)
 					{
-						Bus->Emit(GFEvent::EnemyKilled, TargetActor->GetName(), TEXT("{}"));
+						Bus->Emit(GFEvent::EnemyKilled, TargetActor->GetName(), TEXT("{}"), EntityId);
+					}
+					if (GS)
+					{
+						GS->AddStat(FName(TEXT("game.counter.enemies_killed")), 1.f);
+					}
+					// Dead enemies used to stand in place forever: they still blocked the player, still counted
+					// towards entity.<id>.remaining (so "defeat all" could never be won) and kept their AI tick.
+					if (Enemy)
+					{
+						Enemy->HandleDeath();
 					}
 				}
 			}
