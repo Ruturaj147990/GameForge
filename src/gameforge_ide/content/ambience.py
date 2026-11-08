@@ -8,6 +8,7 @@ Generates ambient audio beds:
 Outputs 16-bit PCM WAV suitable for seamless looping in Unreal Engine.
 """
 from __future__ import annotations
+from typing import Any, Dict
 
 import wave
 from pathlib import Path

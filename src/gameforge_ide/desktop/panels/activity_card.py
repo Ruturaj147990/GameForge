@@ -628,6 +628,18 @@ class StatusActivityItem(QFrame):
             action = f"Self-correcting build/test errors (attempt {attempt})..." if self.is_running else "Error diagnosis complete"
             badge = "repairing" if self.is_running else "verified"
 
+        elif self.status_kind == "running":
+            # Pipeline / long-running work: show the live stage message sent by the runtime.
+            stage = str(self.meta.get("stage") or "").strip()
+            message = str(self.meta.get("message") or "").strip()
+            failed = self.meta.get("ok") is False
+            icon = "⚠️" if failed else "🏗️"
+            label = message or (f"Running {stage}..." if stage else "Working...")
+            if stage and message and stage.lower() not in message.lower():
+                label = f"{stage}: {message}"
+            action = label if self.is_running else (label if failed else f"{stage or 'Pipeline'} finished")
+            badge = "failed" if failed else ("running" if self.is_running else "done")
+
         else:
             icon = "⚡"
             action = f"Agent: {self.status_kind.capitalize()}..." if self.is_running else self.status_kind.capitalize()

@@ -18,35 +18,35 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from tests.fixtures.legacy_recipes.arena_combat.recipe import (
+from src.gameforge_ide.legacy_recipes.arena_combat.recipe import (
     RECIPE_ID as ARENA_RECIPE_ID,
     RECIPE_VERSION as ARENA_RECIPE_VERSION,
     SELFTEST_LOG_PASS as ARENA_SELFTEST_PASS,
     ArenaCombatParams,
     generate as arena_generate,
 )
-from tests.fixtures.legacy_recipes.card_battler.recipe import (
+from src.gameforge_ide.legacy_recipes.card_battler.recipe import (
     RECIPE_ID as CARD_RECIPE_ID,
     RECIPE_VERSION as CARD_RECIPE_VERSION,
     SELFTEST_LOG_PASS as CARD_SELFTEST_PASS,
     CardBattlerParams,
     generate as card_generate,
 )
-from tests.fixtures.legacy_recipes.grid_board_game.recipe import (
+from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import (
     RECIPE_ID as GRID_RECIPE_ID,
     RECIPE_VERSION as GRID_RECIPE_VERSION,
     SELFTEST_LOG_PASS as GRID_SELFTEST_PASS,
     GridBoardParams,
     generate as grid_generate,
 )
-from tests.fixtures.legacy_recipes.platformer.recipe import (
+from src.gameforge_ide.legacy_recipes.platformer.recipe import (
     RECIPE_ID as PLATFORMER_RECIPE_ID,
     RECIPE_VERSION as PLATFORMER_RECIPE_VERSION,
     SELFTEST_LOG_PASS as PLATFORMER_SELFTEST_PASS,
     PlatformerParams,
     generate as platformer_generate,
 )
-from tests.fixtures.legacy_recipes.procedural_world.recipe import (
+from src.gameforge_ide.legacy_recipes.procedural_world.recipe import (
     RECIPE_ID as PROCEDURAL_RECIPE_ID,
     RECIPE_VERSION as PROCEDURAL_RECIPE_VERSION,
     SELFTEST_LOG_PASS as PROCEDURAL_SELFTEST_PASS,

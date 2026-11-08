@@ -11,7 +11,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, List, Optional, Union
 
 from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QSize, Signal, Slot
 from PySide6.QtGui import (
@@ -1474,15 +1474,14 @@ class MainWindow(QMainWindow):
         self._view_host.register("settings", create_settings_view)
 
     def _register_studio_shortcuts(self) -> None:
+        # Derive the shortcuts from the rail definition so the tooltips shown on the rail
+        # ("Play  Ctrl+3", ...) are the keys that actually work. The previous hard-coded
+        # table still mapped Ctrl+3/Ctrl+4 to the retired Design/Build views and shifted
+        # Play/Assets/Code to Ctrl+5/6/7, contradicting the rail tooltips.
+        from .shell.rail import RAIL_ITEMS
+
         view_shortcuts = [
-            ("Ctrl+1", "home"),
-            ("Ctrl+2", "games"),
-            ("Ctrl+3", "design"),
-            ("Ctrl+4", "build"),
-            ("Ctrl+5", "play"),
-            ("Ctrl+6", "assets"),
-            ("Ctrl+7", "code"),
-            ("Ctrl+,", "settings"),
+            (key, vid) for vid, _label, key in RAIL_ITEMS if vid != "separator" and key
         ]
         self._studio_shortcuts = []
         for key, vid in view_shortcuts:

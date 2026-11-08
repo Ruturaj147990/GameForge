@@ -14,7 +14,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from PySide6.QtCore import QTimer, QUrl, Qt, Signal, Slot
 from PySide6.QtGui import QDesktopServices

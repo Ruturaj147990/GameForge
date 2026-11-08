@@ -68,11 +68,46 @@ class ModelRouter:
             raise KeyError(f"Provider '{pid}' is not registered. Available: {list(self.providers.keys())}")
         return self.providers[pid]
 
-    def list_all_models(self) -> List[ModelInfo]:
-        all_models = []
+    def list_all_models(self, include_configured_when_offline: bool = True) -> List[ModelInfo]:
+        """Models from every reachable provider.
+
+        When no provider answers (Ollama not started yet), the configured routing models are
+        returned with an "offline" description instead of an empty list, so the model selector
+        still shows the user which model will be used and the UI can say *why* it is unavailable.
+        """
+        all_models: List[ModelInfo] = []
+        seen: set = set()
         for provider in self.providers.values():
-            if provider.is_available():
-                all_models.extend(provider.list_models())
+            try:
+                if provider.is_available():
+                    for m in provider.list_models():
+                        if m.id not in seen:
+                            seen.add(m.id)
+                            all_models.append(m)
+            except Exception:
+                continue
+        if all_models or not include_configured_when_offline:
+            return all_models
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+
+            cfg = _Path(__file__).resolve().parents[2] / "config" / "model_routing.json"
+            roles = _json.loads(cfg.read_text(encoding="utf-8")).get("roles", {})
+        except Exception:
+            roles = {}
+        for role, model_id in roles.items():
+            if model_id and model_id not in seen:
+                seen.add(model_id)
+                all_models.append(
+                    ModelInfo(
+                        id=model_id,
+                        name=model_id,
+                        provider=self.default_provider_id or "ollama",
+                        description=f"Configured for '{role}' (provider offline: start Ollama to use it)",
+                        is_local=True,
+                    )
+                )
         return all_models
 
     def route_for_phase(

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 
 PlanStepStatus = Literal["pending", "in_progress", "completed", "failed", "skipped"]
-PlanArtifactStatus = Literal["draft", "awaiting_approval", "approved", "executing", "completed", "rejected"]
+PlanArtifactStatus = Literal["draft", "awaiting_approval", "approved", "executing", "completed", "failed", "rejected"]
 
 
 class PlanStep(BaseModel):

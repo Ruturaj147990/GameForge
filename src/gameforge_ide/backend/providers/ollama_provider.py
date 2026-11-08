@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+import socket
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -105,30 +108,65 @@ def _extract_clean_json(text: str) -> Optional[str]:
 class OllamaProvider(ModelProvider):
     """Integrates local Ollama running on consumer AMD GPU/CPU."""
 
+    # Ollama reloads a model (several seconds, plus VRAM churn on a 12 GB card) whenever a
+    # request arrives with a different num_ctx than the loaded instance. Every caller used to
+    # pick its own value (8192 for design JSON, 32768 for chat, ...), so switching between the
+    # assistant and the design tools reloaded the model each time. The provider now keeps a
+    # per-model "sticky" context that only grows (in power-of-two buckets) up to the model cap.
+    _CTX_BUCKETS = (4096, 8192, 16384, 32768, 65536, 131072)
+    _sticky_ctx: Dict[str, int] = {}
+    _sticky_lock = threading.Lock()
+
     def __init__(self, host: str = "127.0.0.1:11434", timeout_seconds: int = 180):
-        self.host = host.rstrip("/")
+        host = (host or "127.0.0.1:11434").strip().rstrip("/")
+        # Accept "http://host:port" as well as "host:port" (OLLAMA_HOST is often set with a scheme).
+        for prefix in ("http://", "https://"):
+            if host.lower().startswith(prefix):
+                host = host[len(prefix):]
+        self.host = host
         self.timeout = timeout_seconds
 
     def get_provider_id(self) -> str:
         return "ollama"
 
-    def is_available(self) -> bool:
+    # The desktop asks for availability/model lists several times during startup and on every
+    # dropdown open, often on the UI thread. One /api/tags probe answers both questions, and the
+    # answer is cached briefly per host so repeated calls do not each pay an HTTP round-trip.
+    _TAGS_TTL_S = 5.0
+    _tags_cache: Dict[str, Any] = {}
+    _tags_lock = threading.Lock()
+
+    def _fetch_tags(self, force: bool = False) -> Optional[Dict[str, Any]]:
+        now = time.monotonic()
+        with self._tags_lock:
+            hit = self._tags_cache.get(self.host)
+            if hit and not force and now - hit[0] < self._TAGS_TTL_S:
+                return hit[1]
+        data: Optional[Dict[str, Any]] = None
         try:
             url = f"http://{self.host}/api/tags"
             req = urllib.request.Request(url, headers={"User-Agent": "GameForge-IDE/1.0"})
             with urllib.request.urlopen(req, timeout=3) as resp:
-                return resp.status == 200
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8") or "{}")
         except Exception:
-            return False
+            data = None
+        with self._tags_lock:
+            self._tags_cache[self.host] = (now, data)
+        return data
+
+    def invalidate_cache(self) -> None:
+        with self._tags_lock:
+            self._tags_cache.pop(self.host, None)
+
+    def is_available(self) -> bool:
+        return self._fetch_tags() is not None
 
     def list_models(self) -> List[ModelInfo]:
-        if not self.is_available():
+        data = self._fetch_tags()
+        if data is None:
             return []
         try:
-            url = f"http://{self.host}/api/tags"
-            req = urllib.request.Request(url, headers={"User-Agent": "GameForge-IDE/1.0"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
             models = []
             for item in data.get("models", []):
                 name = item.get("name", "")
@@ -162,14 +200,38 @@ class OllamaProvider(ModelProvider):
         )
 
     def budget_num_ctx(self, model_id: str, estimated_input_tokens: int = 0, requested_ctx: Optional[int] = None) -> int:
-        """Dynamically budgets num_ctx based on model family and input size, respecting hardware bounds."""
+        """Budget num_ctx from model capability and input size, reusing the loaded context when possible.
+
+        The result is rounded up to a bucket and never shrinks below the context this provider
+        last used for the same model (see ``_sticky_ctx``), which avoids model reloads.
+        """
         caps = self.get_capabilities(model_id)
-        base_needed = max(8192, estimated_input_tokens + 4096)
-        if requested_ctx and requested_ctx > 0:
-            needed = max(requested_ctx, base_needed)
-        else:
-            needed = base_needed
-        return min(needed, caps.max_context)
+        base_needed = max(8192, int(estimated_input_tokens) + 4096)
+        needed = max(int(requested_ctx), base_needed) if requested_ctx and requested_ctx > 0 else base_needed
+        bucket = next((b for b in self._CTX_BUCKETS if b >= needed), needed)
+        with self._sticky_lock:
+            sticky = self._sticky_ctx.get(model_id, 0)
+            # An explicit caller request may exceed the family heuristic (unknown model tags
+            # default to a conservative 4096); honour it rather than silently shrinking.
+            cap = max(caps.max_context, int(requested_ctx or 0))
+            chosen = min(max(bucket, sticky), cap)
+            self._sticky_ctx[model_id] = max(sticky, chosen)
+        return chosen
+
+    @staticmethod
+    def estimate_tokens(*texts: Any) -> int:
+        """Cheap token estimate (~3.2 chars/token for code-heavy English; errs on the high side)."""
+        total = 0
+        for t in texts:
+            if t is None:
+                continue
+            if isinstance(t, (list, tuple)):
+                total += OllamaProvider.estimate_tokens(*t)
+            elif isinstance(t, dict):
+                total += OllamaProvider.estimate_tokens(t.get("content", ""))
+            else:
+                total += len(str(t))
+        return int(total / 3.2) + 1
 
     def _request_with_retry(
         self,
@@ -208,6 +270,13 @@ class OllamaProvider(ModelProvider):
                 raise last_exc from exc
             except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError, ValueError) as exc:
                 last_exc = exc
+                # A read timeout means the model is generating (or stuck) for longer than the
+                # budget; re-sending the same request would only multiply the wait by max_retries.
+                reason = getattr(exc, "reason", exc)
+                if isinstance(reason, (socket.timeout, TimeoutError)):
+                    raise RuntimeError(
+                        f"Ollama request timed out after {timeout:.0f}s (model still loading or generation too long)."
+                    ) from exc
                 if attempt < max_retries - 1:
                     sleep_time = 0.5 * (2 ** attempt)
                     logger.warning(
@@ -271,9 +340,14 @@ class OllamaProvider(ModelProvider):
         `tools` uses the provider-neutral shape {name, description, parameters}. `think` is
         always False and `num_ctx` is always explicit (Master Blueprint v2 §6).
         """
-        est_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 3
-        needed = max(8192, num_ctx, est_tokens + max_tokens + 512)
+        est_tokens = self.estimate_tokens(messages) + self.estimate_tokens(json.dumps(tools))
+        needed = max(8192, int(num_ctx or 0), est_tokens + max_tokens + 512)
         effective_ctx = self.budget_num_ctx(model_id, est_tokens, needed)
+        if est_tokens + max_tokens > effective_ctx:
+            logger.warning(
+                "Ollama chat_with_tools: ~%d prompt tokens + %d output exceed num_ctx=%d for %s; "
+                "Ollama will truncate the oldest context.", est_tokens, max_tokens, effective_ctx, model_id,
+            )
         payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
@@ -330,8 +404,8 @@ class OllamaProvider(ModelProvider):
         timeout_s: float = 120.0,
     ) -> Optional[str]:
         """Structured output via /api/chat `format` (JSON schema). Returns clean JSON text or None on transport errors."""
-        est_tokens = (len(system) + len(user)) // 3
-        effective_ctx = max(num_ctx, self.budget_num_ctx(model_id, est_tokens, num_ctx))
+        est_tokens = self.estimate_tokens(system, user, json.dumps(schema))
+        effective_ctx = self.budget_num_ctx(model_id, est_tokens, num_ctx)
         payload = {
             "model": model_id,
             "stream": False,
@@ -465,10 +539,23 @@ class OllamaProvider(ModelProvider):
         max_tokens: int = 2048,
         **kwargs: Any,
     ) -> AsyncIterator[StreamChunk]:
-        """Streams completion tokens from Ollama /api/chat."""
+        """Stream completion tokens from Ollama /api/chat.
+
+        The blocking HTTP read runs on a worker thread and hands chunks to the event loop through
+        a queue, so (a) other coroutines keep running while the model generates, and (b) closing
+        the generator (the consumer breaks out, e.g. on user cancel) or setting the optional
+        ``cancel_event`` (threading.Event) closes the HTTP response, which makes Ollama stop
+        generating instead of burning GPU time on an abandoned answer.
+        """
         url = f"http://{self.host}/api/chat"
-        resolved_ctx = kwargs.get("num_ctx") or self.get_capabilities(model_id).max_context
-        
+        est_tokens = self.estimate_tokens(messages, system_prompt)
+        resolved_ctx = self.budget_num_ctx(model_id, est_tokens + max_tokens, kwargs.get("num_ctx"))
+        if est_tokens + max_tokens > resolved_ctx:
+            logger.warning(
+                "Ollama stream_chat: ~%d prompt tokens + %d output exceed num_ctx=%d for %s; "
+                "Ollama will truncate the oldest context.", est_tokens, max_tokens, resolved_ctx, model_id,
+            )
+
         payload = self.build_chat_payload(
             model_id=model_id,
             messages=messages,
@@ -477,6 +564,8 @@ class OllamaProvider(ModelProvider):
             max_tokens=max_tokens,
             num_ctx=resolved_ctx,
         )
+        if kwargs.get("keep_alive") is not None:
+            payload["keep_alive"] = kwargs["keep_alive"]
 
         req = urllib.request.Request(
             url,
@@ -485,18 +574,69 @@ class OllamaProvider(ModelProvider):
             method="POST",
         )
 
+        external_cancel: Optional[threading.Event] = kwargs.get("cancel_event")
+        stop = threading.Event()
+        loop = asyncio.get_running_loop()
+        queue: "asyncio.Queue[Optional[StreamChunk]]" = asyncio.Queue()
+        holder: Dict[str, Any] = {}
+
+        def _put(item: Optional[StreamChunk]) -> None:
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, item)
+            except RuntimeError:
+                pass  # event loop already closed
+
+        def _reader() -> None:
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    holder["resp"] = resp
+                    for chunk in self.parse_stream_lines(resp):
+                        if stop.is_set() or (external_cancel is not None and external_cancel.is_set()):
+                            break
+                        _put(chunk)
+                        if chunk.is_final:
+                            break
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode("utf-8", errors="replace")[:500]
+                except Exception:
+                    pass
+                if not stop.is_set():
+                    _put(StreamChunk(token="", is_final=True, error=f"Ollama HTTP {e.code}: {body or e.reason}"))
+            except urllib.error.URLError as e:
+                if not stop.is_set():
+                    _put(StreamChunk(
+                        token="",
+                        is_final=True,
+                        error=f"Local Ollama connection failure: {e.reason}. Ensure 'ollama serve' is running.",
+                    ))
+            except Exception as e:  # socket timeouts, resets, decoding errors
+                if not stop.is_set():
+                    _put(StreamChunk(token="", is_final=True, error=f"Ollama streaming error: {e}"))
+            finally:
+                _put(None)
+
+        worker = threading.Thread(target=_reader, name="ollama-stream", daemon=True)
+        worker.start()
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                for chunk in self.parse_stream_lines(resp):
-                    yield chunk
-        except urllib.error.URLError as e:
-            yield StreamChunk(
-                token="",
-                is_final=True,
-                error=f"Local Ollama connection failure: {e.reason}. Ensure 'ollama serve' is running.",
-            )
-        except Exception as e:
-            yield StreamChunk(token="", is_final=True, error=f"Ollama streaming error: {str(e)}")
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+                if item.is_final:
+                    break
+                if external_cancel is not None and external_cancel.is_set():
+                    break
+        finally:
+            stop.set()
+            resp = holder.get("resp")
+            if resp is not None:
+                try:
+                    resp.close()  # disconnecting makes Ollama abort the generation
+                except Exception:
+                    pass
 
     def complete(
         self,
@@ -508,8 +648,8 @@ class OllamaProvider(ModelProvider):
         **kwargs: Any,
     ) -> ChatResponse:
         url = f"http://{self.host}/api/generate"
-        est_tokens = (len(prompt) + len(system_prompt or "")) // 3
-        resolved_ctx = kwargs.get("num_ctx") or self.budget_num_ctx(model_id, est_tokens)
+        est_tokens = self.estimate_tokens(prompt, system_prompt)
+        resolved_ctx = self.budget_num_ctx(model_id, est_tokens + max_tokens, kwargs.get("num_ctx"))
         payload = {
             "model": model_id,
             "prompt": prompt,

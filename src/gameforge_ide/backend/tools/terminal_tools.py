@@ -22,7 +22,7 @@ from ..models.command_contract import (
     RiskCategory,
 )
 from ..models.modes import PermissionsMode
-from .command_broker import CommandExecutionBroker
+from .command_broker import CommandExecutionBroker, find_forbidden_payload
 
 
 class TerminalTools:
@@ -113,10 +113,8 @@ class TerminalTools:
         reason: str = "",
     ) -> Dict[str, Any]:
         """Executes a command within the workspace directory via CommandExecutionBroker."""
-        cmd_lower = command.lower().strip()
-        for forbidden in self.FORBIDDEN_COMMANDS:
-            if forbidden in cmd_lower:
-                return self._blocked(f"Command contains forbidden operation '{forbidden}'")
+        if not isinstance(command, str) or not command.strip():
+            return self._blocked("Command is empty.")
 
         try:
             if isinstance(timeout_seconds, bool):
@@ -141,7 +139,11 @@ class TerminalTools:
             return self._blocked(f"Working directory is not an existing directory: '{subpath}'.")
 
         # Resolve permissions mode
-        pm = PermissionsMode.from_str(permissions_mode) if permissions_mode else PermissionsMode.AUTO
+        try:
+            pm = PermissionsMode.from_str(permissions_mode) if permissions_mode else PermissionsMode.AUTO
+        except ValueError as exc:
+            # Fail closed on an unknown mode instead of raising out of the tool call.
+            return self._blocked(str(exc))
 
         # Default to direct shell-free execution for agent security (REQ-051).
         # Explicit shell choices (powershell, cmd, bash) can be passed when needed.
@@ -153,6 +155,11 @@ class TerminalTools:
                 return self._blocked(str(exc))
         elif target_shell not in ("powershell", "cmd", "bash"):
             return self._blocked(f"Unsupported shell: {target_shell!r}")
+
+        # Catastrophic payloads are rejected before any approval is even offered.
+        forbidden = find_forbidden_payload(command)
+        if forbidden:
+            return self._blocked(f"Command contains forbidden operation '{forbidden}'")
 
         request = CommandExecutionRequest(
             command=command,

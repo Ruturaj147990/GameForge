@@ -456,7 +456,7 @@ mislabel, 2026-10-30).
 | Idle CPU | < 1 % of one core over 60 s (measured 0.2–0.6 %) |
 | Cold start | < 2.5 s (measured 0.8–1.7 s) |
 | UI-thread stalls | none > 50 ms |
-| Install footprint without models | ≤ 250 MB |
+| Install footprint without models | ≤ 400 MB (owner decision 2026-11-07; PyInstaller bundle incl. PySide6 measured ~320 MB) |
 | Per-workspace metadata | default cap 512 MB; rotation; cleanup preview |
 | Child processes | zero leaks: every child is in a Windows job object |
 

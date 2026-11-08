@@ -8,7 +8,9 @@ import sys
 from pathlib import Path
 
 # Ensure application root is on sys.path
-app_root = Path(__file__).resolve().parent.parent.parent
+# entrypoint.py lives at the repository root; under PyInstaller the bundle root
+# is sys._MEIPASS. (The previous value walked two directories above the repo.)
+app_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 if str(app_root) not in sys.path:
     sys.path.insert(0, str(app_root))
 

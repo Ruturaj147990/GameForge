@@ -39,7 +39,6 @@ HANDLERS: Dict[str, Handler] = {
     "report": report_handler,
     # StepKind enums
     "design": legacy_stages.legacy_spec,
-    "scaffold": scaffold_handler,
     "codegen": legacy_stages.legacy_sources,
     "build": legacy_stages.legacy_build,
     "content": content.content_handler,

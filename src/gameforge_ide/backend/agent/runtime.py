@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -101,14 +102,28 @@ class AgentRuntime:
             pass
         self._active_tasks: Dict[str, TaskState] = {}
         self._cancel_events: Dict[str, asyncio.Event] = {}
+        # Thread-safe twin of _cancel_events: cancel_task() is called from the UI thread, and
+        # the provider's streaming reader thread polls this to abort the HTTP generation.
+        self._thread_cancel: Dict[str, threading.Event] = {}
+        self._llm_intent_by_prompt: Dict[str, Any] = {}
         self._cancelled_sessions: set[str] = set()
 
     def cancel_task(self, session_id: str) -> bool:
         """Cooperatively cancels an active or waiting task without zombie locks."""
         self._cancelled_sessions.add(session_id)
+        tev = self._thread_cancel.get(session_id)
+        if tev is not None:
+            tev.set()
         ev = self._cancel_events.get(session_id)
         if ev:
-            ev.set()
+            try:
+                loop = getattr(ev, "_loop", None)
+                if loop is not None and loop.is_running():
+                    loop.call_soon_threadsafe(ev.set)
+                else:
+                    ev.set()
+            except Exception:
+                ev.set()
         task = self._active_tasks.get(session_id)
         if task:
             task.terminal_status = "CANCELLED"
@@ -126,6 +141,21 @@ class AgentRuntime:
             return True
         task = self._active_tasks.get(session_id)
         return bool(task and task.terminal_status == "CANCELLED")
+
+    async def _await_cancellable(self, session_id: str, fn: Callable[..., Any], *args: Any, poll_s: float = 0.2) -> Any:
+        """Run a blocking provider call on a worker thread; return None as soon as the task is cancelled.
+
+        The blocking call itself cannot be interrupted, but the agent loop (and therefore the UI)
+        no longer waits up to the provider timeout after the user pressed Stop.
+        """
+        fut = asyncio.ensure_future(asyncio.to_thread(fn, *args))
+        while True:
+            done, _ = await asyncio.wait({fut}, timeout=poll_s)
+            if done:
+                return fut.result()
+            if self.is_task_cancelled(session_id):
+                fut.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
+                return None
 
     def set_workspace(self, new_workspace: Path | str) -> None:
         """Switch the agent runtime active workspace and re-initialize path-dependent subsystems."""
@@ -1253,7 +1283,14 @@ class AgentRuntime:
         return predicates
 
     def _is_game_creation_request(self, user_prompt: str) -> bool:
-        """Determines if prompt is asking to build or create a complete new game."""
+        """Determines if prompt is asking to build or create a complete new game.
+
+        A confident model classification for this prompt (made at the start of the task)
+        takes precedence; otherwise the keyword heuristic decides.
+        """
+        llm_intent = getattr(self, "_llm_intent_by_prompt", {}).get(user_prompt)
+        if llm_intent is not None:
+            return llm_intent.intent == "create_game"
         from ...pipeline.spec_from_prompt import is_game_creation_request
         return is_game_creation_request(user_prompt)
 
@@ -1379,7 +1416,31 @@ class AgentRuntime:
             and active_plan.status in ("awaiting_approval", "draft")
             and user_norm in ("proceed", "execute", "start", "run", "go ahead", "apply", "confirm", "build it", "do it")
         )
-        is_conversational = False if is_proceed else self._is_conversational(user_prompt)
+        # Model-assisted routing (falls back to the keyword heuristics when the model is
+        # unavailable or not confident). See intent_classifier.py.
+        llm_intent = None
+        if not is_proceed:
+            try:
+                from .intent_classifier import classify_intent
+
+                intent_provider = self.router.get_provider(getattr(session, "provider_type", None))
+                llm_intent = await asyncio.to_thread(
+                    classify_intent, user_prompt, intent_provider, getattr(session, "model_name", "")
+                )
+            except Exception as exc:
+                logger.debug("LLM intent routing skipped: %s", exc)
+                llm_intent = None
+        self._llm_intent_by_prompt[user_prompt] = llm_intent
+        if len(self._llm_intent_by_prompt) > 64:
+            self._llm_intent_by_prompt.pop(next(iter(self._llm_intent_by_prompt)))
+        if is_proceed:
+            is_conversational = False
+        elif llm_intent is not None:
+            is_conversational = llm_intent.intent == "chat"
+            logger.info("[AgentRuntime] Routed by model: %s (confidence %.2f, %.1fs)",
+                        llm_intent.intent, llm_intent.confidence, llm_intent.seconds)
+        else:
+            is_conversational = self._is_conversational(user_prompt)
         intent = "answer" if is_conversational else "mutate"
         predicates = acceptance_predicates or self._propose_acceptance_predicates(user_prompt)
 
@@ -1416,6 +1477,7 @@ class AgentRuntime:
         self._cancelled_sessions.discard(session_id)
         cancel_ev = asyncio.Event()
         self._cancel_events[session_id] = cancel_ev
+        self._thread_cancel[session_id] = threading.Event()
 
         try:
             async for ev in self._run_task_stream(
@@ -1425,6 +1487,7 @@ class AgentRuntime:
                 yield ev
         finally:
             self._cancel_events.pop(session_id, None)
+            self._thread_cancel.pop(session_id, None)
             self._cancelled_sessions.discard(session_id)
 
     async def _run_task_stream(
@@ -1619,8 +1682,15 @@ class AgentRuntime:
                     metadata={"stage": "Scaffold", "message": "Executing autonomous game creation pipeline..."},
                 )
                 try:
+                    # Stage events arrive on the pipeline's worker thread; hand them to this
+                    # coroutine through a thread-safe queue so the chat shows live progress
+                    # (the previous forwarder discarded them, leaving the UI silent for minutes).
+                    import queue as _queue
+
+                    stage_events: "_queue.Queue[Tuple[str, Dict[str, Any]]]" = _queue.Queue()
+
                     def _stage_event_forwarder(event_name: str, event_data: Dict[str, Any]) -> None:
-                        pass
+                        stage_events.put((event_name, dict(event_data or {})))
 
                     effective_game_prompt = active_plan.goal if (active_plan and active_plan.goal and is_proceed_command) else user_prompt
                     gds_obj = None
@@ -1629,17 +1699,22 @@ class AgentRuntime:
                             from ...design.gds import GameDesignSpec
                             gds_data = active_plan.metadata["gds"]
                             gds_obj = GameDesignSpec.model_validate(gds_data) if isinstance(gds_data, dict) else GameDesignSpec.model_validate_json(gds_data)
-                        except Exception:
+                        except Exception as exc:
+                            logger.warning("Stored plan GDS is invalid, re-deriving from prompt: %s", exc)
                             gds_obj = None
 
                     if gds_obj is None:
+                        yield AgentEvent(event_type="status", content="RUNNING",
+                                         metadata={"stage": "Design", "message": "Drafting the game design spec..."})
                         try:
                             from ...design.prompt_to_gds import prompt_to_gds
-                            res = prompt_to_gds(effective_game_prompt, allow_model=True)
+                            res = await asyncio.to_thread(prompt_to_gds, effective_game_prompt, allow_model=True)
                             if res.status == "OK" and res.gds is not None:
                                 gds_obj = res.gds
-                        except Exception:
-                            pass
+                            # Questions are asked during planning; after Proceed / in Fast mode
+                            # create_game derives a design from the prompt itself.
+                        except Exception as exc:
+                            logger.warning("prompt_to_gds failed; create_game will derive the design itself: %s", exc)
 
                     target_pdir = None
                     ps = getattr(self, "projects_service", None)
@@ -1648,48 +1723,67 @@ class AgentRuntime:
                     elif session and getattr(session, "project_dir", None):
                         target_pdir = session.project_dir
 
-                    game_outcome = await asyncio.to_thread(
+                    build_future = asyncio.ensure_future(asyncio.to_thread(
                         self.tool_gateway.game_tools.create_game,
                         gds_or_params=gds_obj,
                         prompt=effective_game_prompt,
                         project_dir=target_pdir,
                         package=True,
                         on_event=_stage_event_forwarder,
+                        cancel_event=self._thread_cancel.get(session_id),
+                    ))
+                    started_at = time.monotonic()
+                    while True:
+                        done_set, _ = await asyncio.wait({build_future}, timeout=0.5)
+                        while True:
+                            try:
+                                ev_name, ev_data = stage_events.get_nowait()
+                            except _queue.Empty:
+                                break
+                            stage_label = str(ev_data.get("stage") or ev_data.get("step_id") or "").replace("_", " ")
+                            if ev_name == "stage_started":
+                                yield AgentEvent(event_type="status", content="RUNNING",
+                                                 metadata={"stage": stage_label.title(), "message": f"Running {stage_label}...",
+                                                           "elapsed_s": round(time.monotonic() - started_at, 1)})
+                            elif ev_name == "stage_finished":
+                                ok = bool(ev_data.get("ok"))
+                                dur = float(ev_data.get("duration_s") or 0.0)
+                                yield AgentEvent(event_type="status", content="RUNNING",
+                                                 metadata={"stage": stage_label.title(),
+                                                           "message": f"{stage_label} {'done' if ok else 'failed'} ({dur:.1f}s)",
+                                                           "ok": ok, "errors": ev_data.get("errors", [])[:3]})
+                            elif ev_name == "gpu_released":
+                                yield AgentEvent(event_type="status", content="RUNNING",
+                                                 metadata={"stage": "GPU", "message": "Unloaded local models to free VRAM for Unreal."})
+                        if done_set:
+                            break
+                    game_outcome = build_future.result()
+
+                    if self.is_task_cancelled(session_id):
+                        msg = "Game build cancelled. The run is saved; ask me to resume it later."
+                        yield AgentEvent(event_type="token", content=msg)
+                        self.session_manager.append_message(session_id, "assistant", msg)
+                        task_state.terminal_status = "CANCELLED"
+                        task_state.terminal_reason = "cancelled_by_user"
+                        self._save_task_state(task_state)
+                        yield AgentEvent(event_type="done", content=msg, metadata={"terminal_status": "CANCELLED"})
+                        return
+
+                    outcome = game_outcome if isinstance(game_outcome, dict) else {"status": "ERROR", "error": str(game_outcome)}
+                    p_dir = outcome.get("project_dir") or str(self.workspace_root)
+                    stages = outcome.get("stages") or []
+                    stage_lines = "\n".join(
+                        f"- `{st.get('step_id')}`: {st.get('status')}" for st in stages
                     )
-
-                    if isinstance(game_outcome, dict) and game_outcome.get("status") in ("FAILED", "ERROR"):
-                        # Automatic stage recovery engine (Section 2.9 / 8.4)
-                        failed_step = game_outcome.get("failed_step", "scenarios")
-                        root_cause = self.repair_engine.extract_root_cause(
-                            game_outcome.get("error") or game_outcome.get("errors") or str(game_outcome),
-                            stage_id=failed_step,
-                        )
-                        can_repair, reason = self.repair_engine.can_attempt_repair(root_cause)
-                        if can_repair:
-                            yield AgentEvent(
-                                event_type="status",
-                                content="REPAIRING",
-                                metadata={"stage": "Automatic Error Repair", "root_cause": root_cause.model_dump(), "attempt": 1},
-                            )
-                            # Record attempt
-                            self.repair_engine.record_attempt(
-                                root_cause,
-                                diff_text=f"// Automatic repair applied to {failed_step}",
-                                modified_files=[],
-                                result_status="SUCCESS",
-                                diag_count_before=1,
-                                diag_count_after=0,
-                            )
-                            game_outcome["status"] = "SUCCESS"
-                            game_outcome["repaired"] = True
-
-                    if isinstance(game_outcome, dict) and game_outcome.get("status") == "SUCCESS":
-                        p_dir = game_outcome.get("project_dir", str(self.workspace_root))
+                    if outcome.get("status") == "SUCCESS" and outcome.get("ok", True):
+                        exe = outcome.get("exe") or outcome.get("package_exe")
+                        report = outcome.get("report_path")
                         succ_msg = (
-                            f"Game creation complete and verified!\n\n"
-                            f"- **Project Directory:** `{p_dir}`\n"
-                            f"- **Executable:** `{game_outcome.get('package_exe', 'Packaged/Windows')}`\n"
-                            f"- **Evidence:** All 11 Forge stages and QA scenarios verified PASS."
+                            "Game creation complete and verified: every Forge stage (including packaged QA scenarios) reported DONE.\n\n"
+                            f"- **Project directory:** `{p_dir}`\n"
+                            + (f"- **Executable:** `{exe}`\n" if exe else "- **Executable:** not found on disk (packaging may have been skipped)\n")
+                            + (f"- **Report:** `{report}`\n" if report else "")
+                            + (f"\n**Stages**\n{stage_lines}\n" if stage_lines else "")
                         )
                         yield AgentEvent(event_type="token", content=succ_msg)
                         self.session_manager.append_message(session_id, "assistant", succ_msg)
@@ -1700,8 +1794,44 @@ class AgentRuntime:
                             self.session_manager.set_active_plan(session_id, active_plan)
                         yield AgentEvent(event_type="done", content=succ_msg, metadata={"terminal_status": "COMPLETED"})
                         return
+
+                    # Failure: report it truthfully. (The previous code recorded a fabricated
+                    # "repair" and then announced that all stages had passed.)
+                    failed_stage = outcome.get("failed_stage") or outcome.get("failed_step") or "unknown"
+                    err = outcome.get("error") or outcome.get("errors") or "no error text was recorded"
+                    root_cause = self.repair_engine.extract_root_cause(str(err), stage_id=failed_stage)
+                    fail_msg = (
+                        f"Game build did **not** complete. It stopped at stage `{failed_stage}`.\n\n"
+                        f"**Error:** {str(err)[:1500]}\n\n"
+                        f"**Likely cause:** {getattr(root_cause, 'category', 'unknown')}"
+                        f"{(' - ' + str(getattr(root_cause, 'summary', ''))) if getattr(root_cause, 'summary', '') else ''}\n\n"
+                        + (f"**Stages**\n{stage_lines}\n\n" if stage_lines else "")
+                        + f"Project directory: `{p_dir}`"
+                        + (f" - run `{outcome.get('run_id')}` can be resumed from the Build view." if outcome.get("run_id") else "")
+                        + "\n\nTell me to fix it and I will inspect the logs and source for that stage."
+                    )
+                    yield AgentEvent(event_type="token", content=fail_msg)
+                    self.session_manager.append_message(session_id, "assistant", fail_msg)
+                    task_state.terminal_status = "FAILED"
+                    task_state.terminal_reason = f"game build failed at {failed_stage}"
+                    self._save_task_state(task_state)
+                    if active_plan:
+                        active_plan.status = "failed"
+                        try:
+                            self.session_manager.set_active_plan(session_id, active_plan)
+                        except Exception:
+                            pass
+                    yield AgentEvent(event_type="done", content=fail_msg,
+                                     metadata={"terminal_status": "FAILED", "failed_stage": failed_stage})
+                    return
                 except Exception as g_exc:
                     logger.exception("Game creation execution error: %s", g_exc)
+                    err_msg = f"Game creation pipeline crashed: {type(g_exc).__name__}: {g_exc}"
+                    task_state.terminal_status = "FAILED"
+                    task_state.terminal_reason = err_msg
+                    self._save_task_state(task_state)
+                    yield AgentEvent(event_type="error", content=err_msg)
+                    return
 
         # Short-circuit: conversational prompts get a direct reply with no tool dispatch.
         if is_conversational:
@@ -1713,12 +1843,22 @@ class AgentRuntime:
             full_response = ""
             async for chunk in provider.stream_chat(
                 model_id=session.model_name,
+                cancel_event=self._thread_cancel.get(session_id),
                 messages=conversation_history,
                 system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=output_tokens,
                 num_ctx=capabilities.max_context,
             ):
+                if self.is_task_cancelled(session_id):
+                    task_state.terminal_status = "CANCELLED"
+                    task_state.terminal_reason = "cancelled_by_user"
+                    self._save_task_state(task_state)
+                    if full_response.strip():
+                        self.session_manager.append_message(session_id, "assistant", full_response + "\n\n[stopped]")
+                    yield AgentEvent(event_type="done", content="Task cancelled by user.",
+                                     metadata={"full_text": full_response, "terminal_status": "CANCELLED"})
+                    return
                 if chunk.error:
                     task_state.terminal_status = "FAILED"
                     task_state.terminal_reason = chunk.error
@@ -1837,7 +1977,8 @@ class AgentRuntime:
                 used_native = self.native_tools and hasattr(provider, "chat_with_tools")
                 if used_native:
                     try:
-                        native = await asyncio.to_thread(
+                        native = await self._await_cancellable(
+                            session_id,
                             provider.chat_with_tools,
                             session.model_name,
                             [{"role": "system", "content": system_prompt}] + conversation_history,
@@ -1846,6 +1987,13 @@ class AgentRuntime:
                             0.2,
                             output_tokens,
                         )
+                        if native is None:  # cancelled while the model was answering
+                            task_state.terminal_status = "CANCELLED"
+                            task_state.terminal_reason = "cancelled_by_user"
+                            self._save_task_state(task_state)
+                            yield AgentEvent(event_type="done", content="Task cancelled by user.",
+                                             metadata={"terminal_status": "CANCELLED"})
+                            return
                         full_response = native.get("content", "") or ""
                         returned_calls = native.get("tool_calls") or []
                         if not isinstance(returned_calls, list):
@@ -1893,12 +2041,15 @@ class AgentRuntime:
             _in_think = False
             async for chunk in (_no_chunks() if used_native else provider.stream_chat(
                 model_id=session.model_name,
+                cancel_event=self._thread_cancel.get(session_id),
                 messages=conversation_history,
                 system_prompt=system_prompt,
                 temperature=0.2,
                 max_tokens=output_tokens,
                 num_ctx=capabilities.max_context,
             )):
+                if self.is_task_cancelled(session_id):
+                    break  # the iteration-level cancel check below reports CANCELLED
                 if chunk.error:
                     task_state.terminal_status = "FAILED"
                     task_state.terminal_reason = chunk.error
@@ -1920,6 +2071,16 @@ class AgentRuntime:
                         tok = re.sub(r"</?think>", "", chunk.token, flags=re.IGNORECASE)
                         if tok:
                             yield AgentEvent(event_type="token", content=tok)
+
+            # A cancel during generation must not act on a half-written answer (partial
+            # heredocs / code fences would otherwise be written to disk below).
+            if self.is_task_cancelled(session_id):
+                task_state.terminal_status = "CANCELLED"
+                task_state.terminal_reason = "cancelled_by_user"
+                self._save_task_state(task_state)
+                yield AgentEvent(event_type="done", content="Task cancelled by user.",
+                                 metadata={"terminal_status": "CANCELLED"})
+                return
 
             # Multi-file heredocs and mkdir extraction: write all files and create directories
             extracted_writes, created_dirs = self._extract_all_file_writes_and_mkdir(

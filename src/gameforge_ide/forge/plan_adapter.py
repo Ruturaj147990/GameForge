@@ -15,6 +15,21 @@ from .model import RunSpec, RunState, StepKind, StepRecord, StepSpec, StepStatus
 from .store import RunStore
 
 
+
+# Tools whose effects are irreversible or leave the workspace: a plan step that uses them is
+# always routed through the executor's per-step user approval, whatever the plan declared.
+_APPROVAL_GATED_TOOLS = {"run_command", "delete_file", "unreal_package", "play_game", "create_game"}
+
+
+def _tool_is_approval_gated(tool_name: str, tool_args: dict) -> bool:
+    if not tool_name:
+        return False
+    if tool_name in _APPROVAL_GATED_TOOLS:
+        return True
+    if tool_name == "unreal_editor":
+        return (tool_args or {}).get("op", "") not in READ_ONLY_EDITOR_OPS
+    return False
+
 def plan_to_run(plan: TaskPlan, workspace: Union[Path, str]) -> RunSpec:
     """Translate a TaskPlan into a Forge RunSpec."""
     ws = Path(workspace).resolve()
@@ -42,7 +57,7 @@ def plan_to_run(plan: TaskPlan, workspace: Union[Path, str]) -> RunSpec:
             title=task.title,
             depends_on=list(task.dependency_ids),
             inputs=inputs,
-            approval="step" if task.requires_approval else "none",
+            approval="step" if (task.requires_approval or _tool_is_approval_gated(tool_name, tool_args)) else "none",
             engine_lock=(tool_name == "unreal_editor" and not is_readonly_op),
             timeout_s=float(task.timeout_seconds),
             max_attempts=max(1, int(task.retry_limit) + 1),

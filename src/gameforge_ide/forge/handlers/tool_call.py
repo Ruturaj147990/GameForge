@@ -63,14 +63,34 @@ def tool_call_handler(ctx: StepContext) -> StepOutcome:
     step_output: Any = None
     step_error: Optional[str] = None
 
+    # Approval comes only from the user: the executor holds a step with approval "step"/"run"
+    # until the user approves it in the UI. A step declared with approval "none" (e.g. by a
+    # model-generated plan) must NOT silently grant approval for an approval-gated tool.
+    user_approved = getattr(ctx.step, "approval", "none") in ("step", "run")
+
     if tool:
         ctx.log(f"Executing tool '{tool}' with args {list(arguments.keys())}")
         try:
             step_output = gateway.execute_tool(
                 tool,
                 arguments,
-                approval_granted=True,
+                approval_granted=user_approved,
             )
+            if (
+                isinstance(step_output, dict)
+                and step_output.get("status") in ("PENDING_APPROVAL", "AWAITING_APPROVAL")
+                and not user_approved
+                and tool != "propose_edit"
+            ):
+                return StepOutcome(
+                    False,
+                    errors=[
+                        f"APPROVAL_REQUIRED: tool '{tool}' needs user approval but step "
+                        f"'{ctx.step.step_id}' was not declared with approval='step'"
+                    ],
+                    data={"output": step_output},
+                    blocked=True,
+                )
             if (
                 tool == "propose_edit"
                 and isinstance(step_output, dict)
@@ -80,7 +100,7 @@ def tool_call_handler(ctx: StepContext) -> StepOutcome:
                 apply_res = gateway.execute_tool(
                     "apply_edit",
                     {"diff_id": step_output["diff_id"]},
-                    approval_granted=True,
+                    approval_granted=user_approved,
                 )
                 apply_res["diff_id"] = step_output["diff_id"]
                 apply_res["file_path"] = step_output.get("file_path")

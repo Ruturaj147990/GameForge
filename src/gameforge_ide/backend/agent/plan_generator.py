@@ -19,7 +19,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from ...core.settings import get_settings
 from ..models.plan_artifact import PlanArtifact, PlanStep
@@ -535,7 +535,14 @@ class PlanGenerator:
         # 4. Attempt genuine LLM generation via Ollama / router
         raw_json = None
         t0 = time.time()
-        call_timeout = 0.5 if os.environ.get("PYTEST_CURRENT_TEST") else 12.0
+        # A local 9B model needs model-load time plus ~20-40 s to emit a multi-step JSON plan;
+        # the previous 12 s budget meant the LLM plan almost always timed out and the
+        # deterministic fallback was shown instead. Override with GAMEFORGE_PLAN_TIMEOUT_S.
+        try:
+            default_timeout = float(os.environ.get("GAMEFORGE_PLAN_TIMEOUT_S", "90"))
+        except ValueError:
+            default_timeout = 90.0
+        call_timeout = 0.5 if os.environ.get("PYTEST_CURRENT_TEST") else max(5.0, default_timeout)
         try:
             provider = self.model_router.get_provider("ollama")
             if hasattr(provider, "complete_json") and (not hasattr(provider, "is_available") or provider.is_available()):
@@ -559,9 +566,12 @@ class PlanGenerator:
                 if isinstance(steps_data, list) and len(steps_data) >= 1:
                     valid_steps: List[PlanStep] = []
                     seen_ids: Set[str] = set()
+                    known_tools = {t.name for t in self.tool_gateway.get_definitions()}
 
-                    for idx, s in enumerate(steps_data, start=1):
-                        sid = s.get("step_id") or f"step_{idx}"
+                    for idx, s in enumerate(steps_data[:20], start=1):
+                        if not isinstance(s, dict):
+                            continue
+                        sid = str(s.get("step_id") or f"step_{idx}")
                         if sid in seen_ids:
                             sid = f"step_{idx}_{uuid.uuid4().hex[:4]}"
                         seen_ids.add(sid)
@@ -572,11 +582,16 @@ class PlanGenerator:
                                 title=s.get("title") or f"Step {idx}",
                                 description=s.get("description") or "",
                                 target_files=s.get("target_files", []) if isinstance(s.get("target_files"), list) else [],
-                                tools=s.get("tools", []) if isinstance(s.get("tools"), list) else [],
+                                # Keep only tools that actually exist: a hallucinated tool name in
+                                # a plan step would otherwise fail later at execution time.
+                                tools=[t for t in (s.get("tools") or []) if isinstance(t, str) and t in known_tools]
+                                if isinstance(s.get("tools"), list) else [],
                                 verification=s.get("verification") or "",
                             )
                         )
 
+                    if not valid_steps:
+                        raise ValueError("model plan contained no usable steps")
                     return PlanArtifact(
                         plan_id=expected_plan_id,
                         session_id=session_id,

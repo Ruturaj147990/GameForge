@@ -11,7 +11,7 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
@@ -235,6 +235,16 @@ class _AgentWorker(QObject):
 
     def stop(self) -> None:
         self._stop_flag.set()
+        # Propagate to the runtime so the in-flight model request is aborted (the provider's
+        # streaming reader closes the HTTP connection) instead of only being ignored when the
+        # next event arrives. cancel_task() is thread-safe.
+        runtime = getattr(self, "_runtime", None)
+        session_id = getattr(self, "_session_id", None)
+        if runtime is not None and session_id and hasattr(runtime, "cancel_task"):
+            try:
+                runtime.cancel_task(session_id)
+            except Exception:
+                pass
 
     # Public session helpers ---------------------------------------------------
 

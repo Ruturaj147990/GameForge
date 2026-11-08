@@ -20,7 +20,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from ...pipeline.game_pipeline import GamePipeline
 from ...design.gds import GameDesignSpec
@@ -29,7 +29,7 @@ from ...design.prompt_to_gds import PRESET_TITLES, prompt_to_gds
 from ...design.render import render_markdown
 from ...design import store as design_store
 from ...pipeline.spec_from_prompt import is_game_creation_request, match_prompt
-from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
+from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams
 from ...unreal.live_editor import LiveEditorLink
 from ...unreal import op_catalog, op_schemas
 from ...unreal.toolchain import UnrealToolchain
@@ -401,12 +401,30 @@ class GameTools:
                                 })
 
                 unsub = bus.subscribe("forge", _on_ev)
-                try:
-                    executor = ForgeExecutor(HANDLERS, bus=bus)
-                    if cancel_event is not None and cancel_event.is_set():
+                executor = ForgeExecutor(HANDLERS, bus=bus)
+                watcher_stop = threading.Event()
+
+                def _watch_cancel() -> None:
+                    # Forward a user cancel that arrives *during* the run (previously the event was
+                    # only checked once, before the run started).
+                    while not watcher_stop.wait(0.5):
+                        if cancel_event is not None and cancel_event.is_set():
+                            try:
+                                executor.request_cancel()
+                            except Exception:
+                                pass
+                            return
+
+                watcher = None
+                if cancel_event is not None:
+                    if cancel_event.is_set():
                         executor.request_cancel()
+                    watcher = threading.Thread(target=_watch_cancel, name="create-game-cancel", daemon=True)
+                    watcher.start()
+                try:
                     state = executor.run(state, rstore)
                 finally:
+                    watcher_stop.set()
                     unsub()
 
                 ok = state.status == "DONE"
@@ -432,14 +450,19 @@ class GameTools:
                 }
                 if exe_path.is_file():
                     out["exe"] = str(exe_path)
+                out["stages"] = [
+                    {"step_id": sid, "status": getattr(r.status, "value", str(r.status)),
+                     "errors": list(r.errors or [])[:3]}
+                    for sid, r in state.records.items()
+                ]
                 return out
         elif params is not None:
             # Backward compatibility branch for pre-P1 approval records
-            from tests.fixtures.legacy_recipes.grid_board_game.recipe import GridBoardParams
-            from tests.fixtures.legacy_recipes.platformer.recipe import PlatformerParams
-            from tests.fixtures.legacy_recipes.arena_combat.recipe import ArenaCombatParams
-            from tests.fixtures.legacy_recipes.card_battler.recipe import CardBattlerParams
-            from tests.fixtures.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
+            from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams
+            from src.gameforge_ide.legacy_recipes.platformer.recipe import PlatformerParams
+            from src.gameforge_ide.legacy_recipes.arena_combat.recipe import ArenaCombatParams
+            from src.gameforge_ide.legacy_recipes.card_battler.recipe import CardBattlerParams
+            from src.gameforge_ide.legacy_recipes.procedural_world.recipe import ProceduralWorldParams
             if isinstance(params, (GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams)):
                 recipe_params = params
             elif isinstance(params, dict):

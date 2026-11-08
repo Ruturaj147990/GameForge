@@ -149,7 +149,7 @@ it in `QUESTIONS.md`.
   ladder); Forge plan builder; legacy-parity suite; two new genres (third-person exploration/adventure, top-down
   shooter).
 - **Exit gate:** the 5 legacy genres reproduced from presets on the kit with equal or better tests; 2 new genres from
-  prompts; all `must_pass` scenarios green in packaged builds; recipe templates moved to `tests/fixtures/legacy_recipes/`.
+  prompts; all `must_pass` scenarios green in packaged builds; recipe templates moved to `src/gameforge_ide/legacy_recipes/` (2026-11-07: relocated from `tests/fixtures/legacy_recipes/`, which the PyInstaller build excludes; the old path is now a test-only alias).
 
 ### P7 — Content & art direction ([handover](handovers/P07_content_art.md))
 - **Objectives:** games stop looking like prototypes (research R11 failure mode) without fabricating provenance.

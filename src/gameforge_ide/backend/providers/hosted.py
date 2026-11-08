@@ -27,7 +27,7 @@ import urllib.request
 from ctypes import wintypes
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Iterator, List, Optional
+from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Tuple
 
 from .base import ChatResponse, ModelInfo, ModelProvider, ProviderCapabilities, StreamChunk
 
@@ -331,29 +331,56 @@ def _sse_lines(url: str, headers: Dict[str, str], body: Dict, timeout: float) ->
                 continue
 
 
-async def _iterate_in_thread(gen_factory) -> AsyncIterator[Any]:
-    """Run a blocking generator in a thread and yield its items asynchronously."""
+async def _iterate_in_thread(gen_factory, cancel_event: Optional[threading.Event] = None) -> AsyncIterator[Any]:
+    """Run a blocking generator in a thread and yield its items asynchronously.
+
+    The worker stops (closing the underlying HTTP generator, which drops the connection) when
+    ``cancel_event`` is set or when the consumer stops iterating, so a cancelled hosted request
+    no longer keeps streaming (and billing) in the background.
+    """
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
     sentinel = object()
+    stop = threading.Event()
+
+    def _post(item: Any) -> None:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, item)
+        except RuntimeError:
+            pass  # loop closed
 
     def worker():
+        gen = None
         try:
-            for item in gen_factory():
-                loop.call_soon_threadsafe(queue.put_nowait, item)
+            gen = gen_factory()
+            for item in gen:
+                if stop.is_set() or (cancel_event is not None and cancel_event.is_set()):
+                    break
+                _post(item)
         except Exception as exc:  # surfaced to the consumer
-            loop.call_soon_threadsafe(queue.put_nowait, exc)
+            if not stop.is_set():
+                _post(exc)
         finally:
-            loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+            if gen is not None and hasattr(gen, "close"):
+                try:
+                    gen.close()
+                except Exception:
+                    pass
+            _post(sentinel)
 
     threading.Thread(target=worker, daemon=True).start()
-    while True:
-        item = await queue.get()
-        if item is sentinel:
-            return
-        if isinstance(item, Exception):
-            raise item
-        yield item
+    try:
+        while True:
+            item = await queue.get()
+            if item is sentinel:
+                return
+            if isinstance(item, Exception):
+                raise item
+            yield item
+            if cancel_event is not None and cancel_event.is_set():
+                return
+    finally:
+        stop.set()
 
 
 # ── providers ───────────────────────────────────────────────────────────────
@@ -406,7 +433,7 @@ class OpenAICompatibleHostedProvider(_HostedBase):
         body = self._body(model_id, messages, system_prompt, temperature, max_tokens, True, kw.get("tools"))
         headers = self._headers()
         usage: Dict[str, int] = {}
-        async for ev in _iterate_in_thread(lambda: _sse_lines(url, headers, body, self.profile.timeout_s)):
+        async for ev in _iterate_in_thread(lambda: _sse_lines(url, headers, body, self.profile.timeout_s), kw.get("cancel_event")):
             if ev.get("error"):
                 yield StreamChunk(token="", is_final=True, error=str(ev["error"]))
                 return
@@ -503,7 +530,7 @@ class AnthropicProvider(_HostedBase):
         body = self._body(model_id, messages, system_prompt, temperature, max_tokens, True, kw.get("tools"))
         headers = self._headers()
         usage = {"prompt_tokens": 0, "completion_tokens": 0}
-        async for ev in _iterate_in_thread(lambda: _sse_lines(url, headers, body, self.profile.timeout_s)):
+        async for ev in _iterate_in_thread(lambda: _sse_lines(url, headers, body, self.profile.timeout_s), kw.get("cancel_event")):
             t = ev.get("type")
             if t == "message_start":
                 usage["prompt_tokens"] = ev.get("message", {}).get("usage", {}).get("input_tokens", 0)

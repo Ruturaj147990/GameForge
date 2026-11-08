@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import json
 import logging
 import re
-from typing import Callable, List, Literal, Optional, Set
+from typing import Any, Callable, Dict, List, Literal, Optional, Set
 
 from pydantic import ValidationError
 
@@ -250,7 +250,26 @@ def prompt_to_gds(
                         gds.meta.generator = f"model:{model}"
                         return PromptToGdsResult(status="OK", gds=gds, path="model", model=model, attempts=1)
                 except Exception as exc:
-                    logger.info("Scratch model draft failed validation, falling back to verified scratch architecture: %s", exc)
+                    logger.info("Scratch model draft failed validation; attempting one repair: %s", exc)
+                    # One repair round-trip (same policy as the template path) before falling
+                    # back to the deterministic scratch architecture.
+                    if data_scratch is None:
+                        repair_prompt = (
+                            f"{prompt}\n\nPrevious output:\n{raw_json[:6000]}\n\n"
+                            f"Validation errors:\n{str(exc)[:1500]}\n\n"
+                            "Fix the errors and return only the corrected JSON object matching the schema."
+                        )
+                        try:
+                            repair_raw = complete_json(scratch_system_prompt, repair_prompt, schema)
+                            if repair_raw:
+                                data2 = json.loads(repair_raw)
+                                if isinstance(data2, dict):
+                                    draft = DesignDraft.model_validate(data2)
+                                    gds = expand_draft(draft)
+                                    gds.meta.generator = f"model:{model}"
+                                    return PromptToGdsResult(status="OK", gds=gds, path="model", model=model, attempts=2)
+                        except Exception as exc2:
+                            logger.info("Scratch draft repair failed, using deterministic scratch architecture: %s", exc2)
 
         # Verified scratch architecture synthesis fallback
         gds = _build_scratch_gds(prompt, decision)

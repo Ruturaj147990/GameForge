@@ -22,6 +22,7 @@ from transformers import AutoTokenizer
 
 LOG_FILE = Path("E:/GameForge/training/gameforge-27b-sft/smoke_test/smoke_test.log")
 RESULT_FILE = Path("E:/GameForge/training/gameforge-27b-sft/smoke_test/clm_smoke_test_result.json")
+OUTPUT_DIR = RESULT_FILE.parent
 TOKENIZER_DIR = Path("E:/GameForge/models/hf/Qwen3.8-27B")
 
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)

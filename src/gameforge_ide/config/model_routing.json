@@ -1,8 +1,8 @@
 {
   "schema": "model_routing/1",
   "source": {
-    "description": "Generated from latest P9 empirical evaluation reports.",
-    "generated_at": "2026-11-07T16:47:38Z",
+    "description": "Fixed role policy (Part 6.1: 9B primary, 4B fast/vision, 27B heavy). The P9 eval reports below are listed for reference; they do not select the models.",
+    "generated_at": "2026-11-08T07:53:19Z",
     "reports": [
       {
         "path": "reports/P9/eval_gameforge-27b-sft_latest_20261101T112010Z.json",

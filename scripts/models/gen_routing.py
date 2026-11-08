@@ -101,7 +101,13 @@ def select_best_model_for_role(
     return "gameforge-qwen3.5-9b:latest"
 
 
-def generate_routing_table() -> Dict[str, Any]:
+def generate_routing_table(write: bool = False) -> Dict[str, Any]:
+    """Build the routing table. Pass write=True (the CLI does) to overwrite the packaged config;
+    the default is side-effect free so tests do not rewrite a shipped product file.
+
+    Note: role assignments are currently fixed policy (Part 6.1), not derived from the eval
+    scores listed under source.reports.
+    """
     latest = load_latest_reports()
 
     # Per Part 6.1: 9B model is the default and primary for chat, design, codegen, planning, tools
@@ -120,7 +126,7 @@ def generate_routing_table() -> Dict[str, Any]:
     routing = {
         "schema": "model_routing/1",
         "source": {
-            "description": "Generated from latest P9 empirical evaluation reports.",
+            "description": "Fixed role policy (Part 6.1: 9B primary, 4B fast/vision, 27B heavy). The P9 eval reports below are listed for reference; they do not select the models.",
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "reports": source_records,
         },
@@ -134,12 +140,13 @@ def generate_routing_table() -> Dict[str, Any]:
         },
     }
 
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_FILE.write_text(json.dumps(routing, indent=2), encoding="utf-8")
-    print(f"Generated routing table saved to {CONFIG_FILE}")
-    print(f"Role assignments: {json.dumps(routing['roles'], indent=2)}")
+    if write:
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_FILE.write_text(json.dumps(routing, indent=2), encoding="utf-8")
+        print(f"Generated routing table saved to {CONFIG_FILE}")
+        print(f"Role assignments: {json.dumps(routing['roles'], indent=2)}")
     return routing
 
 
 if __name__ == "__main__":
-    generate_routing_table()
+    generate_routing_table(write=True)

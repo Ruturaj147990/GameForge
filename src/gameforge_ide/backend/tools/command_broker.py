@@ -52,6 +52,84 @@ FORBIDDEN_COMMANDS: List[str] = [
     "rm -rf c:",
 ]
 
+# Token/position-aware patterns for the catastrophic payloads above. Plain substring
+# matching blocked legitimate commands such as ``git log --format=%H``,
+# ``dotnet format`` or ``clang-format`` and also ``rm -rf /<anything>`` inside the
+# workspace, while missing variants such as ``Format-Volume`` or ``rm -rf ~``.
+_CMD_START = r"(?:^|[\s;&|(`])"
+_FORBIDDEN_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
+    ("format", re.compile(_CMD_START + r"format(?:\.com|\.exe)?\s+[a-z]:", re.IGNORECASE)),
+    ("diskpart", re.compile(_CMD_START + r"diskpart(?:\.exe)?(?:\s|$)", re.IGNORECASE)),
+    ("bcdedit", re.compile(_CMD_START + r"bcdedit(?:\.exe)?(?:\s|$)", re.IGNORECASE)),
+    ("format-volume", re.compile(r"\b(?:format-volume|clear-disk|initialize-disk|remove-partition)\b", re.IGNORECASE)),
+    ("del /s /q c:", re.compile(_CMD_START + r"(?:del|erase|rmdir|rd)(?:\s+/[a-z])*\s+[a-z]:[\\/]?\*?(?:\s|$|[;&|])", re.IGNORECASE)),
+    ("rm -rf /", re.compile(_CMD_START + r"rm\s+(?:-[a-z]+\s+)*-[a-z]*r[a-z]*\s+(?:-[a-z]+\s+)*(?:/|/\*|~|~/|\$home|[a-z]:[\\/]?\*?)(?:\s|$|[;&|])", re.IGNORECASE)),
+    ("remove-item drive root", re.compile(r"\bremove-item\b[^;&|]*\s[\"']?[a-z]:[\\/]?\*?[\"']?(?:\s|$|[;&|])", re.IGNORECASE)),
+]
+
+
+def find_forbidden_payload(command: str) -> Optional[str]:
+    """Return the label of a catastrophic payload contained in *command*, or None."""
+    for label, pattern in _FORBIDDEN_PATTERNS:
+        if pattern.search(command or ""):
+            return label
+    return None
+
+
+def split_command_segments(command: str) -> List[str]:
+    """Split a shell command line on unquoted ``;``, ``&&``, ``||``, ``|``, ``&`` and newlines.
+
+    Used so that risk classification covers *every* command in a chain, not only the
+    first executable (``git status; Remove-Item ...`` was previously classified as a
+    routine read and auto-executed in Auto mode).
+    """
+    segments: List[str] = []
+    buf: List[str] = []
+    quote: Optional[str] = None
+    i = 0
+    text = command or ""
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = None
+        elif ch in ("'", '"'):
+            quote = ch
+            buf.append(ch)
+        elif ch in (";", "\n", "\r", "|", "&"):
+            seg = "".join(buf).strip()
+            if seg:
+                segments.append(seg)
+            buf = []
+            # swallow doubled operators (&&, ||)
+            if i + 1 < len(text) and text[i + 1] == ch and ch in ("|", "&"):
+                i += 1
+        else:
+            buf.append(ch)
+        i += 1
+    seg = "".join(buf).strip()
+    if seg:
+        segments.append(seg)
+    return segments
+
+
+# Relative severity used to aggregate the classification of chained commands.
+_RISK_SEVERITY: Dict[RiskCategory, int] = {
+    RiskCategory.ROUTINE_READ: 0,
+    RiskCategory.DEVELOPMENT_TEST: 1,
+    RiskCategory.PROJECT_BUILD: 2,
+    RiskCategory.WORKSPACE_EDIT: 3,
+    RiskCategory.UNCERTAIN_SCRIPT: 4,
+    RiskCategory.DESTRUCTIVE_DELETE: 5,
+    RiskCategory.OUTSIDE_WORKSPACE: 6,
+    RiskCategory.SYSTEM_MODIFICATION: 7,
+    RiskCategory.ELEVATED_ADMIN: 8,
+}
+
+# Git subcommands that transfer data over the network (egress needs approval, AD/egress rule).
+_GIT_NETWORK_SUBCOMMANDS = {"push", "pull", "fetch", "clone", "submodule", "ls-remote", "archive", "send-email"}
+
 # Known safe development commands that AUTO mode permits without routine approval
 SAFE_DEVELOPMENT_EXECUTABLES: Set[str] = {
     "python", "python.exe", "py", "py.exe",
@@ -136,14 +214,14 @@ class CommandExecutionBroker:
         cmd_raw = command.strip()
         cmd_lower = cmd_raw.lower()
 
-        # 1. Check for unconditionally forbidden payloads
-        for forbidden in FORBIDDEN_COMMANDS:
-            if forbidden in cmd_lower:
-                return (
-                    RiskCategory.SYSTEM_MODIFICATION,
-                    True,
-                    f"Command contains forbidden catastrophic payload '{forbidden}'.",
-                )
+        # 1. Check for unconditionally forbidden payloads (execute() blocks these outright)
+        forbidden = find_forbidden_payload(cmd_raw)
+        if forbidden:
+            return (
+                RiskCategory.SYSTEM_MODIFICATION,
+                True,
+                f"Command contains forbidden catastrophic payload '{forbidden}'.",
+            )
 
         # 1b. Check for raw unmanaged subshell invocations or network egress
         subshell_patterns = [
@@ -219,7 +297,7 @@ class CommandExecutionBroker:
         # Requiring a nested POSIX path avoids mistaking common command flags
         # such as /s or /q for filesystem paths.
         abs_path_matches = re.findall(
-            r"""(?<![A-Za-z0-9_])(?:[A-Za-z]:\\[^ \t\r\n\"']+|/(?:[^/ \t\r\n\"']+/)+[^ \t\r\n\"']+)""",
+            r"""(?<![A-Za-z0-9_])(?:[A-Za-z]:[\\/][^ \t\r\n\"']*|/(?:[^/ \t\r\n\"']+/)+[^ \t\r\n\"']+)""",
             cmd_raw,
         )
         for abs_p in abs_path_matches:
@@ -256,6 +334,30 @@ class CommandExecutionBroker:
                 "Command performs recursive or destructive file deletion.",
             )
 
+        # 5b. Chained commands: every segment must be classified, not only the first one.
+        #     Subexpression/eval constructs cannot be statically classified at all.
+        if shell != "direct":
+            if re.search(r"\$\(|`|\b(?:invoke-expression|iex)\b", cmd_raw, re.IGNORECASE):
+                return (
+                    RiskCategory.UNCERTAIN_SCRIPT,
+                    mode != PermissionsMode.UNRESTRICTED,
+                    "Command uses dynamic evaluation or subexpressions that cannot be classified statically.",
+                )
+            segments = split_command_segments(cmd_raw)
+            if len(segments) > 1:
+                worst: Optional[Tuple[RiskCategory, bool, str]] = None
+                for seg in segments:
+                    seg_result = self.classify_risk(
+                        seg, shell=shell, working_directory=wd, permissions_mode=mode
+                    )
+                    if worst is None or (
+                        (seg_result[1], _RISK_SEVERITY.get(seg_result[0], 4))
+                        > (worst[1], _RISK_SEVERITY.get(worst[0], 4))
+                    ):
+                        worst = seg_result
+                assert worst is not None
+                return (worst[0], worst[1], f"Chained command ({len(segments)} parts): {worst[2]}")
+
         # 6. Parse first executable token to identify safe development commands
         first_token = self._extract_first_executable(cmd_raw, shell=shell)
         first_lower = first_token.lower()
@@ -287,6 +389,12 @@ class CommandExecutionBroker:
                     requires,
                     f"Routine git read operation ('git {subcmd}').",
                 )
+            if subcmd in _GIT_NETWORK_SUBCOMMANDS:
+                return (
+                    RiskCategory.UNCERTAIN_SCRIPT,
+                    mode != PermissionsMode.UNRESTRICTED,
+                    f"git {subcmd} transfers data over the network; egress requires approval.",
+                )
             # Other git operations (commit, checkout, stash) are workspace edits
             requires = (mode == PermissionsMode.REQUEST_ALL)
             return (
@@ -312,7 +420,7 @@ class CommandExecutionBroker:
                 requires,
                 f"Project build tool invocation ({first_lower}).",
             )
-        if any(b in cmd_lower for b in ("unrealbuildtool", "ubt", "runuat")):
+        if first_lower in ("unrealbuildtool", "unrealbuildtool.exe", "ubt", "runuat", "runuat.bat", "runuat.sh", "uat", "automationtool", "automationtool.exe"):
             requires = (mode == PermissionsMode.REQUEST_ALL)
             return (
                 RiskCategory.PROJECT_BUILD,
@@ -429,15 +537,14 @@ class CommandExecutionBroker:
             return result
 
         # Check unconditionally forbidden commands
-        cmd_lower = cmd_text.lower()
-        for forbidden in FORBIDDEN_COMMANDS:
-            if forbidden in cmd_lower:
-                result.status = CommandStatus.BLOCKED
-                result.error_message = f"Security boundary violation: Command contains forbidden catastrophic payload '{forbidden}'."
-                result.risk_category = RiskCategory.SYSTEM_MODIFICATION
-                result.finished_at = time.time()
-                result.duration_s = round(result.finished_at - t0, 3)
-                return result
+        forbidden = find_forbidden_payload(cmd_text)
+        if forbidden:
+            result.status = CommandStatus.BLOCKED
+            result.error_message = f"Security boundary violation: Command contains forbidden catastrophic payload '{forbidden}'."
+            result.risk_category = RiskCategory.SYSTEM_MODIFICATION
+            result.finished_at = time.time()
+            result.duration_s = round(result.finished_at - t0, 3)
+            return result
 
         # Validate working directory
         wd = Path(request.working_directory).resolve() if request.working_directory else self.workspace_root

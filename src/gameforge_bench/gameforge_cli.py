@@ -16,7 +16,7 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .eval_dataset import get_evaluation_dataset
 from .knowledge_retrieval import GameForgeKnowledgeBase

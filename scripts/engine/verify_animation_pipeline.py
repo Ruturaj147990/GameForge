@@ -25,6 +25,7 @@ Executes and verifies:
 """
 
 from __future__ import annotations
+from typing import List
 
 import hashlib
 import json

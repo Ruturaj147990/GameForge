@@ -14,7 +14,7 @@ import json
 import logging
 from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QShortcut

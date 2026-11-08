@@ -13,7 +13,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Union
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QTextCursor
@@ -273,7 +273,14 @@ class _MessageBubble(QFrame):
             res = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", res)
             res = re.sub(r"__([^_]+)__", r"<b>\1</b>", res)
             # links
-            res = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', res)
+            # Only http(s)/mailto links become clickable (bubbles open links externally, and the
+            # text comes from the model).
+            res = re.sub(
+                r"\[([^\]]+)\]\(((?:https?://|mailto:)[^)\s]+)\)", r'<a href="\2">\1</a>', res
+            )
+            # italics (single * or _), after bold has been consumed
+            res = re.sub(r"(?<![*\w])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![*\w])", r"<i>\1</i>", res)
+            res = re.sub(r"~~([^~]+)~~", r"<s>\1</s>", res)
             return res
 
         lines = text_with_blocks.split("\n")
@@ -336,13 +343,13 @@ class _MessageBubble(QFrame):
             _flush_lists()
 
             if s.startswith("#### "):
-                out.append(f"<h5>{html.escape(s[5:])}</h5>")
+                out.append(f"<h5>{_format_inline(s[5:])}</h5>")
             elif s.startswith("### "):
-                out.append(f"<h4>{html.escape(s[4:])}</h4>")
+                out.append(f"<h4>{_format_inline(s[4:])}</h4>")
             elif s.startswith("## "):
-                out.append(f"<h3>{html.escape(s[3:])}</h3>")
+                out.append(f"<h3>{_format_inline(s[3:])}</h3>")
             elif s.startswith("# "):
-                out.append(f"<h2>{html.escape(s[2:])}</h2>")
+                out.append(f"<h2>{_format_inline(s[2:])}</h2>")
             else:
                 out.append(f"<p>{_format_inline(line)}</p>")
 
@@ -379,14 +386,41 @@ class _MessageBubble(QFrame):
         super().resizeEvent(event)
         self._adjust_height()
 
+    # Streaming render throttle. Re-rendering the whole message (markdown -> HTML -> layout) on
+    # every token is O(n^2) over a reply and stalled the UI thread on long answers. Tokens are
+    # appended to _raw_text immediately; the document is re-rendered at most every
+    # _RENDER_INTERVAL_MS while streaming, and always on finalise().
+    _RENDER_INTERVAL_MS = 50
+
     def append_token(self, token: str) -> None:
         self._raw_text += token
-        self._render_text(self._raw_text)
+        now = time.monotonic()
+        last = getattr(self, "_last_render_at", 0.0)
+        if (now - last) * 1000.0 >= self._RENDER_INTERVAL_MS:
+            self._flush_render()
+        elif not getattr(self, "_render_scheduled", False):
+            self._render_scheduled = True
+            QTimer.singleShot(self._RENDER_INTERVAL_MS, self._flush_render)
+
+    def _flush_render(self) -> None:
+        self._render_scheduled = False
+        try:
+            self._last_render_at = time.monotonic()
+            self._render_text(self._raw_text)
+        except RuntimeError:
+            pass  # bubble deleted before the timer fired
+
+    def toPlainText(self) -> str:  # noqa: N802 - convenience mirror of the content widget
+        if getattr(self, "_render_scheduled", False):
+            self._flush_render()
+        return self._content.toPlainText()
 
     def set_timestamp(self, ts: str) -> None:
         self._ts_label.setText(ts)
 
     def finalise(self) -> None:
+        if getattr(self, "_render_scheduled", False) or self._content.toPlainText().strip() != self._raw_text.strip():
+            self._flush_render()
         self.set_timestamp(time.strftime("%H:%M:%S"))
         self._adjust_height()
 
@@ -1401,6 +1435,7 @@ class ChatPanel(QWidget):
             return False
         self._hide_start_screen()
         self._last_prompt = prompt
+        self._remember_prompt(prompt)
         self._tokens_streamed_in_turn = False
         self._plan_received_in_turn = False
         self._token_buffer = ""
@@ -1678,7 +1713,7 @@ class ChatPanel(QWidget):
                 self._active_bubble = None
             self._finalize_status_activity()
             # In GameForge 1.0, all tasks execute autonomously in chat; retired open_design cards are omitted
-        elif status in ("THINKING", "PLANNING", "REPAIRING"):
+        elif status in ("THINKING", "PLANNING", "REPAIRING", "RUNNING"):
             if self._active_bubble:
                 if not self._active_bubble.has_tokens() or self._is_raw_tool_json(self._active_bubble._raw_text):
                     self._remove_bubble(self._active_bubble)
@@ -2262,4 +2297,55 @@ class ChatPanel(QWidget):
                 # Enter or Ctrl+Enter sends
                 self._on_send()
                 return True
+            # Esc stops a running task (same as the Stop button).
+            if ke.key() == Qt.Key_Escape and getattr(self._agent, "is_busy", False):
+                self._on_stop()
+                return True
+            # Up / Down on an empty (or history-recalled) input walk through previous prompts,
+            # like a terminal; normal cursor movement is kept for multi-line text being edited.
+            if ke.key() in (Qt.Key_Up, Qt.Key_Down) and not (ke.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier)):
+                if self._recall_prompt_history(up=ke.key() == Qt.Key_Up):
+                    return True
         return super().eventFilter(obj, event)
+
+    def _prompt_history_list(self) -> List[str]:
+        hist = getattr(self, "_prompt_history", None)
+        if hist is None:
+            hist = []
+            self._prompt_history = hist
+        return hist
+
+    def _remember_prompt(self, prompt: str) -> None:
+        prompt = (prompt or "").strip()
+        if not prompt:
+            return
+        hist = self._prompt_history_list()
+        if not hist or hist[-1] != prompt:
+            hist.append(prompt)
+            del hist[:-100]
+        self._history_index = None
+
+    def _recall_prompt_history(self, up: bool) -> bool:
+        hist = self._prompt_history_list()
+        if not hist:
+            return False
+        current = self._input.toPlainText()
+        idx = getattr(self, "_history_index", None)
+        recalled = idx is not None and 0 <= idx < len(hist) and current == hist[idx]
+        if current.strip() and not recalled:
+            return False  # user is editing their own text: let the cursor move
+        if idx is None:
+            idx = len(hist)
+        idx = idx - 1 if up else idx + 1
+        if idx < 0:
+            idx = 0
+        if idx >= len(hist):
+            self._history_index = None
+            self._input.clear()
+            return True
+        self._history_index = idx
+        self._input.setPlainText(hist[idx])
+        cursor = self._input.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self._input.setTextCursor(cursor)
+        return True
