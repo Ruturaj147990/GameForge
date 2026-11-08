@@ -136,6 +136,8 @@ class GAMEFORGERUNTIME_API AGameForgeGameModeBase : public AGameModeBase
 public:
 	AGameForgeGameModeBase();
 	virtual void StartPlay() override;
+	virtual void RestartPlayer(AController* NewPlayer) override;
+	void ConfigurePlayer(AController* Controller);
 };
 
 /**

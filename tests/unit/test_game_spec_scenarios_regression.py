@@ -106,14 +106,60 @@ def test_events_aliasing_enemy_damaged_and_game_won():
     assert ok
     assert count == 1
 
-    # Stream containing enemy.killed
-    stream_kill = EventStream(events=[
-        QAEvent(time=2.0, name="enemy.killed", entity="Enemy_1", data={}),
+    # Stream containing game.victory
+    stream_win = EventStream(events=[
+        QAEvent(time=2.0, name="game.victory", entity="GameMode", data={}),
     ])
-    # Expecting game.won in combat context should pass via kill alias
-    ok, count, reason = stream_kill.verify_expectation(EventExpectation(event="game.won"))
+    # Expecting game.won should pass via victory alias
+    ok, count, reason = stream_win.verify_expectation(EventExpectation(event="game.won"))
     assert ok
     assert count == 1
+
+    # Defect Remediation DEF-REM-0033/0034: enemy.killed, enemy.attacked, and game.started must NOT satisfy game.won
+    stream_kill = EventStream(events=[
+        QAEvent(time=1.5, name="enemy.killed", entity="Enemy_1", data={}),
+    ])
+    ok_k, count_k, _ = stream_kill.verify_expectation(EventExpectation(event="game.won"))
+    assert not ok_k, "enemy.killed must not satisfy game.won"
+
+    stream_att = EventStream(events=[
+        QAEvent(time=1.0, name="enemy.attacked", entity="Enemy_1", data={}),
+    ])
+    ok_a, count_a, _ = stream_att.verify_expectation(EventExpectation(event="game.won"))
+    assert not ok_a, "enemy.attacked must not satisfy game.won"
+
+    stream_start = EventStream(events=[
+        QAEvent(time=0.0, name="game.started", entity="GameMode", data={}),
+    ])
+    ok_s, count_s, _ = stream_start.verify_expectation(EventExpectation(event="game.won"))
+    assert not ok_s, "game.started must not satisfy game.won"
+
+
+def test_scenario_event_history_jsonl_and_incomplete_crash():
+    """Verify valid JSONL serialization and tolerating incomplete crash line (Section 5A.26)."""
+    from src.gameforge_ide.qa.events import EventStream, QAEvent
+    import json
+
+    ev = QAEvent(name="player.jumped", time=1.234, source="PlayerChar", entity="player", data={"height": 50}, run_id="run_42")
+    line = ev.to_jsonl()
+    parsed = json.loads(line)
+    assert parsed["e"] == "player.jumped"
+    assert parsed["t"] == 1.234
+    assert parsed["run_id"] == "run_42"
+    assert parsed["schema"] == "gameforge_event/1"
+
+    # Incomplete line after simulated crash at end of stream
+    lines = [
+        '{"schema":"gameforge_event/1","e":"game.started","t":0.0}',
+        '{"schema":"gameforge_event/1","e":"pickup.collected","t":1.0,"ent":"coin_1"}',
+        '{"schema":"gameforge_event/1","e":"game.won","t":2.5',  # Truncated write from crash
+    ]
+    stream = EventStream.from_lines(lines)
+    assert len(stream) == 2
+    assert stream.is_incomplete is True
+    summary = stream.timeline_summary()
+    assert summary["is_incomplete"] is True
+    assert summary["count"] == 2
 
 
 def test_composer_layouts_tag_standardization():

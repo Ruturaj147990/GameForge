@@ -91,7 +91,7 @@ _ENEMIES = re.compile(r"\b(\d{1,2})\s*(?:enemies|enemy|monsters?|targets?)\s*(?:
 _HP = re.compile(r"\b(\d{1,3})\s*(?:hp|health|base health)\b", re.I)
 _NAME = re.compile(r"\b(?:called|named|titled)\s+[\"']?([A-Za-z][A-Za-z0-9 \-]{0,40}?)[\"']?"
                    r"(?=\s+(?:against|with|vs|versus|for|that|and|in|on|where|using|which)\b|[.,!;:]|\s*$)", re.I)
-_HOTSEAT = re.compile(r"\b(two[- ]player|2[- ]player|hot[- ]?seat|local multiplayer|pvp|against a friend|vs (?:a )?friend)\b", re.I)
+_HOTSEAT = re.compile(r"\b(two[- ]players?|2[- ]players?|two[- ]humans?|2[- ]humans?|local[- ]versus|local[- ]co[- ]?op|hot[- ]?seat|local[- ]multiplayer|pvp|against a friend|vs (?:a )?friend)\b", re.I)
 _AI_EASY = re.compile(r"\b(easy|beginner|random)\b", re.I)
 _AI_MED = re.compile(r"\b(medium|normal|greedy)\b", re.I)
 _DIFF = re.compile(r"\b(easy|normal|hard|expert)\b", re.I)
@@ -178,6 +178,8 @@ def is_game_creation_request(prompt: str) -> bool:
     # "... for my game", "in the game", "to our game": work inside an existing game, not a new one.
     if re.search(r"\b(?:for|in|into|inside|of|to)\s+(?:my|the|this|our|your)\s+games?\b", text):
         return False
+    if re.search(r"\bpreset:[a-z0-9_]+\b", text, re.I):
+        return True
     if _CREATE_GAME.search(text):
         return True
     if _NOUN_GAME.match(text):
@@ -219,10 +221,52 @@ def match_prompt(prompt: str) -> GameSpec:
     text = " " + prompt.lower().replace("’", "'") + " "
     best: Optional[RecipeEntry] = None
     best_kw = ""
-    for entry in RECIPES:
-        for kw in entry.keywords:
-            if kw in text and len(kw) > len(best_kw):
-                best, best_kw = entry, kw
+
+    # Explicit preset handler
+    m_preset = re.search(r"\bpreset:([a-z0-9_]+)\b", prompt, re.I)
+    if m_preset:
+        p_name = m_preset.group(1).lower()
+        recipe_alias = {
+            "platformer": "platformer",
+            "3d_platformer": "platformer",
+            "arena_combat": "arena_combat",
+            "arena": "arena_combat",
+            "card_battler": "card_battler",
+            "card_game": "card_battler",
+            "procedural_world": "procedural_world",
+            "grid_board_game": "grid_board_game",
+            "tic_tac_toe": "grid_board_game",
+            "gomoku": "grid_board_game",
+            "connect_four": "grid_board_game",
+            "snake_and_ladders": "grid_board_game",
+            "snakes_and_ladders": "grid_board_game",
+        }
+        target_recipe = recipe_alias.get(p_name)
+        if target_recipe:
+            for entry in RECIPES:
+                if entry.recipe_id == target_recipe:
+                    if target_recipe == "grid_board_game" and p_name in ("gomoku", "connect_four", "snakes_and_ladders", "snake_and_ladders"):
+                        if p_name in entry.keywords or p_name.replace("_", " ") in entry.keywords:
+                            best = entry
+                            best_kw = f"preset:{p_name}"
+                            break
+                    else:
+                        best = entry
+                        best_kw = f"preset:{p_name}"
+                        break
+
+    if best is None:
+        for entry in RECIPES:
+            for kw in entry.keywords:
+                if re.search(rf"\b{re.escape(kw)}\b", text) and len(kw) > len(best_kw):
+                    best, best_kw = entry, kw
+
+        # Prevent greedy keyword hijacking when conflicting explicit genres are specified
+        if best is not None and not m_preset:
+            conflicting_genres = {"rpg", "puzzle", "dungeon", "survival", "roguelike", "stealth", "horror"}
+            prompt_words = set(re.findall(r"\b\w+\b", text))
+            if prompt_words.intersection(conflicting_genres):
+                best = None
     if best is None:
         return GameSpec(False, reasons=["no installed recipe matches this request; installed: "
                                         + ", ".join(sorted({r.title for r in RECIPES}))])

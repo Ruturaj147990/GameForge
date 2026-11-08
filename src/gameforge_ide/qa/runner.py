@@ -132,15 +132,12 @@ def run_packaged(
     if events_out.exists():
         events_out.unlink()
 
+    argv: List[str] = [str(exe)]
     if map_path:
-        clean_map = map_path.strip().split("?")[0]
-        url = f"{clean_map}?game=/Script/GameForgeRuntime.GameForgeGameMode"
-    else:
-        url = "?game=/Script/GameForgeRuntime.GameForgeGameMode"
-
-    argv: List[str] = [
-        str(exe),
-        url,
+        clean_map = map_path.strip().split('?')[0]
+        if clean_map:
+            argv.append(clean_map)
+    argv.extend([
         f"-GFScenario={scenario_path.resolve()}",
         f"-GFScenarioOut={scenario_out.resolve()}",
         f"-GFEventsOut={events_out.resolve()}",
@@ -150,7 +147,7 @@ def run_packaged(
         "-unattended",
         "-nosplash",
         "-nosound",
-    ]
+    ])
     argv.extend(extra_args)
 
     proc_log = out_dir / f"{scenario.scenario_id}_stdout.log"
@@ -263,8 +260,9 @@ def run_editor_game(
         str(uproject.resolve()),
     ]
     if map_path:
-        clean_map = map_path.strip().split("?")[0]
-        argv.append(f"{clean_map}?game=/Script/GameForgeRuntime.GameForgeGameMode")
+        clean_map = map_path.strip().split('?')[0]
+        if clean_map:
+            argv.append(clean_map)
     argv.extend([
         "-game",
         f"-GFScenario={scenario_path.resolve()}",

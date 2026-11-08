@@ -43,6 +43,7 @@ from src.gameforge_ide.legacy_recipes.procedural_world.recipe import (
     generate as procedural_generate,
 )
 from ...unreal.toolchain import UnrealToolchain
+from ...composer.model import map_package_path
 from ..checkpoints import ProjectRepo
 from ..executor import StepContext, StepOutcome
 
@@ -117,18 +118,33 @@ def get_recipe_id(params: Any) -> str:
         return ARENA_RECIPE_ID
     if isinstance(params, PlatformerParams):
         return PLATFORMER_RECIPE_ID
-    return GRID_RECIPE_ID
+    if isinstance(params, GridBoardParams):
+        return GRID_RECIPE_ID
+    if params is None:
+        raise ValueError("Cannot determine recipe_id: params is None")
+    raise ValueError(f"Unsupported legacy recipe params type: {type(params).__name__}")
 
 
 def get_params(ctx: StepContext) -> Any:
     raw = ctx.step.inputs.get("params")
     if hasattr(raw, "validate"):
         return raw
-    recipe_id = ctx.step.inputs.get("recipe_id", GRID_RECIPE_ID)
-    cls = PARAMS_BY_RECIPE.get(recipe_id, GridBoardParams)
+    recipe_id = ctx.step.inputs.get("recipe_id")
+    if recipe_id is not None:
+        if recipe_id not in PARAMS_BY_RECIPE:
+            raise ValueError(f"Unknown legacy recipe_id: {recipe_id!r}")
+        cls = PARAMS_BY_RECIPE[recipe_id]
+        if isinstance(raw, dict):
+            return cls(**raw)
+        return cls()
     if isinstance(raw, dict):
-        return cls(**raw)
-    return cls()
+        for r_id, p_cls in PARAMS_BY_RECIPE.items():
+            try:
+                return p_cls(**raw)
+            except Exception:
+                pass
+        raise ValueError("Cannot resolve params for unknown recipe")
+    return GridBoardParams()
 
 
 def _get_toolchain(ctx: StepContext) -> UnrealToolchain:
@@ -246,14 +262,32 @@ def _sync_project_map_settings(pdir: Path, map_path: str) -> None:
 
 
 def legacy_scaffold(ctx: StepContext) -> StepOutcome:
-    params = get_params(ctx)
+    try:
+        params = get_params(ctx)
+    except ValueError as exc:
+        return StepOutcome(False, errors=[str(exc)])
     project_name = ctx.step.inputs.get("project_name") or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
     display_title = ctx.step.inputs.get("display_title") or getattr(params, "display_title", project_name)
     pdir = ctx.project_dir or (ctx.workspace_dir / project_name)
     uproject = pdir / f"{project_name}.uproject"
-    recipe_id = ctx.step.inputs.get("recipe_id") or get_recipe_id(params)
-    impl = RECIPE_IMPL.get(recipe_id, RECIPE_IMPL[GRID_RECIPE_ID])
-    default_gm = ctx.step.inputs.get("game_mode") or "/Script/GameForgeRuntime.GameForgeGameMode"
+    recipe_id = ctx.step.inputs.get("recipe_id")
+    if not recipe_id and params is not None:
+        try:
+            recipe_id = get_recipe_id(params)
+        except ValueError as exc:
+            return StepOutcome(False, errors=[str(exc)])
+    impl = RECIPE_IMPL.get(recipe_id)
+    if impl is None:
+        return StepOutcome(False, errors=[f"Unsupported legacy recipe: {recipe_id!r}"])
+    recipe_game_mode_template = impl[3] if len(impl) > 3 else None
+    recipe_game_mode = (
+        recipe_game_mode_template.format(name=project_name)
+        if recipe_game_mode_template
+        else None
+    )
+    default_gm = ctx.step.inputs.get("game_mode") or recipe_game_mode
+    if not default_gm:
+        return StepOutcome(False, errors=[f"No GameMode configured for recipe {recipe_id!r}"])
     deps = ctx.step.inputs.get("module_deps") or impl[2] or ["UMG", "Slate", "SlateCore"]
     plugins = ctx.step.inputs.get("plugins")
     tc = _get_toolchain(ctx)
@@ -288,7 +322,7 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
                 if isinstance(gds_input, dict) and "scene" in gds_input and "levels" in gds_input["scene"]:
                     lvls = gds_input["scene"]["levels"]
                     if lvls and isinstance(lvls[0], dict) and "level_id" in lvls[0]:
-                        default_map = f"/Game/Maps/{lvls[0]['level_id'].capitalize()}"
+                        default_map = map_package_path(lvls[0]["level_id"])
             except Exception:
                 pass
         if not default_map:
@@ -297,7 +331,7 @@ def legacy_scaffold(ctx: StepContext) -> StepOutcome:
 
                 g_loaded = design_store.load(pdir)
                 if g_loaded and hasattr(g_loaded, "scene") and g_loaded.scene and g_loaded.scene.levels:
-                    default_map = f"/Game/Maps/{g_loaded.scene.levels[0].level_id.capitalize()}"
+                    default_map = map_package_path(g_loaded.scene.levels[0].level_id)
             except Exception:
                 pass
         if not default_map:
@@ -372,12 +406,25 @@ def legacy_sources(ctx: StepContext) -> StepOutcome:
         pub_dir.mkdir(parents=True, exist_ok=True)
         priv_dir.mkdir(parents=True, exist_ok=True)
 
+        from ...composer.codegen import safety_scan
         for task in tasks:
-            h_name = task.get("handler_name") if isinstance(task, dict) else getattr(task, "handler_name", "")
+            h_name = task.get("handler_name", "") if isinstance(task, dict) else getattr(task, "handler_name", "")
+            on_event_body = task.get("on_event_body", "") if isinstance(task, dict) else getattr(task, "on_event_body", "")
+            tick_body = task.get("tick_body", "") if isinstance(task, dict) else getattr(task, "tick_body", "")
             if not h_name:
-                continue
+                return StepOutcome(False, errors=["codegen task is missing handler_name"])
+            if not on_event_body.strip() and not tick_body.strip():
+                return StepOutcome(False, errors=[f"custom rule {h_name} has no generated implementation"])
+            for label, body in (("OnEvent", on_event_body), ("Tick", tick_body)):
+                ok, issues = safety_scan(body)
+                if not ok:
+                    return StepOutcome(False, errors=[f"{h_name}.{label}: {issue}" for issue in issues])
             h_content = generate_header(project_name, h_name)
-            cpp_content = generate_source(h_name)
+            cpp_content = generate_source(
+                h_name,
+                on_event_body=on_event_body,
+                tick_body=tick_body,
+            )
 
             h_file = pub_dir / f"{h_name}.h"
             cpp_file = priv_dir / f"{h_name}.cpp"
@@ -469,7 +516,17 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
         if gds is None:
             gds = design_store.load(pdir)
 
-        gfdef = build_gfdef(gds) if gds is not None else None
+        gfdef_data = ctx.step.inputs.get("gfdef")
+        if gfdef_data is not None:
+            if not isinstance(gfdef_data, dict):
+                return StepOutcome(False, errors=["assemble input 'gfdef' must be an object"])
+            gfdef = gfdef_data
+            from ...kit.runtime_def import validate_runtime_def
+            gfdef_errors = validate_runtime_def(gfdef)
+            if gfdef_errors:
+                return StepOutcome(False, errors=[f"invalid gfdef: {e}" for e in gfdef_errors])
+        else:
+            gfdef = build_gfdef(gds) if gds is not None else None
         level_id = ctx.step.inputs.get("level_id", getattr(plan, "level_id", "level_1"))
         is_first = str(level_id) in ("level_1", "1") or ctx.step.step_id == "assemble_level_1"
 
@@ -531,7 +588,7 @@ def legacy_assemble(ctx: StepContext) -> StepOutcome:
             data["log"] = str(log_file)
             data["log_path"] = str(log_file)
         if len(errors) == 0:
-            assembled_map = getattr(plan, "map_path", None) or f"/Game/Maps/{str(level_id).capitalize()}"
+            assembled_map = getattr(plan, "map_path", None) or map_package_path(str(level_id))
             if is_first:
                 _sync_project_map_settings(pdir, assembled_map)
             # Output evidence verification for assemble stage

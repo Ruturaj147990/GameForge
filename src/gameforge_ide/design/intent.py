@@ -245,6 +245,10 @@ def is_game_creation_request(prompt: str) -> bool:
     if DOC_ANALYSIS_PAT.search(text) and not any(v in text for v in ("make", "create", "build", "design")):
         return False
 
+    # 0. Explicit preset pattern
+    if re.search(r"\bpreset:[a-z0-9_]+\b", text, re.I):
+        return True
+
     # 5. Direct game creation patterns
     if CREATE_GAME_PAT.search(text):
         return True

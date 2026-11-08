@@ -103,7 +103,11 @@ LIGHTING: dict[str, list[dict]] = {
         {"actor_class": "ExponentialHeightFog", "label": "GF_Fog"},
     ],
     "indoor": [
+        {"actor_class": "DirectionalLight", "label": "GF_Indoor_Key", "light_intensity": 1.5,
+         "rotation": {"pitch": -50, "yaw": 45, "roll": 0}},
         {"actor_class": "SkyLight", "label": "GF_SkyLight", "light_intensity": 1.0},
+        {"actor_class": "PointLight", "label": "GF_Indoor_Fill", "light_intensity": 5000.0,
+         "location": {"x": 0.0, "y": 0.0, "z": 250.0}},
     ],
 }
 

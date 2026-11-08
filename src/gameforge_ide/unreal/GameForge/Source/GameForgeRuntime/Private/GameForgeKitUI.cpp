@@ -1,4 +1,5 @@
 #include "GameForgeKitUI.h"
+#include "GameFramework/SaveGame.h"
 #include "GameForgeGameDefinition.h"
 #include "GameForgeGameState.h"
 #include "GameForgeEventNames.h"
@@ -405,16 +406,33 @@ void UGameForgeSaveSubsystem::HandleEvent(const FGameForgeEvent& Event)
 
 void UGameForgeSaveSubsystem::SaveGame()
 {
-	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+	bool bOk = false;
+	if (USaveGame* SaveObj = UGameplayStatics::CreateSaveGameObject(USaveGame::StaticClass()))
 	{
-		Bus->Emit(GFEvent::SaveWritten, TEXT("SaveSubsystem"), TEXT("{\"slot\":\"default\"}"));
+		bOk = UGameplayStatics::SaveGameToSlot(SaveObj, SaveSlotName, 0);
+	}
+	if (bOk)
+	{
+		if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+		{
+			Bus->Emit(GFEvent::SaveWritten, TEXT("SaveSubsystem"), FString::Printf(TEXT("{\"slot\":\"%s\"}"), *SaveSlotName));
+		}
 	}
 }
 
 void UGameForgeSaveSubsystem::LoadGame()
 {
-	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+	bool bOk = false;
+	if (UGameplayStatics::DoesSaveGameExist(SaveSlotName, 0))
 	{
-		Bus->Emit(GFEvent::SaveLoaded, TEXT("SaveSubsystem"), TEXT("{\"slot\":\"default\"}"));
+		USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(SaveSlotName, 0);
+		bOk = (Loaded != nullptr);
+	}
+	if (bOk)
+	{
+		if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+		{
+			Bus->Emit(GFEvent::SaveLoaded, TEXT("SaveSubsystem"), FString::Printf(TEXT("{\"slot\":\"%s\"}"), *SaveSlotName));
+		}
 	}
 }

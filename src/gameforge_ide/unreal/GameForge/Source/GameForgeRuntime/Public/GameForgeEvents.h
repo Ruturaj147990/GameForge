@@ -38,7 +38,10 @@ public:
 
 private:
 	TArray<FGameForgeEvent> Events;     // bounded to MaxEvents
+	TMap<FName, int32> EventCountsByName;
+	TMap<FString, int32> EventCountsByEntity;
 	FString SessionPath;
+	FString RunId;
 	double StartSeconds = 0.0;
 	static constexpr int32 MaxEvents = 20000;
 };

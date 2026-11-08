@@ -29,6 +29,8 @@ class QAEvent:
     entity: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
     raw_line: str = ""
+    schema: str = ""
+    run_id: str = ""
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any], raw: str = "") -> Optional[QAEvent]:
@@ -53,6 +55,8 @@ class QAEvent:
             or (data.get("target") if isinstance(data, dict) else "")
             or ""
         )
+        sch = str(d.get("schema", d.get("$schema", "")))
+        rid = str(d.get("run_id", d.get("runId", "")))
 
         return cls(
             name=name,
@@ -61,7 +65,25 @@ class QAEvent:
             entity=ent,
             data=data,
             raw_line=raw,
+            schema=sch,
+            run_id=rid,
         )
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = {
+            "schema": self.schema or "gameforge_event/1",
+            "e": self.name,
+            "t": round(self.time, 3),
+            "src": self.source,
+            "ent": self.entity,
+            "d": self.data,
+        }
+        if self.run_id:
+            d["run_id"] = self.run_id
+        return d
+
+    def to_jsonl(self) -> str:
+        return json.dumps(self.to_dict(), separators=(",", ":"))
 
 
 EVENT_ALIASES: Dict[str, List[str]] = {
@@ -69,7 +91,7 @@ EVENT_ALIASES: Dict[str, List[str]] = {
     "enemy.attacked": ["enemy.damaged", "enemy.hit"],
     "enemy.killed": ["enemy.defeated", "enemy.died", "enemy.eliminated"],
     "enemy.defeated": ["enemy.killed", "enemy.died", "enemy.eliminated"],
-    "game.won": ["enemy.killed", "enemy.attacked", "goal.reached", "level.completed", "game.victory", "game.win"],
+    "game.won": ["goal.reached", "level.completed", "game.victory", "game.win", "board.win", "match.win"],
     "game.victory": ["game.won", "level.completed", "goal.reached", "game.win"],
     "game.win": ["game.won", "game.victory", "level.completed"],
     "goal.reached": ["game.won", "level.completed", "game.victory", "finish.reached"],
@@ -98,11 +120,13 @@ class EventStream:
         file_path: Optional[Path] = None,
         total_lines: int = 0,
         malformed_lines: int = 0,
+        is_incomplete: bool = False,
     ) -> None:
         self.events: List[QAEvent] = events or []
         self.file_path: Optional[Path] = file_path
         self.total_lines: int = total_lines
         self.malformed_lines: int = malformed_lines
+        self.is_incomplete: bool = is_incomplete
 
     def __len__(self) -> int:
         return len(self.events)
@@ -134,12 +158,12 @@ class EventStream:
         events: List[QAEvent] = []
         total = 0
         malformed = 0
+        is_incomplete = False
 
-        for line in lines:
-            line_str = line.strip()
-            if not line_str:
-                continue
+        non_empty = [l.strip() for l in lines if l.strip()]
+        for i, line_str in enumerate(non_empty):
             total += 1
+            is_last = (i == len(non_empty) - 1)
             try:
                 data = json.loads(line_str)
                 if isinstance(data, dict):
@@ -148,16 +172,23 @@ class EventStream:
                         events.append(ev)
                     else:
                         malformed += 1
+                        if is_last:
+                            is_incomplete = True
                 else:
                     malformed += 1
+                    if is_last:
+                        is_incomplete = True
             except Exception:
                 malformed += 1
+                if is_last:
+                    is_incomplete = True
 
         return cls(
             events=events,
             file_path=file_path,
             total_lines=total,
             malformed_lines=malformed,
+            is_incomplete=is_incomplete,
         )
 
     def filter(
@@ -288,6 +319,7 @@ class EventStream:
                 "duration_s": 0.0,
                 "unique_events": [],
                 "malformed_lines": self.malformed_lines,
+                "is_incomplete": self.is_incomplete,
             }
 
         unique = sorted(list({ev.name for ev in self.events}))
@@ -300,4 +332,5 @@ class EventStream:
             "duration_s": round(max(0.0, t1 - t0), 3),
             "unique_events": unique,
             "malformed_lines": self.malformed_lines,
+            "is_incomplete": self.is_incomplete,
         }

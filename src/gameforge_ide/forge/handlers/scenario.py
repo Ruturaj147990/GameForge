@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ...design.gds import GameDesignSpec
-from ...qa.generate import generate
+from ...qa.generate import ScenarioGap, generate
 from ...qa.manifest import LevelManifest
 from ...qa.runner import run_packaged
 from ...qa.scenario import (
@@ -82,14 +82,16 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         ctx.workspace_dir / "GameForge" / "gds.json",
     ]
     scenarios: List[Scenario] = []
+    scenario_gaps: List[ScenarioGap] = []
     gds = None
 
     for g_path in gds_candidates:
         if g_path.is_file():
             try:
                 gds = GameDesignSpec.model_validate_json(g_path.read_text(encoding="utf-8"))
-                scs, _ = generate(gds, manifests)
+                scs, gaps = generate(gds, manifests)
                 scenarios.extend(scs)
+                scenario_gaps.extend(gaps)
                 break
             except Exception:
                 pass
@@ -98,8 +100,45 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         try:
             gds_input = ctx.step.inputs["gds"]
             gds = GameDesignSpec.model_validate(gds_input) if isinstance(gds_input, dict) else gds_input
+            if gds:
+                scs, gaps = generate(gds, manifests)
+                scenarios.extend(scs)
+                scenario_gaps.extend(gaps)
         except Exception:
             pass
+
+    if gds is None:
+        for sh in ctx.shared.values():
+            if isinstance(sh, dict) and "gds" in sh:
+                try:
+                    gds = GameDesignSpec.model_validate(sh["gds"]) if isinstance(sh["gds"], dict) else sh["gds"]
+                    if gds:
+                        scs, gaps = generate(gds, manifests)
+                        scenarios.extend(scs)
+                        scenario_gaps.extend(gaps)
+                        break
+                except Exception:
+                    pass
+
+    # Fail closed if any mandatory acceptance criterion has a ScenarioGap (Section 5A.24)
+    if gds is not None and scenario_gaps:
+        mandatory_refs = [
+            ref for ref in getattr(getattr(gds, "acceptance", None), "scenarios", [])
+            if getattr(ref, "must_pass", True)
+        ]
+        mandatory_ids = {ref.scenario_id for ref in mandatory_refs}
+        if scenario_ids:
+            mandatory_ids = mandatory_ids.intersection(set(scenario_ids))
+
+        mandatory_gaps = [g for g in scenario_gaps if not mandatory_ids or g.scenario_id in mandatory_ids]
+        if mandatory_gaps:
+            gap_msgs = [f"{g.scenario_id}: {g.reason}" for g in mandatory_gaps]
+            return StepOutcome(
+                ok=False,
+                errors=[
+                    f"Mandatory acceptance criteria have scenario gaps and cannot be verified: {'; '.join(gap_msgs)}"
+                ] + [f"ScenarioGap({g.scenario_id}): {g.reason}" for g in mandatory_gaps],
+            )
 
     # Load game-specific acceptance tests driven by GDS
     if gds is not None:
@@ -313,9 +352,11 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
                 except Exception:
                     pass
 
+    gaps: List[ScenarioGap] = []
     if gds is not None:
         try:
-            scs, _ = generate(gds, manifests)
+            scs, gen_gaps = generate(gds, manifests)
+            gaps.extend(gen_gaps)
             existing_ids = {s.scenario_id for s in scenarios}
             for s in scs:
                 if s.scenario_id not in existing_ids:
@@ -368,6 +409,10 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
     ctx.log(f"Generated {len(scenarios)} QA playtest scenarios in {scenarios_dir}")
     return StepOutcome(
         ok=True,
-        data={"scenarios": [s.model_dump() for s in scenarios], "count": len(scenarios)},
+        data={
+            "scenarios": [s.model_dump() for s in scenarios],
+            "count": len(scenarios),
+            "gaps": [{"scenario_id": g.scenario_id, "reason": g.reason} for g in gaps],
+        },
         artifacts=[{"path": str(a), "kind": "scenario_result"} for a in artifacts],
     )

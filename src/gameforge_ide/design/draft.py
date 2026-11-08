@@ -69,6 +69,7 @@ class DesignDraft(_D):
     music_mood: Literal["none", "calm", "tense", "heroic", "playful"] = "none"
     custom_rules: List[str] = Field(default_factory=list, max_length=3)
     questions: List[str] = Field(default_factory=list, max_length=3)
+    architecture: Optional[Dict[str, Any]] = Field(default=None)
 
     @field_validator("camera", mode="before")
     @classmethod

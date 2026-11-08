@@ -269,47 +269,83 @@ class GameTools:
             or (gds_or_params.get("prompt") if isinstance(gds_or_params, dict) else None)
             or (gds_or_params if isinstance(gds_or_params, str) and not gds_or_params.strip().startswith("{") else None)
         )
+        # If prompt is a proceed/continue confirmation command, resolve existing GDS from project_dir
         if gds is None and params is None and prompt_input:
-            spec = match_prompt(prompt_input)
-            if spec.matched and spec.params:
-                params = spec.params
-            else:
-                try:
-                    from ...design.prompt_to_gds import prompt_to_gds
-                    res = prompt_to_gds(prompt_input, allow_model=True)
-                    if res.status == "OK" and res.gds is not None:
-                        gds = res.gds
-                except Exception:
-                    pass
-
-                # If prompt is a proceed/continue confirmation command, resolve existing GDS from project_dir
-                if gds is None and prompt_input:
-                    norm_pi = prompt_input.strip().lower()
-                    if norm_pi in ("proceed", "continue", "start", "run", "go ahead", "apply", "confirm"):
-                        explicit_pdir = kwargs.get("project_dir") or (gds_or_params.get("project_dir") if isinstance(gds_or_params, dict) else None)
-                        if explicit_pdir:
-                            try:
-                                from ...core.projects import find_gds
-                                found_gds = find_gds(explicit_pdir)
-                                if found_gds and found_gds.is_file():
-                                    gds = GameDesignSpec.model_validate_json(found_gds.read_text(encoding="utf-8"))
-                            except Exception:
-                                pass
-                        if gds is None:
-                            return {
-                                "status": "FAILED",
-                                "ok": False,
-                                "error": f"No GameDesignSpec found to execute for '{prompt_input}'. Please specify the game to create.",
-                                "failed_stage": "spec",
-                            }
-
+            norm_pi = prompt_input.strip().lower()
+            if norm_pi in ("proceed", "continue", "start", "run", "go ahead", "apply", "confirm"):
+                explicit_pdir = kwargs.get("project_dir") or (gds_or_params.get("project_dir") if isinstance(gds_or_params, dict) else None)
+                if explicit_pdir:
+                    try:
+                        from ...core.projects import find_gds
+                        found_gds = find_gds(explicit_pdir)
+                        if found_gds and found_gds.is_file():
+                            gds = GameDesignSpec.model_validate_json(found_gds.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
                 if gds is None:
-                    return self.create_game_freeform(
-                        prompt=prompt_input,
-                        on_event=on_event,
-                        cancel_event=cancel_event,
-                        project_dir=kwargs.get("project_dir"),
-                    )
+                    return {
+                        "status": "FAILED",
+                        "ok": False,
+                        "error": f"No GameDesignSpec found to execute for '{prompt_input}'. Please specify the game to create.",
+                        "failed_stage": "spec",
+                    }
+
+        if gds is None and params is None and prompt_input:
+            try:
+                from ...design.prompt_to_gds import prompt_to_gds
+                complete_json, model = self._get_complete_json()
+                res = prompt_to_gds(
+                    prompt_input,
+                    complete_json=complete_json,
+                    model=model,
+                    allow_model=True,
+                )
+                if res.status == "OK" and res.gds is not None:
+                    gds = res.gds
+                elif res.status == "NEEDS_INPUT":
+                    return {
+                        "status": "NEEDS_INPUT",
+                        "ok": False,
+                        "questions": list(res.questions),
+                        "errors": list(res.errors),
+                        "failed_stage": "spec",
+                    }
+                elif res.status == "UNSUPPORTED":
+                    return {
+                        "status": "UNSUPPORTED",
+                        "ok": False,
+                        "error": "; ".join(res.errors) or "This is not a supported game-creation request.",
+                        "failed_stage": "spec",
+                    }
+                else:
+                    return {
+                        "status": "FAILED",
+                        "ok": False,
+                        "error": "; ".join(res.errors) or "Could not produce a valid game specification.",
+                        "failed_stage": "spec",
+                    }
+            except Exception as exc:
+                logger.warning("prompt_to_gds invocation error: %s", exc)
+                return {
+                    "status": "FAILED",
+                    "ok": False,
+                    "error": f"Could not create game specification for prompt {prompt_input!r}: {exc}",
+                    "failed_stage": "spec",
+                }
+
+            # Check match_prompt as offline fallback for explicit recipe/preset intents
+            if gds is None:
+                spec = match_prompt(prompt_input)
+                if spec.matched and spec.params:
+                    params = spec.params
+
+            if gds is None and params is None:
+                return {
+                    "status": "FAILED",
+                    "ok": False,
+                    "error": f"Could not create game specification for prompt {prompt_input!r}",
+                    "failed_stage": "spec",
+                }
 
         hook = None
         if gds is not None:

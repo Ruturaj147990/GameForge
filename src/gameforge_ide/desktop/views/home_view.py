@@ -489,6 +489,7 @@ class HomeView(QWidget):
         readiness_vbox.addLayout(self._readiness_rows_layout)
         readiness_vbox.addStretch(1)
 
+        bottom_layout.addWidget(self._recent_section, 1)
         bottom_layout.addWidget(self._readiness_section, 1)
         main_layout.addLayout(bottom_layout, 1)
 

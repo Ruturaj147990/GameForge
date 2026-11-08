@@ -62,13 +62,19 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             r_id = getattr(rule, "rule_id", getattr(rule, "id", f"rule_{task_idx}"))
             for eff in rule.effects:
                 if eff.kind == "custom_code" or getattr(eff, "custom_code", None):
-                    h_name = f"Custom{task_idx}Rule"
+                    h_name = getattr(eff, "handler_name", None) or f"Custom{task_idx}Rule"
+                    if any(task.handler_name == h_name for task in codegen_tasks):
+                        raise CompositionError([f"duplicate custom rule handler_name {h_name!r}"])
                     desc = getattr(eff, "description", rule.description or f"Custom rule {r_id}")
+                    on_event = getattr(eff, "on_event_body", "") or getattr(eff, "code", "") or ""
+                    tick = getattr(eff, "tick_body", "") or ""
                     codegen_tasks.append(
                         CodegenTask(
                             handler_name=h_name,
                             description=desc,
                             rule_id=r_id,
+                            on_event_body=on_event,
+                            tick_body=tick,
                         )
                     )
                     task_idx += 1

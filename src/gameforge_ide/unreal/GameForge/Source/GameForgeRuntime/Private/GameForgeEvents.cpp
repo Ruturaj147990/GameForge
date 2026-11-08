@@ -17,6 +17,7 @@ void UGameForgeEventBus::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	StartSeconds = FPlatformTime::Seconds();
 	FString Override;
+	FParse::Value(FCommandLine::Get(), TEXT("GFRunId="), RunId);
 	if (FParse::Value(FCommandLine::Get(), TEXT("GFEventsOut="), Override) && !Override.IsEmpty())
 	{
 		SessionPath = Override;
@@ -48,23 +49,37 @@ void UGameForgeEventBus::Emit(FName Name, const FString& Source, const FString& 
 	{
 		Events.Add(Ev);
 	}
-	const FString Line = FString::Printf(TEXT("{\"e\":\"%s\",\"t\":%.3f,\"src\":\"%s\",\"ent\":\"%s\",\"d\":%s}"),
-		*Name.ToString(), Ev.Time, *Source.ReplaceCharWithEscapedChar(),
+	EventCountsByName.FindOrAdd(Name)++;
+	if (!Entity.IsNone())
+	{
+		FString EntityKey = FString::Printf(TEXT("%s|%s"), *Name.ToString(), *Entity.ToString());
+		EventCountsByEntity.FindOrAdd(EntityKey)++;
+	}
+	const FString Line = FString::Printf(TEXT("{\"schema\":\"gameforge_event/1\",\"run_id\":\"%s\",\"e\":\"%s\",\"t\":%.3f,\"src\":\"%s\",\"ent\":\"%s\",\"d\":%s}"),
+		*RunId, *Name.ToString(), Ev.Time, *Source.ReplaceCharWithEscapedChar(),
 		Entity.IsNone() ? TEXT("") : *Entity.ToString(), *Ev.DataJson);
 	UE_LOG(LogGameForgeEvents, Display, TEXT("GF_EVENT %s"), *Line);           // compiled out in Shipping (fine)
-	FFileHelper::SaveStringToFile(Line + TEXT("\n"), *SessionPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
-		&IFileManager::Get(), FILEWRITE_Append);                                // works in every configuration
+	if (!FFileHelper::SaveStringToFile(Line + TEXT("\n"), *SessionPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,
+		&IFileManager::Get(), FILEWRITE_Append))
+	{
+		UE_LOG(LogGameForgeEvents, Warning, TEXT("Failed to append event to %s"), *SessionPath);
+	}
 	OnEvent.Broadcast(Ev);
 }
 
 int32 UGameForgeEventBus::Count(FName Name, FName Entity) const
 {
-	int32 N = 0;
-	for (const FGameForgeEvent& Ev : Events)
+	if (Entity.IsNone())
 	{
-		N += (Ev.Name == Name && (Entity.IsNone() || Ev.Entity == Entity)) ? 1 : 0;
+		const int32* Found = EventCountsByName.Find(Name);
+		return Found ? *Found : 0;
 	}
-	return N;
+	else
+	{
+		FString EntityKey = FString::Printf(TEXT("%s|%s"), *Name.ToString(), *Entity.ToString());
+		const int32* Found = EventCountsByEntity.Find(EntityKey);
+		return Found ? *Found : 0;
+	}
 }
 
 void UGameForgeEventLibrary::EmitGameForgeEvent(const UObject* WorldContextObject, FName Name, const FString& Source,

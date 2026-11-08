@@ -67,10 +67,7 @@ void AGameForgeCharacter::BeginPlay()
 
 	if (WeaponMesh && WeaponMesh->GetStaticMesh() == nullptr)
 	{
-		if (UStaticMesh* DefaultGunMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
-		{
-			WeaponMesh->SetStaticMesh(DefaultGunMesh);
-		}
+		WeaponMesh->SetVisibility(false);
 	}
 
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PlayerSpawned, GetName(), TEXT("{}"));
@@ -116,12 +113,19 @@ void AGameForgeCharacter::ApplyCameraMode()
 		}
 		if (WeaponMesh)
 		{
-			WeaponMesh->AttachToComponent(Camera, FAttachmentTransformRules::SnapToTargetIncludingScale);
-			WeaponMesh->SetRelativeLocation(FVector(35.f, 15.f, -12.f));
-			WeaponMesh->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
-			WeaponMesh->SetRelativeScale3D(FVector(0.12f, 0.45f, 0.15f));
-			WeaponMesh->SetOwnerNoSee(false);
-			WeaponMesh->SetVisibility(true);
+			if (WeaponMesh->GetStaticMesh() != nullptr)
+			{
+				WeaponMesh->AttachToComponent(Camera, FAttachmentTransformRules::SnapToTargetIncludingScale);
+				WeaponMesh->SetRelativeLocation(FVector(35.f, 15.f, -12.f));
+				WeaponMesh->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+				WeaponMesh->SetRelativeScale3D(FVector(0.12f, 0.45f, 0.15f));
+				WeaponMesh->SetOwnerNoSee(false);
+				WeaponMesh->SetVisibility(true);
+			}
+			else
+			{
+				WeaponMesh->SetVisibility(false);
+			}
 		}
 		break;
 	case EGameForgeCameraMode::SideScroller:
@@ -151,12 +155,19 @@ void AGameForgeCharacter::ApplyCameraMode()
 			GetMesh()->SetOwnerNoSee(false);
 			if (WeaponMesh)
 			{
-				WeaponMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, FName(TEXT("hand_rSocket")));
-				WeaponMesh->SetRelativeLocation(FVector::ZeroVector);
-				WeaponMesh->SetRelativeRotation(FRotator::ZeroRotator);
-				WeaponMesh->SetRelativeScale3D(FVector(0.12f, 0.45f, 0.15f));
-				WeaponMesh->SetOwnerNoSee(false);
-				WeaponMesh->SetVisibility(true);
+				if (WeaponMesh->GetStaticMesh() != nullptr && GetMesh()->DoesSocketExist(FName(TEXT("hand_rSocket"))))
+				{
+					WeaponMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, FName(TEXT("hand_rSocket")));
+					WeaponMesh->SetRelativeLocation(FVector::ZeroVector);
+					WeaponMesh->SetRelativeRotation(FRotator::ZeroRotator);
+					WeaponMesh->SetRelativeScale3D(FVector(0.12f, 0.45f, 0.15f));
+					WeaponMesh->SetOwnerNoSee(false);
+					WeaponMesh->SetVisibility(true);
+				}
+				else
+				{
+					WeaponMesh->SetVisibility(false);
+				}
 			}
 		}
 		break;
@@ -356,14 +367,39 @@ void AGameForgePlayerController::HandleMove(const FInputActionValue& Value)
 	const FVector2D Axis = Value.Get<FVector2D>();
 	if (APawn* P = GetPawn())
 	{
-		const FRotator Yaw(0.f, GetControlRotation().Yaw, 0.f);
-		P->AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Axis.Y);
-		P->AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Axis.X);
+		FRotator BasisRot = FRotator(0.f, GetControlRotation().Yaw, 0.f);
+		if (AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(P))
+		{
+			if (GFChar->CameraMode == EGameForgeCameraMode::TopDown)
+			{
+				if (GFChar->Camera)
+				{
+					BasisRot = FRotator(0.f, GFChar->Camera->GetComponentRotation().Yaw, 0.f);
+				}
+				else
+				{
+					BasisRot = FRotator::ZeroRotator;
+				}
+			}
+			else if (GFChar->CameraMode == EGameForgeCameraMode::SideScroller)
+			{
+				BasisRot = FRotator(0.f, P->GetActorRotation().Yaw, 0.f);
+			}
+		}
+		P->AddMovementInput(FRotationMatrix(BasisRot).GetUnitAxis(EAxis::X), Axis.Y);
+		P->AddMovementInput(FRotationMatrix(BasisRot).GetUnitAxis(EAxis::Y), Axis.X);
 	}
 }
 
 void AGameForgePlayerController::HandleLook(const FInputActionValue& Value)
 {
+	if (const AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(GetPawn()))
+	{
+		if (GFChar->CameraMode == EGameForgeCameraMode::TopDown || GFChar->CameraMode == EGameForgeCameraMode::SideScroller)
+		{
+			return;
+		}
+	}
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddYawInput(Axis.X);
 	AddPitchInput(-Axis.Y);
@@ -443,6 +479,27 @@ AGameForgeGameModeBase::AGameForgeGameModeBase()
 void AGameForgeGameModeBase::StartPlay()
 {
 	Super::StartPlay();
+	ConfigurePlayer(UGameplayStatics::GetPlayerController(this, 0));
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GameStarted, GetName(), TEXT("{}"));
+}
+
+void AGameForgeGameModeBase::RestartPlayer(AController* NewPlayer)
+{
+	Super::RestartPlayer(NewPlayer);
+	ConfigurePlayer(NewPlayer);
+}
+
+void AGameForgeGameModeBase::ConfigurePlayer(AController* Controller)
+{
+	if (!Controller)
+	{
+		return;
+	}
+	AGameForgeCharacter* Char = Cast<AGameForgeCharacter>(Controller->GetPawn());
+	if (!Char)
+	{
+		return;
+	}
 
 	// Read player parameters from definition
 	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
@@ -463,94 +520,90 @@ void AGameForgeGameModeBase::StartPlay()
 		TSharedPtr<FJsonObject> Def = DefAsset->GetParsed();
 		if (Def.IsValid())
 		{
-			APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-			AGameForgeCharacter* Char = PC ? Cast<AGameForgeCharacter>(PC->GetPawn()) : nullptr;
-			if (Char)
+			// 1. Camera mode parsing
+			FString CamModeStr;
+			const TSharedPtr<FJsonObject>* PlayerObj = nullptr;
+			if (Def->TryGetObjectField(TEXT("player"), PlayerObj) && PlayerObj)
 			{
-				// 1. Camera mode parsing
-				FString CamModeStr;
-				const TSharedPtr<FJsonObject>* PlayerObj = nullptr;
-				if (Def->TryGetObjectField(TEXT("player"), PlayerObj) && PlayerObj)
-				{
-					(*PlayerObj)->TryGetStringField(TEXT("camera"), CamModeStr);
-				}
-				if (CamModeStr.IsEmpty())
-				{
-					Def->TryGetStringField(TEXT("camera"), CamModeStr);
-				}
+				(*PlayerObj)->TryGetStringField(TEXT("camera"), CamModeStr);
+			}
+			if (CamModeStr.IsEmpty())
+			{
+				Def->TryGetStringField(TEXT("camera"), CamModeStr);
+			}
 
-				if (CamModeStr.Equals(TEXT("first_person"), ESearchCase::IgnoreCase) ||
-					CamModeStr.Equals(TEXT("fps"), ESearchCase::IgnoreCase) ||
-					CamModeStr.Equals(TEXT("FirstPerson"), ESearchCase::IgnoreCase))
-				{
-					Char->CameraMode = EGameForgeCameraMode::FirstPerson;
-					Char->bProjectileAttack = true;
-				}
-				else if (CamModeStr.Equals(TEXT("top_down"), ESearchCase::IgnoreCase) ||
-						 CamModeStr.Equals(TEXT("TopDown"), ESearchCase::IgnoreCase))
-				{
-					Char->CameraMode = EGameForgeCameraMode::TopDown;
-				}
-				else if (CamModeStr.Equals(TEXT("side_scroller"), ESearchCase::IgnoreCase) ||
-						 CamModeStr.Equals(TEXT("SideScroller"), ESearchCase::IgnoreCase))
-				{
-					Char->CameraMode = EGameForgeCameraMode::SideScroller;
-				}
-				else if (CamModeStr.Equals(TEXT("third_person"), ESearchCase::IgnoreCase) ||
-						 CamModeStr.Equals(TEXT("ThirdPerson"), ESearchCase::IgnoreCase))
-				{
-					Char->CameraMode = EGameForgeCameraMode::ThirdPerson;
-				}
-				Char->ApplyCameraMode();
+			if (CamModeStr.Equals(TEXT("first_person"), ESearchCase::IgnoreCase) ||
+				CamModeStr.Equals(TEXT("fps"), ESearchCase::IgnoreCase) ||
+				CamModeStr.Equals(TEXT("FirstPerson"), ESearchCase::IgnoreCase))
+			{
+				Char->CameraMode = EGameForgeCameraMode::FirstPerson;
+				Char->bProjectileAttack = true;
+			}
+			else if (CamModeStr.Equals(TEXT("top_down"), ESearchCase::IgnoreCase) ||
+					 CamModeStr.Equals(TEXT("TopDown"), ESearchCase::IgnoreCase))
+			{
+				Char->CameraMode = EGameForgeCameraMode::TopDown;
+			}
+			else if (CamModeStr.Equals(TEXT("side_scroller"), ESearchCase::IgnoreCase) ||
+					 CamModeStr.Equals(TEXT("SideScroller"), ESearchCase::IgnoreCase))
+			{
+				Char->CameraMode = EGameForgeCameraMode::SideScroller;
+			}
+			else if (CamModeStr.Equals(TEXT("third_person"), ESearchCase::IgnoreCase) ||
+					 CamModeStr.Equals(TEXT("ThirdPerson"), ESearchCase::IgnoreCase))
+			{
+				Char->CameraMode = EGameForgeCameraMode::ThirdPerson;
+			}
+			Char->ApplyCameraMode();
 
-				// 2. Player attributes
-				if (PlayerObj && *PlayerObj)
-				{
-					double Speed = 600.0, JumpZ = 650.0, MaxHP = 100.0;
-					int32 LivesVal = 0;
-					(*PlayerObj)->TryGetNumberField(TEXT("move_speed"), Speed);
-					(*PlayerObj)->TryGetNumberField(TEXT("jump_velocity"), JumpZ);
-					(*PlayerObj)->TryGetNumberField(TEXT("max_health"), MaxHP);
-					(*PlayerObj)->TryGetNumberField(TEXT("lives"), LivesVal);
+			// 2. Player attributes
+			if (PlayerObj && *PlayerObj)
+			{
+				double Speed = 600.0, JumpZ = 650.0, MaxHP = 100.0;
+				int32 LivesVal = 0;
+				(*PlayerObj)->TryGetNumberField(TEXT("move_speed"), Speed);
+				(*PlayerObj)->TryGetNumberField(TEXT("jump_velocity"), JumpZ);
+				(*PlayerObj)->TryGetNumberField(TEXT("max_health"), MaxHP);
+				(*PlayerObj)->TryGetNumberField(TEXT("lives"), LivesVal);
 
-					FString AttackMode;
-					if ((*PlayerObj)->TryGetStringField(TEXT("attack_mode"), AttackMode))
+				FString AttackMode;
+				if ((*PlayerObj)->TryGetStringField(TEXT("attack_mode"), AttackMode))
+				{
+					if (AttackMode.Equals(TEXT("projectile"), ESearchCase::IgnoreCase) ||
+						AttackMode.Equals(TEXT("ranged"), ESearchCase::IgnoreCase))
 					{
-						if (AttackMode.Equals(TEXT("projectile"), ESearchCase::IgnoreCase) ||
-							AttackMode.Equals(TEXT("ranged"), ESearchCase::IgnoreCase))
-						{
-							Char->bProjectileAttack = true;
-						}
+						Char->bProjectileAttack = true;
 					}
-					double AtkDamage = 0.0;
-					if ((*PlayerObj)->TryGetNumberField(TEXT("attack_damage"), AtkDamage) && AtkDamage > 0.0)
-					{
-						Char->AttackDamage = static_cast<float>(AtkDamage);
-					}
-					double ProjSpeed = 0.0;
-					if ((*PlayerObj)->TryGetNumberField(TEXT("projectile_speed"), ProjSpeed) && ProjSpeed > 0.0)
-					{
-						Char->ProjectileSpeed = static_cast<float>(ProjSpeed);
-					}
+				}
+				double AtkDamage = 0.0;
+				if ((*PlayerObj)->TryGetNumberField(TEXT("attack_damage"), AtkDamage) && AtkDamage > 0.0)
+				{
+					Char->AttackDamage = static_cast<float>(AtkDamage);
+				}
+				double ProjSpeed = 0.0;
+				if ((*PlayerObj)->TryGetNumberField(TEXT("projectile_speed"), ProjSpeed) && ProjSpeed > 0.0)
+				{
+					Char->ProjectileSpeed = static_cast<float>(ProjSpeed);
+				}
 
-					Char->MoveSpeed = static_cast<float>(Speed);
-					Char->JumpVelocity = static_cast<float>(JumpZ);
-					Char->MaxHealth = static_cast<float>(MaxHP);
-					Char->Lives = LivesVal;
+				Char->MoveSpeed = static_cast<float>(Speed);
+				Char->JumpVelocity = static_cast<float>(JumpZ);
+				Char->MaxHealth = static_cast<float>(MaxHP);
+				Char->Lives = LivesVal;
 
+				if (Char->GetCharacterMovement())
+				{
 					Char->GetCharacterMovement()->MaxWalkSpeed = Char->MoveSpeed;
 					Char->GetCharacterMovement()->JumpZVelocity = Char->JumpVelocity;
-					if (Char->AttributeSet)
-					{
-						Char->AttributeSet->SetMaxHealth(Char->MaxHealth);
-						Char->AttributeSet->SetHealth(Char->MaxHealth);
-					}
+				}
+				if (Char->AttributeSet)
+				{
+					Char->AttributeSet->SetMaxHealth(Char->MaxHealth);
+					Char->AttributeSet->SetHealth(Char->MaxHealth);
 				}
 			}
 		}
 	}
-
-	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::GameStarted, GetName(), TEXT("{}"));
 }
 
 AGameForgeGameMode::AGameForgeGameMode()

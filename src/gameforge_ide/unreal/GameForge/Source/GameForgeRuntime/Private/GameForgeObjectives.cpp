@@ -114,8 +114,11 @@ bool UGameForgeObjectiveSubsystem::SaveNow()
 	Save->SaveCount = ++SaveCount;
 	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName, 0);
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT objective_save slot=%s ok=%d count=%d"), *SlotName, bOk ? 1 : 0, SaveCount);
-	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::SaveWritten, SlotName,
-		FString::Printf(TEXT("{\"ok\":%s}"), bOk ? TEXT("true") : TEXT("false")), NAME_None);
+	if (bOk)
+	{
+		UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::SaveWritten, SlotName,
+			TEXT("{\"ok\":true}"), NAME_None);
+	}
 	return bOk;
 }
 

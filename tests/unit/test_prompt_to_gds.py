@@ -27,7 +27,7 @@ def test_unsupported_prompt():
 def test_preset_path_no_model_called():
     mock_complete = MagicMock()
     res = prompt_to_gds(
-        "make a 3d platformer with 8 coins called Sky Hop",
+        "preset:platformer with 8 coins called Sky Hop",
         complete_json=mock_complete,
         allow_model=True,
     )
@@ -44,13 +44,26 @@ def test_preset_path_no_model_called():
 
 
 def test_preset_tic_tac_toe():
-    res = prompt_to_gds("create a tic tac toe game against a friend")
+    res = prompt_to_gds("preset:tic_tac_toe against a friend")
     assert res.status == "OK"
     assert res.path == "preset"
     assert res.gds is not None
     board = [e for e in res.gds.entities if e.kind.value == "board"][0]
     assert board.props.get("board_size") == 3
     assert board.props.get("vs_ai") is False
+
+
+def test_ordinary_prompts_do_not_trigger_presets():
+    """Section 5A.3: Ordinary prompts with words like arena, platformer, board, survive, racing must not trigger presets."""
+    for ordinary_prompt in [
+        "make an arena game",
+        "make a 3d platformer with 8 coins called Sky Hop",
+        "create a board game with custom rules",
+        "a survive the night game",
+        "create a fast racing game",
+    ]:
+        res = prompt_to_gds(ordinary_prompt, allow_model=False)
+        assert res.path != "preset", f"Ordinary prompt '{ordinary_prompt}' must not trigger preset path!"
 
 
 def test_model_path_valid():

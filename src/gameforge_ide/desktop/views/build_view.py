@@ -397,13 +397,13 @@ class BuildView(QWidget):
     def start_build(self, project_name: str, spec: Optional[Any] = None, project_dir: Optional[Path] = None) -> None:
         """Start or resume a Forge build run for project_name in a background thread."""
         self._current_project = project_name
-        p_dir = project_dir or getattr(self, "_current_project_dir", None) or resolve_project_dir(project_name, self._workspace)
-        if not p_dir:
-            p_root = get_settings().projects_root
-            if not p_root:
-                return
-            p_dir = Path(p_root) / project_name
-        p_dir = Path(p_dir).resolve()
+        p_root_cfg = get_settings().projects_root
+        p_root = Path(p_root_cfg).expanduser().resolve() if p_root_cfg else self._workspace
+        if project_dir is not None:
+            p_dir = Path(project_dir).expanduser().resolve()
+        else:
+            resolved = getattr(self, "_current_project_dir", None) or resolve_project_dir(project_name, self._workspace)
+            p_dir = Path(resolved).resolve() if resolved else (p_root / project_name).resolve()
         p_dir.mkdir(parents=True, exist_ok=True)
         self._current_project_dir = p_dir
         self._store = RunStore(project_dir=p_dir, workspace_dir=self._workspace)

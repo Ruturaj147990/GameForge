@@ -70,6 +70,9 @@ class BoundaryManager:
         ".gameforge/settings.json",
         ".gameforge/ide_settings.ini",
         ".gameforge/credentials",
+        ".gameforge/egress.json",
+        ".gameforge/spend.jsonl",
+        ".gameforge/tasks",
     ]
 
     RESERVED_DEVICE_NAMES = {

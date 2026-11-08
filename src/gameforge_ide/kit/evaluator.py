@@ -29,6 +29,17 @@ class ConditionEvaluator:
     """Evaluates gfdef/1 condition dictionaries."""
 
     @staticmethod
+    def _composite_children(cond: Dict[str, Any]) -> Tuple[Optional[List[Any]], Optional[str]]:
+        items = cond.get("items")
+        legacy_conditions = cond.get("conditions")
+        if items is not None and legacy_conditions is not None and items != legacy_conditions:
+            return None, "Composite condition has conflicting 'items' and 'conditions'"
+        children = items if items is not None else legacy_conditions
+        if not isinstance(children, list):
+            return None, "Composite condition requires an 'items' list"
+        return children, None
+
+    @staticmethod
     def evaluate(cond: Dict[str, Any], ctx: EvaluationContext, depth: int = 0) -> Tuple[bool, Optional[str]]:
         """Returns (result, error_if_malformed). Never raises."""
         if depth > 3:
@@ -41,7 +52,9 @@ class ConditionEvaluator:
         if not kind:
             return False, "Condition missing 'kind' field"
 
-        if kind == "count_at_least":
+        kind_norm = str(kind).lower().replace("_", "")
+
+        if kind_norm == "countatleast" or kind == "count_at_least":
             event = cond.get("event")
             n = cond.get("n")
             if not event or n is None:
@@ -89,28 +102,30 @@ class ConditionEvaluator:
             source = cond.get("source")
             return ctx.has_event(event, source), None
 
-        elif kind == "all":
-            conditions = cond.get("conditions")
-            if not isinstance(conditions, list) or len(conditions) == 0:
-                return False, "'all' requires non-empty 'conditions' list"
+        elif kind_norm in ("all", "allof"):
+            conditions, error = ConditionEvaluator._composite_children(cond)
+            if error:
+                return False, error
+            if not conditions:
+                return False, "'all' requires a non-empty 'items' list"
             for sub in conditions:
-                res, err = ConditionEvaluator.evaluate(sub, ctx, depth + 1)
-                if err:
-                    return False, err
+                res, sub_err = ConditionEvaluator.evaluate(sub, ctx, depth + 1)
+                if sub_err:
+                    return False, sub_err
                 if not res:
                     return False, None
             return True, None
 
-        elif kind == "any":
-            conditions = cond.get("conditions")
-            if not isinstance(conditions, list):
-                return False, "'any' requires 'conditions' list"
-            if len(conditions) == 0:
+        elif kind_norm in ("any", "anyof"):
+            conditions, error = ConditionEvaluator._composite_children(cond)
+            if error:
+                return False, error
+            if not conditions:
                 return False, None
             for sub in conditions:
-                res, err = ConditionEvaluator.evaluate(sub, ctx, depth + 1)
-                if err:
-                    return False, err
+                res, sub_err = ConditionEvaluator.evaluate(sub, ctx, depth + 1)
+                if sub_err:
+                    return False, sub_err
                 if res:
                     return True, None
             return False, None

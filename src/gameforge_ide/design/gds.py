@@ -256,10 +256,36 @@ class AllOf(_M):
     kind: Literal["all"] = "all"
     items: List["Condition"] = Field(min_length=1, max_length=8)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_items(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            items = v.get("items")
+            conditions = v.get("conditions")
+            if items is not None and conditions is not None and items != conditions:
+                raise ValueError("Conflicting 'items' and 'conditions' in composite condition")
+            if items is None and conditions is not None:
+                v = dict(v)
+                v["items"] = conditions
+        return v
+
 
 class AnyOf(_M):
     kind: Literal["any"] = "any"
     items: List["Condition"] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_items(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            items = v.get("items")
+            conditions = v.get("conditions")
+            if items is not None and conditions is not None and items != conditions:
+                raise ValueError("Conflicting 'items' and 'conditions' in composite condition")
+            if items is None and conditions is not None:
+                v = dict(v)
+                v["items"] = conditions
+        return v
 
 
 Condition = Annotated[Union[CountAtLeast, StatCompare, TimerElapsed, EventOccurred, AllOf, AnyOf],
@@ -312,6 +338,8 @@ class CustomCode(_M):
     kind: Literal["custom_code"] = "custom_code"
     description: str = Field(min_length=10, max_length=400)
     handler_name: str = Field(pattern=r"^[A-Z][A-Za-z0-9]{2,40}Rule$")
+    on_event_body: str = Field("", max_length=8000)
+    tick_body: str = Field("", max_length=8000)
 
 
 Effect = Annotated[Union[AddStat, SetStat, Emit, Spawn, Message, EndGame, CustomCode], Field(discriminator="kind")]
@@ -417,6 +445,19 @@ class Acceptance(_M):
     scenarios: List[ScenarioRef] = Field(default_factory=list, max_length=32)
     vision_rubric_min: float = Field(0.0, ge=0, le=1)
     extra_checks: List[str] = Field(default_factory=list, max_length=16)
+    required_features: List[str] = Field(default_factory=list, max_length=32)
+
+
+class ArchitectureSpec(_M):
+    method: str = "scratch_generation"
+    plan_kind: Optional[str] = None
+    target_classes: List[str] = Field(default_factory=list)
+    target_widgets: List[str] = Field(default_factory=list)
+    source_files: List[str] = Field(default_factory=list)
+    template_id: Optional[str] = None
+    base_template_id: Optional[str] = None
+    custom_capabilities: List[str] = Field(default_factory=list)
+    mechanics: Dict[str, Any] = Field(default_factory=dict)
 
 
 class GameDesignSpec(_M):
@@ -435,6 +476,7 @@ class GameDesignSpec(_M):
     presentation: PresentationSpec = Field(default_factory=PresentationSpec)
     tech: TechSpec = Field(default_factory=TechSpec)
     acceptance: Acceptance = Field(default_factory=Acceptance)
+    architecture: Optional[ArchitectureSpec] = Field(default=None)
 
     # ---- cross-reference validation -------------------------------------------------------
     def _declared_events(self) -> set[str]:

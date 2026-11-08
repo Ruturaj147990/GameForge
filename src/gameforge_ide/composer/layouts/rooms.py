@@ -8,13 +8,13 @@ from __future__ import annotations
 import math
 import random
 from typing import Any, Dict, List, Tuple
-from ..model import LevelPlan, OpCall, PlacedActor
+from ..model import map_package_path, LevelPlan, OpCall, PlacedActor
 from ...backend.tools import dungeon_layout
 
 
 def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     level_id = getattr(level, "level_id", "level_1")
-    map_path = f"/Game/Maps/{level_id.capitalize()}"
+    map_path = map_package_path(level_id)
 
     seed = getattr(level, "seed", rng.randint(1, 999999))
     num_rooms = rng.randint(4, 7)

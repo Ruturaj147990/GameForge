@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -12,6 +13,9 @@ from pydantic import BaseModel, Field
 from ..core.settings import get_settings
 from .models.modes import AutonomyProfile, PermissionsMode, TaskLifecycleStatus, TaskMode
 from .models.plan_artifact import PlanArtifact
+
+
+logger = logging.getLogger(__name__)
 
 
 class ChatMessage(BaseModel):
@@ -165,22 +169,19 @@ class SessionManager:
 
     def get_session(self, session_id: str) -> Optional[Session]:
         path = self.storage_dir / f"{session_id}.json"
-        bak_path = path.with_suffix(".json.bak")
+        bak_path = path.with_suffix(path.suffix + ".bak")
         for target in (path, bak_path):
             if not target.exists():
                 continue
             try:
                 from ..storage.atomic import safe_read_json
-                data = safe_read_json(target, max_retries=3)
-                if data and isinstance(data, dict):
+                data, recovered = safe_read_json(target, max_retries=3)
+                if recovered:
+                    logger.warning("Recovered JSON from backup: %s", target)
+                if isinstance(data, dict):
                     return Session(**data)
-            except Exception:
-                pass
-            try:
-                with open(target, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                return Session(**data)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed reading session from %s: %s", target, exc)
                 continue
         return None
 
@@ -306,10 +307,17 @@ class SessionManager:
         return export_path
 
     def delete_session(self, session_id: str) -> bool:
-        """Delete session checkpoint from disk."""
+        """Delete session checkpoint and backup sidecar from disk."""
         path = self.storage_dir / f"{session_id}.json"
-        if path.exists():
-            path.unlink()
-            return True
-        return False
+        backup_path = path.with_suffix(path.suffix + ".bak")
+        removed = False
+        for target in (path, backup_path):
+            try:
+                if target.is_file():
+                    target.unlink()
+                    removed = True
+            except OSError as exc:
+                logger.warning("Could not delete session file %s: %s", target, exc)
+                return False
+        return removed
 

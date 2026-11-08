@@ -2,6 +2,28 @@
 from .registry import KIT, KitModule, all_modules, get_module, register
 from .runtime_def import build_runtime_def, validate_runtime_def
 from .evaluator import ConditionEvaluator, EvaluationContext, RulesEvaluator
+from .rules import (
+    RaceProgress,
+    RacerProgress,
+    sudoku_conflicts,
+    is_sudoku_solved,
+    parse_player_slots,
+    PlayerSlotConfig,
+    tic_tac_toe_result,
+    SnakesAndLaddersRules,
+    LudoRules,
+    TetrisState,
+    SnakeState,
+    ChessState,
+    TowerDefenseState,
+    RoguelikeState,
+    ZombieSurvivalState,
+    GAME_TYPE_LAYOUT_MAP,
+    get_layout_for_game_type,
+    get_required_modules_for_game_type,
+    resolve_codegen_features,
+    check_composition_features,
+)
 
 __all__ = [
     "KIT",
@@ -14,4 +36,24 @@ __all__ = [
     "ConditionEvaluator",
     "EvaluationContext",
     "RulesEvaluator",
+    "RaceProgress",
+    "RacerProgress",
+    "sudoku_conflicts",
+    "is_sudoku_solved",
+    "parse_player_slots",
+    "PlayerSlotConfig",
+    "tic_tac_toe_result",
+    "SnakesAndLaddersRules",
+    "LudoRules",
+    "TetrisState",
+    "SnakeState",
+    "ChessState",
+    "TowerDefenseState",
+    "RoguelikeState",
+    "ZombieSurvivalState",
+    "GAME_TYPE_LAYOUT_MAP",
+    "get_layout_for_game_type",
+    "get_required_modules_for_game_type",
+    "resolve_codegen_features",
+    "check_composition_features",
 ]

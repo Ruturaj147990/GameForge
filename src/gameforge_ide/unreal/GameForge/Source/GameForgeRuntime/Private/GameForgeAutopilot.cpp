@@ -33,7 +33,7 @@ bool UGameForgeAutopilotComponent::MoveTo(const FVector& Target, const FString& 
 	}
 
 	UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), Pawn->GetActorLocation(), Target, Pawn);
-	if (!NavPath || !NavPath->IsValid() || NavPath->PathPoints.Num() == 0)
+	if (!NavPath || !NavPath->IsValid() || NavPath->PathPoints.Num() == 0 || NavPath->IsPartial())
 	{
 		Current.Target = Label;
 		Finish(TEXT("NO_PATH"));
@@ -113,10 +113,19 @@ void UGameForgeAutopilotComponent::TickComponent(float DeltaTime, ELevelTick Tic
 		return;
 	}
 
-	// 6. Advance PathIndex while the next point is within Accept (2D)
-	while (PathIndex < Path.Num() && FVector::Dist2D(Pos, Path[PathIndex]) <= Accept)
+	// 6. Advance PathIndex while the next point is within Accept (3D on final point)
+	while (PathIndex < Path.Num())
 	{
-		PathIndex++;
+		bool bIsFinal = (PathIndex == Path.Num() - 1);
+		float Dist = bIsFinal ? FVector::Dist(Pos, Path[PathIndex]) : FVector::Dist2D(Pos, Path[PathIndex]);
+		if (Dist <= Accept)
+		{
+			PathIndex++;
+		}
+		else
+		{
+			break;
+		}
 	}
 	if (PathIndex >= Path.Num())
 	{

@@ -942,7 +942,7 @@ class DesignView(QWidget):
         if "PYTEST_CURRENT_TEST" in os.environ:
             return None
         try:
-            from ..providers.ollama_provider import OllamaProvider
+            from ...backend.providers.ollama_provider import OllamaProvider
             settings = get_settings()
             provider = OllamaProvider(host=settings.ollama_url.replace("http://", "").replace("https://", ""))
             model = settings.model_for("design")

@@ -25,6 +25,7 @@ from src.gameforge_ide.composer.layouts.open_world import plan_level as plan_ope
 from src.gameforge_ide.composer.layouts.arena import plan_level as plan_arena_level
 from src.gameforge_ide.composer.layouts.board import plan_level as plan_board_level
 from src.gameforge_ide.composer.layouts.lanes import plan_level as plan_lanes_level
+from src.gameforge_ide.composer.layouts.tactical_fps import plan_level as plan_tactical_fps_level
 from src.gameforge_ide.composer.compose import compose
 from src.gameforge_ide.composer.level_ops import plan_to_op_calls, verify_placed_actor_transforms
 from src.gameforge_ide.composer.codegen import generate_source, generate_header, safety_scan
@@ -373,3 +374,59 @@ def test_def113_cinematics_dynamic_focus_mapping():
     assert "Boss" in cin["shots"][0]
     assert "Boss" in cin["shots"][1]
     assert "Treasure" in cin["shots"][2]
+
+
+# ---------------------------------------------------------------------------
+# Section 5A.11: Exact map paths and no .capitalize() corruption (all 7 layouts)
+# ---------------------------------------------------------------------------
+
+def test_section_5a11_exact_map_paths_across_all_seven_layouts():
+    """Verify all 7 layout generators preserve exact level_id casing without .capitalize()."""
+    from types import SimpleNamespace
+
+    test_level_id = "custom_Arena_Level_99"
+    lvl = SimpleNamespace(level_id=test_level_id, size_m=Vec2(x=60.0, y=60.0), seed=42)
+    gds = preset_platformer()
+    rng = random.Random(42)
+
+    all_layouts = [
+        ("arena", plan_arena_level),
+        ("board", plan_board_level),
+        ("course", plan_course_level),
+        ("lanes", plan_lanes_level),
+        ("open_world", plan_open_world_level),
+        ("rooms", plan_rooms_level),
+        ("tactical_fps", plan_tactical_fps_level),
+    ]
+
+    expected_path = f"/Game/Maps/{test_level_id}"
+    for name, factory in all_layouts:
+        plan = factory(lvl, gds, rng)
+        assert plan.map_path == expected_path, (
+            f"Layout {name} corrupted map path: expected {expected_path}, got {plan.map_path}"
+        )
+        # Verify no .capitalize() corruption (e.g. Custom_arena_level_99)
+        assert plan.map_path != f"/Game/Maps/{test_level_id.capitalize()}", (
+            f"Layout {name} improperly capitalized level_id"
+        )
+
+
+def test_tactical_fps_watertight_geometry_with_mesh_and_material():
+    """Verify tactical_fps emits static_mesh and material on every StaticMeshActor."""
+    from types import SimpleNamespace
+
+    rng = random.Random(999)
+    lvl = SimpleNamespace(level_id="tactical_bsite", size_m=Vec2(x=60.0, y=60.0), seed=999)
+    gds = preset_platformer()
+
+    plan = plan_tactical_fps_level(lvl, gds, rng)
+    assert len(plan.geometry_ops) >= 5, "tactical_fps has too few geometry ops"
+
+    for op in plan.geometry_ops:
+        if op.op == "spawn_actor" and op.args.get("actor_class") == "StaticMeshActor":
+            label = op.args.get("label", "")
+            assert "static_mesh" in op.args, f"tactical_fps op {label} missing 'static_mesh'"
+            assert op.args["static_mesh"] == "/Engine/BasicShapes/Cube.Cube"
+            assert "material" in op.args, f"tactical_fps op {label} missing 'material'"
+            assert op.args["material"].startswith("/Game/LevelPrototyping/Materials/")
+

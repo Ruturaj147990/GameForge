@@ -190,6 +190,36 @@ bool AGameForgeGridBoard::MakeMove(int32 Row, int32 Col, int32 Player)
 
 	Grid[TargetRow * BoardSize + Col] = Player;
 
+	// Spawn visible piece on target cell component
+	TArray<UGameForgeGridCellComponent*> Cells;
+	GetComponents<UGameForgeGridCellComponent>(Cells);
+	for (UGameForgeGridCellComponent* Cell : Cells)
+	{
+		if (Cell && Cell->Row == TargetRow && Cell->Col == Col)
+		{
+			if (!Cell->PieceVisual)
+			{
+				FString PieceName = FString::Printf(TEXT("Piece_%d_%d"), TargetRow, Col);
+				UStaticMeshComponent* Piece = NewObject<UStaticMeshComponent>(this, *PieceName);
+			if (Piece)
+			{
+				Piece->RegisterComponent();
+				Piece->AttachToComponent(Cell, FAttachmentTransformRules::KeepRelativeTransform);
+				Piece->SetRelativeLocation(FVector(0.f, 0.f, 15.f));
+				Piece->SetRelativeScale3D(FVector(0.35f, 0.35f, 0.35f));
+				Piece->SetCollisionProfileName(TEXT("NoCollision"));
+				const TCHAR* MeshPath = (Player == 1) ? TEXT("/Engine/BasicShapes/Cylinder.Cylinder") : TEXT("/Engine/BasicShapes/Cube.Cube");
+				if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, MeshPath))
+				{
+					Piece->SetStaticMesh(SM);
+				}
+				Cell->PieceVisual = Piece;
+			}
+			}
+			break;
+		}
+	}
+
 	UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this);
 	if (Bus)
 	{
@@ -311,21 +341,112 @@ UGameForgeCardMatchComponent::UGameForgeCardMatchComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+void UGameForgeCardMatchComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	InitializeMatch(2026);
+}
+
+void UGameForgeCardMatchComponent::InitializeMatch(int32 Seed)
+{
+	PlayerHealth = 20;
+	OpponentHealth = 20;
+	CurrentEnergy = EnergyPerTurn;
+	TurnCount = 1;
+
+	Deck.Empty();
+	Hand.Empty();
+	PlayerLanes.Init(FGameForgeCard(), 3);
+	OpponentLanes.Init(FGameForgeCard(), 3);
+
+	// Deterministic seeded deck generation
+	FRandomStream Rng(Seed);
+	for (int32 i = 0; i < DeckSize; ++i)
+	{
+		FGameForgeCard Card;
+		Card.CardId = i + 1;
+		Card.Name = FString::Printf(TEXT("Card_%d"), Card.CardId);
+		Card.Cost = 1 + (i % 3);
+		Card.Attack = 1 + (i % 4);
+		Card.Health = 1 + ((i * 2) % 5);
+		Deck.Add(Card);
+	}
+
+	DrawCards(HandSize);
+}
+
+void UGameForgeCardMatchComponent::DrawCards(int32 Count)
+{
+	for (int32 i = 0; i < Count; ++i)
+	{
+		if (Deck.Num() > 0)
+		{
+			Hand.Add(Deck[0]);
+			Deck.RemoveAt(0);
+		}
+	}
+}
+
 void UGameForgeCardMatchComponent::PlayCard(int32 CardIndex, int32 TargetLane)
 {
+	if (CardIndex < 0 || CardIndex >= Hand.Num())
+	{
+		return;
+	}
+	if (TargetLane < 0 || TargetLane >= 3)
+	{
+		return;
+	}
+
+	const FGameForgeCard& CardToPlay = Hand[CardIndex];
+	if (CardToPlay.Cost > CurrentEnergy)
+	{
+		return;
+	}
+
+	CurrentEnergy -= CardToPlay.Cost;
+	FGameForgeCard PlayedCard = CardToPlay;
+	Hand.RemoveAt(CardIndex);
+	PlayerLanes[TargetLane] = PlayedCard;
+
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{
-		FString Data = FString::Printf(TEXT("{\"card\":%d,\"lane\":%d}"), CardIndex, TargetLane);
+		FString Data = FString::Printf(TEXT("{\"card\":%d,\"lane\":%d,\"cost\":%d,\"atk\":%d,\"hp\":%d}"),
+			PlayedCard.CardId, TargetLane, PlayedCard.Cost, PlayedCard.Attack, PlayedCard.Health);
 		Bus->Emit(GFEvent::CardPlayed, GetName(), Data);
 	}
 }
 
 void UGameForgeCardMatchComponent::EndTurn()
 {
+	// Resolve lane combat
+	for (int32 Lane = 0; Lane < 3; ++Lane)
+	{
+		if (PlayerLanes[Lane].CardId > 0 && OpponentLanes[Lane].CardId > 0)
+		{
+			PlayerLanes[Lane].Health -= OpponentLanes[Lane].Attack;
+			OpponentLanes[Lane].Health -= PlayerLanes[Lane].Attack;
+			if (PlayerLanes[Lane].Health <= 0) PlayerLanes[Lane] = FGameForgeCard();
+			if (OpponentLanes[Lane].Health <= 0) OpponentLanes[Lane] = FGameForgeCard();
+		}
+		else if (PlayerLanes[Lane].CardId > 0 && OpponentLanes[Lane].CardId == 0)
+		{
+			OpponentHealth = FMath::Max(0, OpponentHealth - PlayerLanes[Lane].Attack);
+		}
+		else if (OpponentLanes[Lane].CardId > 0 && PlayerLanes[Lane].CardId == 0)
+		{
+			PlayerHealth = FMath::Max(0, PlayerHealth - OpponentLanes[Lane].Attack);
+		}
+	}
+
+	TurnCount++;
+	CurrentEnergy = EnergyPerTurn;
+	DrawCards(1);
+
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{
-		Bus->Emit(GFEvent::TurnEnded, GetName(), TEXT("{}"));
-		Bus->Emit(GFEvent::LaneResolved, GetName(), TEXT("{}"));
+		Bus->Emit(GFEvent::TurnEnded, GetName(), FString::Printf(TEXT("{\"turn\":%d}"), TurnCount));
+		Bus->Emit(GFEvent::LaneResolved, GetName(), FString::Printf(TEXT("{\"player_hp\":%d,\"opp_hp\":%d}"), PlayerHealth, OpponentHealth));
 	}
 }
 

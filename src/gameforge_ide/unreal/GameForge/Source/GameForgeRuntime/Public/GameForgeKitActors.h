@@ -41,6 +41,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UBoxComponent> Trigger;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
 
@@ -81,6 +84,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<USphereComponent> Trigger;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
 
@@ -108,6 +114,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<USphereComponent> Trigger;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
@@ -139,6 +148,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<USphereComponent> Trigger;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
@@ -419,6 +431,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<USphereComponent> Trigger;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TObjectPtr<UStaticMeshComponent> Mesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName SiteName = FName(TEXT("A"));

@@ -26,6 +26,7 @@ class KitModule:
     automation_tests: Tuple[str, ...] = ()
     status: str = "PASS"
     evidence: Tuple[str, ...] = ("reports/P5/kit_scenarios_final.json",)
+    features: Tuple[str, ...] = ()
 
 
 KIT: Dict[str, KitModule] = {}

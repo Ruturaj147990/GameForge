@@ -112,7 +112,12 @@ def test_run_packaged_with_map_path(tmp_path: Path):
         res = run_packaged(fake_exe, scenario, out_dir=out_dir, map_path="/Game/Maps/Level_1")
 
     assert res.passed is True
-    assert any("/Game/Maps/Level_1?game=" in arg for arg in captured_argv)
+    assert any("/Game/Maps/Level_1" in arg for arg in captured_argv)
+    assert not any("?game=" in arg for arg in captured_argv), "No ?game= override allowed in packaged argv"
+    assert Path(captured_argv[0]) == fake_exe.resolve()
+    assert any(arg.startswith("-GFScenario=") for arg in captured_argv)
+    assert any(arg.startswith("-GFScenarioOut=") for arg in captured_argv)
+    assert any(arg.startswith("-GFEventsOut=") for arg in captured_argv)
 
 
 def test_scenario_handler_resolves_and_forwards_map(tmp_path: Path):
@@ -156,3 +161,129 @@ def test_scenario_handler_resolves_and_forwards_map(tmp_path: Path):
 
     assert outcome.ok is True
     assert captured_kwargs.get("map_path") == "/Game/Maps/Level_1"
+
+
+def test_run_editor_game_argv_distinct_and_no_game_override(tmp_path: Path):
+    from src.gameforge_ide.qa.runner import run_editor_game
+    uproject = tmp_path / "MyEditorGame" / "MyEditorGame.uproject"
+    uproject.parent.mkdir(parents=True)
+    uproject.touch()
+
+    scenario = Scenario(
+        scenario_id="editor_argv_test",
+        steps=[WaitStep(wait_s=WaitArgs(seconds=1.0))],
+    )
+    out_dir = tmp_path / "out_editor"
+
+    captured_argv = []
+
+    def fake_spawn(argv, **kwargs):
+        captured_argv.extend(argv)
+        class FakeProc:
+            returncode = 0
+            def wait(self, timeout=None):
+                result_path = out_dir / "editor_argv_test_result.json"
+                result_path.write_text(json.dumps({
+                    "schema": "scenario_result/1",
+                    "scenario_id": "editor_argv_test",
+                    "passed": True,
+                    "duration_s": 1.0,
+                    "steps": [],
+                    "legs": [],
+                    "expect": [],
+                    "failures": [],
+                }), encoding="utf-8")
+                return 0
+        return FakeProc()
+
+    fake_editor = tmp_path / "UnrealEditor.exe"
+    fake_editor.touch()
+
+    with patch("src.gameforge_ide.qa.runner.UnrealToolchain") as mock_tc_cls:
+        mock_tc = MagicMock()
+        mock_tc.engine_root = tmp_path
+        mock_tc.editor_cmd = fake_editor
+        mock_tc_cls.return_value = mock_tc
+
+        with patch("src.gameforge_ide.qa.runner.jobs.spawn", side_effect=fake_spawn):
+            res = run_editor_game(
+                uproject,
+                scenario,
+                out_dir=out_dir,
+                map_path="/Game/Maps/Level_1?game=/Script/GameForgeRuntime.GameForgeGameMode",
+            )
+
+    assert res.passed is True
+    # Confirm no ?game= option remains
+    assert not any("?game=" in arg for arg in captured_argv), "No ?game= override allowed in editor argv"
+    # Confirm editor argv structure: [editor_exe, uproject, clean_map, -game, ...]
+    assert Path(captured_argv[1]) == uproject.resolve()
+    assert captured_argv[2] == "/Game/Maps/Level_1"
+    assert "-game" in captured_argv
+    assert any(arg.startswith("-GFScenario=") for arg in captured_argv)
+    assert any(arg.startswith("-GFScenarioOut=") for arg in captured_argv)
+    assert any(arg.startswith("-GFEventsOut=") for arg in captured_argv)
+
+
+def test_scenario_handler_fails_on_mandatory_scenario_gap(tmp_path: Path):
+    from src.gameforge_ide.qa.generate import ScenarioGap
+
+    pdir = tmp_path / "GapGame"
+    pdir.mkdir(parents=True)
+    fake_exe = pdir / "Packaged" / "Windows" / "GapGame.exe"
+    fake_exe.parent.mkdir(parents=True)
+    fake_exe.touch()
+
+    ctx = MagicMock()
+    ctx.project_dir = pdir
+    ctx.workspace_dir = tmp_path
+    ctx.step = StepSpec(step_id="scenarios", kind=StepKind.SCENARIO, title="Scenarios", inputs={"configuration": "Development"})
+    ctx.shared = {}
+    ctx.cancel = MagicMock()
+    ctx.cancel.is_set.return_value = False
+
+    fake_gds = MagicMock()
+    ref = MagicMock()
+    ref.scenario_id = "test_gap_scenario"
+    ref.must_pass = True
+    fake_gds.acceptance.scenarios = [ref]
+
+    mock_gap = ScenarioGap(scenario_id="test_gap_scenario", reason="Missing target actor in manifest")
+
+    with patch("src.gameforge_ide.forge.handlers.scenario.generate", return_value=([], [mock_gap])):
+        ctx.step.inputs["gds"] = fake_gds
+        outcome = scenario_handler(ctx)
+
+    assert outcome.ok is False
+    assert any("test_gap_scenario" in err for err in outcome.errors)
+    assert any("scenario gaps" in err.lower() for err in outcome.errors)
+
+
+def test_scenario_gen_handler_preserves_gaps(tmp_path: Path):
+    from src.gameforge_ide.forge.handlers.scenario import scenario_gen_handler
+    from src.gameforge_ide.qa.generate import ScenarioGap
+
+    pdir = tmp_path / "GenGame"
+    pdir.mkdir(parents=True)
+
+    ctx = MagicMock()
+    ctx.project_dir = pdir
+    ctx.workspace_dir = tmp_path
+    ctx.step = StepSpec(step_id="scenario_gen", kind=StepKind.SCENARIO, title="Scenario Gen", inputs={})
+    ctx.shared = {}
+    ctx.cancel = MagicMock()
+    ctx.cancel.is_set.return_value = False
+
+    fake_gds = MagicMock()
+    mock_gap = ScenarioGap(scenario_id="gap_sc", reason="No quest giver found")
+
+    with patch("src.gameforge_ide.forge.handlers.scenario.generate", return_value=([], [mock_gap])):
+        with patch("src.gameforge_ide.qa.game_spec_tests.generate_acceptance_tests", return_value=[]):
+            ctx.step.inputs["gds"] = fake_gds
+            outcome = scenario_gen_handler(ctx)
+
+    assert outcome.ok is True
+    assert "gaps" in outcome.data
+    assert len(outcome.data["gaps"]) == 1
+    assert outcome.data["gaps"][0]["scenario_id"] == "gap_sc"
+    assert outcome.data["gaps"][0]["reason"] == "No quest giver found"

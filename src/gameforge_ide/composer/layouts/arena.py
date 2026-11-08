@@ -8,12 +8,12 @@ from __future__ import annotations
 import math
 import random
 from typing import Any, List, Tuple
-from ..model import LevelPlan, OpCall, PlacedActor
+from ..model import map_package_path, LevelPlan, OpCall, PlacedActor
 
 
 def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     level_id = getattr(level, "level_id", "level_1")
-    map_path = f"/Game/Maps/{level_id.capitalize()}"
+    map_path = map_package_path(level_id)
 
     size_m = getattr(level, "size_m", (60.0, 60.0))
     if hasattr(size_m, "x") and hasattr(size_m, "y"):

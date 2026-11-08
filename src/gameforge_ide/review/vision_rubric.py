@@ -104,17 +104,6 @@ def evaluate_vision_rubric(
     image_path = Path(image_path)
 
     if not image_path.is_file() or image_path.stat().st_size == 0:
-        if advisory_only and not image_path.name.endswith(".png"):
-            # Synthetic / unit-test fallback when advisory only
-            return VisionRubricScore(
-                readability=0.85,
-                not_placeholder=0.85,
-                lighting=0.85,
-                composition=0.85,
-                hud_legible=0.85,
-                style_consistency=0.85,
-                notes=[f"Advisory evaluation for {style} style (no physical screenshot available)."],
-            )
         return VisionRubricScore(
             readability=0.0,
             not_placeholder=0.0,
@@ -198,17 +187,26 @@ def evaluate_vision_rubric(
             notes=[f"Failed to inspect image file: {exc}"],
         )
 
+    # Genuine image metric scoring from analyzed pixel data
+    lum_score = max(0.2, min(1.0, 1.0 - abs(mean_lum - 120.0) / 120.0))
+    contrast_score = max(0.2, min(1.0, total_var / 1500.0))
+    readability = round(min(0.95, 0.4 + 0.3 * contrast_score + 0.3 * lum_score), 3)
+    lighting = round(min(0.95, 0.3 + 0.5 * lum_score + 0.2 * contrast_score), 3)
+    composition = round(min(0.95, 0.5 + 0.3 * contrast_score), 3)
+    style_consistency = round(min(0.95, 0.6 + 0.3 * lum_score), 3)
+    hud_legible = round(min(0.95, 0.4 + 0.5 * contrast_score), 3)
+    not_placeholder = round(max(0.2, min(0.95, 1.0 - magenta_ratio * 10.0)), 3)
+
     score = VisionRubricScore(
-        readability=0.88,
-        not_placeholder=0.92,
-        lighting=0.86,
-        composition=0.84,
-        hud_legible=0.85,
-        style_consistency=0.89,
+        readability=readability,
+        not_placeholder=not_placeholder,
+        lighting=lighting,
+        composition=composition,
+        hud_legible=hud_legible,
+        style_consistency=style_consistency,
         notes=[
             f"Image evaluated for {style} style under {theme} theme.",
-            "Character silhouette clearly distinguishable from background.",
-            "Lighting hierarchy properly established with clear key/fill/sky contribution.",
+            f"Computed metrics: mean_lum={mean_lum:.1f}, total_var={total_var:.1f}, magenta_ratio={magenta_ratio:.4f}.",
         ],
     )
     if advisory_only:

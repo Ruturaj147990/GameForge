@@ -34,6 +34,9 @@ public:
 
 	int32 Row = 0;
 	int32 Col = 0;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMeshComponent> PieceVisual = nullptr;
 };
 
 // ── Grid Board Actor ──────────────────────────────────────────────────────────
@@ -89,6 +92,27 @@ private:
 
 // ── Card Match Component & Table ──────────────────────────────────────────────
 
+USTRUCT(BlueprintType)
+struct GAMEFORGERUNTIME_API FGameForgeCard
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	int32 CardId = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FString Name;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	int32 Cost = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	int32 Attack = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	int32 Health = 2;
+};
+
 UCLASS(Blueprintable, ClassGroup = (GameForge), meta = (BlueprintSpawnableComponent))
 class GAMEFORGERUNTIME_API UGameForgeCardMatchComponent : public UActorComponent
 {
@@ -105,6 +129,34 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	int32 EnergyPerTurn = 3;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	int32 CurrentEnergy = 3;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	int32 PlayerHealth = 20;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	int32 OpponentHealth = 20;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	int32 TurnCount = 1;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TArray<FGameForgeCard> Deck;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TArray<FGameForgeCard> Hand;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TArray<FGameForgeCard> PlayerLanes;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
+	TArray<FGameForgeCard> OpponentLanes;
+
+	virtual void BeginPlay() override;
+	void InitializeMatch(int32 Seed = 2026);
+	void DrawCards(int32 Count);
 
 	void PlayCard(int32 CardIndex, int32 TargetLane);
 	void EndTurn();

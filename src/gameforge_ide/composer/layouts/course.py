@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import random
 from typing import Any, List, Optional, Tuple
-from ..model import LevelPlan, OpCall, PlacedActor
+from ..model import map_package_path, LevelPlan, OpCall, PlacedActor
 
 
 def validate_jump_reachability(
@@ -46,7 +46,7 @@ def validate_jump_reachability(
 
 def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     level_id = getattr(level, "level_id", "level_1")
-    map_path = f"/Game/Maps/{level_id.capitalize()}"
+    map_path = map_package_path(level_id)
 
     # Extract physics properties from player or defaults
     move_speed = 600.0

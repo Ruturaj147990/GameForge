@@ -436,7 +436,7 @@ class UnrealToolchain:
             if not any(p.get("Name") == t_p for p in plugin_list):
                 plugin_list.append({"Name": t_p, "Enabled": False})
 
-        input_ini = ENHANCED_INPUT_INI if (module_deps and "EnhancedInput" in module_deps) else _LEGACY_INPUT_INI
+        input_ini = ENHANCED_INPUT_INI if "EnhancedInput" in deps else _LEGACY_INPUT_INI
 
         files: Dict[str, str] = {
             f"{name}.uproject": json.dumps({

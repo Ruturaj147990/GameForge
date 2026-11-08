@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtWidgets import QApplication
 
 
 class _AgentWorker(QObject):

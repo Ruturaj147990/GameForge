@@ -205,6 +205,12 @@ class TerminalPanel(QWidget):
     # ── Command dispatch ─────────────────────────────────────────────────────
 
     @Slot()
+    def run_command(self, cmd: Optional[str] = None) -> None:
+        """Adapter for MainWindow and automation to run commands directly."""
+        if cmd is not None:
+            self._cmd_input.setText(cmd)
+        self._on_send_command()
+
     def _on_send_command(self) -> None:
         cmd = self._cmd_input.text()
         if not cmd.strip():

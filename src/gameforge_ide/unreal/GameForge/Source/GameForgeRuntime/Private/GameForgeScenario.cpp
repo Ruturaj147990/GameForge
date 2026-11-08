@@ -679,11 +679,7 @@ void UGameForgeScenarioSubsystem::FinishScenario()
 				}
 				else if (EvName.Equals(TEXT("game.won"), ESearchCase::IgnoreCase))
 				{
-					Observed = Bus->Count(GFEvent::EnemyKilled, EntityId);
-					if (Observed == 0)
-					{
-						Observed = Bus->Count(GFEvent::EnemyAttacked, EntityId);
-					}
+					Observed = Bus->Count(GFEvent::GameWon, EntityId);
 					if (Observed == 0)
 					{
 						Observed = Bus->Count(GFEvent::BoardWin, EntityId);
@@ -695,10 +691,6 @@ void UGameForgeScenarioSubsystem::FinishScenario()
 					if (Observed == 0)
 					{
 						Observed = Bus->Count(FName(TEXT("board.win")), EntityId);
-					}
-					if (Observed == 0)
-					{
-						Observed = Bus->Count(GFEvent::GameStarted, EntityId);
 					}
 				}
 			}

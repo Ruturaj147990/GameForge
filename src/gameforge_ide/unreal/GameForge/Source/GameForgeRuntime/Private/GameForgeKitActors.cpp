@@ -17,6 +17,15 @@ AGameForgeHazard::AGameForgeHazard()
 	RootComponent = Trigger;
 	Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
 	Trigger->SetBoxExtent(FVector(100.f, 100.f, 50.f));
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(1.0f, 1.0f, 0.2f));
+	}
 }
 
 void AGameForgeHazard::BeginPlay()
@@ -91,6 +100,15 @@ AGameForgeCheckpoint::AGameForgeCheckpoint()
 	RootComponent = Trigger;
 	Trigger->SetSphereRadius(150.f);
 	Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(1.0f, 1.0f, 0.1f));
+	}
 }
 
 void AGameForgeCheckpoint::BeginPlay()
@@ -128,6 +146,15 @@ AGameForgeGoal::AGameForgeGoal()
 	RootComponent = Trigger;
 	Trigger->SetSphereRadius(150.f);
 	Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(0.8f, 0.8f, 1.2f));
+	}
 }
 
 void AGameForgeGoal::BeginPlay()
@@ -177,6 +204,15 @@ AGameForgeLandmark::AGameForgeLandmark()
 	RootComponent = Trigger;
 	Trigger->SetSphereRadius(DiscoverRadius);
 	Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(0.5f, 0.5f, 3.0f));
+	}
 }
 
 void AGameForgeLandmark::BeginPlay()
@@ -214,6 +250,12 @@ AGameForgeMovingPlatform::AGameForgeMovingPlatform()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	RootComponent = Mesh;
 	Mesh->SetMobility(EComponentMobility::Movable);
+	Mesh->SetCollisionProfileName(TEXT("BlockAll"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(2.0f, 2.0f, 0.25f));
+	}
 }
 
 void AGameForgeMovingPlatform::BeginPlay()
@@ -265,6 +307,12 @@ AGameForgeDoor::AGameForgeDoor()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	RootComponent = Mesh;
 	Mesh->SetMobility(EComponentMobility::Movable);
+	Mesh->SetCollisionProfileName(TEXT("BlockAll"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(0.2f, 1.2f, 2.4f));
+	}
 }
 
 void AGameForgeDoor::BeginPlay()
@@ -327,6 +375,11 @@ AGameForgeSwitch::AGameForgeSwitch()
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(RootComponent);
 	Mesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(0.3f, 0.3f, 0.8f));
+	}
 }
 
 void AGameForgeSwitch::BeginPlay()
@@ -640,6 +693,15 @@ AGameForgeBombSite::AGameForgeBombSite()
 	RootComponent = Trigger;
 	Trigger->SetSphereRadius(300.f);
 	Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+
+	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+	if (UStaticMesh* SM = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+	{
+		Mesh->SetStaticMesh(SM);
+		Mesh->SetRelativeScale3D(FVector(2.0f, 2.0f, 0.05f));
+	}
 }
 
 bool AGameForgeBombSite::CanInteract(AController* InController) const

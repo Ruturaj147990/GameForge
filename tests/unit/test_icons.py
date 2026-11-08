@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QImage
+from PySide6.QtWidgets import QApplication
 
 from src.gameforge_ide.desktop.icons import (
     ICON_DIR,
@@ -38,9 +39,9 @@ EXPECTED_ICONS = [
 
 @pytest.fixture(scope="module")
 def qapp():
-    app = QGuiApplication.instance()
+    app = QApplication.instance() or QGuiApplication.instance()
     if app is None:
-        app = QGuiApplication([])
+        app = QApplication([])
     return app
 
 
@@ -96,3 +97,20 @@ def test_cache_clear(qapp):
     clear_icon_cache()
     info_after = _pixmap.cache_info()
     assert info_after.currsize == 0
+
+def test_missing_icon_glyph_fallback(qapp):
+    """Verify FileNotFoundError invokes _fallback_icon and renders a non-empty QIcon (Section 5C.7)."""
+    clear_icon_cache()
+    ic_missing = icon("nonexistent_test_action_xyz", role="primary", size=24)
+    assert isinstance(ic_missing, QIcon)
+    assert not ic_missing.isNull()
+    pm = ic_missing.pixmap(QSize(24, 24))
+    assert not pm.isNull()
+    img = pm.toImage().convertToFormat(QImage.Format_ARGB32)
+    non_transparent = 0
+    for y in range(img.height()):
+        for x in range(img.width()):
+            if QColor(img.pixel(x, y)).alpha() > 0:
+                non_transparent += 1
+    assert non_transparent > 0, "Fallback glyph rendered 0 visible pixels"
+

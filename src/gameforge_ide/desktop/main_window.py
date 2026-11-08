@@ -157,6 +157,7 @@ class MainWindow(QMainWindow):
                 self.restoreState(saved_layout)
         else:
             self._build_studio_shell()
+            self._default_layout = self.saveState()
             saved_geometry = self._settings.value("window/geometry")
             if saved_geometry:
                 self.restoreGeometry(saved_geometry)
@@ -1318,6 +1319,14 @@ class MainWindow(QMainWindow):
         # Shortcuts
         self._register_studio_shortcuts()
 
+    @property
+    def _design_view(self) -> Optional[DesignView]:
+        if hasattr(self, "_view_host"):
+            widget = self._view_host.get_view_widget("design")
+            if widget is not None:
+                return widget
+        return getattr(self, "_design_view_instance", None)
+
     def _get_or_create_code_view(self) -> CodeView:
         if not hasattr(self, "_code_view") or self._code_view is None:
             self._code_view = CodeView(self._workspace, self._tools, parent=self)
@@ -1405,6 +1414,7 @@ class MainWindow(QMainWindow):
 
         def create_design_view() -> DesignView:
             view = DesignView(parent=self)
+            self._design_view_instance = view
             view.buildRequested.connect(self._on_games_build_requested)
             if hasattr(view, "projectDirectoryChangeRequested"):
                 view.projectDirectoryChangeRequested.connect(
@@ -1739,9 +1749,19 @@ class MainWindow(QMainWindow):
                 p_dir = Path(p_dir_str).resolve()
             else:
                 p_dir = self._resolve_project_dir(p_name)
+            if p_dir:
+                p_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    from ..design import store as design_store
+                    design_store.save(p_dir, gds)
+                except Exception as exc:
+                    print(f"[GameForge Studio] Failed to persist draft to {p_dir}: {exc}", flush=True)
             self.refresh_projects(select_project=p_name)
             self.set_active_project(p_name, p_dir)
-        self._switch_studio_view("home")
+        self._switch_studio_view("design")
+        dv = self._design_view
+        if dv and hasattr(dv, "open_draft"):
+            dv.open_draft(gds, questions=questions, project_dir=p_dir)
 
     def _on_new_project_requested(self, project_name: str, project_dir: Path) -> None:
         pdir = Path(project_dir).resolve()

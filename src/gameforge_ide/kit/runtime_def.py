@@ -83,10 +83,31 @@ def build_runtime_def(gds: GameDesignSpec, seed: int = 2026) -> Dict[str, Any]:
     ]
 
     # Stats
+    player_max_health = float(player_data.get("max_health", 100.0))
     stats_data: Dict[str, Any] = {
-        "player.health": {"initial": 100.0, "min": 0.0, "max": 100.0},
+        "player.health": {"initial": player_max_health, "min": 0.0, "max": player_max_health},
         "game.score": {"initial": 0.0},
     }
+
+    from ..design.gds import EntityKind
+    for ent in gds.entities:
+        kind_val = ent.kind.value if hasattr(ent.kind, "value") else str(ent.kind).lower()
+        if kind_val in ("enemy", "ranged_enemy", "guard"):
+            count = getattr(ent, "count", None)
+            if count is None and hasattr(ent, "props") and isinstance(ent.props, dict):
+                count = ent.props.get("count", 1)
+            cnt = float(count if count is not None else 1)
+            placed_count = 0
+            if hasattr(gds, "scene") and gds.scene and getattr(gds.scene, "levels", None):
+                for lvl in gds.scene.levels:
+                    for pl in getattr(lvl, "placements", []):
+                        if pl.entity_id == ent.entity_id:
+                            placed_count += 1
+            effective_count = float(placed_count if placed_count > 0 else cnt)
+            stats_data[f"entity.{ent.entity_id}.remaining"] = {
+                "initial": effective_count,
+                "min": 0.0,
+            }
 
     # Entities
     entities_data: Dict[str, Any] = {}

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 from PySide6.QtCore import QByteArray, QSize, Qt
-from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 from .styles import tokens
@@ -23,6 +23,36 @@ ROLE_COLOURS: Dict[str, str] = {
     "warning": tokens.ACCENT_WARNING,
     "error": tokens.ACCENT_ERROR,
 }
+
+
+FALLBACK_GLYPHS: Dict[str, str] = {
+    "play": "▶",
+    "pause": "Ⅱ",
+    "settings": "⚙",
+    "home": "⌂",
+    "build": "▣",
+    "chat": "◌",
+    "assets": "◆",
+    "games": "🎮",
+    "code": "</>",
+    "evidence": "📊",
+}
+
+
+def _fallback_icon(name: str, colour: str, size: int, dpr: float) -> QIcon:
+    """Render a lightweight QPainter vector glyph when an SVG asset is missing."""
+    safe_dpr = max(1.0, float(dpr))
+    px = max(1, int(size * safe_dpr))
+    pixmap = QPixmap(px, px)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setPen(QColor(colour))
+    painter.setFont(QFont("Segoe UI Symbol", max(8, int(px * 0.65))))
+    painter.drawText(pixmap.rect(), Qt.AlignCenter, FALLBACK_GLYPHS.get(name, "•"))
+    painter.end()
+    pixmap.setDevicePixelRatio(safe_dpr)
+    return QIcon(pixmap)
 
 
 @lru_cache(maxsize=256)
@@ -69,5 +99,5 @@ def icon(name: str, role: str = "secondary", size: int = 20) -> QIcon:
         ic.addPixmap(_pixmap(name, accent_color, safe_size, safe_dpr), QIcon.Normal, QIcon.On)
         ic.addPixmap(_pixmap(name, disabled_color, safe_size, safe_dpr), QIcon.Disabled, QIcon.Off)
     except FileNotFoundError:
-        return ic
+        return _fallback_icon(name, normal_color, safe_size, safe_dpr)
     return ic

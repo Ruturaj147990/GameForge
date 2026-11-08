@@ -12,6 +12,7 @@ from src.gameforge_ide.pipeline.spec_from_prompt import _pascal
 from .events_catalog import DEFAULT_MODULE, MODULE_EVENTS
 from .draft import DesignDraft, DraftEntity, DraftLose, DraftWin
 from .gds import (
+    ArchitectureSpec,
     Acceptance,
     AddStat,
     AllOf,
@@ -711,6 +712,13 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
     progression = Progression(difficulty=draft.difficulty)
 
     try:
+        arch_spec = None
+        if getattr(draft, "architecture", None):
+            try:
+                arch_spec = ArchitectureSpec.model_validate(draft.architecture)
+            except Exception:
+                pass
+
         spec = GameDesignSpec(
             meta=meta,
             overview=overview,
@@ -726,6 +734,7 @@ def expand_draft(draft: DesignDraft) -> GameDesignSpec:
             audio=audio,
             tech=tech,
             acceptance=acceptance,
+            architecture=arch_spec,
         )
         return spec
     except Exception as exc:

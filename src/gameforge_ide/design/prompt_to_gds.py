@@ -143,6 +143,7 @@ def _build_scratch_gds(prompt: str, decision: StrategyDecision) -> GameDesignSpe
         win=win_list,
         lose=lose_list,
         custom_rules=custom_rules[:3],
+        architecture=arch,
     )
     gds = expand_draft(draft)
     gds.meta.generator = "fallback:scratch"
@@ -171,53 +172,41 @@ def prompt_to_gds(
             path="none",
         )
 
-    # 1. Preset / Fast Template path: keyword match (only for direct preset requests without custom narrative/mechanics)
-    text = " " + prompt.lower().replace("’", "'").replace("'", "'") + " "
-    words = set(re.findall(r"\b\w+\b", text))
-    preset_words = {w for kws in PRESET_KEYWORDS.values() for kw in kws for w in kw.split()}
-    stop_words = {
-        "a", "an", "the", "in", "on", "at", "to", "for", "with", "and", "or", "of", "is", "are",
-        "you", "where", "game", "make", "create", "build", "called", "named", "titled", "against",
-        "friend", "ai", "easy", "medium", "hard", "vs", "versus", "i", "want", "please",
-    }
-    override_words = {
-        "coin", "coins", "pickups", "pickup", "collectibles", "collectible", "gems", "gem",
-        "points", "point", "stars", "star", "ring", "rings", "target", "targets", "waves",
-        "wave", "health", "hp", "seed", "size", "board", "grid", "rows", "columns",
-    }
-    m_title = re.search(r'\b(?:called|named|titled)\s+["\']?([^"\',.!?\n]+)["\']?', prompt, re.I)
-    title_words = set(re.findall(r"\b\w+\b", m_title.group(1).lower())) if m_title else set()
+    # 0. Explicit preset selector: preset:<id>
+    explicit_preset_id: Optional[str] = None
+    match = re.match(
+        r"^\s*preset\s*:\s*([a-z0-9_]+)(?:\s+.*)?$",
+        prompt,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        candidate = match.group(1).lower()
+        alias_map = {
+            "3d_platformer": "platformer",
+            "snakes_and_ladders": "snake_and_ladders",
+            "grid_board_game": "tic_tac_toe",
+            "card_game": "card_battler",
+            "arena": "arena_combat",
+        }
+        candidate = alias_map.get(candidate, candidate)
+        if candidate in PRESETS:
+            explicit_preset_id = candidate
 
-    custom_words = {
-        w
-        for w in (words - preset_words - stop_words - override_words - title_words)
-        if not w.isdigit()
-    }
-    has_custom_detail = bool(words.intersection(CUSTOM_DETAIL_KEYWORDS)) or len(custom_words) >= 1
+    if explicit_preset_id is not None:
+        overrides = extract_preset_overrides(explicit_preset_id, prompt)
+        title = overrides.pop("title", None)
+        try:
+            gds = PRESETS[explicit_preset_id](title=title, **overrides)
+            return PromptToGdsResult(status="OK", gds=gds, path="preset")
+        except Exception as exc:
+            logger.exception("Explicit preset %s failed", explicit_preset_id)
+            return PromptToGdsResult(
+                status="ERROR",
+                path="none",
+                errors=[f"Explicit preset {explicit_preset_id!r} failed: {exc}"],
+            )
 
-    best_preset: Optional[str] = None
-    best_kw: str = ""
-    if not (allow_model and complete_json is not None and has_custom_detail):
-        for preset_id, kws in PRESET_KEYWORDS.items():
-            for kw in kws:
-                if kw in text and len(kw) > len(best_kw):
-                    best_preset = preset_id
-                    best_kw = kw
-
-        if best_preset is not None and best_preset in PRESETS:
-            overrides = extract_preset_overrides(best_preset, prompt)
-            title = overrides.pop("title", None)
-            try:
-                gds = PRESETS[best_preset](title=title, **overrides)
-                return PromptToGdsResult(
-                    status="OK",
-                    gds=gds,
-                    path="preset",
-                )
-            except Exception as exc:
-                logger.warning("Preset creation failed for %s: %s", best_preset, exc)
-
-    # 2. Strategy evaluation (uses model evaluation when callback is available)
+    # 1. Strategy evaluation (uses model evaluation when callback is available)
     if allow_model and complete_json is not None:
         decision = default_registry.evaluate_strategy_with_model(
             prompt, complete_json=complete_json, model=model
@@ -272,6 +261,20 @@ def prompt_to_gds(
                             logger.info("Scratch draft repair failed, using deterministic scratch architecture: %s", exc2)
 
         # Verified scratch architecture synthesis fallback
+        deterministic_supported = any(
+            k in decision.profile.keywords_matched
+            for k in ("sudoku", "chess", "tetris", "snake")
+        ) or decision.profile.title_hint in ("Sudoku", "Chess", "Tetris", "Snake")
+        if not deterministic_supported and not (allow_model and complete_json is not None):
+            preset_list = ", ".join(PRESET_TITLES)
+            return PromptToGdsResult(
+                status="NEEDS_INPUT",
+                questions=[f"Which kind of game is this closest to: {preset_list}?"],
+                path="none",
+                model=model,
+                errors=["No model available to synthesize custom scratch architecture."],
+            )
+
         gds = _build_scratch_gds(prompt, decision)
         fallback_errors = []
         if allow_model and complete_json is not None:

@@ -43,6 +43,21 @@ class LevelPlan(BaseModel):
     lighting: Literal["day", "dusk", "night", "indoor"] = "day"
     nav_checks: List[Tuple[str, str]] = Field(default_factory=list)        # (from actor_id | "player_start", to actor_id)
 
+def map_package_path(level_id: str) -> str:
+    """Canonical Unreal map package path preserving exact case."""
+    if not level_id:
+        return "/Game/Maps/Level_1"
+    clean = str(level_id).strip()
+    if clean.startswith("/Game/Maps/"):
+        return clean
+    if clean.startswith("/Game/"):
+        return f"/Game/Maps/{clean.rsplit('/', 1)[-1]}"
+    clean = clean.lstrip("/")
+    if clean.lower() == "level_1":
+        return "/Game/Maps/Level_1"
+    return f"/Game/Maps/{clean}"
+
+
 
 class CodegenTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -50,6 +65,8 @@ class CodegenTask(BaseModel):
     handler_name: str                        # "Custom0Rule"
     description: str
     rule_id: str
+    on_event_body: str = ""
+    tick_body: str = ""
 
 
 class Composition(BaseModel):

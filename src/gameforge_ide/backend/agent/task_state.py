@@ -357,15 +357,13 @@ class TaskState(BaseModel):
                             pre_h = out.get("original_sha256") or th.get("pre_state_hash")
                             post_h = out.get("new_sha256") or th.get("post_state_hash")
                             # If hashes are available, require genuine state comparison: pre_hash != post_hash
-                            if pre_h and post_h:
-                                if pre_h != post_h:
-                                    if target_path.exists():
-                                        cur_hash = hashlib.sha256(target_path.read_bytes()).hexdigest()
-                                        if cur_hash == post_h:
-                                            matched = True
-                                            matched_reason = f"Verified content hash change ({pre_h[:8]} -> {post_h[:8]}) matches disk"
-                                            break
-                            elif th.get("status") in ("SUCCESS", "APPLIED") or th.get("tool_name") in ("write_file", "apply_diff", "propose_edit"):
+                            if pre_h and post_h and pre_h != post_h and target_path.is_file():
+                                cur_hash = hashlib.sha256(target_path.read_bytes()).hexdigest()
+                                if cur_hash == post_h:
+                                    matched = True
+                                    matched_reason = f"Verified content hash change ({pre_h[:8]} -> {post_h[:8]}) matches disk"
+                                    break
+                            elif str(th.get("status", "")).upper() in ("SUCCESS", "APPLIED") and th.get("tool_name") in ("write_file", "apply_diff"):
                                 matched = True
                                 matched_reason = f"Verified edit applied via tool '{th.get('tool_name')}'"
                                 break

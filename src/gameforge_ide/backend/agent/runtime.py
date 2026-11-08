@@ -1420,15 +1420,23 @@ class AgentRuntime:
             if target.exists():
                 try:
                     from ...storage.atomic import safe_read_json
-                    data = safe_read_json(target, max_retries=3)
-                    if not data:
-                        data = json.loads(target.read_text(encoding="utf-8"))
+                    data, recovered = safe_read_json(target, max_retries=3)
+                    if recovered:
+                        logger.warning("Recovered JSON from backup: %s", target)
+                    if not isinstance(data, dict):
+                        logger.warning("Active task candidate %s is not a dict (%s), skipping", target, type(data))
+                        continue
                     loaded = TaskState.model_validate(data)
                     self._active_tasks[session_id] = loaded
                     return loaded
-                except Exception:
+                except Exception as exc:
+                    logger.warning("Failed restoring active task from %s: %s", target, exc)
                     continue
         return None
+
+    def _load_active_task(self, session_id: str):
+        """Loads the active task state associated with a session, falling back to disk (5B.1)."""
+        return self.get_task_state(session_id)
 
     def _record_prompt_and_get_history(
         self, session_id: str, user_prompt: str, history_limit: int = 8
@@ -2745,7 +2753,7 @@ class AgentRuntime:
                         ]
                         diag_summary = "\n\nStructured Diagnostics:\n" + "\n".join(diag_lines)
 
-                    attempt_num = self.repair_engine.attempt_counts.get(root_cause.cause_id, 1)
+                    attempt_num = self.repair_engine.attempt_counts.get(root_cause.signature, 0) + 1
                     continuation_nudge = (
                         f"[Tool Execution Error in `{tool_name}` (Repair Attempt {attempt_num}/5)]:\n{obs_json}{diag_summary}\n\n"
                         f"The tool invocation returned an error. Analyze the error and diagnostics above, reason through why it occurred, "

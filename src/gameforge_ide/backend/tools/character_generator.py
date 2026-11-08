@@ -288,15 +288,15 @@ class ProceduralSkinnedCharacterGenerator:
         # Pelvis / Hips (Cylinder)
         add_cylinder_part(16.0, 17.5, 92.0, 115.0, 0.0, 0.0, 10, 2, 0.5, 1.0, 0.25, 0.5)
 
-        # Left Arm: UpperArm, Forearm, Hand
-        add_cylinder_part(5.5, 4.8, 142.0, 142.0, -18.0, 0.0, 8, 3, 0.0, 0.25, 0.0, 0.25)  # Clavicle-Upperarm
-        add_cylinder_part(4.8, 4.0, 142.0, 142.0, -45.0, 0.0, 8, 3, 0.0, 0.25, 0.0, 0.25)  # Forearm
-        add_sphere_part(-75.0, 0.0, 142.0, 4.0, 6, 8, 0.25, 0.5, 0.0, 0.25)                 # Hand
+        # Left Arm: UpperArm, Forearm, Hand (A-pose span 88cm -> 142cm)
+        add_cylinder_part(5.5, 4.8, 115.0, 142.0, -18.0, 0.0, 8, 3, 0.0, 0.25, 0.0, 0.25)  # Upperarm
+        add_cylinder_part(4.8, 4.0, 88.0, 115.0, -45.0, 0.0, 8, 3, 0.0, 0.25, 0.0, 0.25)   # Forearm
+        add_sphere_part(-70.0, 0.0, 88.0, 4.0, 6, 8, 0.25, 0.5, 0.0, 0.25)                  # Hand
 
-        # Right Arm: UpperArm, Forearm, Hand
-        add_cylinder_part(5.5, 4.8, 142.0, 142.0, 18.0, 0.0, 8, 3, 0.5, 0.75, 0.0, 0.25)
-        add_cylinder_part(4.8, 4.0, 142.0, 142.0, 45.0, 0.0, 8, 3, 0.5, 0.75, 0.0, 0.25)
-        add_sphere_part(75.0, 0.0, 142.0, 4.0, 6, 8, 0.75, 1.0, 0.0, 0.25)
+        # Right Arm: UpperArm, Forearm, Hand (A-pose span 88cm -> 142cm)
+        add_cylinder_part(5.5, 4.8, 115.0, 142.0, 18.0, 0.0, 8, 3, 0.5, 0.75, 0.0, 0.25)   # Upperarm
+        add_cylinder_part(4.8, 4.0, 88.0, 115.0, 45.0, 0.0, 8, 3, 0.5, 0.75, 0.0, 0.25)    # Forearm
+        add_sphere_part(70.0, 0.0, 88.0, 4.0, 6, 8, 0.75, 1.0, 0.0, 0.25)                   # Hand
 
         # Left Leg: Thigh, Calf, Foot
         add_cylinder_part(8.5, 6.5, 48.0, 92.0, -12.0, 0.0, 10, 4, 0.0, 0.25, 0.5, 0.75)

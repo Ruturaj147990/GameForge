@@ -165,3 +165,65 @@ def test_api_unreal_context_sync(client, monkeypatch):
             restore_path = context_path.with_suffix(".restore.tmp")
             restore_path.write_bytes(previous_bytes)
             restore_path.replace(context_path)
+
+
+
+def test_api_mutating_routes_require_session_auth(client, monkeypatch):
+    """Verify session bearer token authentication for mutating routes (5B.8)."""
+    api_token = "secret-session-token-1234"
+    monkeypatch.setenv("GAMEFORGE_API_TOKEN", api_token)
+
+    # 1. Unauthenticated mutating request must be rejected with 401
+    res_unauth = client.post("/api/sessions", json={"name": "Auth Probe"})
+    assert res_unauth.status_code == 401
+
+    # 2. Invalid bearer token must be rejected with 401
+    res_wrong = client.post(
+        "/api/sessions",
+        json={"name": "Auth Probe"},
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+    assert res_wrong.status_code == 401
+
+    # 3. Valid bearer token succeeds
+    res_ok = client.post(
+        "/api/sessions",
+        json={"name": "Auth Probe"},
+        headers={"Authorization": f"Bearer {api_token}"},
+    )
+    assert res_ok.status_code == 200
+    session_id = res_ok.json()["session_id"]
+    if session_id:
+        (backend_app.session_manager.storage_dir / f"{session_id}.json").unlink(missing_ok=True)
+
+
+def test_api_agent_websocket_security(client, monkeypatch):
+    import json
+    sess = backend_app.session_manager.create_session(name="WS Test")
+    sess_id = sess.session_id
+    api_token = "ws-secret-token"
+    monkeypatch.setenv("GAMEFORGE_API_TOKEN", api_token)
+    try:
+        # 1. Non-loopback Origin must be rejected
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/api/ws/agent/{sess_id}", headers={"Origin": "http://attacker.com", "Authorization": f"Bearer {api_token}"}) as ws:
+                pass
+
+        # 2. Query param token must not be accepted (token in URL rejected)
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/api/ws/agent/{sess_id}?token={api_token}", headers={"Origin": "http://localhost"}) as ws:
+                pass
+
+        # 3. Non-existent session must be rejected
+        with pytest.raises(Exception):
+            with client.websocket_connect(f"/api/ws/agent/nonexistent_session_id", headers={"Origin": "http://localhost", "Authorization": f"Bearer {api_token}"}) as ws:
+                pass
+
+        # 4. Valid loopback origin + valid Bearer header + valid session connects
+        with client.websocket_connect(f"/api/ws/agent/{sess_id}", headers={"Origin": "http://localhost", "Authorization": f"Bearer {api_token}"}) as ws:
+            # Send malformed json -> returns error
+            ws.send_text("not-json")
+            resp = json.loads(ws.receive_text())
+            assert resp["event_type"] == "error"
+    finally:
+        backend_app.session_manager.delete_session(sess_id)

@@ -126,6 +126,7 @@ def composition_to_run_spec(
                     "plan": level.model_dump(),
                     "genre": genre,
                     "project_name": comp.project_name,
+                    "gfdef": comp.gfdef,
                 },
             )
         )

@@ -10,6 +10,7 @@ from __future__ import annotations
 import configparser
 import functools
 import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -511,7 +512,7 @@ class ProjectIndex:
                         deps = a.get("dependencies", [])
                         conn.execute(
                             "INSERT OR REPLACE INTO assets (path, class, deps_json) VALUES (?, ?, ?)",
-                            (path, cls_name, str(deps)),
+                            (path, cls_name, json.dumps(deps, ensure_ascii=False, separators=(",", ":"))),
                         )
                     conn.execute(
                         "INSERT OR REPLACE INTO meta (key, value) VALUES ('assets_indexed_at', ?)",
