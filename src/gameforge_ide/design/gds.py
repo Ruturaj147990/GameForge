@@ -94,7 +94,7 @@ class Meta(_M):
     project_name: str = Field(pattern=PASCAL)
     title: str = Field(min_length=1, max_length=60)
     source_prompt: str = Field("", max_length=4000)
-    generator: str = Field("user", pattern=r"^(user|preset:[a-z_]+|model:[\w.:\-/]+|patch)$")
+    generator: str = Field("user", pattern=r"^(user|preset:[a-z_]+|model:[\w.:\-/]+|fallback:[a-z_]+|patch)$")
     created_at: str = Field(default_factory=_now)
     updated_at: str = Field(default_factory=_now)
     project_dir: Optional[str] = None

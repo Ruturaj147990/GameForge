@@ -275,6 +275,12 @@ class ToolGateway:
                         "command": {"type": "string"},
                         "subpath": {"type": "string", "default": "."},
                         "timeout_seconds": {"type": "integer", "default": 60},
+                        "shell": {
+                            "type": "string",
+                            "enum": ["powershell", "cmd", "bash", "direct"],
+                            "description": "Execution environment. Defaults to the host-native shell.",
+                        },
+                        "reason": {"type": "string", "description": "Why this command is needed."},
                     },
                     "required": ["command"],
                 },

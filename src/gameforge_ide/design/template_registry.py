@@ -90,6 +90,7 @@ class StrategyDecision:
     reasons: List[str]
     evaluations: List[CandidateEvaluation]
     suggested_architecture: Dict[str, Any] = field(default_factory=dict)
+    draft_preloaded: Optional[Dict[str, Any]] = None
 
 
 CANONICAL_TEMPLATES: List[TemplateDefinition] = [
@@ -640,6 +641,7 @@ class SemanticTemplateRegistry:
                 "CRITICAL ARCHITECTURAL CONSTRAINTS:\n"
                 "- NEVER adapt a 3D platformer or combat shooter for a discrete board game, logic puzzle, or Sudoku!\n"
                 "- For Sudoku: you MUST select strategy='scratch' (or 'puzzle_grid') so that it is built with dedicated 9x9 grid data structures, number pad, and solver without falling cubes, obstacles, or character combat.\n"
+                "- Architecture domain guidance: grid_board (tic-tac-toe, chess, checkers), card_battler, puzzle_logic, platformer.\n"
                 "- Output strictly valid JSON conforming to the schema."
             )
             schema = {
@@ -671,12 +673,27 @@ class SemanticTemplateRegistry:
                 raw = complete_json(system, prompt, schema)
                 if raw:
                     data = json.loads(raw)
-                    strat_str = data.get("strategy", "").lower()
+                    strat_str = data.get("strategy", "").lower() if isinstance(data, dict) else ""
+                    if not strat_str and isinstance(data, dict):
+                        det_decision = self.evaluate_strategy(prompt)
+                        det_decision.draft_preloaded = data
+                        return det_decision
                     if strat_str in ("adapt_template", "hybrid", "scratch"):
                         strategy = GenerationStrategy(strat_str)
                         tmpl_id = data.get("template_id")
                         tmpl = next((t for t in self.templates if t.id == tmpl_id), None)
                         profile = self.analyze_prompt(prompt)
+                        if strategy in (GenerationStrategy.ADAPT_TEMPLATE, GenerationStrategy.HYBRID):
+                            # A model may choose only a real registered template that
+                            # does not contradict explicit user requirements.
+                            if tmpl is None:
+                                raise ValueError(f"LLM selected unknown template_id: {tmpl_id!r}")
+                            if (tmpl.capabilities & profile.forbidden_capabilities) or (
+                                tmpl.forbidden_capabilities & profile.required_capabilities
+                            ):
+                                raise ValueError(
+                                    f"LLM selected incompatible template {tmpl.id!r} for the request."
+                                )
                         if data.get("genre"):
                             try:
                                 profile.detected_genre = Genre(data["genre"])

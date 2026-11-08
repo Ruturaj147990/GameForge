@@ -13,7 +13,9 @@ Authoritative implementation conforming to DEF-304:
 from __future__ import annotations
 
 import logging
+import os
 import re
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union
@@ -250,11 +252,14 @@ class MultiFileChangeManifest(BaseModel):
                     ready.append(neighbor)
             ready.sort(key=_node_priority)
 
-        # Handle any circular dependency gracefully by appending remaining
+        # A dependency cycle is a malformed manifest. Never silently guess an
+        # execution order because doing so can compile against partially applied APIs.
         if len(ordered_indices) < len(ops):
-            remaining = [i for i in range(len(ops)) if i not in ordered_indices]
-            remaining.sort(key=_node_priority)
-            ordered_indices.extend(remaining)
+            remaining = [ops[i].subpath for i in range(len(ops)) if i not in ordered_indices]
+            raise ValueError(
+                "Multi-file dependency cycle detected; unresolved operations: "
+                + ", ".join(remaining)
+            )
 
         return [ops[i] for i in ordered_indices]
 
@@ -263,15 +268,27 @@ class MultiFileChangeManifest(BaseModel):
         gateway: ToolGateway,
         verify_compilation: bool = True,
         rollback_on_failure: bool = True,
+        *,
+        approval_granted: bool = False,
+        permissions_mode: Any = None,
     ) -> MultiFileApplyResult:
-        """Applies all operations in safe topological order with compilation verification and rollback."""
+        """Apply a validated multi-file change set.
+
+        Paths are validated before snapshots are read. Tool permissions are
+        forwarded unchanged; this method never grants approval on the caller's
+        behalf. Rollback touches only files that were actually modified.
+        """
         result = MultiFileApplyResult(
             manifest_id=self.manifest_id,
             status="staged",
             total_operations=len(self.operations),
         )
 
-        # 1. Reflection invariant check
+        if not self.operations:
+            result.status = "failed"
+            result.error_message = "Manifest contains no operations."
+            return result
+
         valid_refl, refl_errs = self.validate_reflection_consistency()
         if not valid_refl:
             result.status = "failed"
@@ -279,127 +296,223 @@ class MultiFileChangeManifest(BaseModel):
             result.diagnostics = refl_errs
             return result
 
-        ordered_ops = self.get_topological_execution_order()
-        ws_root = gateway.workspace_root
+        try:
+            ordered_ops = self.get_topological_execution_order()
+        except ValueError as exc:
+            result.status = "failed"
+            result.error_message = str(exc)
+            result.diagnostics.append(str(exc))
+            return result
 
-        # 2. Capture pre-edit snapshot for transactional rollback
+        ws_root = Path(gateway.workspace_root).resolve()
+        validated_paths: Dict[str, Path] = {}
         snapshots: Dict[str, Optional[str]] = {}
+
+        # Validate every path before reading any file or executing any tool.
         for op in ordered_ops:
-            file_p = ws_root / op.subpath
-            if file_p.exists() and file_p.is_file():
+            raw = Path(op.subpath)
+            if raw.is_absolute() or any(part == ".." for part in raw.parts):
+                result.status = "failed"
+                result.error_message = f"Unsafe manifest path: {op.subpath!r}"
+                return result
+            try:
+                candidate = gateway.boundary.validate_path(str(ws_root / raw), allow_write=True)
+                candidate = Path(candidate)
+                resolved_parent = candidate.parent.resolve()
+                if resolved_parent != ws_root and ws_root not in resolved_parent.parents:
+                    raise ValueError("Target parent escapes the workspace.")
+                if candidate.is_symlink():
+                    raise ValueError("Symbolic-link targets are not accepted in a multi-file manifest.")
+                validated_paths[op.subpath] = candidate
+            except Exception as exc:
+                result.status = "failed"
+                result.error_message = f"Unsafe manifest path {op.subpath!r}: {exc}"
+                return result
+
+        # Snapshot only after all paths have passed validation.
+        for op in ordered_ops:
+            file_path = validated_paths[op.subpath]
+            if file_path.exists():
+                if not file_path.is_file():
+                    result.status = "failed"
+                    result.error_message = f"Target is not a regular file: {op.subpath}"
+                    return result
                 try:
-                    snapshots[op.subpath] = file_p.read_text(encoding="utf-8", errors="replace")
-                except Exception:
-                    snapshots[op.subpath] = None
+                    snapshots[op.subpath] = file_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeError) as exc:
+                    result.status = "failed"
+                    result.error_message = f"Could not snapshot {op.subpath}: {exc}"
+                    return result
             else:
                 snapshots[op.subpath] = None
 
-        # 3. Apply edits in topological order
-        applied_ops = 0
-        modified_paths: List[str] = []
+        for op in ordered_ops:
+            exists = snapshots[op.subpath] is not None
+            if op.operation_kind == "create" and exists:
+                result.status = "failed"
+                result.error_message = f"Create operation target already exists: {op.subpath}"
+                return result
+            if op.operation_kind in ("modify", "delete") and not exists:
+                result.status = "failed"
+                result.error_message = f"{op.operation_kind.title()} operation target does not exist: {op.subpath}"
+                return result
+
+        applied_paths: List[str] = []
+
+        def _tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+            kwargs: Dict[str, Any] = {"approval_granted": approval_granted}
+            if permissions_mode is not None:
+                kwargs["permissions_mode"] = permissions_mode
+            return gateway.execute_tool(name, args, **kwargs)
 
         for op in ordered_ops:
             try:
-                if op.operation_kind == "create" or op.target_content == "":
-                    # Write new file directly
-                    res = gateway.execute_tool(
-                        "write_file",
-                        {"subpath": op.subpath, "content": op.replacement_content},
-                        approval_granted=True,
-                    )
+                if op.operation_kind == "delete":
+                    res = _tool("delete_file", {"subpath": op.subpath})
+                elif op.operation_kind == "create":
+                    res = _tool("write_file", {"subpath": op.subpath, "content": op.replacement_content})
                 else:
-                    # Apply surgical replacement
-                    res = gateway.execute_tool(
-                        "propose_edit",
-                        {
-                            "subpath": op.subpath,
-                            "target_content": op.target_content,
-                            "replacement_content": op.replacement_content,
-                        },
-                        approval_granted=True,
-                    )
-                    if res.get("status") == "SUCCESS" and res.get("diff_id"):
-                        res = gateway.execute_tool(
-                            "apply_edit",
-                            {"diff_id": res["diff_id"]},
-                            approval_granted=True,
+                    if not op.target_content:
+                        # A recovered prose manifest carries a complete file body
+                        # rather than a surgical old-text fragment. Treat it as a
+                        # full-file replacement, still through the permission-aware
+                        # atomic write tool.
+                        res = _tool(
+                            "write_file",
+                            {"subpath": op.subpath, "content": op.replacement_content},
                         )
+                    else:
+                        res = _tool(
+                            "propose_edit",
+                            {
+                                "subpath": op.subpath,
+                                "target_content": op.target_content,
+                                "replacement_content": op.replacement_content,
+                            },
+                        )
+                        # propose_edit intentionally returns a pending diff preview.
+                        # The subsequent apply_edit call is the authoritative
+                        # permission gate and receives the caller's mode/approval.
+                        if res.get("diff_id"):
+                            res = _tool("apply_edit", {"diff_id": res["diff_id"]})
 
-                if res.get("status") == "SUCCESS":
-                    applied_ops += 1
-                    modified_paths.append(op.subpath)
-                else:
-                    raise RuntimeError(f"Operation on {op.subpath} failed: {res.get('error', 'unknown error')}")
+                if res.get("status") == "PENDING_APPROVAL":
+                    raise PermissionError(
+                        f"Approval required for {op.operation_kind} operation on {op.subpath}."
+                    )
+                if res.get("status") != "SUCCESS":
+                    raise RuntimeError(
+                        f"Operation on {op.subpath} failed: {res.get('error', 'unknown error')}"
+                    )
+                applied_paths.append(op.subpath)
             except Exception as exc:
-                logger.error("MultiFileChangeManifest operation failed on %s: %s", op.subpath, exc)
                 result.status = "failed"
                 result.error_message = str(exc)
-                result.operations_applied = applied_ops
-                result.modified_paths = modified_paths
-
-                if rollback_on_failure:
-                    self._rollback_snapshots(ws_root, snapshots)
-                    result.status = "rolled_back"
+                result.operations_applied = len(applied_paths)
+                result.modified_paths = list(applied_paths)
+                if rollback_on_failure and applied_paths:
+                    rollback_ok, rollback_errors = self._rollback_snapshots(
+                        ws_root, snapshots, applied_paths, validated_paths
+                    )
+                    result.diagnostics.extend(rollback_errors)
+                    result.status = "rolled_back" if rollback_ok else "failed"
+                else:
+                    result.status = "failed"
                 return result
 
-        result.operations_applied = applied_ops
-        result.modified_paths = modified_paths
+        result.operations_applied = len(applied_paths)
+        result.modified_paths = list(applied_paths)
         result.status = "applied"
 
-        # 4. Compilation Verification
         if verify_compilation and self.verification_command:
             try:
-                cmd_res = gateway.execute_tool(
+                shell_name = "powershell" if os.name == "nt" else "bash"
+                cmd_res = _tool(
                     "run_command",
-                    {"command": self.verification_command, "shell": "powershell"},
-                    approval_granted=True,
+                    {"command": self.verification_command, "shell": shell_name},
                 )
+                if cmd_res.get("status") == "PENDING_APPROVAL":
+                    raise PermissionError("Compilation verification command requires approval.")
                 stdout_str = cmd_res.get("stdout", "")
                 stderr_str = cmd_res.get("stderr", "")
-                exit_code = cmd_res.get("exit_code", -1)
-                result.verification_output = stdout_str + ("\n" + stderr_str if stderr_str else "")
-
-                if exit_code == 0:
+                result.verification_output = stdout_str + ("\\n" + stderr_str if stderr_str else "")
+                if cmd_res.get("exit_code", -1) == 0 and cmd_res.get("status") == "SUCCESS":
                     result.verification_passed = True
                     result.status = "verified"
                 else:
-                    result.verification_passed = False
-                    result.status = "failed"
-                    result.error_message = f"Compilation verification failed with exit code {exit_code}."
+                    result.error_message = (
+                        f"Compilation verification failed with exit code "
+                        f"{cmd_res.get('exit_code', -1)}."
+                    )
                     result.diagnostics.append(result.verification_output[:2000])
-
                     if rollback_on_failure:
-                        self._rollback_snapshots(ws_root, snapshots)
-                        result.status = "rolled_back"
-            except Exception as v_exc:
+                        rollback_ok, rollback_errors = self._rollback_snapshots(
+                            ws_root, snapshots, applied_paths, validated_paths
+                        )
+                        result.diagnostics.extend(rollback_errors)
+                        result.status = "rolled_back" if rollback_ok else "failed"
+                    else:
+                        result.status = "failed"
+            except Exception as exc:
                 result.verification_passed = False
-                result.status = "failed"
-                result.error_message = f"Compilation verification execution error: {v_exc}"
+                result.error_message = f"Compilation verification execution error: {exc}"
                 if rollback_on_failure:
-                    self._rollback_snapshots(ws_root, snapshots)
-                    result.status = "rolled_back"
+                    rollback_ok, rollback_errors = self._rollback_snapshots(
+                        ws_root, snapshots, applied_paths, validated_paths
+                    )
+                    result.diagnostics.extend(rollback_errors)
+                    result.status = "rolled_back" if rollback_ok else "failed"
+                else:
+                    result.status = "failed"
         else:
-            result.verification_passed = True
+            result.verification_passed = not bool(self.verification_command)
             result.status = "applied"
 
         return result
 
     @staticmethod
-    def _rollback_snapshots(workspace_root: Path, snapshots: Dict[str, Optional[str]]) -> None:
-        """Rollback applied edits by restoring pre-edit snapshots."""
-        for subpath, original_text in snapshots.items():
-            fp = workspace_root / subpath
+    def _rollback_snapshots(
+        workspace_root: Path,
+        snapshots: Dict[str, Optional[str]],
+        modified_paths: List[str],
+        validated_paths: Dict[str, Path],
+    ) -> Tuple[bool, List[str]]:
+        """Restore only modified files using atomic replacement and report failures."""
+        errors: List[str] = []
+        root_resolved = workspace_root.resolve()
+        for subpath in reversed(modified_paths):
+            original_text = snapshots.get(subpath)
+            fp = validated_paths.get(subpath)
+            if fp is None:
+                errors.append(f"Rollback skipped {subpath}: no validated path was recorded.")
+                continue
             try:
+                parent = fp.parent.resolve()
+                if parent != root_resolved and root_resolved not in parent.parents:
+                    raise ValueError("Rollback target escaped workspace.")
+                if fp.is_symlink():
+                    raise ValueError("Rollback refuses to follow symbolic links.")
                 if original_text is None:
-                    # File was newly created; remove it
                     if fp.exists():
-                        fp.unlink(missing_ok=True)
+                        fp.unlink()
                 else:
-                    # Restore original content
                     fp.parent.mkdir(parents=True, exist_ok=True)
-                    fp.write_text(original_text, encoding="utf-8")
-            except Exception as r_err:
-                logger.error("Failed to rollback snapshot for %s: %s", subpath, r_err)
+                    fd, temp_name = tempfile.mkstemp(
+                        prefix=f".{fp.name}.rollback-", dir=str(fp.parent)
+                    )
+                    try:
+                        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+                            handle.write(original_text)
+                            handle.flush()
+                            os.fsync(handle.fileno())
+                        os.replace(temp_name, fp)
+                    finally:
+                        if os.path.exists(temp_name):
+                            os.unlink(temp_name)
+            except Exception as exc:
+                errors.append(f"Failed to rollback {subpath}: {exc}")
+                logger.exception("Failed to rollback snapshot for %s", subpath)
+        return not errors, errors
 
 
 class BoundedRecoveryHandler:

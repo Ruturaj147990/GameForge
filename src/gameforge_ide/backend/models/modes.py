@@ -46,7 +46,9 @@ class PermissionsMode(str, Enum):
             return cls.REQUEST_ALL
         if clean in ("unrestricted", "full"):
             return cls.UNRESTRICTED
-        return cls.AUTO
+        if clean in ("auto", "auto_edit", "autoedit", "agentic", "automatic"):
+            return cls.AUTO
+        raise ValueError(f"Unknown permissions mode: {val!r}")
 
 
 class AutonomyProfile(str, Enum):

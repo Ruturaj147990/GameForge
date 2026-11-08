@@ -1756,6 +1756,9 @@ class AgentRuntime:
         _phantom_edit_nudged = False
         _narrative_promise_nudged = False
         _last_tool_error = False
+        # Native providers may return several independent tool calls in one
+        # assistant message. Drain them one-by-one without discarding calls.
+        _pending_native_calls: List[Dict[str, Any]] = []
 
         # Populate previous tool history and modified files across turns
         for rec in session.tool_history:
@@ -1827,41 +1830,66 @@ class AgentRuntime:
             # providers without a native tools API.
             full_response = ""
             native_call = None
-            used_native = self.native_tools and hasattr(provider, "chat_with_tools")
-            if used_native:
-                try:
-                    native = await asyncio.to_thread(
-                        provider.chat_with_tools,
-                        session.model_name,
-                        [{"role": "system", "content": system_prompt}] + conversation_history,
-                        self._native_tool_schemas(),
-                        capabilities.max_context,
-                        0.2,
-                        output_tokens,
-                    )
-                    full_response = native.get("content", "") or ""
-                    if native.get("tool_calls"):
-                        native_call = native["tool_calls"][0]
-                    tool_call = native_call or self._extract_tool_call(full_response, user_prompt=user_prompt, already_modified=_modified_files)
-                    clean_text = self._clean_narrative_text(full_response)
-                    if clean_text and not tool_call:
-                        yield AgentEvent(event_type="token", content=clean_text)
-                    elif clean_text and tool_call and not self._is_tool_call_start(clean_text):
-                        yield AgentEvent(event_type="token", content=clean_text)
-                except Exception as exc:
-                    err_msg = str(exc)
-                    if any(frag in err_msg for frag in ("unexpected end of JSON input", "invalid tool call arguments", "HTTP 500")):
-                        logger.warning(
-                            "[AgentRuntime] Native tool calling returned grammar truncation error (%s); falling back to stream_chat",
-                            err_msg,
+            if _pending_native_calls:
+                native_call = _pending_native_calls.pop(0)
+                used_native = True
+            else:
+                used_native = self.native_tools and hasattr(provider, "chat_with_tools")
+                if used_native:
+                    try:
+                        native = await asyncio.to_thread(
+                            provider.chat_with_tools,
+                            session.model_name,
+                            [{"role": "system", "content": system_prompt}] + conversation_history,
+                            self._native_tool_schemas(),
+                            capabilities.max_context,
+                            0.2,
+                            output_tokens,
                         )
-                        used_native = False
-                    else:
-                        task_state.terminal_status = "FAILED"
-                        task_state.terminal_reason = f"provider_error: {exc}"
-                        self._save_task_state(task_state)
-                        yield AgentEvent(event_type="error", content=f"Model call failed: {exc}")
-                        return
+                        full_response = native.get("content", "") or ""
+                        returned_calls = native.get("tool_calls") or []
+                        if not isinstance(returned_calls, list):
+                            raise ValueError("Provider tool_calls must be a list.")
+                        if len(returned_calls) > 16:
+                            raise ValueError(
+                                f"Provider returned {len(returned_calls)} tool calls; maximum per response is 16."
+                            )
+                        normalized_calls = []
+                        for call in returned_calls:
+                            if not isinstance(call, dict):
+                                raise ValueError("Provider returned a malformed tool call.")
+                            name = call.get("name")
+                            arguments = call.get("arguments", {})
+                            if not isinstance(name, str) or not name.strip():
+                                raise ValueError("Provider returned a tool call without a valid name.")
+                            if not isinstance(arguments, dict):
+                                raise ValueError(f"Tool arguments for {name!r} must be an object.")
+                            normalized_calls.append({"name": name, "arguments": arguments})
+                        if normalized_calls:
+                            native_call = normalized_calls.pop(0)
+                            _pending_native_calls.extend(normalized_calls)
+                        tool_call = native_call or self._extract_tool_call(
+                            full_response, user_prompt=user_prompt, already_modified=_modified_files
+                        )
+                        clean_text = self._clean_narrative_text(full_response)
+                        if clean_text and not tool_call:
+                            yield AgentEvent(event_type="token", content=clean_text)
+                        elif clean_text and tool_call and not self._is_tool_call_start(clean_text):
+                            yield AgentEvent(event_type="token", content=clean_text)
+                    except Exception as exc:
+                        err_msg = str(exc)
+                        if any(frag in err_msg for frag in ("unexpected end of JSON input", "invalid tool call arguments", "HTTP 500")):
+                            logger.warning(
+                                "[AgentRuntime] Native tool calling returned grammar truncation error (%s); falling back to stream_chat",
+                                err_msg,
+                            )
+                            used_native = False
+                        else:
+                            task_state.terminal_status = "FAILED"
+                            task_state.terminal_reason = f"provider_error: {exc}"
+                            self._save_task_state(task_state)
+                            yield AgentEvent(event_type="error", content=f"Model call failed: {exc}")
+                            return
             _in_think = False
             async for chunk in (_no_chunks() if used_native else provider.stream_chat(
                 model_id=session.model_name,

@@ -233,3 +233,18 @@ def test_process_lifecycle_manager_windowless_and_cleanup(tmp_path: Path):
     ok_dir = safe_remove_directory(sample_dir)
     assert ok_dir is True
     assert not sample_dir.exists()
+
+
+def test_permissions_mode_unknown_value_fails_closed():
+    """Unknown or corrupted permissions values must not silently become AUTO."""
+    with pytest.raises(ValueError):
+        PermissionsMode.from_str("unrestricted-ish")
+    assert PermissionsMode.from_str("agentic") == PermissionsMode.AUTO
+    assert PermissionsMode.from_str("manual") == PermissionsMode.REQUEST_ALL
+
+
+def test_terminal_direct_parser_has_no_stale_executable_allowlist(tmp_path: Path):
+    """Direct command parsing accepts ordinary executables without a hardcoded allowlist."""
+    terminal = TerminalTools(tmp_path)
+    parsed = terminal._parse_command("cat sample.txt")
+    assert parsed[0].lower() == "cat"

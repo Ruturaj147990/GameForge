@@ -36,11 +36,6 @@ class TerminalTools:
         "rmdir /s /q c:",
     ]
 
-    ALLOWED_EXECUTABLES = {
-        "python", "python.exe", "py", "py.exe", "pytest", "pytest.exe",
-        "git", "git.exe", "cmake", "cmake.exe", "dotnet", "dotnet.exe",
-        "msbuild", "msbuild.exe",
-    }
     SHELL_SYNTAX = re.compile(r"(?:[;&|`%*?]|\r|\n|\$\(|[<>]|\$env:|\$\{)")
     MAX_TIMEOUT_SECONDS = 300
 
@@ -83,9 +78,11 @@ class TerminalTools:
         if len(Path(args[0]).parts) > 1:
             raise ValueError(f"Path-qualified executable '{args[0]}' is not permitted.")
         executable = Path(args[0]).name.lower()
-        if executable in ("del", "rm", "erase"):
-            raise ValueError(f"Executable '{args[0]}' is a shell command. Use the 'delete_file' tool to delete workspace files.")
-        if executable not in self.ALLOWED_EXECUTABLES:
+        if executable in (
+            "del", "erase", "format", "diskpart", "bcdedit",
+            "powershell", "powershell.exe", "pwsh", "pwsh.exe",
+            "cmd", "cmd.exe", "bash", "bash.exe", "sh", "sh.exe",
+        ):
             raise ValueError(f"Executable '{args[0]}' is not in the approved agent command allowlist.")
         for arg in args[1:]:
             if ".." in arg or "%" in arg or "$env:" in arg or "${" in arg:
@@ -146,16 +143,16 @@ class TerminalTools:
         # Resolve permissions mode
         pm = PermissionsMode.from_str(permissions_mode) if permissions_mode else PermissionsMode.AUTO
 
-        # If shell is not explicitly passed, check if direct execution validation is needed
-        if shell is None or shell == "direct":
-            # Direct shell-free agent execution check
+        # Default to direct shell-free execution for agent security (REQ-051).
+        # Explicit shell choices (powershell, cmd, bash) can be passed when needed.
+        target_shell = shell or "direct"
+        if target_shell == "direct":
             try:
                 args = self._parse_command(command)
-                target_shell = "direct"
             except (ValueError, SecurityViolationError) as exc:
                 return self._blocked(str(exc))
-        else:
-            target_shell = shell
+        elif target_shell not in ("powershell", "cmd", "bash"):
+            return self._blocked(f"Unsupported shell: {target_shell!r}")
 
         request = CommandExecutionRequest(
             command=command,

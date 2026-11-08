@@ -290,9 +290,18 @@ def safe_remove_file(
     
     If locked persistently, moves to a temporary quarantine name to avoid blocking callers.
     """
-    path = Path(file_path).resolve()
-    if not path.exists():
+    # Do not resolve the final component: resolving a symlink would redirect
+    # deletion to its target instead of unlinking the link itself.
+    path = Path(os.path.abspath(os.fspath(file_path)))
+    if not path.exists() and not path.is_symlink():
         return True
+    if path.is_symlink():
+        try:
+            path.unlink()
+            return True
+        except OSError as exc:
+            logger.warning("Could not unlink symlink %s: %s", path, exc)
+            return False
 
     def _unlink() -> None:
         path.unlink(missing_ok=True)
@@ -320,9 +329,13 @@ def safe_remove_file(
             # Try to unlink the quarantine file once asynchronously/safely
             try:
                 quarantine_name.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return True
+                return not quarantine_name.exists()
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "File %s was quarantined as %s but remains on disk: %s",
+                    path, quarantine_name, cleanup_exc,
+                )
+                return False
         except Exception as rename_exc:
             logger.error("Failed to quarantine locked file %s: %s", path, rename_exc)
             return False
@@ -336,9 +349,17 @@ def safe_remove_directory(
     jitter: bool = True,
 ) -> bool:
     """Safely removes a directory tree, retrying transient sharing violations on nested files."""
-    path = Path(dir_path).resolve()
-    if not path.exists():
+    # A directory symlink must be unlinked, never recursively traversed.
+    path = Path(os.path.abspath(os.fspath(dir_path)))
+    if not path.exists() and not path.is_symlink():
         return True
+    if path.is_symlink():
+        try:
+            path.unlink()
+            return True
+        except OSError as exc:
+            logger.warning("Could not unlink directory symlink %s: %s", path, exc)
+            return False
 
     def _rmtree() -> None:
         shutil.rmtree(path, ignore_errors=False)

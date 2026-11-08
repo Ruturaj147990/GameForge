@@ -215,8 +215,14 @@ class CommandExecutionBroker:
 
         # Look for absolute path literals pointing outside workspace
         # Matches patterns like C:\Windows, D:\..., or /etc
-        abs_drive_matches = re.findall(r"\b([A-Za-z]:\\[^ \t\r\n\"']+)", cmd_raw)
-        for abs_p in abs_drive_matches:
+        # Detect both Windows drive-qualified paths and POSIX absolute paths.
+        # Requiring a nested POSIX path avoids mistaking common command flags
+        # such as /s or /q for filesystem paths.
+        abs_path_matches = re.findall(
+            r"""(?<![A-Za-z0-9_])(?:[A-Za-z]:\\[^ \t\r\n\"']+|/(?:[^/ \t\r\n\"']+/)+[^ \t\r\n\"']+)""",
+            cmd_raw,
+        )
+        for abs_p in abs_path_matches:
             try:
                 self.boundary.validate_path(abs_p, allow_write=False)
             except (SecurityViolationError, ValueError):

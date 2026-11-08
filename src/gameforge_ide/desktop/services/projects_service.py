@@ -165,8 +165,17 @@ def list_games(
                         except OSError:
                             pass
 
-    if not project_dirs_map and not projects_root:
-        project_dirs_map = list_all_project_dirs(workspace_dir)
+    # A configured projects_root can be stale, empty, or point at only one
+    # storage location. Always consult the canonical multi-root discovery path
+    # when the primary scan found nothing; do not let a non-empty setting disable
+    # fallback discovery.
+    if not project_dirs_map:
+        try:
+            discovered = list_all_project_dirs(workspace_dir)
+            for discovered_name, discovered_path in discovered.items():
+                project_dirs_map.setdefault(discovered_name, discovered_path)
+        except (OSError, PermissionError) as exc:
+            logger.warning("Fallback project discovery failed: %s", exc)
 
     if not project_dirs_map:
         return []

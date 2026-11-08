@@ -145,7 +145,7 @@ def test_manifest_apply_success_and_compilation_verification(workspace: Path):
         )
     )
 
-    res = manifest.apply(gateway, verify_compilation=True, rollback_on_failure=True)
+    res = manifest.apply(gateway, verify_compilation=True, rollback_on_failure=True, approval_granted=True)
     assert res.status == "verified"
     assert res.operations_applied == 2
     assert res.verification_passed is True
@@ -178,7 +178,7 @@ def test_manifest_rollback_on_verification_failure(workspace: Path):
     )
     manifest.add_operation(new_file_op)
 
-    res = manifest.apply(gateway, verify_compilation=True, rollback_on_failure=True)
+    res = manifest.apply(gateway, verify_compilation=True, rollback_on_failure=True, approval_granted=True)
     assert res.status == "rolled_back"
     assert res.verification_passed is False
 
@@ -220,3 +220,71 @@ def test_bounded_recovery_handler_respects_max_retries(workspace: Path):
     assert can_recover is False
     assert manifest is None
     assert "budget exhausted" in msg.lower()
+
+
+def test_manifest_rejects_path_traversal_before_snapshot(workspace: Path):
+    """Manifest must reject traversal before reading or writing any target."""
+    outside = workspace.parent / "outside.txt"
+    outside.write_text("do not touch", encoding="utf-8")
+    gateway = ToolGateway(workspace)
+    manifest = MultiFileChangeManifest(goal="Traversal regression")
+    manifest.add_operation(
+        FileChangeOperation.create(
+            subpath="../outside.txt",
+            replacement_content="overwritten",
+            operation_kind="create",
+        )
+    )
+    result = manifest.apply(gateway, approval_granted=True)
+    assert result.status == "failed"
+    assert outside.read_text(encoding="utf-8") == "do not touch"
+
+
+def test_manifest_rejects_dependency_cycles():
+    """Cyclic dependencies must be rejected rather than silently reordered."""
+    first = FileChangeOperation.create(
+        "Source/MyGame/A.h", "class A {};", operation_kind="create", dependencies=["B.h"]
+    )
+    second = FileChangeOperation.create(
+        "Source/MyGame/B.h", "class B {};", operation_kind="create", dependencies=["A.h"]
+    )
+    manifest = MultiFileChangeManifest(goal="Cycle regression", operations=[first, second])
+    with pytest.raises(ValueError, match="dependency cycle"):
+        manifest.get_topological_execution_order()
+
+
+def test_manifest_does_not_bypass_request_all_approval(workspace: Path):
+    """Multi-file application must respect gateway approval policy."""
+    gateway = ToolGateway(workspace)
+    manifest = MultiFileChangeManifest(goal="Approval regression")
+    manifest.add_operation(
+        FileChangeOperation.create(
+            "Source/MyGame/NeedsApproval.cpp",
+            "// must not be written without approval",
+            operation_kind="create",
+        )
+    )
+    result = manifest.apply(gateway, approval_granted=False)
+    assert result.status == "failed"
+    assert not (workspace / "Source/MyGame/NeedsApproval.cpp").exists()
+
+
+def test_manifest_full_file_replacement_for_recovered_prose(workspace: Path):
+    """A prose-recovered full-file body can safely replace an existing file."""
+    target = workspace / "Source/MyGame/Existing.cpp"
+    target.write_text("// old body\n", encoding="utf-8")
+    gateway = ToolGateway(workspace)
+    manifest = MultiFileChangeManifest(goal="Recovered full-file replacement")
+    manifest.add_operation(
+        FileChangeOperation.create(
+            "Source/MyGame/Existing.cpp",
+            replacement_content="// complete recovered body\nint value = 7;\n",
+            target_content="",
+            operation_kind="modify",
+        )
+    )
+    result = manifest.apply(
+        gateway, verify_compilation=False, approval_granted=True
+    )
+    assert result.status == "applied"
+    assert "int value = 7;" in target.read_text(encoding="utf-8")

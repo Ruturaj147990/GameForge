@@ -145,7 +145,7 @@ def _build_scratch_gds(prompt: str, decision: StrategyDecision) -> GameDesignSpe
         custom_rules=custom_rules[:3],
     )
     gds = expand_draft(draft)
-    gds.meta.generator = "model:scratch"
+    gds.meta.generator = "fallback:scratch"
     return gds
 
 
@@ -171,38 +171,8 @@ def prompt_to_gds(
             path="none",
         )
 
-    # 1. Semantic strategy evaluation (deterministic 0ms capability matching)
-    decision = default_registry.evaluate_strategy(prompt)
-
-    # 2. Scratch generation path: discrete logic puzzles and custom games
-    if decision.strategy == GenerationStrategy.SCRATCH:
-        if allow_model and complete_json is not None:
-            # Let the LLM design custom rules/draft from the start with scratch architecture guidance
-            scratch_system_prompt = (
-                f"{DRAFT_SYSTEM_PROMPT}\n\n"
-                f"Architecture Strategy: SCRATCH GENERATION ({decision.profile.detected_genre.value})\n"
-                f"Target Classes: {', '.join(decision.suggested_architecture.get('target_classes', []))}\n"
-                f"DO NOT adapt platformer or shooter mechanics. Generate clean puzzle/board logic."
-            )
-            schema = DesignDraft.model_json_schema()
-            raw_json = complete_json(scratch_system_prompt, prompt, schema)
-            if raw_json is not None:
-                try:
-                    data = json.loads(raw_json)
-                    if isinstance(data, dict):
-                        draft = DesignDraft.model_validate(data)
-                        gds = expand_draft(draft)
-                        gds.meta.generator = f"model:{model}"
-                        return PromptToGdsResult(status="OK", gds=gds, path="model", model=model, attempts=1)
-                except Exception as exc:
-                    logger.info("Scratch model draft failed validation, falling back to verified scratch architecture: %s", exc)
-
-        # Verified scratch architecture synthesis fallback
-        gds = _build_scratch_gds(prompt, decision)
-        return PromptToGdsResult(status="OK", gds=gds, path="preset" if not complete_json else "model", model=model)
-
-    # 3. Preset / Adapt Template path: keyword match (only for direct preset requests without custom narrative/mechanics)
-    text = " " + prompt.lower().replace("’", "'") + " "
+    # 1. Preset / Fast Template path: keyword match (only for direct preset requests without custom narrative/mechanics)
+    text = " " + prompt.lower().replace("’", "'").replace("'", "'") + " "
     words = set(re.findall(r"\b\w+\b", text))
     preset_words = {w for kws in PRESET_KEYWORDS.values() for kw in kws for w in kw.split()}
     stop_words = {
@@ -247,6 +217,58 @@ def prompt_to_gds(
             except Exception as exc:
                 logger.warning("Preset creation failed for %s: %s", best_preset, exc)
 
+    # 2. Strategy evaluation (uses model evaluation when callback is available)
+    if allow_model and complete_json is not None:
+        decision = default_registry.evaluate_strategy_with_model(
+            prompt, complete_json=complete_json, model=model
+        )
+    else:
+        decision = default_registry.evaluate_strategy(prompt)
+
+    # 3. Scratch generation path: discrete logic puzzles and custom games
+    if decision.strategy == GenerationStrategy.SCRATCH:
+        if allow_model and complete_json is not None:
+            # Let the LLM design custom rules/draft from the start with scratch architecture guidance
+            scratch_system_prompt = (
+                f"{DRAFT_SYSTEM_PROMPT}\n\n"
+                f"Architecture Strategy: SCRATCH GENERATION ({decision.profile.detected_genre.value})\n"
+                f"Target Classes: {', '.join(decision.suggested_architecture.get('target_classes', []))}\n"
+                f"DO NOT adapt platformer or shooter mechanics. Generate clean puzzle/board logic."
+            )
+            schema = DesignDraft.model_json_schema()
+            data_scratch = getattr(decision, "draft_preloaded", None)
+            if data_scratch is not None:
+                raw_json = json.dumps(data_scratch)
+            else:
+                raw_json = complete_json(scratch_system_prompt, prompt, schema)
+            if raw_json is not None:
+                try:
+                    data = data_scratch if data_scratch is not None else json.loads(raw_json)
+                    if isinstance(data, dict):
+                        draft = DesignDraft.model_validate(data)
+                        gds = expand_draft(draft)
+                        gds.meta.generator = f"model:{model}"
+                        return PromptToGdsResult(status="OK", gds=gds, path="model", model=model, attempts=1)
+                except Exception as exc:
+                    logger.info("Scratch model draft failed validation, falling back to verified scratch architecture: %s", exc)
+
+        # Verified scratch architecture synthesis fallback
+        gds = _build_scratch_gds(prompt, decision)
+        fallback_errors = []
+        if allow_model and complete_json is not None:
+            fallback_errors.append(
+                "The model did not return a valid scratch-game design; a deterministic "
+                "game-specific fallback was used."
+            )
+        return PromptToGdsResult(
+            status="OK",
+            gds=gds,
+            path="preset",
+            model=None,
+            attempts=1 if allow_model and complete_json is not None else 0,
+            errors=fallback_errors,
+        )
+
     # 4. Model path for Template Adaptation or Hybrid
     if allow_model and complete_json is not None:
         schema = DesignDraft.model_json_schema()
@@ -255,12 +277,16 @@ def prompt_to_gds(
 
         # Attempt 1
         attempts += 1
-        raw_json = complete_json(DRAFT_SYSTEM_PROMPT, prompt, schema)
         draft: Optional[DesignDraft] = None
+        data_init = getattr(decision, "draft_preloaded", None)
+        if data_init is not None:
+            raw_json = json.dumps(data_init)
+        else:
+            raw_json = complete_json(DRAFT_SYSTEM_PROMPT, prompt, schema)
 
         if raw_json is not None:
             try:
-                data = json.loads(raw_json)
+                data = data_init if data_init is not None else json.loads(raw_json)
                 if isinstance(data, dict):
                     draft = DesignDraft.model_validate(data)
                 else:

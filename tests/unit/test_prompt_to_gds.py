@@ -67,7 +67,7 @@ def test_model_path_valid():
         "lose": [{"type": "caught_by_guard"}],
     }
 
-    mock_complete = MagicMock(return_value=json.dumps(valid_draft))
+    mock_complete = MagicMock(side_effect=[None, json.dumps(valid_draft)])
     res = prompt_to_gds(
         "make a stealth adventure game where you avoid guards and collect relics",
         complete_json=mock_complete,
@@ -78,7 +78,7 @@ def test_model_path_valid():
     assert res.gds is not None
     assert res.attempts == 1
     assert res.gds.meta.title == "Stealth Infiltrator"
-    assert mock_complete.call_count == 1
+    assert mock_complete.call_count == 2
 
 
 def test_model_path_repair_call_on_invalid_json():
@@ -94,8 +94,9 @@ def test_model_path_repair_call_on_invalid_json():
     }
 
     mock_complete = MagicMock(side_effect=[
-        '{"title": "Broken", "genre": "NOT_A_GENRE"}',  # invalid schema
-        json.dumps(valid_draft),                         # repaired
+        None,                                             # strategy evaluator: no structured decision
+        '{"title": "Broken", "genre": "NOT_A_GENRE"}',  # invalid draft
+        json.dumps(valid_draft),                         # repaired draft
     ])
 
     res = prompt_to_gds(
@@ -110,11 +111,12 @@ def test_model_path_repair_call_on_invalid_json():
     assert "Attempt 1" in res.errors[0]
     assert res.gds is not None
     assert res.gds.meta.title == "Dungeon Crawler"
-    assert mock_complete.call_count == 2
+    assert mock_complete.call_count == 3
 
 
 def test_model_path_still_invalid_after_repair():
     mock_complete = MagicMock(side_effect=[
+        None,                         # strategy evaluator fallback
         "{not valid json",
         '{"invalid": "still bad schema"}',
     ])
@@ -141,7 +143,7 @@ def test_model_path_with_draft_questions():
         "win": [{"type": "survive_seconds", "target": 60}],
         "questions": ["Should there be hostile ships or peace mode?"],
     }
-    mock_complete = MagicMock(return_value=json.dumps(draft_with_q))
+    mock_complete = MagicMock(side_effect=[None, json.dumps(draft_with_q)])
     res = prompt_to_gds(
         "make an exploration game in an asteroid field",
         complete_json=mock_complete,
@@ -188,3 +190,38 @@ def test_ollama_provider_complete_json():
         assert payload["stream"] is False
         assert payload["format"] == {"type": "object"}
         assert payload["options"]["num_ctx"] == 8192
+
+
+def test_scratch_fallback_has_truthful_generator_provenance():
+    """A deterministic scratch fallback must never claim the LLM generated it."""
+    res = prompt_to_gds(
+        "create a Sudoku game",
+        complete_json=lambda system, user, schema: None,
+        model="gameforge-qwen3.5-9b",
+        allow_model=True,
+    )
+    assert res.status == "OK"
+    assert res.path == "preset"
+    assert res.gds is not None
+    assert res.gds.meta.generator == "fallback:scratch"
+    assert any("deterministic" in error.lower() for error in res.errors)
+
+
+def test_sudoku_strategy_never_selects_incompatible_template():
+    """A Sudoku request must remain a dedicated puzzle/scratch architecture."""
+    strategy_response = json.dumps({
+        "strategy": "adapt_template",
+        "template_id": "platformer_3d",
+        "reasoning": "intentionally incompatible test response",
+    })
+    res = prompt_to_gds(
+        "create a Sudoku game",
+        complete_json=lambda system, user, schema: strategy_response,
+        model="gameforge-qwen3.5-9b",
+        allow_model=True,
+    )
+    assert res.status == "OK"
+    assert res.gds is not None
+    assert res.gds.overview.genre == Genre.PUZZLE
+    assert res.gds.overview.camera == CameraKind.FIXED_BOARD
+    assert res.gds.meta.generator == "fallback:scratch"

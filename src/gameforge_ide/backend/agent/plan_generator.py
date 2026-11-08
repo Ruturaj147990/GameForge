@@ -728,8 +728,8 @@ class PlanGenerator:
                     title="11. Review & Compile Final Evidence Report",
                     description="Review vision rubric, mesh audit, and compile comprehensive pipeline report.",
                     target_files=["Saved/GameForge/pipeline_report.json"],
-                    tools=["play_game"],
-                    verification="Pipeline evidence report compiled and verified",
+                    tools=["write_file", "verify_disk"],
+                    verification="Pipeline evidence report exists and its required fields validate",
                 ),
             ]
             impl_method = "game_creation"
@@ -786,6 +786,8 @@ class PlanGenerator:
             status="awaiting_approval",
             metadata={
                 "provenance": "semantic_fallback",
+                "llm_generated": False,
+                "llm_fallback_reason": "No valid task-specific LLM plan was accepted; deterministic semantic fallback was used.",
                 "model_id": active_model,
                 "turn_id": turn_id,
                 "prompt_hash": prompt_hash,
