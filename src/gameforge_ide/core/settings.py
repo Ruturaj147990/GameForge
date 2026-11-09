@@ -30,11 +30,18 @@ MODEL_ROUTING_FILE = PACKAGE_ROOT / "config" / "model_routing.json"
 
 def get_ops_root() -> Path:
     """Path to bundled gameforge_ops Content package under PACKAGE_ROOT."""
-    return PACKAGE_ROOT / "unreal" / "GameForge" / "Content" / "Python" / "gameforge_ops"
+    p_root = get_plugin_root()
+    return p_root / "Content" / "Python" / "gameforge_ops"
 
 
 def get_plugin_root() -> Path:
     """Path to bundled Unreal plugin package under PACKAGE_ROOT."""
+    env_root = os.environ.get("GAMEFORGE_PLUGIN_ROOT")
+    if env_root and Path(env_root).is_dir():
+        return Path(env_root)
+    candidate = Path(PACKAGE_ROOT.anchor) / "GameForge_Unreal_Plugin"
+    if candidate.is_dir() and (candidate / "GameForge.uplugin").is_file():
+        return candidate
     return PACKAGE_ROOT / "unreal" / "GameForge"
 
 
