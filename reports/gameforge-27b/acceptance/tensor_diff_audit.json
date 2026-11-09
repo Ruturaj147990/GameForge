@@ -1,0 +1,60 @@
+{
+  "base_path": "E:\\GameForge\\models\\ollama\\blobs\\sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d",
+  "final_path": "E:\\GameForge\\artifacts\\gameforge-27b\\gameforge-27b-q4_k_m.gguf",
+  "total_tensors": 866,
+  "identical_tensors": 862,
+  "changed_tensors_count": 4,
+  "changed_tensors": [
+    {
+      "tensor_name": "output_norm.weight",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "offset": 1053939040,
+      "n_bytes": 20480,
+      "max_absolute_delta": 2.86102294921875e-06,
+      "mean_delta": 5.884678103029728e-07,
+      "l2_delta": 5.293311954103888e-05
+    },
+    {
+      "tensor_name": "blk.0.attn_norm.weight",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "offset": 1786815840,
+      "n_bytes": 20480,
+      "max_absolute_delta": 9.059906005859375e-06,
+      "mean_delta": 2.0974082872271536e-06,
+      "l2_delta": 0.00018668848423841926
+    },
+    {
+      "tensor_name": "blk.31.attn_norm.weight",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "offset": 8927450464,
+      "n_bytes": 20480,
+      "max_absolute_delta": 4.649162292480469e-06,
+      "mean_delta": 1.0393501725047828e-06,
+      "l2_delta": 9.250965866206414e-05
+    },
+    {
+      "tensor_name": "blk.63.attn_norm.weight",
+      "tensor_type": "0",
+      "shape": [
+        5120
+      ],
+      "offset": 16316590432,
+      "n_bytes": 20480,
+      "max_absolute_delta": 4.172325134277344e-06,
+      "mean_delta": 9.838375262916089e-07,
+      "l2_delta": 8.746901910636371e-05
+    }
+  ],
+  "vision_tensors_count": 65,
+  "vision_tensors_changed": 0,
+  "vision_projector_invariant": "PRESERVED_BITWISE_IDENTICAL"
+}

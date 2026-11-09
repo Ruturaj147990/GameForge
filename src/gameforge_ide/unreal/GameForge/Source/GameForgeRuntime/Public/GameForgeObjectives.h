@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/SaveGame.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "GameForgeKitActors.h"
 #include "GameForgeObjectives.generated.h"
 
 class USphereComponent;
@@ -85,6 +86,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Objectives")
 	FString GetObjectivesJson() const;
 
+	const TArray<FGameForgeObjective>& GetObjectives() const { return Objectives; }
+
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Objectives")
 	bool SaveNow();
 
@@ -102,11 +105,11 @@ private:
 };
 
 /**
- * Gameplay kit quest giver (content-neutral: dialogue and objective come from the game spec, not defaults): when the player-controlled pawn walks up, it "speaks" its dialogue lines (logged as
+ * Gameplay kit quest giver (content-neutral: dialogue and objective come from the game spec, not defaults): when the player-controlled pawn walks up or interacts, it "speaks" its dialogue lines (logged as
  * GF_EVENT dialogue, kept in SpokenLines) and starts its objective; after completion it speaks its turn-in line.
  */
 UCLASS(Blueprintable)
-class GAMEFORGERUNTIME_API AGameForgeQuestGiver : public AActor
+class GAMEFORGERUNTIME_API AGameForgeQuestGiver : public AActor, public IGameForgeInteractable
 {
 	GENERATED_BODY()
 
@@ -120,13 +123,31 @@ public:
 	TObjectPtr<UStaticMeshComponent> Visual;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FString NpcName = TEXT("Guide");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
 	FName ObjectiveId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FName QuestId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
 	FString ObjectiveTitle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	FString ObjectiveText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
 	int32 ObjectiveTarget = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	int32 TargetCount = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	int32 RewardScore = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
+	bool bTalkOnOverlap = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quest")
 	TArray<FString> IntroLines;
@@ -140,11 +161,17 @@ public:
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Quest|State")
 	TArray<FString> SpokenLines;
 
+	virtual void BeginPlay() override;
+	virtual bool CanInteract(AController* InController) const override { return true; }
+	virtual void Interact(AController* InController) override;
+
 protected:
 	UFUNCTION()
 	void HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,
 		int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
 private:
+	void SyncQuestProperties();
+	void TriggerTalk(const APawn* Pawn);
 	void Say(const FString& Line);
 };

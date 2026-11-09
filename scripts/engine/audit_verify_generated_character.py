@@ -17,6 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.backend.models.animation_spec import LocomotionSetSpec  # noqa: E402
 from src.gameforge_ide.backend.models.character_spec import CharacterSpec  # noqa: E402
@@ -24,12 +25,12 @@ from src.gameforge_ide.backend.tools.motion_generator import ProceduralKinematic
 from src.gameforge_ide.backend.tools.character_generator import ProceduralSkinnedCharacterGenerator  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-UPROJECT = Path(r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
-OUT_DIR = Path(r"E:\GameForge\assets\generated\characters\audit_20261030")
+UPROJECT = (get_settings().require_dev("validation_root") / r"live_ops_probe\GFProbe.uproject")
+OUT_DIR = (get_settings().data_root / "assets" / r"generated\characters\audit_20261030")
 DEST = "/Game/Audit/GeneratedCharacter"
 REPORT = ROOT / "reports" / "audit_m9_generated_character.json"
 ANIM_REPORT = ROOT / "reports" / "audit_m10_generated_motion.json"
-ANIM_DIR = Path(r"E:\GameForge\assets\generated\animations\audit_20261030")
+ANIM_DIR = (get_settings().data_root / "assets" / r"generated\animations\audit_20261030")
 ANIM_DEST = "/Game/Audit/GeneratedMotion"
 SHOT = UPROJECT.parent / "Saved" / "Screenshots" / "audit_m9_generated_character.png"
 

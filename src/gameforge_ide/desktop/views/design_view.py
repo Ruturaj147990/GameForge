@@ -575,6 +575,8 @@ class DesignView(QWidget):
         self._lbl_project_dir.setText(f"Authoritative Project Root: {self._current_project_dir}")
         self._is_dirty = True
         self._lbl_dirty.setVisible(True)
+        if hasattr(self, "_change_panel"):
+            self._change_panel.setVisible(True)
 
         self._form.set_spec(gds)
         self._render_questions(questions or [])
@@ -606,6 +608,8 @@ class DesignView(QWidget):
         self._is_dirty = False
         self._lbl_dirty.setVisible(False)
         self._questions_panel.setVisible(False)
+        if hasattr(self, "_change_panel"):
+            self._change_panel.setVisible(True)
 
         self._form.set_spec(loaded)
         self._update_header_status(is_valid=True, errors=[])

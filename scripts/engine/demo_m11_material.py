@@ -20,16 +20,17 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.backend.assets.registry import AssetRegistry  # noqa: E402
 from src.gameforge_ide.backend.tools.pbr_texture_generator import (  # noqa: E402
     PBRTextureSpec, generate_texture_set, read_png, validate_texture_set)
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-PROBE = Path(r"E:\GameForge\validation\live_ops_probe")
+PROBE = (get_settings().require_dev("validation_root") / r"live_ops_probe")
 DATE = time.strftime("%Y%m%d")
-PROJECT_DIR = Path(rf"E:\GameForge\validation\m11_demo_{DATE}")
-TEX_OUT = Path(rf"E:\GameForge\assets\generated\textures\m11_demo_{DATE}")
+PROJECT_DIR = (get_settings().require_dev("validation_root") / f"m11_demo_{DATE}")
+TEX_OUT = (get_settings().data_root / "assets" / f"generated/textures/m11_demo_{DATE}")
 REPORT = REPO / "reports" / "m11_material_demo.json"
 SHOTS = PROJECT_DIR / "Saved" / "Screenshots"
 

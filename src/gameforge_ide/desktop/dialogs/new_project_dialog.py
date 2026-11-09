@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...core.settings import get_settings
 from ...core.projects import is_gameforge_project, find_uproject
 
@@ -272,8 +273,7 @@ class NewProjectDialog(QDialog):
                     f"<font color='{tokens.ACCENT_SUCCESS}'>✓ Existing GameForge/Unreal project detected. Will open directly.</font>"
                 )
             else:
-                items = list(pdir.iterdir())
-                if not items:
+                if next(pdir.iterdir(), None) is None:
                     self._lbl_status.setText(
                         f"<font color='{tokens.ACCENT_SUCCESS}'>✓ Directory exists and is empty. Ready for project creation.</font>"
                     )

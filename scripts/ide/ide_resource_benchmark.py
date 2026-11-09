@@ -8,7 +8,6 @@ and the per-workspace metadata footprint. Writes JSON and exits non-zero on a bu
 """
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path

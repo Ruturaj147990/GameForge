@@ -62,9 +62,10 @@ def audit_os_isolation_capabilities() -> IsolationAuditResult:
     host_os = f"{platform.system()} {platform.release()}"
     host_build = platform.version()
 
-    # Check Windows Sandbox
-    wsb_path = Path(r"C:\Windows\System32\WindowsSandbox.exe")
-    wsb_available = wsb_path.is_file()
+    # Check Windows Sandbox via SystemRoot or PATH
+    sys_root = Path(os.environ.get("SystemRoot") or os.environ.get("WINDIR") or "/Windows")
+    wsb_path = sys_root / "System32" / "WindowsSandbox.exe"
+    wsb_available = wsb_path.is_file() or shutil.which("WindowsSandbox.exe") is not None
 
     # Check Docker / Podman
     containers_available = False
@@ -79,7 +80,7 @@ def audit_os_isolation_capabilities() -> IsolationAuditResult:
         try:
             # Non-interactive quick check
             res = subprocess.run(["wsl", "-l", "-q"], capture_output=True, text=True, timeout=2)
-            if res.return_code == 0 and res.stdout.strip():
+            if res.returncode == 0 and res.stdout.strip():
                 wsl_available = True
         except Exception:
             pass

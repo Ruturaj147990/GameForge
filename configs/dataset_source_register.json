@@ -157,7 +157,7 @@
         "evaluation": true,
         "redistribution": false
       },
-      "evidence_reference": "E:/GameForge/datasets/gameforge-27b/manifest.json",
+      "evidence_reference": "configs/gameforge_v2_local_training_manifest.json",
       "review_status": "CONFIRMED_FOR_TRAINING",
       "split_restrictions": [
         "train",

@@ -99,7 +99,7 @@ def test_ops_package_is_importable_offline():
         for k in [k for k in sys.modules if k.startswith("gameforge_ops")]:
             del sys.modules[k]
         pkg = importlib.import_module("gameforge_ops")
-        assert len(pkg._OPS) == len(op_catalog.CATALOG) == 129
+        assert len(pkg._OPS) == len(op_catalog.CATALOG) == 130
     finally:
         sys.path.remove(str(op_catalog.OPS_SOURCE.parent))
         for k in [k for k in sys.modules if k == "unreal" or k.startswith("gameforge_ops")]:

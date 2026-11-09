@@ -10,7 +10,6 @@ Results are written to reports/P8/index_benchmark.json.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 import time
@@ -83,7 +82,8 @@ def generate_synthetic_project(root: Path, total_files: int = 100000) -> None:
 
 
 def run_benchmark() -> dict:
-    bench_dir = Path("E:/GameForge/validation/bench_100k")
+    from src.gameforge_ide.core.settings import get_settings
+    bench_dir = get_settings().validation_root / "bench_100k"
     if bench_dir.exists():
         shutil.rmtree(bench_dir, ignore_errors=True)
     bench_dir.mkdir(parents=True, exist_ok=True)

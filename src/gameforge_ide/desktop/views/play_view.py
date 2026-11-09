@@ -180,9 +180,7 @@ class PlayView(QWidget):
             f"  font-weight: 600;"
             f"}}"
         )
-        self._results_table.clicked.connect(self._on_result_selected)
         self._results_table.itemSelectionChanged.connect(self._on_result_selected)
-        self._results_table.currentCellChanged.connect(lambda r, c, pr, pc: self._on_result_selected())
         self._results_table.installEventFilter(self)
         left_layout.addWidget(self._results_table, 1)
         splitter.addWidget(left_widget)
@@ -255,10 +253,6 @@ class PlayView(QWidget):
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 self._on_result_selected()
                 return True
-            elif event.key() in (Qt.Key_Up, Qt.Key_Down, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Home, Qt.Key_End):
-                res = super().eventFilter(watched, event)
-                self._on_result_selected()
-                return res
         return super().eventFilter(watched, event)
 
     @Slot()

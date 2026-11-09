@@ -57,6 +57,10 @@ def check_composition_features(gds: Any) -> None:
             pass
 
     implemented.update(resolve_codegen_features(getattr(gds, "rules", [])))
+    if getattr(gds, "architecture", None) is not None:
+        implemented.update(getattr(gds.architecture, "custom_capabilities", []) or [])
+        if isinstance(getattr(gds.architecture, "mechanics", None), dict):
+            implemented.update(gds.architecture.mechanics.keys())
     missing = sorted(required - implemented)
     if missing:
         raise CompositionError(
@@ -628,9 +632,14 @@ class ZombieSurvivalState:
 
 GAME_TYPE_LAYOUT_MAP: Dict[str, str] = {
     "sudoku": "board",
+    "minesweeper": "board",
     "chess": "board",
+    "checkers": "board",
+    "connect_four": "board",
+    "gomoku": "board",
+    "stealth": "rooms",
     "tic_tac_toe": "board",
-    "snakes_and_ladders": "board",
+    "roll_and_move": "board",
     "ludo": "board",
     "tetris": "board",
     "snake": "board",
@@ -643,7 +652,7 @@ GAME_TYPE_LAYOUT_MAP: Dict[str, str] = {
     "racing": "course",
     "tower_defense": "lanes",
     "roguelike": "rooms",
-    "zombie_survival": "arena",
+    "wave_survival": "arena",
     "action_adventure": "open_world",
     "top_down_shooter": "arena",
     "puzzle": "board",
@@ -651,17 +660,22 @@ GAME_TYPE_LAYOUT_MAP: Dict[str, str] = {
 
 GAME_TYPE_REQUIRED_MODULES: Dict[str, List[str]] = {
     "tic_tac_toe": ["kit.grid_board"],
+    "connect_four": ["kit.grid_board"],
+    "gomoku": ["kit.grid_board"],
     "sudoku": ["kit.grid_board"],
+    "minesweeper": ["kit.grid_board"],
+    "checkers": ["kit.grid_board"],
+    "stealth": ["kit.player_character", "kit.guard", "kit.goal"],
     "chess": ["kit.grid_board"],
     "tetris": ["kit.grid_board"],
     "snake": ["kit.grid_board"],
-    "snakes_and_ladders": ["kit.grid_board"],
+    "roll_and_move": ["kit.grid_board"],
     "ludo": ["kit.grid_board"],
     "puzzle": ["kit.grid_board"],
     "platformer": ["kit.player_character", "kit.pickup", "kit.goal"],
     "racing": ["kit.player_character", "kit.goal"],
     "arena_combat": ["kit.player_character", "kit.enemy_melee", "kit.spawner"],
-    "zombie_survival": ["kit.player_character", "kit.enemy_melee", "kit.spawner"],
+    "wave_survival": ["kit.player_character", "kit.enemy_melee", "kit.spawner"],
     "card_battler": ["kit.card_match"],
     "tactical_fps": ["kit.player_character", "kit.guard"],
     "dungeon_crawler": ["kit.player_character", "kit.enemy_melee", "kit.door"],

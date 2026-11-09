@@ -12,7 +12,6 @@
    - Re-run pipeline to completion (PASS).
 """
 import json
-import os
 import subprocess
 import sys
 import time

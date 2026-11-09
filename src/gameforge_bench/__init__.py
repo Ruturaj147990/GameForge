@@ -3,7 +3,7 @@
 A reproducible, cross-engine benchmark orchestration and evaluation framework.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __benchmark_version__ = "v0.1"
 
 from .grading import GradingLayer, RunStatus

@@ -484,7 +484,6 @@ class ToolActivityItem(QFrame):
             return
         self._pulse_tick += 1
         dots = "." * ((self._pulse_tick % 3) + 1)
-        icon, action, target, _ = format_tool_activity(self.tool_name, self.args, is_running=True)
         accent_warn = theme_color(tokens.ACCENT_WARNING)
         self._badge_label.setText(
             f'<span style="color: {accent_warn}; font-size: 11px; font-weight: 600;">({dots})</span>'
@@ -520,6 +519,9 @@ class ToolActivityItem(QFrame):
         except Exception:
             text = str(payload)
         QApplication.clipboard().setText(text)
+        if hasattr(self, "_btn_copy") and self._btn_copy:
+            self._btn_copy.setText("Copied! ✓")
+            QTimer.singleShot(1500, lambda: self._btn_copy.setText("Copy") if hasattr(self, "_btn_copy") and self._btn_copy else None)
 
     def finalise(self) -> None:
         """Finalize activity item cleanly."""

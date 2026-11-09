@@ -52,10 +52,10 @@
   },
   "dataset": {
     "manifest_path": "configs/gameforge_v2_training_manifest.json",
-    "manifest_digest": "e41c06711530b5df277cab5ea3d6fc00e222f2c0c03ab5e75e57d57faa26066a",
+    "manifest_digest": "4ef4640fd46af29a470076a84744fe304d63762b12ffc6f4b6560b4f2b1fc375",
     "split_policy_version": "v1.1.0",
     "source_register_path": "configs/dataset_source_register.json",
-    "admitted_sample_types": ["conversational_sft", "process_trajectory"]
+    "admitted_sample_types": ["conversational_sft", "process_trajectory", "code_sample"]
   },
   "hyperparameters": {
     "learning_rate": 0.00001,
@@ -81,14 +81,14 @@
     "precision": "bfloat16",
     "max_vram_gb": 22.0,
     "max_disk_gb": 60.0,
-    "output_dir": "E:\\GameForge\\training\\gameforge-v2\\adapter"
+    "output_dir": "artifacts/training/gameforge-v2/adapter"
   },
   "evaluation_manifest": {
     "frozen_manifest_id": "gameforge-bench-v0.2.0-baseline",
     "held_out_tasks": [
       "t2-008-projectile-collision",
       "t3-016-player-composition",
-      "t3-017-health-hud"
+      "t3-017-health-stamina-hud"
     ],
     "general_reasoning_tasks": [
       "general-coding-python-algorithms",

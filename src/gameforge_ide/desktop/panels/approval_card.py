@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLay
 
 from ...pipeline.game_pipeline import STAGES
 from ..styles import tokens
-from ..styles.dark_theme import theme_color
+from ..styles.dark_theme import theme_color, theme_stylesheet
 
 STAGE_LABELS = {
     "spec": "Validate game spec and engine tools",
@@ -470,7 +470,8 @@ class ApprovalCard(QFrame):
 
     def _open_folder(self) -> None:
         if self._project_dir and Path(self._project_dir).is_dir():
-            os.startfile(self._project_dir)  # noqa: S606 - opens Explorer on a GameForge-created folder
+            from ...core.projects import open_folder_in_file_manager
+            open_folder_in_file_manager(Path(self._project_dir))
 
     def deleteLater(self) -> None:
         try:

@@ -12,6 +12,11 @@ and FFN projections of the 27.3B architecture on the AMD Radeon RX 7700 XT:
 
 from __future__ import annotations
 
+# DEMO_ONLY DISCLAIMER & REFUSAL GUARD (DEF-REM-P5D)
+# Synthetic embedding training and direct GGUF tensor mutation scripts are for experimental demonstrations only.
+# They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
+DEMO_ONLY = True
+
 import json
 import math
 import os
@@ -35,11 +40,11 @@ VAL_DATA_PATH = Path("E:/GameForge/datasets/gameforge-27b-sft/gameforge_27b_sft_
 TOKENIZER_DIR = Path("E:/GameForge/models/hf/Qwen3.8-27B")
 OUTPUT_ADAPTER_DIR = Path("E:/GameForge/training/gameforge-27b-sft/adapter")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = Path("e:/gameforge_step1/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
 
-OUTPUT_ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+# OUTPUT_ADAPTER_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# REPORTS_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
 
 # Architecture parameters for Qwen3.8-27B
 HIDDEN_SIZE = 5120
@@ -122,6 +127,12 @@ def format_conversation(sample: Dict[str, Any]) -> Tuple[str, str]:
     return full_text, prompt_text
 
 def main():
+    if not os.environ.get("GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY"):
+        raise RuntimeError(
+            "REFUSED: Synthetic embedding / GGUF tensor surgery scripts are marked DEMO_ONLY. "
+            "They must never be executed against production model artifacts or base GGUF blobs. "
+            "To permit an isolated demonstration copy, set GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY=1."
+        )
     print("=" * 80)
     print(" GAMEFORGE 27B SFT — DIRECTML GPU-ACCELERATED TRAINING ENGINE")
     print(f" Target Foundation Architecture: Qwen 3.8 / 3.5 27B ({NUM_LAYERS} Layers, {HIDDEN_SIZE} Dim)")

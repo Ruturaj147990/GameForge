@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
 from .op_schemas_generated import GENERATED
 
@@ -36,14 +36,15 @@ GamePath = Field(pattern=r"^/(Game|Engine|Script)/")
 # ── 6 Core Level Ops ─────────────────────────────────────────────────────────
 
 class SpawnActorArgs(_Strict):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
     label: Optional[str] = Field(None, min_length=1, max_length=200)
     actor_class: str = "StaticMeshActor"
-    static_mesh: Optional[str] = None
+    static_mesh: Optional[str] = Field(None, validation_alias=AliasChoices("static_mesh", "mesh_path"))
     location: Vec3 = Field(default_factory=Vec3)
     rotation: Rot3 = Field(default_factory=Rot3)
     scale: Optional[Vec3] = None
     mobility: Optional[str] = None
-    material: Optional[str] = None
+    material: Optional[str] = Field(None, validation_alias=AliasChoices("material", "material_path"))
     light_intensity: Optional[float] = None   # read only for light actors
     # Theme tint: linear RGB(A) 0..1. A cached MaterialInstanceConstant of BasicShapeMaterial ("Color" param)
     # is created per unique colour, so prototype geometry carries the game's art direction instead of grey.
@@ -144,6 +145,16 @@ class MaterialBuildGraphArgs(_Strict):
     edges: list[MaterialEdgeSpec] = Field(default_factory=list, description="Connections between nodes")
     outputs: list[MaterialOutputSpec] = Field(default_factory=list, description="Connections to material inputs")
     usage_flags: list[str] = Field(default_factory=list, description="MaterialUsage flags")
+
+
+class MaterialAssignToActorArgs(_Strict):
+    """Assign a MaterialInterface to all mesh components on a level actor."""
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    label: Optional[str] = Field(None, description="Target actor label")
+    actor_label: Optional[str] = Field(None, description="Alias for target actor label")
+    material_path: Optional[str] = Field(None, description="MaterialInterface asset path")
+    material: Optional[str] = Field(None, description="Alias for MaterialInterface asset path")
+    slot: int = Field(0, ge=0, description="Material slot index")
 
 
 class MaterialInstanceCreateArgs(_Strict):
@@ -247,6 +258,31 @@ class LandscapeCreateArgs(_Strict):
     layer_info_path: str = Field("/Game/Landscape/LayerInfo", description="Folder for LayerInfo objects")
     high_start: float = Field(0.72, ge=0.0, le=1.0, description="Threshold for high rule")
     steep_start_cm_per_quad: float = Field(45.0, description="Slope threshold in cm per quad")
+
+
+class SplineCreateRoadArgs(_Strict):
+    """Create a procedural spline road/trail."""
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    road_name: str = Field("Road_MainTrail", description="Actor name for spline road")
+    road_width: float = Field(400.0, description="Road width in cm")
+    mesh_path: str = Field("/Engine/BasicShapes/Cube.Cube", description="StaticMesh for spline segments")
+    material_path: str = Field("", validation_alias=AliasChoices("material_path", "road_material"), description="Optional road material path")
+    points: list[Vec3] = Field(default_factory=list, description="Control points along the spline")
+
+
+class FoliageScatterArgs(_Strict):
+    """Scatter procedural instanced foliage on terrain."""
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    cluster_name: str = Field("Foliage_PineForest", description="Actor name for foliage cluster")
+    mesh_path: str = Field("/Engine/BasicShapes/Cylinder.Cylinder", validation_alias=AliasChoices("mesh_path", "static_mesh"), description="Foliage StaticMesh path")
+    material_path: str = Field("", description="Optional foliage material path")
+    instance_count: int = Field(60, ge=1, description="Number of instances to scatter")
+    seed: int = Field(777, description="Random seed")
+    area_radius: float = Field(3500.0, description="Scatter radius in cm")
+    min_elevation: float = Field(-500.0, description="Min Z elevation")
+    max_elevation: float = Field(2500.0, description="Max Z elevation")
+    max_slope_degrees: float = Field(35.0, description="Max surface slope in degrees")
+    road_clearance: float = Field(450.0, description="Minimum clearance from road splines in cm")
 
 
 class WorldClearGeneratedArgs(_Strict):
@@ -386,18 +422,21 @@ REVIEWED: dict[str, type[BaseModel]] = {
     "set_actor_property": SetActorPropertyArgs,
     "delete_actor": DeleteActorArgs,
     "actors_in_level": ActorsInLevelArgs,
-    # 24 hand-reviewed high-use ops
+    # 24+ hand-reviewed high-use ops
     "asset_exists": AssetExistsArgs,
     "list_assets": ListAssetsArgs,
     "import_asset": ImportAssetArgs,
     "create_material": CreateMaterialArgs,
     "material_build_graph": MaterialBuildGraphArgs,
     "material_instance_create": MaterialInstanceCreateArgs,
+    "material_assign_to_actor": MaterialAssignToActorArgs,
     "texture_import": TextureImportArgs,
     "mesh_generate_prop": MeshGeneratePropArgs,
     "static_mesh_configure": StaticMeshConfigureArgs,
     "pcg_build_graph": PCGBuildGraphArgs,
     "landscape_create": LandscapeCreateArgs,
+    "spline_create_road": SplineCreateRoadArgs,
+    "foliage_scatter": FoliageScatterArgs,
     "world_clear_generated": WorldClearGeneratedArgs,
     "datalayer_ensure": DatalayerEnsureArgs,
     "datalayer_add_actors": DatalayerAddActorsArgs,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict
@@ -13,7 +14,20 @@ from PySide6.QtSvg import QSvgRenderer
 from .styles import tokens
 from .styles.dark_theme import theme_color
 
-ICON_DIR = Path(__file__).parent / "assets" / "icons"
+
+def _resolve_icon_dir() -> Path:
+    local_dir = Path(__file__).parent / "assets" / "icons"
+    if local_dir.is_dir():
+        return local_dir
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        bundled = Path(meipass) / "src" / "gameforge_ide" / "desktop" / "assets" / "icons"
+        if bundled.is_dir():
+            return bundled
+    return local_dir
+
+
+ICON_DIR = _resolve_icon_dir()
 
 ROLE_COLOURS: Dict[str, str] = {
     "primary": tokens.TEXT_PRIMARY,
@@ -32,10 +46,18 @@ FALLBACK_GLYPHS: Dict[str, str] = {
     "home": "⌂",
     "build": "▣",
     "chat": "◌",
+    "assistant": "✦",
     "assets": "◆",
     "games": "🎮",
     "code": "</>",
     "evidence": "📊",
+    "cancel": "✕",
+    "check": "✓",
+    "design": "📐",
+    "resume": "⏭",
+    "rollback": "↩",
+    "search": "🔍",
+    "warning": "⚠",
 }
 
 

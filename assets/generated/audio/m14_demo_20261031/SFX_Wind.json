@@ -1,0 +1,27 @@
+{
+  "name": "Wind",
+  "kind": "wind_loop",
+  "generator": "GameForge-ProceduralSFX-V1",
+  "provenance": "procedural",
+  "license": "CC0-1.0",
+  "spec": {
+    "name": "Wind",
+    "kind": "wind_loop",
+    "seed": 9,
+    "duration_s": 0.0,
+    "gain": 0.8
+  },
+  "path": "E:\\GameForge\\assets\\generated\\audio\\m14_demo_20261031\\SFX_Wind.wav",
+  "sha256": "167ef242db16a42ea61241e65c8f15160c4e86191c100ebdedb9d630612a56be",
+  "analysis": {
+    "sample_rate": 44100,
+    "channels": 1,
+    "bits": 16,
+    "duration_s": 3.75,
+    "peak": 0.8,
+    "rms": 0.1363,
+    "clipped_samples": 0,
+    "loop_seam_ratio": 1.095
+  },
+  "looping": true
+}

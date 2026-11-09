@@ -19,8 +19,9 @@ from PySide6.QtWidgets import (
 
 from ...design.gds import GameDesignSpec
 from ...design.render import render_markdown
-from ...design.store import load as load_gds
+from ...design.store import load as load_gds, save as save_gds
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 
 class DesignPanel(QWidget):
@@ -39,7 +40,7 @@ class DesignPanel(QWidget):
         header_row = QHBoxLayout()
         self._title_lbl = QLabel("<b>Game Design Spec</b>", self)
         self._title_lbl.setTextFormat(Qt.RichText)
-        self._title_lbl.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: {tokens.FONT_BODY}px;")
+        self._title_lbl.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-size: {tokens.FONT_BODY}px;"))
         header_row.addWidget(self._title_lbl)
         header_row.addStretch()
 
@@ -47,14 +48,14 @@ class DesignPanel(QWidget):
         self._btn_refresh.setObjectName("btn_design_panel_refresh")
         self._btn_refresh.setAccessibleName("Reload spec from disk")
         self._btn_refresh.setCursor(Qt.PointingHandCursor)
-        self._btn_refresh.setStyleSheet(
+        self._btn_refresh.setStyleSheet(theme_stylesheet(
             f"QPushButton {{"
             f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
             f"  padding: 3px 10px; font-size: {tokens.FONT_BODY_SM}px;"
             f"}}"
             f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
-        )
+        ))
         self._btn_refresh.clicked.connect(self.reload_from_disk)
         header_row.addWidget(self._btn_refresh)
         layout.addLayout(header_row)
@@ -62,7 +63,7 @@ class DesignPanel(QWidget):
         # Tab widget: Markdown (read-only render) and JSON (editor + validate)
         self._tabs = QTabWidget(self)
         self._tabs.setObjectName("designPanelTabs")
-        self._tabs.setStyleSheet(
+        self._tabs.setStyleSheet(theme_stylesheet(
             f"QTabWidget::pane {{"
             f"  border: 1px solid {tokens.BORDER};"
             f"  border-radius: {tokens.RADIUS}px;"
@@ -76,14 +77,14 @@ class DesignPanel(QWidget):
             f"QTabBar::tab:selected {{"
             f"  background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_PRIMARY}; border-color: {tokens.ACCENT_PRIMARY};"
             f"}}"
-        )
+        ))
 
         # Tab 1: Markdown render
         self._md_browser = QTextBrowser(self)
         self._md_browser.setObjectName("designMdBrowser")
         self._md_browser.setAccessibleName("Markdown Design Spec View")
         self._md_browser.setOpenExternalLinks(True)
-        self._md_browser.setStyleSheet(
+        self._md_browser.setStyleSheet(theme_stylesheet(
             f"QTextBrowser {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  color: {tokens.TEXT_PRIMARY};"
@@ -91,7 +92,7 @@ class DesignPanel(QWidget):
             f"  padding: 8px;"
             f"  font-size: {tokens.FONT_BODY}px;"
             f"}}"
-        )
+        ))
         self._tabs.addTab(self._md_browser, "Design View")
 
         # Tab 2: JSON edit & validate
@@ -104,7 +105,7 @@ class DesignPanel(QWidget):
         self._json_edit.setObjectName("designJsonEdit")
         self._json_edit.setAccessibleName("Raw GDS JSON editor")
         self._json_edit.setPlaceholderText("Paste or edit Game Design Spec JSON here...")
-        self._json_edit.setStyleSheet(
+        self._json_edit.setStyleSheet(theme_stylesheet(
             f"QPlainTextEdit {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  color: {tokens.TEXT_PRIMARY};"
@@ -114,7 +115,7 @@ class DesignPanel(QWidget):
             f"  font-size: 12px;"
             f"  padding: 6px;"
             f"}}"
-        )
+        ))
         json_layout.addWidget(self._json_edit)
 
         val_row = QHBoxLayout()
@@ -122,16 +123,31 @@ class DesignPanel(QWidget):
         self._btn_validate.setObjectName("btn_validate_json")
         self._btn_validate.setAccessibleName("Validate GDS JSON schema")
         self._btn_validate.setCursor(Qt.PointingHandCursor)
-        self._btn_validate.setStyleSheet(
+        self._btn_validate.setStyleSheet(theme_stylesheet(
             f"QPushButton {{"
             f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
             f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
             f"  padding: 4px 12px; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;"
             f"}}"
             f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; border-color: {tokens.ACCENT_PRIMARY}; }}"
-        )
+        ))
         self._btn_validate.clicked.connect(self._validate_json)
         val_row.addWidget(self._btn_validate)
+
+        self._btn_save = QPushButton("Save", json_widget)
+        self._btn_save.setObjectName("btn_save_json")
+        self._btn_save.setAccessibleName("Save GDS JSON to disk")
+        self._btn_save.setCursor(Qt.PointingHandCursor)
+        self._btn_save.setStyleSheet(theme_stylesheet(
+            f"QPushButton {{"
+            f"  background-color: {tokens.ACCENT_PRIMARY}; color: {tokens.TEXT_PRIMARY};"
+            f"  border: none; border-radius: {tokens.RADIUS}px;"
+            f"  padding: 4px 12px; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;"
+            f"}}"
+            f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+        ))
+        self._btn_save.clicked.connect(self._save_json)
+        val_row.addWidget(self._btn_save)
 
         self._status_lbl = QLabel("", json_widget)
         self._status_lbl.setObjectName("lbl_design_status")
@@ -179,3 +195,16 @@ class DesignPanel(QWidget):
             self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ Valid GDS (gds/1)</span>")
         except Exception as exc:
             self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Invalid: {exc}</span>")
+
+    def _save_json(self) -> None:
+        text = self._json_edit.toPlainText().strip()
+        if not text:
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>Empty JSON</span>")
+            return
+        try:
+            gds = GameDesignSpec.model_validate_json(text)
+            save_gds(self.workspace_root, gds)
+            self.set_gds(gds)
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ Saved GDS to disk</span>")
+        except Exception as exc:
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Save failed: {exc}</span>")

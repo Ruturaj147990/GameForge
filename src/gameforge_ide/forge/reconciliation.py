@@ -1,24 +1,23 @@
-"""Living project level reconciliation and user-edit protection (WI-8.3).
-
-Instead of wiping levels on rebuild, reconciles planned actors against existing actors:
-- Preserves user-added actors (without GF_Owned tag).
-- Detects user-modified owned actors (state_hash mismatch) and raises conflicts.
-- Supports resolutions: "keep_mine" (node becomes owner: "user"), "use_design" (overwrite).
-- Updates modified actors and spawns new plan actors.
-"""
+"""Living project level reconciliation and user-edit protection (WI-8.3) plus interrupted run reconciliation."""
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Literal, Optional, Tuple
+import json
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
 
+from ..storage.atomic import atomic_write_json
+from .model import RunState, StepStatus
 from .project_graph import (
     GeneratedBy,
     ProjectGraph,
     ProjectNode,
     compute_actor_state_hash,
 )
+from .store import _INDEX_LOCK
 
 TAG_GF_OWNED = "GF_Owned"
 
@@ -179,3 +178,100 @@ def apply_resolutions(
 
     plan.conflicts = remaining_conflicts
     return plan
+
+
+def _update_index_file(index_path: Path, reconciled_ids: Dict[str, float]) -> None:
+    """Update status and updated_at for reconciled runs in an index JSON file."""
+    if not index_path.is_file():
+        return
+    try:
+        raw = json.loads(index_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    changed = False
+    if isinstance(raw, list):
+        for entry in raw:
+            if isinstance(entry, dict) and entry.get("run_id") in reconciled_ids:
+                entry["status"] = "INTERRUPTED"
+                entry["updated_at"] = reconciled_ids[entry["run_id"]]
+                changed = True
+    elif isinstance(raw, dict):
+        runs_list = raw.get("runs")
+        if isinstance(runs_list, list):
+            for entry in runs_list:
+                if isinstance(entry, dict) and entry.get("run_id") in reconciled_ids:
+                    entry["status"] = "INTERRUPTED"
+                    entry["updated_at"] = reconciled_ids[entry["run_id"]]
+                    changed = True
+        for rid, ts in reconciled_ids.items():
+            if rid in raw and isinstance(raw[rid], dict):
+                raw[rid]["status"] = "INTERRUPTED"
+                raw[rid]["updated_at"] = ts
+                changed = True
+
+    if changed:
+        atomic_write_json(index_path, raw)
+
+
+def reconcile_interrupted_runs(
+    workspace_dir: Union[Path, str],
+    project_dir: Optional[Union[Path, str]] = None,
+) -> List[str]:
+    """Scan persisted Forge runs and mark any orphaned RUNNING runs as INTERRUPTED.
+
+    Also updates `.gameforge/runs/index.json` and `.gameforge/runs_index.json` so
+    summary listings never report stale RUNNING status.
+    """
+    ws = Path(workspace_dir)
+    search_roots: List[Path] = [ws / ".gameforge" / "runs"]
+    if project_dir is not None:
+        search_roots.append(Path(project_dir) / "Saved" / "GameForge" / "runs")
+
+    reconciled: Dict[str, float] = {}
+    now = time.time()
+
+    with _INDEX_LOCK:
+        for runs_root in search_roots:
+            if not runs_root.is_dir():
+                continue
+            for run_dir in sorted(runs_root.iterdir()):
+                if not run_dir.is_dir():
+                    continue
+                state_file = run_dir / "state.json"
+                if not state_file.is_file():
+                    continue
+                try:
+                    raw_state = json.loads(state_file.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                if not isinstance(raw_state, dict):
+                    continue
+
+                status = raw_state.get("status")
+                if status in ("RUNNING", "CANCELLING"):
+                    raw_state["status"] = "INTERRUPTED"
+                    raw_state["updated_at"] = now
+                    records = raw_state.get("records")
+                    if isinstance(records, dict):
+                        for rec in records.values():
+                            if isinstance(rec, dict) and rec.get("status") == "RUNNING":
+                                rec["status"] = StepStatus.INTERRUPTED.value
+                                rec["finished_at"] = now
+                                errs = rec.setdefault("errors", [])
+                                if isinstance(errs, list):
+                                    errs.append("Run interrupted before step completion")
+                    atomic_write_json(state_file, raw_state)
+                    run_id = (
+                        raw_state.get("run", {}).get("run_id")
+                        if isinstance(raw_state.get("run"), dict)
+                        else None
+                    ) or run_dir.name
+                    reconciled[str(run_id)] = now
+
+            # Update index files inside or alongside runs_root
+            if reconciled:
+                _update_index_file(runs_root / "index.json", reconciled)
+                _update_index_file(runs_root.parent / "runs_index.json", reconciled)
+
+    return sorted(reconciled.keys())

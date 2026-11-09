@@ -106,8 +106,11 @@ EVENT_ALIASES: Dict[str, List[str]] = {
     "game.started": ["session.started", "game.start", "level.loaded"],
     "objective.completed": ["objective.complete", "bomb.defused", "bomb.planted", "target.destroyed", "game.won"],
     "dice.rolled": ["dice.roll", "dice.result"],
-    "snake.transition": ["snake.slide", "board.snake"],
-    "ladder.transition": ["ladder.climb", "board.ladder"],
+    "board.transition": ["cell.warp", "portal.teleported", "board.move"],
+    "switch.toggled": ["switch.activated", "lever.pulled"],
+    "door.opened": ["door.unlocked", "gate.opened"],
+    "checkpoint.reached": ["lap.completed", "waypoint.reached"],
+    "lap.completed": ["checkpoint.reached", "race.lap"],
 }
 
 

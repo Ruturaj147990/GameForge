@@ -310,6 +310,10 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 			{
 				Info->Layers[Index].LayerInfoObj = Layer.LayerInfo;
 			}
+			else
+			{
+				Info->Layers.Add(FLandscapeInfoLayerSettings(Layer.LayerInfo, Landscape));
+			}
 			Layer.LayerInfo->MarkPackageDirty();
 		}
 	}
@@ -336,6 +340,70 @@ FString UGameForgeLandscapeLibrary::CreateLandscape(const FString& ParamsJson)
 	Data->SetStringField(TEXT("terrain_type"), TerrainType);
 
 	return MakeLandscapeEnvelope(true, Data, {}, LayerWarnings);
+}
+
+FString UGameForgeLandscapeLibrary::AddPaintLayer(const FString& ParamsJson)
+{
+	UWorld* World = GetActiveEditorWorld();
+	if (!World)
+	{
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No active editor world found.")});
+	}
+
+	TSharedPtr<FJsonObject> Json;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ParamsJson);
+	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
+	{
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Failed to parse ParamsJson.")});
+	}
+
+	const FString LayerNameStr = Json->HasField(TEXT("layer_name")) ? Json->GetStringField(TEXT("layer_name"))
+		: (Json->HasField(TEXT("name")) ? Json->GetStringField(TEXT("name")) : TEXT("Grass"));
+	const FString LayerFolder = Json->HasField(TEXT("layer_info_path")) ? Json->GetStringField(TEXT("layer_info_path")) : TEXT("/Game/Landscape/LayerInfo");
+
+	ALandscape* Landscape = nullptr;
+	for (TActorIterator<ALandscape> It(World); It; ++It)
+	{
+		Landscape = *It;
+		break;
+	}
+	if (!Landscape)
+	{
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("No ALandscape found in world.")});
+	}
+
+	ULandscapeInfo* Info = Landscape->GetLandscapeInfo();
+	if (!Info)
+	{
+		return MakeLandscapeEnvelope(false, nullptr, {TEXT("Landscape has no ULandscapeInfo.")});
+	}
+
+	const FName LayerFName(*LayerNameStr);
+	ULandscapeLayerInfoObject* LayerInfo = UE::Landscape::CreateTargetLayerInfo(LayerFName, LayerFolder, FString::Printf(TEXT("LI_%s"), *LayerNameStr));
+	if (!LayerInfo)
+	{
+		return MakeLandscapeEnvelope(false, nullptr, {FString::Printf(TEXT("Failed to create ULandscapeLayerInfoObject for '%s'."), *LayerNameStr)});
+	}
+
+	Landscape->AddTargetLayer(LayerInfo->GetLayerName(), FLandscapeTargetLayerSettings(LayerInfo));
+	Info->UpdateLayerInfoMap(Landscape);
+	const int32 ExistingIdx = Info->GetLayerInfoIndex(LayerFName);
+	if (ExistingIdx != INDEX_NONE)
+	{
+		Info->Layers[ExistingIdx].LayerInfoObj = LayerInfo;
+	}
+	else
+	{
+		Info->Layers.Add(FLandscapeInfoLayerSettings(LayerInfo, Landscape));
+	}
+	LayerInfo->MarkPackageDirty();
+
+	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
+	Data->SetStringField(TEXT("landscape"), Landscape->GetActorLabel());
+	Data->SetStringField(TEXT("layer_name"), LayerNameStr);
+	Data->SetStringField(TEXT("layer_info_path"), LayerInfo->GetPathName());
+	Data->SetNumberField(TEXT("total_layers"), Info->Layers.Num());
+	return MakeLandscapeEnvelope(true, Data);
 }
 
 FString UGameForgeLandscapeLibrary::InspectLandscapeLayers()
@@ -414,7 +482,8 @@ FString UGameForgeLandscapeLibrary::CreateSplineRoad(const FString& ParamsJson)
 	const FString RoadName = Json->HasField(TEXT("road_name")) ? Json->GetStringField(TEXT("road_name")) : TEXT("Road_MainTrail");
 	const float RoadWidth = Json->HasField(TEXT("road_width")) ? (float)Json->GetNumberField(TEXT("road_width")) : 400.0f;
 	const FString MeshPath = Json->HasField(TEXT("mesh_path")) ? Json->GetStringField(TEXT("mesh_path")) : TEXT("/Engine/BasicShapes/Cube.Cube");
-	const FString MaterialPath = Json->HasField(TEXT("material_path")) ? Json->GetStringField(TEXT("material_path")) : TEXT("");
+	const FString MaterialPath = Json->HasField(TEXT("material_path")) ? Json->GetStringField(TEXT("material_path"))
+		: (Json->HasField(TEXT("road_material")) ? Json->GetStringField(TEXT("road_material")) : TEXT(""));
 
 	UStaticMesh* RoadMesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *MeshPath));
 	if (!RoadMesh)
@@ -533,7 +602,12 @@ FString UGameForgeLandscapeLibrary::CreateFoliageScatter(const FString& ParamsJs
 	}
 
 	const FString ClusterName = Json->HasField(TEXT("cluster_name")) ? Json->GetStringField(TEXT("cluster_name")) : TEXT("Foliage_PineForest");
-	const FString MeshPath = Json->HasField(TEXT("mesh_path")) ? Json->GetStringField(TEXT("mesh_path")) : TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
+	FString MeshPath = Json->HasField(TEXT("mesh_path")) ? Json->GetStringField(TEXT("mesh_path"))
+		: (Json->HasField(TEXT("static_mesh")) ? Json->GetStringField(TEXT("static_mesh")) : TEXT(""));
+	if (MeshPath.IsEmpty())
+	{
+		MeshPath = TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
+	}
 	const FString MaterialPath = Json->HasField(TEXT("material_path")) ? Json->GetStringField(TEXT("material_path")) : TEXT("");
 	const int32 TargetCount = Json->HasField(TEXT("instance_count")) ? Json->GetIntegerField(TEXT("instance_count")) : 60;
 	const int32 Seed = Json->HasField(TEXT("seed")) ? Json->GetIntegerField(TEXT("seed")) : 777;
@@ -743,6 +817,7 @@ FString UGameForgeLandscapeLibrary::CreateLandmark(const FString& ParamsJson)
 	if (AltarMesh) Altar->SetStaticMesh(AltarMesh);
 	if (StoneMat) Altar->SetMaterial(0, StoneMat);
 	Altar->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	Altar->SetCollisionResponseToAllChannels(ECR_Block);
 	Altar->RegisterComponent();
 	LandmarkActor->AddInstanceComponent(Altar);
 

@@ -13,6 +13,7 @@ struct GAMEFORGERUNTIME_API FGameForgeEvent
 {
 	GENERATED_BODY()
 	UPROPERTY(BlueprintReadOnly, Category = "GameForge") FName Name;
+	UPROPERTY(BlueprintReadOnly, Category = "GameForge") FString EventName;    // string mirror of Name for custom C++ rules
 	UPROPERTY(BlueprintReadOnly, Category = "GameForge") float Time = 0.f;     // seconds since this game instance started
 	UPROPERTY(BlueprintReadOnly, Category = "GameForge") FString Source;       // emitting actor name (diagnostics only)
 	UPROPERTY(BlueprintReadOnly, Category = "GameForge") FName Entity;         // GDS entity id (the actor's EntityId); matching uses this
@@ -31,8 +32,16 @@ public:
 	static UGameForgeEventBus* Get(const UObject* WorldContext);
 
 	void Emit(FName Name, const FString& Source, const FString& DataJson = TEXT("{}"), FName Entity = NAME_None);
+	void EmitSimple(FName Name, const UObject* SourceObj = nullptr, FName Category = NAME_None, float Value = 0.0f)
+	{
+		const FString Src = SourceObj ? SourceObj->GetName() : TEXT("CustomRule");
+		const FString Json = FString::Printf(TEXT("{\"value\":%.2f}"), Value);
+		Emit(Name, Src, Json, Category);
+	}
 	/** Events named Name; when Entity is not None, only those whose Entity matches. */
 	int32 Count(FName Name, FName Entity = NAME_None) const;
+	/** Extracts a string/number/bool field from the most recent event matching Name (and optional Entity). */
+	bool GetLastEventDataField(FName Name, const FString& Key, FString& OutValue, FName Entity = NAME_None) const;
 	const TArray<FGameForgeEvent>& History() const { return Events; }
 	const FString& SessionFile() const { return SessionPath; }
 	/** Clears the in-memory history and counters (the JSONL session log keeps everything). The bus lives on the
@@ -51,6 +60,8 @@ private:
 	double StartSeconds = 0.0;
 	static constexpr int32 MaxEvents = 20000;
 };
+
+using UGameForgeEventBusSubsystem = UGameForgeEventBus;
 
 UCLASS()
 class GAMEFORGERUNTIME_API UGameForgeEventLibrary : public UBlueprintFunctionLibrary

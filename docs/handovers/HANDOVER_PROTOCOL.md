@@ -55,7 +55,6 @@ Each handover is a list of work items `WI-<phase>.<n>`. For each item:
   missing, mark the item `BLOCKED (needs approval: <what>)`.
 - Ollama calls always pass `"think": false` and an explicit `num_ctx`.
 - Large artifacts go on `E:` only.
-- If the user says to shut down the PC: `shutdown /s /t 0` immediately (AGENTS.md).
 - Do not refactor code that is not in the item. Do not "improve" architecture. Write ideas in `QUESTIONS.md`.
 
 ## 4. When a handover is unclear or wrong

@@ -11,7 +11,7 @@ Read first: [`02_AUDIT_2026-10-31.md`](02_AUDIT_2026-10-31.md) (where we are), [
 
 ## 1. Starting point in one paragraph
 
-The engine layer is strong. It has 126 read-back-catalogued ops, a 7.4k-line C++ plugin, a real
+The engine layer is strong. It has 127 read-back-catalogued ops, a 7.4k-line C++ plugin, a real
 build/test/package toolchain and kit actors verified in PIE. The 5 recipe genres reach packaged games from a prompt.
 **But the product loop is narrow.** A prompt can only produce those 5 fixed genres with placeholder art. Nothing
 built in M8–M16 is reachable from a prompt. There is no design spec the user can review. Verification is per-demo
@@ -51,7 +51,7 @@ P0 Foundation hardening ─┬─► P1 Game Design Spec ──► P2 Forge exec
 | **P8** | Living projects | Change requests via GDS patches, incremental rebuilds, user-edit protection, project index, import of existing UE projects | P6 (P7 for content regeneration) | 4–5 wks |
 | **P9** | Model intelligence | Agentic eval suite, real hosted-tier validation, routing from scores, local fine-tune flywheel, gated neural spikes | P1 (track), P6 for codegen evals | 3–4 wks (parallel) |
 | **P10** | Scale & advanced systems | Performance budgets + optimisation loop, Shipping packaging ≤ 400 MB, World Partition open worlds, multiplayer (listen server), in-game cinematics, UE 5.8 lane | P6–P8 | 5–7 wks |
-| **P11** | Release | Flagship "Ember Vale" from one prompt, IDE distribution (Nuitka), first-run onboarding, soak tests, security review, 1.0 gates | all | 2–3 wks |
+| **P11** | Release | Multi-genre dynamic prompt-to-game verification from one prompt, IDE distribution (Nuitka), first-run onboarding, soak tests, security review, 1.0 gates | all | 2–3 wks |
 
 *Calendar estimates for one developer plus AI agents, assuming a hosted heavy model is available from P6. These are
 planning aids, not commitments. Estimates for engine work have historically been met; estimates for content
@@ -189,7 +189,7 @@ it in `QUESTIONS.md`.
 - **Exit gate:** each sub-area has a packaged, scenario-verified demo with its budget met.
 
 ### P11 — Release ([handover](handovers/P11_release.md))
-- **Scope:** flagship "Ember Vale" from one prompt, built end-to-end by the product (golden test); IDE packaging with
+- **Scope:** multi-genre dynamic prompt-to-game verification from one prompt, built end-to-end by the product (golden test); IDE packaging with
   Nuitka (install approval), portable zip plus optional installer; first-run wizard; crash-safe state restore; soak
   test (10 consecutive game builds, zero leaked processes, metadata within cap); security review; documentation pass;
   1.0 tag.

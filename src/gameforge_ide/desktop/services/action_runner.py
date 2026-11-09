@@ -34,6 +34,14 @@ class ActionRunner(QObject):
         self._handles: Dict[str, JobHandle] = {}
         self._cancel_events: Dict[str, threading.Event] = {}
 
+    @property
+    def has_active_jobs(self) -> bool:
+        return any(not h.done() for h in self._handles.values())
+
+    @property
+    def _threads(self) -> list:
+        return [h for h in self._handles.values() if not h.done()]
+
     def is_running(self, approval_id: str) -> bool:
         handle = self._handles.get(approval_id)
         return handle is not None and not handle.done()

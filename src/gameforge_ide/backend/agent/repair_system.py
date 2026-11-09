@@ -23,14 +23,21 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field
 
-from .code_verify import parse_diagnostics
+from .code_verify import MSVC_DIAG_RE as _SHARED_MSVC_DIAG_RE, _extract_symbol, parse_diagnostics
 
 logger = logging.getLogger(__name__)
+
+# Expanded MSVC / Linker (LNK\d+) / UHT diagnostic regex
+MSVC_DIAG_RE = re.compile(
+    r"^(?:(?P<file>(?:[a-zA-Z]:[\\/])?[^\(\r\n:]+?)(?:\((?P<line>\d+)(?:,\s*(?P<col>\d+))?\))?\s*:\s*)?"
+    r"(?P<severity>fatal error|error|warning|Error|Warning)\s*"
+    r"(?P<code>(?:[A-Z]+\d+|LNK\d+|C\d+|UHT\d+))?\s*:\s*(?P<message>.+)$"
+)
 
 
 class FailureCategory(str, Enum):
     """Categorized root causes of build, test, pipeline, or compiler failures."""
-    CODE_DEFECT = "code_defect"                  # Syntax, type, linker, or compiler errors
+    CODE_DEFECT = "code_defect"                  # Syntax, type, linker, UHT, or compiler errors
     LOGIC_DEFECT = "logic_defect"                # Assertion failure, scenario logic, math error
     CONTENT_DEFECT = "content_defect"            # Asset missing, invalid material, texture format
     CONFIG_DEFECT = "config_defect"              # .ini settings, target rules, map settings
@@ -45,6 +52,7 @@ class DiagnosticRecord(BaseModel):
     file: str = ""
     line: int = 0
     column: int = 0
+    code: str = ""
     message: str
     severity: str = "error"  # error, warning, note
     symbol: Optional[str] = None
@@ -91,6 +99,50 @@ class RepairEngine:
     def attempt_counts(self) -> Dict[str, int]:
         return {k: len(v) for k, v in self._history_by_cause.items()}
 
+    def parse_diagnostics(self, raw_output: Any) -> List[DiagnosticRecord]:
+        """Parse compiler, linker (LNK), and UHT diagnostics using MSVC_DIAG_RE and parse_diagnostics."""
+        records: List[DiagnosticRecord] = []
+        if isinstance(raw_output, str):
+            for line in raw_output.splitlines():
+                sline = line.strip()
+                if not sline:
+                    continue
+                m = MSVC_DIAG_RE.match(sline)
+                if m:
+                    raw_file = (m.group("file") or "").strip().replace("\\", "/")
+                    if raw_file.upper() == "LINK":
+                        raw_file = ""
+                    elif raw_file.endswith(".cpp.obj") or raw_file.endswith(".c.obj"):
+                        raw_file = raw_file[:-4]
+                    code = (m.group("code") or "").strip()
+                    msg = m.group("message").strip()
+                    sym = _extract_symbol(msg)
+                    records.append(
+                        DiagnosticRecord(
+                            file=raw_file,
+                            line=int(m.group("line") or 0),
+                            column=int(m.group("col") or 0),
+                            code=code,
+                            message=f"{code}: {msg}" if code and code not in msg else msg,
+                            severity=m.group("severity").lower(),
+                            symbol=sym,
+                        )
+                    )
+        if not records:
+            for d in parse_diagnostics(raw_output):
+                records.append(
+                    DiagnosticRecord(
+                        file=d.get("file", ""),
+                        line=int(d.get("line", 0) or 0),
+                        column=int(d.get("column", 0) or 0),
+                        code=str(d.get("code", "") or ""),
+                        message=d.get("message", ""),
+                        severity=d.get("severity", "error"),
+                        symbol=d.get("symbol"),
+                    )
+                )
+        return records
+
     def extract_root_cause(
         self,
         raw_output: Any,
@@ -104,6 +156,7 @@ class RepairEngine:
                 file=d.get("file", ""),
                 line=int(d.get("line", 0) or 0),
                 column=int(d.get("column", 0) or 0),
+                code=str(d.get("code", "") or ""),
                 message=d.get("message", ""),
                 severity=d.get("severity", "error"),
                 symbol=d.get("symbol"),
@@ -111,6 +164,10 @@ class RepairEngine:
             )
             for d in diagnostics_data
         ]
+        if not diags and isinstance(raw_output, str):
+            diags = self.parse_diagnostics(raw_output)
+            for d in diags:
+                d.stage_id = stage_id
 
         text = raw_output if isinstance(raw_output, str) else json.dumps(raw_output)
 
@@ -140,18 +197,18 @@ class RepairEngine:
                 diagnostics=diags,
             )
 
-        # 3. Check for compiler / syntax defects
+        # 3. Check for compiler / linker / UHT defects
         if diags:
             first = diags[0]
             norm_file = Path(first.file).name if first.file else "unknown"
-            sym = first.symbol or "unknown_symbol"
+            sym = first.symbol or first.code or "unknown_symbol"
             sig = f"code:{norm_file}:{first.line}:{sym}"
             return RootCause(
                 cause_id=f"rc_{uuid_hex(sig)}",
                 category=FailureCategory.CODE_DEFECT,
                 signature=sig,
                 description=first.message[:200],
-                primary_file=first.file,
+                primary_file=first.file or None,
                 diagnostics=diags,
             )
 
@@ -180,7 +237,6 @@ class RepairEngine:
         # Check consecutive attempts without measurable progress
         if len(history) >= self.MAX_CONSECUTIVE_NO_PROGRESS:
             recent = history[-self.MAX_CONSECUTIVE_NO_PROGRESS:]
-            # Check if all recent attempts failed to reduce diagnostic count or produced identical diffs
             no_error_reduction = all(
                 r.diagnostic_count_after >= r.diagnostic_count_before and r.result_status != "SUCCESS"
                 for r in recent
@@ -276,7 +332,6 @@ class RepairEngine:
         all_stage_dependencies: Dict[str, List[str]],
     ) -> List[str]:
         """Calculates which downstream stages are invalidated and must be rerun."""
-        # Topologically determine all transitive dependents of failed_stage_id
         invalidated: Set[str] = {failed_stage_id}
         changed = True
         while changed:
@@ -287,6 +342,10 @@ class RepairEngine:
                     changed = True
 
         return sorted(list(invalidated))
+
+
+# Alias for callers expecting RepairSystem
+RepairSystem = RepairEngine
 
 
 def uuid_hex(val: str) -> str:

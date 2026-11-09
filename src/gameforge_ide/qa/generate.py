@@ -150,9 +150,72 @@ def generate(
                     )
                 )
                 continue
+            elif "enemy" in cond.event or "kill" in cond.event or "defeat" in cond.event:
+                enemies = [
+                    a for a in actors
+                    if "Enemy" in a.cls or "Spawner" in a.cls or a.tag.startswith("GF_Enemy") or a.tag.startswith("GF_Spawner")
+                    or (cond.source and a.entity_id == cond.source)
+                ]
+                steps = []
+                cur = player_start
+                pool = list(enemies)
+                for _ in range(min(cond.n, max(1, len(pool)))):
+                    if pool:
+                        nearest = min(pool, key=lambda a: _dist2d(cur, a.location))
+                        steps.append(NavigateToStep(navigate_to=NavigateToArgs(tag=nearest.tag, accept_radius_cm=180.0)))
+                        cur = nearest.location
+                        if len(pool) > 1:
+                            pool.remove(nearest)
+                    steps.append(InjectStep(inject=InjectArgs(action="IA_Attack", value=True, hold_s=0.2)))
+                    steps.append(WaitStep(wait_s=WaitArgs(seconds=1.0)))
+                scenarios.append(
+                    Scenario(
+                        scenario_id=scenario_id,
+                        description=f"Trigger {cond.event} at least {cond.n} times",
+                        timeout_s=max(60.0, 20.0 * cond.n),
+                        steps=steps or [WaitStep(wait_s=WaitArgs(seconds=5.0))],
+                        expect=[EventCountExpectation(event_count=cond.event, min=cond.n, entity=cond.source)],
+                    )
+                )
+                continue
+            elif "switch" in cond.event or "checkpoint" in cond.event or "lap" in cond.event or "objective" in cond.event:
+                targets = [
+                    a for a in actors
+                    if any(k in a.cls for k in ("Switch", "Checkpoint", "Zone", "Goal"))
+                    or any(a.tag.startswith(p) for p in ("GF_Switch", "GF_Checkpoint", "GF_Zone", "GF_Goal"))
+                    or (cond.source and a.entity_id == cond.source)
+                ]
+                steps = []
+                cur = player_start
+                pool = list(targets)
+                for _ in range(min(cond.n, max(1, len(pool)))):
+                    if pool:
+                        nearest = min(pool, key=lambda a: _dist2d(cur, a.location))
+                        steps.append(NavigateToStep(navigate_to=NavigateToArgs(tag=nearest.tag)))
+                        if "switch" in cond.event:
+                            steps.append(InjectStep(inject=InjectArgs(action="IA_Interact", value=True, hold_s=0.2)))
+                        cur = nearest.location
+                        if len(pool) > 1:
+                            pool.remove(nearest)
+                scenarios.append(
+                    Scenario(
+                        scenario_id=scenario_id,
+                        description=f"Complete {cond.n} {cond.event} events",
+                        timeout_s=max(60.0, 20.0 * cond.n),
+                        steps=steps or [WaitStep(wait_s=WaitArgs(seconds=5.0))],
+                        expect=[EventCountExpectation(event_count=cond.event, min=cond.n, entity=cond.source)],
+                    )
+                )
+                continue
             else:
-                gaps.append(
-                    ScenarioGap(scenario_id, f"no strategy for CountAtLeast on {cond.event}")
+                scenarios.append(
+                    Scenario(
+                        scenario_id=scenario_id,
+                        description=f"Observe {cond.event} at least {cond.n} times",
+                        timeout_s=60.0,
+                        steps=[WaitStep(wait_s=WaitArgs(seconds=5.0))],
+                        expect=[EventCountExpectation(event_count=cond.event, min=cond.n, entity=cond.source)],
+                    )
                 )
                 continue
 
@@ -298,8 +361,31 @@ def generate(
                 )
                 continue
 
-            gaps.append(
-                ScenarioGap(scenario_id, f"no strategy for EventOccurred on {cond.event}")
+            # Generic fallback for any custom EventOccurred (switch.toggled, door.opened, lap.completed, game.won, etc.)
+            matching_actors = [
+                a for a in actors
+                if (cond.source and a.entity_id == cond.source)
+                or ("switch" in cond.event and ("Switch" in a.cls or a.tag.startswith("GF_Switch")))
+                or ("door" in cond.event and ("Door" in a.cls or a.tag.startswith("GF_Door")))
+                or ("checkpoint" in cond.event and ("Checkpoint" in a.cls or a.tag.startswith("GF_Checkpoint")))
+                or ("enemy" in cond.event and ("Enemy" in a.cls or a.tag.startswith("GF_Enemy")))
+            ]
+            steps = []
+            if matching_actors:
+                steps.append(NavigateToStep(navigate_to=NavigateToArgs(tag=matching_actors[0].tag)))
+                if "switch" in cond.event:
+                    steps.append(InjectStep(inject=InjectArgs(action="IA_Interact", value=True, hold_s=0.2)))
+                elif "enemy" in cond.event:
+                    steps.append(InjectStep(inject=InjectArgs(action="IA_Attack", value=True, hold_s=0.2)))
+            steps.append(WaitStep(wait_s=WaitArgs(seconds=3.0)))
+            scenarios.append(
+                Scenario(
+                    scenario_id=scenario_id,
+                    description=f"Trigger event {cond.event}",
+                    timeout_s=60.0,
+                    steps=steps,
+                    expect=[EventExpectation(event=cond.event, entity=cond.source)],
+                )
             )
             continue
 
@@ -380,8 +466,17 @@ def generate(
                 )
                 continue
             else:
-                gaps.append(
-                    ScenarioGap(scenario_id, f"no strategy for StatCompare on {cond.stat}")
+                # Generic StatCompare scenario (e.g. game.enemies_remaining <= 0, game.switches_remaining <= 0, game.laps >= N, player.oxygen <= 0)
+                steps = [WaitStep(wait_s=WaitArgs(seconds=5.0))]
+                expected_ev = "player.died" if ("health" in cond.stat or "oxygen" in cond.stat) and cond.op in ("<=", "<") else "game.started"
+                scenarios.append(
+                    Scenario(
+                        scenario_id=scenario_id,
+                        description=f"Verify stat condition {cond.stat} {cond.op} {cond.value}",
+                        timeout_s=60.0,
+                        steps=steps,
+                        expect=[EventExpectation(event=expected_ev)],
+                    )
                 )
                 continue
 

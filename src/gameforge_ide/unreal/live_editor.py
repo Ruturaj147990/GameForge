@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import secrets
 import shutil
 import subprocess
@@ -130,20 +131,20 @@ class LiveEditorLink:
         dest.mkdir(parents=True, exist_ok=True)
         shutil.copytree(OPS_LIBRARY_SOURCE, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
 
-        # Deploy GameForge native plugin if binaries exist
-        candidates = [
-            Path(__file__).parent / "GameForge",
-            Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
-        ]
+        # Deploy GameForge native plugin if binaries exist in configured settings or environment
+        candidates: List[Path] = [Path(__file__).parent / "GameForge"]
+        env_plugin = os.environ.get("GAMEFORGE_PLUGIN_BUILD") or os.environ.get("GAMEFORGE_PLUGIN_DIR")
+        if env_plugin:
+            candidates.append(Path(env_plugin))
         try:
             from ..core.settings import get_settings
             s = get_settings()
-            if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build != candidates[0]:
+            if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build not in candidates:
                 candidates.append(s.plugin_build)
-            if s.validation_root:
-                cand = s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge"
-                if cand.is_dir():
-                    candidates.append(cand)
+            if s.validation_root and s.validation_root.is_dir():
+                for sub in sorted(s.validation_root.glob("*/Plugins/GameForge")):
+                    if sub.is_dir() and sub not in candidates:
+                        candidates.append(sub)
         except Exception:
             pass
 

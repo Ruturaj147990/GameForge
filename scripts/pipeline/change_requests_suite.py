@@ -20,22 +20,20 @@ Outputs evidence to reports/P8/change_requests.json.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.gameforge_ide.composer.compose import compose
 from src.gameforge_ide.composer.plan import composition_to_run_spec
-from src.gameforge_ide.design.gds import GameDesignSpec, Lighting
-from src.gameforge_ide.design.patch import apply_patch, propose_patch, summarize_patch
+from src.gameforge_ide.design.patch import apply_patch, propose_patch
 from src.gameforge_ide.design.presets import preset_relic_hunt
 from src.gameforge_ide.forge.executor import ForgeExecutor, StepOutcome
-from src.gameforge_ide.forge.impact import compute_effective_hashes, impact, prepare_incremental_state
-from src.gameforge_ide.forge.model import RunSpec, RunState, StepKind, StepRecord, StepStatus
+from src.gameforge_ide.forge.impact import impact, prepare_incremental_state
+from src.gameforge_ide.forge.model import RunState, StepStatus
 from src.gameforge_ide.forge.project_graph import ProjectGraph, ProjectNode, compute_actor_state_hash
 from src.gameforge_ide.forge.reconciliation import TAG_GF_OWNED, apply_resolutions, plan_reconciliation
 from src.gameforge_ide.forge.store import RunStore
@@ -73,7 +71,8 @@ def run_change_requests_suite() -> Dict[str, Any]:
     print("Running Phase 8 Change Requests Suite (10 Scripted CRs + User Edit)")
     print("=" * 70)
 
-    work_dir = Path("E:/GameForge/validation/P8_change_requests")
+    from src.gameforge_ide.core.settings import get_settings
+    work_dir = get_settings().validation_root / "P8_change_requests"
     work_dir.mkdir(parents=True, exist_ok=True)
     report_path = Path("reports/P8/change_requests.json")
     report_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,7 +1,8 @@
 """Free-form game host framework (UE 5.7 C++).
 
 The framework owns everything that small and large models get wrong most often: camera, input
-routing, HUD, lighting, cooked engine meshes, and the -GFSelfTest plumbing in shipped builds.
+routing, HUD, lighting, cooked engine meshes, multi-primitive prop spawning, and the -GFSelfTest
+plumbing in shipped builds.
 The model writes ONE class, AGFGameImpl : AGFGameBase, in GFGameImpl.h / GFGameImpl.cpp.
 
 API_DOC is the exact contract given to the authoring model.
@@ -37,11 +38,14 @@ AGFGameBase (already implemented; do not redefine) gives you:
     virtual void OnClicked(AActor* Actor, const FVector& Point); // left click; Actor may be nullptr
     virtual void OnKey(FKey Key);                              // any key pressed (EKeys::SpaceBar, EKeys::A, ...)
     virtual void OnTick(float DeltaSeconds);                   // every frame
-    virtual FString GetStatusText() const;                     // shown under the title (score, turn, result)
+    virtual FString GetStatusText() const;                     // primary HUD line (score, health, turn, result)
+    virtual FString GetSecondaryStatusText() const;            // secondary HUD line (wave, timer, ammo, inventory, lap)
     virtual FString GetControlsText() const;                   // shown at the bottom of the screen
-    virtual FVector GetCameraFocus() const;                    // world point the camera looks at (default 0,0,0)
+    virtual FVector GetCameraFocus() const;                    // world point the camera dynamically tracks (default 0,0,0)
     virtual float GetCameraDistance() const;                   // default 1500 (cm)
-    virtual float GetCameraPitch() const;                      // default -60 degrees
+    virtual float GetCameraPitch() const;                      // default -60 degrees (-85 top-down, -25 third-person)
+    virtual float GetCameraYaw() const;                        // default 0 degrees
+    virtual float GetCameraFOV() const;                        // default 60 degrees
     virtual bool RunSelfTest(FString& OutReport);              // REQUIRED: drive the game through its own
                                                                // functions (call OnClicked/OnKey/OnTick directly),
                                                                // check the rules, return true only if they hold
@@ -49,6 +53,9 @@ AGFGameBase (already implemented; do not redefine) gives you:
     AActor* SpawnShape(EGFShape Shape, const FVector& Location, const FVector& Scale, const FLinearColor& Color);
         // EGFShape::Cube, Sphere, Cylinder, Cone, Plane. Basic shapes are 100 cm. Returns the actor.
         // Scale is a MULTIPLIER: FVector(1.f) = 100 cm, FVector(0.5f) = 50 cm. Never pass 100 for "1 metre".
+    AActor* SpawnProp(const FString& Recipe, const FVector& Location, const FVector& Scale, const FLinearColor& Color);
+        // Spawns a multi-primitive compound prop ("crate", "pillar", "tree", "turret", "vehicle", "portal") and
+        // returns its root shape actor.
     AActor* SpawnText(const FString& Text, const FVector& Location, float HeightCm, const FLinearColor& Color);
         // 3D text label in the world, facing the camera. Destroyed by ClearShapes like shapes.
     void SetText(AActor* TextActor, const FString& Text);
@@ -108,13 +115,17 @@ public:
 	virtual void OnKey(FKey Key) {}
 	virtual void OnTick(float DeltaSeconds) {}
 	virtual FString GetStatusText() const { return FString(); }
+	virtual FString GetSecondaryStatusText() const { return FString(); }
 	virtual FString GetControlsText() const { return TEXT("R: restart   |   Esc: quit"); }
 	virtual FVector GetCameraFocus() const { return FVector::ZeroVector; }
 	virtual float GetCameraDistance() const { return 1500.f; }
 	virtual float GetCameraPitch() const { return -60.f; }
+	virtual float GetCameraYaw() const { return 0.f; }
+	virtual float GetCameraFOV() const { return 60.f; }
 	virtual bool RunSelfTest(FString& OutReport) { OutReport = TEXT("no self-test implemented"); return false; }
 
 	AActor* SpawnShape(EGFShape Shape, const FVector& Location, const FVector& Scale, const FLinearColor& Color);
+	AActor* SpawnProp(const FString& Recipe, const FVector& Location, const FVector& Scale, const FLinearColor& Color);
 	AActor* SpawnText(const FString& Text, const FVector& Location, float HeightCm, const FLinearColor& Color);
 	void SetText(AActor* TextActor, const FString& Text);
 	void SetShapeColor(AActor* Shape, const FLinearColor& Color);
@@ -153,7 +164,6 @@ AGFGameBase::AGFGameBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	// Hard references from the CDO make sure the engine shapes are cooked into shipped builds.
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
@@ -200,8 +210,6 @@ AActor* AGFGameBase::SpawnShape(EGFShape Shape, const FVector& Location, const F
 			MID->SetVectorParameterValue(TEXT("Color"), Color);
 		}
 	}
-	// Scale is a multiplier of the 100 cm basic shape. Values above 25 (25 m) are almost certainly
-	// sizes written in centimetres; treat them that way instead of filling the screen.
 	FVector S = Scale;
 	if (S.GetMax() > 25.f)
 	{
@@ -213,6 +221,36 @@ AActor* AGFGameBase::SpawnShape(EGFShape Shape, const FVector& Location, const F
 	return A;
 }
 
+AActor* AGFGameBase::SpawnProp(const FString& Recipe, const FVector& Location, const FVector& Scale, const FLinearColor& Color)
+{
+	FString R = Recipe.ToLower();
+	if (R.Contains(TEXT("tree")))
+	{
+		AActor* Trunk = SpawnShape(EGFShape::Cylinder, Location + FVector(0.f, 0.f, 60.f * Scale.Z), FVector(0.35f * Scale.X, 0.35f * Scale.Y, 1.2f * Scale.Z), FLinearColor(0.38f, 0.24f, 0.12f));
+		SpawnShape(EGFShape::Cone, Location + FVector(0.f, 0.f, 160.f * Scale.Z), FVector(1.6f * Scale.X, 1.6f * Scale.Y, 1.8f * Scale.Z), Color);
+		return Trunk;
+	}
+	if (R.Contains(TEXT("turret")) || R.Contains(TEXT("tower")))
+	{
+		AActor* Base = SpawnShape(EGFShape::Cylinder, Location + FVector(0.f, 0.f, 40.f * Scale.Z), FVector(1.1f * Scale.X, 1.1f * Scale.Y, 0.8f * Scale.Z), FLinearColor(0.3f, 0.32f, 0.38f));
+		SpawnShape(EGFShape::Sphere, Location + FVector(0.f, 0.f, 100.f * Scale.Z), FVector(0.8f * Scale.X, 0.8f * Scale.Y, 0.8f * Scale.Z), Color);
+		return Base;
+	}
+	if (R.Contains(TEXT("vehicle")) || R.Contains(TEXT("car")) || R.Contains(TEXT("kart")))
+	{
+		AActor* Chassis = SpawnShape(EGFShape::Cube, Location + FVector(0.f, 0.f, 35.f * Scale.Z), FVector(1.8f * Scale.X, 1.0f * Scale.Y, 0.5f * Scale.Z), Color);
+		SpawnShape(EGFShape::Cube, Location + FVector(-15.f * Scale.X, 0.f, 70.f * Scale.Z), FVector(0.9f * Scale.X, 0.8f * Scale.Y, 0.4f * Scale.Z), Color * 0.8f);
+		return Chassis;
+	}
+	if (R.Contains(TEXT("pillar")) || R.Contains(TEXT("column")))
+	{
+		AActor* Col = SpawnShape(EGFShape::Cylinder, Location + FVector(0.f, 0.f, 120.f * Scale.Z), FVector(0.7f * Scale.X, 0.7f * Scale.Y, 2.4f * Scale.Z), Color);
+		SpawnShape(EGFShape::Cube, Location + FVector(0.f, 0.f, 250.f * Scale.Z), FVector(1.0f * Scale.X, 1.0f * Scale.Y, 0.25f * Scale.Z), Color * 0.85f);
+		return Col;
+	}
+	return SpawnShape(EGFShape::Cube, Location, Scale, Color);
+}
+
 AActor* AGFGameBase::SpawnText(const FString& Text, const FVector& Location, float HeightCm, const FLinearColor& Color)
 {
 	UWorld* World = GetWorld();
@@ -220,8 +258,7 @@ AActor* AGFGameBase::SpawnText(const FString& Text, const FVector& Location, flo
 	FActorSpawnParameters Params;
 	Params.Owner = this;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	// Face the host camera, which looks along +X from above: turn the text towards -X and tilt it back.
-	const FRotator Facing(-GetCameraPitch(), 180.f, 0.f);
+	const FRotator Facing(-GetCameraPitch(), GetCameraYaw() + 180.f, 0.f);
 	ATextRenderActor* A = World->SpawnActor<ATextRenderActor>(Location, Facing, Params);
 	if (!A) return nullptr;
 	UTextRenderComponent* T = A->GetTextRender();
@@ -307,10 +344,12 @@ class __API__ AGFHostGameMode : public AGameModeBase
 public:
 	AGFHostGameMode();
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	AGFGameBase* GetGame() const { return Game; }
 	void ApplyViewTarget(APlayerController* PC);
 private:
 	void EnsureLighting();
+	void UpdateCameraTransform();
 	void RunSelfTest();
 	void CaptureEvidence();
 	void FinishSelfTest();
@@ -365,6 +404,7 @@ HOST_CPP = r'''#include "GFHost.h"
 
 AGFHostGameMode::AGFHostGameMode()
 {
+	PrimaryActorTick.bCanEverTick = true;
 	DefaultPawnClass = nullptr;
 	PlayerControllerClass = AGFHostController::StaticClass();
 	HUDClass = AGFHostHUD::StaticClass();
@@ -381,13 +421,15 @@ void AGFHostGameMode::BeginPlay()
 		return;
 	}
 	const float Pitch = Game->GetCameraPitch();
-	const FVector Dir = FRotator(Pitch, 0.f, 0.f).Vector();
+	const float Yaw = Game->GetCameraYaw();
+	const FRotator CamRot(Pitch, Yaw, 0.f);
+	const FVector Dir = CamRot.Vector();
 	Camera = GetWorld()->SpawnActor<ACameraActor>(ACameraActor::StaticClass(),
-		Game->GetCameraFocus() - Dir * Game->GetCameraDistance(), FRotator(Pitch, 0.f, 0.f));
+		Game->GetCameraFocus() - Dir * Game->GetCameraDistance(), CamRot);
 	if (Camera)
 	{
 		UCameraComponent* Cam = Camera->GetCameraComponent();
-		Cam->SetFieldOfView(60.f);
+		Cam->SetFieldOfView(FMath::Clamp(Game->GetCameraFOV(), 30.f, 110.f));
 		Cam->bConstrainAspectRatio = false;
 		Cam->PostProcessSettings.bOverride_MotionBlurAmount = true;
 		Cam->PostProcessSettings.MotionBlurAmount = 0.f;
@@ -403,6 +445,22 @@ void AGFHostGameMode::BeginPlay()
 	{
 		GetWorldTimerManager().SetTimer(SelfTestTimer, this, &AGFHostGameMode::RunSelfTest, 1.0f, false);
 	}
+}
+
+void AGFHostGameMode::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UpdateCameraTransform();
+}
+
+void AGFHostGameMode::UpdateCameraTransform()
+{
+	if (!Game || !Camera) return;
+	const float Pitch = Game->GetCameraPitch();
+	const float Yaw = Game->GetCameraYaw();
+	const FRotator CamRot(Pitch, Yaw, 0.f);
+	const FVector Dir = CamRot.Vector();
+	Camera->SetActorLocationAndRotation(Game->GetCameraFocus() - Dir * Game->GetCameraDistance(), CamRot);
 }
 
 void AGFHostGameMode::ApplyViewTarget(APlayerController* PC)
@@ -431,6 +489,7 @@ void AGFHostGameMode::RunSelfTest()
 {
 	FString Report;
 	bSelfTestPassed = Game && Game->RunSelfTest(Report);
+	UpdateCameraTransform();
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
 	{
 		ApplyViewTarget(PC);
@@ -443,13 +502,11 @@ void AGFHostGameMode::RunSelfTest()
 		Report += FString::Printf(TEXT(" status=\"%s\""), *Game->GetStatusText());
 	}
 	UE_LOG(LogTemp, Display, TEXT("GF_SELFTEST %s %s"), bSelfTestPassed ? TEXT("PASS") : TEXT("FAIL"), *Report);
-	// A fresh build compiles pipeline states asynchronously; give rendering time to settle before capture.
 	GetWorldTimerManager().SetTimer(SelfTestTimer, this, &AGFHostGameMode::CaptureEvidence, 3.0f, false);
 }
 
 void AGFHostGameMode::CaptureEvidence()
 {
-	// Objective scene facts for reviewers, recorded at capture time.
 	UE_LOG(LogTemp, Display, TEXT("GF_SCENE shapes=%d status=\"%s\""), Game ? Game->NumShapes() : -1,
 		Game ? *Game->GetStatusText() : TEXT(""));
 	FString Shot;
@@ -531,6 +588,11 @@ void AGFHostHUD::DrawHUD()
 	if (Game)
 	{
 		DrawText(Game->GetStatusText(), FLinearColor(1.f, 0.85f, 0.3f), 24.f * Scale, 60.f * Scale, GEngine->GetLargeFont(), 1.3f * Scale);
+		const FString Secondary = Game->GetSecondaryStatusText();
+		if (!Secondary.IsEmpty())
+		{
+			DrawText(Secondary, FLinearColor(0.55f, 0.9f, 1.f), 24.f * Scale, 96.f * Scale, GEngine->GetMediumFont(), 1.15f * Scale);
+		}
 		DrawText(Game->GetControlsText(), FLinearColor(0.75f, 0.75f, 0.8f), 24.f * Scale, Canvas->ClipY - 40.f * Scale,
 			GEngine->GetSmallFont(), 1.2f * Scale);
 	}
@@ -555,7 +617,6 @@ def api_doc(project_name: str) -> str:
     return API_DOC.replace("__API__", project_name.upper() + "_API")
 
 
-# A reference implementation, used to verify the framework itself compiles, packages and passes.
 REFERENCE_IMPL_H = r'''#pragma once
 #include "CoreMinimal.h"
 #include "GFGameBase.h"

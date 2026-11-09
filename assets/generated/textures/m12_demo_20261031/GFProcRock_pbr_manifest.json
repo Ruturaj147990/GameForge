@@ -1,0 +1,66 @@
+{
+  "name": "GFProcRock",
+  "generator": "GameForge-ProceduralPBR-V1",
+  "generator_version": "1.0.0",
+  "provenance": "procedural",
+  "license": "CC0-1.0",
+  "spec": {
+    "name": "GFProcRock",
+    "size": 512,
+    "seed": 21,
+    "base_color": [
+      0.55,
+      0.36,
+      0.2
+    ],
+    "color_variation": 0.45,
+    "roughness_range": [
+      0.45,
+      0.9
+    ],
+    "metallic": 0.0,
+    "normal_strength": 4.0,
+    "ao_strength": 0.8,
+    "base_frequency": 4,
+    "octaves": 5,
+    "persistence": 0.5,
+    "tags": []
+  },
+  "size": 512,
+  "normal_convention": "DirectX (Unreal)",
+  "orm_packing": {
+    "R": "AO",
+    "G": "Roughness",
+    "B": "Metallic"
+  },
+  "files": {
+    "BaseColor": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m12_demo_20261031\\T_GFProcRock_BaseColor.png",
+      "sha256": "87502f8ff65c38fd34e45ccbc3002f2104fc016b2b78788bd1562bbacf790ee3",
+      "srgb": true,
+      "compression": "TC_Default",
+      "channels": 3
+    },
+    "Normal": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m12_demo_20261031\\T_GFProcRock_Normal.png",
+      "sha256": "9cd6917f9b806edeebab94942924b412d3d1804a05dcd15dde71c5b4ab830826",
+      "srgb": false,
+      "compression": "TC_Normalmap",
+      "channels": 3
+    },
+    "ORM": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m12_demo_20261031\\T_GFProcRock_ORM.png",
+      "sha256": "c9059e3e289392ac6966aff03b37fb99584559e7dfa7e916c37d6f20efbf2a71",
+      "srgb": false,
+      "compression": "TC_Masks",
+      "channels": 3
+    },
+    "Height": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m12_demo_20261031\\T_GFProcRock_Height.png",
+      "sha256": "8b8ccd5dcc0f06e9450d4ab6a728c5a871c5106905381968977014af4232076b",
+      "srgb": false,
+      "compression": "TC_Grayscale",
+      "channels": 1
+    }
+  }
+}

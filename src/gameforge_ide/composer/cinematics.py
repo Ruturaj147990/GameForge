@@ -1,12 +1,12 @@
 """Level Sequence intro cinematics generator (WI-10.5).
 
-Generates camera spline flythroughs focusing on landmarks and goals
+Generates camera spline flythroughs focusing on landmarks, goals, and key POIs
 with audio mood progression and shot cut detection.
 """
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from ..design.gds import GameDesignSpec
 
@@ -17,21 +17,31 @@ def generate_intro_cinematic(
 ) -> Dict[str, Any]:
     """Build Level Sequence definition for intro flythrough."""
     intro_spec = gds.presentation.intro
-    duration_s = intro_spec.seconds if intro_spec.enabled else 8.0
+    duration_s = float(intro_spec.seconds) if intro_spec.enabled else 8.0
     focus_kinds = intro_spec.focus or ["landmark", "goal"]
 
-    focus_locs = focus_entity_locations or {
+    default_locs: Dict[str, Tuple[float, float, float]] = {
         "player_start": (0.0, 0.0, 100.0),
         "landmark": (2000.0, 1500.0, 400.0),
         "goal": (4000.0, 3000.0, 200.0),
     }
+    if hasattr(gds, "entities"):
+        for ent in gds.entities:
+            pts = getattr(getattr(ent, "placement", None), "points_m", None)
+            if pts:
+                p0 = pts[0]
+                default_locs[str(getattr(ent.kind, "value", ent.kind))] = (
+                    float(p0.x) * 100.0,
+                    float(p0.y) * 100.0,
+                    float(p0.z) * 100.0 + 100.0,
+                )
 
-    # Generate keyframes along camera spline
+    focus_locs = {**default_locs, **(focus_entity_locations or {})}
+
     keyframes = []
     fps = 30
-    total_frames = int(duration_s * fps)
+    total_frames = max(30, int(duration_s * fps))
 
-    # Shots: map to focus_kinds dynamically
     primary_focus = focus_kinds[0] if len(focus_kinds) > 0 else "landmark"
     secondary_focus = focus_kinds[1] if len(focus_kinds) > 1 else primary_focus
     shot_segments = [
@@ -44,11 +54,10 @@ def generate_intro_cinematic(
     current_frame = 0
     for shot in shot_segments:
         cuts.append(current_frame)
-        shot_frames = int(shot["fraction"] * total_frames)
+        shot_frames = max(2, int(shot["fraction"] * total_frames))
         target = focus_locs.get(shot["focus"], (2000.0, 2000.0, 200.0))
         for sf in range(shot_frames):
             t = sf / max(1, shot_frames - 1)
-            # Smooth interpolation
             cam_x = target[0] - 1200.0 + (t * 400.0)
             cam_y = target[1] - 800.0 + (t * 300.0)
             cam_z = target[2] + 500.0 - (t * 100.0)

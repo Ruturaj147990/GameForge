@@ -53,6 +53,7 @@ class _AgentWorker(QObject):
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._task: Optional[asyncio.Task] = None
         # Lazy imports to avoid loading heavy deps until first use
+        self._lock = threading.RLock()
         self._runtime = None
         self._session_manager = None
         self._router = None
@@ -65,21 +66,22 @@ class _AgentWorker(QObject):
             self._runtime.projects_service = projects_service
 
     def _ensure_runtime(self) -> None:
-        if self._runtime is not None:
-            return
-        from ...backend.agent.runtime import AgentRuntime
-        from ...backend.providers.router import ModelRouter
-        from ...backend.session_manager import SessionManager
+        with self._lock:
+            if self._runtime is not None:
+                return
+            from ...backend.agent.runtime import AgentRuntime
+            from ...backend.providers.router import ModelRouter
+            from ...backend.session_manager import SessionManager
 
-        self._session_manager = SessionManager(self.workspace_root)
-        self._router = ModelRouter()
-        self._runtime = AgentRuntime(
-            workspace_root=self.workspace_root,
-            session_manager=self._session_manager,
-            model_router=self._router,
-            studio_mode=False,
-            projects_service=self._projects_service,
-        )
+            self._session_manager = SessionManager(self.workspace_root)
+            self._router = ModelRouter()
+            self._runtime = AgentRuntime(
+                workspace_root=self.workspace_root,
+                session_manager=self._session_manager,
+                model_router=self._router,
+                studio_mode=False,
+                projects_service=self._projects_service,
+            )
 
     def set_task(self, session_id: str, prompt: str) -> None:
         self._session_id = session_id
@@ -280,19 +282,20 @@ class _AgentWorker(QObject):
         **kwargs,
     ) -> str:
         """Creates a new session and returns its ID."""
-        self._ensure_runtime()
-        if not project_dir and hasattr(self, "_projects_service") and self._projects_service:
-            project_dir = getattr(self._projects_service, "active_project_dir", None)
-        try:
-            session = self._session_manager.create_session(
-                name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
-            )
-        except TypeError:
-            kwargs.pop("permissions_mode", None)
-            session = self._session_manager.create_session(
-                name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
-            )
-        return session.session_id
+        with self._lock:
+            self._ensure_runtime()
+            if not project_dir and hasattr(self, "_projects_service") and self._projects_service:
+                project_dir = getattr(self._projects_service, "active_project_dir", None)
+            try:
+                session = self._session_manager.create_session(
+                    name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
+                )
+            except TypeError:
+                kwargs.pop("permissions_mode", None)
+                session = self._session_manager.create_session(
+                    name=name, model_name=model_name, provider_type=provider_type, project_dir=project_dir, **kwargs
+                )
+            return session.session_id
 
     def set_session_mode(
         self,
@@ -303,69 +306,76 @@ class _AgentWorker(QObject):
         **kwargs,
     ) -> bool:
         """Update task_mode, autonomy_profile, and/or permissions_mode on an existing session."""
-        self._ensure_runtime()
-        call_kwargs = {}
-        if task_mode is not None:
-            call_kwargs["task_mode"] = task_mode
-        if autonomy_profile is not None:
-            call_kwargs["autonomy_profile"] = autonomy_profile
-        if permissions_mode is not None:
-            call_kwargs["permissions_mode"] = permissions_mode
-        try:
-            return self._session_manager.set_session_mode(session_id, **call_kwargs)
-        except TypeError:
-            call_kwargs.pop("permissions_mode", None)
-            return self._session_manager.set_session_mode(session_id, **call_kwargs)
+        with self._lock:
+            self._ensure_runtime()
+            call_kwargs = {}
+            if task_mode is not None:
+                call_kwargs["task_mode"] = task_mode
+            if autonomy_profile is not None:
+                call_kwargs["autonomy_profile"] = autonomy_profile
+            if permissions_mode is not None:
+                call_kwargs["permissions_mode"] = permissions_mode
+            try:
+                return self._session_manager.set_session_mode(session_id, **call_kwargs)
+            except TypeError:
+                call_kwargs.pop("permissions_mode", None)
+                return self._session_manager.set_session_mode(session_id, **call_kwargs)
 
     def get_context_usage(self, session_id: str) -> Optional[Any]:
         """Query runtime or context manager for active context usage report."""
-        self._ensure_runtime()
-        if hasattr(self._runtime, "get_context_usage"):
-            try:
-                model_name = None
-                if self._session_manager:
-                    sess = self._session_manager.get_session(session_id)
-                    if sess:
-                        model_name = sess.model_name
-                return self._runtime.get_context_usage(session_id, model_id=model_name)
-            except Exception:
-                pass
-        if hasattr(self._runtime, "context_manager") and hasattr(self._runtime.context_manager, "get_context_usage"):
-            try:
-                return self._runtime.context_manager.get_context_usage(session_id)
-            except TypeError:
+        with self._lock:
+            self._ensure_runtime()
+            if hasattr(self._runtime, "get_context_usage"):
                 try:
-                    return self._runtime.context_manager.get_context_usage()
+                    model_name = None
+                    if self._session_manager:
+                        sess = self._session_manager.get_session(session_id)
+                        if sess:
+                            model_name = sess.model_name
+                    return self._runtime.get_context_usage(session_id, model_id=model_name)
                 except Exception:
                     pass
-            except Exception:
-                pass
-        return None
+            if hasattr(self._runtime, "context_manager") and hasattr(self._runtime.context_manager, "get_context_usage"):
+                try:
+                    return self._runtime.context_manager.get_context_usage(session_id)
+                except TypeError:
+                    try:
+                        return self._runtime.context_manager.get_context_usage()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            return None
 
     def get_session(self, session_id: str):
         """Retrieve a session by its ID."""
-        self._ensure_runtime()
-        return self._session_manager.get_session(session_id)
+        with self._lock:
+            self._ensure_runtime()
+            return self._session_manager.get_session(session_id)
 
     def set_session_model(self, session_id: str, model_name: str, provider_type: Optional[str] = None) -> bool:
         """Update model for an existing session."""
-        self._ensure_runtime()
-        return self._session_manager.set_session_model(session_id, model_name, provider_type=provider_type)
+        with self._lock:
+            self._ensure_runtime()
+            return self._session_manager.set_session_model(session_id, model_name, provider_type=provider_type)
 
     def set_session_project_dir(self, session_id: str, project_dir: Optional[Union[str, Path]]) -> bool:
         """Update active project directory on an existing session."""
-        self._ensure_runtime()
-        return self._session_manager.set_session_project_dir(session_id, project_dir)
+        with self._lock:
+            self._ensure_runtime()
+            return self._session_manager.set_session_project_dir(session_id, project_dir)
 
     def list_models(self) -> list:
         """Returns list of available model dicts."""
-        self._ensure_runtime()
-        return [m.model_dump() for m in self._router.list_all_models()]
+        with self._lock:
+            self._ensure_runtime()
+            return [m.model_dump() for m in self._router.list_all_models()]
 
     @property
     def session_manager(self):
-        self._ensure_runtime()
-        return self._session_manager
+        with self._lock:
+            self._ensure_runtime()
+            return self._session_manager
 
 
 class AgentService(QObject):
@@ -500,10 +510,11 @@ class AgentService(QObject):
                     app.processEvents()
                 time.sleep(0.05)
         self.workspace_root = Path(new_workspace).resolve()
-        self._worker.workspace_root = self.workspace_root
-        self._worker._runtime = None
-        self._worker._session_manager = None
-        self._worker._router = None
+        with self._worker._lock:
+            self._worker.workspace_root = self.workspace_root
+            self._worker._runtime = None
+            self._worker._session_manager = None
+            self._worker._router = None
 
     def create_session(self, **kwargs) -> str:
         return self._worker.create_session(**kwargs)

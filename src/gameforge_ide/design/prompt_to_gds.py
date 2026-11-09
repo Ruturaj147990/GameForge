@@ -196,7 +196,6 @@ def prompt_to_gds(
         candidate = match.group(1).lower()
         alias_map = {
             "3d_platformer": "platformer",
-            "snakes_and_ladders": "snake_and_ladders",
             "grid_board_game": "tic_tac_toe",
             "card_game": "card_battler",
             "arena": "arena_combat",
@@ -331,7 +330,7 @@ def prompt_to_gds(
 
 # ── helpers ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-_BOARD_PRESETS = {"tic_tac_toe", "connect_four", "gomoku", "snake_and_ladders", "card_battler"}
+_BOARD_PRESETS = {"tic_tac_toe", "connect_four", "gomoku", "card_battler"}
 
 
 def _is_board_preset(preset_id: str) -> bool:

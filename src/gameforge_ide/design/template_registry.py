@@ -1,7 +1,9 @@
-"""Semantic Template Registry and Multi-Strategy Game Generation Engine (P0 Overhaul).
+"""Semantic Template Registry and Multi-Strategy Game Generation Engine.
 
-Replaces rigid template hijacking and falling-cube fallbacks with semantic capability matching,
-two-stage suitability analysis, and explicit strategy selection (Adapt Template, Hybrid, Scratch).
+Evaluates capability overlap between arbitrary user prompts and engine foundations,
+selects the optimal generation strategy (Adapt Template, Hybrid, Scratch), and
+synthesizes a prompt-specific C++ & UI architecture specification so every generated
+game genuinely implements the user's requested mechanics, systems, and entities.
 """
 from __future__ import annotations
 
@@ -10,7 +12,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from .gds import CameraKind, Genre
 
@@ -42,12 +44,16 @@ class Capability:
     CONSTRAINT_SOLVER = "constraint_solver"
     PIECE_MOVEMENT = "piece_movement"
     CHECKMATE_LOGIC = "checkmate_logic"
+    STEALTH_AI = "stealth_ai"
+    INTERACTIVE_SWITCHES = "interactive_switches"
+    RESOURCE_DRAIN = "resource_drain"
+    MULTI_WEAPON = "multi_weapon"
 
 
 class GenerationStrategy(str, Enum):
-    ADAPT_TEMPLATE = "adapt_template"  # Approach A: >= 80% overlap, 0 conflicts
-    HYBRID = "hybrid"                  # Approach B: 40-79% overlap, custom C++ logic added
-    SCRATCH = "scratch"                # Approach C: < 40% overlap or conflicting constraints (e.g. Sudoku, Chess, Tetris)
+    ADAPT_TEMPLATE = "adapt_template"
+    HYBRID = "hybrid"
+    SCRATCH = "scratch"
 
 
 @dataclass(frozen=True)
@@ -113,7 +119,7 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.CARD_DECK,
             Capability.CONSTRAINT_SOLVER,
         },
-        description="3D obstacle course with running, jumping, floating platforms, and collectibles.",
+        description="3D traversal foundation with character movement, jumping, platforms, and collectibles.",
         preset_key="platformer",
     ),
     TemplateDefinition(
@@ -136,7 +142,7 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.CARD_DECK,
             Capability.CONSTRAINT_SOLVER,
         },
-        description="First-person tactical combat arena with firearms, bot enemies, and weapon fire.",
+        description="First-person tactical combat foundation with projectile weapons and hostile AI.",
         preset_key="arena_combat",
     ),
     TemplateDefinition(
@@ -158,7 +164,7 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.PUZZLE_LOGIC,
             Capability.CARD_DECK,
         },
-        description="Top-down shooter with projectile mechanics, wave spawners, and enemy hordes.",
+        description="Top-down combat foundation with projectile aiming and wave spawners.",
         preset_key="top_down_shooter",
     ),
     TemplateDefinition(
@@ -183,7 +189,7 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.REAL_TIME,
             Capability.PIECE_MOVEMENT,
         },
-        description="Turn-based grid board game for two or more players (e.g. Tic-Tac-Toe, Connect Four, Gomoku).",
+        description="Turn-based grid board foundation for alignment and token movement rules.",
         preset_key="tic_tac_toe",
     ),
     TemplateDefinition(
@@ -203,7 +209,7 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.SHOOTING,
             Capability.VEHICLE_PHYSICS,
         },
-        description="Turn-based card match game with deck play and UI interaction.",
+        description="Turn-based card match foundation with lane deployment and deck management.",
         preset_key="card_battler",
     ),
     TemplateDefinition(
@@ -223,14 +229,23 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.CARD_DECK,
             Capability.PUZZLE_LOGIC,
         },
-        description="Third-person open adventure with relic exploration and environment navigation.",
+        description="Third-person exploration and adventure foundation with quests and world interaction.",
         preset_key="relic_hunt",
     ),
 ]
 
 
+def _pascal_ident(text: str, default: str = "DynamicGame") -> str:
+    tokens = re.findall(r"[A-Za-z0-9]+", text or "")
+    out = "".join(t[:1].upper() + t[1:] for t in tokens if t)
+    if not out or not out[0].isalpha():
+        return default
+    return out[:24]
+
+
 class SemanticTemplateRegistry:
-    """Classifies templates and capabilities, matching user prompts to the correct generation strategy."""
+    """Classifies templates and capabilities, matching user prompts to the optimal generation strategy
+    and synthesizing prompt-specific C++ & UI architecture extensions."""
 
     def __init__(self, templates: Optional[List[TemplateDefinition]] = None):
         self.templates = templates or list(CANONICAL_TEMPLATES)
@@ -238,7 +253,6 @@ class SemanticTemplateRegistry:
     def analyze_prompt(self, prompt: str) -> CapabilityProfile:
         text = prompt.lower().strip()
 
-        # Title hint extraction
         m_title = re.search(r'\b(?:called|named|titled)\s+["\']?([^"\',.!?\n]+)["\']?', prompt, re.I)
         title_hint = m_title.group(1).strip() if m_title else None
 
@@ -246,8 +260,8 @@ class SemanticTemplateRegistry:
         forbid: Set[str] = set()
         matched: List[str] = []
 
-        # 1. Specialized Logic Puzzles & Discrete Games
-        if re.search(r"\bsudoku\b", text):
+        # 1. Constraint-Satisfaction & Grid Logic Archetypes
+        if re.search(r"\b(sudoku|number\s+constraint|constraint\s+grid)\b", text):
             matched.append("sudoku")
             req.update({
                 Capability.GRID_2D,
@@ -272,10 +286,36 @@ class SemanticTemplateRegistry:
                 required_capabilities=req,
                 forbidden_capabilities=forbid,
                 keywords_matched=matched,
-                title_hint=title_hint or "Sudoku",
+                title_hint=title_hint or "Constraint Grid",
             )
 
-        if re.search(r"\btetris\b", text):
+        if re.search(r"\b(minesweeper|mine\s+deduction|hidden\s+mine)\b", text):
+            matched.append("minesweeper")
+            req.update({
+                Capability.GRID_2D,
+                Capability.PUZZLE_LOGIC,
+                Capability.UI_DRIVEN,
+                Capability.FIXED_CAMERA,
+                Capability.CONSTRAINT_SOLVER,
+            })
+            forbid.update({
+                Capability.PHYSICS_CHARACTER,
+                Capability.COMBAT,
+                Capability.SHOOTING,
+                Capability.JUMPING,
+                Capability.ENEMIES,
+                Capability.VEHICLE_PHYSICS,
+                Capability.TURN_BASED,
+            })
+            return CapabilityProfile(
+                detected_genre=Genre.PUZZLE,
+                required_capabilities=req,
+                forbidden_capabilities=forbid,
+                keywords_matched=matched,
+                title_hint=title_hint or "Deduction Grid",
+            )
+
+        if re.search(r"\b(tetris|falling\s+blocks?|tetromino)\b", text):
             matched.append("tetris")
             req.update({
                 Capability.GRID_2D,
@@ -297,11 +337,11 @@ class SemanticTemplateRegistry:
                 required_capabilities=req,
                 forbidden_capabilities=forbid,
                 keywords_matched=matched,
-                title_hint=title_hint or "Tetris",
+                title_hint=title_hint or "Block Matrix",
             )
 
-        is_snake_and_ladders = bool(re.search(r"\bsnakes?\s*(?:and|&)\s*ladders?\b|\bchutes\s*(?:and|&)\s*ladders?\b", text))
-        if re.search(r"\bsnake\b", text) and not is_snake_and_ladders:
+        is_roll_and_move = bool(re.search(r"\b(snakes?\s*(?:and|&)\s*ladders?|chutes\s*(?:and|&)\s*ladders?|roll\s+and\s+move)\b", text))
+        if re.search(r"\bsnake\b", text) and not is_roll_and_move and re.search(r"\b(grid|grow|apple|food|tail|arcade)\b", text):
             matched.append("snake")
             req.update({
                 Capability.GRID_2D,
@@ -322,7 +362,7 @@ class SemanticTemplateRegistry:
                 required_capabilities=req,
                 forbidden_capabilities=forbid,
                 keywords_matched=matched,
-                title_hint=title_hint or "Snake",
+                title_hint=title_hint or "Grid Trail",
             )
 
         if re.search(r"\bchess\b", text):
@@ -349,11 +389,37 @@ class SemanticTemplateRegistry:
                 required_capabilities=req,
                 forbidden_capabilities=forbid,
                 keywords_matched=matched,
-                title_hint=title_hint or "Chess",
+                title_hint=title_hint or "Tactical Chess",
             )
 
-        # 2. General Capability Detection
-        is_top_down = bool(re.search(r"\b(?:top[\s\-]down|twin[\s\-]stick)\b", text))
+        if re.search(r"\b(?:checkers|draughts)\b", text):
+            matched.append("checkers")
+            req.update({
+                Capability.GRID_2D,
+                Capability.TURN_BASED,
+                Capability.BOARD_GAME,
+                Capability.FIXED_CAMERA,
+                Capability.PIECE_MOVEMENT,
+            })
+            forbid.update({
+                Capability.PHYSICS_CHARACTER,
+                Capability.COMBAT,
+                Capability.SHOOTING,
+                Capability.JUMPING,
+                Capability.ENEMIES,
+                Capability.VEHICLE_PHYSICS,
+                Capability.REAL_TIME,
+            })
+            return CapabilityProfile(
+                detected_genre=Genre.GRID_BOARD,
+                required_capabilities=req,
+                forbidden_capabilities=forbid,
+                keywords_matched=matched,
+                title_hint=title_hint or "Capture Checkers",
+            )
+
+        # 2. General Spatial & Gameplay Capability Decomposition
+        is_top_down = bool(re.search(r"\b(?:top[\s\-]down|twin[\s\-]stick|isometric|overhead)\b", text))
 
         if re.search(r"\b(?:platformer|obstacle\s+course|parkour|jump(?:ing)?)\b", text):
             matched.append("platformer")
@@ -384,7 +450,7 @@ class SemanticTemplateRegistry:
                 Capability.BOARD_GAME,
                 Capability.CARD_DECK,
             })
-        elif re.search(r"\b(?:fps|first[\s\-]person|shooter|gun|rifle|counter[\s\-]strike)\b", text):
+        elif re.search(r"\b(?:fps|first[\s\-]person|shooter|gun|rifle|pistol|shotgun|blaster|railgun)\b", text):
             matched.append("fps")
             req.update({
                 Capability.PHYSICS_CHARACTER,
@@ -401,7 +467,7 @@ class SemanticTemplateRegistry:
                 Capability.PUZZLE_LOGIC,
             })
 
-        if re.search(r"\b(?:racing|car|vehicle|drive|driving)\b", text):
+        if re.search(r"\b(?:racing|car|vehicle|drive|driving|hoverbike|speedway|circuit|kart)\b", text):
             matched.append("racing")
             req.update({
                 Capability.VEHICLE_PHYSICS,
@@ -418,7 +484,7 @@ class SemanticTemplateRegistry:
                 Capability.PUZZLE_LOGIC,
             })
 
-        if re.search(r"\b(?:tower\s+defense|defend\s+the\s+base)\b", text):
+        if re.search(r"\b(?:tower\s+defense|defend\s+the\s+(?:base|core|nexus|crystal)|lane\s+defense|turret\s+defense)\b", text):
             matched.append("tower_defense")
             req.update({
                 Capability.TOP_DOWN,
@@ -446,8 +512,12 @@ class SemanticTemplateRegistry:
                 Capability.VEHICLE_PHYSICS,
             })
 
-        if re.search(r"\b(?:tic[\s\-]tac[\s\-]toe|connect\s+four|gomoku|board\s+game|snakes?\s*(?:and|&)\s*ladders?|chutes\s*(?:and|&)\s*ladders?|ludo|parcheesi|monopoly|checkers|draughts|dice\s+board(?:\s+game)?|roll\s+and\s+move)\b", text):
+        if re.search(r"\b(?:tic[\s\-]tac[\s\-]toe|connect\s+four|gomoku|board\s+game|roll\s+and\s+move|linear\s+board|dice\s+board(?:\s+game)?)\b", text):
             matched.append("board_game")
+            if is_roll_and_move:
+                matched.append("roll_and_move")
+            elif re.search(r"\b(?:ludo|parcheesi)\b", text):
+                matched.append("ludo")
             req.update({
                 Capability.GRID_2D,
                 Capability.TURN_BASED,
@@ -472,19 +542,28 @@ class SemanticTemplateRegistry:
                 Capability.ENEMIES,
             })
 
-        if re.search(r"\b(?:zombie\s+survival|zombie\s+wave|undead\s+survival)\b", text):
-            matched.append("zombie_survival")
+        if re.search(r"\b(?:wave\s+survival|horde\s+survival|survival\s+arena|horde\s+mode)\b", text):
+            matched.append("wave_survival")
             req.update({
                 Capability.PHYSICS_CHARACTER,
                 Capability.REAL_TIME,
-                Capability.FIRST_PERSON,
+                Capability.THIRD_PERSON,
                 Capability.COMBAT,
-                Capability.SHOOTING,
                 Capability.ENEMIES,
                 Capability.WAVE_SPAWNER,
             })
 
-        # Fallback to action adventure or custom if no strong genre matched
+        # Additional fine-grained capabilities requested in the prompt
+        if re.search(r"\b(stealth|sneak|infiltrat|undetected|patrol(?:ling)?\s+guards?)\b", text):
+            matched.append("stealth")
+            req.add(Capability.STEALTH_AI)
+        if re.search(r"\b(hack|terminal|console|switch|lever|relay|brazier|unlock)\b", text):
+            matched.append("interactive_switches")
+            req.add(Capability.INTERACTIVE_SWITCHES)
+        if re.search(r"\b(oxygen|air\s+supply|radiation|heat|overheat|battery\s+drain)\b", text):
+            matched.append("resource_drain")
+            req.add(Capability.RESOURCE_DRAIN)
+
         if not req:
             req.update({Capability.PHYSICS_CHARACTER, Capability.REAL_TIME, Capability.THIRD_PERSON})
             detected_genre = Genre.ACTION_ADVENTURE
@@ -511,6 +590,150 @@ class SemanticTemplateRegistry:
             title_hint=title_hint,
         )
 
+    def _synthesize_architecture_for_prompt(
+        self,
+        prompt: str,
+        profile: CapabilityProfile,
+        strategy: GenerationStrategy,
+        template: Optional[TemplateDefinition],
+    ) -> Dict[str, Any]:
+        """Synthesize a rich, prompt-tailored C++ & UI architecture specification for any strategy."""
+        from .prompt_analysis import analyze_prompt
+
+        brief = analyze_prompt(prompt)
+        title_pascal = _pascal_ident(brief.title or profile.title_hint or "DynamicGame")
+
+        custom_caps: List[str] = []
+        for m in brief.mechanics:
+            if m not in custom_caps:
+                custom_caps.append(m)
+        if brief.double_jump and "double_jump" not in custom_caps:
+            custom_caps.append("double_jump")
+        if brief.sprint and "sprint_boost" not in custom_caps:
+            custom_caps.append("sprint_boost")
+        if brief.switches and "interactive_switches" not in custom_caps:
+            custom_caps.append("interactive_switches")
+        if brief.has_guards and "stealth_detection" not in custom_caps:
+            custom_caps.append("stealth_detection")
+        if brief.waves and "wave_progression" not in custom_caps:
+            custom_caps.append("wave_progression")
+        if brief.laps and "checkpoint_lap_tracker" not in custom_caps:
+            custom_caps.append("checkpoint_lap_tracker")
+        if brief.weapons and len(brief.weapons) > 1 and "multi_weapon_loadout" not in custom_caps:
+            custom_caps.append("multi_weapon_loadout")
+
+        mechanics_dict: Dict[str, Any] = {}
+        if brief.weapons:
+            mechanics_dict["weapons"] = list(brief.weapons)
+        if brief.mechanics:
+            mechanics_dict["active_mechanics"] = list(brief.mechanics)
+        if brief.waves:
+            mechanics_dict["wave_count"] = brief.waves
+        if brief.laps:
+            mechanics_dict["lap_count"] = brief.laps
+            mechanics_dict["checkpoint_count"] = brief.checkpoints or 4
+        if brief.survive_seconds:
+            mechanics_dict["survive_seconds"] = brief.survive_seconds
+        if brief.time_limit_seconds:
+            mechanics_dict["time_limit_seconds"] = brief.time_limit_seconds
+        if brief.score_target:
+            mechanics_dict["score_target"] = brief.score_target
+        if brief.enemies:
+            mechanics_dict["primary_enemy"] = brief.enemies[0].label
+        if brief.collectibles:
+            mechanics_dict["primary_collectible"] = brief.collectibles[0].label
+        if brief.switches:
+            mechanics_dict["interactive_object"] = brief.switches[0].label
+
+        # Determine plan_kind and target classes dynamically
+        subtype = brief.game_subtype or ""
+        if subtype in ("sudoku", "minesweeper") or (
+            profile.detected_genre == Genre.PUZZLE and subtype not in ("tetris", "snake")
+        ):
+            plan_kind = "scratch_puzzle"
+            mechanics_dict.setdefault("grid_size", 9)
+            if subtype == "sudoku":
+                mechanics_dict.setdefault("subgrid_size", 3)
+        elif subtype in ("chess", "checkers"):
+            plan_kind = "scratch_board"
+            mechanics_dict.setdefault("grid_size", 8)
+        elif subtype == "tetris":
+            plan_kind = "scratch_falling_blocks"
+            mechanics_dict.setdefault("grid_size", 10)
+        elif subtype == "snake":
+            plan_kind = "scratch_snake"
+            mechanics_dict.setdefault("grid_size", 15)
+        elif subtype in ("roll_and_move", "ludo"):
+            plan_kind = "scratch_board"
+            mechanics_dict.setdefault("grid_size", 10 if subtype == "roll_and_move" else 15)
+            mechanics_dict.setdefault("dice_sides", 6)
+        elif subtype == "racing" or "racing" in profile.keywords_matched:
+            plan_kind = "scratch_racing"
+            mechanics_dict.setdefault("lap_count", brief.laps or 3)
+            mechanics_dict.setdefault("checkpoint_count", brief.checkpoints or 4)
+        elif subtype == "tower_defense" or "tower_defense" in profile.keywords_matched:
+            plan_kind = "scratch_tower_defense"
+            mechanics_dict.setdefault("starting_gold", 250)
+            mechanics_dict.setdefault("base_health", 100.0)
+        elif subtype == "roguelike" or "roguelike" in profile.keywords_matched:
+            plan_kind = "scratch_roguelike"
+            mechanics_dict.setdefault("room_count", 6)
+            mechanics_dict.setdefault("has_boss", True)
+        elif strategy == GenerationStrategy.HYBRID:
+            plan_kind = f"hybrid_{profile.detected_genre.value}"
+        elif strategy == GenerationStrategy.ADAPT_TEMPLATE:
+            plan_kind = f"extended_{template.id if template else profile.detected_genre.value}"
+        else:
+            plan_kind = f"scratch_{profile.detected_genre.value}"
+
+        target_classes = [
+            f"A{title_pascal}GameMode",
+            f"U{title_pascal}GameplayRule",
+            f"A{title_pascal}PlayerController",
+        ]
+        if profile.detected_genre == Genre.PUZZLE or subtype in ("sudoku", "tetris", "minesweeper", "puzzle"):
+            target_classes.append("UGridPuzzleSubsystem")
+        elif profile.detected_genre == Genre.GRID_BOARD or brief.is_board_like or subtype in ("chess", "checkers", "board", "roll_and_move"):
+            target_classes.append("UBoardGameSubsystem")
+        elif brief.enemies:
+            target_classes.append("UArenaCombatSubsystem")
+
+        target_widgets = [
+            f"W{title_pascal}HUD",
+            f"W{title_pascal}ObjectiveTracker",
+        ]
+        if profile.detected_genre in (Genre.PUZZLE, Genre.GRID_BOARD) or brief.is_board_like:
+            target_widgets.append(f"W{title_pascal}Grid")
+        source_files = [
+            f"Source/{title_pascal}/{title_pascal}GameMode.h",
+            f"Source/{title_pascal}/{title_pascal}GameMode.cpp",
+            f"Source/{title_pascal}/{title_pascal}GameplayRule.h",
+            f"Source/{title_pascal}/{title_pascal}GameplayRule.cpp",
+        ]
+
+        method_str = {
+            GenerationStrategy.ADAPT_TEMPLATE: "template_adaptation",
+            GenerationStrategy.HYBRID: "hybrid_generation",
+            GenerationStrategy.SCRATCH: "scratch_generation",
+        }[strategy]
+
+        arch: Dict[str, Any] = {
+            "method": method_str,
+            "plan_kind": plan_kind,
+            "genre": brief.genre or profile.detected_genre,
+            "camera": brief.camera or (template.camera if template else CameraKind.THIRD_PERSON),
+            "target_classes": target_classes,
+            "target_widgets": target_widgets,
+            "source_files": source_files,
+            "custom_capabilities": custom_caps,
+            "mechanics": mechanics_dict,
+        }
+        if template is not None:
+            arch["template_id"] = template.id
+            arch["base_template_id"] = template.id
+            arch["preset_key"] = template.preset_key
+        return arch
+
     def evaluate_strategy(self, prompt: str) -> StrategyDecision:
         profile = self.analyze_prompt(prompt)
         evaluations: List[CandidateEvaluation] = []
@@ -518,14 +741,12 @@ class SemanticTemplateRegistry:
         for tmpl in self.templates:
             conflict_reasons: List[str] = []
 
-            # Check 1: Template has capability forbidden by the user's request
             conflicts_in_template = tmpl.capabilities & profile.forbidden_capabilities
             if conflicts_in_template:
                 conflict_reasons.append(
                     f"Template '{tmpl.title}' includes forbidden capabilities: {sorted(conflicts_in_template)}"
                 )
 
-            # Check 2: Template forbids capability required by the user's request
             conflicts_in_req = tmpl.forbidden_capabilities & profile.required_capabilities
             if conflicts_in_req:
                 conflict_reasons.append(
@@ -553,29 +774,17 @@ class SemanticTemplateRegistry:
                 )
             )
 
-        # Sort evaluations by score descending
         evaluations.sort(key=lambda e: e.overlap_score, reverse=True)
         best = evaluations[0] if evaluations else None
-
-        # Decision logic:
-        # Strategy A (ADAPT_TEMPLATE): overlap >= 0.80 and no conflicts
-        # Strategy B (HYBRID): 0.40 <= overlap < 0.80 and no conflicts
-        # Strategy C (SCRATCH): overlap < 0.40 or all candidates have conflicts
         reasons: List[str] = []
 
         if best and not best.has_conflict and best.overlap_score >= 0.80:
             strategy = GenerationStrategy.ADAPT_TEMPLATE
             reasons.append(
-                f"Selected '{best.template.title}' (Approach A: Adapt Template) with "
+                f"Selected '{best.template.title}' (Approach A: Extend & Adapt Template) with "
                 f"{int(best.overlap_score * 100)}% capability overlap and zero conflicts."
             )
-            suggested_arch = {
-                "method": "template_adaptation",
-                "template_id": best.template.id,
-                "genre": best.template.genre,
-                "camera": best.template.camera,
-                "preset_key": best.template.preset_key,
-            }
+            suggested_arch = self._synthesize_architecture_for_prompt(prompt, profile, strategy, best.template)
             return StrategyDecision(
                 strategy=strategy,
                 template=best.template,
@@ -590,16 +799,13 @@ class SemanticTemplateRegistry:
             strategy = GenerationStrategy.HYBRID
             reasons.append(
                 f"Selected '{best.template.title}' (Approach B: Hybrid Generation) with "
-                f"{int(best.overlap_score * 100)}% capability overlap. Requires custom rules for "
-                f"missing capabilities: {sorted(best.missing_capabilities)}."
+                f"{int(best.overlap_score * 100)}% capability overlap. Synthesizing custom subsystems for: "
+                f"{sorted(best.missing_capabilities)}."
             )
-            suggested_arch = {
-                "method": "hybrid_generation",
-                "base_template_id": best.template.id,
-                "genre": profile.detected_genre,
-                "camera": best.template.camera,
-                "custom_capabilities": list(best.missing_capabilities),
-            }
+            suggested_arch = self._synthesize_architecture_for_prompt(prompt, profile, strategy, best.template)
+            for cap in sorted(best.missing_capabilities):
+                if cap not in suggested_arch["custom_capabilities"]:
+                    suggested_arch["custom_capabilities"].append(cap)
             return StrategyDecision(
                 strategy=strategy,
                 template=best.template,
@@ -610,7 +816,6 @@ class SemanticTemplateRegistry:
                 suggested_architecture=suggested_arch,
             )
 
-        # Strategy C: Generate from Scratch
         strategy = GenerationStrategy.SCRATCH
         if best and best.has_conflict:
             reasons.append(
@@ -623,8 +828,7 @@ class SemanticTemplateRegistry:
                 "Selecting Approach C: Generate from Scratch."
             )
 
-        # Construct game-specific scratch architecture
-        suggested_arch = self._synthesize_scratch_architecture(profile)
+        suggested_arch = self._synthesize_architecture_for_prompt(prompt, profile, strategy, None)
 
         return StrategyDecision(
             strategy=strategy,
@@ -636,13 +840,33 @@ class SemanticTemplateRegistry:
             suggested_architecture=suggested_arch,
         )
 
+    def _synthesize_scratch_architecture(self, profile: CapabilityProfile) -> Dict[str, Any]:
+        """Synthesize a dedicated scratch architecture from a CapabilityProfile."""
+        title = profile.title_hint or ""
+        if profile.keywords_matched:
+            title = profile.keywords_matched[0]
+        arch = self._synthesize_architecture_for_prompt(title, profile, GenerationStrategy.SCRATCH, None)
+        if "racing" in profile.keywords_matched or "racing" in title.lower():
+            arch["plan_kind"] = "scratch_racing"
+            arch["target_classes"] = ["ARaceGameMode", "URaceGameplayRule", "ARacePlayerController", "URaceLapTracker"]
+        elif "tower_defense" in profile.keywords_matched or "tower" in title.lower():
+            arch["plan_kind"] = "scratch_tower_defense"
+            arch["target_classes"] = ["ATowerDefenseGameMode", "UTowerDefenseGameplayRule", "ATowerDefensePlayerController", "UTowerPlacementManager"]
+        elif "roguelike" in profile.keywords_matched or "roguelike" in title.lower():
+            arch["plan_kind"] = "scratch_roguelike"
+            arch["target_classes"] = ["ARoguelikeGameMode", "URoguelikeGameplayRule", "ARoguelikePlayerController", "URoomGenerator"]
+        elif "wave_survival" in profile.keywords_matched or "survival" in title.lower() or "horde" in title.lower():
+            arch["plan_kind"] = "scratch_wave_survival"
+            arch["target_classes"] = ["AWaveSurvivalGameMode", "UWaveSurvivalGameplayRule", "AWaveSurvivalPlayerController", "AWaveSpawner"]
+        return arch
+
     def evaluate_strategy_with_model(
         self,
         prompt: str,
         complete_json: Optional[CompleteJson] = None,
         model: Optional[str] = None,
     ) -> StrategyDecision:
-        """Uses LLM to evaluate the generation strategy and decide whether to adapt a template, create hybrid, or build from scratch."""
+        """Use LLM to evaluate the generation strategy and enrich with deterministic architecture synthesis."""
         if complete_json is not None:
             templates_summary = "\n".join(
                 f"- ID: '{t.id}' | Title: {t.title} | Genre: {t.genre.value} | Camera: {t.camera.value}\n"
@@ -653,17 +877,15 @@ class SemanticTemplateRegistry:
             )
             system = (
                 "You are GameForge's Principal Game Systems Architect.\n"
-                "Your mission is to evaluate the user's natural-language game request and choose the optimal implementation strategy.\n\n"
-                "AVAILABLE TEMPLATES IN ENGINE:\n"
+                "Evaluate the user's natural-language game request and choose the optimal implementation strategy.\n\n"
+                "AVAILABLE ENGINE FOUNDATIONS:\n"
                 f"{templates_summary}\n\n"
                 "STRATEGY DEFINITIONS:\n"
-                "1. 'adapt_template': An existing template is an exact match (>=80% overlap) for the gameplay mechanics with zero conflicting constraints.\n"
-                "2. 'hybrid': An existing template provides the base movement/camera (40-79% overlap), but requires custom C++ logic for new mechanics.\n"
-                "3. 'scratch': NONE of the templates match (e.g. Sudoku, Chess, Tetris, Minesweeper, Card games with custom logic, RTS, Tycoon, custom logic games).\n\n"
+                "1. 'adapt_template': A foundation matches the spatial/camera mode (>=80% overlap) and will be extended with custom rules, entities, and C++ subsystems.\n"
+                "2. 'hybrid': A foundation provides base movement/camera (40-79% overlap) and is combined with custom C++ subsystems for novel mechanics.\n"
+                "3. 'scratch': None of the foundations match (e.g., constraint puzzles, tactical chess/checkers, falling blocks, racing circuits, tower defense).\n\n"
                 "CRITICAL ARCHITECTURAL CONSTRAINTS:\n"
-                "- NEVER adapt a 3D platformer or combat shooter for a discrete board game, logic puzzle, or Sudoku!\n"
-                "- For Sudoku: you MUST select strategy='scratch' (or 'puzzle_grid') so that it is built with dedicated 9x9 grid data structures, number pad, and solver without falling cubes, obstacles, or character combat.\n"
-                "- Architecture domain guidance: grid_board (tic-tac-toe, chess, checkers), card_battler, puzzle_logic, platformer.\n"
+                "- NEVER adapt a 3D platformer or combat shooter for a discrete board game or logic puzzle.\n"
                 "- Output strictly valid JSON conforming to the schema."
             )
             schema = {
@@ -683,13 +905,13 @@ class SemanticTemplateRegistry:
                                 "title": {"type": "string"},
                                 "description": {"type": "string"},
                                 "target_files": {"type": "array", "items": {"type": "string"}},
-                                "verification": {"type": "string"}
+                                "verification": {"type": "string"},
                             },
-                            "required": ["title", "description", "target_files", "verification"]
-                        }
-                    }
+                            "required": ["title", "description", "target_files", "verification"],
+                        },
+                    },
                 },
-                "required": ["strategy", "reasoning"]
+                "required": ["strategy", "reasoning"],
             }
             try:
                 raw = complete_json(system, prompt, schema)
@@ -703,7 +925,6 @@ class SemanticTemplateRegistry:
                     strat_str = str(data.get("strategy", "") or "").lower() if isinstance(data, dict) else ""
                     if not strat_str and isinstance(data, dict):
                         det_decision = self.evaluate_strategy(prompt)
-                        # Only reuse the answer as a design draft when it actually looks like one.
                         if "title" in data and "genre" in data and ("win" in data or "entities" in data):
                             det_decision.draft_preloaded = data
                         return det_decision
@@ -713,8 +934,6 @@ class SemanticTemplateRegistry:
                         tmpl = next((t for t in self.templates if t.id == tmpl_id), None)
                         profile = self.analyze_prompt(prompt)
                         if strategy in (GenerationStrategy.ADAPT_TEMPLATE, GenerationStrategy.HYBRID):
-                            # A model may choose only a real registered template that
-                            # does not contradict explicit user requirements.
                             if tmpl is None:
                                 raise ValueError(f"LLM selected unknown template_id: {tmpl_id!r}")
                             if (tmpl.capabilities & profile.forbidden_capabilities) or (
@@ -728,18 +947,14 @@ class SemanticTemplateRegistry:
                                 profile.detected_genre = Genre(data["genre"])
                             except Exception:
                                 pass
-                        suggested_arch = {
-                            "method": f"llm_{strat_str}",
-                            "template_id": tmpl_id,
-                            "genre": profile.detected_genre,
-                            "target_classes": data.get("target_classes") or ["CustomGameMode"],
-                            "mechanics": data.get("custom_mechanics") or {},
-                            "llm_plan_steps": data.get("plan_steps") or [],
-                        }
-                        if strategy == GenerationStrategy.SCRATCH:
-                            scratch_arch = self._synthesize_scratch_architecture(profile)
-                            scratch_arch.update(suggested_arch)
-                            suggested_arch = scratch_arch
+                        suggested_arch = self._synthesize_architecture_for_prompt(prompt, profile, strategy, tmpl)
+                        suggested_arch["method"] = f"llm_{strat_str}"
+                        if data.get("target_classes"):
+                            suggested_arch["target_classes"] = data["target_classes"]
+                        if isinstance(data.get("custom_mechanics"), dict):
+                            suggested_arch["mechanics"] = {**suggested_arch.get("mechanics", {}), **data["custom_mechanics"]}
+                        if data.get("plan_steps"):
+                            suggested_arch["llm_plan_steps"] = data["plan_steps"]
 
                         return StrategyDecision(
                             strategy=strategy,
@@ -755,282 +970,5 @@ class SemanticTemplateRegistry:
 
         return self.evaluate_strategy(prompt)
 
-    def _synthesize_scratch_architecture(self, profile: CapabilityProfile) -> Dict[str, Any]:
-        """Provides concrete, genre-appropriate C++ and UI architecture for games generated from scratch."""
-        if "sudoku" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.PUZZLE,
-                "camera": CameraKind.FIXED_BOARD,
-                "plan_kind": "scratch_puzzle",
-                "target_classes": [
-                    "ASudokuGameMode",
-                    "USudokuGameInstance",
-                    "USudokuGridManager",
-                    "FSudokuSolver",
-                ],
-                "target_widgets": [
-                    "WSudokuGrid",
-                    "WNumberPad",
-                    "WCellButton",
-                    "WSudokuHUD",
-                ],
-                "source_files": [
-                    "Source/MyGame/SudokuGameMode.h",
-                    "Source/MyGame/SudokuGameMode.cpp",
-                    "Source/MyGame/SudokuGameInstance.h",
-                    "Source/MyGame/SudokuGameInstance.cpp",
-                    "Source/MyGame/SudokuGridManager.h",
-                    "Source/MyGame/SudokuGridManager.cpp",
-                ],
-                "mechanics": {
-                    "grid_size": 9,
-                    "subgrid_size": 3,
-                    "rule_set": "Standard Sudoku (no repeated digits in rows, columns, or 3x3 boxes)",
-                },
-                "win_condition": "board.solved == true",
-                "lose_condition": None,
-            }
 
-        if "chess" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.GRID_BOARD,
-                "camera": CameraKind.FIXED_BOARD,
-                "plan_kind": "scratch_board",
-                "target_classes": [
-                    "AChessGameMode",
-                    "AChessBoardManager",
-                    "AChessPiece",
-                    "FChessMoveValidator",
-                ],
-                "target_widgets": [
-                    "WChessHUD",
-                    "WTurnIndicator",
-                ],
-                "source_files": [
-                    "Source/MyGame/ChessGameMode.h",
-                    "Source/MyGame/ChessGameMode.cpp",
-                    "Source/MyGame/ChessBoardManager.h",
-                    "Source/MyGame/ChessBoardManager.cpp",
-                ],
-                "win_condition": "board.checkmate == true",
-                "lose_condition": None,
-            }
-
-        if "tetris" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.PUZZLE,
-                "camera": CameraKind.FIXED_BOARD,
-                "plan_kind": "scratch_falling_blocks",
-                "target_classes": [
-                    "ATetrisGameMode",
-                    "UTetrisGridManager",
-                    "ATetrominoSpawner",
-                ],
-                "target_widgets": [
-                    "WTetrisHUD",
-                    "WScoreBoard",
-                ],
-                "source_files": [
-                    "Source/MyGame/TetrisGameMode.h",
-                    "Source/MyGame/TetrisGameMode.cpp",
-                    "Source/MyGame/TetrisGridManager.h",
-                    "Source/MyGame/TetrisGridManager.cpp",
-                ],
-                "win_condition": "score >= 1000",
-                "lose_condition": "grid.top_out == true",
-            }
-
-        if "snake" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.PUZZLE,
-                "camera": CameraKind.FIXED_BOARD,
-                "plan_kind": "scratch_snake",
-                "target_classes": [
-                    "ASnakeGameMode",
-                    "ASnakePawn",
-                    "AFoodSpawner",
-                ],
-                "target_widgets": [
-                    "WSnakeHUD",
-                ],
-                "source_files": [
-                    "Source/MyGame/SnakeGameMode.h",
-                    "Source/MyGame/SnakeGameMode.cpp",
-                ],
-                "win_condition": "score >= 50",
-                "lose_condition": "snake.self_collision == true",
-            }
-
-        if "racing" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.PLATFORMER,
-                "camera": CameraKind.THIRD_PERSON,
-                "plan_kind": "scratch_racing",
-                "target_classes": [
-                    "ARaceGameMode",
-                    "AVehiclePawn",
-                    "ACheckpointTrigger",
-                    "URaceProgressionManager",
-                ],
-                "target_widgets": [
-                    "WRaceHUD",
-                    "WLapTimer",
-                    "WSpeedometer",
-                ],
-                "source_files": [
-                    "Source/MyGame/RaceGameMode.h",
-                    "Source/MyGame/RaceGameMode.cpp",
-                    "Source/MyGame/VehiclePawn.h",
-                    "Source/MyGame/VehiclePawn.cpp",
-                ],
-                "mechanics": {
-                    "lap_count": 3,
-                    "checkpoint_count": 4,
-                },
-                "win_condition": "race.finished == true",
-                "lose_condition": "timer_runs_out",
-            }
-
-        if "tower_defense" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.ARENA_COMBAT,
-                "camera": CameraKind.TOP_DOWN,
-                "plan_kind": "scratch_tower_defense",
-                "target_classes": [
-                    "ATowerDefenseGameMode",
-                    "ATowerBase",
-                    "ACreepSpawner",
-                    "UTowerDefenseManager",
-                ],
-                "target_widgets": [
-                    "WTowerDefenseHUD",
-                    "WBuildMenu",
-                    "WWaveCounter",
-                ],
-                "source_files": [
-                    "Source/MyGame/TowerDefenseGameMode.h",
-                    "Source/MyGame/TowerDefenseGameMode.cpp",
-                    "Source/MyGame/TowerBase.h",
-                    "Source/MyGame/TowerBase.cpp",
-                ],
-                "mechanics": {
-                    "starting_gold": 250,
-                    "base_health": 100.0,
-                },
-                "win_condition": "waves_cleared >= 5",
-                "lose_condition": "base_health <= 0.0",
-            }
-
-        if "roguelike" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.DUNGEON_CRAWLER,
-                "camera": CameraKind.THIRD_PERSON,
-                "plan_kind": "scratch_roguelike",
-                "target_classes": [
-                    "ARoguelikeGameMode",
-                    "ADungeonRoomManager",
-                    "ARoguelikeCharacter",
-                ],
-                "target_widgets": [
-                    "WRoguelikeHUD",
-                    "WInventoryWidget",
-                    "WRoomMapWidget",
-                ],
-                "source_files": [
-                    "Source/MyGame/RoguelikeGameMode.h",
-                    "Source/MyGame/RoguelikeGameMode.cpp",
-                    "Source/MyGame/DungeonRoomManager.h",
-                    "Source/MyGame/DungeonRoomManager.cpp",
-                ],
-                "mechanics": {
-                    "room_count": 6,
-                    "has_boss": True,
-                },
-                "win_condition": "boss_defeated == true",
-                "lose_condition": "player_health <= 0.0",
-            }
-
-        if "zombie_survival" in profile.keywords_matched or "zombie" in profile.keywords_matched:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.ARENA_COMBAT,
-                "camera": CameraKind.FIRST_PERSON,
-                "plan_kind": "scratch_zombie_survival",
-                "target_classes": [
-                    "AZombieSurvivalGameMode",
-                    "AZombieSpawner",
-                    "AZombieCharacter",
-                    "AWaveManager",
-                ],
-                "target_widgets": [
-                    "WZombieSurvivalHUD",
-                    "WWaveAnnouncer",
-                    "WAmmoCounter",
-                ],
-                "source_files": [
-                    "Source/MyGame/ZombieSurvivalGameMode.h",
-                    "Source/MyGame/ZombieSurvivalGameMode.cpp",
-                    "Source/MyGame/ZombieCharacter.h",
-                    "Source/MyGame/ZombieCharacter.cpp",
-                ],
-                "mechanics": {
-                    "starting_ammo": 30,
-                    "reserve_ammo": 90,
-                },
-                "win_condition": "waves_cleared >= 5",
-                "lose_condition": "player_health <= 0.0",
-            }
-
-        if profile.detected_genre == Genre.PUZZLE:
-            return {
-                "method": "scratch_generation",
-                "genre": Genre.PUZZLE,
-                "camera": CameraKind.FIXED_BOARD,
-                "plan_kind": "scratch_puzzle",
-                "target_classes": [
-                    "APuzzleGameMode",
-                    "UPuzzleGridManager",
-                ],
-                "target_widgets": [
-                    "WPuzzleHUD",
-                ],
-                "source_files": [
-                    "Source/MyGame/PuzzleGameMode.h",
-                    "Source/MyGame/PuzzleGameMode.cpp",
-                ],
-                "win_condition": "puzzle.solved == true",
-                "lose_condition": None,
-            }
-
-        # Default scratch architecture
-        return {
-            "method": "scratch_generation",
-            "genre": profile.detected_genre,
-            "camera": CameraKind.THIRD_PERSON,
-            "plan_kind": "scratch_custom",
-            "target_classes": [
-                "ACustomGameMode",
-                "ACustomPlayerController",
-                "ACustomGameState",
-            ],
-            "target_widgets": [
-                "WCustomHUD",
-            ],
-            "source_files": [
-                "Source/MyGame/CustomGameMode.h",
-                "Source/MyGame/CustomGameMode.cpp",
-            ],
-            "win_condition": "game.won == true",
-            "lose_condition": "game.lost == true",
-        }
-
-
-# Global registry instance
 default_registry = SemanticTemplateRegistry()

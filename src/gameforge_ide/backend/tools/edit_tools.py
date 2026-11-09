@@ -11,6 +11,7 @@ import os
 import re
 import stat
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -21,8 +22,12 @@ from ...storage.atomic import atomic_write, atomic_write_json
 from ...storage.diff_store import DiffStore
 
 
-def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, Optional[str]]:
-    """Applies a multi-hunk unified diff to original_text with cumulative line offset tracking.
+def _apply_unified_diff_text(
+    original_text: str,
+    diff_text: str,
+    fuzzy_window: int = 25,
+) -> Tuple[bool, str, Optional[str]]:
+    """Applies a multi-hunk unified diff to original_text with context verification and fuzzy offset matching.
 
     Returns (success, result_text, error_message).
     """
@@ -31,6 +36,7 @@ def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, O
 
     orig_lines = original_text.splitlines(keepends=True)
     diff_lines = diff_text.splitlines(keepends=True)
+    dom_nl = "\r\n" if original_text.count("\r\n") > (original_text.count("\n") - original_text.count("\r\n")) else "\n"
 
     hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
@@ -38,11 +44,23 @@ def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, O
     orig_idx = 0
     i = 0
     n = len(diff_lines)
-    cumulative_line_delta = 0
 
     # Skip file headers (--- / +++)
     while i < n and (diff_lines[i].startswith("---") or diff_lines[i].startswith("+++")):
         i += 1
+
+    def _matches_at(start_idx: int, expected: List[str], strip_ws: bool = False) -> bool:
+        if start_idx < orig_idx or start_idx + len(expected) > len(orig_lines):
+            return False
+        for k, exp_line in enumerate(expected):
+            actual_line = orig_lines[start_idx + k].rstrip("\r\n")
+            if strip_ws:
+                if actual_line.strip() != exp_line.strip():
+                    return False
+            else:
+                if actual_line != exp_line:
+                    return False
+        return True
 
     while i < n:
         line = diff_lines[i]
@@ -51,59 +69,72 @@ def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, O
             i += 1
             continue
 
-        hunk_orig_start = int(match.group(1)) - 1  # 0-indexed line number in original file
+        hunk_orig_start = max(0, int(match.group(1)) - 1)  # 0-indexed line number in original file
         i += 1
 
-        # Advance untouched original lines up to the start of this hunk
-        target_orig_start = max(0, hunk_orig_start)
-        while orig_idx < target_orig_start and orig_idx < len(orig_lines):
+        # Collect all lines belonging to this hunk
+        hunk_body: List[str] = []
+        while i < n and not diff_lines[i].startswith("@@"):
+            hunk_body.append(diff_lines[i])
+            i += 1
+
+        expected_orig = [
+            hl[1:].rstrip("\r\n")
+            for hl in hunk_body
+            if len(hl) > 0 and hl[0] in (" ", "-")
+        ]
+
+        # Find matching start index (exact at nominal start, then fuzzy offset search within +/- fuzzy_window)
+        matched_start: Optional[int] = None
+        if not expected_orig:
+            matched_start = min(max(orig_idx, hunk_orig_start), len(orig_lines))
+        else:
+            offsets = [0]
+            for d in range(1, fuzzy_window + 1):
+                offsets.append(-d)
+                offsets.append(d)
+            for off in offsets:
+                cand = hunk_orig_start + off
+                if _matches_at(cand, expected_orig, strip_ws=False):
+                    matched_start = cand
+                    break
+            if matched_start is None:
+                for off in offsets:
+                    cand = hunk_orig_start + off
+                    if _matches_at(cand, expected_orig, strip_ws=True):
+                        matched_start = cand
+                        break
+
+        if matched_start is None:
+            probe_idx = min(max(orig_idx, hunk_orig_start), max(0, len(orig_lines) - 1))
+            got_line = orig_lines[probe_idx].strip() if orig_lines else "<EOF>"
+            exp_first = expected_orig[0].strip() if expected_orig else ""
+            return (
+                False,
+                original_text,
+                f"Diff context mismatch near line {hunk_orig_start + 1}: expected {exp_first!r}, got {got_line!r}",
+            )
+
+        # Advance untouched original lines up to matched_start
+        while orig_idx < matched_start and orig_idx < len(orig_lines):
             out_lines.append(orig_lines[orig_idx])
             orig_idx += 1
 
-        hunk_added = 0
-        hunk_deleted = 0
-
-        while i < n and not diff_lines[i].startswith("@@"):
-            hline = diff_lines[i]
+        # Apply hunk operations at matched_start
+        for hline in hunk_body:
             prefix = hline[0] if len(hline) > 0 else ""
             content = hline[1:] if len(hline) > 0 else ""
-
             if prefix == " ":
-                # Context line: must match original
-                if orig_idx < len(orig_lines):
-                    if orig_lines[orig_idx].rstrip("\r\n") != content.rstrip("\r\n"):
-                        return (
-                            False,
-                            original_text,
-                            f"Diff context mismatch at line {orig_idx + 1}: expected {content.strip()!r}, got {orig_lines[orig_idx].strip()!r}",
-                        )
-                    out_lines.append(orig_lines[orig_idx])
-                    orig_idx += 1
-                else:
-                    return False, original_text, "Diff context line exceeds original file length"
+                out_lines.append(orig_lines[orig_idx])
+                orig_idx += 1
             elif prefix == "-":
-                # Deletion line: advance original index
-                if orig_idx < len(orig_lines):
-                    if orig_lines[orig_idx].rstrip("\r\n") != content.rstrip("\r\n"):
-                        return (
-                            False,
-                            original_text,
-                            f"Diff deletion mismatch at line {orig_idx + 1}: expected {content.strip()!r}, got {orig_lines[orig_idx].strip()!r}",
-                        )
-                    orig_idx += 1
-                    hunk_deleted += 1
-                else:
-                    return False, original_text, "Diff deletion line exceeds original file length"
+                orig_idx += 1
             elif prefix == "+":
-                # Addition line: append to output
+                if not content.endswith(("\n", "\r\n")):
+                    content = content + dom_nl
                 out_lines.append(content)
-                hunk_added += 1
             elif prefix == "\\":
-                # '\ No newline at end of file' comment
                 pass
-            i += 1
-
-        cumulative_line_delta += (hunk_added - hunk_deleted)
 
     # Append any remaining untouched original lines
     while orig_idx < len(orig_lines):
@@ -113,15 +144,31 @@ def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, O
     return True, "".join(out_lines), None
 
 
+apply_unified_diff = _apply_unified_diff_text
+
+
 class EditTools:
     """Manages diff generation, patch approval, atomic edits, and rollback snapshots."""
 
     def __init__(self, boundary: BoundaryManager):
         self.boundary = boundary
+        self._lock = threading.RLock()
         self.pending_diffs: Dict[str, Dict[str, Any]] = {}
         self.applied_diffs: Dict[str, Dict[str, Any]] = {}
         self.diff_store = DiffStore(self.boundary.workspace_root)
         self.diffs_dir = self.diff_store.diffs_dir
+
+    @staticmethod
+    def _apply_unified_diff_text(original_text: str, diff_text: str, fuzzy_window: int = 25) -> Tuple[bool, str, Optional[str]]:
+        return _apply_unified_diff_text(original_text, diff_text, fuzzy_window=fuzzy_window)
+
+    def apply_patch_unified(self, subpath: str, diff_text: str) -> Dict[str, Any]:
+        """Apply a unified diff directly to subpath with context verification and atomic write."""
+        with self._lock:
+            prop = self.propose_edit(subpath=subpath, patch=diff_text)
+            if prop.get("status") != "PENDING_APPROVAL":
+                return prop
+            return self.apply_diff(prop["diff_id"])
 
     def _save_diff_to_disk(self, rec: Dict[str, Any]) -> None:
         try:

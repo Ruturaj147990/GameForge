@@ -10,6 +10,7 @@
 
 class UAIPerceptionComponent;
 class UAISenseConfig_Sight;
+class UStaticMeshComponent;
 
 UENUM(BlueprintType)
 enum class EGameForgeGuardState : uint8
@@ -35,18 +36,36 @@ public:
 	AGameForgeGuard();
 
 	/** World-space patrol route, visited in order and looped. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Guard")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
 	TArray<FVector> PatrolPoints;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Guard")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
+	float PatrolRadius = 600.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
+	float AggroRadius = 900.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
+	float MoveSpeed = 240.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
 	float PatrolSpeed = 200.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Guard")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
 	float ChaseSpeed = 420.0f;
 
 	/** Seconds spent at the last known location before giving up. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Guard")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
 	float SearchTime = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Guard")
+	FLinearColor BodyColor = FLinearColor(0.95f, 0.55f, 0.1f, 1.f);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Guard")
+	TObjectPtr<UStaticMeshComponent> ProxyBody;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Guard")
+	TObjectPtr<UStaticMeshComponent> ProxyHead;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
@@ -81,6 +100,7 @@ public:
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Guard|State")
 	TArray<FString> PatrolLog;
 
+	virtual void BeginPlay() override;
 	void EnterState(EGameForgeGuardState NewState, const AActor* Target = nullptr);
 };
 
@@ -101,6 +121,7 @@ public:
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result) override;
+	void ApplyGuardSightRadius(float NewAggroRadius);
 
 protected:
 	UFUNCTION()

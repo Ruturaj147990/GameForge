@@ -21,7 +21,12 @@ def landscape_create(args):
 def spline_create_road(args):
     if not hasattr(unreal, "GameForgeLandscapeLibrary"):
         return _envelope("spline_create_road", False, errors=["GameForgeLandscapeLibrary not loaded in editor"])
-    res_raw = unreal.GameForgeLandscapeLibrary.create_spline_road(json.dumps(args))
+    normalized = dict(args or {})
+    mat = normalized.get("road_material") or normalized.get("material_path") or normalized.get("material")
+    if mat:
+        normalized.setdefault("road_material", mat)
+        normalized.setdefault("material_path", mat)
+    res_raw = unreal.GameForgeLandscapeLibrary.create_spline_road(json.dumps(normalized))
     res = json.loads(res_raw)
     return _envelope("spline_create_road", res.get("success", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []))
@@ -31,7 +36,12 @@ def spline_create_road(args):
 def foliage_scatter(args):
     if not hasattr(unreal, "GameForgeLandscapeLibrary"):
         return _envelope("foliage_scatter", False, errors=["GameForgeLandscapeLibrary not loaded in editor"])
-    res_raw = unreal.GameForgeLandscapeLibrary.create_foliage_scatter(json.dumps(args))
+    normalized = dict(args or {})
+    mesh = normalized.get("static_mesh") or normalized.get("mesh_path")
+    if mesh:
+        normalized.setdefault("static_mesh", mesh)
+        normalized.setdefault("mesh_path", mesh)
+    res_raw = unreal.GameForgeLandscapeLibrary.create_foliage_scatter(json.dumps(normalized))
     res = json.loads(res_raw)
     return _envelope("foliage_scatter", res.get("success", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []))
@@ -50,7 +60,8 @@ def landmark_spawn(args):
 @op("landscape_inspect_layers", reversibility="read-only")
 def landscape_inspect_layers(args):
     """Per paint layer of the landscape: layer info asset, mean weight and dominant fraction (engine weightmaps)."""
-    if not hasattr(unreal, "GameForgeLandscapeLibrary") or             not hasattr(unreal.GameForgeLandscapeLibrary, "inspect_landscape_layers"):
+    if not hasattr(unreal, "GameForgeLandscapeLibrary") or \
+            not hasattr(unreal.GameForgeLandscapeLibrary, "inspect_landscape_layers"):
         return _envelope("landscape_inspect_layers", False,
                          errors=["GameForgeLandscapeLibrary.inspect_landscape_layers not loaded (rebuild the plugin)"])
     res = json.loads(unreal.GameForgeLandscapeLibrary.inspect_landscape_layers())
@@ -223,5 +234,3 @@ def world_generation_digest(args):
                 instances += 1
     return _envelope("world_generation_digest", heights > 0, {"digest": h.hexdigest(), "height_samples": heights,
                                                               "instances": instances}, reversibility="read-only")
-
-

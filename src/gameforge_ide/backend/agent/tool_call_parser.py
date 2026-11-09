@@ -57,12 +57,19 @@ DEFAULT_KNOWN_TOOLS: Set[str] = {
     "rollback_batch",
     "write_file",
     "delete_file",
+    "verify_disk",
+    "unreal_engine_info",
+    "unreal_find_projects",
     "unreal_editor",
     "unreal_build",
     "unreal_run_tests",
     "unreal_package",
     "play_game",
+    "plan_game",
     "create_game",
+    "create_game_freeform",
+    "modify_game",
+    "generate_3d_mesh",
     "run_command",
     "git_status",
     "git_diff",
@@ -144,7 +151,7 @@ def normalize_flat_command(
 
     {
       "command": "read_file",
-      "path": "E:\\GameForge\\projects\\CounterStrike\\Source\\CounterStrike\\GFGameImpl.cpp"
+      "path": "Source/MyProject/GFGameImpl.cpp"
     }
 
     Also handles when 'command' wraps arguments or when flat keys are arguments.

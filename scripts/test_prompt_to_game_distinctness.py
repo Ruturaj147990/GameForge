@@ -12,11 +12,9 @@ Proves:
   - Resulting project files, levels and assets are distinct across all three games.
 """
 
-import os
 import sys
 import json
 from pathlib import Path
-from typing import Dict, Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -24,10 +22,7 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 import urllib.request
 import urllib.error
-from src.gameforge_ide.design.gds import GameDesignSpec, Genre, LayoutKind, CameraKind
-from src.gameforge_ide.design.draft import DesignDraft
-from src.gameforge_ide.design.expand import expand_draft
-from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds, DRAFT_SYSTEM_PROMPT
+from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds
 
 PROMPTS = {
     "CyberStorm": (

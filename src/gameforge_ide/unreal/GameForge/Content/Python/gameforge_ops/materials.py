@@ -250,16 +250,65 @@ def material_instance_inspect(args):
         "vectors": vectors, "textures": textures})
 
 
+def _collect_mesh_components(actor):
+    """Return all mesh components on an actor, including StaticMeshComponent, SkeletalMeshComponent,
+    ProceduralMeshComponent, and any other MeshComponent subclasses."""
+    seen = set()
+    comps = []
+    comp_classes = [unreal.MeshComponent, unreal.StaticMeshComponent, unreal.SkeletalMeshComponent]
+    proc_cls = getattr(unreal, "ProceduralMeshComponent", None)
+    if proc_cls is not None:
+        comp_classes.append(proc_cls)
+    for cls in comp_classes:
+        try:
+            for comp in actor.get_components_by_class(cls):
+                if comp is not None and comp.get_path_name() not in seen:
+                    seen.add(comp.get_path_name())
+                    comps.append(comp)
+        except Exception:
+            continue
+    return comps
+
+
+@op("material_assign_to_actor", mutates=True, reversibility="transactional")
+def material_assign_to_actor(args):
+    """Assign a MaterialInterface to all mesh components (including ProceduralMeshComponent) on an actor."""
+    label = args.get("label") or args.get("actor_label")
+    mat_path = args.get("material_path") or args.get("material")
+    slot = int(args.get("slot", 0))
+    if not label or not mat_path:
+        return _envelope("material_assign_to_actor", False, errors=["label and material_path are required"])
+    actor = _find_actor(label)
+    if actor is None:
+        return _envelope("material_assign_to_actor", False, errors=["actor not found: " + label])
+    mat = unreal.EditorAssetLibrary.load_asset(mat_path)
+    if not isinstance(mat, unreal.MaterialInterface):
+        return _envelope("material_assign_to_actor", False, errors=["not a MaterialInterface: " + mat_path])
+    comps = _collect_mesh_components(actor)
+    if not comps:
+        return _envelope("material_assign_to_actor", False, errors=["actor has no mesh components: " + label])
+    updated = []
+    with unreal.ScopedEditorTransaction("GameForge material_assign_to_actor"):
+        for comp in comps:
+            comp.set_material(slot, mat)
+            updated.append(comp.get_name())
+    return _envelope("material_assign_to_actor", True,
+                     {"label": label, "material_path": mat.get_path_name(), "slot": slot, "components": updated},
+                     reversibility="transactional")
+
+
+
+
 @op("actor_get_materials", reversibility="read-only")
 def actor_get_materials(args):
     actor = _find_actor(args["label"])
     if actor is None:
         return _envelope("actor_get_materials", False, errors=["actor not found: " + args["label"]])
     slots = []
-    for comp in actor.get_components_by_class(unreal.MeshComponent):
-        for i in range(comp.get_num_materials()):
+    for comp in _collect_mesh_components(actor):
+        num_mats = comp.get_num_materials()
+        for i in range(max(num_mats, 1)):
             m = comp.get_material(i)
-            slots.append({"component": comp.get_name(), "slot": i, "material": m.get_path_name() if m else None})
+            if m is not None or i < num_mats:
+                slots.append({"component": comp.get_name(), "slot": i, "material": m.get_path_name() if m else None})
     return _envelope("actor_get_materials", True, {"label": args["label"], "slots": slots})
-
-

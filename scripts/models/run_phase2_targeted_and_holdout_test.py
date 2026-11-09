@@ -22,7 +22,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-WORKSPACE_ROOT = Path("E:/gameforge_step1")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = WORKSPACE_ROOT / "reports" / "gameforge-27b-sft"
 MIRROR_REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
 

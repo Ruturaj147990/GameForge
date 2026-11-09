@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 import time
@@ -12,7 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.gameforge_ide.evals.adapters import DeterministicMockAdapter, HostedAdapter, OllamaAdapter
+from src.gameforge_ide.evals.adapters import DeterministicMockAdapter, OllamaAdapter
 from src.gameforge_ide.evals.report import format_markdown_summary, save_eval_report
 from src.gameforge_ide.evals.runner import EvalRunner
 

@@ -35,7 +35,8 @@ UNDO_CLASSES = ("transaction", "checkpoint", "runtime", "none")
 NATIVE_TRANSACTION = frozenset({"blueprint_create_node", "blueprint_set_pin_default", "blueprint_connect_pins",
                                 "blueprint_disconnect_pins", "blueprint_delete_node"})
 PYTHON_TRANSACTION = frozenset({"scene_set_manual_exposure", "spawn_actor", "delete_actor", "set_actor_property",
-                                "actor_set_tags", "world_clear_generated", "audio_place_ambient"})
+                                "actor_set_tags", "world_clear_generated", "audio_place_ambient",
+                                "material_assign_to_actor"})
 # What callers are told, per undo class (the editor envelope's own field is not trusted; see true_reversibility).
 REVERSIBILITY = {"transaction": "transactional", "checkpoint": "irreversible", "runtime": "transient",
                  "none": "read-only"}
@@ -119,6 +120,8 @@ CATALOG: dict[str, OpSpec] = {spec.name: spec for spec in [
           "M11 demo: reports/m11_material_demo.json"),
     *_ops("materials", "project", "material_instance_create", "material_instance_inspect", "PASS",
           "M11 demo: reports/m11_material_demo.json"),
+    *_ops("materials", "project", "material_assign_to_actor", "actor_get_materials", "PASS",
+          "Assigns a MaterialInterface to all mesh components on an actor inside a ScopedEditorTransaction."),
     *_ops("session", "read", "api_introspect"),
     *_ops("mesh", "read", "static_mesh_inspect"),
     *_ops("mesh", "project", "mesh_generate_prop static_mesh_configure", "static_mesh_inspect", "PASS",
@@ -223,3 +226,5 @@ def true_reversibility(op_name: str) -> str | None:
     """Reversibility derived from the audited undo class; None for unknown ops."""
     spec = CATALOG.get(op_name)
     return REVERSIBILITY[spec.undo] if spec else None
+
+OP_CATALOG = CATALOG

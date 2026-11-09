@@ -39,7 +39,7 @@ Upon initial startup, GameForge performs automated environment validation:
 
 ### Natural-Language Prompting
 From the **Home View** or **Assistant Panel**, enter a natural-language description of your game idea:
-> *"Create a compact third-person action adventure called Ember Vale: a forest village at dusk with an old hermit who asks me to recover 5 relics while avoiding patrol guards and cursed fire."*
+> *"Create a third-person action adventure in an ancient forest ruin at dusk: talk to the scout, recover 5 artifacts while avoiding patrol guards and fire hazards, unlock the gate with a switch, and escape."*
 
 ### Generation Pipeline
 GameForge executes a structured, deterministic pipeline:

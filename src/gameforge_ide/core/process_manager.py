@@ -10,6 +10,8 @@ Authoritative implementation conforming to DEF-305:
 
 from __future__ import annotations
 
+import ctypes
+from ctypes import wintypes
 import logging
 import os
 import random
@@ -32,6 +34,38 @@ T = TypeVar("T")
 CREATE_NO_WINDOW = 0x08000000
 STARTF_USESHOWWINDOW = 0x00000001
 SW_HIDE = 0
+PROCESS_SET_QUOTA = 0x0100
+PROCESS_TERMINATE = 0x0001
+
+# Explicit 64-bit Windows Job Object ctypes signatures (prevents 32-bit c_int handle truncation on 64-bit Windows)
+if sys.platform == "win32":
+    _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    _k32.CreateJobObjectW.restype = wintypes.HANDLE
+    _k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD)
+    _k32.SetInformationJobObject.restype = wintypes.BOOL
+    _k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _k32.OpenProcess.restype = wintypes.HANDLE
+    _k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    _k32.AssignProcessToJobObject.restype = wintypes.BOOL
+    _k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    _k32.TerminateJobObject.restype = wintypes.BOOL
+    _k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    _k32.CloseHandle.restype = wintypes.BOOL
+
+
+def assign_pid_to_job_object(job_handle: Any, pid: int) -> bool:
+    """Assign a process by PID to a Windows Job Object, guaranteeing CloseHandle runs in finally."""
+    if sys.platform != "win32" or not job_handle or not pid:
+        return False
+    proc_handle = _k32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, int(pid))
+    if not proc_handle:
+        return False
+    try:
+        return bool(_k32.AssignProcessToJobObject(wintypes.HANDLE(int(job_handle)), proc_handle))
+    finally:
+        _k32.CloseHandle(proc_handle)
+
 
 # Sensitive environment prefixes and keys that must never leak to child processes
 SENSITIVE_ENV_PREFIXES = ("GAMEFORGE_API_", "GAMEFORGE_BRIDGE_", "GAMEFORGE_TOKEN", "GAMEFORGE_SECRET", "GAMEFORGE_AUTH")
@@ -42,13 +76,14 @@ SENSITIVE_ENV_KEYS = frozenset({
     "GAMEFORGE_SECRET_KEY",
 })
 
+
 def sanitize_environment(
     base_env: Optional[Dict[str, str]] = None,
     extra_env: Optional[Dict[str, str]] = None,
     allowlist_keys: Optional[Set[str]] = None,
 ) -> Dict[str, str]:
     """Sanitize environment variables for child process execution (DEF-REM-P4A).
-    
+
     Removes administrative API tokens, secrets, and sensitive GAMEFORGE_* variables.
     """
     raw = dict(base_env if base_env is not None else os.environ)
@@ -69,6 +104,7 @@ def sanitize_environment(
                     continue
             clean[k] = v
     return clean
+
 
 # Transient Windows error codes indicating sharing/locking violations
 SHARING_VIOLATION_ERRNOS = {13}  # PermissionError (EACCES)
@@ -162,12 +198,19 @@ class ProcessLifecycleManager:
         """Adopts an already started process into the Windows Job Object and registry."""
         with self._lock:
             self._tracked_processes.add(proc)
-            # Prune completed processes
             dead = [p for p in self._tracked_processes if p.poll() is not None]
             for p in dead:
                 self._tracked_processes.discard(p)
 
-        return jobs.adopt(proc)
+        ok = jobs.adopt(proc)
+        if not ok and sys.platform == "win32" and getattr(proc, "pid", None):
+            try:
+                jh = jobs._job()
+                if jh:
+                    ok = assign_pid_to_job_object(jh, proc.pid)
+            except Exception:
+                pass
+        return ok
 
     def run(
         self,
@@ -182,7 +225,7 @@ class ProcessLifecycleManager:
         **kwargs: Any,
     ) -> Tuple[int, str, str, float]:
         """Runs a process to completion, returning (exit_code, stdout, stderr, duration_seconds).
-        
+
         Guarantees process tree termination on timeout or exception.
         """
         t0 = time.time()
@@ -252,13 +295,23 @@ class ProcessLifecycleManager:
 
         jobs.terminate_all_children()
 
+    kill_all = terminate_all
+
+    def list_active(self) -> List[subprocess.Popen]:
+        """Returns all active processes tracked in ProcessLifecycleManager and core.jobs."""
+        with self._lock:
+            active = {p for p in self._tracked_processes if p.poll() is None}
+            self._tracked_processes = set(active)
+        for jp in jobs.get_active_children():
+            active.add(jp)
+        return list(active)
+
     def get_active_count(self) -> int:
         """Returns the number of currently active managed child processes."""
-        with self._lock:
-            active = [p for p in self._tracked_processes if p.poll() is None]
-            self._tracked_processes = set(active)
-            return len(active)
+        return len(self.list_active())
 
+
+ProcessManager = ProcessLifecycleManager
 
 # Global singleton instance
 default_process_manager = ProcessLifecycleManager.get_instance()
@@ -321,11 +374,9 @@ def safe_remove_file(
     jitter: bool = True,
 ) -> bool:
     """Safely deletes a file, retrying transient sharing violations (.pdb, .exe, etc.).
-    
+
     If locked persistently, moves to a temporary quarantine name to avoid blocking callers.
     """
-    # Do not resolve the final component: resolving a symlink would redirect
-    # deletion to its target instead of unlinking the link itself.
     path = Path(os.path.abspath(os.fspath(file_path)))
     if not path.exists() and not path.is_symlink():
         return True
@@ -356,11 +407,9 @@ def safe_remove_file(
             max_retries,
             exc,
         )
-        # Fallback: rename out of the way so build/toolchain can proceed
         try:
             quarantine_name = path.with_name(f".quarantine_{uuid.uuid4().hex[:6]}_{path.name}")
             path.rename(quarantine_name)
-            # Try to unlink the quarantine file once asynchronously/safely
             try:
                 quarantine_name.unlink(missing_ok=True)
                 return not quarantine_name.exists()
@@ -383,7 +432,6 @@ def safe_remove_directory(
     jitter: bool = True,
 ) -> bool:
     """Safely removes a directory tree, retrying transient sharing violations on nested files."""
-    # A directory symlink must be unlinked, never recursively traversed.
     path = Path(os.path.abspath(os.fspath(dir_path)))
     if not path.exists() and not path.is_symlink():
         return True
@@ -413,7 +461,6 @@ def safe_remove_directory(
             path,
             exc,
         )
-        # Leaf-first retry
         success = True
         for root, dirs, files in os.walk(str(path), topdown=False):
             for f in files:

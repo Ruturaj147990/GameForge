@@ -12,7 +12,7 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Capability | Status | Evidence / note | Phase |
 |---|---|---|---|
 | Prompt → packaged game, 5 recipe genres + 2 new genres | PASS | Composer replaces legacy recipes; 6 preset parity + adventure & top-down shooter verified (`reports/P6/`) | P6 |
-| Free-form game via model C++ + repair ladder | PARTIAL | hard gates pass (whack-a-mole, 9B); visual quality weak | P6 replaces it with composition |
+| Free-form game via model C++ + repair ladder | PASS | Multi-capability C++ synthesizer (`codegen.py`) + dynamic rule compiler (`expand.py`) active across all strategy modes | P6 + Overhaul |
 | Game Design Spec (typed, reviewable) | PASS | schema gds/1, deterministic expander, presets, prompt_to_gds eval 100% valid, store/revisions, pipeline wired; 2 packaged games from GDS (reports/P1/legacy_from_gds_{tictactoe,platformer}.json) | P1 |
 | One durable executor, resume, checkpoints | PASS | Forge executor, atomic persistence, git checkpoints, resume kill test (reports/P2/resume_kill_test.json), rollback check (reports/P2/rollback_check.json), plan demos on Forge (reports/P2/plan_demos_forge.json), leak test (reports/P2/job_object_leak_test.json) | P2 |
 | Scenario playtests (injected input, Shipping-safe) | PASS | Headless packaged Development & Shipping replay, injected Enhanced Input, C++ event bus, 5 dev scenarios (incl. 2 controls) & 3 ship scenarios (`reports/P3/kit_testbed_scenarios.json`) | P3 |
@@ -42,8 +42,8 @@ Engine: UE 5.7.4 (CL 51494982). Statuses: `PASS`, `PARTIAL`, `FAIL`, `BLOCKED`, 
 | Capability | Status | Evidence / note | Phase |
 |---|---|---|---|
 | Live editor link (token, loopback, crash classes) | PASS | contract 16/16 | — |
-| Op catalogue with read-back enforcement (126 ops) | PASS | `unreal/op_catalog.py` + tests | — |
-| Op argument schemas | PASS | all 126 drafted, 30 high-use hand-reviewed in `REVIEWED` (`op_schemas.py`) with strict validation (P0 WI-0.8) | P2 strict |
+| Op catalogue with read-back enforcement (127 ops) | PASS | `unreal/op_catalog.py` + tests | — |
+| Op argument schemas | PASS | all 127 drafted, 30 high-use hand-reviewed in `REVIEWED` (`op_schemas.py`) with strict validation (P0 WI-0.8) | P2 strict |
 | Undo coverage for mutating ops | PASS | audited: 11 transactional, 46 checkpoint-only, 14 runtime; engine spot check PASS (P0 WI-0.7, `reports/P0/undo_spotcheck.json`) | P2 checkpoints |
 | Build / test / package Win64 (Development) | PASS | ~860 MB per game | — |
 | Shipping packages, size ≤ 400 MB | PASS | 328.12 MB redistributable package verified with Oodle compression and plugin trimming (`reports/P10/shipping_package.json`) | P10 |

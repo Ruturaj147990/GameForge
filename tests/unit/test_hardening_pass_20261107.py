@@ -60,7 +60,7 @@ def test_legacy_recipe_fixture_alias_is_same_module():
 
 def test_pyinstaller_spec_still_excludes_tests_and_graders():
     spec = (REPO_ROOT / "GameForge.spec").read_text(encoding="utf-8")
-    assert "'tests'" in spec and "'graders'" in spec
+    assert ("'tests'" in spec or '"tests"' in spec) and ("'graders'" in spec or '"graders"' in spec)
 
 
 # ── command broker ───────────────────────────────────────────────────────────

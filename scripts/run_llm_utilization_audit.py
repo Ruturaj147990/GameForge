@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
-import shutil
 import sys
 import time
 
@@ -22,13 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.backend.providers.ollama_provider import OllamaProvider
-from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds, DRAFT_SYSTEM_PROMPT
+from src.gameforge_ide.design.prompt_to_gds import prompt_to_gds
 from src.gameforge_ide.design.gds import GameDesignSpec
 from src.gameforge_ide.design.patch import propose_patch, apply_patch
 from src.gameforge_ide.composer.compose import compose
-from src.gameforge_ide.composer.plan import composition_to_run_spec
-from src.gameforge_ide.forge.executor import ForgeExecutor
-from src.gameforge_ide.forge.store import RunStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("LLMAudit")

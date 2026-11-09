@@ -7,7 +7,6 @@ Saves evidence to reports/P2/job_object_leak_test.json.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import time

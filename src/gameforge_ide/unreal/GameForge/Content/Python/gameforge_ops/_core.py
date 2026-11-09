@@ -196,6 +196,74 @@ _SAMPLERS = {"color": "SAMPLERTYPE_COLOR", "normal": "SAMPLERTYPE_NORMAL", "mask
              "grayscale": "SAMPLERTYPE_GRAYSCALE", "linear": "SAMPLERTYPE_LINEAR_COLOR"}
 
 
+
+_ENUM_STRING_MAP = {
+    "cameramode": (
+        "GameForgeCameraMode",
+        {
+            "third_person": "THIRD_PERSON",
+            "thirdperson": "THIRD_PERSON",
+            "first_person": "FIRST_PERSON",
+            "firstperson": "FIRST_PERSON",
+            "top_down": "TOP_DOWN",
+            "topdown": "TOP_DOWN",
+            "side_scroller": "SIDE_SCROLLER",
+            "sidescroller": "SIDE_SCROLLER",
+            "fixed_board": "FIXED_BOARD",
+            "fixedboard": "FIXED_BOARD",
+        },
+    ),
+    "effect": (
+        "GameForgePickupEffect",
+        {
+            "add_score": "ADD_SCORE",
+            "addscore": "ADD_SCORE",
+            "score": "ADD_SCORE",
+            "heal": "HEAL",
+            "health": "HEAL",
+            "grant_item": "GRANT_ITEM",
+            "grantitem": "GRANT_ITEM",
+            "item": "GRANT_ITEM",
+            "speed_boost": "SPEED_BOOST",
+            "speedboost": "SPEED_BOOST",
+            "speed": "SPEED_BOOST",
+            "custom_event": "CUSTOM_EVENT",
+            "customevent": "CUSTOM_EVENT",
+            "custom": "CUSTOM_EVENT",
+        },
+    ),
+}
+
+
+def _coerce_enum_property(actor, prop_name, value):
+    """Coerce a string enum identifier (e.g. 'third_person', 'AddScore') to the reflected Unreal EnumBase."""
+    if not isinstance(value, str):
+        return value
+    key = prop_name.lower().replace("_", "")
+    spec = _ENUM_STRING_MAP.get(key)
+    if spec is not None:
+        enum_cls_name, mapping = spec
+        enum_cls = getattr(unreal, enum_cls_name, None)
+        if enum_cls is not None:
+            norm = value.strip().lower().replace("-", "_").replace(" ", "_")
+            member_name = mapping.get(norm) or mapping.get(norm.replace("_", "")) or value.upper()
+            member = getattr(enum_cls, member_name, None) or getattr(enum_cls, value, None)
+            if member is not None:
+                return member
+    try:
+        cur = actor.get_editor_property(prop_name)
+        if isinstance(cur, unreal.EnumBase):
+            enum_cls = type(cur)
+            cand_upper = value.strip().upper().replace(" ", "_").replace("-", "_")
+            for cand in (value, cand_upper, value.replace("_", "")):
+                member = getattr(enum_cls, cand, None)
+                if member is not None:
+                    return member
+    except Exception:
+        pass
+    return value
+
+
 def _enum_name(value):
     name = getattr(value, "name", None)
     return name if isinstance(name, str) else str(value).split(".")[-1].split(":")[0].strip("<> ")
@@ -588,4 +656,4 @@ def dispatch(request_json):
 
 
 
-__all__ = ['LIBRARY_VERSION', 'RESULT_SENTINEL', '_AUDIO_COMPONENTS', '_COLLISION_SHAPES', '_GENERATED_CLASSES', '_MRQ_JOB', '_MS_NODE_HANDLES', '_NIAGARA_TEMPLATES', '_OPS', '_PERF_COMMANDS', '_READBACK_PROPERTIES', '_SAMPLERS', '_TEXTURE_ROLES', '_active_log_path', '_actor_record', '_actor_sub', '_append_part', '_attenuation_record', '_binding_id', '_blendspace_record', '_check_token', '_configure_fbx_skeletal_import', '_csv_dir', '_data_layer_instance', '_desc_layers', '_dl_sub', '_enum_name', '_envelope', '_exposure_record', '_expr_props', '_expr_summary', '_find_actor', '_gs', '_gs_transform', '_level_sub', '_load_asset_pie_safe', '_load_class', '_lod_triangles', '_lod_triangles_via_geometry_script', '_log_since', '_log_size', '_ms_class', '_ms_graph_spec_check', '_ms_ok', '_new_asset', '_pcg_value', '_pie_world', '_rot', '_section_range', '_sm_sub', '_sound_record', '_state_value', '_static_mesh_record', '_texture_record', '_token_path', '_triangles', '_vec', '_vfx_lib', '_world_is_partitioned', '_wp_actor_descs', 'dispatch', 'feature_detect', 'op']
+__all__ = ['LIBRARY_VERSION', 'RESULT_SENTINEL', '_AUDIO_COMPONENTS', '_COLLISION_SHAPES', '_GENERATED_CLASSES', '_MRQ_JOB', '_MS_NODE_HANDLES', '_NIAGARA_TEMPLATES', '_OPS', '_PERF_COMMANDS', '_READBACK_PROPERTIES', '_SAMPLERS', '_TEXTURE_ROLES', '_active_log_path', '_actor_record', '_actor_sub', '_append_part', '_attenuation_record', '_binding_id', '_blendspace_record', '_check_token', '_coerce_enum_property', '_configure_fbx_skeletal_import', '_csv_dir', '_data_layer_instance', '_desc_layers', '_dl_sub', '_enum_name', '_envelope', '_exposure_record', '_expr_props', '_expr_summary', '_find_actor', '_gs', '_gs_transform', '_level_sub', '_load_asset_pie_safe', '_load_class', '_lod_triangles', '_lod_triangles_via_geometry_script', '_log_since', '_log_size', '_ms_class', '_ms_graph_spec_check', '_ms_ok', '_new_asset', '_pcg_value', '_pie_world', '_rot', '_section_range', '_sm_sub', '_sound_record', '_state_value', '_static_mesh_record', '_texture_record', '_token_path', '_triangles', '_vec', '_vfx_lib', '_world_is_partitioned', '_wp_actor_descs', 'dispatch', 'feature_detect', 'op']

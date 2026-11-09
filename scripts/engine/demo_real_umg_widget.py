@@ -20,7 +20,6 @@ Executes genuinely against installed Unreal Engine 5.7.4 on GFProbe.uproject:
 """
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -29,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink
 
 
@@ -62,7 +62,7 @@ def verify_image_content(file_path: Path) -> dict:
 
 
 def main():
-    uproject = Path("E:/GameForge/validation/live_ops_probe/GFProbe.uproject")
+    uproject = get_settings().require_dev("probe_project")
     if not uproject.is_file():
         print(f"FATAL: Probe project not found at {uproject}")
         sys.exit(1)

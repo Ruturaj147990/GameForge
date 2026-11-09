@@ -219,6 +219,86 @@ VFX_PRESETS: Dict[str, VFXPreset] = {
         },
         event_triggers=["projectile.spawned", "spell.cast"],
     ),
+
+    # 9. Burst
+    "vfx.burst": VFXPreset(
+        preset_id="vfx.burst",
+        template_path="/Game/GameForge/VFX/NS_Burst",
+        description="Concentrated radial particle burst",
+        template_system="RadialBurst",
+        template_emitters=["OmnidirectionalBurst"],
+        user_parameters={
+            "User.Color": [1.0, 0.75, 0.25, 1.0],
+            "User.SpawnCount": 45,
+            "User.Lifetime": 0.65,
+            "User.Radius": 85.0,
+        },
+        event_triggers=["pickup.collected", "ability.cast"],
+    ),
+
+    # 10. Explosion
+    "vfx.explosion": VFXPreset(
+        preset_id="vfx.explosion",
+        template_path="/Game/GameForge/VFX/NS_Explosion",
+        description="High-intensity concussive fireball and debris burst",
+        template_system="SimpleExplosion",
+        template_emitters=["OmnidirectionalBurst", "DirectionalBurst"],
+        user_parameters={
+            "User.Color": [1.0, 0.38, 0.08, 1.0],
+            "User.SpawnCount": 90,
+            "User.Lifetime": 1.1,
+            "User.Radius": 180.0,
+        },
+        event_triggers=["hazard.exploded", "enemy.killed"],
+    ),
+
+    # 11. Slash
+    "vfx.slash": VFXPreset(
+        preset_id="vfx.slash",
+        template_path="/Game/GameForge/VFX/NS_Slash",
+        description="Directional melee arc slash ribbon",
+        template_system="DirectionalBurst",
+        template_emitters=["DirectionalBurst"],
+        user_parameters={
+            "User.Color": [0.95, 0.95, 1.0, 1.0],
+            "User.SpawnCount": 30,
+            "User.Lifetime": 0.28,
+            "User.Radius": 75.0,
+        },
+        event_triggers=["melee.hit", "player.attack"],
+    ),
+
+    # 12. Shield Hit
+    "vfx.shield_hit": VFXPreset(
+        preset_id="vfx.shield_hit",
+        template_path="/Game/GameForge/VFX/NS_ShieldHit",
+        description="Energy barrier ripple on impact",
+        template_system="RadialBurst",
+        template_emitters=["OmnidirectionalBurst"],
+        user_parameters={
+            "User.Color": [0.15, 0.82, 1.0, 1.0],
+            "User.SpawnCount": 35,
+            "User.Lifetime": 0.45,
+            "User.Radius": 95.0,
+        },
+        event_triggers=["shield.damaged", "player.damaged"],
+    ),
+
+    # 13. Boost
+    "vfx.boost": VFXPreset(
+        preset_id="vfx.boost",
+        template_path="/Game/GameForge/VFX/NS_Boost",
+        description="High-velocity speed trail burst",
+        template_system="DirectionalBurstLightweight",
+        template_emitters=["DirectionalBurst"],
+        user_parameters={
+            "User.Color": [0.2, 0.95, 0.65, 1.0],
+            "User.SpawnCount": 40,
+            "User.Lifetime": 0.5,
+            "User.Radius": 60.0,
+        },
+        event_triggers=["player.dash", "vehicle.boost"],
+    ),
 }
 
 

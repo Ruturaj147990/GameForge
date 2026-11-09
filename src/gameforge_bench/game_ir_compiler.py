@@ -1,7 +1,7 @@
 """GameForge Step 9 Game IR & Executable Contract Compiler.
 
 Implements Section 6 and Section 28.6 (Step 9 Gate — Game IR choice):
-- Parses and statically validates Game IR v0.1 JSON definitions.
+- Parses and statically validates Game IR v0.1 JSON definitions against schemas/game_ir_schema.json.
 - Deterministic lowering into Unreal Engine 5.7.4 C++ component pairs (.h/.cpp).
 - Generates native reflection macros (UCLASS, UPROPERTY, GENERATED_BODY).
 - Preserves executable contracts as runtime validation probes and asserts.
@@ -29,29 +29,58 @@ class CompilationResult:
 class GameIRCompiler:
     """Compiles Game IR v0.1 definitions into native engine source files."""
 
-    def __init__(self, target_engine: str = "unreal") -> None:
+    def __init__(self, target_engine: str = "unreal", schema_path: Optional[Path] = None) -> None:
         self.target_engine = target_engine.lower()
+        self.schema_path = schema_path or (Path(__file__).resolve().parents[2] / "schemas" / "game_ir_schema.json")
+
+    def validate_ir(self, ir_data: Dict[str, Any]) -> List[str]:
+        """Validates Game IR dictionary against schemas/game_ir_schema.json and structural invariants."""
+        errors: List[str] = []
+        if not isinstance(ir_data, dict):
+            return ["Game IR root must be a JSON object."]
+
+        required_fields = ["schema_version", "ir_version", "module_name", "entities", "contracts"]
+        if self.schema_path and self.schema_path.is_file():
+            try:
+                schema = json.loads(self.schema_path.read_text(encoding="utf-8"))
+                for req in required_fields:
+                    if req not in ir_data:
+                        errors.append(f"Missing required Game IR field: '{req}'")
+                props = schema.get("properties", {})
+                if "schema_version" in ir_data and "enum" in props.get("schema_version", {}):
+                    if ir_data["schema_version"] not in props["schema_version"]["enum"]:
+                        errors.append(f"Invalid schema_version: {ir_data['schema_version']}")
+                if "ir_version" in ir_data and "enum" in props.get("ir_version", {}):
+                    if ir_data["ir_version"] not in props["ir_version"]["enum"]:
+                        errors.append(f"Invalid ir_version: {ir_data['ir_version']}")
+            except Exception as exc:
+                errors.append(f"Failed to load Game IR schema: {exc}")
+        else:
+            for req in required_fields:
+                if req not in ir_data:
+                    errors.append(f"Missing required Game IR field: '{req}'")
+
+        if "entities" in ir_data and not isinstance(ir_data["entities"], list):
+            errors.append("'entities' must be a list.")
+        if "contracts" in ir_data and not isinstance(ir_data["contracts"], list):
+            errors.append("'contracts' must be a list.")
+
+        return errors
 
     def compile_ir(self, ir_data: Dict[str, Any]) -> CompilationResult:
-        errors: List[str] = []
+        errors = self.validate_ir(ir_data)
         files: Dict[str, str] = {}
         contracts_count = 0
         escape_hatches_count = 0
-
-        # Validate basic schema
-        for req in ["schema_version", "ir_version", "module_name", "entities", "contracts"]:
-            if req not in ir_data:
-                errors.append(f"Missing required Game IR field: '{req}'")
 
         if errors:
             return CompilationResult(success=False, errors=errors)
 
         entities = ir_data.get("entities", [])
-        contracts = {c["target_component"]: c for c in ir_data.get("contracts", [])}
+        contracts = {c["target_component"]: c for c in ir_data.get("contracts", []) if isinstance(c, dict) and "target_component" in c}
         contracts_count = len(contracts)
 
         for entity in entities:
-            entity_id = entity.get("entity_id", "DefaultEntity")
             components = entity.get("components", [])
 
             for comp in components:
@@ -118,7 +147,7 @@ public:
 """
         # Properties
         for prop_name, prop_val in props.items():
-            prop_type = "float" if isinstance(prop_val, (int, float)) else "bool"
+            prop_type = "float" if isinstance(prop_val, (int, float)) and not isinstance(prop_val, bool) else "bool"
             header += f"\tUPROPERTY(EditAnywhere, BlueprintReadWrite, Category = \"GameForge\")\n"
             header += f"\t{prop_type} {prop_name};\n\n"
 
@@ -137,10 +166,10 @@ public:
 \tPrimaryComponentTick.bCanEverTick = false;
 """
         for prop_name, prop_val in props.items():
-            if isinstance(prop_val, float):
-                cpp += f"\t{prop_name} = {prop_val}f;\n"
-            elif isinstance(prop_val, bool):
+            if isinstance(prop_val, bool):
                 cpp += f"\t{prop_name} = {'true' if prop_val else 'false'};\n"
+            elif isinstance(prop_val, float):
+                cpp += f"\t{prop_name} = {prop_val}f;\n"
             else:
                 cpp += f"\t{prop_name} = {prop_val};\n"
 
@@ -177,15 +206,19 @@ namespace GameForge.Gameplay
     {{
 """
         for prop_name, prop_val in props.items():
-            prop_type = "float" if isinstance(prop_val, (int, float)) else "bool"
+            prop_type = "float" if isinstance(prop_val, (int, float)) and not isinstance(prop_val, bool) else "bool"
             code += f"        [SerializeField] private {prop_type} {prop_name};\n"
 
         code += "\n        private void Awake()\n        {\n            ValidateContracts();\n        }\n\n"
         code += "        public void ValidateContracts()\n        {\n"
         if contract:
             for inv in contract.get("invariants", []):
-                rule = inv.get("rule", "Invariant")
-                expr = inv.get("expression", "true")
+                if isinstance(inv, dict):
+                    rule = inv.get("rule", "Invariant")
+                    expr = inv.get("expression", "true")
+                else:
+                    rule = "Invariant"
+                    expr = str(inv)
                 code += f"            Debug.Assert({expr}, \"Contract violation: {rule}\");\n"
         code += "        }\n    }\n}\n"
         return code

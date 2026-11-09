@@ -63,7 +63,7 @@ def _piece_ops(piece: DecorPiece, theme: Theme, idx: int, x: float, y: float, z:
 def _avoid_from_plan(plan: LevelPlan, extra: Iterable[Tuple[float, float, float]] = ()) -> List[Tuple[float, float, float]]:
     avoid: List[Tuple[float, float, float]] = [(plan.player_start[0], plan.player_start[1], 500.0)]
     for a in plan.actors:
-        avoid.append((a.location[0], a.location[1], 250.0))
+        avoid.append((a.location[0], a.location[1], 320.0))
     for op in plan.geometry_ops:
         args = op.args if isinstance(op.args, dict) else {}
         label = str(args.get("label", "")).lower()

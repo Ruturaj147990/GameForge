@@ -457,6 +457,7 @@ class PlanGenerator:
         active_project_dir: Optional[Union[str, Path]] = None,
         existing_plan: Optional[PlanArtifact] = None,
         turn_id: Optional[str] = None,
+        gds_override: Optional[Dict[str, Any]] = None,
     ) -> PlanArtifact:
         """Generates a genuine task-specific implementation plan using the configured LLM or semantic strategy."""
         clean_prompt = prompt.strip()
@@ -478,9 +479,10 @@ class PlanGenerator:
         if active_project_dir:
             proj_context += f" | Active Project: {Path(active_project_dir).name}"
 
-        # 3. Strategy evaluation if game creation
+        # 3. Strategy evaluation and GDS pre-generation if game creation
         strategy_info = ""
-        gds_payload = None
+        gds_payload: Optional[Dict[str, Any]] = gds_override
+        gds_questions: List[str] = []
         if is_game:
             try:
                 from ...design.template_registry import default_registry
@@ -490,6 +492,45 @@ class PlanGenerator:
                     strategy_info += f" (Template: {decision.template.title})"
             except Exception:
                 pass
+            if gds_payload is None:
+                try:
+                    from ...design.prompt_to_gds import prompt_to_gds
+                    _cj, _design_model = None, None
+                    if hasattr(self.tool_gateway, "game_tools"):
+                        try:
+                            _cj, _design_model = self.tool_gateway.game_tools._get_complete_json()
+                        except Exception:
+                            _cj, _design_model = None, None
+                    res = prompt_to_gds(
+                        clean_prompt,
+                        complete_json=_cj,
+                        model=_design_model,
+                        allow_model=bool(_cj),
+                    )
+                    if res.gds is not None:
+                        gds_payload = res.gds.model_dump()
+                    if res.questions:
+                        gds_questions = list(res.questions)
+                except Exception as exc:
+                    logger.debug("Pre-generating GDS during plan generation failed: %s", exc)
+            if isinstance(gds_payload, dict):
+                ent_names = [
+                    f"{e.get('entity_id')} ({e.get('kind')})"
+                    for e in gds_payload.get("entities", [])
+                    if isinstance(e, dict)
+                ]
+                lvl_names = [
+                    str(lv.get("level_id", "level_1"))
+                    for lv in gds_payload.get("scene", {}).get("levels", [])
+                    if isinstance(lv, dict)
+                ]
+                gds_proj = gds_payload.get("meta", {}).get("project_name", "MyGame")
+                gds_genre = gds_payload.get("overview", {}).get("genre", "custom")
+                strategy_info += (
+                    f"\nGDS Project: {gds_proj} (genre={gds_genre})"
+                    f"\nGDS Entities: {', '.join(ent_names) if ent_names else 'default'}"
+                    f"\nGDS Levels: {', '.join(lvl_names) if lvl_names else 'level_1'}"
+                )
 
         plan_schema = {
             "type": "object",
@@ -520,7 +561,7 @@ class PlanGenerator:
             "You are GameForge Principal Systems Architect. Formulate an actionable, sequential technical implementation plan.\n"
             "Rules:\n"
             "- Tailor every step specifically to the user's explicit prompt, genre, and requested mechanics.\n"
-            "- NEVER output hardcoded or generic Sudoku steps unless the user explicitly requested a Sudoku game.\n"
+            "- NEVER output hardcoded or generic template steps that ignore the user's requested game mechanics.\n"
             f"- Available tools: {tools_summary}\n"
             "- Include concrete target files, tool names, and verifiable acceptance criteria for each step."
         )
@@ -535,9 +576,6 @@ class PlanGenerator:
         # 4. Attempt genuine LLM generation via Ollama / router
         raw_json = None
         t0 = time.time()
-        # A local 9B model needs model-load time plus ~20-40 s to emit a multi-step JSON plan;
-        # the previous 12 s budget meant the LLM plan almost always timed out and the
-        # deterministic fallback was shown instead. Override with GAMEFORGE_PLAN_TIMEOUT_S.
         try:
             default_timeout = float(os.environ.get("GAMEFORGE_PLAN_TIMEOUT_S", "90"))
         except ValueError:
@@ -567,6 +605,7 @@ class PlanGenerator:
                     valid_steps: List[PlanStep] = []
                     seen_ids: Set[str] = set()
                     known_tools = {t.name for t in self.tool_gateway.get_definitions()}
+                    files_expected: List[str] = []
 
                     for idx, s in enumerate(steps_data[:20], start=1):
                         if not isinstance(s, dict):
@@ -575,15 +614,17 @@ class PlanGenerator:
                         if sid in seen_ids:
                             sid = f"step_{idx}_{uuid.uuid4().hex[:4]}"
                         seen_ids.add(sid)
+                        t_files = s.get("target_files", []) if isinstance(s.get("target_files"), list) else []
+                        for tf in t_files:
+                            if isinstance(tf, str) and tf not in files_expected:
+                                files_expected.append(tf)
 
                         valid_steps.append(
                             PlanStep(
                                 step_id=sid,
                                 title=s.get("title") or f"Step {idx}",
                                 description=s.get("description") or "",
-                                target_files=s.get("target_files", []) if isinstance(s.get("target_files"), list) else [],
-                                # Keep only tools that actually exist: a hallucinated tool name in
-                                # a plan step would otherwise fail later at execution time.
+                                target_files=t_files,
                                 tools=[t for t in (s.get("tools") or []) if isinstance(t, str) and t in known_tools]
                                 if isinstance(s.get("tools"), list) else [],
                                 verification=s.get("verification") or "",
@@ -599,20 +640,24 @@ class PlanGenerator:
                         summary=parsed.get("summary") or f"Implementation plan for: {clean_prompt}",
                         implementation_method=parsed.get("implementation_method") or ("game_creation" if is_game else "direct_code_edit"),
                         steps=valid_steps,
+                        files_expected=files_expected,
+                        assumptions=gds_questions,
                         status="awaiting_approval",
                         metadata={
                             "provenance": "llm_generated",
+                            "is_game": is_game,
                             "model_id": active_model,
                             "turn_id": turn_id,
                             "prompt_hash": prompt_hash,
                             "duration_seconds": duration,
                             "gds": gds_payload,
+                            "questions": gds_questions,
                         },
                     )
             except Exception as parse_exc:
                 logger.warning("Failed parsing LLM plan JSON: %s; falling back to dynamic semantic strategy.", parse_exc)
 
-        # 6. Dynamic Semantic Strategy Fallback (No fake hardcoded Sudoku)
+        # 6. Dynamic Semantic Strategy Fallback (Prompt-specific plan generation)
         return self._generate_dynamic_semantic_plan(
             clean_prompt=clean_prompt,
             session_id=session_id,
@@ -622,7 +667,100 @@ class PlanGenerator:
             turn_id=turn_id,
             prompt_hash=prompt_hash,
             gds_payload=gds_payload,
+            gds_questions=gds_questions,
         )
+
+    def revise_plan_artifact(
+        self,
+        active_plan: PlanArtifact,
+        user_feedback: str,
+        model_name: Optional[str] = None,
+        active_project_dir: Optional[Union[str, Path]] = None,
+    ) -> PlanArtifact:
+        """Revises an existing PlanArtifact using user feedback, updating goal, steps, files_expected, and metadata['gds']."""
+        feedback_clean = (user_feedback or "").strip()
+        if not feedback_clean:
+            return active_plan
+
+        is_game = bool(
+            active_plan.implementation_method in ("game_creation", "gds_patch", "composer", "pipeline")
+            or (active_plan.metadata and active_plan.metadata.get("is_game"))
+        )
+        base_goal = active_plan.goal.split(" — Revised:")[0].strip()
+        prior_revs = [r.user_prompt.strip() for r in active_plan.revisions if r.user_prompt.strip()]
+        all_feedback = "; ".join(prior_revs + [feedback_clean])
+        combined_goal = f"{base_goal} — Revised: {all_feedback}"
+
+        updated_gds_payload = active_plan.metadata.get("gds") if isinstance(active_plan.metadata, dict) else None
+        if is_game:
+            # Try patching existing GDS first if present; fall back to re-running prompt_to_gds on combined_goal
+            patched_ok = False
+            if isinstance(updated_gds_payload, dict):
+                try:
+                    from ...design.gds import GameDesignSpec
+                    from ...design.patch import apply_patch, propose_patch
+                    gds_obj = GameDesignSpec.model_validate(updated_gds_payload)
+                    _cj, _design_model = None, None
+                    if hasattr(self.tool_gateway, "game_tools"):
+                        try:
+                            _cj, _design_model = self.tool_gateway.game_tools._get_complete_json()
+                        except Exception:
+                            _cj, _design_model = None, None
+                    model_caller = None
+                    if _cj and _design_model:
+                        model_caller = lambda role, p: _cj("You are a GameForge GDS RFC6902 patch generator.", p, {})
+                    prop = propose_patch(gds_obj, feedback_clean, complete_json=bool(_cj), model_caller=model_caller)
+                    if prop.ops:
+                        patched_gds = apply_patch(gds_obj, prop.ops)
+                        updated_gds_payload = patched_gds.model_dump()
+                        patched_ok = True
+                except Exception as exc:
+                    logger.debug("Patching GDS during plan revision fell back to prompt_to_gds: %s", exc)
+            if not patched_ok:
+                try:
+                    from ...design.prompt_to_gds import prompt_to_gds
+                    _cj, _design_model = None, None
+                    if hasattr(self.tool_gateway, "game_tools"):
+                        try:
+                            _cj, _design_model = self.tool_gateway.game_tools._get_complete_json()
+                        except Exception:
+                            _cj, _design_model = None, None
+                    res = prompt_to_gds(
+                        f"{base_goal}. {all_feedback}",
+                        complete_json=_cj,
+                        model=_design_model,
+                        allow_model=bool(_cj),
+                    )
+                    if res.gds is not None:
+                        updated_gds_payload = res.gds.model_dump()
+                except Exception as exc:
+                    logger.debug("Re-running prompt_to_gds during plan revision failed: %s", exc)
+
+        regenerated = self.generate_llm_plan_artifact(
+            prompt=combined_goal,
+            session_id=active_plan.session_id,
+            is_game=is_game,
+            model_name=model_name,
+            active_project_dir=active_project_dir,
+            existing_plan=None,
+            gds_override=updated_gds_payload,
+        )
+
+        new_meta = dict(regenerated.metadata or {})
+        if updated_gds_payload is not None:
+            new_meta["gds"] = updated_gds_payload
+        new_meta["is_game"] = is_game
+
+        active_plan.record_revision(
+            user_prompt=feedback_clean,
+            summary_of_changes=f"Reconciled requirements: {feedback_clean[:80]}",
+            new_steps=regenerated.steps,
+            new_goal=combined_goal,
+            new_summary=regenerated.summary,
+            new_files_expected=regenerated.files_expected,
+            new_metadata=new_meta,
+        )
+        return active_plan
 
     def _generate_dynamic_semantic_plan(
         self,
@@ -634,6 +772,7 @@ class PlanGenerator:
         turn_id: Optional[str],
         prompt_hash: str,
         gds_payload: Optional[Dict[str, Any]],
+        gds_questions: Optional[List[str]] = None,
     ) -> PlanArtifact:
         """Constructs a prompt-specific implementation plan dynamically without static hardcodings."""
         p_lower = clean_prompt.lower()
@@ -641,46 +780,80 @@ class PlanGenerator:
         # Identify key domain nouns and project name
         words = re.findall(r"\b[A-Za-z]{3,}\b", clean_prompt)
         subject_name = "".join(w.capitalize() for w in words[:2]) if words else "CustomFeature"
-        
+
         if is_game:
-            # Detect genre / mechanics from prompt
+            proj_name = "MyGame"
             genre_tag = "Custom"
-            if any(k in p_lower for k in ("platform", "jump", "obstacle")):
-                genre_tag = "Platformer"
-            elif any(k in p_lower for k in ("shoot", "fps", "gun", "combat")):
-                genre_tag = "CombatShooter"
-            elif any(k in p_lower for k in ("puzzle", "sudoku", "match", "board")):
-                genre_tag = "Puzzle"
-            elif any(k in p_lower for k in ("adventure", "relic", "rpg", "dungeon")):
-                genre_tag = "Adventure"
+            ent_summary = "player, interactive actors, and objective entities"
+            level_files = ["Content/Maps/Level_1.umap"]
+            if isinstance(gds_payload, dict):
+                proj_name = str(gds_payload.get("meta", {}).get("project_name") or subject_name or "MyGame")
+                raw_genre = gds_payload.get("overview", {}).get("genre")
+                if raw_genre:
+                    genre_tag = str(raw_genre).replace("_", " ").title().replace(" ", "")
+                ents = [
+                    f"{e.get('count', 1)}x {e.get('entity_id', e.get('kind', 'entity'))}"
+                    for e in gds_payload.get("entities", [])
+                    if isinstance(e, dict)
+                ]
+                if ents:
+                    ent_summary = ", ".join(ents[:8])
+                lvls = [
+                    f"Content/Maps/{lv.get('level_id', 'Level_1')}.umap"
+                    for lv in gds_payload.get("scene", {}).get("levels", [])
+                    if isinstance(lv, dict)
+                ]
+                if lvls:
+                    level_files = lvls
+            else:
+                if any(k in p_lower for k in ("platform", "jump", "obstacle")):
+                    genre_tag = "Platformer"
+                elif any(k in p_lower for k in ("shoot", "fps", "gun", "combat")):
+                    genre_tag = "CombatShooter"
+                elif any(k in p_lower for k in ("puzzle", "logic", "match", "board", "grid")):
+                    genre_tag = "Puzzle"
+                elif any(k in p_lower for k in ("adventure", "relic", "rpg", "dungeon")):
+                    genre_tag = "Adventure"
 
             steps = [
                 PlanStep(
                     step_id="step_1_design",
                     title=f"1. Game Design Specification ({genre_tag})",
-                    description=f"Draft typed GameDesignSpec configuring {clean_prompt} mechanics, entities, camera, and victory conditions.",
+                    description=f"Draft typed GameDesignSpec configuring {clean_prompt} mechanics, entities ({ent_summary}), camera, and victory conditions.",
                     target_files=["GameForge/design/game.gds.json"],
                     tools=["plan_game", "write_file"],
                     verification="Valid GDS schema and parameter bounds",
                 ),
                 PlanStep(
                     step_id="step_2_scaffold",
-                    title=f"2. Project Scaffold & C++ Core ({subject_name})",
-                    description=f"Scaffold project structure declaring {subject_name}GameMode and {subject_name}State.",
+                    title=f"2. Project Scaffold & C++ Core ({proj_name})",
+                    description=f"Scaffold project structure declaring {proj_name}GameMode and {proj_name}State.",
                     target_files=[
-                        f"Source/MyGame/{subject_name}GameMode.h",
-                        f"Source/MyGame/{subject_name}GameMode.cpp",
+                        f"Source/{proj_name}/{proj_name}GameMode.h",
+                        f"Source/{proj_name}/{proj_name}GameMode.cpp",
                     ],
                     tools=["create_game", "write_file"],
                     verification="Scaffold directory structure intact and headers declared",
                 ),
                 PlanStep(
                     step_id="step_3_codegen",
-                    title=f"3. Custom C++ Gameplay Handlers ({subject_name})",
-                    description=f"Generate custom C++ rule handlers and game rules for: {clean_prompt}.",
-                    target_files=[f"Source/MyGame/{subject_name}Rules.cpp"],
+                    title=f"3. Custom C++ Gameplay Systems & Rules ({proj_name})",
+                    description=(
+                        f"Generate custom C++ architecture classes and rule handlers for: {clean_prompt}."
+                    ),
+                    target_files=(
+                        [f"Source/{proj_name}/{proj_name}Rules.cpp"]
+                        + [
+                            f"Source/{proj_name}/GF_{s.get('system_id')}.cpp"
+                            for s in (
+                                (gds_payload.get("architecture") or {}).get("custom_systems", [])
+                                if isinstance(gds_payload, dict) else []
+                            )
+                            if isinstance(s, dict) and s.get("system_id")
+                        ]
+                    ),
                     tools=["propose_edit", "write_file"],
-                    verification="Custom rule handlers compile cleanly",
+                    verification="Custom C++ systems and rule handlers compile cleanly",
                 ),
                 PlanStep(
                     step_id="step_4_build_editor",
@@ -693,7 +866,7 @@ class PlanGenerator:
                 PlanStep(
                     step_id="step_5_content",
                     title="5. Content Preparation (Audio & Visual Assets)",
-                    description="Prepare procedural VFX/SFX audio presets, mannequins, and level prototyping materials.",
+                    description=f"Prepare procedural meshes, characters, animations, PBR textures, and SFX for {ent_summary}.",
                     target_files=["Content/GameForge/"],
                     tools=["write_file", "generate_3d_mesh"],
                     verification="Content assets placed and cooker directories configured",
@@ -701,8 +874,8 @@ class PlanGenerator:
                 PlanStep(
                     step_id="step_6_assemble",
                     title="6. Level Assembly & Actor Placement",
-                    description="Instantiate level geometry, player start, lighting, and interactive gameplay entities.",
-                    target_files=["Content/Maps/Level_1.umap"],
+                    description=f"Instantiate level geometry, player start, lighting, and gameplay entities ({ent_summary}).",
+                    target_files=level_files,
                     tools=["unreal_editor"],
                     verification="Level read-back confirms placed actors and NavMesh bounds",
                 ),
@@ -751,23 +924,28 @@ class PlanGenerator:
             summary_text = f"Actionable game creation pipeline for: {clean_prompt}"
         else:
             # Non-game engineering task
-            target_files = re.findall(r"[\w\-\./\\]+\.(?:cpp|h|hpp|py|cs|json|ini)", clean_prompt)
+            target_files = [f.replace("\\", "/") for f in re.findall(r"[\w\-\./\\]+\.(?:cpp|h|hpp|py|cs|json|ini)", clean_prompt)]
             primary_file = target_files[0] if target_files else f"Source/{subject_name}.cpp"
+            header_file = (
+                target_files[1]
+                if len(target_files) > 1
+                else (primary_file.replace(".cpp", ".h") if primary_file.endswith(".cpp") else primary_file)
+            )
 
             steps = [
                 PlanStep(
                     step_id="step_1_inspect",
                     title="1. Inspect Codebase & Symbols",
                     description=f"Inspect relevant files and symbol definitions related to: {clean_prompt}",
-                    target_files=[primary_file],
+                    target_files=target_files if target_files else [primary_file],
                     tools=["search_index", "search_code", "read_file", "list_dir"],
                     verification="Relevant code context and dependencies identified",
                 ),
                 PlanStep(
                     step_id="step_2_interface",
                     title="2. Interface & Declaration Staging",
-                    description=f"Stage type signatures, interfaces, or declarations for {subject_name}.",
-                    target_files=[primary_file.replace(".cpp", ".h") if primary_file.endswith(".cpp") else primary_file],
+                    description=f"Stage type signatures, interfaces, or declarations for {subject_name} ({clean_prompt}).",
+                    target_files=[header_file],
                     tools=["propose_edit", "write_file"],
                     verification="Header declarations staged cleanly",
                 ),
@@ -775,7 +953,7 @@ class PlanGenerator:
                     step_id="step_3_implement",
                     title="3. Implementation & Refactoring",
                     description=f"Implement core logic satisfying: {clean_prompt}",
-                    target_files=[primary_file],
+                    target_files=target_files if target_files else [primary_file],
                     tools=["propose_edit", "write_file"],
                     verification="Target file modified on disk with unified diff",
                 ),
@@ -791,6 +969,12 @@ class PlanGenerator:
             impl_method = "direct_code_edit"
             summary_text = f"Technical engineering workflow for: {clean_prompt}"
 
+        files_expected: List[str] = []
+        for st in steps:
+            for tf in st.target_files:
+                if tf not in files_expected:
+                    files_expected.append(tf)
+
         return PlanArtifact(
             plan_id=plan_id,
             session_id=session_id,
@@ -798,14 +982,18 @@ class PlanGenerator:
             summary=summary_text,
             implementation_method=impl_method,
             steps=steps,
+            files_expected=files_expected,
+            assumptions=list(gds_questions or []),
             status="awaiting_approval",
             metadata={
                 "provenance": "semantic_fallback",
+                "is_game": is_game,
                 "llm_generated": False,
                 "llm_fallback_reason": "No valid task-specific LLM plan was accepted; deterministic semantic fallback was used.",
                 "model_id": active_model,
                 "turn_id": turn_id,
                 "prompt_hash": prompt_hash,
                 "gds": gds_payload,
+                "questions": list(gds_questions or []),
             },
         )

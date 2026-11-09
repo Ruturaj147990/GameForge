@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpin
                                QLineEdit, QListWidget, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...backend.providers.hosted import (CredentialStore, EgressPolicy, HostedModel, HostedProfile,
                                          PROVIDER_KINDS, GuardedProvider, load_profiles, user_config_dir)
 
@@ -196,7 +197,14 @@ class HostedSettingsDialog(QDialog):
             self._list.setCurrentRow(0)
 
     def _load(self, pid: str) -> None:
-        self._commit_form()
+        if self._current and self._current != pid:
+            if not self._commit_form():
+                self._list.blockSignals(True)
+                items = self._list.findItems(self._current, Qt.MatchExactly)
+                if items:
+                    self._list.setCurrentItem(items[0])
+                self._list.blockSignals(False)
+                return
         prof = self._profiles.get(pid)
         self._current = pid
         if not prof:

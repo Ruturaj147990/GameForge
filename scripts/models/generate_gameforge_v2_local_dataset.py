@@ -15,9 +15,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 SOURCE_ID = "gameforge-v2-local-specialist-corpus"
 MANIFEST_PATH = Path("configs/gameforge_v2_local_training_manifest.json")

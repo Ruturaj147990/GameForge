@@ -2,12 +2,13 @@
 
 Defines Geometry Script CSG primitive recipes for procedural props (crate, barrel,
 rock, pillar, fence, stylized_tree, bush, torch, chest, altar) with LOD reduction,
-collision profiles, and material role assignments.
+collision profiles, material role assignments, and multi-primitive level op expansion.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 ALLOWED_COLLISIONS = ("box", "sphere", "capsule", "convex", "complex_as_simple", "none")
@@ -48,7 +49,6 @@ class PropRecipe:
             if op not in ALLOWED_OPS:
                 raise ValueError(f"Part {idx} has invalid op: {op!r}. Allowed: {ALLOWED_OPS}")
 
-            # Strict dimension verification per primitive shape
             if shape == "box":
                 size = part.get("size")
                 if not isinstance(size, (list, tuple)) or len(size) != 3:
@@ -88,12 +88,7 @@ class PropRecipe:
                 prev = frac
 
     def to_op_args(self, asset_path: str, convert_to_base_origin: bool = True) -> Dict[str, Any]:
-        """Convert recipe into arguments for mesh_generate_prop op.
-        
-        Translates center-based coordinates to Geometry Script base coordinates for shapes
-        that use GeometryScriptPrimitiveOriginMode.BASE (box, cylinder, cone), ensuring
-        watertight mesh unions without vertical offset gaps.
-        """
+        """Convert recipe into arguments for mesh_generate_prop op."""
         self.validate()
         op_parts = []
         for part in self.parts:
@@ -234,7 +229,6 @@ def compute_bounds(recipe: PropRecipe, use_base_origin: bool = True) -> Dict[str
 def verify_recipe_watertight(recipe: PropRecipe) -> Dict[str, Any]:
     """Verify that a CSG recipe is structurally connected without floating/detached gaps."""
     bounds = compute_bounds(recipe, use_base_origin=True)
-    # Check that there is at least one solid base element contacting or penetrating near ground z <= 0.0
     contacts_ground = bounds["min_z"] <= 1.0
     return {
         "recipe": recipe.name,
@@ -390,4 +384,144 @@ PROP_RECIPES: Dict[str, PropRecipe] = {
         material_role="prop",
         tags=["prop", "landmark", "altar"],
     ),
+
+    # 11. Crystal
+    "crystal": PropRecipe(
+        name="crystal",
+        parts=[
+            _cylinder(35.0, 24.0, {"x": 0.0, "y": 0.0, "z": 12.0}),
+            _cone(28.0, 130.0, top_radius=2.0, loc={"x": 0.0, "y": 0.0, "z": 80.0}),
+            _cone(18.0, 80.0, top_radius=2.0, loc={"x": 20.0, "y": 12.0, "z": 50.0}),
+            _cone(16.0, 70.0, top_radius=2.0, loc={"x": -18.0, "y": -14.0, "z": 45.0}),
+        ],
+        triangle_budget=1400,
+        collision="capsule",
+        material_role="accent",
+        tags=["prop", "crystal", "collectible", "magic"],
+    ),
+
+    # 12. Arch
+    "arch": PropRecipe(
+        name="arch",
+        parts=[
+            _box([50.0, 50.0, 280.0], {"x": -140.0, "y": 0.0, "z": 140.0}),
+            _box([50.0, 50.0, 280.0], {"x": 140.0, "y": 0.0, "z": 140.0}),
+            _box([350.0, 60.0, 45.0], {"x": 0.0, "y": 0.0, "z": 295.0}),
+        ],
+        triangle_budget=1200,
+        collision="box",
+        material_role="wall",
+        tags=["architecture", "arch", "gate"],
+    ),
+
+    # 13. Console
+    "console": PropRecipe(
+        name="console",
+        parts=[
+            _box([90.0, 60.0, 80.0], {"x": 0.0, "y": 0.0, "z": 40.0}),
+            _box([84.0, 45.0, 35.0], {"x": 0.0, "y": -5.0, "z": 95.0}),
+            _sphere(12.0, {"x": 25.0, "y": -18.0, "z": 115.0}),
+        ],
+        triangle_budget=1000,
+        collision="box",
+        material_role="accent",
+        tags=["prop", "interactive", "console", "terminal"],
+    ),
+
+    # 14. Turret Base
+    "turret_base": PropRecipe(
+        name="turret_base",
+        parts=[
+            _cylinder(55.0, 35.0, {"x": 0.0, "y": 0.0, "z": 17.5}),
+            _cylinder(38.0, 55.0, {"x": 0.0, "y": 0.0, "z": 60.0}),
+            _sphere(36.0, {"x": 0.0, "y": 0.0, "z": 95.0}),
+            _cylinder(10.0, 65.0, {"x": 35.0, "y": 0.0, "z": 95.0}),
+        ],
+        triangle_budget=1600,
+        collision="capsule",
+        material_role="prop",
+        tags=["prop", "turret", "hazard", "defense"],
+    ),
 }
+
+_SHAPE_TO_BASIC_MESH = {
+    "box": "/Engine/BasicShapes/Cube.Cube",
+    "cylinder": "/Engine/BasicShapes/Cylinder.Cylinder",
+    "sphere": "/Engine/BasicShapes/Sphere.Sphere",
+    "cone": "/Engine/BasicShapes/Cone.Cone",
+}
+
+
+def expand_prop_to_ops(
+    actor_id: str,
+    recipe_name: str,
+    location: Tuple[float, float, float],
+    yaw: float = 0.0,
+    scale: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    color: Optional[List[float]] = None,
+) -> List[Dict[str, Any]]:
+    """Expand a PropRecipe into multi-primitive StaticMeshActor spawn_actor op args dicts."""
+    recipe_key = "stylized_tree" if recipe_name == "tree" else recipe_name
+    recipe = PROP_RECIPES.get(recipe_key)
+    if recipe is None:
+        return []
+
+    rad = math.radians(yaw)
+    cos_y, sin_y = math.cos(rad), math.sin(rad)
+    sx_mult, sy_mult, sz_mult = float(scale[0]), float(scale[1]), float(scale[2])
+    bx, by, bz = float(location[0]), float(location[1]), float(location[2])
+
+    spawn_args_list: List[Dict[str, Any]] = []
+    for idx, part in enumerate(recipe.parts):
+        if part.get("op", "union") != "union":
+            continue
+        shape = part["shape"]
+        mesh_path = _SHAPE_TO_BASIC_MESH.get(shape, "/Engine/BasicShapes/Cube.Cube")
+        ploc = part.get("location", {"x": 0.0, "y": 0.0, "z": 0.0})
+        ox = float(ploc.get("x", 0.0)) * sx_mult
+        oy = float(ploc.get("y", 0.0)) * sy_mult
+        oz = float(ploc.get("z", 0.0)) * sz_mult
+        rx = ox * cos_y - oy * sin_y
+        ry = ox * sin_y + oy * cos_y
+
+        if shape == "box":
+            sz = part["size"]
+            pscale = {
+                "x": round((float(sz[0]) / 100.0) * sx_mult, 3),
+                "y": round((float(sz[1]) / 100.0) * sy_mult, 3),
+                "z": round((float(sz[2]) / 100.0) * sz_mult, 3),
+            }
+        elif shape in ("cylinder", "cone"):
+            r_cm = float(part["radius"])
+            h_cm = float(part["height"])
+            pscale = {
+                "x": round((r_cm * 2.0 / 100.0) * sx_mult, 3),
+                "y": round((r_cm * 2.0 / 100.0) * sy_mult, 3),
+                "z": round((h_cm / 100.0) * sz_mult, 3),
+            }
+        else:  # sphere
+            r_cm = float(part["radius"])
+            pscale = {
+                "x": round((r_cm * 2.0 / 100.0) * sx_mult, 3),
+                "y": round((r_cm * 2.0 / 100.0) * sy_mult, 3),
+                "z": round((r_cm * 2.0 / 100.0) * sz_mult, 3),
+            }
+
+        part_label = actor_id if idx == 0 else f"{actor_id}_part_{idx}"
+        args: Dict[str, Any] = {
+            "actor_class": "StaticMeshActor",
+            "label": part_label,
+            "static_mesh": mesh_path,
+            "location": {
+                "x": round(bx + rx, 1),
+                "y": round(by + ry, 1),
+                "z": round(bz + oz, 1),
+            },
+            "rotation": {"pitch": 0.0, "yaw": round(yaw, 1), "roll": 0.0},
+            "scale": pscale,
+        }
+        if color is not None:
+            args["color"] = list(color)
+        spawn_args_list.append(args)
+
+    return spawn_args_list

@@ -1,0 +1,26 @@
+{
+  "name": "Pickup",
+  "kind": "pickup",
+  "generator": "GameForge-ProceduralSFX-V1",
+  "provenance": "procedural",
+  "license": "CC0-1.0",
+  "spec": {
+    "name": "Pickup",
+    "kind": "pickup",
+    "seed": 4,
+    "duration_s": 0.0,
+    "gain": 0.8
+  },
+  "path": "E:\\GameForge\\assets\\generated\\audio\\m14_demo_20261031\\SFX_Pickup.wav",
+  "sha256": "af0731a7a4c5883ffbf3a7ee6004511d12a1495bc7f9d6364ced96f2cedf9058",
+  "analysis": {
+    "sample_rate": 44100,
+    "channels": 1,
+    "bits": 16,
+    "duration_s": 0.35,
+    "peak": 0.8,
+    "rms": 0.3794,
+    "clipped_samples": 0
+  },
+  "looping": false
+}

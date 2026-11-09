@@ -34,6 +34,9 @@ class PlanStep(BaseModel):
     output_summary: Optional[str] = None
 
 
+PlanStepItem = PlanStep
+
+
 class PlanRevision(BaseModel):
     """Records one turn of user revision to the plan."""
     version: int
@@ -51,6 +54,8 @@ class PlanArtifact(BaseModel):
     summary: str
     implementation_method: str = "direct_code_edit"  # "direct_code_edit", "game_creation", "gds_patch", "composer", "pipeline"
     steps: List[PlanStep] = Field(default_factory=list)
+    files_expected: List[str] = Field(default_factory=list)
+    assumptions: List[str] = Field(default_factory=list)
     status: PlanArtifactStatus = "awaiting_approval"
     proceed_confirmed: bool = False
     revisions: List[PlanRevision] = Field(default_factory=list)
@@ -58,14 +63,52 @@ class PlanArtifact(BaseModel):
     updated_at: float = Field(default_factory=time.time)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    def record_revision(self, user_prompt: str, summary_of_changes: str) -> None:
-        """Records a user revision and increments the plan version."""
+    def record_revision(
+        self,
+        user_prompt: str = "",
+        summary_of_changes: str = "",
+        *,
+        user_feedback: Optional[str] = None,
+        summary: Optional[str] = None,
+        new_steps: Optional[List[PlanStep]] = None,
+        new_goal: Optional[str] = None,
+        new_summary: Optional[str] = None,
+        new_files_expected: Optional[List[str]] = None,
+        new_metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Records a user revision, updates plan fields when provided, and increments the plan version."""
+        effective_prompt = user_feedback if user_feedback is not None else user_prompt
+        effective_summary = (
+            summary
+            if summary is not None
+            else (summary_of_changes or f"Reconciled requirements: {effective_prompt[:80]}")
+        )
+        if new_goal:
+            self.goal = new_goal
+        if new_summary:
+            self.summary = new_summary
+        if new_steps is not None:
+            self.steps = list(new_steps)
+        if new_files_expected is not None:
+            self.files_expected = list(new_files_expected)
+        elif new_steps is not None:
+            files: List[str] = []
+            for st in self.steps:
+                for tf in st.target_files:
+                    if tf not in files:
+                        files.append(tf)
+            self.files_expected = files
+        if new_metadata is not None:
+            merged_meta = dict(self.metadata)
+            merged_meta.update(new_metadata)
+            self.metadata = merged_meta
+
         self.version += 1
         self.revisions.append(
             PlanRevision(
                 version=self.version,
-                user_prompt=user_prompt,
-                summary_of_changes=summary_of_changes,
+                user_prompt=effective_prompt,
+                summary_of_changes=effective_summary,
                 timestamp=time.time(),
             )
         )
@@ -77,6 +120,14 @@ class PlanArtifact(BaseModel):
         """Marks the plan approved and ready for execution."""
         self.proceed_confirmed = True
         self.status = "approved"
+        self.updated_at = time.time()
+
+    def mark_completed(self) -> None:
+        """Marks the plan and its steps completed."""
+        self.status = "completed"
+        for step in self.steps:
+            if step.status in ("pending", "in_progress"):
+                step.status = "completed"
         self.updated_at = time.time()
 
     def update_step_status(
@@ -106,6 +157,7 @@ class PlanArtifact(BaseModel):
             "approved": "Approved — Ready to Execute",
             "executing": "Executing...",
             "completed": "Completed",
+            "failed": "Failed",
             "rejected": "Rejected",
         }
         badge = status_badges.get(self.status, self.status)

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from ..icons import icon
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 logger = logging.getLogger(__name__)
 
@@ -59,20 +60,20 @@ class ToastCard(QFrame):
         col.setSpacing(2)
 
         lbl_title = QLabel(title, self)
-        lbl_title.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;")
+        lbl_title.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;"))
         col.addWidget(lbl_title)
 
         if message:
             lbl_msg = QLabel(message, self)
             lbl_msg.setWordWrap(True)
-            lbl_msg.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 12px;")
+            lbl_msg.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 12px;"))
             col.addWidget(lbl_msg)
 
         if details_cb is not None:
             btn_details = QPushButton("Details →", self)
             btn_details.setObjectName("toastDetailsBtn")
             btn_details.setCursor(Qt.PointingHandCursor)
-            btn_details.setStyleSheet(f"""
+            btn_details.setStyleSheet(theme_stylesheet(f"""
                 QPushButton {{
                     background: transparent;
                     color: {tokens.ACCENT_HOVER};
@@ -84,7 +85,7 @@ class ToastCard(QFrame):
                 QPushButton:hover {{
                     text-decoration: underline;
                 }}
-            """)
+            """))
             def _safe_details() -> None:
                 try:
                     details_cb()
@@ -100,7 +101,7 @@ class ToastCard(QFrame):
         btn_close.setText("✕")
         btn_close.setFixedSize(20, 20)
         btn_close.setCursor(Qt.PointingHandCursor)
-        btn_close.setStyleSheet(f"""
+        btn_close.setStyleSheet(theme_stylesheet(f"""
             QToolButton {{
                 background: transparent;
                 border: none;
@@ -110,18 +111,18 @@ class ToastCard(QFrame):
             QToolButton:hover {{
                 color: {tokens.TEXT_PRIMARY};
             }}
-        """)
+        """))
         btn_close.clicked.connect(self._dismiss)
         layout.addWidget(btn_close, alignment=Qt.AlignTop)
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QFrame#{self.objectName()} {{
                 background: {tokens.BG_SURFACE};
                 border: 1px solid {tokens.BORDER};
                 border-left: 4px solid {border_color};
                 border-radius: {tokens.RADIUS}px;
             }}
-        """)
+        """))
 
         # Auto dismiss after 6 seconds unless kind == "error"
         if kind != "error":
@@ -213,10 +214,11 @@ class ToastOverlay(QWidget):
             self.hide()
             return
         self.show()
+        self._layout.activate()
         pw = parent.width()
         ph = parent.height()
         w = 340
-        h = max(60, len(self._toasts) * 90)
+        h = max(60, self._layout.sizeHint().height(), len(self._toasts) * 90)
         self.setGeometry(pw - w - 20, ph - h - 30, w, h)
 
     def resizeEvent(self, event) -> None:

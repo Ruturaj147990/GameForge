@@ -5,9 +5,9 @@ and dependency metadata.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple, Type
-from pydantic import BaseModel, ConfigDict
+from dataclasses import dataclass
+from typing import Dict, FrozenSet, List, Optional, Tuple, Type
+from pydantic import BaseModel
 
 
 @dataclass(frozen=True)
@@ -41,11 +41,20 @@ def register(m: KitModule) -> KitModule:
 def get_module(module_id: str) -> KitModule:
     """Retrieve registered kit module or raise KeyError."""
     if module_id not in KIT:
-        # Trigger lazy load of modules if empty
         _ensure_modules_loaded()
     if module_id not in KIT:
         raise KeyError(f"Kit module {module_id!r} not found in registry; known: {sorted(KIT.keys())}")
     return KIT[module_id]
+
+
+def find_module_for_kind(kind: str) -> Optional[KitModule]:
+    """Find the first registered KitModule matching an entity kind string."""
+    _ensure_modules_loaded()
+    k_clean = (kind or "").strip().lower()
+    for mod in KIT.values():
+        if k_clean in mod.entity_kinds:
+            return mod
+    return None
 
 
 def all_modules() -> List[KitModule]:

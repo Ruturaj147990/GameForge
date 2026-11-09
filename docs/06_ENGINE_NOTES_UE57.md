@@ -105,7 +105,7 @@ used for GameForge evidence.
 
 ## 6. Packaging and cooked builds
 
-- `Packaged\Windows\<Name>.exe` is a launcher. Test the binary in `<Name>\Binaries\Win64\`.
+- Always launch the top-level `Packaged\Windows\<Name>.exe` bootstrapper (per D-096 / DEF-308) rather than `<Name>\Binaries\Win64\<Name>.exe` so packaged content roots and default maps resolve correctly.
 - **Shipping compiles out `UE_LOG` and disables the console.** Evidence must come from files the game writes (event
   bus JSONL, scenario result files), not from logs. The legacy `-GFSelfTest` log markers only work in Development.
 - Assets referenced only by strings (JSON, soft paths in config) are not cooked unless their folders are in

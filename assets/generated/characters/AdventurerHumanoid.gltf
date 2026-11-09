@@ -1,0 +1,344 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "GameForge Character Rig Engine"
+  },
+  "buffers": [
+    {
+      "uri": "AdventurerHumanoid.bin",
+      "byteLength": 49568
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 9048,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 9048,
+      "byteLength": 9048,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 18096,
+      "byteLength": 6032,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24128,
+      "byteLength": 6032,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 30160,
+      "byteLength": 12064,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 42224,
+      "byteLength": 7344,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 754,
+      "type": "VEC3",
+      "min": [
+        -79.0,
+        -20.0,
+        0.0
+      ],
+      "max": [
+        79.0,
+        20.0,
+        182.0
+      ]
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 754,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 754,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "byteOffset": 0,
+      "componentType": 5123,
+      "count": 754,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 4,
+      "byteOffset": 0,
+      "componentType": 5126,
+      "count": 754,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 5,
+      "byteOffset": 0,
+      "componentType": 5123,
+      "count": 3672,
+      "type": "SCALAR"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "AdventurerHumanoid",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "JOINTS_0": 3,
+            "WEIGHTS_0": 4
+          },
+          "indices": 5
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "root",
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "pelvis",
+      "translation": [
+        0.0,
+        0.0,
+        95.0
+      ]
+    },
+    {
+      "name": "spine_01",
+      "translation": [
+        0.0,
+        0.0,
+        115.0
+      ]
+    },
+    {
+      "name": "spine_02",
+      "translation": [
+        0.0,
+        0.0,
+        135.0
+      ]
+    },
+    {
+      "name": "neck",
+      "translation": [
+        0.0,
+        0.0,
+        155.0
+      ]
+    },
+    {
+      "name": "head",
+      "translation": [
+        0.0,
+        0.0,
+        165.0
+      ]
+    },
+    {
+      "name": "clavicle_l",
+      "translation": [
+        -4.0,
+        0.0,
+        145.0
+      ]
+    },
+    {
+      "name": "upperarm_l",
+      "translation": [
+        -18.0,
+        0.0,
+        142.0
+      ]
+    },
+    {
+      "name": "lowerarm_l",
+      "translation": [
+        -45.0,
+        0.0,
+        142.0
+      ]
+    },
+    {
+      "name": "hand_l",
+      "translation": [
+        -70.0,
+        0.0,
+        142.0
+      ]
+    },
+    {
+      "name": "clavicle_r",
+      "translation": [
+        4.0,
+        0.0,
+        145.0
+      ]
+    },
+    {
+      "name": "upperarm_r",
+      "translation": [
+        18.0,
+        0.0,
+        142.0
+      ]
+    },
+    {
+      "name": "lowerarm_r",
+      "translation": [
+        45.0,
+        0.0,
+        142.0
+      ]
+    },
+    {
+      "name": "hand_r",
+      "translation": [
+        70.0,
+        0.0,
+        142.0
+      ]
+    },
+    {
+      "name": "thigh_l",
+      "translation": [
+        -12.0,
+        0.0,
+        92.0
+      ]
+    },
+    {
+      "name": "calf_l",
+      "translation": [
+        -12.0,
+        0.0,
+        48.0
+      ]
+    },
+    {
+      "name": "foot_l",
+      "translation": [
+        -12.0,
+        0.0,
+        8.0
+      ]
+    },
+    {
+      "name": "thigh_r",
+      "translation": [
+        12.0,
+        0.0,
+        92.0
+      ]
+    },
+    {
+      "name": "calf_r",
+      "translation": [
+        12.0,
+        0.0,
+        48.0
+      ]
+    },
+    {
+      "name": "foot_r",
+      "translation": [
+        12.0,
+        0.0,
+        8.0
+      ]
+    },
+    {
+      "name": "AdventurerHumanoid",
+      "mesh": 0,
+      "skin": 0
+    }
+  ],
+  "skins": [
+    {
+      "name": "AdventurerHumanoid_Skin",
+      "joints": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "skeleton": 0
+    }
+  ],
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ]
+    }
+  ],
+  "scene": 0
+}

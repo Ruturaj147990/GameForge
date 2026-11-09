@@ -19,7 +19,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts"))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
+sys.path.insert(0, str(REPO / "scripts" / "engine"))
 
 import demo_m11_landscape as land  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
@@ -43,7 +44,7 @@ SPEC = {
 
 def run(rep: dict) -> None:
     checks, steps = rep["checks"], rep["steps"]
-    land.PLUGIN_BUILD = Path(r"E:\GameForge\validation\GameForgePlugin_m14v2")
+    land.PLUGIN_BUILD = (get_settings().require_dev("validation_root") / r"GameForgePlugin_m14v2")
     land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "m14_metasound_"))
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()

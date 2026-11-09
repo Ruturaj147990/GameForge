@@ -102,6 +102,15 @@ class ConditionEvaluator:
             source = cond.get("source")
             return ctx.has_event(event, source), None
 
+        elif kind_norm == "not":
+            sub = cond.get("item") or (cond.get("items")[0] if isinstance(cond.get("items"), list) and cond.get("items") else None)
+            if not isinstance(sub, dict):
+                return False, "'not' condition requires 'item' object"
+            res, sub_err = ConditionEvaluator.evaluate(sub, ctx, depth + 1)
+            if sub_err:
+                return False, sub_err
+            return (not res), None
+
         elif kind_norm in ("all", "allof"):
             conditions, error = ConditionEvaluator._composite_children(cond)
             if error:
@@ -144,10 +153,9 @@ class RulesEvaluator:
         self.event_counts: Dict[Tuple[str, Optional[str]], int] = {}
         self.game_ended: bool = False
         self.end_reason: Optional[str] = None
-        self.outcome: Optional[str] = None  # "win" | "lose"
+        self.outcome: Optional[str] = None
         self.elapsed: float = 0.0
 
-        # Initialize stats
         for s_name, s_def in gfdef.get("stats", {}).items():
             self.stats[s_name] = float(s_def.get("initial", 0.0))
             s_min = s_def.get("min", float("-inf"))
@@ -155,7 +163,13 @@ class RulesEvaluator:
             self.stat_bounds[s_name] = (s_min, s_max)
 
     def get_stat(self, name: str) -> float:
-        return self.stats.get(name, float("nan"))
+        if name in self.stats:
+            return self.stats[name]
+        if name == "player.oxygen":
+            return 100.0
+        if name.startswith(("game.counter.", "entity.", "game.gold", "game.laps", "player.shield", "player.mana", "player.stamina", "player.ammo")):
+            return 0.0
+        return float("nan")
 
     def set_stat(self, name: str, value: float) -> None:
         bounds = self.stat_bounds.get(name)
@@ -164,15 +178,22 @@ class RulesEvaluator:
         self.stats[name] = value
 
     def add_stat(self, name: str, delta: float) -> None:
-        cur = self.stats.get(name, 0.0)
+        cur = self.get_stat(name)
+        if math.isnan(cur):
+            cur = 0.0
         self.set_stat(name, cur + delta)
 
-    def handle_event(self, event_name: str, entity_id: Optional[str] = None, data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def handle_event(
+        self,
+        event_name: str,
+        entity_id: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
+        _chain_depth: int = 0,
+    ) -> List[Dict[str, Any]]:
         """Dispatch event through rules and evaluate win/lose conditions."""
-        if self.game_ended:
+        if self.game_ended or _chain_depth > 4:
             return []
 
-        # Increment count
         key = (event_name, entity_id)
         self.event_counts[key] = self.event_counts.get(key, 0) + 1
         key_wildcard = (event_name, None)
@@ -180,6 +201,7 @@ class RulesEvaluator:
             self.event_counts[key_wildcard] = self.event_counts.get(key_wildcard, 0) + 1
 
         applied_effects: List[Dict[str, Any]] = []
+        emitted_events: List[str] = []
         ctx = EvaluationContext(
             get_stat=self.get_stat,
             count_events=lambda e, ent: self.event_counts.get((e, ent), 0),
@@ -187,13 +209,11 @@ class RulesEvaluator:
             elapsed_seconds=self.elapsed,
         )
 
-        # Evaluate rules
         for rule in self.gfdef.get("rules", []):
             when = rule.get("when", {})
             w_event = when.get("e")
             w_ent = when.get("ent")
             if w_event == event_name and (w_ent is None or w_ent == entity_id):
-                # Check 'if' conditions
                 conditions_met = True
                 for cond in rule.get("if", []):
                     ok, _ = ConditionEvaluator.evaluate(cond, ctx)
@@ -203,10 +223,9 @@ class RulesEvaluator:
 
                 if conditions_met:
                     for effect in rule.get("do", []):
-                        self._apply_effect(effect)
+                        self._apply_effect(effect, emitted_events)
                         applied_effects.append(effect)
 
-        # Check win/lose conditions: lose checked first (tie-break rule)
         for i, cond in enumerate(self.gfdef.get("lose", [])):
             ok, _ = ConditionEvaluator.evaluate(cond, ctx)
             if ok:
@@ -223,9 +242,13 @@ class RulesEvaluator:
                 self.end_reason = f"win[{i}]"
                 return applied_effects
 
+        for next_ev in emitted_events:
+            if not self.game_ended:
+                applied_effects.extend(self.handle_event(next_ev, None, None, _chain_depth + 1))
+
         return applied_effects
 
-    def _apply_effect(self, effect: Dict[str, Any]) -> None:
+    def _apply_effect(self, effect: Dict[str, Any], emitted_events: Optional[List[str]] = None) -> None:
         kind = effect.get("kind")
         if kind == "add_stat":
             self.add_stat(effect.get("stat", ""), float(effect.get("delta", 0.0)))
@@ -235,3 +258,5 @@ class RulesEvaluator:
             self.game_ended = True
             self.outcome = effect.get("outcome", "win")
             self.end_reason = "end_game effect"
+        elif kind == "emit" and emitted_events is not None and effect.get("event"):
+            emitted_events.append(str(effect["event"]))

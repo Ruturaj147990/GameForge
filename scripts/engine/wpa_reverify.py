@@ -22,12 +22,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-PROBE = Path(r"E:\GameForge\validation\live_ops_probe")
+PROBE = (get_settings().require_dev("validation_root") / r"live_ops_probe")
 DATE = time.strftime("%Y%m%d")
-DISPOSABLE = Path(rf"E:\GameForge\validation\wpa_reverify_{DATE}")
+DISPOSABLE = (get_settings().require_dev("validation_root") / f"wpa_reverify_{DATE}")
 REPORT = REPO / "reports" / f"wpa_reverify_{DATE}.json"
 
 SOURCE_MESH = "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero"

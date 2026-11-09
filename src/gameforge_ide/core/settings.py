@@ -131,12 +131,17 @@ def user_settings_path() -> Optional[Path]:
     return Path(appdata) / "GameForge" / "settings.json" if appdata else None
 
 
-def engine_version(root: Path) -> Optional[tuple[str, int]]:
+def engine_version(root: Path, strict: bool = False) -> Optional[tuple[str, int]]:
     """(``"5.7.4"``, changelist) from ``Engine/Build/Build.version``, or None if this is not an engine root."""
-    data = _read_json(root / "Engine" / "Build" / "Build.version")
+    bv_path = Path(root) / "Engine" / "Build" / "Build.version"
+    if strict and not bv_path.is_file():
+        raise FileNotFoundError(f"Engine Build.version not found at {bv_path}")
+    data = _read_json(bv_path)
     try:
         return f"{data['MajorVersion']}.{data['MinorVersion']}.{data['PatchVersion']}", int(data.get("Changelist", 0))
-    except KeyError:
+    except KeyError as exc:
+        if strict:
+            raise ValueError(f"Malformed Build.version at {bv_path}: missing {exc}") from exc
         return None
 
 

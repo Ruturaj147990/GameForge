@@ -96,6 +96,7 @@ class TerminalPanel(QWidget):
         self._output.setObjectName("terminal_output")
         self._output.setAccessibleName("PowerShell terminal output")
         self._output.setReadOnly(True)
+        self._output.setMaximumBlockCount(10000)
         font = QFont("Cascadia Code")
         if not font.exactMatch():
             font.setFamily("Consolas")
@@ -267,3 +268,5 @@ class TerminalPanel(QWidget):
     def deleteLater(self) -> None:
         self.shutdown()
         super().deleteLater()
+
+    _stop_shell = shutdown

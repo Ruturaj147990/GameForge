@@ -3,6 +3,8 @@
 #include "GameForgeObjectives.h"
 #include "GameForgeEventNames.h"
 #include "GameForgeEvents.h"
+#include "GameForgeGameState.h"
+#include "GameForgeVisuals.h"
 
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,6 +13,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Serialization/JsonSerializer.h"
@@ -164,18 +167,55 @@ AGameForgeQuestGiver::AGameForgeQuestGiver()
 	TalkRadius->OnComponentBeginOverlap.AddDynamic(this, &AGameForgeQuestGiver::HandleOverlap);
 }
 
+void AGameForgeQuestGiver::SyncQuestProperties()
+{
+	if (ObjectiveId.IsNone() && !QuestId.IsNone())
+	{
+		ObjectiveId = QuestId;
+	}
+	if (ObjectiveTitle.IsEmpty() && !ObjectiveText.IsEmpty())
+	{
+		ObjectiveTitle = ObjectiveText;
+	}
+	else if (ObjectiveText.IsEmpty() && !ObjectiveTitle.IsEmpty())
+	{
+		ObjectiveText = ObjectiveTitle;
+	}
+	if (ObjectiveTarget <= 1 && TargetCount > 1)
+	{
+		ObjectiveTarget = TargetCount;
+	}
+	if (IntroLines.Num() == 0)
+	{
+		const FString DefaultLine = !ObjectiveText.IsEmpty() ? ObjectiveText : ObjectiveTitle;
+		if (!DefaultLine.IsEmpty())
+		{
+			IntroLines.Add(DefaultLine);
+		}
+	}
+}
+
+void AGameForgeQuestGiver::BeginPlay()
+{
+	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	SyncQuestProperties();
+	GameForgeVisuals::Tint(Visual, FLinearColor(0.25f, 0.85f, 0.55f, 1.f));
+}
+
 void AGameForgeQuestGiver::Say(const FString& Line)
 {
 	SpokenLines.Add(Line);
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT dialogue speaker=%s line=\"%s\""), *GetName(), *Line);
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::DialogueLine, GetName(),
-		FString::Printf(TEXT("{\"line\":\"%s\"}"), *Line.ReplaceCharWithEscapedChar()), EntityId);
+		FString::Printf(TEXT("{\"line\":\"%s\",\"speaker\":\"%s\"}"),
+			*Line.ReplaceCharWithEscapedChar(),
+			*NpcName.ReplaceCharWithEscapedChar()), EntityId);
 }
 
-void AGameForgeQuestGiver::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+void AGameForgeQuestGiver::TriggerTalk(const APawn* Pawn)
 {
-	const APawn* Pawn = Cast<APawn>(OtherActor);
+	SyncQuestProperties();
 	UGameInstance* GI = GetGameInstance();
 	UGameForgeObjectiveSubsystem* Objectives = GI ? GI->GetSubsystem<UGameForgeObjectiveSubsystem>() : nullptr;
 	if (!Pawn || !Pawn->IsPlayerControlled() || !Objectives)
@@ -204,8 +244,43 @@ void AGameForgeQuestGiver::HandleOverlap(UPrimitiveComponent* OverlappedComponen
 			{
 				Say(TurnInLine);
 			}
+			if (RewardScore > 0 && GetWorld())
+			{
+				if (AGameForgeGameState* GS = GetWorld()->GetGameState<AGameForgeGameState>())
+				{
+					GS->AddStat(FName(TEXT("game.score")), static_cast<float>(RewardScore));
+					RewardScore = 0; // grant once
+				}
+			}
 			break;
 		default:
 			break;
+	}
+}
+
+void AGameForgeQuestGiver::Interact(AController* InController)
+{
+	const APawn* Pawn = nullptr;
+	if (InController)
+	{
+		Pawn = InController->GetPawn();
+	}
+	else
+	{
+		Pawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	}
+	TriggerTalk(Pawn);
+}
+
+void AGameForgeQuestGiver::HandleOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	if (!bTalkOnOverlap)
+	{
+		return;
+	}
+	if (const APawn* Pawn = Cast<APawn>(OtherActor))
+	{
+		TriggerTalk(Pawn);
 	}
 }

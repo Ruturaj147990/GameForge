@@ -36,34 +36,71 @@ class _M(BaseModel):
 
 
 class Genre(str, Enum):
-    GRID_BOARD = "grid_board"; PLATFORMER = "platformer"; ARENA_COMBAT = "arena_combat"
-    CARD_BATTLER = "card_battler"; EXPLORATION = "exploration"; ACTION_ADVENTURE = "action_adventure"
-    TOP_DOWN_SHOOTER = "top_down_shooter"; DUNGEON_CRAWLER = "dungeon_crawler"; PUZZLE = "puzzle"; CUSTOM = "custom"
+    GRID_BOARD = "grid_board"
+    PLATFORMER = "platformer"
+    ARENA_COMBAT = "arena_combat"
+    CARD_BATTLER = "card_battler"
+    EXPLORATION = "exploration"
+    ACTION_ADVENTURE = "action_adventure"
+    TOP_DOWN_SHOOTER = "top_down_shooter"
+    DUNGEON_CRAWLER = "dungeon_crawler"
+    PUZZLE = "puzzle"
+    CUSTOM = "custom"
 
 
 class CameraKind(str, Enum):
-    THIRD_PERSON = "third_person"; TOP_DOWN = "top_down"; FIRST_PERSON = "first_person"
-    SIDE_SCROLLER = "side_scroller"; FIXED_BOARD = "fixed_board"
+    THIRD_PERSON = "third_person"
+    TOP_DOWN = "top_down"
+    FIRST_PERSON = "first_person"
+    SIDE_SCROLLER = "side_scroller"
+    FIXED_BOARD = "fixed_board"
 
 
 class LayoutKind(str, Enum):
-    BOARD = "board"; ARENA = "arena"; COURSE = "course"; ROOMS = "rooms"; OPEN_WORLD = "open_world"; LANES = "lanes"
+    BOARD = "board"
+    ARENA = "arena"
+    COURSE = "course"
+    ROOMS = "rooms"
+    OPEN_WORLD = "open_world"
+    LANES = "lanes"
 
 
 class Biome(str, Enum):
-    NONE = "none"; FOREST = "forest"; DESERT = "desert"; ISLAND = "island"; MOUNTAIN = "mountain"
-    DUNGEON = "dungeon"; INDOOR = "indoor"
+    NONE = "none"
+    FOREST = "forest"
+    DESERT = "desert"
+    ISLAND = "island"
+    MOUNTAIN = "mountain"
+    DUNGEON = "dungeon"
+    INDOOR = "indoor"
 
 
 class Lighting(str, Enum):
-    DAY = "day"; DUSK = "dusk"; NIGHT = "night"; INDOOR = "indoor"
+    DAY = "day"
+    DUSK = "dusk"
+    NIGHT = "night"
+    INDOOR = "indoor"
 
 
 class EntityKind(str, Enum):
-    PLAYER = "player"; PICKUP = "pickup"; CHECKPOINT = "checkpoint"; GOAL = "goal"; HAZARD = "hazard"
-    ENEMY = "enemy"; RANGED_ENEMY = "ranged_enemy"; SPAWNER = "spawner"; GUARD = "guard"; NPC = "npc"
-    DOOR = "door"; SWITCH = "switch"; MOVING_PLATFORM = "moving_platform"; LANDMARK = "landmark"; PROP = "prop"
-    BOARD = "board"; CARD_TABLE = "card_table"
+    PLAYER = "player"
+    PICKUP = "pickup"
+    CHECKPOINT = "checkpoint"
+    GOAL = "goal"
+    HAZARD = "hazard"
+    ENEMY = "enemy"
+    RANGED_ENEMY = "ranged_enemy"
+    SPAWNER = "spawner"
+    GUARD = "guard"
+    NPC = "npc"
+    DOOR = "door"
+    SWITCH = "switch"
+    MOVING_PLATFORM = "moving_platform"
+    LANDMARK = "landmark"
+    PROP = "prop"
+    BOARD = "board"
+    CARD_TABLE = "card_table"
+    BOMB_SITE = "bomb_site"
 
 
 class Vec2(_M):
@@ -117,16 +154,37 @@ class Overview(_M):
     def _coerce_genre(cls, v: Any) -> Any:
         if isinstance(v, str):
             v_clean = v.strip().lower().replace("-", "_").replace(" ", "_")
-            if v_clean in ("action", "adventure"):
-                return Genre.ACTION_ADVENTURE
-            if v_clean in ("shooter", "fps"):
-                return Genre.TOP_DOWN_SHOOTER
-            if v_clean in ("board", "grid"):
-                return Genre.GRID_BOARD
-            if v_clean in ("combat", "arena"):
-                return Genre.ARENA_COMBAT
-            if v_clean in ("card", "cards"):
-                return Genre.CARD_BATTLER
+            aliases = {
+                "action": Genre.ACTION_ADVENTURE,
+                "adventure": Genre.ACTION_ADVENTURE,
+                "rpg": Genre.ACTION_ADVENTURE,
+                "stealth": Genre.DUNGEON_CRAWLER,
+                "roguelike": Genre.DUNGEON_CRAWLER,
+                "roguelite": Genre.DUNGEON_CRAWLER,
+                "dungeon": Genre.DUNGEON_CRAWLER,
+                "shooter": Genre.TOP_DOWN_SHOOTER,
+                "twin_stick": Genre.TOP_DOWN_SHOOTER,
+                "fps": Genre.ARENA_COMBAT,
+                "combat": Genre.ARENA_COMBAT,
+                "arena": Genre.ARENA_COMBAT,
+                "survival": Genre.ARENA_COMBAT,
+                "tower_defense": Genre.ARENA_COMBAT,
+                "strategy": Genre.ARENA_COMBAT,
+                "racing": Genre.PLATFORMER,
+                "runner": Genre.PLATFORMER,
+                "parkour": Genre.PLATFORMER,
+                "board": Genre.GRID_BOARD,
+                "grid": Genre.GRID_BOARD,
+                "board_game": Genre.GRID_BOARD,
+                "card": Genre.CARD_BATTLER,
+                "cards": Genre.CARD_BATTLER,
+                "deckbuilder": Genre.CARD_BATTLER,
+                "open_world": Genre.EXPLORATION,
+                "sandbox": Genre.EXPLORATION,
+                "logic": Genre.PUZZLE,
+            }
+            if v_clean in aliases:
+                return aliases[v_clean]
             for g in Genre:
                 if g.value == v_clean:
                     return g
@@ -137,6 +195,21 @@ class Overview(_M):
     def _coerce_camera(cls, v: Any) -> Any:
         if isinstance(v, str):
             v_clean = v.strip().lower().replace("-", "_").replace(" ", "_")
+            cam_aliases = {
+                "fps": CameraKind.FIRST_PERSON,
+                "1st_person": CameraKind.FIRST_PERSON,
+                "3rd_person": CameraKind.THIRD_PERSON,
+                "over_the_shoulder": CameraKind.THIRD_PERSON,
+                "overhead": CameraKind.TOP_DOWN,
+                "isometric": CameraKind.TOP_DOWN,
+                "birds_eye": CameraKind.TOP_DOWN,
+                "2d": CameraKind.SIDE_SCROLLER,
+                "2_5d": CameraKind.SIDE_SCROLLER,
+                "board": CameraKind.FIXED_BOARD,
+                "fixed": CameraKind.FIXED_BOARD,
+            }
+            if v_clean in cam_aliases:
+                return cam_aliases[v_clean]
             for c in CameraKind:
                 if c.value == v_clean:
                     return c
@@ -237,7 +310,7 @@ class CountAtLeast(_M):
 class StatCompare(_M):
     kind: Literal["stat"] = "stat"
     stat: str = Field(pattern=STAT)
-    op: Literal["<", "<=", "==", ">=", ">"]
+    op: Literal["<", "<=", "==", "!=", ">=", ">"]
     value: float
 
 
@@ -288,8 +361,10 @@ class AnyOf(_M):
         return v
 
 
-Condition = Annotated[Union[CountAtLeast, StatCompare, TimerElapsed, EventOccurred, AllOf, AnyOf],
-                      Field(discriminator="kind")]
+Condition = Annotated[
+    Union[CountAtLeast, StatCompare, TimerElapsed, EventOccurred, AllOf, AnyOf],
+    Field(discriminator="kind"),
+]
 AllOf.model_rebuild()
 AnyOf.model_rebuild()
 
@@ -342,7 +417,10 @@ class CustomCode(_M):
     tick_body: str = Field("", max_length=8000)
 
 
-Effect = Annotated[Union[AddStat, SetStat, Emit, Spawn, Message, EndGame, CustomCode], Field(discriminator="kind")]
+Effect = Annotated[
+    Union[AddStat, SetStat, Emit, Spawn, Message, EndGame, CustomCode],
+    Field(discriminator="kind"),
+]
 
 
 class RuleSpec(_M):
@@ -408,11 +486,14 @@ class UISpec(_M):
 
 class ArtDirection(_M):
     style: Literal["stylized", "realistic", "low_poly", "toon"] = "stylized"
-    palette: List[str] = Field(default_factory=lambda: ["#2E3440", "#88C0D0", "#EBCB8B", "#BF616A"],
-                               min_length=2, max_length=8)
+    palette: List[str] = Field(
+        default_factory=lambda: ["#2E3440", "#88C0D0", "#EBCB8B", "#BF616A"],
+        min_length=2,
+        max_length=8,
+    )
     material_theme: str = Field("default", pattern=IDENT)
     character_source: Literal["procedural", "mannequin", "metahuman", "library"] = "mannequin"
-    placeholder_ok: bool = False  # P7 flipped default to False per AD-17
+    placeholder_ok: bool = False
 
     @field_validator("palette")
     @classmethod
@@ -431,7 +512,7 @@ class AudioSpec(_M):
 class TechSpec(_M):
     target_fps: Literal[30, 60] = 60
     max_frame_ms: float = Field(16.6, ge=8, le=50)
-    max_package_mb: int = Field(400, ge=100, le=4000)   # P10 default 400 MB
+    max_package_mb: int = Field(400, ge=100, le=4000)
     multiplayer: Literal["none", "listen_server"] = "none"
 
 
@@ -478,7 +559,6 @@ class GameDesignSpec(_M):
     acceptance: Acceptance = Field(default_factory=Acceptance)
     architecture: Optional[ArchitectureSpec] = Field(default=None)
 
-    # ---- cross-reference validation -------------------------------------------------------
     def _declared_events(self) -> set[str]:
         used_modules = {e.module for e in self.entities}
         events = set(all_events()) if not used_modules else set()
@@ -501,9 +581,8 @@ class GameDesignSpec(_M):
             if e.level_id not in level_ids:
                 errs.append(f"entity {e.entity_id}: unknown level {e.level_id}")
 
-        # Lazy entity props validation against KitModule params_model (WI-5.14)
         try:
-            from ..kit import modules as _kit_modules  # noqa: F401  (registers kit modules)
+            from ..kit import modules as _kit_modules  # noqa: F401
             from ..kit.registry import KIT
             for e in self.entities:
                 if e.module in KIT:

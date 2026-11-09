@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "timestamp": "2026-11-01T06:30:49Z",
+  "timestamp": "2026-11-09T13:26:42Z",
   "results": {
     "approval_paths": {
       "passed": true,
@@ -40,5 +40,5 @@
       "benign_passed": true
     }
   },
-  "elapsed_seconds": 0.12
+  "elapsed_seconds": 0.19
 }

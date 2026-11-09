@@ -35,9 +35,9 @@ def test_sudoku_maps_to_scratch_and_never_combat_or_platformer(registry: Semanti
     # Architectural assertions
     arch = decision.suggested_architecture
     assert arch["plan_kind"] == "scratch_puzzle"
-    assert "USudokuGridManager" in arch["target_classes"]
+    assert "UGridPuzzleSubsystem" in arch["target_classes"]
     assert "ASudokuGameMode" in arch["target_classes"]
-    assert "WSudokuGrid" in arch["target_widgets"]
+    assert any("Grid" in w for w in arch["target_widgets"])
 
     # Incompatibility assertions: check that ALL combat and platformer templates were strictly rejected
     for ev in decision.evaluations:
@@ -54,7 +54,7 @@ def test_chess_maps_to_scratch_and_never_platformer(registry: SemanticTemplateRe
     assert decision.profile.detected_genre == Genre.GRID_BOARD
     arch = decision.suggested_architecture
     assert arch["plan_kind"] == "scratch_board"
-    assert "AChessBoardManager" in arch["target_classes"]
+    assert "UBoardGameSubsystem" in arch["target_classes"]
 
     # Verify platformer and combat conflict
     for ev in decision.evaluations:
@@ -70,7 +70,7 @@ def test_tetris_maps_to_scratch_puzzle(registry: SemanticTemplateRegistry):
     assert decision.profile.detected_genre == Genre.PUZZLE
     arch = decision.suggested_architecture
     assert arch["plan_kind"] == "scratch_falling_blocks"
-    assert "UTetrisGridManager" in arch["target_classes"]
+    assert "UGridPuzzleSubsystem" in arch["target_classes"]
 
     # Verify platformer was rejected
     for ev in decision.evaluations:

@@ -58,25 +58,25 @@ def test_combat_damages_enemies_navigates_into_range():
     assert "enemy" in nav_steps[0].navigate_to.tag.lower()
 
 
-def test_snakes_and_ladders_scenarios_inject_turns():
-    """Verify that snake and ladder transition scenarios inject dice roll inputs rather than idly waiting."""
+def test_roll_and_move_scenarios_inject_turns():
+    """Verify that roll and move transition scenarios inject dice roll inputs rather than idly waiting."""
     from src.gameforge_ide.design.gds import EntityKind
-    gds = preset_tic_tac_toe(title="Snakes and Ladders")
-    gds.meta.source_prompt = "Make a snakes and ladders board game with 100 cells"
+    gds = preset_tic_tac_toe(title="Roll and Move Board")
+    gds.meta.source_prompt = "Make a roll and move board game with 100 cells"
     for e in gds.entities:
         if e.kind == EntityKind.BOARD:
-            e.props["snakes"] = [16, 6]
-            e.props["ladders"] = [1, 38]
+            e.props["board_mode"] = "roll_and_move"
+            e.props["cell_count"] = 100
+            e.props["dice_sides"] = 6
+            e.props["warp_tiles"] = [{"start": 16, "end": 6}, {"start": 1, "end": 38}]
 
     tests = generate_acceptance_tests(gds)
-    snake_test = next(t for t in tests if t.test_id == "snake_transition")
-    scenario = snake_test.to_scenario()
+    warp_test = next(t for t in tests if t.test_id == "tile_transition_hazard")
+    scenario = warp_test.to_scenario()
 
     # Steps must include input injection
     has_inject = any(hasattr(s, "inject") for s in scenario.steps)
-    assert has_inject, "snake_transition must inject dice rolls or actions to trigger transition"
-
-
+    assert has_inject, "tile_transition_hazard must inject dice rolls or actions to trigger transition"
 def test_combat_and_win_scenarios_expectations():
     """Verify combat acceptance scenarios have achievable expectations and navigate to enemies."""
     gds = preset_arena_combat()

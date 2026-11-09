@@ -4,9 +4,8 @@ Translates a Composition into a typed, verified Forge RunSpec DAG with
 proper dependencies, locks, input hashes, and step configurations.
 """
 from __future__ import annotations
+import pathlib
 
-import json
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 from .model import Composition
 from ..forge.model import RunSpec, StepKind, StepSpec
@@ -206,8 +205,8 @@ def composition_to_run_spec(
     return RunSpec(
         title=f"Compose & Build {comp.project_name}",
         origin=origin,  # type: ignore
-        workspace_dir=workspace_dir,
-        project_dir=project_dir,
+        workspace_dir=str(workspace_dir),
+        project_dir=str(project_dir) if project_dir is not None else str(pathlib.Path(workspace_dir) / comp.project_name),
         gds_revision=comp.gds_revision,
         steps=steps,
     )

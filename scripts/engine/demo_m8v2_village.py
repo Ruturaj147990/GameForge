@@ -22,7 +22,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts"))
+sys.path.insert(0, str(REPO / "scripts" / "engine"))
 
 import demo_m11_landscape as land  # noqa: E402
 from src.gameforge_ide.backend.tools import biomes  # noqa: E402

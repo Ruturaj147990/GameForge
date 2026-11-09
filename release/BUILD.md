@@ -3,7 +3,7 @@
 ## 1. Portable Distribution (Standard)
 
 The standard portable distribution bundles the complete GameForge application, including:
-- PySide6 native IDE desktop package (`gameforge_ide`)
+- PySide6 native IDE desktop package (`src/gameforge_ide`)
 - Unreal Engine op catalog and content op library (`gameforge_ops`)
 - Built Unreal Engine runtime/editor plugin binaries (`Plugins/GameForge`)
 - One-click launcher (`GameForge.bat`)
@@ -14,9 +14,9 @@ The standard portable distribution bundles the complete GameForge application, i
 ```powershell
 python scripts/pipeline/build_portable_distribution.py
 ```
-Outputs:
-- Directory: `E:\GameForge\release\GameForge-1.0.0-win64\`
-- Archive: `E:\GameForge\release\GameForge-1.0.0-win64.zip`
+Outputs (under `<data_root>/release/` from the active host profile):
+- Directory: `<data_root>/release/GameForge-1.0.0-win64/`
+- Archive: `<data_root>/release/GameForge-1.0.0-win64.zip`
 - Verification: footprint <= 250 MB (excluding models, datasets, and engine).
 
 ---
@@ -33,6 +33,6 @@ python -m nuitka --standalone --plugin-enable=pyside6 `
   --include-data-dir=src/gameforge_ide/config=gameforge_ide/config `
   --include-data-dir=src/gameforge_ide/unreal/GameForge=gameforge_ide/unreal/GameForge `
   --windows-icon-from-ico=release/gameforge.ico `
-  --output-dir=E:\GameForge\release\nuitka `
+  --output-dir=dist/nuitka `
   src/gameforge_ide/launcher.py
 ```

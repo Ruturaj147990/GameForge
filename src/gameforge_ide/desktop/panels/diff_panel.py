@@ -71,9 +71,9 @@ class DiffView(QPlainTextEdit):
                 fmt.setBackground(QColor(theme_color("#0d0a1f")))
                 fmt.setFontWeight(QFont.Bold)
             elif line.startswith("---") or line.startswith("+++"):
-                fmt.setForeground(QColor(tokens.TEXT_MUTED))
+                fmt.setForeground(QColor(theme_color(tokens.TEXT_MUTED)))
             else:
-                fmt.setForeground(QColor(tokens.TEXT_PRIMARY))
+                fmt.setForeground(QColor(theme_color(tokens.TEXT_PRIMARY)))
             cursor.insertText(line, fmt)
         cursor.movePosition(QTextCursor.Start)
         self.setTextCursor(cursor)
@@ -196,6 +196,28 @@ class DiffPanel(QWidget):
         self._splitter = QSplitter(Qt.Horizontal, split_widget)
         self._split_left = DiffView(self._splitter, is_left=True)
         self._split_right = DiffView(self._splitter, is_right=True)
+        self._syncing_scroll = False
+
+        def _sync_left_to_right(val: int) -> None:
+            if self._syncing_scroll:
+                return
+            self._syncing_scroll = True
+            try:
+                self._split_right.verticalScrollBar().setValue(val)
+            finally:
+                self._syncing_scroll = False
+
+        def _sync_right_to_left(val: int) -> None:
+            if self._syncing_scroll:
+                return
+            self._syncing_scroll = True
+            try:
+                self._split_left.verticalScrollBar().setValue(val)
+            finally:
+                self._syncing_scroll = False
+
+        self._split_left.verticalScrollBar().valueChanged.connect(_sync_left_to_right)
+        self._split_right.verticalScrollBar().valueChanged.connect(_sync_right_to_left)
         self._splitter.addWidget(self._split_left)
         self._splitter.addWidget(self._split_right)
         self._splitter.setStretchFactor(0, 1)
@@ -370,6 +392,20 @@ class DiffPanel(QWidget):
                 cursor.setPosition(block.position())
                 self._diff_view.setTextCursor(cursor)
                 self._diff_view.centerCursor()
+            for split_view in (self._split_left, self._split_right):
+                doc = split_view.document()
+                seen = -1
+                b = doc.begin()
+                while b.isValid():
+                    if b.text().startswith("@@"):
+                        seen += 1
+                        if seen == hunk_idx:
+                            c = split_view.textCursor()
+                            c.setPosition(b.position())
+                            split_view.setTextCursor(c)
+                            split_view.centerCursor()
+                            break
+                    b = b.next()
 
     @Slot()
     def _toggle_view_mode(self) -> None:

@@ -119,6 +119,25 @@ def scatter(
                 if len(points) >= n:
                     break
 
+    # Deterministic grid scan fallback with relaxed spacing if random sampling did not place all points
+    if len(points) < n:
+        relaxed_spacing_sq = (min_spacing_cm * 0.45) ** 2
+        grid_steps = max(8, int(math.ceil(math.sqrt(n * 4))))
+        dx = (max_x - min_x) / max(1, grid_steps)
+        dy = (max_y - min_y) / max(1, grid_steps)
+        for gx_i in range(1, grid_steps):
+            for gy_i in range(1, grid_steps):
+                if len(points) >= n:
+                    break
+                cand = (min_x + gx_i * dx, min_y + gy_i * dy)
+                if not is_point_in_polygon(cand, area_polygon):
+                    continue
+                if any((cand[0] - ax) ** 2 + (cand[1] - ay) ** 2 < (ar * 0.75) ** 2 for ax, ay, ar in avoid):
+                    continue
+                if any((cand[0] - px) ** 2 + (cand[1] - py) ** 2 < relaxed_spacing_sq for px, py in points):
+                    continue
+                points.append(cand)
+
     warning = None
     if len(points) < n:
         warning = f"placed {len(points)} of {n} points; level too small or congested"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -54,6 +55,7 @@ class ToolGateway:
         self.unreal_tools = UnrealEngineTools(self.workspace_root)
         self.asset_tools = ProceduralMeshGenerator()
         self.game_tools = GameTools(self.workspace_root)
+        self._audit_lock = threading.RLock()
 
     def get_definitions(self, for_hosted: bool = False) -> List[ToolDefinition]:
         """Returns schemas for all registered tools."""
@@ -340,6 +342,20 @@ class ToolGateway:
                 requires_approval=True,
             ),
             ToolDefinition(
+                name="modify_game",
+                description="Modify the existing game's GameDesignSpec via RFC 6902 patch and run an incremental Forge DAG rebuild.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string"},
+                        "project_dir": {"type": "string"},
+                        "package": {"type": "boolean", "default": True},
+                    },
+                    "required": ["prompt"],
+                },
+                requires_approval=True,
+            ),
+            ToolDefinition(
                 name="create_game_freeform",
                 description="Create a game with no matching recipe: a model writes gameplay C++ on the verified host framework; compile, repair, package and self-test gates apply.",
                 parameters={"type": "object", "properties": {"prompt": {"type": "string"}, "title": {"type": "string"}},
@@ -397,7 +413,7 @@ class ToolGateway:
         """True when dispatching ``name`` with ``arguments`` needs explicit user approval under active permissions mode."""
         canonical_name = TOOL_ALIASES.get(name, name)
         args = dict(arguments) if isinstance(arguments, dict) else {}
-        
+
         # Resolve permissions mode (fail-closed: default to REQUEST_ALL / MANUAL if not specified)
         if permissions_mode is not None:
             pm = PermissionsMode.from_str(permissions_mode)
@@ -455,7 +471,7 @@ class ToolGateway:
         if pm in (PermissionsMode.AUTO, PermissionsMode.UNRESTRICTED) or profile == AutonomyProfile.AGENTIC:
             if canonical_name in ("apply_edit", "apply_batch", "write_file", "rollback_edit", "rollback_batch", "delete_file"):
                 return False
-            if canonical_name in ("unreal_run_tests", "unreal_build"):
+            if canonical_name in ("unreal_run_tests", "unreal_build", "modify_game"):
                 return False
 
         definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
@@ -607,6 +623,11 @@ class ToolGateway:
             if "reason" in normalized:
                 normalized["reason"] = str(normalized["reason"])
 
+        elif canonical_name == "modify_game":
+            prompt_val = normalized.get("prompt") or normalized.get("request") or normalized.get("input")
+            if prompt_val is not None and "prompt" not in normalized:
+                normalized["prompt"] = str(prompt_val)
+
         return normalized
 
     def execute_tool(
@@ -737,6 +758,8 @@ class ToolGateway:
                 res = self.game_tools.plan_game(**args)
             elif canonical_name == "create_game":
                 res = self.game_tools.create_game(**args)
+            elif canonical_name == "modify_game":
+                res = self.game_tools.modify_game(**args)
             elif canonical_name == "create_game_freeform":
                 res = self.game_tools.create_game_freeform(**args)
             elif canonical_name == "unreal_editor":
@@ -766,4 +789,3 @@ class ToolGateway:
                 "error": f"Tool execution failed: {str(e)}",
                 "execution_time_seconds": round(time.time() - t0, 3),
             }
-

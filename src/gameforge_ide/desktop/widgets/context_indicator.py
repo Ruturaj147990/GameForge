@@ -274,6 +274,7 @@ class ContextUsageIndicator(QFrame):
         """)
 
         self._lbl_tokens.setStyleSheet(f"font-size: {tokens.FONT_BODY_SM}px; font-weight: 600; color: {text_pri};")
+        self._update_tooltip()
 
     def update_report(self, report: Union[ContextUsageReport, Dict[str, Any]]) -> None:
         """Update indicator with newly calculated ContextUsageReport or dict."""
@@ -358,24 +359,29 @@ class ContextUsageIndicator(QFrame):
 
         b = self._report.breakdown
         badge_text = "Exact provider measurement" if not self._report.is_estimated else f"Estimated ({self._report.estimation_method})"
+        t_pri = theme_color(tokens.TEXT_PRIMARY)
+        t_sec = theme_color(tokens.TEXT_SECONDARY)
+        t_mut = theme_color(tokens.TEXT_MUTED)
+        t_acc = theme_color(tokens.ACCENT_HOVER)
+        t_brd = theme_color(tokens.BORDER)
         html_tip = f"""
-        <div style='font-family: Segoe UI, sans-serif; font-size: 11px; color: {tokens.TEXT_PRIMARY}; padding: 4px;'>
-          <b style='color:{tokens.ACCENT_HOVER}; font-size:12px;'>Context Usage: {html.escape(self._report.model_id)}</b><br>
+        <div style='font-family: Segoe UI, sans-serif; font-size: 11px; color: {t_pri}; padding: 4px;'>
+          <b style='color:{t_acc}; font-size:12px;'>Context Usage: {html.escape(self._report.model_id)}</b><br>
           <span>Budget: <b>{self._report.used_tokens:,}</b> / <b>{self._report.nominal_capacity:,}</b> tokens ({self._report.utilization_pct:.1f}%)</span><br>
-          <span style='color:{tokens.TEXT_SECONDARY};'>Remaining prompt budget: {self._report.remaining_tokens:,} tokens</span><br>
-          <span style='color:{tokens.TEXT_MUTED}; font-size:10px;'>Accounting: {badge_text}</span>
-          <hr style='border:0; border-top:1px solid {tokens.BORDER}; margin:6px 0;'>
+          <span style='color:{t_sec};'>Remaining prompt budget: {self._report.remaining_tokens:,} tokens</span><br>
+          <span style='color:{t_mut}; font-size:10px;'>Accounting: {badge_text}</span>
+          <hr style='border:0; border-top:1px solid {t_brd}; margin:6px 0;'>
           <table style='width:100%; border-collapse:collapse; font-size:11px;'>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>1. System / developer prompt:</td><td align='right'><b>{b.system_prompt:,}</b></td></tr>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>2. Conversation history:</td><td align='right'><b>{b.conversation:,}</b></td></tr>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>3. Long-term memory:</td><td align='right'><b>{b.memory:,}</b></td></tr>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>4. Retrieved files/documents:</td><td align='right'><b>{b.retrieved_docs:,}</b></td></tr>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>5. Tool definitions:</td><td align='right'><b>{b.tool_definitions:,}</b></td></tr>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>6. Other prompt overhead:</td><td align='right'><b>{b.other_overhead:,}</b></td></tr>
-            <tr><td style='color:{tokens.TEXT_SECONDARY};'>7. Reserved completion capacity:</td><td align='right'><b>{b.reserved_output:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>1. System / developer prompt:</td><td align='right'><b>{b.system_prompt:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>2. Conversation history:</td><td align='right'><b>{b.conversation:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>3. Long-term memory:</td><td align='right'><b>{b.memory:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>4. Retrieved files/documents:</td><td align='right'><b>{b.retrieved_docs:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>5. Tool definitions:</td><td align='right'><b>{b.tool_definitions:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>6. Other prompt overhead:</td><td align='right'><b>{b.other_overhead:,}</b></td></tr>
+            <tr><td style='color:{t_sec};'>7. Reserved completion capacity:</td><td align='right'><b>{b.reserved_output:,}</b></td></tr>
           </table>
-          <hr style='border:0; border-top:1px solid {tokens.BORDER}; margin:6px 0;'>
-          <span style='color:{tokens.ACCENT_HOVER}; font-size:10px;'>💡 Click indicator to open persistent breakdown popup</span>
+          <hr style='border:0; border-top:1px solid {t_brd}; margin:6px 0;'>
+          <span style='color:{t_acc}; font-size:10px;'>💡 Click indicator to open persistent breakdown popup</span>
         </div>
         """
         self.setToolTip(html_tip)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -365,15 +366,11 @@ def cmd_run_tests(args: argparse.Namespace) -> int:
 
         res = subprocess.run(cmd, cwd=str(workspace), capture_output=True, text=True)
         stdout = res.stdout.strip()
-        stderr = res.stderr.strip()
 
-        # Parse test count from output
-        count = 0
         status = "PASSED" if res.returncode == 0 else "FAILED"
         if res.returncode != 0:
             overall_exit_code = res.returncode
 
-        # Parse lines
         lines = stdout.splitlines()
         last_line = lines[-1] if lines else ""
 
@@ -440,12 +437,20 @@ def cmd_eval_model(args: argparse.Namespace) -> int:
 
 
 def cmd_model_info(args: argparse.Namespace) -> int:
+    ollama_models_dir = os.environ.get("OLLAMA_MODELS")
+    if not ollama_models_dir:
+        try:
+            from src.gameforge_ide.core.settings import get_settings
+            ollama_models_dir = str(get_settings().ollama_models)
+        except Exception:
+            ollama_models_dir = str(Path.home() / ".ollama" / "models")
+
     print("=" * 75)
     print(" GAMEFORGE LLM V1 — MODEL ARCHITECTURE & OPERATIONAL PROFILE")
     print("=" * 75)
     print("Base Architecture:     Qwen 2.5 / Qwen3.8 27B Parameter Model")
     print("Quantization:          Q4_K_M (4-bit Medium Quantization)")
-    print("Model Size:            ~17.1 GB on E:\\GameForge\\models\\ollama")
+    print(f"Model Size:            ~17.1 GB on {ollama_models_dir}")
     print("Local Serving:         Ollama v0.40.6 on 127.0.0.1:11434")
     print("GPU / VRAM Target:     AMD Radeon RX 7700 XT (12 GB VRAM) + System RAM")
     print("Execution Context:     4,096 tokens (num_ctx 4096)")

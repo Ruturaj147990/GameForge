@@ -15,13 +15,11 @@ Implements Phase 7 of GameForge V2:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import List, Tuple
 
 
 def verify_merge_prerequisites(

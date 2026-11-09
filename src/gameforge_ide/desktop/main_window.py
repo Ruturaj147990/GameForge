@@ -128,6 +128,10 @@ class MainWindow(QMainWindow):
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         self._settings = QSettings(str(settings_path), QSettings.IniFormat)
         self._theme = "light" if self._settings.value("appearance/theme", "dark") == "light" else "dark"
+        try:
+            self._font_scale = int(self._settings.value("appearance/font_scale", 100) or 100)
+        except (ValueError, TypeError):
+            self._font_scale = 100
 
         # ── Services (in-process, no HTTP) ───────────────────────────────
         self._agent = AgentService(workspace_root, parent=self)
@@ -163,7 +167,7 @@ class MainWindow(QMainWindow):
                 self.restoreGeometry(saved_geometry)
             if getattr(self, "_current_project", None) and getattr(self, "_current_project_dir", None):
                 self.set_active_project(self._current_project, self._current_project_dir)
-        apply_theme(QApplication.instance(), self._theme)
+        apply_theme(QApplication.instance(), self._theme, font_scale=getattr(self, "_font_scale", 100))
         # Storage hygiene 10 s after start, off the UI thread: only policy-safe actions
         # (log rotation, items past retention). Cap-based cleanup is user-confirmed in Mission Control.
         QTimer.singleShot(10_000, self._run_storage_hygiene)
@@ -179,6 +183,8 @@ class MainWindow(QMainWindow):
         self._chat_panel.model_changed.connect(self._on_chat_model_changed)
         self._chat_panel.open_project_requested.connect(self._open_folder)
         self._chat_panel.unreal_status_changed.connect(self._apply_unreal_status)
+        if hasattr(self._chat_panel, "openDesignRequested"):
+            self._chat_panel.openDesignRequested.connect(self._on_assistant_open_design)
 
         # ── Connect Agent streaming events ────────────────────────────────
         self._agent.token_received.connect(self._on_agent_token)
@@ -209,10 +215,11 @@ class MainWindow(QMainWindow):
         # ── Logical Tab focus order ───────────────────────────────────────
         if hasattr(self, "_tb_workspace_btn") and hasattr(self, "_tb_model_combo"):
             self.setTabOrder(self._tb_workspace_btn, self._tb_model_combo)
-        if hasattr(self, "_tb_model_combo") and hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer"):
-            self.setTabOrder(self._tb_model_combo, self._chat_panel._composer)
-        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer") and hasattr(self._chat_panel, "_btn_send"):
-            self.setTabOrder(self._chat_panel._composer, self._chat_panel._btn_send)
+        _chat_input = (getattr(self._chat_panel, "_input", None) or getattr(self._chat_panel, "_composer", None)) if hasattr(self, "_chat_panel") else None
+        if hasattr(self, "_tb_model_combo") and _chat_input is not None:
+            self.setTabOrder(self._tb_model_combo, _chat_input)
+        if _chat_input is not None and hasattr(self._chat_panel, "_btn_send"):
+            self.setTabOrder(_chat_input, self._chat_panel._btn_send)
         if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_btn_send") and hasattr(self, "_terminal") and hasattr(self._terminal, "_cmd_input"):
             self.setTabOrder(self._chat_panel._btn_send, self._terminal._cmd_input)
         if hasattr(self, "_terminal") and hasattr(self._terminal, "_cmd_input") and hasattr(self, "_unreal_panel") and hasattr(self._unreal_panel, "_btn_build"):
@@ -744,6 +751,8 @@ class MainWindow(QMainWindow):
         # Reconfigure services
         self._agent.set_workspace(self._workspace)
         self._tools.set_workspace(self._workspace)
+        if hasattr(self, "_forge_service") and self._forge_service and hasattr(self._forge_service, "set_workspace"):
+            self._forge_service.set_workspace(self._workspace)
 
         # Reconfigure panels
         self._explorer.set_workspace(self._workspace, tool_service=self._tools)
@@ -1090,15 +1099,23 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"↩️ Diff {diff_id} rolled back.", 4000)
 
     def _on_create_game_from_unreal(self) -> None:
-        if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "_composer"):
-            self._chat_panel._composer.setText("/game ")
-            self._chat_panel._composer.setFocus()
+        if hasattr(self, "_chat_panel") and self._chat_panel is not None:
+            target = getattr(self._chat_panel, "_input", None) or getattr(self._chat_panel, "_composer", None)
+            if target is not None:
+                if hasattr(target, "setPlainText"):
+                    target.setPlainText("/game ")
+                elif hasattr(target, "setText"):
+                    target.setText("/game ")
+                target.setFocus()
 
     @Slot(str, str)
     def _on_slash_command(self, cmd: str, full_cmd: str) -> None:
         """Handle slash command actions triggered from ChatPanel."""
         if cmd in ("/mission", "mission"):
-            self._on_rail_action_clicked(1)
+            if not getattr(self, "_is_legacy_shell", False) and hasattr(self, "_view_host"):
+                self._switch_studio_view("games")
+            else:
+                self._on_rail_action_clicked(1)
             return
         if cmd == "/build":
             self._dock_unreal.show()
@@ -1157,7 +1174,9 @@ class MainWindow(QMainWindow):
             ("Toggle Terminal", lambda: self._dock_terminal.setVisible(not self._dock_terminal.isVisible())),
             ("View: Home", lambda: self._switch_studio_view("home")),
             ("View: Games Catalog", lambda: self._switch_studio_view("games")),
+            ("View: Design", lambda: self._switch_studio_view("design")),
             ("View: Build", lambda: self._switch_studio_view("build")),
+            ("View: Evidence", lambda: self._switch_studio_view("evidence")),
             ("View: Play", lambda: self._switch_studio_view("play")),
             ("View: Assets Registry", lambda: self._switch_studio_view("assets")),
             ("View: Code Developer", lambda: self._switch_studio_view("code")),
@@ -1267,14 +1286,7 @@ class MainWindow(QMainWindow):
             available_models.insert(0, default_model)
         self._assistant_panel.set_models(available_models, default_model)
 
-        # Mode selector synchronization
-        if hasattr(self, "_top_bar"):
-            self._top_bar.taskModeChanged.connect(self._chat_panel.set_task_mode)
-            self._top_bar.permissionsModeChanged.connect(self._chat_panel.set_permissions_mode)
-            self._top_bar.autonomyProfileChanged.connect(self._chat_panel.set_autonomy_profile)
-            self._chat_panel.task_mode_changed.connect(self._top_bar.set_task_mode)
-            self._chat_panel.permissions_mode_changed.connect(self._top_bar.set_permissions_mode)
-            self._chat_panel.autonomy_changed.connect(self._top_bar.set_autonomy_profile)
+        # Mode selector synchronization is wired once in __init__
 
         # Center splitter: ViewHost + AssistantPanel
         self._center_splitter = QSplitter(Qt.Horizontal, self)
@@ -1310,6 +1322,10 @@ class MainWindow(QMainWindow):
 
         # Toasts overlay
         self._toasts = ToastOverlay(self)
+        if hasattr(self._view_host, "viewBlocked"):
+            self._view_host.viewBlocked.connect(
+                lambda vid, reason: self._toasts.info("View Unavailable", reason or f"Cannot open '{vid}' right now.")
+            )
 
         # Switch to initial view
         last_view = str(self._settings.value("studio/last_view", "home"))
@@ -1341,6 +1357,11 @@ class MainWindow(QMainWindow):
             self._unreal_panel = self._code_view._unreal_panel
             self._diff_panel = self._code_view._diff_panel
             self._terminal = self._code_view._terminal
+            self._explorer.open_folder_requested.connect(self._open_folder)
+            self._unreal_panel.create_game_requested.connect(self._on_create_game_from_unreal)
+            self._diff_panel.diff_approved.connect(self._on_diff_applied)
+            self._diff_panel.diff_rejected.connect(self._on_diff_rejected)
+            self._diff_panel.diff_rolled_back.connect(self._on_diff_rolled_back)
             self._code_view.restore_dock_state(self._settings)
         return self._code_view
 
@@ -1463,8 +1484,17 @@ class MainWindow(QMainWindow):
         self._view_host.register(
             "play",
             create_play_view,
-            enabled_when=lambda: (self._current_project_has_package(), "No packaged build found")
+            enabled_when=lambda: (bool(self._current_project), "Select a game first")
         )
+
+        def create_evidence_view():
+            from .views.evidence_view import EvidenceView
+            view = EvidenceView(workspace_root=self._workspace, parent=self)
+            if self._current_project:
+                view.set_project(self._current_project, project_dir=self._current_project_dir)
+            return view
+
+        self._view_host.register("evidence", create_evidence_view)
 
         def create_assets_view() -> AssetsView:
             view = AssetsView(workspace_root=self._workspace, parent=self)
@@ -1663,6 +1693,8 @@ class MainWindow(QMainWindow):
 
         # 3. Synchronize backend services & assistant
         if p_dir and p_dir.is_dir():
+            if hasattr(self, "_forge_service") and self._forge_service and hasattr(self._forge_service, "set_workspace"):
+                self._forge_service.set_workspace(self._workspace, p_dir)
             if hasattr(self, "_agent") and self._agent:
                 self._agent.set_workspace(p_dir)
             if hasattr(self, "_tools") and self._tools:
@@ -1798,10 +1830,17 @@ class MainWindow(QMainWindow):
             bv.start_build(project_name, spec, project_dir=p_dir)
 
     def _on_settings_saved(self) -> None:
+        self._settings.sync()
         new_theme = "light" if self._settings.value("appearance/theme", "dark") == "light" else "dark"
-        if new_theme != self._theme:
+        try:
+            new_font_scale = int(self._settings.value("appearance/font_scale", 100) or 100)
+        except (ValueError, TypeError):
+            new_font_scale = 100
+        old_font_scale = getattr(self, "_font_scale", 100)
+        if new_theme != self._theme or new_font_scale != old_font_scale:
             self._theme = new_theme
-            apply_theme(QApplication.instance(), self._theme)
+            self._font_scale = new_font_scale
+            apply_theme(QApplication.instance(), self._theme, font_scale=self._font_scale)
             if hasattr(self, "_rail") and hasattr(self._rail, "update_theme"):
                 self._rail.update_theme()
             if hasattr(self, "_top_bar") and hasattr(self._top_bar, "update_theme"):
@@ -1810,6 +1849,20 @@ class MainWindow(QMainWindow):
                 self._assistant_panel.update_theme()
             from .styles.dark_theme import get_theme_display_name
             self.statusBar().showMessage(f"{get_theme_display_name(self._theme)} theme enabled.", 3000)
+
+        perm_mode = str(self._settings.value("preferences/permissions_mode", "") or "")
+        if perm_mode:
+            if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "set_permissions_mode"):
+                self._chat_panel.set_permissions_mode(perm_mode)
+            if hasattr(self, "_top_bar") and hasattr(self._top_bar, "set_permissions_mode"):
+                self._top_bar.set_permissions_mode(perm_mode)
+
+        task_mode = str(self._settings.value("preferences/task_mode", "") or "")
+        if task_mode:
+            if hasattr(self, "_chat_panel") and hasattr(self._chat_panel, "set_task_mode"):
+                self._chat_panel.set_task_mode(task_mode)
+            if hasattr(self, "_top_bar") and hasattr(self._top_bar, "set_task_mode"):
+                self._top_bar.set_task_mode(task_mode)
 
         from ..core.settings import get_settings
         s = get_settings()
@@ -1915,9 +1968,29 @@ class MainWindow(QMainWindow):
             if hasattr(self, "_rail"):
                 self._rail.set_running("build", False)
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if hasattr(self, "_systems_service") and self._systems_service:
+            self._systems_service.set_window_state(True, self.isMinimized())
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        super().hideEvent(event)
+        if hasattr(self, "_systems_service") and self._systems_service:
+            self._systems_service.set_window_state(False, self.isMinimized())
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            if hasattr(self, "_systems_service") and self._systems_service:
+                self._systems_service.set_window_state(self.isVisible(), self.isMinimized())
+
     def closeEvent(self, event: QCloseEvent) -> None:
         chat = getattr(self, "_chat_panel", None)
-        legacy_building = bool(chat is not None and getattr(getattr(chat, "_runner", None), "_threads", None))
+        runner = getattr(chat, "_runner", None) if chat is not None else None
+        legacy_building = bool(
+            runner is not None
+            and (getattr(runner, "has_active_jobs", False) or getattr(runner, "_threads", None))
+        )
         forge_service = getattr(self, "_forge_service", None)
         forge_building = bool(forge_service is not None and hasattr(forge_service, "active_runs") and forge_service.active_runs())
         building = legacy_building or forge_building
@@ -1970,6 +2043,11 @@ class MainWindow(QMainWindow):
                 self._settings.setValue("studio/assistant_width", sizes[1])
         if hasattr(self, "_view_host") and self._view_host.current_view_id:
             self._settings.setValue("studio/last_view", self._view_host.current_view_id)
-        if hasattr(self, "_systems_service"):
+        if hasattr(self, "_systems_service") and self._systems_service:
             self._systems_service.stop()
+        if hasattr(self, "_forge_service") and self._forge_service:
+            try:
+                self._forge_service.close()
+            except Exception:
+                pass
         event.accept()

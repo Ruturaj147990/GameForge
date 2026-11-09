@@ -27,6 +27,12 @@ public:
 	static FString CreateLandscape(const FString& ParamsJson);
 
 	/**
+	 * Creates and registers a ULandscapeLayerInfoObject on the active ALandscape's ULandscapeInfo->Layers.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Landscape")
+	static FString AddPaintLayer(const FString& ParamsJson);
+
+	/**
 	 * Creates a genuine spline road/trail actor with USplineComponent and USplineMeshComponent segments.
 	 * Returns structured JSON envelope.
 	 */

@@ -101,11 +101,15 @@ def blueprint_set_pin_default(args):
     node_id = args.get("node_id") or args.get("node_name")
     pin_name = args.get("pin_name")
     default_val = str(args.get("default_value", ""))
+    graph_name = args.get("graph_name") or ""
     if not bp_path or not node_id or not pin_name:
         return _envelope("blueprint_set_pin_default", False, errors=["blueprint_path, node_id, and pin_name are required"])
     if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
         return _envelope("blueprint_set_pin_default", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
-    res_raw = unreal.GameForgeBlueprintGraphLibrary.set_pin_default(bp_path, node_id, pin_name, default_val)
+    try:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.set_pin_default(bp_path, node_id, pin_name, default_val, graph_name)
+    except TypeError:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.set_pin_default(bp_path, node_id, pin_name, default_val)
     res = json.loads(res_raw)
     return _envelope("blueprint_set_pin_default", res.get("ok", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
@@ -118,11 +122,15 @@ def blueprint_connect_pins(args):
     from_pin = args.get("from_pin") or args.get("from_pin_name")
     to_node = args.get("to_node") or args.get("to_node_id")
     to_pin = args.get("to_pin") or args.get("to_pin_name")
+    graph_name = args.get("graph_name") or ""
     if not bp_path or not from_node or not from_pin or not to_node or not to_pin:
         return _envelope("blueprint_connect_pins", False, errors=["blueprint_path, from_node, from_pin, to_node, and to_pin are required"])
     if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
         return _envelope("blueprint_connect_pins", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
-    res_raw = unreal.GameForgeBlueprintGraphLibrary.connect_pins(bp_path, from_node, from_pin, to_node, to_pin)
+    try:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.connect_pins(bp_path, from_node, from_pin, to_node, to_pin, graph_name)
+    except TypeError:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.connect_pins(bp_path, from_node, from_pin, to_node, to_pin)
     res = json.loads(res_raw)
     return _envelope("blueprint_connect_pins", res.get("ok", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
@@ -135,11 +143,15 @@ def blueprint_disconnect_pins(args):
     from_pin = args.get("from_pin") or args.get("from_pin_name")
     to_node = args.get("to_node") or args.get("to_node_id") or ""
     to_pin = args.get("to_pin") or args.get("to_pin_name") or ""
+    graph_name = args.get("graph_name") or ""
     if not bp_path or not from_node or not from_pin:
         return _envelope("blueprint_disconnect_pins", False, errors=["blueprint_path, from_node, and from_pin are required"])
     if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
         return _envelope("blueprint_disconnect_pins", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
-    res_raw = unreal.GameForgeBlueprintGraphLibrary.disconnect_pins(bp_path, from_node, from_pin, to_node, to_pin)
+    try:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.disconnect_pins(bp_path, from_node, from_pin, to_node, to_pin, graph_name)
+    except TypeError:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.disconnect_pins(bp_path, from_node, from_pin, to_node, to_pin)
     res = json.loads(res_raw)
     return _envelope("blueprint_disconnect_pins", res.get("ok", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
@@ -149,11 +161,15 @@ def blueprint_disconnect_pins(args):
 def blueprint_delete_node(args):
     bp_path = args.get("blueprint_path")
     node_id = args.get("node_id") or args.get("node_name")
+    graph_name = args.get("graph_name") or ""
     if not bp_path or not node_id:
         return _envelope("blueprint_delete_node", False, errors=["blueprint_path and node_id are required"])
     if not hasattr(unreal, "GameForgeBlueprintGraphLibrary"):
         return _envelope("blueprint_delete_node", False, errors=["GameForgeBlueprintGraphLibrary not loaded in editor"])
-    res_raw = unreal.GameForgeBlueprintGraphLibrary.delete_node(bp_path, node_id)
+    try:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.delete_node(bp_path, node_id, graph_name)
+    except TypeError:
+        res_raw = unreal.GameForgeBlueprintGraphLibrary.delete_node(bp_path, node_id)
     res = json.loads(res_raw)
     return _envelope("blueprint_delete_node", res.get("ok", False), res.get("data", {}),
                      errors=res.get("errors", []), warnings=res.get("warnings", []), affected=[bp_path], reversibility="transactional")
@@ -188,5 +204,3 @@ def blueprint_save_op(args):
     saved = unreal.EditorAssetLibrary.save_loaded_asset(bp)
     return _envelope("blueprint_save", bool(saved), {"blueprint_path": bp_path, "saved": bool(saved)},
                      affected=[bp_path], reversibility="snapshot-only")
-
-

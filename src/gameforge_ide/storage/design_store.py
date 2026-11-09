@@ -12,9 +12,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 import re
-from typing import Any, List, Optional, Union
+import threading
+from typing import Any, List, Optional, Union, TYPE_CHECKING
 
-from ..design.gds import GameDesignSpec
+if TYPE_CHECKING:
+    from ..design.gds import GameDesignSpec
+
 from .atomic import (
     atomic_write_text,
     safe_read_text,
@@ -25,11 +28,17 @@ logger = logging.getLogger(__name__)
 
 DESIGN_SUBDIR = Path("GameForge") / "design"
 _REV_RE = re.compile(r"^r(\d+)\.gds\.json$")
+_DESIGN_LOCK = threading.RLock()
 
 
 class RevisionConflict(RuntimeError):
     """Raised when saving a revision that does not strictly exceed the stored revision."""
     pass
+
+
+def _get_gds_cls():
+    from ..design.gds import GameDesignSpec
+    return GameDesignSpec
 
 
 def _diff_nodes(val_a: Any, val_b: Any, path: str, ops: list[dict]) -> None:
@@ -75,6 +84,7 @@ class DesignStore:
         self.project_dir = Path(project_dir).resolve()
         self.design_dir = self.project_dir / DESIGN_SUBDIR
         self.history_dir = self.design_dir / "history"
+        self._lock = _DESIGN_LOCK
         self._ensure_dirs()
 
     def _ensure_dirs(self) -> None:
@@ -92,89 +102,90 @@ class DesignStore:
 
     def save(self, gds: GameDesignSpec) -> Path:
         """Write game.gds.json and history/r{revision:04d}.gds.json atomically with backup and fsync."""
-        self._ensure_dirs()
-        rev = gds.meta.revision
+        with self._lock:
+            self._ensure_dirs()
+            rev = gds.meta.revision
 
-        stored = self.load()
-        if stored is not None and rev <= stored.meta.revision:
-            raise RevisionConflict(
-                f"Cannot save revision {rev}; stored revision is {stored.meta.revision} (must strictly exceed it)"
-            )
+            stored = self.load()
+            if stored is not None and rev <= stored.meta.revision:
+                raise RevisionConflict(
+                    f"Cannot save revision {rev}; stored revision is {stored.meta.revision} (must strictly exceed it)"
+                )
 
-        json_text = gds.to_json()
-        rev_file = self.history_dir / f"r{rev:04d}.gds.json"
+            json_text = gds.to_json()
+            rev_file = self.history_dir / f"r{rev:04d}.gds.json"
 
-        # 1. Write historical revision snapshot with lock retries and backup
-        atomic_write_text(rev_file, json_text, sync=True, backup=False)
+            # 1. Write historical revision snapshot with lock retries and backup
+            atomic_write_text(rev_file, json_text, sync=True, backup=False)
 
-        # 2. Write main specification file with lock retries, fsync, and automatic .bak backup
-        atomic_write_text(self.main_file, json_text, sync=True, backup=True)
+            # 2. Write main specification file with lock retries, fsync, and automatic .bak backup
+            atomic_write_text(self.main_file, json_text, sync=True, backup=True)
 
-        return self.main_file
+            return self.main_file
 
     def load(self) -> Optional[GameDesignSpec]:
         """Load current game.gds.json with automatic self-healing fallback to history and .bak."""
-        latest_rev = self.latest_revision_number()
+        with self._lock:
+            latest_rev = self.latest_revision_number()
 
-        # If primary file is healthy, check it first
-        if self.main_file.is_file():
-            text, _ = safe_read_text(self.main_file, fallback_backup=False)
+            if self.main_file.is_file():
+                text, _ = safe_read_text(self.main_file, fallback_backup=False)
+                if text and text.strip():
+                    try:
+                        loaded = _get_gds_cls().model_validate_json(text)
+                        if latest_rev is None or loaded.meta.revision >= latest_rev:
+                            return loaded
+                    except Exception as exc:
+                        logger.warning("Corrupt main GDS at %s (%s). Attempting history/bak fallback.", self.main_file, exc)
+
+            if latest_rev is not None:
+                rev_gds = self.load_revision(latest_rev)
+                if rev_gds is not None:
+                    logger.info("Successfully recovered corrupted GDS from history revision r%04d", latest_rev)
+                    try:
+                        atomic_write_text(self.main_file, rev_gds.to_json(), sync=True, backup=True)
+                    except Exception:
+                        pass
+                    return rev_gds
+
+            text, _ = safe_read_text(self.main_file, fallback_backup=True)
             if text and text.strip():
                 try:
-                    loaded = GameDesignSpec.model_validate_json(text)
-                    if latest_rev is None or loaded.meta.revision >= latest_rev:
-                        return loaded
-                except Exception as exc:
-                    logger.warning("Corrupt main GDS at %s (%s). Attempting history/bak fallback.", self.main_file, exc)
-
-        # Primary missing or corrupt: check latest history revision first (authoritative immutable history)
-        if latest_rev is not None:
-            rev_gds = self.load_revision(latest_rev)
-            if rev_gds is not None:
-                logger.info("Successfully recovered corrupted GDS from history revision r%04d", latest_rev)
-                try:
-                    atomic_write_text(self.main_file, rev_gds.to_json(), sync=True, backup=True)
+                    return _get_gds_cls().model_validate_json(text)
                 except Exception:
                     pass
-                return rev_gds
 
-        # Fallback to .bak if history is not available
-        text, _ = safe_read_text(self.main_file, fallback_backup=True)
-        if text and text.strip():
-            try:
-                return GameDesignSpec.model_validate_json(text)
-            except Exception:
-                pass
-
-        return None
+            return None
 
     def load_revision(self, rev: int) -> Optional[GameDesignSpec]:
         """Load specific historical revision with lock retry."""
-        rev_file = self.history_dir / f"r{rev:04d}.gds.json"
-        if not rev_file.is_file():
-            return None
-        text, _ = safe_read_text(rev_file, fallback_backup=False)
-        if text:
-            try:
-                return GameDesignSpec.model_validate_json(text)
-            except Exception:
+        with self._lock:
+            rev_file = self.history_dir / f"r{rev:04d}.gds.json"
+            if not rev_file.is_file():
                 return None
-        return None
+            text, _ = safe_read_text(rev_file, fallback_backup=False)
+            if text:
+                try:
+                    return _get_gds_cls().model_validate_json(text)
+                except Exception:
+                    return None
+            return None
 
     def history(self) -> List[int]:
         """Return sorted list of revision numbers preserved in history."""
-        if not self.history_dir.is_dir():
-            return []
-        revs: List[int] = []
-        try:
-            for p in self.history_dir.iterdir():
-                if p.is_file():
-                    m = _REV_RE.match(p.name)
-                    if m:
-                        revs.append(int(m.group(1)))
-        except OSError:
-            pass
-        return sorted(revs)
+        with self._lock:
+            if not self.history_dir.is_dir():
+                return []
+            revs: List[int] = []
+            try:
+                for p in self.history_dir.iterdir():
+                    if p.is_file():
+                        m = _REV_RE.match(p.name)
+                        if m:
+                            revs.append(int(m.group(1)))
+            except OSError:
+                pass
+            return sorted(revs)
 
     def latest_revision_number(self) -> Optional[int]:
         h = self.history()

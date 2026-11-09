@@ -16,10 +16,10 @@ import json
 import time
 import urllib.request
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = Path("e:/gameforge_step1/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 

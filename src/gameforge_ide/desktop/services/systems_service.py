@@ -63,8 +63,12 @@ class SystemsService(QObject):
         def _do_probe() -> SystemsSnapshot:
             return probe_all(workspace_root=ws)
 
-        handle: JobHandle = self.job_manager.submit(_do_probe, name="systems_probe")
-        handle.add_done_callback(self._on_probe_complete)
+        try:
+            handle: JobHandle = self.job_manager.submit(_do_probe, name="systems_probe")
+            handle.add_done_callback(self._on_probe_complete)
+        except Exception:
+            self._is_probing = False
+            raise
 
     def _on_probe_complete(self, handle: JobHandle) -> None:
         try:

@@ -1,0 +1,21 @@
+{
+  "base_model_name_or_path": "Qwen/Qwen3.8-27B",
+  "peft_type": "LORA",
+  "r": 16,
+  "lora_alpha": 32.0,
+  "target_modules": [
+    "blk_0_attn_qkv",
+    "blk_0_ffn_up",
+    "blk_16_attn_qkv",
+    "blk_16_ffn_up",
+    "blk_31_attn_qkv",
+    "blk_31_ffn_up",
+    "blk_48_attn_qkv",
+    "blk_48_ffn_up",
+    "blk_63_attn_qkv",
+    "blk_63_ffn_up",
+    "output_head"
+  ],
+  "bias": "none",
+  "modules_to_save": null
+}

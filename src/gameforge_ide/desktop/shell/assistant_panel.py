@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from ..icons import icon
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 
 class _ModelComboBox(QComboBox):
@@ -59,16 +60,16 @@ class AssistantPanel(QWidget):
         h_layout.setContentsMargins(10, 0, 8, 0)
         h_layout.setSpacing(8)
 
-        title_lbl = QLabel("✦ Assistant", header)
-        title_lbl.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;")
-        h_layout.addWidget(title_lbl)
+        self._title_lbl = QLabel("✦ Assistant", header)
+        self._title_lbl.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;"))
+        h_layout.addWidget(self._title_lbl)
 
         # Model selector
         self.model_combo = _ModelComboBox(self, header)
         self.model_combo.setObjectName("assistantModelCombo")
         self.model_combo.setAccessibleName("Assistant Model")
         self.model_combo.setToolTip("Select active assistant model")
-        self.model_combo.setStyleSheet(f"""
+        self.model_combo.setStyleSheet(theme_stylesheet(f"""
             QComboBox {{
                 background: {tokens.BG_SURFACE};
                 color: {tokens.TEXT_PRIMARY};
@@ -87,7 +88,7 @@ class AssistantPanel(QWidget):
                 border: 1px solid {tokens.BORDER};
                 min-width: 260px;
             }}
-        """)
+        """))
         self.model_combo.currentTextChanged.connect(self._on_model_changed)
         h_layout.addWidget(self.model_combo)
 
@@ -127,7 +128,7 @@ class AssistantPanel(QWidget):
         self.close_btn.clicked.connect(self.closeRequested.emit)
         h_layout.addWidget(self.close_btn)
 
-        header.setStyleSheet(f"""
+        header.setStyleSheet(theme_stylesheet(f"""
             QWidget#assistantHeader {{
                 background: {tokens.BG_SURFACE};
                 border-bottom: 1px solid {tokens.BORDER};
@@ -142,18 +143,18 @@ class AssistantPanel(QWidget):
                 background: {tokens.BG_HOVER};
                 color: {tokens.TEXT_PRIMARY};
             }}
-        """)
+        """))
         layout.addWidget(header)
 
         # Embed ChatPanel
         layout.addWidget(self.chat_panel, 1)
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QWidget#studioAssistantPanel {{
                 background: {tokens.BG_PANEL};
                 border-left: 1px solid {tokens.BORDER};
             }}
-        """)
+        """))
 
     @property
     def task_mode_combo(self):
@@ -250,15 +251,38 @@ class AssistantPanel(QWidget):
         self.clear_btn.setIcon(icon("cancel", role="secondary", size=14))
 
     def update_theme(self) -> None:
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QWidget#studioAssistantPanel {{
                 background: {tokens.BG_PANEL};
                 border-left: 1px solid {tokens.BORDER};
             }}
-        """)
+        """))
+        if hasattr(self, "_title_lbl"):
+            self._title_lbl.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;"))
+        if hasattr(self, "model_combo"):
+            self.model_combo.setStyleSheet(theme_stylesheet(f"""
+                QComboBox {{
+                    background: {tokens.BG_SURFACE};
+                    color: {tokens.TEXT_PRIMARY};
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {tokens.RADIUS}px;
+                    padding: 2px 6px;
+                    font-size: 12px;
+                    min-width: 150px;
+                    max-width: 220px;
+                }}
+                QComboBox QAbstractItemView {{
+                    background: {tokens.BG_SURFACE};
+                    color: {tokens.TEXT_PRIMARY};
+                    selection-background-color: {tokens.BG_HOVER};
+                    selection-color: {tokens.TEXT_PRIMARY};
+                    border: 1px solid {tokens.BORDER};
+                    min-width: 260px;
+                }}
+            """))
         header = self.findChild(QWidget, "assistantHeader")
         if header:
-            header.setStyleSheet(f"""
+            header.setStyleSheet(theme_stylesheet(f"""
                 QWidget#assistantHeader {{
                     background: {tokens.BG_SURFACE};
                     border-bottom: 1px solid {tokens.BORDER};
@@ -273,5 +297,5 @@ class AssistantPanel(QWidget):
                     background: {tokens.BG_HOVER};
                     color: {tokens.TEXT_PRIMARY};
                 }}
-            """)
+            """))
         self.refresh_icons()

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
-from ..styles.dark_theme import theme_color
+from ..styles.dark_theme import theme_color, theme_stylesheet
 
 
 class DiffApprovalCard(QFrame):
@@ -211,7 +211,7 @@ class DiffApprovalCard(QFrame):
                 fmt.setForeground(QColor(theme_color("#a78bfa")))
                 fmt.setFontWeight(QFont.Bold)
             else:
-                fmt.setForeground(QColor(tokens.TEXT_PRIMARY))
+                fmt.setForeground(QColor(theme_color(tokens.TEXT_PRIMARY)))
             cursor.insertText(line, fmt)
         cursor.movePosition(QTextCursor.Start)
         self._diff_view.setTextCursor(cursor)

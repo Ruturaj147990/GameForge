@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from .model import LevelPlan, OpCall, PlacedActor
 from ..unreal import op_schemas
 from ..backend.tools import biomes
+from ..content.procedural_props import PROP_RECIPES, expand_prop_to_ops
 
 
 NON_UE_GDS_PROPS = frozenset({
@@ -46,9 +47,11 @@ NON_UE_GDS_PROPS = frozenset({
     "genre",
     "snakes",
     "ladders",
-    "snakes_and_ladders",
     "seed",
     "difficulty",
+    "ScaleX",
+    "ScaleY",
+    "ScaleZ",
 })
 
 
@@ -128,17 +131,19 @@ def plan_to_op_calls(
     for g_op in plan.geometry_ops:
         emit(g_op.op, g_op.args, purpose=g_op.purpose, expect=g_op.expect)
 
-    # On terrain the player start is placed after the ground exists, snapped onto it (it used to be spawned at a
-    # fixed height and could end up inside a hill).
     if deferred_player_start and ps_args:
         emit("spawn_actor", {**ps_args, "snap_to_ground": True, "ground_offset": 110.0},
              purpose="Spawn primary player start point (snapped to terrain)")
 
-    # 4. Placed actors (filter out any duplicates of PlayerStart or duplicate labels)
+    # 4. Placed actors (filter out non-actor Subsystems, duplicates of PlayerStart, or duplicate labels)
     spawned_labels: Set[str] = {"GF_PlayerStart"} if has_spawned_player_start else set()
     for a in plan.actors:
         if a.actor_id in spawned_labels:
             continue
+        # Skip UGameInstanceSubsystem classes (e.g. kit.objective -> GameForgeObjectiveSubsystem)
+        if "Subsystem" in a.runtime_class:
+            continue
+
         is_player_start_actor = (
             a.runtime_class in ("PlayerStart", "/Script/Engine.PlayerStart")
             or a.runtime_class.endswith(".PlayerStart")
@@ -152,19 +157,49 @@ def plan_to_op_calls(
 
         spawned_labels.add(a.actor_id)
 
+        # Expand procedural CSG prop recipes for StaticMeshActor props when a recipe is specified
+        recipe_name = a.properties.get("recipe")
+        if a.runtime_class.endswith("StaticMeshActor") and recipe_name:
+            scale_tuple = (
+                float(a.properties.get("ScaleX", a.properties.get("scale_x", 1.0)) or 1.0),
+                float(a.properties.get("ScaleY", a.properties.get("scale_y", 1.0)) or 1.0),
+                float(a.properties.get("ScaleZ", a.properties.get("scale_z", 1.0)) or 1.0),
+            )
+            part_ops = expand_prop_to_ops(
+                actor_id=a.actor_id,
+                recipe_name=str(recipe_name),
+                location=a.location,
+                yaw=a.yaw,
+                scale=scale_tuple,
+            )
+            if part_ops:
+                for p_idx, part_args in enumerate(part_ops):
+                    if p_idx == 0 and a.snap_to_ground:
+                        part_args["snap_to_ground"] = True
+                        part_args["ground_offset"] = float(a.ground_offset)
+                    emit("spawn_actor", part_args, purpose=f"Spawn CSG prop {a.actor_id} ({recipe_name} part {p_idx})")
+                if a.tags:
+                    emit("actor_set_tags", {"label": a.actor_id, "tags": a.tags}, purpose=f"Set tags for {a.actor_id}")
+                continue
+
         spawn_args: Dict[str, Any] = {
-            "actor_class": a.runtime_class,
+            "actor_class": "StaticMeshActor" if a.runtime_class.endswith("StaticMeshActor") else a.runtime_class,
             "label": a.actor_id,
             "location": {"x": a.location[0], "y": a.location[1], "z": a.location[2]},
             "rotation": {"pitch": 0.0, "yaw": a.yaw, "roll": 0.0},
         }
+        if a.runtime_class.endswith("StaticMeshActor"):
+            spawn_args["static_mesh"] = str(a.properties.get("StaticMesh", "/Engine/BasicShapes/Cube.Cube"))
+            sx = float(a.properties.get("ScaleX", 1.0) or 1.0)
+            sy = float(a.properties.get("ScaleY", 1.0) or 1.0)
+            sz = float(a.properties.get("ScaleZ", 1.0) or 1.0)
+            if (sx, sy, sz) != (1.0, 1.0, 1.0):
+                spawn_args["scale"] = {"x": sx, "y": sy, "z": sz}
         if a.snap_to_ground:
             spawn_args["snap_to_ground"] = True
             spawn_args["ground_offset"] = float(a.ground_offset)
         emit("spawn_actor", spawn_args, purpose=f"Spawn placed actor {a.actor_id}")
 
-        # Kit actors identify themselves in events by EntityId; it was never assigned, so every pickup/enemy event
-        # carried Entity=None and per-entity HUD counters and rule filters never matched.
         if a.entity_id and "EntityId" not in a.properties and a.runtime_class.startswith("/Script/GameForgeRuntime."):
             emit("set_actor_property", {"label": a.actor_id, "property": "EntityId", "value": a.entity_id},
                  purpose=f"Set EntityId on {a.actor_id}")
@@ -180,13 +215,12 @@ def plan_to_op_calls(
             p_clean = prop_name.strip()
             if p_clean in NON_UE_GDS_PROPS or p_clean.startswith("_"):
                 continue
-            # Unmapped snake_case GDS keys are not Unreal properties; sending them only produced "skipped" warnings.
+            if a.runtime_class.endswith("StaticMeshActor") and p_clean == "StaticMesh":
+                continue
             if p_clean[0].islower() and not (p_clean[0] == "b" and len(p_clean) > 1 and p_clean[1].isupper()):
                 continue
-            # Guard: property name must be a valid C++/Unreal identifier
             if not p_clean.isidentifier():
                 continue
-            # Guard: filter complex nested dicts that Unreal cannot assign directly
             if isinstance(prop_val, dict) and not (set(prop_val).issubset({"x", "y", "z"}) or set(prop_val).issubset({"r", "g", "b", "a"})):
                 continue
 
@@ -208,8 +242,6 @@ def plan_to_op_calls(
             )
 
     # 5. NavMeshBoundsVolume and nav rebuild
-    # For grid board / card / puzzle games with no enemy AI or navigation checks,
-    # skip NavMeshBoundsVolume and nav_rebuild to prevent rebuild warnings/errors.
     is_board_layout = (
         any(
             "GridBoard" in a.runtime_class
@@ -271,7 +303,6 @@ def plan_to_op_calls(
     # 8. save_all
     emit("save_all", {}, purpose="Save modified assets and level")
 
-    # Validation: ensure new_level always precedes load_level in assembly sequence
     new_level_indices = [i for i, op in enumerate(ops) if op.op == "new_level"]
     load_level_indices = [i for i, op in enumerate(ops) if op.op == "load_level"]
     if load_level_indices and (not new_level_indices or load_level_indices[0] < new_level_indices[0]):
@@ -309,21 +340,9 @@ def verify_placed_actor_transforms(
     severe_tolerance_cm: float = 500.0,
     yaw_tolerance_deg: float = 15.0,
 ) -> List[str]:
-    """Verify that placed actors match their planned locations and rotations within tolerance.
-
-    Args:
-        plan: The LevelPlan containing planned actors.
-        actual_records: Map of actor label -> dict containing location/rotation info.
-        tolerance_cm: Maximum allowed Euclidean distance in centimetres for minor warnings.
-        severe_tolerance_cm: Threshold distance above which a discrepancy is deemed critical.
-        yaw_tolerance_deg: Maximum allowed yaw angle difference in degrees.
-
-    Returns:
-        List of warning strings describing any location discrepancies.
-    """
+    """Verify that placed actors match their planned locations and rotations within tolerance."""
     warnings: List[str] = []
 
-    # Verify primary PlayerStart if recorded
     ps_rec = actual_records.get("GF_PlayerStart") or actual_records.get("PlayerStart")
     if ps_rec is not None and plan.player_start:
         coords = _parse_location_record(ps_rec)
@@ -348,7 +367,7 @@ def verify_placed_actor_transforms(
             ax, ay, az = coords
             px, py, pz = a.location
             if a.snap_to_ground:
-                az = pz   # snapped actors move vertically by design; only XY drift is a discrepancy
+                az = pz
             dist = ((ax - px) ** 2 + (ay - py) ** 2 + (az - pz) ** 2) ** 0.5
             if dist > tolerance_cm:
                 prefix = "CRITICAL: " if dist > severe_tolerance_cm else ""
@@ -357,7 +376,6 @@ def verify_placed_actor_transforms(
                     f"vs confirmed ({ax:.1f}, {ay:.1f}, {az:.1f}), delta={dist:.1f}cm > tolerance={tolerance_cm:.1f}cm"
                 )
 
-        # Check yaw rotation if planned yaw is non-zero
         if a.yaw != 0.0 and isinstance(rec, dict):
             rot = rec.get("rotation")
             actual_yaw = None

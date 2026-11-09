@@ -30,6 +30,75 @@ DEFAULT_KIND_DURATIONS_S: Dict[StepKind, float] = {
     StepKind.TOOL_CALL: 10.0,
 }
 
+# Maps RFC 6902 GDS patch path prefixes to affected Forge DAG step IDs / stage names.
+# Note: "/entities" includes "content" so adding or modifying entities generates their meshes/textures/animations/SFX.
+PATH_IMPACT_MAP: Dict[str, Tuple[str, ...]] = {
+    "/meta": ("design", "report"),
+    "/overview": ("design", "codegen", "build_editor", "content", "levels", "assemble", "scenario_gen", "automation", "package", "scenarios", "review", "report"),
+    "/art": ("design", "content", "levels", "assemble", "package", "scenarios", "review", "report"),
+    "/scene/levels": ("design", "levels", "assemble", "scenario_gen", "package", "scenarios", "review", "report"),
+    "/scene": ("design", "levels", "assemble", "scenario_gen", "package", "scenarios", "review", "report"),
+    "/entities": ("design", "codegen", "build_editor", "content", "levels", "assemble", "scenario_gen", "automation", "package", "scenarios", "review", "report"),
+    "/rules": ("design", "codegen", "build_editor", "levels", "assemble", "scenario_gen", "automation", "package", "scenarios", "review", "report"),
+    "/goals": ("design", "codegen", "build_editor", "levels", "assemble", "scenario_gen", "automation", "package", "scenarios", "review", "report"),
+    "/progression": ("design", "codegen", "build_editor", "levels", "assemble", "scenario_gen", "automation", "package", "scenarios", "review", "report"),
+    "/ui": ("design", "codegen", "build_editor", "levels", "assemble", "package", "scenarios", "review", "report"),
+    "/audio": ("design", "content", "levels", "assemble", "package", "scenarios", "review", "report"),
+}
+
+
+def compute_dirty_steps(
+    ops: List[Dict[str, Any]],
+    spec: Optional[RunSpec] = None,
+) -> List[str]:
+    """Map RFC 6902 GDS patch operations to affected Forge DAG step IDs."""
+    dirty: List[str] = []
+    seen: set[str] = set()
+
+    def _add(step_id: str) -> None:
+        if step_id not in seen:
+            seen.add(step_id)
+            dirty.append(step_id)
+
+    for op in (ops or []):
+        if not isinstance(op, dict):
+            continue
+        path = str(op.get("path", "")).strip()
+        if not path:
+            continue
+        matched = False
+        # Match most-specific prefix first
+        for prefix in sorted(PATH_IMPACT_MAP.keys(), key=len, reverse=True):
+            if path == prefix or path.startswith(prefix + "/"):
+                for st in PATH_IMPACT_MAP[prefix]:
+                    _add(st)
+                matched = True
+                break
+        if not matched:
+            for st in ("design", "codegen", "build_editor", "content", "levels", "assemble", "scenario_gen", "automation", "package", "scenarios", "review", "report"):
+                _add(st)
+
+    if spec is not None:
+        expanded: List[str] = []
+        exp_seen: set[str] = set()
+        for step in spec.topo_order():
+            sid = step.step_id
+            is_hit = (
+                sid in seen
+                or step.kind.value in seen
+                or (sid.startswith("assemble_") and ("assemble" in seen or "levels" in seen))
+                or any(d in exp_seen for d in step.depends_on)
+            )
+            if is_hit:
+                exp_seen.add(sid)
+                expanded.append(sid)
+        for sid in dirty:
+            if sid not in exp_seen:
+                expanded.append(sid)
+        return expanded
+
+    return dirty
+
 
 class ImpactReport(BaseModel):
     """Impact analysis comparing a new RunSpec against a prior RunState."""

@@ -1,14 +1,14 @@
 """AI Intent Analysis & Prompt Classification for GameForge 1.0 (P1/P9).
 
 Provides robust classification of user prompts into:
-- GAME_CREATION: User desires to author a new game from scratch.
+- GAME_CREATION: User desires to author a new game from a natural-language prompt.
 - GAME_MUTATION: User desires to edit, modify, tune, or balance an existing game.
 - CONVERSATIONAL: Pleasantries, greetings, assistant identity inquiries, small talk.
 - INFORMATIONAL: Questions about game design, mechanics, Unreal Engine, coding concepts.
 - CODE_OR_DEBUG: Error fixing, debugging, compile repair, refactoring.
 
 Eliminates template hijacking, conversational false-positives, typo failures,
-and handles comprehensive modern genre mapping.
+and handles arbitrary novel game concepts and mechanics.
 """
 from __future__ import annotations
 
@@ -40,7 +40,6 @@ class IntentResult:
     reasons: List[str] = field(default_factory=list)
 
 
-# Typo normalization map for common user misspellings
 TYPO_REPLACEMENTS: Dict[str, str] = {
     "buid": "build",
     "biuld": "build",
@@ -67,7 +66,6 @@ TYPO_REPLACEMENTS: Dict[str, str] = {
     "shtr": "shooter",
 }
 
-# Verbs signaling game creation intent
 CREATE_VERB_PAT = re.compile(
     r"\b(create|make|build|generate|develop|design|give me|gimme|i want|wanna|want|need|"
     r"write|complete|finish|expand|build out|author|code|implement|deploy|construct|produce|"
@@ -75,29 +73,34 @@ CREATE_VERB_PAT = re.compile(
     re.I,
 )
 
-# Standalone game words
 GAME_WORD_PAT = re.compile(
-    r"(?<![\w/\\.])(?:games?|gem|gaem|gme|gmes|gam|shtr|brawler|vidya|title)\b(?!\s*(?:mode|state|instance|play|object|loop|class)\b)(?![\w/\\.])",
+    r"(?<![\w/\\.])(?:games?|gem|gaem|gme|gmes|gam|shtr|brawler|vidya|title|mission|simulation|experience|adventure|challenge)\b(?!\s*(?:mode|state|instance|play|object|loop|class)\b)(?![\w/\\.])",
     re.I,
 )
 
-# Create game phrase: "create a ... game"
 CREATE_GAME_PAT = re.compile(
     r"\b(?:create|make|build|generate|develop|design|write|give me|gimme|i want|wanna|want|need|"
     r"complete|finish|expand|build out|author|code|implement|deploy|construct|produce|craft|"
     r"scaffold|spin up|whip up|put together)\s+(?:me\s+)?"
-    r"(?:[\w\-\']+\s+){0,8}?(?:games?|title)\b(?!\s*(?:mode|state|instance|play|object)\b)",
+    r"(?:[\w\-\']+\s+){0,10}?(?:games?|title|mission|adventure|simulation|prototype|level)\b(?!\s*(?:mode|state|instance|play|object)\b)",
     re.I,
 )
 
-# Noun phrase game: "a 3D platformer game with 5 coins"
 NOUN_GAME_PAT = re.compile(
-    r"^(?:(?:a|an|the)\s+)?(?:[\w\-\']+\s+){0,8}(?:games?|title)"
-    r"(?:\s+(?:with|where|featuring|set in|having)\b.*)?$",
+    r"^(?:(?:a|an|the)\s+)?(?:[\w\-\']+\s+){0,10}(?:games?|title|mission|adventure|simulation)"
+    r"(?:\s+(?:with|where|featuring|set in|having|in which)\b.*)?$",
     re.I,
 )
 
-# Conversational greetings and polite lead-ins
+# Structural gameplay descriptors that indicate a prompt is describing a playable game even if it omits the literal word "game"
+GAMEPLAY_STRUCTURE_PAT = re.compile(
+    r"\b(?:where\s+(?:you|the\s+player)|collect(?:ing)?\s+\d+|dodge|dodging|survive|surviving|defeat(?:ing)?|"
+    r"defend(?:ing)?|waves?\s+of|patrol(?:ling)?\s+guards?|reach\s+the\s+(?:exit|goal|portal|beacon|summit|finish)|"
+    r"time\s+limit|health|stamina|mana|oxygen|shield|turrets?|checkpoints?|laps?|obstacles?|hazards?|"
+    r"first[- ]person|third[- ]person|top[- ]down|side[- ]scroller)\b",
+    re.I,
+)
+
 GREETING_PREFIX_PAT = re.compile(
     r"^(?:(?:hi|hello|hey|howdy|good\s+(?:morning|afternoon|evening|day)|greetings|"
     r"please|pls|can\s+you(?:\s+please)?|could\s+you(?:\s+please)?|would\s+you(?:\s+please)?|"
@@ -107,7 +110,6 @@ GREETING_PREFIX_PAT = re.compile(
     re.I,
 )
 
-# Pure small talk / conversational phrases
 PURE_CONVERSATIONAL_PAT = re.compile(
     r"^(?:hello|hi|hey|howdy|good\s+(?:morning|afternoon|evening)|greetings|"
     r"who\s+are\s+you|what\s+are\s+you|what\s+is\s+your\s+name|what\s+can\s+you\s+do|"
@@ -116,7 +118,6 @@ PURE_CONVERSATIONAL_PAT = re.compile(
     re.I,
 )
 
-# Informational / conceptual questions
 INFORMATIONAL_QUESTION_PAT = re.compile(
     r"^(?:what\s+(?:is|was|are|were|do|does|a|an|the)|how\s+(?:to|do|can|does|did|is|are|would)|"
     r"why\s+(?:is|was|are|were|do|does|did|would)|who\s+(?:is|was|are|were|made|created|invented|built|developed|designed|authored)|"
@@ -128,58 +129,54 @@ INFORMATIONAL_QUESTION_PAT = re.compile(
     re.I,
 )
 
-# Work inside existing game or code
 EXISTING_GAME_CONTEXT_PAT = re.compile(
     r"\b(?:for|in|into|inside|of|to)\s+(?:my|the|this|our|your)\s+games?\b",
     re.I,
 )
 
-# Bug/debug/refactoring indicators
 CODE_DEBUG_PAT = re.compile(
     r"\b(?:fix|debug|error|bug|issue|problem|refactor|compile|build error|crash|failed assertion|"
     r"stack trace|nullptr|null pointer|memory leak|syntax error|warning|unresolved external)\b",
     re.I,
 )
 
-# Documentation/analysis indicators
 DOC_ANALYSIS_PAT = re.compile(
     r"\b(?:analysis|essay|article|overview|document|lore|story|script|breakdown|history|"
     r"historical|gameplay loop|progression curve|whitepaper|design document|gdd)\b",
     re.I,
 )
 
-# Modern genres and subgenres mapping
 GENRE_PATTERNS: List[Tuple[Genre, re.Pattern]] = [
-    (Genre.GRID_BOARD, re.compile(r"\b(?:grid\s+board|board\s+game|tic[- ]tac[- ]toe|tictactoe|connect\s+(?:four|4)|four\s+in\s+a\s+row|gomoku|five\s+in\s+a\s+row|snakes?\s+and\s+ladders?|chutes\s+and\s+ladders?|ludo|chess|checkers|parcheesi|monopoly|dice\s+board|roll\s+and\s+move)\b", re.I)),
-    (Genre.CARD_BATTLER, re.compile(r"\b(?:card\s+battler|card\s+game|deck\s*builder|deck\s*building|card\s+battle|deck\s+battler|lane\s+battler|collectible\s+card|tcg|ccg|hearthstone|slay\s+the\s+spire|balatro)\b", re.I)),
-    (Genre.TOP_DOWN_SHOOTER, re.compile(r"\b(?:top[- ]down\s+shooter|topdown\s+shooter|twin[- ]stick\s+shooter|arena\s+shooter|shmup|shoot\s*'?em\s*up|bullet\s+hell|danmaku|tower\s+defense|defend\s+the\s+base)\b", re.I)),
-    (Genre.ARENA_COMBAT, re.compile(r"\b(?:arena\s+combat|combat\s+arena|gladiator\s+arena|wave\s+combat|action\s+arena|brawler|beat\s*'?em\s*up|hack\s+and\s+slash|zombie\s+survival)\b", re.I)),
-    (Genre.PLATFORMER, re.compile(r"\b(?:platformer|3d\s+platformer|2d\s+platformer|jump\s+and\s+run|jumping\s+game|platform\s+game|parkour|speedrun\s+platformer|endless\s+runner|runner\s+game|racing|racer|race\s+track)\b", re.I)),
-    (Genre.DUNGEON_CRAWLER, re.compile(r"\b(?:dungeon\s+crawler|dungeon\s+crawl|roguelike|roguelite|arpg|action\s+rpg|diablo|binding\s+of\s+isaac|enter\s+the\s+gungeon)\b", re.I)),
-    (Genre.EXPLORATION, re.compile(r"\b(?:exploration|open\s+world|procedural\s+world|procedural\s+landscape|terrain\s+generation|hiking\s+trail|survival\s+craft|walking\s+simulator|sandbox)\b", re.I)),
+    (Genre.GRID_BOARD, re.compile(r"\b(?:grid\s+board|board\s+game|tic[- ]tac[- ]toe|tictactoe|noughts\s+(?:and|&)\s+crosses|connect\s+(?:four|4)|four\s+in\s+a\s+row|gomoku|five\s+in\s+a\s+row|roll\s+and\s+move|dice\s+board|turn[- ]based\s+board|strategy\s+board|checkers|draughts|chess)\b", re.I)),
+    (Genre.CARD_BATTLER, re.compile(r"\b(?:card\s+battler|card\s+game|deck\s*builder|deck\s*building|card\s+battle|deck\s+battler|lane\s+battler|collectible\s+card|tcg|ccg)\b", re.I)),
+    (Genre.TOP_DOWN_SHOOTER, re.compile(r"\b(?:top[- ]down\s+shooter|topdown\s+shooter|twin[- ]stick\s+shooter|arena\s+shooter|shmup|shoot\s*'?em\s*up|bullet\s+hell|danmaku)\b", re.I)),
+    (Genre.ARENA_COMBAT, re.compile(r"\b(?:arena\s+combat|combat\s+arena|gladiator\s+arena|wave\s+combat|action\s+arena|brawler|beat\s*'?em\s*up|hack\s+and\s+slash|wave\s+survival|horde\s+survival|survival\s+arena|tower\s+defense|defend\s+the\s+(?:base|core|nexus)|turret\s+defense|bomb\s+defusal|tactical\s+shooter|fps\s+arena)\b", re.I)),
+    (Genre.PLATFORMER, re.compile(r"\b(?:platformer|3d\s+platformer|2d\s+platformer|jump\s+and\s+run|jumping\s+game|platform\s+game|parkour|speedrun\s+platformer|endless\s+runner|runner\s+game|racing|racer|race\s+track|kart\s+racer|time\s+trial|obstacle\s+course)\b", re.I)),
+    (Genre.DUNGEON_CRAWLER, re.compile(r"\b(?:dungeon\s+crawler|dungeon\s+crawl|roguelike|roguelite|arpg|action\s+rpg|infiltration|heist|stealth\s+mission)\b", re.I)),
+    (Genre.EXPLORATION, re.compile(r"\b(?:exploration|open\s+world|procedural\s+world|procedural\s+landscape|procedural\s+terrain|procedural\s+environment|terrain\s+generation|hiking\s+trail|survival\s+craft|walking\s+simulator|sandbox|salvage\s+mission|expedition)\b", re.I)),
     (Genre.ACTION_ADVENTURE, re.compile(r"\b(?:action\s+adventure|relic\s+hunt|adventure\s+game|quest|souls[- ]like|soulslike|metroidvania|stealth\s+adventure|third[- ]person\s+shooter)\b", re.I)),
-    (Genre.PUZZLE, re.compile(r"\b(?:puzzle\s+game|logic\s+puzzle|escape\s+room|physics\s+puzzle|match\s+3|sokoban|block\s+puzzle|sudoku|tetris|snake)\b", re.I)),
+    (Genre.PUZZLE, re.compile(r"\b(?:puzzle\s+game|logic\s+puzzle|escape\s+room|physics\s+puzzle|match\s+3|sokoban|block\s+puzzle|number\s+puzzle|grid\s+puzzle|constraint\s+puzzle|falling\s+blocks|mine\s+deduction|snake(?:\s+game)?|sudoku|tetris)\b", re.I)),
 ]
 
-# Common gameplay mechanics keywords
 MECHANIC_KEYWORDS: Set[str] = {
-    "dash", "grapple", "grappling", "hookshot", "jetpack", "slide", "sliding", "walljump", "wall-jump",
+    "dash", "grapple", "grappling", "hookshot", "jetpack", "slide", "sliding", "walljump", "wall-jump", "wall jump",
     "double-jump", "double jump", "triple-jump", "climb", "climbing", "glide", "gliding", "swim", "swimming",
-    "fly", "flying", "sprint", "sprinting", "crouch", "crouching", "sneak", "sneaking", "stealth",
-    "shield", "shields", "mana", "stamina", "energy", "spell", "spells", "magic", "skill", "skills",
+    "fly", "flying", "sprint", "sprinting", "crouch", "crouching", "sneak", "sneaking", "stealth", "patrol",
+    "shield", "shields", "mana", "stamina", "energy", "oxygen", "heat", "spell", "spells", "magic", "skill", "skills",
     "ability", "abilities", "perk", "perks", "talent", "talents", "combo", "parry", "parrying",
     "dodge", "dodging", "roll", "rolling", "block", "blocking", "bow", "arrow", "arrows",
-    "sword", "swords", "blade", "axe", "hammer", "dagger", "spear", "rifle", "shotgun", "pistol",
+    "sword", "swords", "blade", "axe", "hammer", "dagger", "spear", "rifle", "shotgun", "pistol", "sniper", "laser",
     "grenade", "inventory", "craft", "crafting", "loot", "looting", "chest", "shop", "merchant",
     "upgrade", "upgrades", "level up", "xp", "experience", "boss", "bosses", "minion", "trap",
     "traps", "hazard", "puzzle", "riddle", "checkpoint", "timer", "countdown", "permadeath",
+    "turret", "tower", "wave", "waves", "lap", "laps", "drift", "boost", "nitro", "vehicle", "driving",
+    "quest", "dialogue", "defuse", "plant", "portal", "teleporter", "synergy", "relic", "hack", "switch", "door",
 }
 
 
 def normalize_prompt(prompt: str) -> str:
     """Normalize whitespace, quotes, and common misspellings in user prompts."""
     text = (prompt or "").strip().replace("’", "'").replace("“", '"').replace("”", '"')
-    # Word-level typo replacement
     for typo, correction in TYPO_REPLACEMENTS.items():
         pattern = r"\b" + re.escape(typo) + r"\b"
         text = re.sub(pattern, correction, text, flags=re.I)
@@ -193,11 +190,7 @@ def strip_conversational_prefixes(prompt: str) -> str:
 
 
 def is_game_creation_request(prompt: str) -> bool:
-    """Determine whether a natural-language prompt is a request to author a game.
-
-    Handles leading greetings, conversational questions, bug/edit requests,
-    typos, and modern game genres.
-    """
+    """Determine whether a natural-language prompt is a request to author a game."""
     if not prompt or not prompt.strip():
         return False
 
@@ -205,13 +198,10 @@ def is_game_creation_request(prompt: str) -> bool:
     stripped = strip_conversational_prefixes(normalized)
     text = stripped.lower().strip()
 
-    # 1. Pure conversational check on raw / stripped prompt
     raw_lower = normalized.lower().strip().rstrip(".!?")
     if PURE_CONVERSATIONAL_PAT.match(raw_lower) or (text and PURE_CONVERSATIONAL_PAT.match(text.rstrip(".!?"))):
         return False
 
-    # 2. Informational questions & project status/completeness inquiries:
-    # e.g., "what is a platformer", "is the sudoku game complete", "status of the build"
     if INFORMATIONAL_QUESTION_PAT.search(text):
         return False
     orig_lower = normalized.lower().strip()
@@ -231,7 +221,6 @@ def is_game_creation_request(prompt: str) -> bool:
     if (text.endswith("?") or "?" in orig_lower) and not re.search(r"\b(create|make|build|generate|develop|scaffold|craft)\b", text):
         return False
 
-    # 3. Bug fixes, refactoring, code editing, Unreal source files
     if CODE_DEBUG_PAT.search(text):
         return False
     if re.search(r"(?:\.uproject|\.cpp|\.h|\.ini|\bSource/|\bclass\b|\bstruct\b)", text, re.I):
@@ -239,17 +228,14 @@ def is_game_creation_request(prompt: str) -> bool:
     if re.search(r"\b(?:game\s+(?:mode|state|instance|object|loop)|gamemode)\b", text, re.I) and not CREATE_GAME_PAT.search(text):
         return False
 
-    # 4. Context inside an existing game or documentation analysis
     if EXISTING_GAME_CONTEXT_PAT.search(text):
         return False
     if DOC_ANALYSIS_PAT.search(text) and not any(v in text for v in ("make", "create", "build", "design")):
         return False
 
-    # 0. Explicit preset pattern
     if re.search(r"\bpreset:[a-z0-9_]+\b", text, re.I):
         return True
 
-    # 5. Direct game creation patterns
     if CREATE_GAME_PAT.search(text):
         return True
     if NOUN_GAME_PAT.match(text):
@@ -257,29 +243,22 @@ def is_game_creation_request(prompt: str) -> bool:
     if ":" in text and GAME_WORD_PAT.search(text):
         return True
 
-    # 6. Specific board games standalone
+    # Standalone genre/archetype short prompts
     clean_text = text.replace("-", " ").strip()
     if clean_text in (
-        "monopoly", "chess", "checkers", "gomoku", "ludo", "parcheesi",
-        "snakes and ladders", "snake and ladders", "chutes and ladders",
-        "connect four", "tic tac toe", "sudoku", "tetris", "snake",
-        "racing", "tower defense", "zombie survival", "roguelike",
+        "platformer", "3d platformer", "arena combat", "card battler", "top down shooter",
+        "relic hunt", "procedural world", "dungeon crawler", "tower defense", "racing",
+        "tic tac toe", "connect four", "connect 4", "gomoku", "board game", "puzzle game",
+        "chess", "checkers", "sudoku", "tetris", "minesweeper", "roguelike",
     ):
         return True
 
-    # 7. Comprehensive modern genres check
-    genre_match = False
-    for _, pattern in GENRE_PATTERNS:
-        if pattern.search(text):
-            genre_match = True
-            break
-
+    genre_match = any(pattern.search(text) for _, pattern in GENRE_PATTERNS)
     if not genre_match:
-        # Check additional standalone genre tags
         if re.search(
-            r"\b(?:clone|fps|shooter|adventure|rpg|roguelike|roguelite|counterstrike|counter-strike|"
+            r"\b(?:clone|fps|shooter|adventure|rpg|roguelike|roguelite|"
             r"brawler|stealth|dungeon|survival|horror|arena|card\s+battler|board\s+game|tactical|"
-            r"snake|ladders|chutes|ludo|chess|checkers|monopoly|dice\s+board|runner|racing|racer|"
+            r"dice\s+board|runner|racing|racer|heist|infiltration|salvage|"
             r"simulator|sim|strategy|rts|tbs|defense|tower\s+defense|puzzle|escape|flight|dogfight|"
             r"combat|action|brawl|metroidvania|sandbox|open\s+world|quest|autobattler|auto\s+battler|"
             r"shmup|bullet\s+hell|souls[- ]like|soulslike|deckbuilder|battle\s+royale|moba|arpg|jrpg|"
@@ -288,25 +267,20 @@ def is_game_creation_request(prompt: str) -> bool:
         ):
             genre_match = True
 
-    if genre_match:
-        if (
-            CREATE_VERB_PAT.search(text)
-            or GAME_WORD_PAT.search(text)
-            or text.startswith(("a ", "an ", "the ", "deploy ", "construct "))
-            or ":" in text
-        ):
-            return True
+    if genre_match and (
+        CREATE_VERB_PAT.search(text)
+        or GAME_WORD_PAT.search(text)
+        or GAMEPLAY_STRUCTURE_PAT.search(text)
+        or text.startswith(("a ", "an ", "the ", "deploy ", "construct "))
+        or ":" in text
+    ):
+        return True
 
-    # 8. Create verb plus game keywords or recipes
-    if CREATE_VERB_PAT.search(text):
-        if GAME_WORD_PAT.search(text):
-            return True
-        try:
-            from .presets import PRESET_KEYWORDS
-            if any(k in text for kws in PRESET_KEYWORDS.values() for k in kws):
-                return True
-        except ImportError:
-            pass
+    if CREATE_VERB_PAT.search(text) and (GAME_WORD_PAT.search(text) or GAMEPLAY_STRUCTURE_PAT.search(text)):
+        return True
+
+    if text.startswith(("a ", "an ")) and GAMEPLAY_STRUCTURE_PAT.search(text) and len(text.split()) >= 6:
+        return True
 
     return False
 
@@ -314,14 +288,12 @@ def is_game_creation_request(prompt: str) -> bool:
 def detect_genre_intent(prompt: str) -> Optional[Genre]:
     """Detect the most likely Genre enum from prompt text, prioritizing dominant main clause over subordinate modifiers."""
     normalized = normalize_prompt(prompt).lower()
-    # 1. Main clause check (before secondary modifiers like 'with giant chess tiles' or 'featuring card mini-game')
     main_clause = re.split(r"\b(?:with|featuring|where|having|set in|containing|on giant|on a)\b", normalized, maxsplit=1)[0].strip()
     if main_clause:
         for genre, pattern in GENRE_PATTERNS:
             if pattern.search(main_clause):
                 return genre
 
-    # 2. Full prompt fallback
     for genre, pattern in GENRE_PATTERNS:
         if pattern.search(normalized):
             return genre
@@ -335,7 +307,6 @@ def extract_gameplay_mechanics(prompt: str) -> List[str]:
     found: List[str] = []
     for m in sorted(MECHANIC_KEYWORDS):
         if m in words or (" " in m and m in normalized):
-            # Check if this mechanic is negated (e.g. "no timer", "without hazards", "never jump")
             is_negated = bool(re.search(rf"\b(?:no|without|zero|never|no\s+more|remove)\s+(?:[\w\-]+\s+)?{re.escape(m)}\b", normalized))
             if not is_negated:
                 found.append(m)
@@ -349,7 +320,6 @@ def classify_prompt_intent(prompt: str) -> IntentResult:
     text = stripped.lower().strip()
     raw_lower = norm.lower().strip().rstrip(".!?")
 
-    # Conversational
     if not text or PURE_CONVERSATIONAL_PAT.match(raw_lower) or (text and PURE_CONVERSATIONAL_PAT.match(text.rstrip(".!?"))):
         return IntentResult(
             intent=IntentType.CONVERSATIONAL,
@@ -359,7 +329,6 @@ def classify_prompt_intent(prompt: str) -> IntentResult:
             reasons=["Prompt matches pure conversational greeting or small-talk pattern"],
         )
 
-    # Informational
     if INFORMATIONAL_QUESTION_PAT.search(text) or (norm.lower().startswith(("what", "how", "why", "who", "explain")) and "?" in norm):
         return IntentResult(
             intent=IntentType.INFORMATIONAL,
@@ -369,7 +338,6 @@ def classify_prompt_intent(prompt: str) -> IntentResult:
             reasons=["Prompt matches informational question or inquiry pattern"],
         )
 
-    # Code / Debug
     if CODE_DEBUG_PAT.search(text):
         return IntentResult(
             intent=IntentType.CODE_OR_DEBUG,
@@ -379,7 +347,6 @@ def classify_prompt_intent(prompt: str) -> IntentResult:
             reasons=["Prompt specifies bug fix, compile error, or code debugging"],
         )
 
-    # Mutation vs Creation
     genre = detect_genre_intent(norm)
     mechanics = extract_gameplay_mechanics(norm)
 
@@ -403,7 +370,7 @@ def classify_prompt_intent(prompt: str) -> IntentResult:
             genre=genre,
             mechanics=mechanics,
             normalized_prompt=norm,
-            reasons=["Prompt specifies game creation verbs, genre keywords, or game specifications"],
+            reasons=["Prompt specifies game creation verbs, genre keywords, or gameplay specifications"],
         )
 
     return IntentResult(

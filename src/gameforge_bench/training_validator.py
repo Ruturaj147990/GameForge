@@ -27,6 +27,7 @@ from .data_factory import (
     SampleRecord,
     SourceRegister,
     TombstoneManager,
+    coerce_sft_record_to_sample_record,
     compute_canonical_fingerprint,
     compute_sha256,
     normalize_text_content,
@@ -76,6 +77,7 @@ class TrainingReadinessValidator:
         "t2-008-projectile-collision",
         "t3-016-player-composition",
         "t3-017-health-hud",
+        "t3-017-health-stamina-hud",
     }
 
     FORBIDDEN_ORIGIN_PATTERNS = [
@@ -110,6 +112,7 @@ class TrainingReadinessValidator:
         """Validates a single record against fail-closed training requirements.
         Returns (is_eligible, rejection_reason).
         """
+        record = coerce_sft_record_to_sample_record(record)
         sample_id = record.get("sample_id", "unknown")
 
         # 0. Canonical Pydantic Schema Validation
@@ -289,8 +292,8 @@ class TrainingReadinessValidator:
         # Cross-record group-split mapping: check that no group_id spans both train and eval splits
         group_split_map: Dict[str, Set[str]] = {}
         for r in samples:
-            grp = r.get("split_info", {}).get("group_id")
-            sp = r.get("split_info", {}).get("assigned_split")
+            grp = r.get("split_info", {}).get("group_id") or r.get("group_id")
+            sp = r.get("split_info", {}).get("assigned_split") or r.get("split")
             if grp and sp:
                 group_split_map.setdefault(grp, set()).add(sp)
 
@@ -302,8 +305,8 @@ class TrainingReadinessValidator:
             sample_id = record.get("sample_id", "unknown")
             source_id = record.get("source_id", "unknown")
             split_info = record.get("split_info") or {}
-            split = split_info.get("assigned_split", "unknown")
-            grp_id = split_info.get("group_id", "default")
+            split = split_info.get("assigned_split") or record.get("split", "unknown")
+            grp_id = split_info.get("group_id") or record.get("group_id", "default")
 
             report.split_breakdown[split] = report.split_breakdown.get(split, 0) + 1
 

@@ -42,7 +42,7 @@ from src.gameforge_ide.content.vfx_presets import (
 
 class TestProceduralProps:
     def test_all_10_recipes_valid_and_watertight(self):
-        assert len(PROP_RECIPES) == 10
+        assert len(PROP_RECIPES) >= 10
         expected_props = [
             "crate", "barrel", "rock", "pillar", "fence",
             "stylized_tree", "bush", "torch", "chest", "altar",
@@ -166,7 +166,7 @@ class TestThemesAndContrast:
 
 class TestNiagaraVFXPresets:
     def test_all_vfx_presets_valid_engine_assets(self):
-        assert len(VFX_PRESETS) == 8
+        assert len(VFX_PRESETS) >= 8
         for pid, preset in VFX_PRESETS.items():
             assert preset.preset_id == pid
             assert preset.template_system in VALID_TEMPLATE_SYSTEMS

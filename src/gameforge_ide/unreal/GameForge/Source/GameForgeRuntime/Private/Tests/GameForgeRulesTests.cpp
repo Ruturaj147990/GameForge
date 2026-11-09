@@ -58,6 +58,8 @@ bool FGameForgeRulesStatOperatorsTest::RunTest(const FString& Parameters)
 	CheckOp(TEXT("=="), 50.0, true);
 	CheckOp(TEXT("=="), 50.00001, true); // within 1e-4 tolerance
 	CheckOp(TEXT("=="), 51.0, false);
+	CheckOp(TEXT("!="), 51.0, true);
+	CheckOp(TEXT("!="), 50.0, false);
 	CheckOp(TEXT("<="), 50.0, true);
 	CheckOp(TEXT("<="), 55.0, true);
 	CheckOp(TEXT("<="), 45.0, false);
@@ -103,6 +105,28 @@ bool FGameForgeRulesNestingTest::RunTest(const FString& Parameters)
 
 	FString Error;
 	TestTrue(TEXT("Single all condition passes"), FGameForgeConditionEvaluator::Evaluate(CondAll, Ctx, Error));
+
+	// 'not' condition test
+	TSharedPtr<FJsonObject> CondNot = MakeShared<FJsonObject>();
+	CondNot->SetStringField(TEXT("kind"), TEXT("not"));
+	CondNot->SetObjectField(TEXT("condition"), C1);
+	TestFalse(TEXT("Negating true condition returns false"), FGameForgeConditionEvaluator::Evaluate(CondNot, Ctx, Error));
+
+	// board.win payload filter test (winner == "ai" must not pass player win condition)
+	Ctx.HasEvent = [](FName Ev, FName Ent) -> bool { return Ev == FName(TEXT("board.win")); };
+	Ctx.GetEventField = [](FName Ev, const FString& Key, FString& OutVal, FName Ent) -> bool
+	{
+		if (Ev == FName(TEXT("board.win")) && Key == TEXT("winner"))
+		{
+			OutVal = TEXT("ai");
+			return true;
+		}
+		return false;
+	};
+	TSharedPtr<FJsonObject> BoardWinCond = MakeShared<FJsonObject>();
+	BoardWinCond->SetStringField(TEXT("kind"), TEXT("event"));
+	BoardWinCond->SetStringField(TEXT("event"), TEXT("board.win"));
+	TestFalse(TEXT("board.win with winner=ai should not trigger default player win"), FGameForgeConditionEvaluator::Evaluate(BoardWinCond, Ctx, Error));
 
 	// Empty all condition is malformed
 	TSharedPtr<FJsonObject> EmptyAll = MakeShared<FJsonObject>();

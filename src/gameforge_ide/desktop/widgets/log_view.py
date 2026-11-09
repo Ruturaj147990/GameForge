@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 
 class LogView(QWidget):
@@ -165,14 +166,14 @@ class LogView(QWidget):
         self._edit.clear()
         self._auto_scroll = True
         self._btn_scroll.setText("⤓ Bottom")
-        self._btn_scroll.setStyleSheet(f"""
+        self._btn_scroll.setStyleSheet(theme_stylesheet(f"""
             QPushButton {{
                 background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};
                 border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;
                 padding: 2px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;
             }}
             QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}
-        """)
+        """))
         if hasattr(self, "_floating_resume_btn"):
             self._floating_resume_btn.hide()
 
@@ -207,14 +208,14 @@ class LogView(QWidget):
             if self._auto_scroll:
                 self._auto_scroll = False
                 self._btn_scroll.setText("⤓ Resume Auto-Scroll")
-                self._btn_scroll.setStyleSheet(f"""
+                self._btn_scroll.setStyleSheet(theme_stylesheet(f"""
                     QPushButton {{
                         background-color: {tokens.BG_SURFACE}; color: {tokens.ACCENT_WARNING};
                         border: 1px solid {tokens.ACCENT_WARNING}; border-radius: {tokens.RADIUS}px;
                         padding: 2px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px; font-weight: bold;
                     }}
                     QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}
-                """)
+                """))
                 if hasattr(self, "_floating_resume_btn"):
                     self._reposition_floating_btn()
                     self._floating_resume_btn.show()
@@ -223,14 +224,14 @@ class LogView(QWidget):
             if not self._auto_scroll:
                 self._auto_scroll = True
                 self._btn_scroll.setText("⤓ Bottom")
-                self._btn_scroll.setStyleSheet(f"""
+                self._btn_scroll.setStyleSheet(theme_stylesheet(f"""
                     QPushButton {{
                         background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};
                         border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;
                         padding: 2px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;
                     }}
                     QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}
-                """)
+                """))
                 if hasattr(self, "_floating_resume_btn"):
                     self._floating_resume_btn.hide()
 
@@ -238,14 +239,14 @@ class LogView(QWidget):
     def _scroll_to_bottom(self) -> None:
         self._auto_scroll = True
         self._btn_scroll.setText("⤓ Bottom")
-        self._btn_scroll.setStyleSheet(f"""
+        self._btn_scroll.setStyleSheet(theme_stylesheet(f"""
             QPushButton {{
                 background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_SECONDARY};
                 border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;
                 padding: 2px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;
             }}
             QPushButton:hover {{ background-color: {tokens.BG_HOVER}; color: {tokens.TEXT_PRIMARY}; }}
-        """)
+        """))
         if hasattr(self, "_floating_resume_btn"):
             self._floating_resume_btn.hide()
         scrollbar = self._edit.verticalScrollBar()

@@ -3,7 +3,7 @@
 ### Architecture: Hybrid linear/full attention with frozen vision tower
 
 # Model arguments
-model_name_or_path: E:/GameForge/models/hf/Qwen3.8-27B
+model_name_or_path: models/hf/Qwen3.8-27B
 trust_remote_code: true
 template: qwen3_8
 
@@ -33,7 +33,7 @@ overwrite_cache: true
 preprocessing_num_workers: 4
 
 # Output and checkpoints
-output_dir: E:/GameForge/training/gameforge-v2/adapter
+output_dir: artifacts/training/gameforge-v2/adapter
 logging_steps: 5
 save_steps: 50
 eval_steps: 25

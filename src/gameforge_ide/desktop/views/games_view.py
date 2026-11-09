@@ -66,6 +66,7 @@ from ..services.projects_service import (
     list_games,
 )
 from ..styles import tokens
+from ..styles.dark_theme import theme_color, theme_stylesheet
 from ...core.jobs import JobHandle, default_job_manager
 from ...core.projects import resolve_project_dir
 
@@ -195,8 +196,8 @@ class GameCardDelegate(QStyledItemDelegate):
         is_selected = bool(option.state & QStyle.State_Selected)
 
         # Background
-        bg_col = QColor(tokens.BG_HOVER) if is_hover else QColor(tokens.BG_SURFACE)
-        border_col = QColor(tokens.ACCENT_PRIMARY) if (is_selected or is_hover) else QColor(tokens.BORDER)
+        bg_col = QColor(theme_color(tokens.BG_HOVER)) if is_hover else QColor(theme_color(tokens.BG_SURFACE))
+        border_col = QColor(theme_color(tokens.ACCENT_PRIMARY)) if (is_selected or is_hover) else QColor(theme_color(tokens.BORDER))
 
         painter.setBrush(QBrush(bg_col))
         painter.setPen(QPen(border_col, 1.5 if (is_selected or is_hover) else 1.0))
@@ -205,14 +206,14 @@ class GameCardDelegate(QStyledItemDelegate):
         # Thumbnail area (top 124px)
         thumb_rect = QRect(r.x() + 8, r.y() + 8, r.width() - 16, 124)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(QColor(tokens.BG_PANEL)))
+        painter.setBrush(QBrush(QColor(theme_color(tokens.BG_PANEL))))
         painter.drawRoundedRect(thumb_rect, 4, 4)
 
         pixmap = self._get_thumbnail(game.thumbnail_path, thumb_rect.size())
         if pixmap:
             painter.drawPixmap(thumb_rect.x(), thumb_rect.y(), pixmap)
         else:
-            painter.setPen(QColor(tokens.TEXT_MUTED))
+            painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
             font = painter.font()
             font.setPointSize(24)
             painter.setFont(font)
@@ -220,7 +221,7 @@ class GameCardDelegate(QStyledItemDelegate):
 
         # Title
         title_y = thumb_rect.bottom() + 10
-        painter.setPen(QColor(tokens.TEXT_PRIMARY))
+        painter.setPen(QColor(theme_color(tokens.TEXT_PRIMARY)))
         font = painter.font()
         font.setPointSize(tokens.FONT_BODY)
         font.setBold(True)
@@ -232,7 +233,7 @@ class GameCardDelegate(QStyledItemDelegate):
 
         # Genre & revision badge
         meta_y = title_y + 22
-        painter.setPen(QColor(tokens.TEXT_SECONDARY))
+        painter.setPen(QColor(theme_color(tokens.TEXT_SECONDARY)))
         font.setPointSize(tokens.FONT_BODY_SM)
         font.setBold(False)
         painter.setFont(font)
@@ -247,12 +248,12 @@ class GameCardDelegate(QStyledItemDelegate):
 
         # Dot
         dot_rect = QRect(r.x() + 10, status_y + 3, 8, 8)
-        painter.setBrush(QBrush(QColor(dot_color)))
+        painter.setBrush(QBrush(QColor(theme_color(dot_color))))
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(dot_rect)
 
         # Status label
-        painter.setPen(QColor(tokens.TEXT_MUTED))
+        painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
         status_rect = QRect(r.x() + 24, status_y, r.width() - 34, 16)
         painter.drawText(status_rect, Qt.AlignLeft | Qt.AlignVCenter, status_text)
 
@@ -261,8 +262,8 @@ class GameCardDelegate(QStyledItemDelegate):
         is_hover = bool(option.state & QStyle.State_MouseOver)
         is_selected = bool(option.state & QStyle.State_Selected)
 
-        bg_col = QColor(tokens.BG_HOVER) if is_hover else QColor(tokens.BG_SURFACE)
-        border_col = QColor(tokens.ACCENT_PRIMARY) if (is_selected or is_hover) else QColor(tokens.BORDER)
+        bg_col = QColor(theme_color(tokens.BG_HOVER)) if is_hover else QColor(theme_color(tokens.BG_SURFACE))
+        border_col = QColor(theme_color(tokens.ACCENT_PRIMARY)) if (is_selected or is_hover) else QColor(theme_color(tokens.BORDER))
 
         painter.setBrush(QBrush(bg_col))
         painter.setPen(QPen(border_col, 1.0))
@@ -270,7 +271,7 @@ class GameCardDelegate(QStyledItemDelegate):
 
         # Small thumbnail 48x48
         thumb_rect = QRect(r.x() + 6, r.y() + 6, 48, 48)
-        painter.setBrush(QBrush(QColor(tokens.BG_PANEL)))
+        painter.setBrush(QBrush(QColor(theme_color(tokens.BG_PANEL))))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(thumb_rect, 4, 4)
 
@@ -278,7 +279,7 @@ class GameCardDelegate(QStyledItemDelegate):
         if pixmap:
             painter.drawPixmap(thumb_rect.x(), thumb_rect.y(), pixmap)
         else:
-            painter.setPen(QColor(tokens.TEXT_MUTED))
+            painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
             font = painter.font()
             font.setPointSize(16)
             painter.setFont(font)
@@ -289,7 +290,7 @@ class GameCardDelegate(QStyledItemDelegate):
         font.setPointSize(tokens.FONT_BODY)
         font.setBold(True)
         painter.setFont(font)
-        painter.setPen(QColor(tokens.TEXT_PRIMARY))
+        painter.setPen(QColor(theme_color(tokens.TEXT_PRIMARY)))
         title_str = game.title or game.name or "Untitled"
         elided_title = painter.fontMetrics().elidedText(title_str, Qt.ElideRight, 260)
         genre_str = (game.genre or "unknown").capitalize()
@@ -299,18 +300,18 @@ class GameCardDelegate(QStyledItemDelegate):
         font.setPointSize(tokens.FONT_BODY_SM)
         font.setBold(False)
         painter.setFont(font)
-        painter.setPen(QColor(tokens.TEXT_SECONDARY))
+        painter.setPen(QColor(theme_color(tokens.TEXT_SECONDARY)))
         painter.drawText(QRect(r.x() + 64, r.y() + 32, 260, 16), Qt.AlignLeft | Qt.AlignVCenter, f"{genre_str} · rev {rev_val}")
 
         # Status on the right
         status_text, dot_color = self._format_status_badge(game)
         right_x = r.right() - 140
         dot_rect = QRect(right_x, r.y() + 26, 8, 8)
-        painter.setBrush(QBrush(QColor(dot_color)))
+        painter.setBrush(QBrush(QColor(theme_color(dot_color))))
         painter.setPen(Qt.NoPen)
         painter.drawEllipse(dot_rect)
 
-        painter.setPen(QColor(tokens.TEXT_MUTED))
+        painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
         painter.drawText(QRect(right_x + 14, r.y() + 22, 120, 16), Qt.AlignLeft | Qt.AlignVCenter, status_text)
 
     def clear_cache(self) -> None:
@@ -888,10 +889,8 @@ class GamesView(QWidget):
     def _open_in_explorer(self, folder: Path) -> None:
         if not folder or not Path(folder).is_dir():
             return
-        if sys.platform == "win32":
-            os.startfile(str(folder))
-        else:
-            subprocess.Popen(["xdg-open", str(folder)])
+        from ...core.projects import open_folder_in_file_manager
+        open_folder_in_file_manager(Path(folder))
 
     def _confirm_delete(self, game: GameSummary) -> None:
         # Check active editor link first

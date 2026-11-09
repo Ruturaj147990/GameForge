@@ -29,8 +29,8 @@ def semantic_validate_gds(
     entities = getattr(gds, "entities", []) or []
 
     # 1. Intent keyword checks in prompt
-    # Check 1: "snake" AND "ladder"
-    if "snake" in p_lower and "ladder" in p_lower:
+    # Check 1: roll-and-move board game
+    if ("snake" in p_lower and "ladder" in p_lower) or "roll and move" in p_lower:
         if genre_val != Genre.GRID_BOARD.value:
             issues.append(
                 f"Prompt specifies 'snake' and 'ladder' game, but genre is '{genre_val}' "
@@ -179,7 +179,7 @@ def semantic_validate_gds(
 
         # Check pickup count sufficiency for count_at_least win conditions
         for cond in win_conds:
-            if getattr(cond, "kind", "") == "count_at_least" and getattr(cond, "event", "") == "kit.pickup/collected":
+            if getattr(cond, "kind", "") == "count_at_least" and getattr(cond, "event", "") in ("pickup.collected", "kit.pickup/collected"):
                 required_n = getattr(cond, "n", 0)
                 total_pickups = sum(
                     getattr(e, "count", 1)

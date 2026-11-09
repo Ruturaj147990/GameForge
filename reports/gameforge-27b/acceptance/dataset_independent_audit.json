@@ -1,0 +1,16 @@
+{
+  "train_samples_count": 8,
+  "val_samples_count": 2,
+  "benchmark_tasks_count": 50,
+  "train_val_exact_overlap_count": 1,
+  "benchmark_leakage_count": 0,
+  "leakage_records": [],
+  "active_source_id": "gameforge-27b-specialist-corpus",
+  "is_quarantined_source_ingested": false,
+  "quarantined_sources_in_register": [
+    "gameforge-cleanroom-unreal-pilots",
+    "gameforge-engine-neutral-specs",
+    "gameforge-private-heldout-eval"
+  ],
+  "status": "CLEAN_NO_LEAKAGE"
+}

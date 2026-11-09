@@ -723,7 +723,7 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         return None
 
     pattern = re.compile(
-        r"(?i)\b(complete|finish|expand|build\s+out|add\s+gameplay|only\s+a\s+box|shooting|shooter|counterstrike|counter-strike|combat|enemies|weapons?|bots?|5v5|five\s+v\s+five)\b"
+        r"(?i)\b(complete|finish|expand|build\s+out|add\s+gameplay|only\s+a\s+box|shooting|shooter|tactical|combat|enemies|weapons?|bots?|5v5|five\s+v\s+five)\b"
     )
     if not pattern.search(req):
         return None
@@ -798,8 +798,8 @@ def _match_complete_game_or_add_combat(gds: GameDesignSpec, req: str) -> Optiona
         if layout_val != target_layout:
             ops.append({"op": "replace", "path": "/scene/levels/0/layout", "value": target_layout})
 
-    # Set camera mode to first_person if requested or Counter-Strike
-    if any(w in req.lower() for w in ("first person", "first-person", "fps", "counter", "strike", "tactical")):
+    # Set camera mode to first_person if requested
+    if any(w in req.lower() for w in ("first person", "first-person", "fps", "tactical")):
         cur_cam = getattr(gds.overview, "camera", None)
         cam_val = cur_cam.value if hasattr(cur_cam, "value") else str(cur_cam)
         if cam_val != "first_person":
@@ -1170,6 +1170,8 @@ def _match_movement_ability(gds: GameDesignSpec, req: str) -> Optional[ProposedP
     action_ids = {a.action_id for a in gds.input.actions}
 
     if ability == "dash":
+        ops.append({"op": "add", "path": f"/entities/{player_idx}/props/dash_impulse", "value": 1200.0})
+        ops.append({"op": "add", "path": f"/entities/{player_idx}/props/sprint_multiplier", "value": 1.8})
         if "IA_Dash" not in action_ids:
             ops.append({
                 "op": "add",
@@ -1189,6 +1191,7 @@ def _match_movement_ability(gds: GameDesignSpec, req: str) -> Optional[ProposedP
             cur_spd = float(props[spd_key])
             new_spd = min(2000.0, round(cur_spd * 1.3, 1))
             ops.append({"op": "replace", "path": f"/entities/{player_idx}/props/{spd_key}", "value": new_spd})
+        ops.append({"op": "add", "path": f"/entities/{player_idx}/props/sprint_multiplier", "value": 1.8})
         if "IA_Sprint" not in action_ids:
             ops.append({
                 "op": "add",
@@ -1201,6 +1204,8 @@ def _match_movement_ability(gds: GameDesignSpec, req: str) -> Optional[ProposedP
                 },
             })
     elif ability == "double_jump":
+        ops.append({"op": "add", "path": f"/entities/{player_idx}/props/double_jump", "value": True})
+        ops.append({"op": "add", "path": f"/entities/{player_idx}/props/max_jumps", "value": 2})
         if "IA_Jump" not in action_ids:
             ops.append({
                 "op": "add",
@@ -1225,13 +1230,18 @@ def _match_gravity(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
             return None
         g_type = m.group(1).lower()
         val = 300.0 if g_type == "low" else (0.0 if g_type == "zero" else 1500.0)
+        g_scale = 0.35 if g_type == "low" else (0.1 if g_type == "zero" else 2.0)
     else:
         val = float(m.group(1))
+        g_scale = round(max(0.1, min(10.0, abs(val) / 980.0 if abs(val) > 10.0 else abs(val))), 2)
 
     val = max(-2000.0, min(3000.0, val))
     ops = []
     for i in range(len(gds.scene.levels)):
         ops.append({"op": "add", "path": f"/scene/levels/{i}/layout_params/gravity_z", "value": val})
+    player_idx = next((i for i, e in enumerate(gds.entities) if e.kind == EntityKind.PLAYER), None)
+    if player_idx is not None:
+        ops.append({"op": "add", "path": f"/entities/{player_idx}/props/gravity_scale", "value": g_scale})
 
     return ProposedPatch(ops=ops, summary=f"World gravity set to {val}", status="OK")
 

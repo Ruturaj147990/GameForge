@@ -109,8 +109,7 @@ def check_candidate_policy(
     try:
         w_resolved = workspace_root.resolve()
         c_resolved = candidate_dir.resolve()
-        # Verify candidate is either inside workspace or a designated scratch folder
-        if not c_resolved.is_relative_to(w_resolved) and "scratch" not in str(c_resolved).lower() and "gemini" not in str(c_resolved).lower():
+        if not c_resolved.is_relative_to(w_resolved):
             violations.append(f"Candidate directory escapes workspace boundary: {c_resolved}")
     except Exception as exc:
         violations.append(f"Failed to resolve candidate directory: {exc}")

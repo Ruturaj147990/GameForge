@@ -10,6 +10,7 @@ import random
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .model import CodegenTask, Composition, CompositionError, LevelPlan, PlacedActor
+from .codegen import plan_architecture_codegen
 from .layouts import LAYOUTS
 from .placement import scatter
 from .runtime_def import build as build_gfdef
@@ -60,7 +61,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         except KeyError:
             pass
 
-    # 3. Codegen tasks from custom code rules
+    # 3. Codegen tasks from custom code rules and gds.architecture
     codegen_tasks: List[CodegenTask] = []
     task_idx = 0
     if hasattr(gds, "rules") and gds.rules:
@@ -85,11 +86,14 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                     )
                     task_idx += 1
 
+    for arch_task in plan_architecture_codegen(gds):
+        if not any(task.handler_name == arch_task.handler_name for task in codegen_tasks):
+            codegen_tasks.append(arch_task)
+
     # 4. Build levels
     level_plans: List[LevelPlan] = []
     levels = gds.scene.levels if hasattr(gds, "scene") and gds.scene.levels else []
 
-    # Fallback default level if none specified
     if not levels:
         from ..design.gds import LevelSpec, Vec2
         from ..kit.rules import get_layout_for_game_type, GAME_TYPE_LAYOUT_MAP
@@ -111,7 +115,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                     pass
 
         if not layout_name:
-            if "counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or (cam_val == "first_person" and "shoot" in title_pitch):
+            if "bomb" in title_pitch or "defus" in title_pitch or "tactical" in title_pitch or (cam_val == "first_person" and "shoot" in title_pitch):
                 layout_name = "tactical_fps"
             elif genre_val in ("grid_board", "board"):
                 layout_name = "board"
@@ -136,7 +140,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         meta_prompt = getattr(gds.meta, "source_prompt", "") if hasattr(gds, "meta") else ""
         overview_pitch = getattr(gds.overview, "pitch", "") if hasattr(gds, "overview") else ""
         title_pitch = f"{meta_title} {meta_proj} {meta_prompt} {overview_pitch}".lower()
-        if layout_name == "arena" and ("counter" in title_pitch or "strike" in title_pitch or "bomb" in title_pitch or "defus" in title_pitch or "fps" in title_pitch):
+        if layout_name == "arena" and ("bomb" in title_pitch or "defus" in title_pitch or "tactical" in title_pitch or "fps" in title_pitch or any(str(getattr(e, "kind", "")) == "bomb_site" for e in getattr(gds, "entities", []))):
             layout_name = "tactical_fps"
         if layout_name not in LAYOUTS:
             problems.append(f"layout {layout_name!r} not found in LAYOUTS; supported: {sorted(LAYOUTS.keys())}")
@@ -145,13 +149,10 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         level_rng = random.Random(level.seed)
         layout_plan = LAYOUTS[layout_name](level, gds, level_rng)
 
-        # Layout-authored goal/landmark/checkpoint actors stand in for the design's entity of that kind: bind them to
-        # it (id, tags, properties) so the design's settings apply and the entity is not placed a second time.
-        # Previously a layout "goal" ignored e.g. the goal's "collect everything first" requirement and the design's
-        # own goal was scattered as a second, competing exit.
+        # Bind layout-authored actors (goals, landmarks, checkpoints, boards, card tables, enemies, spawners)
+        # to the GDS's entities of that kind so custom IDs/properties apply and duplicates are not scattered.
         _bind_layout_actors(layout_plan, gds)
 
-        # Place entities that are not yet placed by the layout
         already_placed_entities = {a.entity_id for a in layout_plan.actors if a.entity_id}
         if "card_table" in already_placed_entities or "cards" in already_placed_entities:
             already_placed_entities.update({"card_table", "cards"})
@@ -165,11 +166,9 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             if e.entity_id not in already_placed_entities
             and e.kind not in ("player", "character", "hero")
             and e.module != "kit.player_character"
-            # enemies that exist only to be spawned by a wave spawner are not pre-placed
             and "spawned_by_spawner" not in (e.tags or [])
         ]
 
-        # Gather layout free-area polygon from nav_bounds
         center, extent = layout_plan.nav_bounds
         half_w = extent[0] * 0.8
         half_h = extent[1] * 0.8
@@ -180,7 +179,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             (center[0] - half_w, center[1] + half_h),
         ]
 
-        # Avoid player start, existing actors, and solid obstacles (walls, cover blocks, pillars)
         avoid_zones: List[Tuple[float, float, float]] = [
             (layout_plan.player_start[0], layout_plan.player_start[1], 400.0)
         ]
@@ -191,8 +189,7 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         for g_op in layout_plan.geometry_ops:
             if g_op.args.get("actor_class") == "StaticMeshActor":
                 lbl = str(g_op.args.get("label", ""))
-                # Skip ground floors, safety floors, walkways, ramps, and platforms
-                if any(floor_kw in lbl.lower() for floor_kw in ("floor", "ground", "walkway", "ramp", "platform", "bridge", "board", "table", "lane")):
+                if any(floor_kw in lbl.lower() for floor_kw in ("floor", "ground", "walkway", "ramp", "platform", "bridge", "board", "table", "lane", "pad", "road")):
                     continue
                 loc_g = g_op.args.get("location", {})
                 scale_g = g_op.args.get("scale", {})
@@ -202,9 +199,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                 sy = float(scale_g.get("y", 1.0)) * 50.0
                 long_half, short_half = max(sx, sy), min(sx, sy)
                 if long_half > 3.0 * short_half and long_half > 400.0:
-                    # Walls are long and thin: a single bounding disc (radius ~ half the wall length) covered the
-                    # whole arena, so scatter placed nothing and every entity fell back to a diagonal line from the
-                    # centre. Approximate the wall with a chain of small discs along its axis instead.
                     yaw = math.radians(float((g_op.args.get("rotation") or {}).get("yaw", 0.0)))
                     along_x = sx >= sy
                     ux, uy = (math.cos(yaw), math.sin(yaw)) if along_x else (-math.sin(yaw), math.cos(yaw))
@@ -219,7 +213,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                 solid_obstacles.append((gx, gy, obs_radius))
                 avoid_zones.append((gx, gy, obs_radius))
 
-        # Scatter unplaced entities
         total_to_place = 0
         entity_scatter_requests: List[Tuple[Any, int]] = []
         for e in unplaced:
@@ -241,7 +234,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         if scatter_warn:
             warnings.append(scatter_warn)
 
-        # For platformer courses, find available platforms to place entities securely
         platform_locs = [
             op.args["location"]
             for op in layout_plan.geometry_ops
@@ -250,7 +242,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
             and "location" in op.args
         ]
 
-        # For dungeon rooms, find floor pieces to avoid mid-air voids
         room_floor_locs = [
             op.args["location"]
             for op in layout_plan.geometry_ops
@@ -269,7 +260,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                 if pt_idx < len(scattered_points):
                     pos_2d = scattered_points[pt_idx]
                     if is_course_layout and platform_locs:
-                        # 2D Euclidean distance matching across 3D course platforms
                         nearest_p = min(
                             platform_locs,
                             key=lambda p: math.hypot(float(p.get("x", 0.0)) - pos_2d[0], float(p.get("y", 0.0)) - pos_2d[1])
@@ -285,7 +275,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                         loc = (pos_2d[0], pos_2d[1], 100.0)
                     pt_idx += 1
                 else:
-                    # Fallback offset
                     if is_course_layout and platform_locs:
                         p_idx = min(c_i, len(platform_locs) - 1)
                         p_loc = platform_locs[p_idx]
@@ -297,7 +286,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                     else:
                         loc = (center[0] + c_i * 200.0, center[1] + c_i * 200.0, 100.0)
 
-                # Validate coordinates: ensure actors cannot spawn inside colliders, under terrain, or past world bounds
                 nav_center, nav_extent = layout_plan.nav_bounds
                 min_bx = nav_center[0] - nav_extent[0] * 0.95
                 max_bx = nav_center[0] + nav_extent[0] * 0.95
@@ -309,7 +297,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                 ly = max(min_by, min(max_by, loc[1]))
                 lz = max(min_safe_z + 50.0, loc[2])
 
-                # Check and push away from any solid obstacle collider
                 for ox, oy, orad in solid_obstacles:
                     dist_sq = (lx - ox) ** 2 + (ly - oy) ** 2
                     if dist_sq < orad ** 2:
@@ -343,7 +330,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                     tags.extend(["pickup", "Pickup", f"Pickup_{c_i + 1}", f"pickup_{c_i + 1}"])
                 elif kind_raw in ("goal", "exit", "flag"):
                     tags.extend(["goal", "Goal", f"Goal_{c_i + 1}", f"goal_{c_i + 1}"])
-                # Deduplicate while preserving order
                 tags = list(dict.fromkeys(tags))
 
                 props = _actor_properties(e, mod)
@@ -354,7 +340,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
                         entity_id=e.entity_id,
                         runtime_class=mod.runtime_class,
                         location=loc,
-                        # varied facing; every enemy and prop used to face +X in lockstep
                         yaw=round(level_rng.uniform(0.0, 360.0), 1) if kind_raw not in ("door", "goal", "board", "card_table") else 0.0,
                         tags=tags,
                         properties=props,
@@ -368,11 +353,12 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
         # Art direction: tint every primitive with the theme, colour the sun, then dress the level.
         theme = resolve_theme(gds)
         layout_plan.theme_id = theme.theme_id
+        layout_plan.layout_params = dict(getattr(level, "layout_params", {}) or {})
         layout_plan.sun_color = [round(c, 3) for c in theme.sun_color] + [1.0]
         paint_geometry_ops(layout_plan.geometry_ops, theme)
         try:
             layout_plan.geometry_ops.extend(decorate(layout_plan, layout_name, theme, random.Random(level.seed + 7)))
-        except Exception as exc:  # decoration is cosmetic; never fail a build over it
+        except Exception as exc:
             warnings.append(f"decoration skipped: {exc}")
         level_plans.append(layout_plan)
 
@@ -384,7 +370,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     if hasattr(gds, "acceptance") and hasattr(gds.acceptance, "scenarios"):
         scenarios = [s.scenario_id for s in gds.acceptance.scenarios]
 
-    # Include game-specific acceptance scenarios derived from GDS
     try:
         from ..qa.game_spec_tests import generate_acceptance_tests
         for spec_test in generate_acceptance_tests(gds):
@@ -409,7 +394,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     else:
         project_name = "GameForgeGame"
 
-    # Genre and pitch extraction
     genre_val = "Platformer"
     if hasattr(gds, "overview") and getattr(gds.overview, "genre", None):
         g = gds.overview.genre
@@ -421,7 +405,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     if not pitch_val:
         pitch_val = f"{project_name} — {genre_val} game experience"
 
-    # Temporary composition object for gfdef builder
     prelim_comp = Composition(
         gds_id=getattr(gds.meta, "gds_id", None) or getattr(gds.meta, "id", "gds_0"),
         gds_revision=getattr(gds.meta, "revision", 1),
@@ -446,7 +429,6 @@ def compose(gds: GameDesignSpec, allow_partial: bool = False) -> Composition:
     return prelim_comp
 
 
-
 def _hex_to_rgba(code: str) -> Optional[Dict[str, float]]:
     if not code or len(code) != 7 or not code.startswith("#"):
         return None
@@ -457,12 +439,7 @@ def _hex_to_rgba(code: str) -> Optional[Dict[str, float]]:
 
 
 def _actor_properties(e: Any, mod: Any) -> Dict[str, Any]:
-    """Unreal property values for one placed instance of entity ``e``.
-
-    Maps GDS keys through the module's property map, keeps explicit PascalCase / property_overrides values, folds
-    the moving platform's end_offset_x/y/z into the real ``EndOffset`` vector, and applies the entity's colour tag
-    (pickups: PickupColor, characters: BodyColor). Unmapped snake_case keys are dropped (they are not UPROPERTYs).
-    """
+    """Unreal property values for one placed instance of entity ``e``."""
     props: Dict[str, Any] = {}
     for gds_p, unreal_p in mod.property_map.items():
         if gds_p in e.props:
@@ -474,6 +451,8 @@ def _actor_properties(e: Any, mod: Any) -> Dict[str, Any]:
             props.update(p_val)
         elif p_key not in mod.property_map and p_key not in mod.property_map.values() and p_key[:1].isupper():
             props[p_key] = p_val
+        elif p_key == "recipe" and p_val:
+            props["recipe"] = p_val
     if mod.module_id == "kit.moving_platform":
         off = {"x": float(e.props.get("end_offset_x", 0.0) or 0.0), "y": float(e.props.get("end_offset_y", 0.0) or 0.0),
                "z": float(e.props.get("end_offset_z", 300.0) or 0.0)}
@@ -492,26 +471,37 @@ def _actor_properties(e: Any, mod: Any) -> Dict[str, Any]:
     return props
 
 
-
-_BINDABLE = {
-    "/Script/GameForgeRuntime.GameForgeGoal": "kit.goal",
-    "/Script/GameForgeRuntime.GameForgeLandmark": "kit.landmark",
-    "/Script/GameForgeRuntime.GameForgeCheckpoint": "kit.checkpoint",
+_BINDABLE: Dict[str, Tuple[str, ...]] = {
+    "/Script/GameForgeRuntime.GameForgeGoal": ("kit.goal",),
+    "/Script/GameForgeRuntime.GameForgeLandmark": ("kit.landmark",),
+    "/Script/GameForgeRuntime.GameForgeCheckpoint": ("kit.checkpoint",),
+    "/Script/GameForgeRuntime.GameForgeGridBoard": ("kit.grid_board",),
+    "/Script/GameForgeRuntime.GameForgeCardTable": ("kit.card_match",),
+    "/Script/GameForgeRuntime.GameForgeEnemy": ("kit.enemy_melee", "kit.enemy_ranged"),
+    "/Script/GameForgeRuntime.GameForgeSpawner": ("kit.spawner",),
+    "/Script/GameForgeRuntime.GameForgeBombSite": ("kit.bomb_site",),
+    "/Script/GameForgeRuntime.GameForgeDoor": ("kit.door",),
+    "/Script/GameForgeRuntime.GameForgeSwitch": ("kit.switch",),
 }
 
 
 def _bind_layout_actors(plan: LevelPlan, gds: Any) -> None:
     for actor in plan.actors:
-        module_id = _BINDABLE.get(actor.runtime_class)
-        if not module_id:
+        module_ids = _BINDABLE.get(actor.runtime_class)
+        if not module_ids:
             continue
-        ent = next((e for e in gds.entities if e.module == module_id), None)
-        if ent is None or actor.entity_id == ent.entity_id:
-            if ent is not None:
-                actor.properties = {**_actor_properties(ent, get_module(module_id)), **actor.properties}
+        # Do not bind friendly stationary turrets in tower defense to hostile enemy entities
+        if actor.Properties.get("bStationaryTurret") if hasattr(actor, "Properties") else actor.properties.get("bStationaryTurret"):
+            continue
+        ent = next((e for e in gds.entities if e.module in module_ids), None)
+        if ent is None:
+            continue
+        mod = get_module(ent.module)
+        if actor.entity_id == ent.entity_id:
+            actor.properties = {**_actor_properties(ent, mod), **actor.properties}
             continue
         old_tag = f"GF_E_{actor.entity_id}" if actor.entity_id else None
         actor.entity_id = ent.entity_id
         actor.tags = [t for t in actor.tags if t != old_tag]
         actor.tags.insert(0, f"GF_E_{ent.entity_id}")
-        actor.properties = {**_actor_properties(ent, get_module(module_id)), **actor.properties}
+        actor.properties = {**_actor_properties(ent, mod), **actor.properties}

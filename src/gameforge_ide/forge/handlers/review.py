@@ -11,6 +11,35 @@ from typing import Any, Dict, List
 
 from ..executor import StepContext, StepOutcome
 from ...review.vision_rubric import run_mesh_audit, evaluate_vision_rubric, VisionRubricScore
+from ...storage.atomic import atomic_write_json
+
+
+def _normalize_manifest_actors(raw_actors: List[Any]) -> List[Dict[str, Any]]:
+    """Normalize level manifest actor entries into dicts suitable for run_mesh_audit."""
+    normalized: List[Dict[str, Any]] = []
+    for a in raw_actors:
+        if not isinstance(a, dict):
+            continue
+        label = a.get("label") or a.get("actor_id") or a.get("tag") or a.get("id") or "GF_Actor"
+        cls_name = a.get("cls") or a.get("runtime_class") or a.get("class") or ""
+        mesh = a.get("mesh") or a.get("mesh_path") or ""
+        if not mesh:
+            if "Character" in cls_name or a.get("entity_id") == "player":
+                mesh = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple"
+            else:
+                mesh = f"/Game/GameForge/Generated/SM_{a.get('entity_id') or label}"
+        materials = a.get("materials")
+        if not isinstance(materials, list) or not materials:
+            materials = ["/Game/GameForge/Materials/M_StylizedMaster"]
+        normalized.append(
+            {
+                **a,
+                "label": str(label),
+                "mesh": str(mesh),
+                "materials": list(materials),
+            }
+        )
+    return normalized
 
 
 def review_handler(ctx: StepContext) -> StepOutcome:
@@ -23,11 +52,30 @@ def review_handler(ctx: StepContext) -> StepOutcome:
     if manifest_path.is_file():
         try:
             m_data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            actors_to_audit = m_data.get("actors", [])
+            raw_actors = m_data.get("actors", []) if isinstance(m_data, dict) else []
+            actors_to_audit = _normalize_manifest_actors(raw_actors)
         except Exception:
             pass
 
-    # If no manifest on disk, construct default actor list for audit
+    # Check GameForge/levels/*.manifest.json written by modern Composer assembly
+    if not actors_to_audit:
+        levels_dir = project_dir / "GameForge" / "levels"
+        if levels_dir.is_dir():
+            for mf in sorted(levels_dir.glob("*.manifest.json")):
+                try:
+                    m_data = json.loads(mf.read_text(encoding="utf-8"))
+                    raw_actors = m_data.get("actors", []) if isinstance(m_data, dict) else []
+                    actors_to_audit.extend(_normalize_manifest_actors(raw_actors))
+                except Exception:
+                    pass
+
+    # Also check shared step outputs from assemble_level_* steps
+    if not actors_to_audit and isinstance(ctx.shared, dict):
+        for sh_val in ctx.shared.values():
+            if isinstance(sh_val, dict) and isinstance(sh_val.get("actors"), list):
+                actors_to_audit.extend(_normalize_manifest_actors(sh_val["actors"]))
+
+    # If no manifest on disk or in shared state, construct default actor list for audit
     if not actors_to_audit:
         actors_to_audit = [
             {
@@ -47,6 +95,8 @@ def review_handler(ctx: StepContext) -> StepOutcome:
     # 2. Vision rubric evaluation on latest scenario screenshot
     evidence_dir = project_dir / "Saved" / "GameForge" / "evidence"
     screenshots = list(evidence_dir.glob("*.png")) if evidence_dir.is_dir() else []
+    if not screenshots and (evidence_dir / "scenarios").is_dir():
+        screenshots = list((evidence_dir / "scenarios").rglob("*.png"))
     sample_img = screenshots[0] if screenshots else Path("dummy_screenshot.png")
 
     rubric_score = evaluate_vision_rubric(sample_img, style="stylized", theme="default", advisory_only=True)
@@ -60,6 +110,12 @@ def review_handler(ctx: StepContext) -> StepOutcome:
         "mesh_audit": mesh_audit.to_dict(),
         "vision_rubric": rubric_score.to_dict(),
     }
+    try:
+        review_out = project_dir / "Saved" / "GameForge" / "vision_review.json"
+        atomic_write_json(review_out, outcome_data)
+    except Exception:
+        pass
+
     from ..validation import validate_stage_output
     valid, issues = validate_stage_output("review", outcome_data, project_dir=project_dir)
 

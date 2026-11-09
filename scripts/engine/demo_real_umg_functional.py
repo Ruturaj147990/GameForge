@@ -18,12 +18,11 @@ Validates:
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path("E:/gameforge_step1")
+ROOT = Path(__file__).resolve().parents[2]
 PROBE_PROJECT = Path("E:/GameForge/validation/live_ops_probe/GFProbe.uproject")
 REPORT_PATH = ROOT / "reports" / "milestone4_umg_functional_demo.json"
 

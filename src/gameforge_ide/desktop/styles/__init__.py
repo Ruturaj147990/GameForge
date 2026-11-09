@@ -1,12 +1,15 @@
 """GameForge IDE — styles package init."""
 
-from ...desktop.styles.tokens import (
+from .tokens import (
     SPACE_XS,
     SPACE_SM,
     SPACE_MD,
     SPACE_LG,
+    RADIUS_SM,
     RADIUS,
     RADIUS_MD,
+    RADIUS_LG,
+    RADIUS_XL,
     FONT_BODY_SM,
     FONT_BODY,
     FONT_HEADING_SM,
@@ -28,7 +31,7 @@ from ...desktop.styles.tokens import (
     ACCENT_WARNING,
     ACCENT_ERROR,
 )
-from ...desktop.styles.dark_theme import (
+from .dark_theme import (
     GAMEFORGE_DARK_QSS,
     GAMEFORGE_LIGHT_QSS,
     apply_theme,
@@ -43,8 +46,11 @@ __all__ = [
     "SPACE_SM",
     "SPACE_MD",
     "SPACE_LG",
+    "RADIUS_SM",
     "RADIUS",
     "RADIUS_MD",
+    "RADIUS_LG",
+    "RADIUS_XL",
     "FONT_BODY_SM",
     "FONT_BODY",
     "FONT_HEADING_SM",

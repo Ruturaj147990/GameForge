@@ -372,12 +372,15 @@ class HomeView(QWidget):
         # Internal widgets retained hidden for backward compatibility and test stability
         self._prompt_input = PromptTextEdit(self)
         self._prompt_input.setVisible(False)
+        self._prompt_input.designRequested.connect(self._on_design_it_clicked)
         self._btn_design = QPushButton("Design it →", self)
         self._btn_design.setObjectName("homeBtnDesign")
         self._btn_design.setVisible(False)
+        self._btn_design.clicked.connect(self._on_design_it_clicked)
         self._btn_cancel = QPushButton("Cancel", self)
         self._btn_cancel.setObjectName("homeBtnCancel")
         self._btn_cancel.setVisible(False)
+        self._btn_cancel.clicked.connect(self._on_cancel_clicked)
         self._status_lbl = QLabel("", self)
         self._status_lbl.setObjectName("homeStatusLabel")
         self._status_lbl.setVisible(False)
@@ -775,7 +778,7 @@ class HomeView(QWidget):
             empty_lbl = QLabel("No recent games yet.", empty_frame)
             empty_lbl.setAlignment(Qt.AlignCenter)
             empty_lbl.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: {tokens.FONT_BODY}px; font-weight: 600;")
-            empty_sub = QLabel("Type a prompt above or pick a preset chip to create your first game.", empty_frame)
+            empty_sub = QLabel("Use the Assistant chat on the right or click '+ New Project' in Games to create your first game.", empty_frame)
             empty_sub.setAlignment(Qt.AlignCenter)
             empty_sub.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
             empty_box.addWidget(empty_lbl)
@@ -790,12 +793,30 @@ class HomeView(QWidget):
 
     def refresh_readiness(self) -> None:
         """Probe system status on JobManager and populate readiness rows."""
+        sys_svc = getattr(self, "_systems_service", None)
+        if sys_svc is not None:
+            snap = getattr(sys_svc, "latest_snapshot", None)
+            if snap is not None:
+                self._latest_snapshot = snap
+                self._render_readiness()
+                return
+            if hasattr(sys_svc, "refresh_now"):
+                sys_svc.refresh_now()
+                return
+
+        if getattr(self, "_readiness_probing", False):
+            return
+        self._readiness_probing = True
         from ...core.settings import get_settings
 
         def work():
-            return probe_all(get_settings())
+            try:
+                return probe_all(get_settings())
+            except TypeError:
+                return probe_all()
 
         def done(handle: JobHandle):
+            self._readiness_probing = False
             try:
                 import shiboken6
                 if not shiboken6.isValid(self):
@@ -813,8 +834,11 @@ class HomeView(QWidget):
             except Exception:
                 pass
 
-        handle = self._job_manager.submit(work, name="Probe Readiness")
-        handle.add_done_callback(done)
+        try:
+            handle = self._job_manager.submit(work, name="Probe Readiness")
+            handle.add_done_callback(done)
+        except Exception:
+            self._readiness_probing = False
 
     @Slot()
     def _render_readiness(self) -> None:
@@ -845,6 +869,7 @@ class HomeView(QWidget):
 
     def attach_systems_service(self, service: SystemsService) -> None:
         """Connect to SystemsService to receive live snapshot updates."""
+        self._systems_service = service
         def on_snapshot(snap: SystemsSnapshot):
             self._latest_snapshot = snap
             from PySide6.QtCore import QMetaObject, Qt
@@ -852,3 +877,6 @@ class HomeView(QWidget):
 
         self._systems_snapshot_slot = on_snapshot
         service.snapshotChanged.connect(on_snapshot)
+        if getattr(service, "latest_snapshot", None) is not None:
+            self._latest_snapshot = service.latest_snapshot
+            self._render_readiness()

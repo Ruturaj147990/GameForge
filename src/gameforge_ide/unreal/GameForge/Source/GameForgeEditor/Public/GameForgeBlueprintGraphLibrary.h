@@ -57,10 +57,11 @@ public:
 	 * @param NodeId Node GUID, name, or title
 	 * @param PinName Pin identifier name
 	 * @param DefaultValue String representation of the default value
+	 * @param GraphName Optional graph name (defaults to "EventGraph")
 	 * @return JSON-encoded string with operation outcome and readback value
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Blueprint")
-	static FString SetPinDefault(const FString& BlueprintPath, const FString& NodeId, const FString& PinName, const FString& DefaultValue);
+	static FString SetPinDefault(const FString& BlueprintPath, const FString& NodeId, const FString& PinName, const FString& DefaultValue, const FString& GraphName = TEXT(""));
 
 	/**
 	 * Connects two pins in a graph using UEdGraphSchema_K2 validation.
@@ -69,10 +70,11 @@ public:
 	 * @param FromPinName Source pin name
 	 * @param ToNodeId Target node identifier
 	 * @param ToPinName Target pin name
+	 * @param GraphName Optional graph name (defaults to "EventGraph")
 	 * @return JSON-encoded string with connection outcome
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Blueprint")
-	static FString ConnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId, const FString& ToPinName);
+	static FString ConnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId, const FString& ToPinName, const FString& GraphName = TEXT(""));
 
 	/**
 	 * Disconnects a pin or severs a specific link between two pins.
@@ -81,19 +83,21 @@ public:
 	 * @param FromPinName Source pin name
 	 * @param ToNodeId Optional target node identifier
 	 * @param ToPinName Optional target pin name
+	 * @param GraphName Optional graph name (defaults to "EventGraph")
 	 * @return JSON-encoded string with outcome
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Blueprint")
-	static FString DisconnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId = TEXT(""), const FString& ToPinName = TEXT(""));
+	static FString DisconnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId = TEXT(""), const FString& ToPinName = TEXT(""), const FString& GraphName = TEXT(""));
 
 	/**
 	 * Deletes a node from a graph using FBlueprintEditorUtils.
 	 * @param BlueprintPath Path to the Blueprint asset
 	 * @param NodeId Node GUID, name, or title
+	 * @param GraphName Optional graph name (defaults to "EventGraph")
 	 * @return JSON-encoded string with outcome
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Blueprint")
-	static FString DeleteNode(const FString& BlueprintPath, const FString& NodeId);
+	static FString DeleteNode(const FString& BlueprintPath, const FString& NodeId, const FString& GraphName = TEXT(""));
 
 	/**
 	 * Compiles the Blueprint and gathers compiler status and diagnostics.

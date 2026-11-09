@@ -31,7 +31,7 @@ from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 PROBE = get_settings().require_dev("probe_project").parent
 PLUGIN_BUILD = get_settings().require_dev("plugin_build")
 DATE = time.strftime("%Y%m%d")
-PROJECT_DIR = Path(rf"E:\GameForge\validation\m11_landscape_{DATE}")
+PROJECT_DIR = get_settings().require_dev("validation_root") / f"m11_landscape_{DATE}"
 REPORT = REPO / "reports" / "m11_landscape_demo.json"
 MAT = "/Game/M11/Landscape/M_GFLandscapeLayers"
 LAYERS = [("Grass", "low", [0.10, 0.32, 0.06]), ("Rock", "steep", [0.22, 0.21, 0.20]), ("Snow", "high", [0.85, 0.87, 0.9])]

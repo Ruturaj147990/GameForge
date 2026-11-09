@@ -2,7 +2,7 @@ import json
 import time
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 MODELS = ["qwen3.8:27b-q4_K_M", "gameforge-27b"]
 
@@ -331,7 +331,7 @@ def main():
     print(f"\nSaved regression results to {out_file}")
 
     # Mirror to workspace
-    mirror_file = Path(r"E:\gameforge_step1\reports\gameforge-27b\acceptance\independent_regression_results.json")
+    mirror_file = (Path(__file__).resolve().parents[1] / r"reports\gameforge-27b\acceptance\independent_regression_results.json")
     mirror_file.parent.mkdir(parents=True, exist_ok=True)
     mirror_file.write_text(json.dumps(results, indent=2))
     print(f"Mirrored regression results to {mirror_file}")

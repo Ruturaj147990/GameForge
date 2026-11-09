@@ -7,10 +7,7 @@ causal LM forward and backward passes on the 27.3B architecture.
 
 from __future__ import annotations
 
-import gc
 import json
-import os
-import sys
 import time
 import traceback
 from pathlib import Path

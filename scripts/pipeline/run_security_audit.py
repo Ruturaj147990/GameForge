@@ -27,8 +27,8 @@ def run_security_audit() -> dict:
     unapproved_matches = []
     for py_file in src_dir.rglob("*.py"):
         rel_str = str(py_file.relative_to(src_dir)).replace("\\", "/")
-        # desktop/ and forge/ are allowed approval paths
-        if rel_str.startswith("gameforge_ide/desktop/") or rel_str.startswith("gameforge_ide/forge/"):
+        # Only desktop UI approval dialogs/handlers may set approval_granted=True
+        if rel_str.startswith("gameforge_ide/desktop/"):
             continue
         try:
             content = py_file.read_text(encoding="utf-8")
@@ -192,12 +192,11 @@ def run_security_audit() -> dict:
     is_safe_good, _ = safety_scan(safe_cpp)
     if not is_safe_good:
         codegen_safe = False
-        codegen_safe = False
 
     results["codegen_scanner"] = {
         "passed": codegen_safe,
         "malicious_blocked": True,
-        "benign_passed": True,
+        "benign_passed": is_safe_good,
     }
 
     # Overall Status
@@ -209,7 +208,7 @@ def run_security_audit() -> dict:
         "elapsed_seconds": round(time.time() - start_time, 2),
     }
 
-    out_json = Path("reports/P11/security_audit.json")
+    out_json = REPO_ROOT / "reports" / "P11" / "security_audit.json"
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(audit_summary, indent=2), encoding="utf-8")
 
@@ -226,23 +225,23 @@ def run_security_audit() -> dict:
 
 | Security Control | Required Invariant | Status | Evidence |
 |---|---|:---:|---|
-| **Approval Paths** | Only UI (`desktop/`) and Forge approval handlers pass `approval_granted=True` | **PASS** | 0 unapproved occurrences across `src/` |
-| **Agent Command Execution** | Shell-free allowlist containment rejecting shell operators (`; & \\| $()`) | **PASS** | 200/200 malicious payloads BLOCKED in fuzz test |
-| **Editor Link & MCP** | Token check, loopback discovery on 47815, Unreal MCP strictly read-only | **PASS** | `UnrealMcpClient` raises `PermissionError` on mutating op |
+| **Approval Paths** | Only UI (`desktop/`) approval handlers pass `approval_granted=True` | **{'PASS' if results['approval_paths']['passed'] else 'FAIL'}** | {results['approval_paths']['count']} unapproved occurrences across `src/` |
+| **Agent Command Execution** | Shell-free allowlist containment rejecting shell operators (`; & \\| $()`) | **{'PASS' if results['command_fuzzing']['passed'] else 'FAIL'}** | {results['command_fuzzing']['blocked_count']}/200 malicious payloads BLOCKED in fuzz test |
+| **Editor Link & MCP** | Token check, loopback discovery on 47815, Unreal MCP strictly read-only | **{'PASS' if results['editor_link_mcp']['passed'] else 'FAIL'}** | `UnrealMcpClient` raises `PermissionError` on mutating op |
 | **Bridge Coexistence** | Loopback binding (127.0.0.1 / ::1), external non-loopback requests rejected | **PASS** | Verified on port 47815 and port 8000 |
-| **Egress Controls** | No cloud data egress without explicit per-workspace opt-in and spend cap | **PASS** | `GuardedProvider` raises `RuntimeError` on unapproved call |
-| **Secrets & Credentials** | Zero API keys, tokens, or plaintext secrets in repo, reports, or logs | **PASS** | Secret scanner: 0 regex hits across `.gameforge/` & `reports/` |
+| **Egress Controls** | No cloud data egress without explicit per-workspace opt-in and spend cap | **{'PASS' if results['egress_controls']['passed'] else 'FAIL'}** | `GuardedProvider` raises `RuntimeError` on unapproved call |
+| **Secrets & Credentials** | Zero API keys, tokens, or plaintext secrets in repo, reports, or logs | **{'PASS' if results['secrets_scanner']['passed'] else 'FAIL'}** | Secret scanner: {len(leaked_secrets)} regex hits across `.gameforge/` & `reports/` |
 | **Asset Licensing** | Every flagship asset has declared provenance and license row | **PASS** | 100% compliant (`EPIC_CONTENT`, `CC0`, `CUSTOM`) |
-| **Codegen Safety** | Custom rule C++ generator rejects dangerous headers, sockets, and shell calls | **PASS** | `scan_custom_code_safety()` blocks all 3 malicious test cases |
+| **Codegen Safety** | Custom rule C++ generator rejects dangerous headers, sockets, and shell calls | **{'PASS' if results['codegen_scanner']['passed'] else 'FAIL'}** | `safety_scan()` blocks all 3 malicious test cases |
 
 ---
 
 ## Fuzzing Results Detail
 - Total payloads evaluated: **200**
-- Payloads blocked: **200 (100.0%)**
-- Payloads allowed: **0**
+- Payloads blocked: **{results['command_fuzzing']['blocked_count']} ({results['command_fuzzing']['blocked_count']/2.0:.1f}%)**
+- Payloads allowed: **{len(results['command_fuzzing']['allowed_payloads'])}**
 """
-    (Path("reports/P11/security_review.md")).write_text(md_content, encoding="utf-8")
+    (REPO_ROOT / "reports" / "P11" / "security_review.md").write_text(md_content, encoding="utf-8")
     return audit_summary
 
 

@@ -9,6 +9,8 @@ Displays:
 """
 from __future__ import annotations
 
+import copy
+
 import logging
 import os
 from pathlib import Path
@@ -17,6 +19,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import (
+    QTimer,
     QAbstractListModel,
     QModelIndex,
     QObject,
@@ -375,6 +378,10 @@ class BuildView(QWidget):
         splitter.setSizes([320, 680])
         main_layout.addWidget(splitter, 1)
 
+        self._duration_timer = QTimer(self)
+        self._duration_timer.setInterval(1000)
+        self._duration_timer.timeout.connect(self._on_duration_tick)
+
         # Connect to ForgeService if provided
         if self._forge_service:
             self._forge_service.runEvent.connect(self._on_forge_event)
@@ -480,14 +487,15 @@ class BuildView(QWidget):
         self._current_state = state
         self.refresh_runs()
 
-        # Run in background daemon thread
+        # Run in background daemon thread with an isolated copy of state
+        worker_state = copy.deepcopy(state)
         def _worker():
             try:
                 from ...forge.executor import ForgeExecutor
                 from ...forge.handlers import HANDLERS
                 from ...core.events import default_bus
                 executor = ForgeExecutor(HANDLERS, bus=default_bus())
-                executor.run(state, self._store)
+                executor.run(worker_state, self._store)
             except Exception as exc:
                 logger.error("Background Forge run crashed: %s", exc, exc_info=True)
 
@@ -495,10 +503,22 @@ class BuildView(QWidget):
         t.start()
 
     def set_forge_service(self, service: ForgeService) -> None:
+        if self._forge_service is not None:
+            try:
+                self._forge_service.runEvent.disconnect(self._on_forge_event)
+                self._forge_service.runListChanged.disconnect(self.refresh_runs)
+            except Exception:
+                pass
         self._forge_service = service
-        service.runEvent.connect(self._on_forge_event)
-        service.runListChanged.connect(self.refresh_runs)
+        if service is not None:
+            service.runEvent.connect(self._on_forge_event)
+            service.runListChanged.connect(self.refresh_runs)
         self.refresh_runs()
+
+    @Slot()
+    def _on_duration_tick(self) -> None:
+        if hasattr(self, "_timeline_view") and self._timeline_view.viewport():
+            self._timeline_view.viewport().update()
 
     @Slot()
     def refresh_runs(self) -> None:
@@ -558,6 +578,12 @@ class BuildView(QWidget):
         # Update Timeline
         records = list(state.records.values())
         self._timeline_model.set_steps(records)
+        if hasattr(self, "_duration_timer"):
+            if any(getattr(r, "status", "") == "RUNNING" for r in records):
+                if not self._duration_timer.isActive():
+                    self._duration_timer.start()
+            else:
+                self._duration_timer.stop()
 
         # Update banner
         self._update_summary_banner(state)
@@ -856,13 +882,14 @@ class BuildView(QWidget):
         self._store.save(state)
         self._load_run_by_id(self._current_run_id)
 
+        worker_state = copy.deepcopy(state)
         def _worker():
             try:
                 from ...forge.executor import ForgeExecutor
                 from ...forge.handlers import HANDLERS
                 from ...core.events import default_bus
                 executor = ForgeExecutor(HANDLERS, bus=default_bus())
-                executor.run(state, self._store)
+                executor.run(worker_state, self._store)
             except Exception as exc:
                 logger.error("Background Forge resume crashed: %s", exc, exc_info=True)
 

@@ -1,0 +1,26 @@
+{
+  "dataset_name": "gameforge-27b-specialist-corpus",
+  "version": "1.0.0",
+  "revision": "v27b.1.0-20261023",
+  "source_id": "gameforge-27b-specialist-corpus",
+  "rights_holder": "GameForge Engineering & Autonomous Systems",
+  "license": "Apache-2.0 (Commercial Training Cleared)",
+  "intended_uses": [
+    "TRAINING",
+    "EVALUATION"
+  ],
+  "review_status": "CONFIRMED_FOR_TRAINING",
+  "total_samples": 10,
+  "train_samples": 8,
+  "val_samples": 2,
+  "files": {
+    "gameforge_27b_train.jsonl": {
+      "size_bytes": 23805,
+      "sha256": "2072cc0acef57b06ccafd932f73f6c700cc49cb9063a726d57d9c09afd7eee19"
+    },
+    "gameforge_27b_val.jsonl": {
+      "size_bytes": 5298,
+      "sha256": "e745239065e97f9db0e6292f639c42491a79b2591c994402844598645a0ffe04"
+    }
+  }
+}

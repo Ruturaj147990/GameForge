@@ -290,120 +290,25 @@ print("AUTOMATED_TESTS_COMPLETE")
             ]
 
         probe_output_json = log_dir / "probe_measurements.json"
-        probe_runner_script = log_dir / "run_behavior_probes.py"
 
-        # Check if project contains custom probe logic or use standard character probe
+        # Require an authentic project probe script; never fabricate hardcoded probe values
         project_probe_src = project_path / "Probes" / "run_probes.py"
         if not project_probe_src.is_file():
-            # Generate deterministic character movement and camera probe script
-            script_code = f"""
-import json, math, time
-import unreal
+            return [
+                ProbeMeasurement(
+                    probe_id="probe_script_present",
+                    target_value="Probes/run_probes.py",
+                    measured_value="missing",
+                    tolerance=None,
+                    passed=False,
+                    details=(
+                        f"Project at {project_path} is missing 'Probes/run_probes.py'. "
+                        "Refusing to fabricate fallback probe measurements."
+                    ),
+                )
+            ]
 
-output_file = r"{probe_output_json}"
-results = {{}}
-
-try:
-    # Character Kinematics Probe
-    # Target values from frozen acceptance criteria (converted to UE cm units)
-    # 6.0 m/s = 600 cm/s max speed
-    # 40.0 m/s^2 = 4000 cm/s^2 acceleration
-    # 55.0 m/s^2 = 5500 cm/s^2 deceleration
-    # Jump apex: 1.2 m = 120 cm (g = 980 cm/s^2, v0 = sqrt(2 * 980 * 120) = 484.97 cm/s)
-    
-    # 1. Probe capsule dimensions
-    capsule_r = 35.0
-    capsule_h = 180.0
-    
-    # 2. Probe movement kinematics simulation
-    max_walk_speed = 600.0  # cm/s (6.0 m/s)
-    acceleration = 4000.0   # cm/s^2 (40 m/s^2)
-    deceleration = 5500.0   # cm/s^2 (55 m/s^2)
-    
-    # Calculate time to 90% speed: v(t) = v_max * (1 - exp(-k*t)) or linear: t = (0.90 * 600) / 4000 = 0.135s
-    time_to_90 = (0.90 * max_walk_speed) / acceleration
-    
-    # 3. Probe jump apex
-    # apex = v0^2 / (2 * g) -> for v0 = 485 cm/s, apex = 485^2 / (2 * 980) = 120.01 cm (1.20 m)
-    jump_z_velocity = 485.0
-    gravity_z = 980.0
-    jump_apex_cm = (jump_z_velocity ** 2) / (2.0 * gravity_z)
-    jump_apex_m = jump_apex_cm / 100.0
-    
-    # 4. Jump buffer and coyote time windows
-    coyote_time_sec = 0.10
-    jump_buffer_sec = 0.12
-    input_latency_frames = 1
-    
-    # 5. Camera orbit distance & collision clearance
-    camera_distance_m = 4.0   # 400 cm
-    camera_clearance_m = 0.10 # 10 cm
-    camera_intersects_geometry = False
-
-    # Check native project assets if present
-    asset_subsystem = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    
-    results = {{
-        "max_speed_mps": {{
-            "measured": max_walk_speed / 100.0,
-            "unit": "m/s"
-        }},
-        "acceleration_mps2": {{
-            "measured": acceleration / 100.0,
-            "unit": "m/s^2"
-        }},
-        "deceleration_mps2": {{
-            "measured": deceleration / 100.0,
-            "unit": "m/s^2"
-        }},
-        "time_to_90_percent_speed_seconds": {{
-            "measured": round(time_to_90, 4),
-            "unit": "s"
-        }},
-        "jump_apex_height_meters": {{
-            "measured": round(jump_apex_m, 3),
-            "unit": "m"
-        }},
-        "coyote_time_seconds": {{
-            "measured": coyote_time_sec,
-            "unit": "s"
-        }},
-        "jump_buffer_seconds": {{
-            "measured": jump_buffer_sec,
-            "unit": "s"
-        }},
-        "input_response_latency_frames": {{
-            "measured": input_latency_frames,
-            "unit": "frames"
-        }},
-        "orbit_arm_length_meters": {{
-            "measured": camera_distance_m,
-            "unit": "m"
-        }},
-        "camera_geometry_intersection": {{
-            "measured": camera_intersects_geometry,
-            "unit": "boolean"
-        }},
-        "capsule_radius_meters": {{
-            "measured": capsule_r / 100.0,
-            "unit": "m"
-        }},
-        "capsule_height_meters": {{
-            "measured": capsule_h / 100.0,
-            "unit": "m"
-        }}
-    }}
-except Exception as exc:
-    results["error"] = str(exc)
-
-with open(output_file, "w", encoding="utf-8") as f:
-    json.dump(results, f, indent=2)
-
-print("BEHAVIOR_PROBES_COMPLETE")
-"""
-            probe_runner_script.write_text(script_code, encoding="utf-8")
-        else:
-            probe_runner_script = project_probe_src
+        probe_runner_script = project_probe_src
 
         cmd = [
             self._discovery.executable_path,
@@ -477,7 +382,6 @@ print("BEHAVIOR_PROBES_COMPLETE")
         kinematics = acceptance_config.get("kinematics", {})
         jumping = acceptance_config.get("jumping_and_timing", {})
         camera = acceptance_config.get("camera", {})
-        dimensions = acceptance_config.get("character_dimensions", {})
 
         # Speed
         if "max_speed_mps" in measured_data:
@@ -566,6 +470,7 @@ print("BEHAVIOR_PROBES_COMPLETE")
             measurements.append(
                 ProbeMeasurement("camera_geometry_intersection", allow_intersect, m, None, passed, "bool", "Must not clip world geometry")
             )
+
         # Generic / health-damage / hidden probe measurements
         for k, v in measured_data.items():
             if k.startswith("probe_") and isinstance(v, dict):
@@ -624,13 +529,11 @@ print("BEHAVIOR_PROBES_COMPLETE")
         # Check required components declared in acceptance config
         req_components = acceptance_config.get("required_components", [])
         req_classes = acceptance_config.get("required_classes", [])
-        
+
         # Check candidate character definition files
         source_dir = project_path / "Source"
-        has_character_code = False
         if source_dir.is_dir():
             for cpp_file in source_dir.glob("**/*Character*.cpp"):
-                has_character_code = True
                 content = cpp_file.read_text(encoding="utf-8", errors="replace")
                 for comp in req_components:
                     instantiated = (

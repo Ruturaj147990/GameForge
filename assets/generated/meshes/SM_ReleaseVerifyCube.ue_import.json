@@ -1,0 +1,42 @@
+{
+  "asset_name": "SM_ReleaseVerifyCube",
+  "target_engine": "Unreal Engine 5.7",
+  "asset_class": "UStaticMesh",
+  "generator": "GameForge Procedural Geometry Engine v1.0",
+  "timestamp": 1792833460.371361,
+  "sha256": "7e7b0c8994120ce72722aa1ddf4c113bd9cda85cfd0d1dd21346b59ee2d144ab",
+  "geometry_metrics": {
+    "vertex_count": 8,
+    "triangle_count": 12,
+    "uv_channel_count": 1,
+    "bounding_box_extent": [
+      150.0,
+      150.0,
+      150.0
+    ]
+  },
+  "unreal_import_settings": {
+    "bImportMeshLODs": false,
+    "LODGroup": "LevelArchitecture",
+    "CollisionTraceFlag": "CTF_UseSimpleAsComplex",
+    "CollisionProfileName": "BlockAllDynamic",
+    "bGenerateLightmapUVs": true,
+    "bAutoGenerateCollision": true
+  },
+  "material_bindings": [
+    {
+      "slot_index": 0,
+      "slot_name": "M_SM_ReleaseVerifyCube_Default",
+      "pbr_channels": {
+        "BaseColor": [
+          0.35,
+          0.55,
+          0.85,
+          1.0
+        ],
+        "Metallic": 0.2,
+        "Roughness": 0.4
+      }
+    }
+  ]
+}

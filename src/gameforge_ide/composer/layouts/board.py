@@ -1,8 +1,8 @@
 """Composer board layout (WI-6.3).
 
-Grid board level plan for turn-based grid games (Tic-Tac-Toe, Connect Four,
-Snakes and Ladders, etc.).
-The board actor dynamically builds its grid cells.
+Grid board level plan for turn-based and discrete grid games (Tic-Tac-Toe, Connect Four,
+Sudoku, Chess, Checkers, Minesweeper, Snakes and Ladders, Ludo, Tetris, Snake).
+The board actor dynamically builds its grid cells and enforces board_mode rules.
 """
 from __future__ import annotations
 
@@ -15,20 +15,18 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     level_id = getattr(level, "level_id", "level_1")
     map_path = map_package_path(level_id)
 
-    # Find matching board entity from GDS entities
     board_ent = None
     if hasattr(gds, "entities") and gds.entities:
         for ent in gds.entities:
             k = getattr(ent, "kind", "")
             m = getattr(ent, "module", "")
             if (
-                k in ("board", "grid", "grid_board", "tictactoe", "connect_four", "gomoku", "snakes_and_ladders")
+                str(getattr(k, "value", k)) in ("board", "grid", "grid_board", "tictactoe", "connect_four", "gomoku")
                 or m in ("kit.grid_board", "kit.board")
             ):
                 board_ent = ent
                 break
 
-    # Match entity_id and actor_id to prevent duplicate unplaced entity scattering
     if board_ent:
         board_entity_id = board_ent.entity_id
         actor_id = f"{board_ent.entity_id}_0" if not board_ent.entity_id.endswith("_0") else board_ent.entity_id
@@ -38,7 +36,6 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         actor_id = "board_0"
         tags = ["GF_E_board", "GF_Owned", "GF_Board"]
 
-    # Extract properties from board entity
     props: Dict[str, Any] = {}
     board_size = 3
     cell_size_cm = 120.0
@@ -46,23 +43,30 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     if board_ent and hasattr(board_ent, "props") and board_ent.props:
         eprops = board_ent.props
-        if "board_size" in eprops:
+        if "board_mode" in eprops and eprops["board_mode"] is not None:
+            props["BoardMode"] = str(eprops["board_mode"])
+        if "board_size" in eprops and eprops["board_size"] is not None:
             board_size = int(eprops["board_size"])
             props["BoardSize"] = board_size
-        if "win_length" in eprops:
+        if "win_length" in eprops and eprops["win_length"] is not None:
             props["WinLength"] = int(eprops["win_length"])
-        if "gravity" in eprops:
+        if "gravity" in eprops and eprops["gravity"] is not None:
             props["bGravity"] = bool(eprops["gravity"])
-        if "vs_ai" in eprops:
+        if "vs_ai" in eprops and eprops["vs_ai"] is not None:
             props["bVsAI"] = bool(eprops["vs_ai"])
-        if "ai_level" in eprops:
+        if "ai_level" in eprops and eprops["ai_level"] is not None:
             props["AILevel"] = str(eprops["ai_level"])
-        if "cell_size_cm" in eprops:
+        if "cell_size_cm" in eprops and eprops["cell_size_cm"] is not None:
             cell_size_cm = float(eprops["cell_size_cm"])
             props["CellSizeCm"] = cell_size_cm
-        for custom_key in ("snakes", "ladders", "snakes_and_ladders"):
-            if custom_key in eprops:
-                props[custom_key] = eprops[custom_key]
+        if "snakes" in eprops and eprops["snakes"] is not None:
+            props["SnakesCount"] = int(eprops["snakes"])
+        if "ladders" in eprops and eprops["ladders"] is not None:
+            props["LaddersCount"] = int(eprops["ladders"])
+        if "dice_sides" in eprops and eprops["dice_sides"] is not None:
+            props["DiceSides"] = int(eprops["dice_sides"])
+        if "players" in eprops and eprops["players"] is not None:
+            props["Players"] = int(eprops["players"])
         if "location" in eprops:
             loc_val = eprops["location"]
             if isinstance(loc_val, (list, tuple)) and len(loc_val) == 3:
@@ -78,12 +82,11 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         properties=props,
     )
 
-    # Provide enough space for player away from the board edge
-    board_extent_y = (board_size * cell_size_cm) / 2.0
+    effective_grid_dim = 10 if board_size >= 100 else board_size
+    board_extent_y = (effective_grid_dim * cell_size_cm) / 2.0
     player_y = loc[1] - max(300.0, board_extent_y + 200.0)
-    extent_xy = max(1000.0, board_size * cell_size_cm + 500.0)
+    extent_xy = max(1000.0, effective_grid_dim * cell_size_cm + 500.0)
 
-    # Spawn solid floor for player and board
     floor_extent = max(2000.0, extent_xy * 2.0)
     floor_scale = floor_extent / 100.0
     geometry_ops = [

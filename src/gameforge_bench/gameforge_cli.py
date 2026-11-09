@@ -105,11 +105,19 @@ def query_ollama(
 
 def run_interactive_chat(model: str = "gameforge-27b-sft", engine: Optional[str] = None, host: str = "127.0.0.1:11434") -> None:
     """Runs interactive terminal chat loop with knowledge retrieval."""
+    ollama_models_dir = os.environ.get("OLLAMA_MODELS")
+    if not ollama_models_dir:
+        try:
+            from src.gameforge_ide.core.settings import get_settings
+            ollama_models_dir = str(get_settings().ollama_models)
+        except Exception:
+            ollama_models_dir = str(Path.home() / ".ollama" / "models")
+
     print("=" * 72)
     print(" GAMEFORGE 27B SFT — INTERACTIVE ASSISTANT CONSOLE")
     print(f" Target Model : {model}")
     print(f" Engine Filter: {engine or 'Universal (Cross-Engine)'}")
-    print(" Local Storage: E:\\GameForge\\models\\ollama")
+    print(f" Local Storage: {ollama_models_dir}")
     print(" Type 'exit' or 'quit' to return to terminal.")
     print("=" * 72)
 
@@ -185,7 +193,6 @@ def run_model_evaluation(
         retrieval_text = kb.format_retrieval_context(snippets)
         eval_prompt = f"{retrieval_text}\n{prompt}" if retrieval_text else prompt
 
-        t0 = time.time()
         res = query_ollama(eval_prompt, model_name=model, host=host)
         resp_text = res.get("response", "")
 

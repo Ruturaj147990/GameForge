@@ -4,6 +4,7 @@
 #include "GameForgeGameState.h"
 #include "GameForgePlayer.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
@@ -15,6 +16,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationSystem.h"
 #include "GameForgeGameDefinition.h"
 #include "GameForgeVisuals.h"
 #include "Dom/JsonObject.h"
@@ -501,8 +503,9 @@ void AGameForgeProjectile::BeginPlay()
 		if (GameForgeVisuals::SetBasicShape(Mesh, TEXT("Sphere")))
 		{
 			Mesh->SetWorldScale3D(FVector(0.18f, 0.18f, 0.18f));
-			const bool bEnemyShot = Cast<AGameForgeEnemy>(GetInstigator()) != nullptr;
-			GameForgeVisuals::Tint(Mesh, bEnemyShot ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(0.3f, 0.9f, 1.f));
+			const AGameForgeEnemy* ShooterEnemy = Cast<AGameForgeEnemy>(GetInstigator());
+			const bool bHostileShot = ShooterEnemy && ShooterEnemy->TeamId != 0;
+			GameForgeVisuals::Tint(Mesh, bHostileShot ? FLinearColor(1.f, 0.25f, 0.1f) : FLinearColor(0.3f, 0.9f, 1.f));
 		}
 	}
 }
@@ -513,11 +516,13 @@ void AGameForgeProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActo
 	AActor* Shooter = GetInstigator();
 	if (OtherActor && OtherActor != Shooter)
 	{
-		// No friendly fire between enemies: a ranged enemy used to kill the melee enemies standing between it and
-		// the player, which also ended "defeat all" waves without the player doing anything.
-		const bool bShooterIsEnemy = Cast<AGameForgeEnemy>(Shooter) != nullptr;
-		const bool bTargetIsEnemy = Cast<AGameForgeEnemy>(OtherActor) != nullptr;
-		if (!(bShooterIsEnemy && bTargetIsEnemy))
+		// Avoid same-team friendly fire between enemies, while allowing allied turrets (TeamId == 0) to damage
+		// hostile enemies (TeamId != 0).
+		const AGameForgeEnemy* ShooterEnemy = Cast<AGameForgeEnemy>(Shooter);
+		const AGameForgeEnemy* TargetEnemy = Cast<AGameForgeEnemy>(OtherActor);
+		const bool bSameEnemyTeam = ShooterEnemy && TargetEnemy && (ShooterEnemy->TeamId == TargetEnemy->TeamId);
+		const bool bAlliedHittingPlayer = ShooterEnemy && ShooterEnemy->TeamId == 0 && Cast<APawn>(OtherActor) && Cast<APawn>(OtherActor)->IsPlayerControlled();
+		if (!bSameEnemyTeam && !bAlliedHittingPlayer)
 		{
 			UGameForgeDamageLibrary::ApplyDamage(OtherActor, Shooter, Damage);
 		}
@@ -567,13 +572,25 @@ void AGameForgeEnemy::BeginPlay()
 	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
 	HomeLocation = GetActorLocation();
 
+	if (!FMath::IsNearlyEqual(PatrolRadius, 600.f) && FMath::IsNearlyEqual(WanderRadius, 600.f))
+	{
+		WanderRadius = PatrolRadius;
+	}
+	if (MoveSpeed <= 0.f)
+	{
+		bStationaryTurret = true;
+	}
+
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 		AttributeSet->SetMaxHealth(MaxHealth);
 		AttributeSet->SetHealth(MaxHealth);
 	}
-	GetCharacterMovement()->MaxWalkSpeed = MoveSpeed;
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->MaxWalkSpeed = FMath::Max(0.f, MoveSpeed);
+	}
 
 	ApplyVisuals();
 
@@ -585,7 +602,11 @@ void AGameForgeEnemy::BeginPlay()
 
 void AGameForgeEnemy::ApplyVisuals()
 {
-	if (bRanged && BodyColor.Equals(FLinearColor(0.85f, 0.15f, 0.12f, 1.f)))
+	if (TeamId == 0 && BodyColor.Equals(FLinearColor(0.85f, 0.15f, 0.12f, 1.f)))
+	{
+		BodyColor = FLinearColor(0.2f, 0.75f, 0.95f, 1.f);
+	}
+	else if (bRanged && BodyColor.Equals(FLinearColor(0.85f, 0.15f, 0.12f, 1.f)))
 	{
 		BodyColor = FLinearColor(0.75f, 0.2f, 0.85f, 1.f);   // ranged enemies read differently from melee ones
 	}
@@ -696,8 +717,8 @@ void AGameForgeEnemy::OnDamaged(AActor* DamageInstigator)
 		return;
 	}
 	FlashColor(FLinearColor::White, 0.12f);
-	// Small knock-back so hits are felt.
-	if (DamageInstigator)
+	// Small knock-back so hits are felt (unless stationary turret).
+	if (DamageInstigator && !bStationaryTurret && MoveSpeed > 0.f)
 	{
 		FVector Away = GetActorLocation() - DamageInstigator->GetActorLocation();
 		Away.Z = 0.f;
@@ -800,25 +821,85 @@ AGameForgeEnemyAIController::AGameForgeEnemyAIController()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+AActor* AGameForgeEnemyAIController::ResolveHostileOrGoalTarget(AGameForgeEnemy* EnemyPawn, bool& bOutIsGoal) const
+{
+	bOutIsGoal = false;
+	if (!EnemyPawn || !GetWorld())
+	{
+		return nullptr;
+	}
+
+	// Allied unit / friendly turret (TeamId == 0): target nearest living hostile AGameForgeEnemy (TeamId != 0)
+	if (EnemyPawn->TeamId == 0)
+	{
+		AGameForgeEnemy* BestHostile = nullptr;
+		float BestDistSq = TNumericLimits<float>::Max();
+		for (TActorIterator<AGameForgeEnemy> It(GetWorld()); It; ++It)
+		{
+			AGameForgeEnemy* Other = *It;
+			if (!Other || Other == EnemyPawn || Other->IsDead() || Other->TeamId == 0)
+			{
+				continue;
+			}
+			const float D = FVector::DistSquared(EnemyPawn->GetActorLocation(), Other->GetActorLocation());
+			if (D < BestDistSq)
+			{
+				BestDistSq = D;
+				BestHostile = Other;
+			}
+		}
+		return BestHostile;
+	}
+
+	// Hostile enemy (TeamId != 0): check lane goal target if TargetGoalEntityId is specified
+	if (!EnemyPawn->TargetGoalEntityId.IsNone())
+	{
+		const FName GoalTag(*(FString(TEXT("GF_E_")) + EnemyPawn->TargetGoalEntityId.ToString()));
+		for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+		{
+			AActor* Act = *It;
+			if (!IsValid(Act) || Act == EnemyPawn)
+			{
+				continue;
+			}
+			if (Act->Tags.Contains(GoalTag) || Act->Tags.Contains(EnemyPawn->TargetGoalEntityId))
+			{
+				bOutIsGoal = true;
+				return Act;
+			}
+			if (const AGameForgeGoal* GoalActor = Cast<AGameForgeGoal>(Act))
+			{
+				if (GoalActor->EntityId == EnemyPawn->TargetGoalEntityId)
+				{
+					bOutIsGoal = true;
+					return Act;
+				}
+			}
+		}
+	}
+
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	return PC ? PC->GetPawn() : nullptr;
+}
+
 void AGameForgeEnemyAIController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
 	AGameForgeEnemy* EnemyPawn = Cast<AGameForgeEnemy>(GetPawn());
-	if (!EnemyPawn || EnemyPawn->IsDead() || EnemyPawn->AttributeSet->GetHealth() <= 0.f)
+	if (!EnemyPawn || EnemyPawn->IsDead() || (EnemyPawn->AttributeSet && EnemyPawn->AttributeSet->GetHealth() <= 0.f))
 	{
 		return;
 	}
 
-	// Re-acquire every tick: the player pawn changes on respawn and a stale weak pointer left enemies idle.
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
-	CurrentTarget = PlayerPawn;
+	bool bIsGoalTarget = false;
+	AActor* Target = ResolveHostileOrGoalTarget(EnemyPawn, bIsGoalTarget);
+	CurrentTarget = Target;
 
-	AActor* Target = CurrentTarget.Get();
+	const bool bStationary = EnemyPawn->bStationaryTurret || EnemyPawn->MoveSpeed <= 0.f;
 	const float DistSq = Target ? FVector::DistSquared(EnemyPawn->GetActorLocation(), Target->GetActorLocation()) : TNumericLimits<float>::Max();
 	const float AggroSq = FMath::Square(EnemyPawn->AggroRange);
-	// Keep chasing until the player is well outside the aggro radius (hysteresis avoids stutter at the edge).
+	// Keep chasing until the target is well outside the aggro radius (hysteresis avoids stutter at the edge).
 	const float LeashSq = FMath::Square(EnemyPawn->AggroRange * 1.5f);
 	const float AttackSq = FMath::Square(EnemyPawn->AttackRange);
 
@@ -831,7 +912,27 @@ void AGameForgeEnemyAIController::Tick(float DeltaSeconds)
 		return;
 	}
 
-	if (Target && (DistSq <= AggroSq || (bAggro && DistSq <= LeashSq)))
+	if (bStationary)
+	{
+		StopMovement();
+		if (Target && DistSq <= FMath::Max(AggroSq, AttackSq))
+		{
+			SetFocus(Target);
+			FVector ToTarget = Target->GetActorLocation() - EnemyPawn->GetActorLocation();
+			ToTarget.Z = 0.f;
+			if (!ToTarget.IsNearlyZero())
+			{
+				EnemyPawn->SetActorRotation(ToTarget.Rotation());
+			}
+			if (DistSq <= AttackSq)
+			{
+				EnemyPawn->PerformAttack(Target);
+			}
+		}
+		return;
+	}
+
+	if (Target && (bIsGoalTarget || DistSq <= AggroSq || (bAggro && DistSq <= LeashSq)))
 	{
 		bAggro = true;
 		SetFocus(Target);
@@ -842,7 +943,7 @@ void AGameForgeEnemyAIController::Tick(float DeltaSeconds)
 			const EPathFollowingRequestResult::Type Res = MoveToActor(Target, EnemyPawn->AttackRange * 0.7f, true, true, true);
 			if (Res == EPathFollowingRequestResult::Failed)
 			{
-				// No navmesh path (e.g. navmesh still building): steer straight at the player.
+				// No navmesh path (e.g. navmesh still building): steer straight at the target.
 				FVector Dir = Target->GetActorLocation() - EnemyPawn->GetActorLocation();
 				Dir.Z = 0.f;
 				EnemyPawn->AddMovementInput(Dir.GetSafeNormal(), 1.f);
@@ -882,14 +983,26 @@ void AGameForgeSpawner::BeginPlay()
 	Super::BeginPlay();
 	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
 
+	if (MaxWaves != 3 && WaveCount == 3)
+	{
+		WaveCount = MaxWaves;
+	}
+	if (!FMath::IsNearlyEqual(WaveIntervalSeconds, 5.f) && FMath::IsNearlyEqual(SecondsBetweenWaves, 5.f))
+	{
+		SecondsBetweenWaves = WaveIntervalSeconds;
+	}
+
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 	{
 		Bus->OnEvent.AddUObject(this, &AGameForgeSpawner::HandleEvent);
 	}
 
-	// Short grace period so the player can orient before the first wave arrives.
-	GetWorld()->GetTimerManager().SetTimer(WaveTimerHandle, this, &AGameForgeSpawner::StartWave,
-		FMath::Clamp(SecondsBetweenWaves * 0.5f, 1.5f, 4.f), false);
+	if (bAutoStart)
+	{
+		// Short grace period so the player can orient before the first wave arrives.
+		GetWorld()->GetTimerManager().SetTimer(WaveTimerHandle, this, &AGameForgeSpawner::StartWave,
+			FMath::Clamp(SecondsBetweenWaves * 0.5f, 1.5f, 4.f), false);
+	}
 }
 
 void AGameForgeSpawner::ConfigureSpawnedEnemy(AActor* Spawned) const
@@ -904,38 +1017,72 @@ void AGameForgeSpawner::ConfigureSpawnedEnemy(AActor* Spawned) const
 	Enemy->Tags.AddUnique(FName(TEXT("GF_Owned")));
 	Enemy->Tags.AddUnique(FName(TEXT("enemy")));
 
-	UGameForgeGameDefinition* DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main.GD_Main"));
+	// 1. Apply spawner-level enemy overrides first if set (> 0)
+	if (EnemyMaxHealth > 0.f) { Enemy->MaxHealth = EnemyMaxHealth; }
+	if (EnemyAttackDamage > 0.f) { Enemy->AttackDamage = EnemyAttackDamage; }
+	if (EnemyAttackRange > 0.f) { Enemy->AttackRange = EnemyAttackRange; }
+	if (EnemyAttackCooldown > 0.f) { Enemy->AttackCooldown = EnemyAttackCooldown; }
+	if (EnemySpeed > 0.f) { Enemy->MoveSpeed = EnemySpeed; }
+	if (!VisualStyle.IsEmpty()) { Enemy->VisualStyle = VisualStyle; }
+	if (!BodyColor.Equals(FLinearColor(0.85f, 0.15f, 0.12f, 1.f))) { Enemy->BodyColor = BodyColor; }
+
+	// 2. Also check game definition for entity-specific properties
+	const UGameForgeRuntimeSettings* Settings = GetDefault<UGameForgeRuntimeSettings>();
+	UGameForgeGameDefinition* DefAsset = (Settings && !Settings->GameDefinition.IsNull())
+		? Settings->GameDefinition.LoadSynchronous()
+		: nullptr;
+	if (!DefAsset)
+	{
+		DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main.GD_Main"));
+	}
+	if (!DefAsset)
+	{
+		DefAsset = LoadObject<UGameForgeGameDefinition>(nullptr, TEXT("/Game/GameForge/GD_Main"));
+	}
 	TSharedPtr<FJsonObject> Def;
 	if (DefAsset)
 	{
 		Def = DefAsset->GetParsed();
 	}
+	bool bExplicitAggroRange = false;
 	const TSharedPtr<FJsonObject>* Entities = nullptr;
 	const TSharedPtr<FJsonObject>* EntSpec = nullptr;
 	const TSharedPtr<FJsonObject>* Props = nullptr;
-	if (!Def.IsValid() || !Def->TryGetObjectField(TEXT("entities"), Entities) || !Entities ||
-		!(*Entities)->TryGetObjectField(EnemyEntityId.ToString(), EntSpec) || !EntSpec ||
-		!(*EntSpec)->TryGetObjectField(TEXT("properties"), Props) || !Props)
+	if (Def.IsValid() && Def->TryGetObjectField(TEXT("entities"), Entities) && Entities &&
+		(*Entities)->TryGetObjectField(EnemyEntityId.ToString(), EntSpec) && EntSpec &&
+		(*EntSpec)->TryGetObjectField(TEXT("properties"), Props) && Props)
 	{
-		return;
+		double V = 0.0;
+		if (EnemyAttackDamage <= 0.f && (*Props)->TryGetNumberField(TEXT("attack_damage"), V)) { Enemy->AttackDamage = static_cast<float>(V); }
+		if (EnemyAttackRange <= 0.f && (*Props)->TryGetNumberField(TEXT("attack_range"), V)) { Enemy->AttackRange = static_cast<float>(V); }
+		if (EnemyAttackCooldown <= 0.f && (*Props)->TryGetNumberField(TEXT("attack_cooldown"), V)) { Enemy->AttackCooldown = static_cast<float>(V); }
+		if (EnemySpeed <= 0.f && (*Props)->TryGetNumberField(TEXT("move_speed"), V)) { Enemy->MoveSpeed = static_cast<float>(V); }
+		if ((*Props)->TryGetNumberField(TEXT("aggro_range"), V) && V > 0.0)
+		{
+			Enemy->AggroRange = static_cast<float>(V);
+			bExplicitAggroRange = true;
+		}
+		if (EnemyMaxHealth <= 0.f && (*Props)->TryGetNumberField(TEXT("max_health"), V)) { Enemy->MaxHealth = static_cast<float>(V); }
+		if ((*Props)->TryGetNumberField(TEXT("projectile_speed"), V)) { Enemy->ProjectileSpeed = static_cast<float>(V); Enemy->bRanged = true; }
+		const TArray<TSharedPtr<FJsonValue>>* ColorArr = nullptr;
+		if ((*Props)->TryGetArrayField(TEXT("body_color"), ColorArr) && ColorArr && ColorArr->Num() >= 3)
+		{
+			TArray<double> Values;
+			for (const TSharedPtr<FJsonValue>& C : *ColorArr) { Values.Add(C->AsNumber()); }
+			Enemy->BodyColor = GameForgeVisuals::ColorFromArray(Values, Enemy->BodyColor);
+		}
 	}
-	double V = 0.0;
-	if ((*Props)->TryGetNumberField(TEXT("attack_damage"), V)) { Enemy->AttackDamage = static_cast<float>(V); }
-	if ((*Props)->TryGetNumberField(TEXT("attack_range"), V)) { Enemy->AttackRange = static_cast<float>(V); }
-	if ((*Props)->TryGetNumberField(TEXT("attack_cooldown"), V)) { Enemy->AttackCooldown = static_cast<float>(V); }
-	if ((*Props)->TryGetNumberField(TEXT("move_speed"), V)) { Enemy->MoveSpeed = static_cast<float>(V); }
-	if ((*Props)->TryGetNumberField(TEXT("aggro_range"), V)) { Enemy->AggroRange = static_cast<float>(V); }
-	if ((*Props)->TryGetNumberField(TEXT("max_health"), V)) { Enemy->MaxHealth = static_cast<float>(V); }
-	if ((*Props)->TryGetNumberField(TEXT("projectile_speed"), V)) { Enemy->ProjectileSpeed = static_cast<float>(V); Enemy->bRanged = true; }
-	// Wave enemies come to the player; wandering around the spawner would stall the wave.
-	Enemy->AggroRange = FMath::Max(Enemy->AggroRange, 6000.f);
-	const TArray<TSharedPtr<FJsonValue>>* ColorArr = nullptr;
-	if ((*Props)->TryGetArrayField(TEXT("body_color"), ColorArr) && ColorArr && ColorArr->Num() >= 3)
+
+	// Wave enemies come to the player when no explicit aggro_range override was specified.
+	if (!bExplicitAggroRange)
 	{
-		TArray<double> Values;
-		for (const TSharedPtr<FJsonValue>& C : *ColorArr) { Values.Add(C->AsNumber()); }
-		Enemy->BodyColor = GameForgeVisuals::ColorFromArray(Values, Enemy->BodyColor);
+		Enemy->AggroRange = FMath::Max(Enemy->AggroRange, 6000.f);
 	}
+}
+
+void AGameForgeSpawner::SpawnWave()
+{
+	StartWave();
 }
 
 void AGameForgeSpawner::StartWave()
@@ -965,15 +1112,27 @@ void AGameForgeSpawner::StartWave()
 	}
 
 	UClass* Cls = EnemyClass ? EnemyClass.Get() : AGameForgeEnemy::StaticClass();
-	// Later waves are a little bigger so the fight escalates.
-	const int32 ThisWave = EnemiesPerWave + (CurrentWave - 1) / 2;
+	// Later waves are a little bigger so the fight escalates, capped by MaxAlive.
+	const int32 DesiredCount = EnemiesPerWave + (CurrentWave - 1) / 2;
+	const int32 ThisWave = (MaxAlive > 0) ? FMath::Min(DesiredCount, MaxAlive) : DesiredCount;
 	int32 Spawned = 0;
+
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
 
 	for (int32 i = 0; i < ThisWave; i++)
 	{
 		const float Angle = (static_cast<float>(i) / FMath::Max(1, ThisWave)) * 2.f * PI + FMath::FRandRange(-0.2f, 0.2f);
 		FVector Offset(FMath::Cos(Angle) * SpawnRadius, FMath::Sin(Angle) * SpawnRadius, 90.f);
-		FTransform SpawnTransform(GetActorRotation(), GetActorLocation() + Offset);
+		FVector SpawnLocation = GetActorLocation() + Offset;
+
+		// Project candidate spawn point onto NavMesh so enemies never spawn outside walls/bounds
+		FNavLocation ProjectedLoc;
+		if (NavSys && NavSys->ProjectPointToNavigation(SpawnLocation, ProjectedLoc, FVector(400.f, 400.f, 500.f)))
+		{
+			SpawnLocation = ProjectedLoc.Location + FVector(0.f, 0.f, 90.f);
+		}
+
+		FTransform SpawnTransform(GetActorRotation(), SpawnLocation);
 
 		AActor* NewActor = W->SpawnActorDeferred<AActor>(Cls, SpawnTransform, nullptr, nullptr,
 			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
@@ -993,25 +1152,40 @@ void AGameForgeSpawner::StartWave()
 	}
 }
 
-void AGameForgeSpawner::HandleEvent(const FGameForgeEvent& Event)
+void AGameForgeSpawner::OnEnemyDied(const FString& DeadActorName)
 {
-	// Only this spawner's own wave members count: pre-placed enemies of the same entity, or another spawner's
-	// wave, used to clear this wave early while its enemies were still alive.
-	if (Event.Name == GFEvent::EnemyKilled && AliveEnemiesInWave > 0 && WaveActorNames.Remove(Event.Source) > 0)
+	if (AliveEnemiesInWave > 0 && WaveActorNames.Remove(DeadActorName) > 0)
 	{
 		AliveEnemiesInWave--;
 		if (AliveEnemiesInWave <= 0)
 		{
+			if (UWorld* W = GetWorld())
+			{
+				if (AGameForgeGameState* GS = W->GetGameState<AGameForgeGameState>())
+				{
+					GS->IncrementCounter(FName(TEXT("game.counter.waves_cleared")), 1);
+				}
+			}
 			if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
 			{
 				Bus->Emit(GFEvent::WaveCleared, GetName(), FString::Printf(TEXT("{\"wave\":%d}"), CurrentWave), EntityId);
 			}
 
-			if (CurrentWave < WaveCount)
+			if (CurrentWave < WaveCount && GetWorld())
 			{
 				GetWorld()->GetTimerManager().SetTimer(WaveTimerHandle, this, &AGameForgeSpawner::StartWave, SecondsBetweenWaves, false);
 			}
 		}
+	}
+}
+
+void AGameForgeSpawner::HandleEvent(const FGameForgeEvent& Event)
+{
+	// Only this spawner's own wave members count: pre-placed enemies of the same entity, or another spawner's
+	// wave, used to clear this wave early while its enemies were still alive.
+	if (Event.Name == GFEvent::EnemyKilled)
+	{
+		OnEnemyDied(Event.Source);
 	}
 }
 

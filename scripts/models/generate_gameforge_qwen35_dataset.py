@@ -20,14 +20,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
 from pathlib import Path
 from typing import Any, Dict, List
 
 OUTPUT_DATA_DIR = Path("E:/GameForge/datasets/gameforge-qwen35")
 EXISTING_DATA_DIR = Path("E:/GameForge/datasets/gameforge-27b-sft")
-REPORTS_DIR = Path("E:/gameforge_step1/reports")
+REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports")
 
 OUTPUT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)

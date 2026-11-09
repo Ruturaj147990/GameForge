@@ -144,6 +144,22 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             )
             break
 
+    # 4. Elevated vantage platforms at corners for 3D verticality
+    for v_idx, (vx, vy) in enumerate([(-half_x_cm * 0.6, -half_y_cm * 0.6), (half_x_cm * 0.6, half_y_cm * 0.6)]):
+        geometry_ops.append(
+            OpCall(
+                op="spawn_actor",
+                args={
+                    "actor_class": "StaticMeshActor",
+                    "label": f"GF_Platform_Vantage_{v_idx}",
+                    "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                    "location": {"x": round(vx, 1), "y": round(vy, 1), "z": 60.0},
+                    "scale": {"x": 4.0, "y": 4.0, "z": 1.2},
+                },
+                purpose=f"Spawn arena vantage platform {v_idx}",
+            )
+        )
+
     nav_extent = (half_x_cm + 200.0, half_y_cm + 200.0, 500.0)
 
     return LevelPlan(

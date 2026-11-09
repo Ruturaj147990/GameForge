@@ -1,5 +1,4 @@
-FROM E:\GameForge\models\ollama\blobs\sha256-d73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b
-FROM E:\GameForge\models\ollama\blobs\sha256-ac3714bfdddeca31351f2752bf1a63f266f4df87c0b68c895e44945ca704448e
+FROM qwen3.8:27b-q4_K_M
 TEMPLATE """{{ if .System }}<|im_start|>system
 {{ .System }}<|im_end|>
 {{ end }}{{ if .Prompt }}<|im_start|>user

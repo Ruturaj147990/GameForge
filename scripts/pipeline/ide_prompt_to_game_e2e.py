@@ -31,7 +31,6 @@ def main() -> int:
     out = ws / ".gameforge" / "e2e"
     out.mkdir(parents=True, exist_ok=True)
 
-    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QPushButton
     from src.gameforge_ide.desktop.main_window import MainWindow
     from src.gameforge_ide.desktop.panels.approval_card import ApprovalCard

@@ -31,6 +31,9 @@ SFX_SETS: Dict[str, Dict[str, SFXPreset]] = {
         "chime_low": SFXPreset("chime_low", "pickup", gain=0.75, duration_s=0.50, description="Subtle warm notification"),
         "ui_click": SFXPreset("ui_click", "click", gain=0.70, duration_s=0.04, description="Crisp mechanical button click"),
         "footstep_soft": SFXPreset("footstep_soft", "impact", gain=0.40, duration_s=0.12, description="Soft footfall tap"),
+        "laser": SFXPreset("laser", "whoosh", gain=0.80, duration_s=0.22, description="High-energy sci-fi laser zap"),
+        "explosion": SFXPreset("explosion", "impact", gain=0.92, duration_s=0.75, description="Deep concussive blast"),
+        "switch": SFXPreset("switch", "click", gain=0.78, duration_s=0.14, description="Mechanical latch switch activation"),
     },
     "retro": {
         "pickup_chime": SFXPreset("pickup_chime", "pickup", gain=0.80, duration_s=0.25, description="8-bit arpeggio burst"),
@@ -40,6 +43,9 @@ SFX_SETS: Dict[str, Dict[str, SFXPreset]] = {
         "chime_low": SFXPreset("chime_low", "click", gain=0.70, duration_s=0.15, description="Low retro blip"),
         "ui_click": SFXPreset("ui_click", "click", gain=0.75, duration_s=0.03, description="Chiptune tick"),
         "footstep_soft": SFXPreset("footstep_soft", "click", gain=0.35, duration_s=0.08, description="Light chiptune tap"),
+        "laser": SFXPreset("laser", "pickup", gain=0.78, duration_s=0.18, description="8-bit pew laser pulse"),
+        "explosion": SFXPreset("explosion", "impact", gain=0.88, duration_s=0.60, description="Retro noise rumble blast"),
+        "switch": SFXPreset("switch", "click", gain=0.75, duration_s=0.10, description="Retro toggle beep"),
     },
     "soft": {
         "pickup_chime": SFXPreset("pickup_chime", "pickup", gain=0.60, duration_s=0.40, description="Soft mellow bell ring"),
@@ -49,6 +55,9 @@ SFX_SETS: Dict[str, Dict[str, SFXPreset]] = {
         "chime_low": SFXPreset("chime_low", "pickup", gain=0.50, duration_s=0.60, description="Distant resonance"),
         "ui_click": SFXPreset("ui_click", "click", gain=0.50, duration_s=0.03, description="Gentle woodblock click"),
         "footstep_soft": SFXPreset("footstep_soft", "whoosh", gain=0.30, duration_s=0.10, description="Whisper step"),
+        "laser": SFXPreset("laser", "whoosh", gain=0.58, duration_s=0.25, description="Soft harmonic energy pulse"),
+        "explosion": SFXPreset("explosion", "whoosh", gain=0.68, duration_s=0.65, description="Warm low-end swell"),
+        "switch": SFXPreset("switch", "click", gain=0.55, duration_s=0.12, description="Muted wooden toggle click"),
     },
 }
 

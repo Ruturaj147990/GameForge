@@ -104,7 +104,7 @@ void FGameForgeBridgeClient::SendContextToIDE()
 
 	TSharedRef<IHttpRequest> Request = FHttpModule::Get().CreateRequest();
 	Request->SetTimeout(5.0f);
-	Request->OnProcessRequestComplete().BindRaw(this, &FGameForgeBridgeClient::OnContextResponseReceived);
+	Request->OnProcessRequestComplete().BindSP(this, &FGameForgeBridgeClient::OnContextResponseReceived);
 	Request->SetURL(IDEServerUrl + TEXT("/api/unreal/context"));
 	Request->SetVerb(TEXT("POST"));
 	Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));

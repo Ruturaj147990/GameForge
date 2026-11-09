@@ -21,9 +21,8 @@ approval.
 - **Always** `"think": false` and an explicit `num_ctx` on programmatic calls.
 - Training lineage: `reports/gameforge-27b-sft/`, `reports/GAMEFORGE_QWEN35_*`, `reports/GAMEFORGE_TRAINING_*`, datasets
   under `E:\GameForge\datasets\`. Never overwrite a tag or Modelfile without a rollback copy.
-- Measured on GameForge Agentic Eval Suite (P9, 
-eports/P9/eval_*.json):
-  - gameforge-qwen3.5-4b:latest: 38.9% pass rate, 94.4% valid JSON, 101.1 tok/s, p90 latency 3.83s (routed to ast, design, codegen, ision).
+- Measured on GameForge Agentic Eval Suite (P9, `reports/P9/eval_*.json`):
+  - gameforge-qwen3.5-4b:latest: 38.9% pass rate, 94.4% valid JSON, 101.1 tok/s, p90 latency 3.83s (routed to `fast`, design, codegen, `vision`).
   - gameforge-qwen3.5-9b:latest: 33.3% pass rate, 83.3% valid JSON, 63.4 tok/s, p90 latency 62.67s (routed to chat).
   - llama3.1:8b: 33.3% pass rate, 100.0% valid JSON, 76.4 tok/s, p90 latency 2.81s (baseline).
   - gameforge-27b-sft:latest: 25.0% pass rate, 75.0% valid JSON, 6.0 tok/s, p90 latency 120.01s (routed to heavy_local).

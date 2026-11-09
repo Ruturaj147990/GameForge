@@ -216,7 +216,7 @@ class ProjectIndex:
                             elif entry.is_file(follow_symlinks=False):
                                 dot_idx = name.rfind(".")
                                 if dot_idx != -1 and name[dot_idx:].lower() in valid_exts:
-                                    rel_str = entry.path[proj_len:].replace("\\", "/")
+                                    rel_str = os.path.relpath(entry.path, proj_str).replace("\\", "/")
                                     found_paths.add(rel_str)
                                     try:
                                         st = entry.stat(follow_symlinks=False)
@@ -369,10 +369,14 @@ class ProjectIndex:
                         )
                     continue
 
-            # Class declaration (skip if enum class)
+            # Class declaration (skip if enum class or forward declaration ending in ';')
             if "class" in sline and not sline.startswith("enum"):
                 snippet = get_joined_snippet(i - 1, max_lines=5, terminators=("{", ";"))
-                m_class = RE_CLASS_DECL.search(snippet)
+                clean_snip = re.sub(r"//.*?$", "", snippet, flags=re.MULTILINE)
+                clean_snip = re.sub(r"/\*.*?\*/", "", clean_snip, flags=re.DOTALL)
+                if ";" in clean_snip and ("{" not in clean_snip or clean_snip.index(";") < clean_snip.index("{")):
+                    continue
+                m_class = RE_CLASS_DECL.search(clean_snip)
                 if m_class and (has_macro("UCLASS", i - 12, i) or "class" in sline):
                     cls_name = m_class.group(1)
                     parent_cls = m_class.group(2)
@@ -390,10 +394,14 @@ class ProjectIndex:
                         )
                     continue
 
-            # Struct declaration
+            # Struct declaration (skip forward declaration ending in ';')
             if "struct" in sline:
                 snippet = get_joined_snippet(i - 1, max_lines=4, terminators=("{", ";"))
-                m_struct = RE_STRUCT_DECL.search(snippet)
+                clean_snip = re.sub(r"//.*?$", "", snippet, flags=re.MULTILINE)
+                clean_snip = re.sub(r"/\*.*?\*/", "", clean_snip, flags=re.DOTALL)
+                if ";" in clean_snip and ("{" not in clean_snip or clean_snip.index(";") < clean_snip.index("{")):
+                    continue
+                m_struct = RE_STRUCT_DECL.search(clean_snip)
                 if m_struct and (has_macro("USTRUCT", i - 12, i) or "struct" in sline):
                     st_name = m_struct.group(1)
                     if ("struct", st_name) not in seen_symbols:
@@ -649,3 +657,98 @@ class ProjectIndex:
             }
         finally:
             conn.close()
+
+    @_retry_sqlite_locked(max_retries=5, base_backoff=0.05)
+    def search_assets(
+        self,
+        query: str = "",
+        asset_class: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Search indexed Unreal assets by path substring and optional asset class."""
+        limit = min(50, max(1, limit))
+        offset = max(0, offset)
+        trimmed = (query or "").strip()
+        is_all = trimmed in ("*", "", '""', "''")
+
+        conn = self._get_connection()
+        try:
+            where_clauses: List[str] = []
+            params: List[Any] = []
+            if is_all:
+                where_clauses.append("1=1")
+            else:
+                like_pat = trimmed.replace("*", "%")
+                if "%" not in like_pat:
+                    like_pat = f"%{like_pat}%"
+                where_clauses.append("path LIKE ?")
+                params.append(like_pat)
+
+            if asset_class:
+                where_clauses.append("class = ?")
+                params.append(asset_class)
+
+            where_str = f"WHERE {' AND '.join(where_clauses)}"
+            total = conn.execute(f"SELECT COUNT(*) FROM assets {where_str}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT path, class, deps_json FROM assets {where_str} ORDER BY path ASC LIMIT ? OFFSET ?",
+                list(params) + [limit, offset],
+            ).fetchall()
+            results = []
+            for r in rows:
+                try:
+                    deps = json.loads(r[2]) if r[2] else []
+                except Exception:
+                    deps = []
+                results.append({"path": r[0], "class": r[1], "dependencies": deps})
+            return {"total": total, "limit": limit, "offset": offset, "results": results}
+        finally:
+            conn.close()
+
+    @_retry_sqlite_locked(max_retries=5, base_backoff=0.05)
+    def search_config(
+        self,
+        query: str = "",
+        section: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Search indexed INI configuration entries by key/value/section."""
+        limit = min(50, max(1, limit))
+        offset = max(0, offset)
+        trimmed = (query or "").strip()
+        is_all = trimmed in ("*", "", '""', "''")
+
+        conn = self._get_connection()
+        try:
+            where_clauses: List[str] = []
+            params: List[Any] = []
+            if is_all:
+                where_clauses.append("1=1")
+            else:
+                like_pat = trimmed.replace("*", "%")
+                if "%" not in like_pat:
+                    like_pat = f"%{like_pat}%"
+                where_clauses.append("(key LIKE ? OR value LIKE ? OR section LIKE ?)")
+                params.extend([like_pat, like_pat, like_pat])
+
+            if section:
+                where_clauses.append("section = ?")
+                params.append(section)
+
+            where_str = f"WHERE {' AND '.join(where_clauses)}"
+            total = conn.execute(f"SELECT COUNT(*) FROM config {where_str}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT file, section, key, value FROM config {where_str} ORDER BY file ASC, section ASC, key ASC LIMIT ? OFFSET ?",
+                list(params) + [limit, offset],
+            ).fetchall()
+            results = [
+                {"file": r[0], "section": r[1], "key": r[2], "value": r[3]}
+                for r in rows
+            ]
+            return {"total": total, "limit": limit, "offset": offset, "results": results}
+        finally:
+            conn.close()
+
+ProjectIndexer = ProjectIndex

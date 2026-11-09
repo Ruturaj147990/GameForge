@@ -1,0 +1,11 @@
+{
+  "engine_root": "E:\\UE\\UE_5.7",
+  "version": "5.7.4",
+  "changelist": 51494982,
+  "msvc_toolchain_root": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207",
+  "msvc_cl_exe": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+  "ubt_path": "E:\\UE\\UE_5.7\\Engine\\Binaries\\DotNET\\UnrealBuildTool\\UnrealBuildTool.exe",
+  "uat_path": "E:\\UE\\UE_5.7\\Engine\\Build\\BatchFiles\\RunUAT.bat",
+  "editor_cmd": "E:\\UE\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+  "bridge_port": 47815
+}

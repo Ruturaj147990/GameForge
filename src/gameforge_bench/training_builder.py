@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .data_factory import compute_canonical_fingerprint, compute_sha256, normalize_text_content
+from .data_factory import coerce_sft_record_to_sample_record, compute_canonical_fingerprint, compute_sha256, normalize_text_content
 from .training_validator import EligibilityReport, TrainingReadinessValidator
 
 
@@ -73,6 +73,7 @@ class TrainingDatasetBuilder:
         Fails if mandatory task identity, engine name, or engine version is missing.
         Never fabricates invented defaults.
         """
+        record = coerce_sft_record_to_sample_record(record)
         sample_id = record["sample_id"]
         task_info = record.get("task_info") or {}
         task_id = task_info.get("task_id")

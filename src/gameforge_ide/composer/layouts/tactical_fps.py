@@ -1,4 +1,4 @@
-"""Composer tactical FPS bomb-defusal layout (Counter-Strike style).
+"""Composer tactical two-site FPS layout (WI-6.3).
 
 Provides an authentic tactical bomb-defusal map:
 - Counter-Terrorist (CT) Spawn Base
@@ -247,7 +247,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     # 9. Spawner for backup waves if wave rules apply
     actors.append(
         PlacedActor(
-            actor_id="spawner_terrorist_reinforcements",
+            actor_id="spawner_tactical_reinforcements",
             runtime_class="/Script/GameForgeRuntime.GameForgeSpawner",
             location=(0.0, 2200.0, 50.0),
             yaw=180.0,

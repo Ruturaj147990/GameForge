@@ -1,17 +1,10 @@
-"""Composer platformer course layout (WI-6.3, reworked).
+"""Composer platformer and racing course layout (WI-6.3, reworked).
 
-A course of floating platforms the player has to *jump* across. The previous version placed 3 m platforms 2.6-4.2 m
-apart centre-to-centre (so edge gaps of -0.4..1.2 m: platforms touched or overlapped) and then bridged every gap with a
-walkway ramp, so the "platformer" was a straight flat walk with no jump required.
-
-Now:
-* gaps are measured edge-to-edge and sized from the player's real ballistic jump (``validate_jump_reachability``),
-  scaled by difficulty;
-* the course zig-zags laterally and climbs, with varied platform sizes;
-* some gaps get moving platforms, hazard platforms and bonus pickups that need a jump;
-* walkway bridges only exist on easy difficulty (and are then narrow planks), so navmesh reachability checks are only
-  emitted when the course is actually walkable;
-* a kill volume below the course catches falls and the game mode respawns the player at the last checkpoint.
+Supports:
+1. Platformer jump course with ballistic jump reachability validation, zig-zag climbing platforms,
+   moving platforms, hazards, checkpoints, and bonus gap pickups.
+2. High-speed Racing track mode (`track_mode == "racing"`) with continuous wide road segments,
+   connected asphalt bridges, drivable checkpoint gates, speed boost pads, and finish line arch.
 """
 from __future__ import annotations
 
@@ -29,16 +22,11 @@ def validate_jump_reachability(
     jump_velocity: float = 650.0,
     gravity_scale: float = 1.2,
 ) -> Tuple[bool, float, float]:
-    """Validate jump reachability using the ballistic flight formula (WI-6.3).
-
-    Returns:
-        (is_reachable, max_allowable_h_cm, max_allowable_gap_cm)
-    """
-    g_acc = max(100.0, gravity_scale * 980.0)  # cm/s^2
+    """Validate jump reachability using the ballistic flight formula (WI-6.3)."""
+    g_acc = max(100.0, gravity_scale * 980.0)
     t_apex = jump_velocity / g_acc
     max_h = (jump_velocity ** 2) / (2.0 * g_acc)
 
-    # Allow up to 92% of peak jump height for execution margin
     max_allowable_h = 0.92 * max_h
     if height_delta_cm > max_allowable_h:
         apex_gap = 0.85 * move_speed * t_apex
@@ -54,7 +42,6 @@ def validate_jump_reachability(
 
 
 _DIFFICULTY = {
-    # (gap fraction of max jump, platform size m (min, max), rise fraction of max height, bridge every N gaps (0 = none))
     "easy": (0.35, (3.6, 4.6), 0.30, 1),
     "normal": (0.55, (2.8, 3.8), 0.45, 0),
     "hard": (0.72, (2.0, 3.0), 0.60, 0),
@@ -93,11 +80,27 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     level_id = getattr(level, "level_id", "level_1")
     map_path = map_package_path(level_id)
 
+    layout_params = getattr(level, "layout_params", {}) or {}
+    meta_title = getattr(getattr(gds, "meta", None), "title", "") or ""
+    meta_prompt = getattr(getattr(gds, "meta", None), "source_prompt", "") or ""
+    pitch = getattr(getattr(gds, "overview", None), "pitch", "") or ""
+    is_racing = (
+        layout_params.get("track_mode") == "racing"
+        or any(k in f"{meta_title} {meta_prompt} {pitch}".lower() for k in ("racing", "race track", "kart", "grand prix", "time trial"))
+    )
+
     difficulty = str(getattr(getattr(gds, "progression", None), "difficulty", "normal") or "normal")
     gap_frac, (size_min, size_max), rise_frac, bridge_every = _DIFFICULTY.get(difficulty, _DIFFICULTY["normal"])
+    if is_racing:
+        # Continuous wide road segments bridged together for high-speed driving
+        gap_frac = 0.25
+        size_min, size_max = 6.0, 8.0
+        rise_frac = 0.15
+        bridge_every = 1
+
     move_speed, jump_velocity, gravity_scale, jumps = _player_physics(gds)
-    if jumps > 1:
-        gap_frac = min(0.85, gap_frac + 0.12)   # double jump earns wider gaps
+    if jumps > 1 and not is_racing:
+        gap_frac = min(0.85, gap_frac + 0.12)
         rise_frac = min(0.8, rise_frac + 0.15)
 
     _ok, max_h, max_gap_flat = validate_jump_reachability(0.0, 0.0, move_speed, jump_velocity, gravity_scale)
@@ -115,23 +118,22 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     actors: List[PlacedActor] = []
 
     # 1. Start pad
-    start_half = 300.0
+    start_half = 400.0 if is_racing else 300.0
     geometry_ops.append(OpCall(op="spawn_actor", purpose="Spawn start platform", args={
         "actor_class": "StaticMeshActor", "label": "GF_Platform_Start",
         "static_mesh": "/Engine/BasicShapes/Cube.Cube",
-        "location": {"x": 0.0, "y": 0.0, "z": -25.0}, "scale": {"x": 6.0, "y": 6.0, "z": 0.5},
+        "location": {"x": 0.0, "y": 0.0, "z": -25.0},
+        "scale": {"x": round(start_half / 50.0, 1), "y": round(start_half / 50.0, 1), "z": 0.5},
     }))
 
-    # platform record: (x, y, top_z, half_size)
     platforms: List[Tuple[float, float, float, float]] = [(0.0, 0.0, 0.0, start_half)]
-    gaps: List[Tuple[int, float]] = []   # (index of platform after the gap, edge gap cm)
+    gaps: List[Tuple[int, float]] = []
     heading = 0.0
     for i in range(1, num_platforms):
         px, py, pz, phalf = platforms[-1]
         is_goal = i == num_platforms - 1
         half = (size_max * 50.0 + 60.0) if is_goal else rng.uniform(size_min, size_max) * 50.0
 
-        # Height change first (gap depends on it), then a reachable edge gap for that height.
         rise = rng.uniform(-0.35, 1.0) * rise_frac * max_h
         target_z = max(-150.0, min(1600.0, pz + rise))
         dz = target_z - pz
@@ -142,9 +144,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             _ok2, _mh2, max_gap = validate_jump_reachability(0.0, dz, move_speed, jump_velocity, gravity_scale)
         gap = max(140.0, rng.uniform(0.75, 1.0) * gap_frac * max_gap)
         if i % 5 == 0 and not is_goal:
-            gap = max(140.0, 0.35 * max_gap)   # breather jump
+            gap = max(140.0, 0.35 * max_gap)
 
-        # Zig-zag: turn up to +-35 degrees, but keep the course heading generally along +X.
         heading = max(-40.0, min(40.0, heading + rng.uniform(-35.0, 35.0)))
         rad = math.radians(heading)
         dist = phalf + gap + half
@@ -160,27 +161,38 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             "scale": {"x": round(half / 50.0, 2), "y": round(half / 50.0, 2), "z": 0.5},
         }))
 
-        # Easy courses get plank bridges so they stay walkable (and navmesh-verifiable).
         if bridge_every and i % bridge_every == 0:
             mid_x, mid_y = (px + nx) / 2.0, (py + ny) / 2.0
             mid_z = (pz + target_z) / 2.0 - 15.0
             span = math.hypot(nx - px, ny - py) - phalf - half + 80.0
-            pitch = math.degrees(math.atan2(target_z - pz, max(1.0, span)))
-            if abs(pitch) <= 30.0:
-                geometry_ops.append(OpCall(op="spawn_actor", purpose=f"Plank bridge to platform {i}", args={
-                    "actor_class": "StaticMeshActor", "label": f"GF_Walkway_{i}",
+            pitch_deg = math.degrees(math.atan2(target_z - pz, max(1.0, span)))
+            if abs(pitch_deg) <= 30.0:
+                bridge_width = 5.5 if is_racing else 1.2
+                geometry_ops.append(OpCall(op="spawn_actor", purpose=f"Road/plank bridge to platform {i}", args={
+                    "actor_class": "StaticMeshActor", "label": f"GF_Road_{i}" if is_racing else f"GF_Walkway_{i}",
                     "static_mesh": "/Engine/BasicShapes/Cube.Cube",
                     "location": {"x": round(mid_x, 1), "y": round(mid_y, 1), "z": round(mid_z, 1)},
-                    "rotation": {"pitch": round(-pitch, 2), "yaw": round(heading, 1), "roll": 0.0},
-                    "scale": {"x": round(max(1.0, span / 100.0), 2), "y": 1.2, "z": 0.3},
+                    "rotation": {"pitch": round(-pitch_deg, 2), "yaw": round(heading, 1), "roll": 0.0},
+                    "scale": {"x": round(max(1.0, span / 100.0), 2), "y": bridge_width, "z": 0.3},
                 }))
+                if is_racing:
+                    perp_x = -math.sin(rad) * (bridge_width * 50.0)
+                    perp_y = math.cos(rad) * (bridge_width * 50.0)
+                    for side_sign, side_tag in ((-1.0, "L"), (1.0, "R")):
+                        geometry_ops.append(OpCall(op="spawn_actor", purpose=f"Racing guardrail {i} {side_tag}", args={
+                            "actor_class": "StaticMeshActor", "label": f"GF_Guardrail_{i}_{side_tag}",
+                            "static_mesh": "/Engine/BasicShapes/Cube.Cube",
+                            "location": {"x": round(mid_x + side_sign * perp_x, 1), "y": round(mid_y + side_sign * perp_y, 1), "z": round(mid_z + 45.0, 1)},
+                            "rotation": {"pitch": round(-pitch_deg, 2), "yaw": round(heading, 1), "roll": 0.0},
+                            "scale": {"x": round(max(1.0, span / 100.0), 2), "y": 0.25, "z": 0.8},
+                        }))
 
     walkable = bool(bridge_every)
     end_x = max(p[0] for p in platforms)
     min_y = min(p[1] for p in platforms) - 1500.0
     max_y = max(p[1] for p in platforms) + 1500.0
 
-    # 2. Safety floor + kill volume (falls respawn at the last checkpoint via the game mode)
+    # 2. Safety floor + kill volume
     floor_cx, floor_cy = end_x / 2.0, (min_y + max_y) / 2.0
     floor_len, floor_wid = end_x + 3000.0, (max_y - min_y)
     geometry_ops.append(OpCall(op="spawn_actor", purpose="Spawn course safety floor", args={
@@ -214,7 +226,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     # 4. Checkpoints spread along the course
     cp_id = checkpoint_ents[0].entity_id if checkpoint_ents else "checkpoint"
-    cp_count = max(1, min(4, (checkpoint_ents[0].count if checkpoint_ents else 1), num_platforms // 4))
+    cp_count = max(1, min(6, (checkpoint_ents[0].count if checkpoint_ents else 1), num_platforms // 3))
     cp_indices = sorted({max(1, int(round((k + 1) * (num_platforms - 1) / (cp_count + 1)))) for k in range(cp_count)})
     for k, idx in enumerate(cp_indices):
         x, y, z, _h = platforms[idx]
@@ -222,10 +234,10 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                                   runtime_class="/Script/GameForgeRuntime.GameForgeCheckpoint",
                                   location=(round(x, 1), round(y, 1), round(z + 50.0, 1)),
                                   tags=_tags(cp_id, "checkpoint", k, f"{cp_id}_{k}") + (["cp_0"] if k == 0 else []),
-                                  properties={}))
+                                  properties={"bActivateOnce": not is_racing}))
     reserved = set(cp_indices) | {0, num_platforms - 1}
 
-    # 5. Hazard platforms (the hazard sits on one half of a platform so the jump target must be chosen)
+    # 5. Hazard platforms
     hazard_slots = [i for i in range(2, num_platforms - 1) if i not in reserved]
     rng.shuffle(hazard_slots)
     for entity_id, count, ent in hazard_requests:
@@ -243,27 +255,28 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                                       tags=_tags(entity_id, "hazard", c_i, f"{entity_id}_{c_i}"), properties=props))
             reserved.add(idx)
 
-    # 6. Moving platforms replace a few static ones: they shuttle sideways across their gap.
-    mover_slots = [i for i in range(2, num_platforms - 1) if i not in reserved]
-    rng.shuffle(mover_slots)
-    mover_total = sum(c for _id, c, _e in mover_requests) or (2 if difficulty != "easy" and num_platforms >= 12 else 0)
-    mover_entity = mover_requests[0][0] if mover_requests else "moving_platforms"
-    for m_i in range(min(mover_total, len(mover_slots), 4)):
-        idx = mover_slots.pop()
-        x, y, z, half = platforms[idx]
-        travel = rng.choice((-1.0, 1.0)) * rng.uniform(250.0, 450.0)
-        actors.append(PlacedActor(actor_id=f"{mover_entity}_{m_i}", entity_id=mover_entity,
-                                  runtime_class="/Script/GameForgeRuntime.GameForgeMovingPlatform",
-                                  location=(round(x, 1), round(y - travel / 2.0, 1), round(z + 40.0, 1)),
-                                  tags=_tags(mover_entity, "moving_platform", m_i, f"{mover_entity}_{m_i}"),
-                                  properties={"EndOffset": {"x": 0.0, "y": round(travel, 1), "z": 0.0},
-                                              "Seconds": round(rng.uniform(2.0, 3.5), 2), "PauseSeconds": 0.6}))
-        reserved.add(idx)
+    # 6. Moving platforms (skip for racing tracks so road stays drivable)
+    if not is_racing:
+        mover_slots = [i for i in range(2, num_platforms - 1) if i not in reserved]
+        rng.shuffle(mover_slots)
+        mover_total = sum(c for _id, c, _e in mover_requests) or (2 if difficulty != "easy" and num_platforms >= 12 else 0)
+        mover_entity = mover_requests[0][0] if mover_requests else "moving_platforms"
+        for m_i in range(min(mover_total, len(mover_slots), 4)):
+            idx = mover_slots.pop()
+            x, y, z, half = platforms[idx]
+            travel = rng.choice((-1.0, 1.0)) * rng.uniform(250.0, 450.0)
+            actors.append(PlacedActor(actor_id=f"{mover_entity}_{m_i}", entity_id=mover_entity,
+                                      runtime_class="/Script/GameForgeRuntime.GameForgeMovingPlatform",
+                                      location=(round(x, 1), round(y - travel / 2.0, 1), round(z + 40.0, 1)),
+                                      tags=_tags(mover_entity, "moving_platform", m_i, f"{mover_entity}_{m_i}"),
+                                      properties={"EndOffset": {"x": 0.0, "y": round(travel, 1), "z": 0.0},
+                                                  "Seconds": round(rng.uniform(2.0, 3.5), 2), "PauseSeconds": 0.6}))
+            reserved.add(idx)
 
-    # 7. Pickups: on platforms, plus bonus pickups floating over gaps (reachable in a normal jump arc).
+    # 7. Pickups
     on_platform = [i for i in range(1, num_platforms - 1) if i not in reserved] or list(range(1, num_platforms - 1))
     pick_slot = 0
-    gap_iter = iter([g for g in gaps if g[0] not in reserved and g[1] > 200.0])
+    gap_iter = iter([g for g in gaps if g[0] not in reserved and g[1] > 200.0]) if not is_racing else iter([])
     for entity_id, count, ent in pickup_requests:
         props: Dict[str, Any] = {}
         if ent.props.get("value") is not None:
@@ -304,6 +317,5 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         geometry_ops=geometry_ops,
         actors=actors,
         lighting=getattr(getattr(level, "lighting", "day"), "value", getattr(level, "lighting", "day")),
-        # A jump course is not navmesh-connected; only bridged (easy) courses can be verified that way.
         nav_checks=[("player_start", goal_actor_id)] if walkable else [],
     )

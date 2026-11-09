@@ -4,21 +4,16 @@ Delegates to authoritative crash-resilient storage in src/gameforge_ide/storage/
 """
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, List, Optional
-
 from ..storage.design_store import (
     DESIGN_SUBDIR as DESIGN_DIR,
     DesignStore,
     RevisionConflict,
-    _diff_nodes,
     diff,
     history,
     load,
     load_revision,
     save,
 )
-from .gds import GameDesignSpec
 
 __all__ = [
     "DESIGN_DIR",
@@ -30,4 +25,3 @@ __all__ = [
     "load_revision",
     "save",
 ]
-

@@ -1,0 +1,20 @@
+{
+  "peft_type": "LORA",
+  "r": 16,
+  "lora_alpha": 32.0,
+  "target_modules": [
+    "blk_0_attn_qkv",
+    "blk_0_ffn_up",
+    "blk_8_attn_qkv",
+    "blk_8_ffn_up",
+    "blk_15_attn_output",
+    "blk_15_ffn_up",
+    "blk_24_attn_output",
+    "blk_24_ffn_up",
+    "blk_31_attn_output",
+    "blk_31_ffn_up",
+    "output_head"
+  ],
+  "base_model_name_or_path": "Qwen/Qwen3.5-4B",
+  "bias": "none"
+}

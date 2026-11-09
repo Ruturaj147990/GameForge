@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts"))
+sys.path.insert(0, str(REPO / "scripts" / "engine"))
 
 import demo_m11_material as m11  # noqa: E402
 import demo_m12_asset as m12  # noqa: E402

@@ -337,8 +337,13 @@ class ForgeExecutor:
                             val_data["params"] = ctx.step.inputs["params"]
                         if "recipe" in ctx.step.inputs and "recipe" not in val_data:
                             val_data["recipe"] = ctx.step.inputs["recipe"]
+                        stage_name = (
+                            step.step_id
+                            if step.step_id in ("scenario_gen", "scenarios")
+                            else step.kind.value
+                        )
                         stage_ok, validation_issues = validate_stage_output(
-                            step.kind.value,
+                            stage_name,
                             val_data,
                             gds=gds_obj,
                             project_dir=ctx.project_dir,

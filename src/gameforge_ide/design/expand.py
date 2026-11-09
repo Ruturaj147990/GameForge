@@ -5,25 +5,32 @@ P5 maps them to UInputModifierNegate and UInputModifierSwizzleAxis(YXZ).
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ..pipeline.spec_from_prompt import _pascal
-from .events_catalog import DEFAULT_MODULE, MODULE_EVENTS
+def _pascal(text: str) -> str:
+    words = re.findall(r"[A-Za-z0-9]+", text or "Game")
+    out = "".join(w[:1].upper() + w[1:] for w in words) or "Game"
+    if not out[0].isalpha():
+        out = "G" + out
+    return (out if len(out) >= 2 else out + "Game")[:31]
 from .draft import DesignDraft, DraftEntity, DraftLose, DraftWin
+from .events_catalog import DEFAULT_MODULE, MODULE_EVENTS
 from .gds import (
-    ArchitectureSpec,
     Acceptance,
     AddStat,
     AllOf,
+    ArchitectureSpec,
     ArtDirection,
     AudioSpec,
+    Biome,
     CameraKind,
     Condition,
     CountAtLeast,
     CustomCode,
     Effect,
-    Message,
+    Emit,
     EndGame,
     EntityKind,
     EntitySpec,
@@ -39,21 +46,22 @@ from .gds import (
     LayoutKind,
     LevelSpec,
     Meta,
+    Message,
     Overview,
+    PhaseSpec,
     Placement,
     Progression,
     RuleSpec,
     ScenarioRef,
     Scene,
     ScoreSpec,
+    SetStat,
+    Spawn,
     StatCompare,
     TechSpec,
     TimerElapsed,
     UISpec,
     Vec2,
-    Biome,
-    IntroSpec,
-    PresentationSpec,
 )
 
 
@@ -123,6 +131,42 @@ IA_RESTART = InputActionSpec(
     value_type="bool",
     bindings=["R"],
     purpose="Restart session",
+)
+IA_DASH = InputActionSpec(
+    action_id="IA_Dash",
+    value_type="bool",
+    bindings=["LeftShift"],
+    purpose="Quick forward burst dash",
+)
+IA_SPRINT = InputActionSpec(
+    action_id="IA_Sprint",
+    value_type="bool",
+    bindings=["LeftShift"],
+    purpose="Sprint faster",
+)
+IA_ROLL_DICE = InputActionSpec(
+    action_id="IA_RollDice",
+    value_type="bool",
+    bindings=["SpaceBar"],
+    purpose="Roll dice on board",
+)
+IA_WEAPON_1 = InputActionSpec(
+    action_id="IA_Weapon1",
+    value_type="bool",
+    bindings=["One"],
+    purpose="Equip weapon slot 1",
+)
+IA_WEAPON_2 = InputActionSpec(
+    action_id="IA_Weapon2",
+    value_type="bool",
+    bindings=["Two"],
+    purpose="Equip weapon slot 2",
+)
+IA_WEAPON_3 = InputActionSpec(
+    action_id="IA_Weapon3",
+    value_type="bool",
+    bindings=["Three"],
+    purpose="Equip weapon slot 3",
 )
 
 
@@ -278,6 +322,7 @@ KIT_DEFAULT_PROPS: Dict[EntityKind, Dict[str, Any]] = {
         "scale_z": 1.0,
     },
     EntityKind.BOARD: {
+        "board_mode": "n_in_a_row",
         "board_size": 3,
         "win_length": 3,
         "gravity": False,
@@ -290,11 +335,17 @@ KIT_DEFAULT_PROPS: Dict[EntityKind, Dict[str, Any]] = {
         "hand_size": 4,
         "energy_per_turn": 3,
     },
+    EntityKind.BOMB_SITE: {
+        "plant_seconds": 3.0,
+        "defuse_seconds": 5.0,
+        "fuse_seconds": 35.0,
+    },
 }
 
 _CSG_PROP_RECIPES = {
     "crate", "barrel", "rock", "pillar", "fence",
     "tree", "stylized_tree", "bush", "torch", "chest", "altar",
+    "crystal", "arch", "console", "turret_base",
 }
 
 
@@ -306,13 +357,11 @@ def _extract_note_props(kind: EntityKind, note: str) -> Dict[str, Any]:
 
     note_lower = note.lower()
 
-    # CSG Procedural Prop Recipes
     for recipe in _CSG_PROP_RECIPES:
         if recipe in note_lower:
             props["recipe"] = "stylized_tree" if recipe == "tree" else recipe
             break
 
-    # Parse key-value parameters: "speed: 400", "health: 120", "damage: 25"
     kv_matches = re.findall(r"([a-z_]+)\s*[:=]\s*(\d+(?:\.\d+)?)", note_lower)
     for k, v in kv_matches:
         num_val = float(v) if "." in v else int(v)
@@ -330,8 +379,6 @@ def _extract_note_props(kind: EntityKind, note: str) -> Dict[str, Any]:
     return props
 
 
-# GDS/legacy aliases -> canonical kit parameter names. Model drafts and presets use both spellings; the kit param
-# models are extra="forbid", so an alias or an unknown key used to fail validation of the whole design.
 PROP_ALIASES: Dict[str, str] = {
     "player_speed": "move_speed", "speed": "move_speed", "walk_speed": "move_speed",
     "player_max_health": "max_health", "health": "max_health", "hp": "max_health",
@@ -343,6 +390,7 @@ PROP_ALIASES: Dict[str, str] = {
     "points": "value", "score": "value",
     "radius": "shape_extent", "size": "shape_extent", "extent": "shape_extent",
     "dps": "damage_per_second",
+    "mode": "board_mode", "snakes_count": "snakes", "ladders_count": "ladders",
 }
 
 DIFFICULTY_SCALE = {"easy": 0.7, "normal": 1.0, "hard": 1.4}
@@ -362,10 +410,7 @@ def _field_bounds(field_info: Any) -> Tuple[Optional[float], Optional[float]]:
 
 
 def sanitize_props(module_id: str, props: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
-    """Map aliases, drop keys the kit module does not accept and clamp numbers into the module's ranges.
-
-    Returns (clean_props, notes). Never raises: a design should not fail because a model wrote ``"speed": 9000``.
-    """
+    """Map aliases, drop keys the kit module does not accept and clamp numbers into the module's ranges."""
     notes: List[str] = []
     try:
         from ..kit.registry import KIT, _ensure_modules_loaded
@@ -383,7 +428,7 @@ def sanitize_props(module_id: str, props: Dict[str, Any]) -> Tuple[Dict[str, Any
             notes.append(f"{module_id}: dropped unsupported property {key!r}")
             continue
         if k in clean and key != k:
-            continue  # canonical spelling wins over an alias
+            continue
         lo, hi = _field_bounds(fields[k])
         if isinstance(val, bool) or not isinstance(val, (int, float)):
             if isinstance(val, str) and lo is not None:
@@ -404,7 +449,6 @@ def sanitize_props(module_id: str, props: Dict[str, Any]) -> Tuple[Dict[str, Any
             num = hi
         ann = getattr(fields[k], "annotation", None)
         clean[k] = int(round(num)) if ann in (int, Optional[int]) or "int" in str(ann) and "float" not in str(ann) else num
-    # Final guard: drop whatever the model still rejects.
     for _ in range(len(clean) + 1):
         try:
             mod.params_model.model_validate(clean)
@@ -443,26 +487,196 @@ def _tag_value(tags: List[str], key: str) -> Optional[str]:
     return None
 
 
-def _hex_ok(code: Optional[str]) -> bool:
-    return bool(code) and bool(re.fullmatch(r"#[0-9A-Fa-f]{6}", code or ""))
+def _compile_custom_rules(
+    custom_rules: List[str],
+    architecture: Optional[Dict[str, Any]],
+    allowed_events: Set[str],
+    enemy_ent: Optional[EntitySpec],
+    pickup_ent: Optional[EntitySpec],
+    start_idx: int,
+) -> List[RuleSpec]:
+    """Compile natural-language custom_rules and architecture into executable RuleSpec items and C++ subsystems."""
+    out: List[RuleSpec] = []
+
+    cleaned_rules = [re.sub(r'["\\\r\n]+', " ", cr).strip() for cr in (custom_rules or []) if cr and cr.strip()]
+    cleaned_rules = [cr for cr in cleaned_rules if len(cr) >= 3]
+
+    user_facing_rules = [
+        cr for cr in cleaned_rules
+        if not cr.lower().startswith(("architecture:", "target classes:"))
+    ]
+    if user_facing_rules:
+        out.append(
+            RuleSpec(
+                rule_id="briefing",
+                when=EventRef(event="game.started"),
+                effects=[Message(text=user_facing_rules[0][:80], seconds=6.0)],
+                description=("Briefing: " + " / ".join(user_facing_rules))[:200],
+            )
+        )
+
+    for i, cr in enumerate(user_facing_rules):
+        low = cr.lower()
+
+        # 1. Determine trigger event from open-vocabulary rule description
+        ev = "game.started"
+        if any(k in low for k in ("enemy dies", "enemy is killed", "on kill", "defeat", "killed", "slain", "destroy")) and "enemy.killed" in allowed_events:
+            ev = "enemy.killed"
+        elif any(k in low for k in ("on pickup", "collect", "coin", "item", "relic", "gather", "grab", "salvage", "core", "crystal", "gem")) and "pickup.collected" in allowed_events:
+            ev = "pickup.collected"
+        elif any(k in low for k in ("takes damage", "on damage", "low health", "hit", "damaged", "hurt")) and "player.damaged" in allowed_events:
+            ev = "player.damaged"
+        elif any(k in low for k in ("wave clear", "every wave", "wave ends", "after wave")) and "wave.cleared" in allowed_events:
+            ev = "wave.cleared"
+        elif any(k in low for k in ("lap", "complete a lap")) and "lap.completed" in allowed_events:
+            ev = "lap.completed"
+        elif any(k in low for k in ("checkpoint", "split")) and "checkpoint.reached" in allowed_events:
+            ev = "checkpoint.reached"
+        elif any(k in low for k in ("jump", "double jump", "airborne")) and "player.jumped" in allowed_events:
+            ev = "player.jumped"
+        elif any(k in low for k in ("dash", "dodge", "boost")) and "player.dashed" in allowed_events:
+            ev = "player.dashed"
+        elif any(k in low for k in ("switch", "terminal", "console", "button", "lever", "hack", "activate")) and "switch.toggled" in allowed_events:
+            ev = "switch.toggled"
+        elif any(k in low for k in ("door", "gate", "unlock")) and "door.opened" in allowed_events:
+            ev = "door.opened"
+        elif any(k in low for k in ("spotted", "detected", "seen by guard")) and "guard.spotted_player" in allowed_events:
+            ev = "guard.spotted_player"
+        elif any(k in low for k in ("hazard", "lava", "acid", "trap", "radiation")) and "hazard.touched" in allowed_events:
+            ev = "hazard.touched"
+
+        # 2. Extract conditions
+        conds: List[Condition] = []
+        if "low health" in low or "health <" in low or "health below" in low:
+            m_thresh = re.search(r"health\s*(?:<|<=|below|under)\s*(\d+)", low)
+            thresh = float(m_thresh.group(1)) if m_thresh else 35.0
+            conds.append(StatCompare(stat="player.health", op="<=", value=max(1.0, min(500.0, thresh))))
+        elif "score >=" in low or "score reaches" in low or "at least" in low and "score" in low:
+            m_sc = re.search(r"(\d+)", low)
+            if m_sc:
+                conds.append(StatCompare(stat="game.score", op=">=", value=float(m_sc.group(1))))
+
+        m_sec = re.search(r"\b(?:every|after)\s+(\d+)\s*(?:seconds?|secs?|s)\b", low)
+        if m_sec:
+            sec_val = max(1.0, min(3600.0, float(m_sec.group(1))))
+            conds.append(TimerElapsed(seconds=sec_val))
+
+        m_every_kill = re.search(r"\bevery\s+(\d+)\s+(?:kills?|enemies|defeats?)\b", low)
+        if m_every_kill and "enemy.killed" in allowed_events:
+            conds.append(CountAtLeast(event="enemy.killed", n=max(1, int(m_every_kill.group(1)))))
+
+        # 3. Extract effects
+        effects: List[Effect] = []
+        m_num = re.search(r"([+-]?\d+(?:\.\d+)?)", low)
+        num_val = abs(float(m_num.group(1))) if m_num else 25.0
+        is_drain = any(k in low for k in ("drain", "lose", "subtract", "reduce", "cost", "consume", "decay", "damage"))
+
+        if any(k in low for k in ("heal", "restore health", "gain health", "extra health", "+hp", "regenerate health")):
+            effects.append(AddStat(stat="player.health", delta=min(200.0, max(5.0, num_val))))
+        elif any(k in low for k in ("oxygen", "air supply")):
+            delta = -min(50.0, max(1.0, num_val)) if is_drain else min(100.0, max(5.0, num_val))
+            effects.append(AddStat(stat="player.oxygen", delta=delta))
+        elif any(k in low for k in ("shield", "armor", "barrier")):
+            delta = -min(50.0, max(5.0, num_val)) if is_drain else min(100.0, max(10.0, num_val))
+            effects.append(AddStat(stat="player.shield", delta=delta))
+        elif any(k in low for k in ("mana", "arcane", "spell energy")):
+            delta = -min(50.0, max(5.0, num_val)) if is_drain else min(100.0, max(10.0, num_val))
+            effects.append(AddStat(stat="player.mana", delta=delta))
+        elif any(k in low for k in ("stamina", "endurance", "energy")):
+            delta = -min(50.0, max(5.0, num_val)) if is_drain else min(100.0, max(10.0, num_val))
+            effects.append(AddStat(stat="player.stamina", delta=delta))
+        elif any(k in low for k in ("ammo", "ammunition", "bullets", "shells")):
+            delta = -min(50.0, max(1.0, num_val)) if is_drain else min(100.0, max(5.0, num_val))
+            effects.append(AddStat(stat="player.ammo", delta=delta))
+        elif any(k in low for k in ("gold", "credits", "currency", "bounty", "scrap")):
+            delta = -min(500.0, max(1.0, num_val)) if is_drain else min(500.0, max(5.0, num_val))
+            effects.append(AddStat(stat="game.gold", delta=delta))
+        elif any(k in low for k in ("speed", "move faster", "haste", "accelerate")):
+            effects.append(AddStat(stat="player.speed", delta=min(400.0, max(25.0, num_val))))
+        elif any(k in low for k in ("lives", "extra life", "1up")):
+            effects.append(AddStat(stat="player.lives", delta=1.0))
+
+        if any(k in low for k in ("score", "points", "bonus", "combo")):
+            effects.append(AddStat(stat="game.score", delta=min(1000.0, max(5.0, num_val))))
+
+        if any(k in low for k in ("spawn", "reinforcement", "ambush", "summon")) and enemy_ent is not None:
+            effects.append(Spawn(entity_id=enemy_ent.entity_id, count=max(1, min(10, int(num_val) if num_val <= 10 else 2))))
+        elif any(k in low for k in ("drop", "reward item")) and pickup_ent is not None:
+            effects.append(Spawn(entity_id=pickup_ent.entity_id, count=1))
+
+        if any(k in low for k in ("instant win", "win the game", "triggers victory")) and "lose" not in low:
+            effects.append(EndGame(outcome="win"))
+        elif any(k in low for k in ("instant death", "lose the game", "game over", "mission failed")):
+            effects.append(EndGame(outcome="lose"))
+
+        if not effects:
+            effects.append(AddStat(stat="game.score", delta=15.0))
+
+        out.append(
+            RuleSpec(
+                rule_id=f"custom_rule_{i + 1}",
+                when=EventRef(event=ev),
+                conditions=conds[:4],
+                effects=effects[:4],
+                description=cr[:200],
+            )
+        )
+
+    # Synthesize C++ subsystem code whenever architecture defines custom mechanics/classes OR custom rules are present
+    arch_dict = dict(architecture) if isinstance(architecture, dict) else {}
+    has_custom_mechanics = bool(
+        arch_dict.get("custom_capabilities")
+        or arch_dict.get("mechanics")
+        or arch_dict.get("target_classes")
+        or arch_dict.get("method", "").startswith(("scratch", "hybrid", "llm_scratch", "llm_hybrid"))
+        or user_facing_rules
+    )
+    if has_custom_mechanics:
+        target_classes = arch_dict.get("target_classes") or []
+        plan_kind = str(arch_dict.get("plan_kind") or arch_dict.get("method") or "dynamic_gameplay")
+        raw_cls = str(target_classes[0]) if target_classes else "DynamicGameplayRule"
+        clean_cls = re.sub(r"[^A-Za-z0-9]", "", raw_cls.lstrip("AUF"))
+        if not clean_cls or not clean_cls[0].isupper():
+            clean_cls = "DynamicGameplay"
+        if not clean_cls.endswith("Rule"):
+            clean_cls = f"{clean_cls[:28]}Rule"
+        desc = f"Architecture state machine ({plan_kind}): {', '.join(str(c) for c in target_classes[:3]) or clean_cls}"
+        from ..composer.codegen import synthesize_cpp_bodies_for_architecture
+        on_event_cpp, tick_cpp = synthesize_cpp_bodies_for_architecture(arch_dict, cleaned_rules)
+        if on_event_cpp.strip() or tick_cpp.strip():
+            out.append(
+                RuleSpec(
+                    rule_id="architecture_codegen",
+                    when=EventRef(event="game.started"),
+                    effects=[
+                        CustomCode(
+                            description=desc[:400],
+                            handler_name=clean_cls,
+                            on_event_body=on_event_cpp[:8000],
+                            tick_body=tick_cpp[:8000],
+                        )
+                    ],
+                    description=desc[:200],
+                )
+            )
+
+    return out
 
 
 def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> GameDesignSpec:
-    """Deterministically expand a DesignDraft into a validated GameDesignSpec.
+    """Deterministically expand a DesignDraft into a validated GameDesignSpec."""
+    from ..kit.rules import GAME_TYPE_LAYOUT_MAP, get_layout_for_game_type, get_required_modules_for_game_type
 
-    ``source_prompt`` is the user's full prompt (the draft pitch is capped at 280 characters); it is stored in
-    ``meta.source_prompt`` and drives the art direction when the draft leaves it at defaults.
-    """
-    from ..kit.rules import get_layout_for_game_type, get_required_modules_for_game_type, GAME_TYPE_LAYOUT_MAP
     proj_name = _pascal(draft.title)
     tmpl = GENRE_TEMPLATES.get(draft.genre, GENRE_TEMPLATES[Genre.CUSTOM])
     layout = tmpl["layout"]
 
-    # Check for specific game type hints to resolve authoritative layout
-    pitch_title = f"{draft.title} {draft.pitch}".lower()
+    pitch_title = f"{draft.title} {draft.pitch} {source_prompt or ''}".lower()
     game_type_hint = ""
     for gt in GAME_TYPE_LAYOUT_MAP:
-        if gt in pitch_title or gt.replace("_", " ") in pitch_title:
+        if re.search(rf"\b{re.escape(gt.replace('_', ' '))}\b", pitch_title) or re.search(rf"\b{re.escape(gt)}\b", pitch_title):
+            if gt == "snake" and "ladder" in pitch_title:
+                continue
             try:
                 resolved_l = get_layout_for_game_type(gt)
                 for lk in LayoutKind:
@@ -476,14 +690,25 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
                 pass
 
     size_key = draft.level_size
-    # Crowded designs get room to breathe: 30+ scattered things in a 60 m square overlapped and spawned in walls.
     if size_key == "small" and sum(de.count for de in draft.entities) > 30:
         size_key = "medium"
     size_w, size_h = LEVEL_SIZES.get(size_key, LEVEL_SIZES["small"])
 
-    # Stable per-design seed: every game used to get seed 2026 and therefore the identical level layout.
-    import hashlib
     seed = int(hashlib.sha256(f"{draft.title}|{source_prompt or draft.pitch}".encode("utf-8")).hexdigest()[:7], 16) % (2**31 - 1)
+
+    layout_params: Dict[str, Any] = {}
+    if game_type_hint == "racing" or re.search(r"\b(racing|race\s+track|racer|kart|driving|hoverbike|speedway|circuit)\b", pitch_title):
+        layout_params["track_mode"] = "racing"
+        m_laps = re.search(r"\b(\d+)\s+laps?\b", pitch_title)
+        layout_params["laps"] = int(m_laps.group(1)) if m_laps else 3
+    elif game_type_hint == "tower_defense" or re.search(r"\b(tower\s+defense|lane\s+defense|defend\s+the\s+(?:base|core|nexus|crystal))\b", pitch_title):
+        layout = LayoutKind.LANES
+        layout_params["lane_mode"] = "tower_defense"
+
+    if re.search(r"\b(zero[- ]gravity|0g|weightless)\b", pitch_title):
+        layout_params["gravity_z"] = -150.0
+    elif re.search(r"\b(low[- ]gravity|moon\s+gravity|lunar)\b", pitch_title):
+        layout_params["gravity_z"] = -380.0
 
     # 1. Level & Scene
     level = LevelSpec(
@@ -493,11 +718,11 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         biome=draft.biome,
         lighting=draft.lighting,
         seed=seed,
+        layout_params=layout_params,
     )
     scene = Scene(levels=[level], start_level="level_1")
 
     # 2. Collect Entities
-    # Start with always-added entities for the genre
     existing_kinds: Set[EntityKind] = set()
     raw_entities: List[Tuple[EntityKind, int, str, Dict[str, Any], List[str], str]] = []
 
@@ -505,10 +730,8 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         existing_kinds.add(kind)
         raw_entities.append((kind, count, slot_or_strat, {}, [], ""))
 
-    # Add entities from draft, preserving user entity properties and tags
     for de in draft.entities:
         if de.kind in (EntityKind.PLAYER, EntityKind.BOARD, EntityKind.CARD_TABLE, EntityKind.SPAWNER) and de.kind in existing_kinds:
-            # Merge props onto existing mandatory entity if user provided custom parameters
             idx = next(i for i, (k, _, _, _, _, _) in enumerate(raw_entities) if k == de.kind)
             cur_k, cur_cnt, cur_strat, cur_props, cur_tags, cur_note = raw_entities[idx]
             merged_props = dict(cur_props)
@@ -528,7 +751,6 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         custom_props.update(de.props)
         raw_entities.append((de.kind, de.count, slot_or_strat, custom_props, list(de.tags), de.note))
 
-    # Check Win & Lose conditions to see if additional entities must be injected
     has_spawner = any(k == EntityKind.SPAWNER for k, _, _, _, _, _ in raw_entities)
     has_enemy = any(k in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY) for k, _, _, _, _, _ in raw_entities)
     has_pickup = any(k == EntityKind.PICKUP for k, _, _, _, _, _ in raw_entities)
@@ -538,7 +760,6 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
     has_card = any(k == EntityKind.CARD_TABLE for k, _, _, _, _, _ in raw_entities)
     has_player = any(k == EntityKind.PLAYER for k, _, _, _, _, _ in raw_entities)
 
-    # If required game type modules imply entities not yet present, add them
     if game_type_hint:
         req_mods = get_required_modules_for_game_type(game_type_hint)
         if "kit.grid_board" in req_mods and not has_board:
@@ -582,14 +803,11 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
             raw_entities.append((EntityKind.PLAYER, 1, "player_start", {}, [], ""))
             has_player = True
 
-    # Platformers: a fall used to end the whole game ("health_zero" with no lives). Give the classic three lives
-    # unless the design says otherwise; deaths respawn at the last checkpoint.
     if draft.genre == Genre.PLATFORMER and any(l.type in ("health_zero", "fall_off") for l in draft.lose):
         for idx, (k, c, st, pr, tg, nt) in enumerate(raw_entities):
             if k == EntityKind.PLAYER and not pr.get("lives"):
                 raw_entities[idx] = (k, c, st, {**pr, "lives": 3}, tg, nt)
 
-    # Build EntitySpec instances with deduplicated entity_ids and validated default properties
     entities: List[EntitySpec] = []
     used_ids: Set[str] = set()
 
@@ -617,35 +835,31 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         else:
             placement = Placement(strategy="scatter")
 
-        # Merge kit default properties with custom user properties
         final_props = dict(KIT_DEFAULT_PROPS.get(kind, {}))
         if kind in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY) and diff_scale != 1.0:
             for key in ("attack_damage", "max_health"):
                 if key in final_props:
                     final_props[key] = round(float(final_props[key]) * diff_scale, 1)
-        if kind == EntityKind.BOARD:
-            draft_text = f"{draft.title} {getattr(draft, 'pitch', '')} {getattr(draft, 'core_mechanic', '')}".lower()
-            if "sudoku" in draft_text or draft.genre == Genre.PUZZLE:
-                final_props["board_size"] = 9
-                final_props["win_length"] = 9
-                final_props["vs_ai"] = False
-                final_props["cell_size_cm"] = 80.0
-            elif any(k in draft_text for k in ("chess", "checkers", "draughts")):
-                final_props["board_size"] = 8
-                final_props["win_length"] = 8
-                final_props["cell_size_cm"] = 100.0
-            elif any(k in draft_text for k in ("connect four", "connect 4", "connect_four", "four in a row")):
-                final_props["board_size"] = 7
-                final_props["win_length"] = 4
-                final_props["gravity"] = True
+        if kind == EntityKind.BOARD and not user_props.get("board_mode"):
+            try:
+                from .prompt_analysis import analyze_prompt, _board_props_for_brief
+                brief_board = analyze_prompt(f"{draft.title} {draft.pitch} {source_prompt or ''}")
+                _, inferred_b_props = _board_props_for_brief(brief_board)
+                final_props.update(inferred_b_props)
+            except Exception:
+                pass
         if kind == EntityKind.PICKUP and "objective_id" not in user_props:
             final_props["objective_id"] = candidate_id
         if kind == EntityKind.PLAYER and "attack_mode" not in user_props and (
                 draft.genre == Genre.TOP_DOWN_SHOOTER or draft.camera == CameraKind.FIRST_PERSON):
-            final_props["attack_mode"] = "projectile"   # shooters used to get the melee default
+            final_props["attack_mode"] = "projectile"
         if kind == EntityKind.PLAYER and draft.genre == Genre.PLATFORMER:
             final_props.setdefault("air_control", 0.45)
-            final_props["jump_velocity"] = max(float(final_props.get("jump_velocity", 600.0)), 700.0)
+            if layout_params.get("track_mode") == "racing":
+                final_props.setdefault("move_speed", 1100.0)
+                final_props.setdefault("sprint_multiplier", 2.0)
+            else:
+                final_props["jump_velocity"] = max(float(final_props.get("jump_velocity", 600.0)), 700.0)
         final_props.update(user_props)
         module_id = DEFAULT_MODULE[kind.value]
         final_props, notes = sanitize_props(module_id, final_props)
@@ -671,43 +885,55 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
             )
         )
 
-    # Map entity lookups
     pickup_ents = [e for e in entities if e.kind == EntityKind.PICKUP]
     pickup_ent = pickup_ents[0] if pickup_ents else None
     enemy_ent = next((e for e in entities if e.kind in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY)), None)
 
-    # A spawner must spawn an enemy entity that exists in this design. The default "enemy" id rarely matched the
-    # expanded id ("enemies", "zombies"), so waves spawned nameless default enemies with none of the design's stats.
     for sp in [e for e in entities if e.kind == EntityKind.SPAWNER]:
         target = sp.props.get("enemy_entity_id")
         if not any(e.entity_id == target for e in entities):
             if enemy_ent is None:
                 enemy_ent = EntitySpec(
                     entity_id="enemies" if "enemies" not in {e.entity_id for e in entities} else "wave_enemies",
-                    kind=EntityKind.ENEMY, module=DEFAULT_MODULE["enemy"], level_id="level_1",
+                    kind=EntityKind.ENEMY,
+                    module=DEFAULT_MODULE["enemy"],
+                    level_id="level_1",
                     count=max(1, int(sp.props.get("enemies_per_wave", 4))),
                     placement=Placement(strategy="scatter"),
-                    props=sanitize_props("kit.enemy_melee", {
-                        **KIT_DEFAULT_PROPS[EntityKind.ENEMY],
-                        "attack_damage": round(15.0 * diff_scale, 1), "max_health": round(50.0 * diff_scale, 1)})[0],
+                    props=sanitize_props(
+                        "kit.enemy_melee",
+                        {
+                            **KIT_DEFAULT_PROPS[EntityKind.ENEMY],
+                            "attack_damage": round(15.0 * diff_scale, 1),
+                            "max_health": round(50.0 * diff_scale, 1),
+                        },
+                    )[0],
                     tags=["GF_Owned", "spawned_by_spawner"],
                 )
                 entities.append(enemy_ent)
             sp.props = {**sp.props, "enemy_entity_id": enemy_ent.entity_id}
         if diff_scale != 1.0 and "enemies_per_wave" in sp.props:
-            sp.props = {**sp.props, "enemies_per_wave": max(1, min(50, int(round(int(sp.props["enemies_per_wave"]) * diff_scale))))}
+            sp.props = {
+                **sp.props,
+                "enemies_per_wave": max(1, min(50, int(round(int(sp.props["enemies_per_wave"]) * diff_scale)))),
+            }
+
+    # Wire switches to doors automatically if switches have no target_tag
+    door_ent = next((e for e in entities if e.kind == EntityKind.DOOR), None)
+    for sw in [e for e in entities if e.kind == EntityKind.SWITCH]:
+        if not sw.props.get("target_tag") and door_ent is not None:
+            sw.props = {**sw.props, "target_tag": door_ent.entity_id}
 
     # 3. Rules & Goals
     rules: List[RuleSpec] = []
     rule_idx = 1
 
-    # Rules always added: score on pickup / enemy kill
     if pickup_ent:
         rules.append(
             RuleSpec(
                 rule_id=f"rule_{rule_idx}",
                 when=EventRef(event="pickup.collected"),
-                effects=[AddStat(stat="game.score", delta=10.0)],
+                effects=[AddStat(stat="game.score", delta=float(pickup_ent.props.get("value", 1)) * 10.0)],
                 description="Award points on pickup",
             )
         )
@@ -715,7 +941,6 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
 
     if enemy_ent:
         enemy_effects: List[Effect] = [AddStat(stat="game.score", delta=25.0)]
-        # Track enemy kill remaining stat if defeat_all without spawner is in win conditions
         if any(w.type == "defeat_all" for w in draft.win) and not has_spawner:
             enemy_effects.append(AddStat(stat=f"entity.{enemy_ent.entity_id}.remaining", delta=-1.0))
 
@@ -729,8 +954,6 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         )
         rule_idx += 1
 
-    # "Collect everything AND reach the exit": win conditions are OR-ed at runtime, so reaching the goal used to win
-    # without collecting anything. Lock the goal behind the pickup total instead and win on reaching it.
     win_types = [w.type for w in draft.win]
     goal_ent = next((e for e in entities if e.kind == EntityKind.GOAL), None)
     effective_wins = list(draft.win)
@@ -739,20 +962,22 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         if len(pickup_ents) == 1:
             stat = f"entity.{pickup_ents[0].entity_id}.collected"
         else:
-            # several collectible kinds: count them all in one counter
             stat = "game.counter.collected"
-            rules.append(RuleSpec(rule_id="count_collected", when=EventRef(event="pickup.collected"),
-                                  effects=[AddStat(stat=stat, delta=1.0)], description="Count every collectible"))
+            rules.append(
+                RuleSpec(
+                    rule_id="count_collected",
+                    when=EventRef(event="pickup.collected"),
+                    effects=[AddStat(stat=stat, delta=1.0)],
+                    description="Count every collectible",
+                )
+            )
         goal_ent.props = {**goal_ent.props, "required_stat": stat, "required_value": float(total)}
         effective_wins = [w for w in draft.win if w.type != "collect_all"]
 
-    # Win conditions
     win_conds: List[Condition] = []
     has_timer_win = False
     for w in effective_wins:
         if w.type == "collect_all":
-            # "Collect all" means every pickup placed; a model-supplied target smaller than the placed count made
-            # the game end early, a larger one made it unwinnable.
             total_pickups = sum(e.count for e in pickup_ents) or 5
             win_conds.append(CountAtLeast(event="pickup.collected", n=total_pickups))
         elif w.type == "reach_goal":
@@ -790,14 +1015,12 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         elif w.type == "match_win":
             win_conds.append(EventOccurred(event="match.won"))
 
-    # Lose conditions
     lose_conds: List[Condition] = []
     for l in draft.lose:
         if l.type == "health_zero":
             player_ent = next((e for e in entities if e.kind == EntityKind.PLAYER), None)
             lives = int(player_ent.props.get("lives", 0) or 0) if player_ent else 0
             if lives > 0:
-                # With lives, death respawns the player; the game is lost when the last life is used.
                 lose_conds.append(StatCompare(stat="player.lives", op="<=", value=0.0))
             else:
                 lose_conds.append(StatCompare(stat="player.health", op="<=", value=0.0))
@@ -807,7 +1030,6 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         elif l.type == "fall_off":
             lose_conds.append(EventOccurred(event="player.died"))
         elif l.type == "board_loss":
-            # Handled via rule: on board.win with ai_won -> end_game lose
             rules.append(
                 RuleSpec(
                     rule_id=f"rule_{rule_idx}",
@@ -823,62 +1045,71 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         elif l.type == "caught_by_guard":
             lose_conds.append(EventOccurred(event="guard.spotted_player"))
 
-    # Custom rules from the draft are free text. They used to become empty CustomCode handlers, i.e. generated C++
-    # classes that compiled (or failed to compile) and did nothing. They are shown to the player as briefing lines
-    # instead; mechanics that matter are expressed with the typed entities/conditions above.
-    briefings = [] if draft.architecture else [
-        re.sub(r'["\\\r\n]+', " ", cr).strip() for cr in draft.custom_rules
-    ]
-    briefings = [b for b in briefings if len(b) >= 3]
-    if briefings:
-        rules.append(
-            RuleSpec(
-                rule_id="briefing",
-                when=EventRef(event="game.started"),
-                effects=[Message(text=briefings[0][:80], seconds=6.0)],
-                description=("Briefing: " + " / ".join(briefings))[:200],
-            )
-        )
+    game_events = {"game.started", "game.won", "game.lost", "game.restarted", "game.paused", "game.resumed"}
+    allowed_events = set(game_events)
+    for e in entities:
+        if e.module in MODULE_EVENTS:
+            allowed_events.update(MODULE_EVENTS[e.module])
 
-    # 4. Input - Ensure comprehensive camera orientation, movement and jump bindings
+    # Synthesize or enrich architecture from prompt/draft when not provided
+    arch_input = getattr(draft, "architecture", None)
+    if not arch_input and source_prompt:
+        try:
+            from .template_registry import default_registry
+            dec = default_registry.evaluate_strategy(source_prompt)
+            arch_input = dec.suggested_architecture
+        except Exception:
+            arch_input = None
+
+    compiled_custom_rules = _compile_custom_rules(
+        draft.custom_rules,
+        arch_input,
+        allowed_events,
+        enemy_ent,
+        pickup_ent,
+        rule_idx,
+    )
+    rules.extend(compiled_custom_rules)
+
+    # 4. Input
     actions = list(tmpl.get("actions", [IA_MOVE, IA_LOOK]))
     action_ids = {a.action_id for a in actions}
 
-    # Bindings for 3D and dynamic cameras
     if draft.camera in (CameraKind.FIRST_PERSON, CameraKind.THIRD_PERSON):
-        if IA_MOVE.action_id not in action_ids:
-            actions.append(IA_MOVE)
-            action_ids.add(IA_MOVE.action_id)
-        if IA_LOOK.action_id not in action_ids:
-            actions.append(IA_LOOK)
-            action_ids.add(IA_LOOK.action_id)
-        if IA_JUMP.action_id not in action_ids:
-            actions.append(IA_JUMP)
-            action_ids.add(IA_JUMP.action_id)
-
+        for ia in (IA_MOVE, IA_LOOK, IA_JUMP):
+            if ia.action_id not in action_ids:
+                actions.append(ia)
+                action_ids.add(ia.action_id)
     elif draft.camera == CameraKind.SIDE_SCROLLER:
-        if IA_MOVE.action_id not in action_ids:
-            actions.append(IA_MOVE)
-            action_ids.add(IA_MOVE.action_id)
-        if IA_JUMP.action_id not in action_ids:
-            actions.append(IA_JUMP)
-            action_ids.add(IA_JUMP.action_id)
-
+        for ia in (IA_MOVE, IA_JUMP):
+            if ia.action_id not in action_ids:
+                actions.append(ia)
+                action_ids.add(ia.action_id)
     elif draft.camera == CameraKind.TOP_DOWN:
-        if IA_MOVE.action_id not in action_ids:
-            actions.append(IA_MOVE)
-            action_ids.add(IA_MOVE.action_id)
-        if IA_LOOK.action_id not in action_ids:
-            actions.append(IA_LOOK)
-            action_ids.add(IA_LOOK.action_id)
+        for ia in (IA_MOVE, IA_LOOK):
+            if ia.action_id not in action_ids:
+                actions.append(ia)
+                action_ids.add(ia.action_id)
 
-    # Combat action injection
-    has_combat_elements = has_enemy or has_spawner or any(
-        getattr(e, "kind", None) in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY, EntityKind.SPAWNER)
+    has_interactive_world = any(
+        e.kind in (EntityKind.DOOR, EntityKind.SWITCH, EntityKind.NPC, EntityKind.BOMB_SITE)
         for e in entities
-    ) or any(
-        "shoot" in cr.lower() or "attack" in cr.lower() or "gun" in cr.lower() or "weapon" in cr.lower()
-        for cr in draft.custom_rules
+    )
+    if has_interactive_world and IA_INTERACT.action_id not in action_ids and len(actions) < 16:
+        actions.append(IA_INTERACT)
+        action_ids.add(IA_INTERACT.action_id)
+
+    has_combat_elements = (
+        has_enemy
+        or has_spawner
+        or any(
+            getattr(e, "kind", None) in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY, EntityKind.SPAWNER)
+            for e in entities
+        )
+        or any(
+            "shoot" in cr.lower() or "attack" in cr.lower() or "gun" in cr.lower() or "weapon" in cr.lower()
+            for cr in draft.custom_rules
+        )
     )
 
     if has_combat_elements:
@@ -889,39 +1120,101 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
                 actions.append(IA_ATTACK)
             action_ids.add(actions[-1].action_id)
 
+    player_ent_for_input = next((e for e in entities if e.kind == EntityKind.PLAYER), None)
+    if player_ent_for_input:
+        if player_ent_for_input.props.get("dash_impulse") and IA_DASH.action_id not in action_ids and len(actions) < 16:
+            actions.append(IA_DASH)
+            action_ids.add(IA_DASH.action_id)
+        elif player_ent_for_input.props.get("sprint_multiplier") and IA_SPRINT.action_id not in action_ids and len(actions) < 16:
+            actions.append(IA_SPRINT)
+            action_ids.add(IA_SPRINT.action_id)
+
+        weapons_list = player_ent_for_input.props.get("weapons")
+        if isinstance(weapons_list, list) and len(weapons_list) >= 2:
+            for ia_w in (IA_WEAPON_1, IA_WEAPON_2, IA_WEAPON_3)[: len(weapons_list)]:
+                if ia_w.action_id not in action_ids and len(actions) < 16:
+                    actions.append(ia_w)
+                    action_ids.add(ia_w.action_id)
+
+    board_ent_for_input = next((e for e in entities if e.kind == EntityKind.BOARD), None)
+    if board_ent_for_input:
+        bmode = str(board_ent_for_input.props.get("board_mode", ""))
+        if (
+            bmode in ("roll_and_move", "race_board", "linear_path", "ludo")
+            or board_ent_for_input.props.get("dice_sides")
+            or board_ent_for_input.props.get("warp_tiles")
+        ) and IA_ROLL_DICE.action_id not in action_ids and len(actions) < 16:
+            actions.append(IA_ROLL_DICE)
+            action_ids.add(IA_ROLL_DICE.action_id)
+
     input_spec = InputSpec(actions=actions)
 
     # 5. UI & HUD
     hud_elements: List[HudElement] = []
     if any(e.kind == EntityKind.PLAYER for e in entities):
         hud_elements.append(HudElement(element_id="hud_health", kind="bar", binds="player.health", label="Health"))
+
+    # Add dynamic HUD bars/counters for stats referenced in rules or player props
+    referenced_stats: Set[str] = set()
+    for r in rules:
+        for c in r.conditions:
+            if hasattr(c, "stat") and getattr(c, "stat"):
+                referenced_stats.add(str(getattr(c, "stat")))
+        for eff in r.effects:
+            if hasattr(eff, "stat") and getattr(eff, "stat"):
+                referenced_stats.add(str(getattr(eff, "stat")))
+
+    dynamic_hud_map = [
+        ("player.shield", "hud_shield", "bar", "Shield"),
+        ("player.oxygen", "hud_oxygen", "bar", "Oxygen"),
+        ("player.mana", "hud_mana", "bar", "Mana"),
+        ("player.stamina", "hud_stamina", "bar", "Stamina"),
+        ("player.ammo", "hud_ammo", "counter", "Ammo"),
+        ("game.gold", "hud_gold", "counter", "Gold"),
+    ]
+    for stat_name, el_id, el_kind, el_label in dynamic_hud_map:
+        if stat_name in referenced_stats and len(hud_elements) < 8:
+            hud_elements.append(HudElement(element_id=el_id, kind=el_kind, binds=stat_name, label=el_label))  # type: ignore[arg-type]
+
+    if layout_params.get("track_mode") == "racing" and len(hud_elements) < 9:
+        hud_elements.append(HudElement(element_id="hud_laps", kind="counter", binds="game.laps", label="Laps"))
+
     for i, pe in enumerate(pickup_ents[:3]):
+        if len(hud_elements) >= 10:
+            break
         plabel = _tag_value(pe.tags, "label") or "Pickups"
-        hud_elements.append(HudElement(element_id=f"hud_pickups{'' if i == 0 else '_' + str(i + 1)}", kind="counter",
-                                       binds=f"entity.{pe.entity_id}.collected",
-                                       label=(_plural(plabel) if not plabel.endswith("s") else plabel)[:30]))
-    if any(w.type == "defeat_all" for w in draft.win) and enemy_ent and not has_spawner:
+        hud_elements.append(
+            HudElement(
+                element_id=f"hud_pickups{'' if i == 0 else '_' + str(i + 1)}",
+                kind="counter",
+                binds=f"entity.{pe.entity_id}.collected",
+                label=(_plural(plabel) if not plabel.endswith("s") else plabel)[:30],
+            )
+        )
+    if any(w.type == "defeat_all" for w in draft.win) and enemy_ent and not has_spawner and len(hud_elements) < 10:
         elabel = _tag_value(enemy_ent.tags, "label") or "Enemies"
-        hud_elements.append(HudElement(element_id="hud_enemies", kind="counter",
-                                       binds=f"entity.{enemy_ent.entity_id}.remaining",
-                                       label=f"{_plural(elabel) if not elabel.endswith('s') else elabel} left"[:30]))
-    if has_spawner:
-        hud_elements.append(HudElement(element_id="hud_waves", kind="counter",
-                                       binds="game.counter.waves_cleared", label="Waves cleared"))
-    if any(e.kind == EntityKind.PLAYER and int(e.props.get("lives", 0) or 0) > 0 for e in entities):
+        hud_elements.append(
+            HudElement(
+                element_id="hud_enemies",
+                kind="counter",
+                binds=f"entity.{enemy_ent.entity_id}.remaining",
+                label=f"{_plural(elabel) if not elabel.endswith('s') else elabel} left"[:30],
+            )
+        )
+    if has_spawner and len(hud_elements) < 10:
+        hud_elements.append(
+            HudElement(element_id="hud_waves", kind="counter", binds="game.counter.waves_cleared", label="Waves cleared")
+        )
+    if any(e.kind == EntityKind.PLAYER and int(e.props.get("lives", 0) or 0) > 0 for e in entities) and len(hud_elements) < 10:
         hud_elements.append(HudElement(element_id="hud_lives", kind="counter", binds="player.lives", label="Lives"))
-    if any(isinstance(c, TimerElapsed) for c in win_conds + lose_conds):
+    if any(isinstance(c, TimerElapsed) for c in win_conds + lose_conds) and len(hud_elements) < 11:
         hud_elements.append(HudElement(element_id="hud_timer", kind="timer", binds="game.time_s", label="Time"))
-    hud_elements.append(HudElement(element_id="hud_score", kind="counter", binds="game.score", label="Score"))
+    if len(hud_elements) < 12:
+        hud_elements.append(HudElement(element_id="hud_score", kind="counter", binds="game.score", label="Score"))
 
-    ui_spec = UISpec(hud=hud_elements, main_menu=True, pause_menu=True, end_screen=True)
+    ui_spec = UISpec(hud=hud_elements[:12], main_menu=True, pause_menu=True, end_screen=True)
 
-    # 6. Feedback rows (only for events declared by modules/rules)
-    game_events = {"game.started", "game.won", "game.lost", "game.restarted", "game.paused", "game.resumed"}
-    allowed_events = set(game_events)
-    for e in entities:
-        if e.module in MODULE_EVENTS:
-            allowed_events.update(MODULE_EVENTS[e.module])
+    # 6. Feedback rows
     for r in rules:
         for eff in r.effects:
             if hasattr(eff, "event"):
@@ -938,20 +1231,30 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         "door.opened": "Door opened",
     }
     shakes = {"player.damaged": 0.35, "enemy.killed": 0.15}
-    for ev, vfx, sfx in FEEDBACK_CATALOG + [("wave.cleared", "vfx.ring", "sfx.fanfare"),
-                                            ("landmark.discovered", "vfx.magic_trail", "sfx.chime_low"),
-                                            ("door.opened", None, "sfx.chime_low")]:
+    for ev, vfx, sfx in FEEDBACK_CATALOG + [
+        ("wave.cleared", "vfx.ring", "sfx.fanfare"),
+        ("landmark.discovered", "vfx.magic_trail", "sfx.chime_low"),
+        ("door.opened", None, "sfx.chime_low"),
+    ]:
         if ev in allowed_events and not any(f.on.event == ev for f in feedback):
             msg = messages.get(ev)
-            feedback.append(FeedbackSpec(on=EventRef(event=ev), vfx=vfx, sfx=sfx,
-                                         camera_shake=shakes.get(ev, 0.0),
-                                         ui_message=msg[:60] if msg else None))
+            feedback.append(
+                FeedbackSpec(
+                    on=EventRef(event=ev),
+                    vfx=vfx,
+                    sfx=sfx,
+                    camera_shake=shakes.get(ev, 0.0),
+                    ui_message=msg[:60] if msg else None,
+                )
+            )
 
     # 7. Acceptance Scenarios
     scenarios: List[ScenarioRef] = []
-    # A real jump course is not navmesh-connected, so the walking autopilot cannot prove its win conditions;
-    # those scenarios are advisory (the smoke test and lose scenarios still gate the build).
-    jump_course = draft.genre == Genre.PLATFORMER and draft.difficulty != "easy"
+    jump_course = (
+        draft.genre == Genre.PLATFORMER
+        and draft.difficulty != "easy"
+        and layout_params.get("track_mode") != "racing"
+    )
     for i, _ in enumerate(win_conds):
         scenarios.append(ScenarioRef(scenario_id=f"win_{i+1}", derived_from=f"goals.win[{i}]", must_pass=not jump_course))
     for i, _ in enumerate(lose_conds):
@@ -969,17 +1272,21 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         source_prompt=full_prompt[:4000],
         generator="user",
     )
-    # Art direction from the prompt's setting (palette, material theme, ambience). Previously every game got the
-    # same four default colours and no ambience regardless of "volcano", "neon city" or "haunted graveyard".
     theme_id, palette, ambience, music = None, None, "none", draft.music_mood
     try:
-        from .prompt_analysis import analyze_prompt, THEMES
+        from .prompt_analysis import THEMES, analyze_prompt
         brief = analyze_prompt(f"{full_prompt} {draft.title}")
         theme_id = brief.theme
         if theme_id is None:
-            theme_id = {Biome.FOREST: "forest", Biome.DESERT: "desert", Biome.ISLAND: "island",
-                        Biome.MOUNTAIN: "castle", Biome.DUNGEON: "dungeon", Biome.INDOOR: "cyber"}.get(draft.biome)
-        if theme_id:
+            theme_id = {
+                Biome.FOREST: "forest",
+                Biome.DESERT: "desert",
+                Biome.ISLAND: "island",
+                Biome.MOUNTAIN: "castle",
+                Biome.DUNGEON: "dungeon",
+                Biome.INDOOR: "cyber",
+            }.get(draft.biome)
+        if theme_id and theme_id in THEMES:
             palette = list(THEMES[theme_id]["palette"])
             ambience = THEMES[theme_id]["ambience"]
             if music == "none":
@@ -1027,15 +1334,35 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         max_package_mb=400,
         multiplayer="none",
     )
-    progression = Progression(difficulty=draft.difficulty, difficulty_params={"scale": diff_scale})
+
+    phases: List[PhaseSpec] = []
+    if has_spawner and len(entities) > 0:
+        sp_ent = next((e for e in entities if e.kind == EntityKind.SPAWNER), None)
+        w_cnt = int(sp_ent.props.get("wave_count", 3)) if sp_ent else 3
+        for w_i in range(1, min(w_cnt + 1, 8)):
+            phases.append(
+                PhaseSpec(
+                    phase_id=f"wave_{w_i}",
+                    description=f"Wave {w_i} progression stage",
+                    enter_when=StatCompare(stat="game.counter.waves_cleared", op=">=", value=float(w_i - 1)),
+                    params={"speed_multiplier": round(1.0 + 0.1 * (w_i - 1), 2)},
+                )
+            )
+    progression = Progression(phases=phases, difficulty=draft.difficulty, difficulty_params={"scale": diff_scale})
 
     try:
         arch_spec = None
-        if getattr(draft, "architecture", None):
+        eff_arch = getattr(draft, "architecture", None) or arch_input
+        if eff_arch:
             try:
-                arch_spec = ArchitectureSpec.model_validate(draft.architecture)
+                arch_spec = ArchitectureSpec.model_validate(eff_arch)
             except Exception:
-                pass
+                allowed_arch = set(ArchitectureSpec.model_fields)
+                filtered = {k: v for k, v in eff_arch.items() if k in allowed_arch}
+                try:
+                    arch_spec = ArchitectureSpec.model_validate(filtered)
+                except Exception:
+                    pass
 
         spec = GameDesignSpec(
             meta=meta,

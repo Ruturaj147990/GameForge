@@ -515,16 +515,19 @@ class UnrealToolchain:
             # Also ensure precompiled binaries exist in target if available from fallback candidates
             target_bin = target / "Binaries" / "Win64"
             if not target_bin.is_dir() or not any(target_bin.glob("*.dll")):
-                candidates = [
-                    Path(r"E:\GameForge\validation\P3_kittest_20261031\Plugins\GameForge"),
-                ]
+                candidates: list[Path] = []
+                env_plugin = os.environ.get("GAMEFORGE_PLUGIN_BUILD")
+                if env_plugin:
+                    candidates.append(Path(env_plugin))
                 try:
                     from ..core.settings import get_settings
                     s = get_settings()
                     if s.plugin_build and s.plugin_build.is_dir() and s.plugin_build != auth_root:
                         candidates.append(s.plugin_build)
-                    if s.validation_root:
-                        candidates.append(s.validation_root / "P3_kittest_20261031" / "Plugins" / "GameForge")
+                    if s.validation_root and s.validation_root.is_dir():
+                        for sub in sorted(s.validation_root.glob("*/Plugins/GameForge"), reverse=True):
+                            if sub.is_dir():
+                                candidates.append(sub)
                 except Exception:
                     pass
 

@@ -18,11 +18,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
 WORLD = Path(r"E:\GameForge\projects\AuditWorld\AuditWorld.uproject")
-PROBE = Path(r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
+PROBE = (get_settings().require_dev("validation_root") / r"live_ops_probe\GFProbe.uproject")
 REPORT = ROOT / "reports" / "audit_m8_completion.json"
 START = {"x": -2500.0, "y": -2000.0, "z": 350.0}
 LANDMARK = {"x": 2500.0, "y": 2000.0, "z": 450.0}

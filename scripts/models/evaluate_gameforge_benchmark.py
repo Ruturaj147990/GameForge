@@ -22,7 +22,7 @@ import requests
 
 BENCHMARK_FILE = Path("E:/GameForge/reports/gameforge-27b/baseline_benchmark.json")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b")
-MIRROR_REPORTS_DIR = Path("E:/gameforge_step1/reports/gameforge-27b")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b")
 
 MODELS = [
     "qwen3.8:27b-q4_K_M",

@@ -17,12 +17,11 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
-from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.desktop.main_window import MainWindow
 
 def run_chat_tests():
     app = QApplication.instance() or QApplication(sys.argv)
-    workspace = Path(r"C:\Users\limbk\Documents\GameForge")
+    workspace = Path(os.environ.get("GAMEFORGE_WORKSPACE", Path(__file__).resolve().parent.parent / "scratch" / "chat_test_ws"))
     win = MainWindow(workspace_root=workspace)
     win.show()
     chat = win._chat_panel

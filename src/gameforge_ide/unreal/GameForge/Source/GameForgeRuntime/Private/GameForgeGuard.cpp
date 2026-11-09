@@ -3,10 +3,14 @@
 #include "GameForgeGuard.h"
 #include "GameForgeEventNames.h"
 #include "GameForgeEvents.h"
+#include "GameForgeVisuals.h"
 
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationSystem.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISense_Sight.h"
@@ -30,6 +34,91 @@ AGameForgeGuard::AGameForgeGuard()
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->MaxWalkSpeed = PatrolSpeed;
+
+	ProxyBody = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProxyBody"));
+	ProxyBody->SetupAttachment(RootComponent);
+	ProxyBody->SetCollisionProfileName(TEXT("NoCollision"));
+	ProxyBody->SetRelativeLocation(FVector(0.f, 0.f, -20.f));
+	ProxyBody->SetRelativeScale3D(FVector(0.7f, 0.7f, 1.3f));
+	ProxyBody->SetVisibility(false);
+
+	ProxyHead = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProxyHead"));
+	ProxyHead->SetupAttachment(RootComponent);
+	ProxyHead->SetCollisionProfileName(TEXT("NoCollision"));
+	ProxyHead->SetRelativeLocation(FVector(0.f, 0.f, 70.f));
+	ProxyHead->SetRelativeScale3D(FVector(0.45f, 0.45f, 0.45f));
+	ProxyHead->SetVisibility(false);
+}
+
+void AGameForgeGuard::BeginPlay()
+{
+	Super::BeginPlay();
+	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+
+	if (MoveSpeed > 0.f && FMath::IsNearlyEqual(PatrolSpeed, 200.0f) && !FMath::IsNearlyEqual(MoveSpeed, 200.0f))
+	{
+		PatrolSpeed = MoveSpeed;
+	}
+	else if (MoveSpeed > 0.f)
+	{
+		PatrolSpeed = MoveSpeed;
+	}
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->MaxWalkSpeed = PatrolSpeed;
+	}
+
+	// Build procedural guard visual if no skeletal mesh is set
+	const bool bHasSkeletal = GetMesh() && GetMesh()->GetSkeletalMeshAsset() != nullptr;
+	if (!bHasSkeletal)
+	{
+		GameForgeVisuals::SetBasicShape(ProxyBody, TEXT("Cylinder"));
+		GameForgeVisuals::SetBasicShape(ProxyHead, TEXT("Sphere"));
+		if (ProxyBody)
+		{
+			ProxyBody->SetVisibility(true);
+			GameForgeVisuals::Tint(ProxyBody, BodyColor);
+		}
+		if (ProxyHead)
+		{
+			ProxyHead->SetVisibility(true);
+			GameForgeVisuals::Tint(ProxyHead, BodyColor * 0.75f);
+		}
+	}
+
+	// Auto-generate 4 cardinal patrol waypoints from PatrolRadius when PatrolPoints is empty
+	if (PatrolPoints.Num() == 0 && PatrolRadius > 0.f)
+	{
+		const FVector Origin = GetActorLocation();
+		const FVector Offsets[4] = {
+			FVector(PatrolRadius, 0.f, 0.f),
+			FVector(0.f, PatrolRadius, 0.f),
+			FVector(-PatrolRadius, 0.f, 0.f),
+			FVector(0.f, -PatrolRadius, 0.f)
+		};
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		for (int32 i = 0; i < 4; ++i)
+		{
+			const FVector Candidate = Origin + Offsets[i];
+			FNavLocation Projected;
+			if (NavSys && NavSys->ProjectPointToNavigation(Candidate, Projected, FVector(300.f, 300.f, 500.f)))
+			{
+				PatrolPoints.Add(Projected.Location);
+			}
+			else
+			{
+				PatrolPoints.Add(Candidate);
+			}
+		}
+	}
+
+	if (AGameForgeGuardAIController* AIC = Cast<AGameForgeGuardAIController>(GetController()))
+	{
+		if (AggroRadius > 0.f)
+		{
+			AIC->ApplyGuardSightRadius(AggroRadius);
+		}
+	}
 }
 
 void AGameForgeGuard::EnterState(EGameForgeGuardState NewState, const AActor* Target)
@@ -77,6 +166,16 @@ AGameForgeGuardAIController::AGameForgeGuardAIController()
 	SetPerceptionComponent(*Perception);
 }
 
+void AGameForgeGuardAIController::ApplyGuardSightRadius(float NewAggroRadius)
+{
+	if (SightConfig && Perception && NewAggroRadius > 0.f)
+	{
+		SightConfig->SightRadius = NewAggroRadius;
+		SightConfig->LoseSightRadius = FMath::Max(NewAggroRadius * 1.25f, NewAggroRadius + 300.0f);
+		Perception->ConfigureSense(*SightConfig);
+	}
+}
+
 AGameForgeGuard* AGameForgeGuardAIController::Guard() const
 {
 	return Cast<AGameForgeGuard>(GetPawn());
@@ -93,6 +192,13 @@ void AGameForgeGuardAIController::SetSpeed(float Speed) const
 void AGameForgeGuardAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	if (AGameForgeGuard* G = Cast<AGameForgeGuard>(InPawn))
+	{
+		if (G->AggroRadius > 0.f && !FMath::IsNearlyEqual(G->AggroRadius, 900.0f))
+		{
+			ApplyGuardSightRadius(G->AggroRadius);
+		}
+	}
 	Perception->OnTargetPerceptionUpdated.AddUniqueDynamic(this, &AGameForgeGuardAIController::HandlePerception);
 	RequestPatrolMove(0.5f);  // give the NavMesh a moment at world start
 }

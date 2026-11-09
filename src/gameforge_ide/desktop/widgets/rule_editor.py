@@ -110,6 +110,11 @@ class RuleEditorDialog(QDialog):
             "guard.spotted",
             "combat.hit",
             "combat.death",
+            "switch.activated",
+            "hazard.triggered",
+            "checkpoint.reached",
+            "wave.cleared",
+            "door.unlocked",
             "player.spawned",
             "timer.elapsed",
             "goal.reached",
@@ -490,7 +495,7 @@ class RuleEditorDialog(QDialog):
         elif eff_type == "Set Stat":
             stat_name = self._stat_input.text().strip() or self._target_stat or "player.health"
             if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
-                if stat_name in ("health", "lives", "stamina", "max_health"):
+                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
                     stat_name = f"player.{stat_name}"
                 elif stat_name in ("score", "time_s"):
                     stat_name = f"game.{stat_name}"
@@ -500,7 +505,7 @@ class RuleEditorDialog(QDialog):
         else:
             stat_name = self._stat_input.text().strip() or self._target_stat or "game.score"
             if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
-                if stat_name in ("health", "lives", "stamina", "max_health"):
+                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
                     stat_name = f"player.{stat_name}"
                 elif stat_name in ("score", "time_s"):
                     stat_name = f"game.{stat_name}"
@@ -511,10 +516,15 @@ class RuleEditorDialog(QDialog):
         # Build conditions
         conds: List[Condition] = []
         cond_type = self._cond_type_combo.currentText()
+        trailing_conditions = (
+            list(self._rule.conditions[1:])
+            if (self._rule and hasattr(self._rule, "conditions") and len(self._rule.conditions) > 1 and cond_type != "No Condition")
+            else []
+        )
         if cond_type == "Stat Comparison":
             stat_name = self._cond_stat_input.text().strip() or "player.health"
             if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
-                if stat_name in ("health", "lives", "stamina", "max_health"):
+                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
                     stat_name = f"player.{stat_name}"
                 elif stat_name in ("score", "time_s"):
                     stat_name = f"game.{stat_name}"
@@ -522,12 +532,12 @@ class RuleEditorDialog(QDialog):
                     stat_name = f"player.{stat_name}"
             op = self._cond_op_combo.currentText()
             val = float(self._cond_val_spin.value())
-            conds.append(StatCompare(stat=stat_name, op=op, value=val))
+            conds = [StatCompare(stat=stat_name, op=op, value=val)] + trailing_conditions
         elif cond_type == "Event Count At Least":
             cev = self._cond_event_input.text().strip() or "pickup.collected"
             cnt = int(self._cond_count_spin.value())
-            conds.append(CountAtLeast(kind="count_at_least", event=cev, n=cnt))
-        elif self._rule and hasattr(self._rule, "conditions") and self._rule.conditions:
+            conds = [CountAtLeast(kind="count_at_least", event=cev, n=cnt)] + trailing_conditions
+        elif cond_type != "No Condition" and self._rule and hasattr(self._rule, "conditions") and self._rule.conditions:
             # Preserve any complex non-standard conditions
             conds = list(self._rule.conditions)
 

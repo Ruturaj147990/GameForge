@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_color, theme_stylesheet
 from ...backend.assets.registry import ASSET_TYPES, STAGES, AssetRegistry
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,14 @@ class AssetsTableModel(QAbstractTableModel):
 
     def set_rows(self, rows: List[Any]) -> None:
         self.beginResetModel()
-        self._rows = [dict(r) for r in rows]
+        processed: List[Dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            sz_bytes, sz_disp = _calc_size(d, self._workspace)
+            d["_size_bytes"] = sz_bytes
+            d["_size_display"] = sz_disp
+            processed.append(d)
+        self._rows = processed
         self.endResetModel()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
@@ -115,7 +123,7 @@ class AssetsTableModel(QAbstractTableModel):
             elif col == 2:
                 return row.get("stage", "")
             elif col == 3:
-                return _calc_size(row, self._workspace)[1]
+                return row.get("_size_display") or _calc_size(row, self._workspace)[1]
             elif col == 4:
                 return row.get("license", "")
             elif col == 5:
@@ -131,13 +139,13 @@ class AssetsTableModel(QAbstractTableModel):
             if col == 2:
                 stage = row.get("stage", "")
                 if stage == "PROMOTE":
-                    return QColor(tokens.ACCENT_SUCCESS)
+                    return QColor(theme_color(tokens.ACCENT_SUCCESS))
                 elif stage in ("QUARANTINE", "REJECTED"):
-                    return QColor(tokens.ACCENT_ERROR)
+                    return QColor(theme_color(tokens.ACCENT_ERROR))
                 elif stage in ("VALIDATE", "ENGINE_VERIFY"):
-                    return QColor(tokens.ACCENT_PRIMARY)
+                    return QColor(theme_color(tokens.ACCENT_PRIMARY))
             elif col == 3:
-                return QColor(tokens.TEXT_SECONDARY)
+                return QColor(theme_color(tokens.TEXT_SECONDARY))
         return None
 
     def get_row_dict(self, row_idx: int) -> Optional[Dict[str, Any]]:
@@ -162,7 +170,7 @@ class AssetsTableModel(QAbstractTableModel):
 
         def _sort_key(r: Dict[str, Any]) -> Any:
             if key == "size":
-                return _calc_size(r, self._workspace)[0]
+                return r.get("_size_bytes", _calc_size(r, self._workspace)[0])
             elif key == "updated_at":
                 return r.get("updated_at", 0) or 0
             else:

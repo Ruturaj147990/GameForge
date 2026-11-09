@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 import time
@@ -16,14 +15,15 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.gameforge_ide.composer import compose
 from src.gameforge_ide.design.presets import PRESETS
-from src.gameforge_ide.forge.executor import ForgeExecutor, StepContext, StepOutcome
+from src.gameforge_ide.forge.executor import ForgeExecutor, StepOutcome
 from src.gameforge_ide.forge.model import RunSpec, RunState, StepKind, StepSpec, StepStatus
 from src.gameforge_ide.forge.store import RunStore
 
 
 def run_soak_test() -> dict:
     start_time = time.time()
-    soak_ws = Path("E:/GameForge/validation/soak_ws")
+    from src.gameforge_ide.core.settings import get_settings
+    soak_ws = get_settings().validation_root / "soak_ws"
     if soak_ws.exists():
         shutil.rmtree(soak_ws)
     soak_ws.mkdir(parents=True, exist_ok=True)

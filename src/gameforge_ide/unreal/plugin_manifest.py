@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 logger = logging.getLogger(__name__)
 
 MANIFEST_FILENAME = "plugin_manifest.json"
-IGNORED_DIR_NAMES = frozenset({"__pycache__", ".git", "Intermediate", "Saved", ".vs"})
+IGNORED_DIR_NAMES = frozenset({"Binaries", "__pycache__", ".git", "Intermediate", "Saved", ".vs"})
 
 KEY_INTERFACE_FILES = (
     "GameForge.uplugin",

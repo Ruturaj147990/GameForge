@@ -229,11 +229,6 @@ class _MessageBubble(QFrame):
                 font-weight: 500;
             }}
             QPushButton#btn_copy_bubble:hover {{
-                background: {tokens.BG_SURFACE};
-                border-color: {tokens.BORDER};
-                color: {tokens.TEXT_PRIMARY};
-            }}
-            QPushButton#btn_copy_bubble:hover {{
                 background: {tokens.BG_HOVER};
                 border-color: {tokens.ACCENT_PRIMARY};
                 color: {tokens.TEXT_PRIMARY};
@@ -618,7 +613,7 @@ class _StartScreen(QWidget):
 
         examples = [
             ("✨ Create Game", "Make a 3D platformer on a volcano: collect 12 gems, avoid lava, reach the portal, double jump"),
-            ("🧟 Create Game", "Make a top-down shooter in a haunted graveyard at night: survive 5 waves of zombies"),
+            ("🛸 Create Game", "Make a top-down sci-fi arena game: defend the energy core against 4 waves of drones with shields and dash"),
             ("🕵 Create Game", "Make a stealth game called Shadow Vault: sneak past guards and steal 3 diamonds, then escape"),
             ("🚀 Engine Build", "/build project and execute automation scenarios"),
         ]
@@ -804,7 +799,7 @@ class ChatPanel(QWidget):
 
         # Toolbar row
         toolbar = QWidget()
-        toolbar.setStyleSheet("background: #0c0e14; border-bottom: 1px solid #26304a;")
+        toolbar.setStyleSheet(theme_stylesheet(f"background: {tokens.BG_PANEL}; border-bottom: 1px solid {tokens.BORDER};"))
         toolbar.setFixedHeight(48)
         tbar_layout = QHBoxLayout(toolbar)
         tbar_layout.setContentsMargins(12, 6, 12, 6)
@@ -953,10 +948,10 @@ class ChatPanel(QWidget):
         self._scroll_area.setObjectName("chat_scroll_area")
         self._scroll_area.setWidgetResizable(True)
         self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._scroll_area.setStyleSheet("border: none; background: #0c0e14;")
+        self._scroll_area.setStyleSheet(theme_stylesheet(f"border: none; background: {tokens.BG_ROOT};"))
 
         self._msg_container = QWidget()
-        self._msg_container.setStyleSheet("background: #0c0e14;")
+        self._msg_container.setStyleSheet(theme_stylesheet(f"background: {tokens.BG_ROOT};"))
         self._msg_layout = QVBoxLayout(self._msg_container)
         self._msg_layout.setContentsMargins(8, 12, 8, 12)
         self._msg_layout.setSpacing(8)
@@ -967,14 +962,14 @@ class ChatPanel(QWidget):
 
         # Status bar
         self._status_bar = _StatusBar()
-        self._status_bar.setStyleSheet("background: #0c0e14; border-top: 1px solid #26304a;")
+        self._status_bar.setStyleSheet(theme_stylesheet(f"background: {tokens.BG_PANEL}; border-top: 1px solid {tokens.BORDER};"))
         self._status_bar.set_model(self._current_model)
         root.addWidget(self._status_bar)
 
         # Context chips row (Antigravity & Claude Code inspired shortcuts)
         self._chips_widget = QWidget()
         self._chips_widget.setObjectName("chat_chips_bar")
-        self._chips_widget.setStyleSheet("background: #0f131c; border-top: 1px solid #1e263d; padding: 2px 8px;")
+        self._chips_widget.setStyleSheet(theme_stylesheet(f"background: {tokens.BG_SURFACE}; border-top: 1px solid {tokens.BORDER}; padding: 2px 8px;"))
         chips_layout = QHBoxLayout(self._chips_widget)
         chips_layout.setContentsMargins(8, 4, 8, 4)
         chips_layout.setSpacing(6)
@@ -1025,12 +1020,13 @@ class ChatPanel(QWidget):
         # Input row
         input_widget = QWidget()
         input_widget.setObjectName("panel_action_bar")
-        input_widget.setStyleSheet("background: #0d0b14; border-top: 1px solid #231c34;")
+        input_widget.setStyleSheet(theme_stylesheet(f"background: {tokens.BG_PANEL}; border-top: 1px solid {tokens.BORDER};"))
         input_layout = QHBoxLayout(input_widget)
         input_layout.setContentsMargins(12, 10, 12, 10)
         input_layout.setSpacing(10)
 
         self._input = QPlainTextEdit()
+        self._composer = self._input
         self._input.setObjectName("chat_input")
         self._input.setPlaceholderText(
             "Describe what you want to build or fix… type /build, /ue, /compact or use @actor, @asset (Enter to send)"

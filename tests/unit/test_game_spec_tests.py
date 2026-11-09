@@ -29,26 +29,30 @@ from src.gameforge_ide.qa.game_spec_tests import (
 from src.gameforge_ide.qa.scenario import Scenario
 
 
-def _make_snakes_and_ladders_gds() -> GameDesignSpec:
-    """Helper to create a valid Snake and Ladders GameDesignSpec."""
-    gds = preset_tic_tac_toe(title="Snakes and Ladders")
-    gds.meta.source_prompt = "Make a snakes and ladders board game with 100 cells"
-    gds.overview.pitch = "Classic 100-cell board game with snakes and ladders"
+def _make_roll_and_move_gds() -> GameDesignSpec:
+    """Helper to create a valid roll-and-move race board GameDesignSpec."""
+    gds = preset_tic_tac_toe(title="Roll and Move Board")
+    gds.meta.source_prompt = "Make a roll and move board game with 100 cells"
+    gds.overview.pitch = "Classic 100-cell race board game with dice rolls and warp transitions"
     for e in gds.entities:
         if e.kind == EntityKind.BOARD:
+            e.props["board_mode"] = "roll_and_move"
             e.props["cell_count"] = 100
-            e.props["snakes"] = [16, 6, 47, 26, 49, 11]
-            e.props["ladders"] = [1, 38, 4, 14, 9, 31]
+            e.props["dice_sides"] = 6
+            e.props["warp_tiles"] = [{"start": 16, "end": 6}, {"start": 1, "end": 38}]
     return gds
+
+
+_make_snakes_and_ladders_gds = _make_roll_and_move_gds
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Acceptance Test Generation Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_generate_acceptance_tests_snakes_and_ladders():
-    """Verify snake and ladders GDS generates all 8 concrete test assertions."""
-    gds = _make_snakes_and_ladders_gds()
+def test_generate_acceptance_tests_roll_and_move():
+    """Verify roll and move board GDS generates all 8 concrete test assertions."""
+    gds = _make_roll_and_move_gds()
     tests = generate_acceptance_tests(gds)
 
     assert len(tests) >= 8
@@ -58,8 +62,8 @@ def test_generate_acceptance_tests_snakes_and_ladders():
         "board_structure_valid",
         "dice_outcomes_valid",
         "player_token_movement",
-        "snake_transition",
-        "ladder_transition",
+        "tile_transition_hazard",
+        "tile_transition_boost",
         "win_condition",
         "overshoot_handling",
         "turn_progression",
@@ -75,13 +79,13 @@ def test_generate_acceptance_tests_snakes_and_ladders():
     assert "1-6" in dice_test.description
     assert any("1" in a and "6" in a for a in dice_test.assertions)
 
-    snake_test = next(t for t in tests if t.test_id == "snake_transition")
-    assert "snake head" in snake_test.description
-    assert any("tail" in a for a in snake_test.assertions)
+    hazard_test = next(t for t in tests if t.test_id == "tile_transition_hazard")
+    assert "backward" in hazard_test.description
+    assert any("start" in a and "end" in a for a in hazard_test.assertions)
 
-    ladder_test = next(t for t in tests if t.test_id == "ladder_transition")
-    assert "ladder bottom" in ladder_test.description
-    assert any("top" in a for a in ladder_test.assertions)
+    boost_test = next(t for t in tests if t.test_id == "tile_transition_boost")
+    assert "forward" in boost_test.description
+    assert any("start" in a and "end" in a for a in boost_test.assertions)
 
     win_test = next(t for t in tests if t.test_id == "win_condition")
     assert "cell 100" in win_test.description or "100" in win_test.description

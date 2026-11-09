@@ -1,40 +1,35 @@
-import struct
+"""Verify GGUF binary header structure and compute streaming SHA-256 digest."""
+from __future__ import annotations
+
+import argparse
 import hashlib
-import os
 import json
+import os
+import struct
 import time
 from pathlib import Path
 
-GGUF_PATH = Path(r"E:\GameForge\artifacts\gameforge-27b\gameforge-27b-q4_k_m.gguf")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATA_ROOT = Path(os.environ.get("GAMEFORGE_DATA_ROOT", str(REPO_ROOT)))
+DEFAULT_GGUF_PATH = DEFAULT_DATA_ROOT / "artifacts" / "gameforge-27b" / "gameforge-27b-q4_k_m.gguf"
 
-def verify_gguf(path: Path):
+
+def verify_gguf(path: Path) -> dict:
     assert path.exists(), f"File does not exist: {path}"
     file_size = path.stat().st_size
     print(f"File: {path}")
     print(f"Size: {file_size} bytes ({file_size / (1024**3):.4f} GiB / {file_size / 1e9:.4f} GB)")
 
-    # Read GGUF Header
     with open(path, "rb") as f:
         magic = f.read(4)
         print(f"Magic bytes: {magic}")
         assert magic == b"GGUF", f"Invalid GGUF magic: {magic}"
-        version, tensor_count, kv_count = struct.unpack("<IQI", f.read(4 + 8 + 4)) # wait, in GGUF v2/v3, kv_count is uint64
-        # Let's check GGUF spec:
-        # uint32 magic = 0x46554747
-        # uint32 version
-        # uint64 tensor_count
-        # uint64 metadata_kv_count
-    
-    # Re-read with standard uint64
-    with open(path, "rb") as f:
-        f.seek(4)
         version = struct.unpack("<I", f.read(4))[0]
         tensor_count, kv_count = struct.unpack("<QQ", f.read(16))
         print(f"GGUF Version: {version}")
         print(f"Tensor Count: {tensor_count}")
         print(f"Metadata KV Count: {kv_count}")
 
-    # Compute SHA-256
     print("Computing SHA-256...")
     t0 = time.time()
     h = hashlib.sha256()
@@ -57,9 +52,18 @@ def verify_gguf(path: Path):
         "sha256": sha256_hash,
     }
 
+
 if __name__ == "__main__":
-    res = verify_gguf(GGUF_PATH)
-    out_path = Path(r"E:\GameForge\reports\gameforge-27b\acceptance\artifact_verification_raw.json")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(res, indent=2))
-    print(f"Saved raw verification to {out_path}")
+    ap = argparse.ArgumentParser(description="Verify GGUF binary header and SHA-256")
+    ap.add_argument("--gguf", type=Path, default=DEFAULT_GGUF_PATH, help="Path to GGUF file")
+    ap.add_argument(
+        "--out",
+        type=Path,
+        default=REPO_ROOT / "reports" / "gameforge-27b" / "acceptance" / "artifact_verification_raw.json",
+        help="Output JSON report path",
+    )
+    args = ap.parse_args()
+    res = verify_gguf(args.gguf)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(res, indent=2), encoding="utf-8")
+    print(f"Saved raw verification to {args.out}")

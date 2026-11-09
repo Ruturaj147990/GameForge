@@ -14,13 +14,17 @@
 
 from __future__ import annotations
 
+# DEMO_ONLY DISCLAIMER & REFUSAL GUARD (DEF-REM-P5D)
+# Synthetic embedding training and direct GGUF tensor mutation scripts are for experimental demonstrations only.
+# They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
+DEMO_ONLY = True
+
 import hashlib
 import json
 import math
 import os
 import shutil
 import subprocess
-import sys
 import time
 import urllib.request
 from pathlib import Path
@@ -50,13 +54,13 @@ VISION_PROJECTOR_BLOB = Path("E:/GameForge/models/ollama/blobs/sha256-f836f08f92
 ARTIFACT_DIR = Path("E:/GameForge/artifacts/gameforge-qwen3.5-9b")
 FINAL_GGUF_PATH = ARTIFACT_DIR / "gameforge-qwen3.5-9b-q4_k_m.gguf"
 MODELFILE_PATH = ARTIFACT_DIR / "Modelfile"
-REPORTS_DIR = Path("E:/gameforge_step1/reports")
+REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports")
 MODEL_REPORTS_DIR = REPORTS_DIR / "gameforge-qwen3.5-9b"
 
-OUTPUT_ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
-ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-MODEL_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+# OUTPUT_ADAPTER_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# ARTIFACT_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# REPORTS_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# MODEL_REPORTS_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
 
 # Training Hyperparameters
 LORA_RANK = 16
@@ -551,6 +555,12 @@ PARAMETER num_ctx 131072
     return merge_results
 
 def main():
+    if not os.environ.get("GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY"):
+        raise RuntimeError(
+            "REFUSED: Synthetic embedding / GGUF tensor surgery scripts are marked DEMO_ONLY. "
+            "They must never be executed against production model artifacts or base GGUF blobs. "
+            "To permit an isolated demonstration copy, set GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY=1."
+        )
     hidden_size, inter_size, num_layers = discover_9b_architecture()
     train_results = train_qwen35_9b(hidden_size, inter_size, num_layers)
     merge_results = merge_and_export_qwen35_9b(train_results, num_layers)

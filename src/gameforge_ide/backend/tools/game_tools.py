@@ -2,6 +2,7 @@
 
   plan_game        T1  prompt -> Game Spec (recipe + parameters + acceptance), no side effects
   create_game      T3  run the full pipeline (scaffold, build, level, tests, package, self-test)
+  modify_game      T3  apply RFC 6902 GDS patch and run incremental Forge DAG rebuild
   unreal_editor    T0/T2  one live editor operation on a project (read-only ops need no approval)
   unreal_run_tests T3  run automation tests for a project
   unreal_package   T3  cook + package a project
@@ -46,7 +47,6 @@ AGENT_EDITOR_OPS = frozenset(op_catalog.agent_ops())
 from ...storage.approval_store import ApprovalStore
 
 
-
 class GameTools:
     _links: Dict[str, LiveEditorLink] = {}
     _instances: List[Any] = []
@@ -54,6 +54,7 @@ class GameTools:
     @classmethod
     def all_links(cls) -> Dict[str, LiveEditorLink]:
         return dict(cls._links)
+
     def __init__(self, workspace_root: Path, projects_root: Optional[Path] = None,
                  engine_root: Optional[Path] = None):
         self.workspace_root = Path(workspace_root).resolve()
@@ -93,7 +94,6 @@ class GameTools:
     def _get_complete_json(self):
         return resolve_design_model()
 
-
     # ── T1 ─────────────────────────────────────────────────────────────────
     def plan_game(self, prompt: str) -> Dict[str, Any]:
         complete_json, model = self._get_complete_json()
@@ -124,11 +124,6 @@ class GameTools:
             "projects_root": str(self.projects_root),
         }
 
-
-
-
-
-
     def propose_create_game(self, prompt: str, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """For a game-creation prompt, produce a GDS and persist a pending create_game action."""
         if not is_game_creation_request(prompt):
@@ -141,12 +136,11 @@ class GameTools:
         summary_md = render_markdown(gds)
         project_dir = self.projects_root / gds.meta.project_name
         legacy_dict = None
-        try:
-            legacy_dict = to_legacy_params(gds).to_dict()
-        except LegacyUnsupported:
-            pass
-        # project_dir/project_name travel with the approval: without them the approval card guessed "MyGame",
-        # wrote that guess back into the args and the game was built into a folder called MyGame.
+        if os.environ.get("GAMEFORGE_LEGACY_ACTION_RECIPES", "").strip().lower() in ("1", "true", "yes"):
+            try:
+                legacy_dict = to_legacy_params(gds).to_dict()
+            except LegacyUnsupported:
+                pass
         args_payload = {"gds": gds.to_json(), "package": True, "project_dir": str(project_dir),
                         "project_name": gds.meta.project_name}
         if legacy_dict is not None:
@@ -209,9 +203,9 @@ class GameTools:
         return FreeformGamePipeline(self.workspace_root, proj_root, self.engine_root,
                                     on_event=on_event, cancel_event=cancel_event).run(prompt, title)
 
-    # ── T3 create game ─────────────────────────────────────────────────────
+    # ── T3 create / modify game ────────────────────────────────────────────
     @staticmethod
-    def release_llm_vram(host: str = "127.0.0.1:11434") -> List[str]:
+    def release_llm_vram(host: Optional[str] = None) -> List[str]:
         """Unload resident Ollama models so the editor/cook get the GPU (one heavy GPU workload).
 
         Best effort and harmless when Ollama is not running; models reload on next use.
@@ -219,11 +213,20 @@ class GameTools:
         import urllib.request
         unloaded: List[str] = []
         try:
-            with urllib.request.urlopen(f"http://{host}/api/ps", timeout=3) as r:
+            if not host:
+                try:
+                    from ...core.settings import get_settings
+                    s = get_settings()
+                    host = getattr(s, "ollama_url", None) or getattr(s, "ollama_host", None)
+                except Exception:
+                    host = None
+            raw_host = (host or os.environ.get("GAMEFORGE_OLLAMA_HOST") or "http://127.0.0.1:11434").strip().rstrip("/")
+            base_url = raw_host if raw_host.startswith(("http://", "https://")) else f"http://{raw_host}"
+            with urllib.request.urlopen(f"{base_url}/api/ps", timeout=3) as r:
                 running = json.loads(r.read().decode("utf-8")).get("models", [])
             for m in running:
                 body = json.dumps({"model": m["name"], "keep_alive": 0}).encode("utf-8")
-                req = urllib.request.Request(f"http://{host}/api/generate", data=body,
+                req = urllib.request.Request(f"{base_url}/api/generate", data=body,
                                              headers={"Content-Type": "application/json"}, method="POST")
                 urllib.request.urlopen(req, timeout=30).read()
                 unloaded.append(m["name"])
@@ -352,160 +355,28 @@ class GameTools:
                     gds.meta.revision = stored.meta.revision + 1
                 return design_store.save(pdir_path, gds)
 
-            try:
-                recipe_params = to_legacy_params(gds)
-                hook = _save_gds_auto_advance
-            except (LegacyUnsupported, ValueError):
-                # Modern Composer + Forge DAG path
-                from ...composer import compose, composition_to_run_spec
-                from ...forge.store import RunStore
-                from ...forge.executor import ForgeExecutor
-                from ...forge.handlers import HANDLERS
-                from ...forge.model import RunState, StepStatus
-                from ...core.events import default_bus
+            legacy_enabled = os.environ.get("GAMEFORGE_LEGACY_ACTION_RECIPES", "").strip().lower() in ("1", "true", "yes")
+            is_explicit_preset = (getattr(gds.meta, "generator", "") or "").startswith("preset:")
+            recipe_params = None
+            if legacy_enabled and is_explicit_preset:
+                try:
+                    recipe_params = to_legacy_params(gds)
+                    hook = _save_gds_auto_advance
+                except (LegacyUnsupported, ValueError):
+                    recipe_params = None
 
-                explicit_pdir = (
-                    kwargs.get("project_dir")
-                    or (gds_or_params.get("project_dir") if isinstance(gds_or_params, dict) else None)
-                    or getattr(gds.meta, "project_dir", None)
+            if recipe_params is None:
+                # Modern Composer + Forge DAG path (default for all GDS builds)
+                return self._execute_composer_forge_pipeline(
+                    gds=gds,
+                    save_hook=_save_gds_auto_advance,
+                    package=package,
+                    on_event=on_event,
+                    cancel_event=cancel_event,
+                    gds_or_params=gds_or_params,
+                    origin="prompt",
+                    **kwargs,
                 )
-                if explicit_pdir:
-                    pdir = Path(explicit_pdir).resolve()
-                else:
-                    pdir = self.projects_root / gds.meta.project_name
-                pdir.mkdir(parents=True, exist_ok=True)
-                _save_gds_auto_advance(pdir)
-
-                freed = self.release_llm_vram()
-                if on_event and freed:
-                    on_event("gpu_released", {"unloaded_models": freed})
-
-                try:
-                    comp = compose(gds, allow_partial=True)
-                    run_spec = composition_to_run_spec(
-                        comp,
-                        str(self.workspace_root),
-                        str(pdir),
-                        origin="prompt",
-                    )
-                except Exception as exc:
-                    # Composition problems used to escape as raw exceptions and abort the agent turn; report them
-                    # as a structured failure the chat can show (with the composer's own suggestions).
-                    problems = list(getattr(exc, "problems", []) or []) or [str(exc)]
-                    suggestions = list(getattr(exc, "suggestions", []) or [])
-                    logger.warning("Composition failed for %s: %s", gds.meta.project_name, "; ".join(problems))
-                    return {
-                        "status": "FAILED",
-                        "ok": False,
-                        "project_dir": str(pdir),
-                        "failed_stage": "compose",
-                        "error": "Could not compose the game: " + "; ".join(problems[:5]),
-                        "suggestions": suggestions[:5],
-                    }
-                if comp.warnings and on_event:
-                    on_event("compose_warnings", {"warnings": list(comp.warnings)[:10]})
-                if not package:
-                    run_spec.steps = [s for s in run_spec.steps if s.step_id not in ("package", "scenarios")]
-                    for s in run_spec.steps:
-                        s.depends_on = [d for d in s.depends_on if d not in ("package", "scenarios")]
-
-                rstore = RunStore(project_dir=pdir, workspace_dir=self.workspace_root)
-                state = RunState.new(run_spec)
-                rstore.save(state)
-                bus = default_bus()
-
-                def _on_ev(topic: str, ev: Dict[str, Any]):
-                    kind = ev.get("kind")
-                    sid = ev.get("step_id", "")
-                    stage = sid
-                    if sid.startswith("assemble_"):
-                        stage = "assemble_level"
-                    elif sid == "automation":
-                        stage = "automation_tests"
-                    elif sid == "scenarios":
-                        stage = "packaged_smoke"
-                    elif sid == "codegen":
-                        stage = "sources"
-                    elif sid == "design":
-                        stage = "spec"
-
-                    if kind == "step_started":
-                        if on_event:
-                            on_event("stage_started", {"stage": stage, "step_id": sid})
-                    elif kind == "step_finished":
-                        if on_event:
-                            on_event("stage_finished", {
-                                "stage": stage,
-                                "step_id": sid,
-                                "ok": ev.get("ok", False),
-                                "duration_s": ev.get("duration_s", 0.0),
-                                "errors": ev.get("errors", []),
-                            })
-                            if sid == "scaffold" and not comp.codegen:
-                                on_event("stage_finished", {
-                                    "stage": "sources",
-                                    "step_id": "sources",
-                                    "ok": True,
-                                    "duration_s": 0.0,
-                                    "errors": [],
-                                })
-
-                unsub = bus.subscribe("forge", _on_ev)
-                executor = ForgeExecutor(HANDLERS, bus=bus)
-                watcher_stop = threading.Event()
-
-                def _watch_cancel() -> None:
-                    # Forward a user cancel that arrives *during* the run (previously the event was
-                    # only checked once, before the run started).
-                    while not watcher_stop.wait(0.5):
-                        if cancel_event is not None and cancel_event.is_set():
-                            try:
-                                executor.request_cancel()
-                            except Exception:
-                                pass
-                            return
-
-                watcher = None
-                if cancel_event is not None:
-                    if cancel_event.is_set():
-                        executor.request_cancel()
-                    watcher = threading.Thread(target=_watch_cancel, name="create-game-cancel", daemon=True)
-                    watcher.start()
-                try:
-                    state = executor.run(state, rstore)
-                finally:
-                    watcher_stop.set()
-                    unsub()
-
-                ok = state.status == "DONE"
-                exe_path = pdir / "Packaged" / "Windows" / f"{gds.meta.project_name}.exe"
-                report_path = pdir / "Saved" / "GameForge" / "pipeline_report.json"
-                first_failed = next((sid for sid, r in state.records.items() if r.status == StepStatus.FAILED), None)
-
-                err_msg = None
-                if not ok:
-                    if first_failed and state.records[first_failed].errors:
-                        err_msg = "; ".join(state.records[first_failed].errors)
-                    else:
-                        err_msg = f"Run status: {state.status}"
-
-                out = {
-                    "status": "SUCCESS" if ok else state.status,
-                    "ok": ok,
-                    "project_dir": str(pdir),
-                    "run_id": state.run.run_id,
-                    "report_path": str(report_path) if report_path.is_file() else None,
-                    "failed_stage": first_failed,
-                    "error": err_msg,
-                }
-                if exe_path.is_file():
-                    out["exe"] = str(exe_path)
-                out["stages"] = [
-                    {"step_id": sid, "status": getattr(r.status, "value", str(r.status)),
-                     "errors": list(r.errors or [])[:3]}
-                    for sid, r in state.records.items()
-                ]
-                return out
         elif params is not None:
             # Backward compatibility branch for pre-P1 approval records
             from ...legacy_recipes.grid_board_game.recipe import GridBoardParams
@@ -516,7 +387,6 @@ class GameTools:
             if isinstance(params, (GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams)):
                 recipe_params = params
             elif isinstance(params, dict):
-                # Infer recipe type or default to GridBoardParams
                 if "collectible_target" in params:
                     recipe_params = PlatformerParams(**params)
                 elif "wave_count" in params:
@@ -545,6 +415,296 @@ class GameTools:
             exe = Path(res.project_dir) / "Packaged" / "Windows" / f"{recipe_params.project_name}.exe"
             out["exe"] = str(exe)
             out["screenshot"] = smoke.data.get("screenshot")
+        return out
+
+    def _execute_composer_forge_pipeline(
+        self,
+        gds: GameDesignSpec,
+        save_hook: Callable[[Path], Path],
+        package: bool = True,
+        on_event: Optional[Callable[[str, Dict], None]] = None,
+        cancel_event=None,
+        gds_or_params: Any = None,
+        origin: str = "prompt",
+        dirty_steps: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Run the 11-stage Composer + Forge DAG pipeline for a GameDesignSpec."""
+        from ...composer import compose, composition_to_run_spec
+        from ...forge.store import RunStore
+        from ...forge.executor import ForgeExecutor
+        from ...forge.handlers import HANDLERS
+        from ...forge.impact import prepare_incremental_state
+        from ...forge.model import RunState, StepStatus
+        from ...core.events import default_bus
+
+        explicit_pdir = (
+            kwargs.get("project_dir")
+            or (gds_or_params.get("project_dir") if isinstance(gds_or_params, dict) else None)
+            or getattr(gds.meta, "project_dir", None)
+        )
+        if explicit_pdir:
+            pdir = Path(explicit_pdir).resolve()
+        else:
+            pdir = self.projects_root / gds.meta.project_name
+        pdir.mkdir(parents=True, exist_ok=True)
+        save_hook(pdir)
+
+        freed = self.release_llm_vram()
+        if on_event and freed:
+            on_event("gpu_released", {"unloaded_models": freed})
+
+        try:
+            comp = compose(gds, allow_partial=True)
+            run_spec = composition_to_run_spec(
+                comp,
+                str(self.workspace_root),
+                str(pdir),
+                origin=origin,
+            )
+        except Exception as exc:
+            problems = list(getattr(exc, "problems", []) or []) or [str(exc)]
+            suggestions = list(getattr(exc, "suggestions", []) or [])
+            logger.warning("Composition failed for %s: %s", gds.meta.project_name, "; ".join(problems))
+            return {
+                "status": "FAILED",
+                "ok": False,
+                "project_dir": str(pdir),
+                "failed_stage": "compose",
+                "error": "Could not compose the game: " + "; ".join(problems[:5]),
+                "suggestions": suggestions[:5],
+            }
+        if comp.warnings and on_event:
+            on_event("compose_warnings", {"warnings": list(comp.warnings)[:10]})
+        if not package:
+            run_spec.steps = [s for s in run_spec.steps if s.step_id not in ("package", "scenarios")]
+            for s in run_spec.steps:
+                s.depends_on = [d for d in s.depends_on if d not in ("package", "scenarios")]
+
+        rstore = RunStore(project_dir=pdir, workspace_dir=self.workspace_root)
+        bus = default_bus()
+        executor = ForgeExecutor(HANDLERS, bus=bus)
+
+        if dirty_steps is not None:
+            prev_state = rstore.latest_for_project(pdir)
+            state, _ = prepare_incremental_state(prev_state, run_spec)
+            for ds in dirty_steps:
+                executor.invalidate_stage_and_downstream(state, ds)
+        else:
+            state = RunState.new(run_spec)
+        rstore.save(state)
+
+        def _on_ev(topic: str, ev: Dict[str, Any]):
+            kind = ev.get("kind")
+            sid = ev.get("step_id", "")
+            stage = sid
+            if sid.startswith("assemble_"):
+                stage = "assemble_level"
+            elif sid == "automation":
+                stage = "automation_tests"
+            elif sid == "scenarios":
+                stage = "packaged_smoke"
+            elif sid == "codegen":
+                stage = "sources"
+            elif sid == "design":
+                stage = "spec"
+
+            if kind == "step_started":
+                if on_event:
+                    on_event("stage_started", {"stage": stage, "step_id": sid})
+            elif kind == "step_finished":
+                if on_event:
+                    on_event("stage_finished", {
+                        "stage": stage,
+                        "step_id": sid,
+                        "ok": ev.get("ok", False),
+                        "duration_s": ev.get("duration_s", 0.0),
+                        "errors": ev.get("errors", []),
+                    })
+                    if sid == "scaffold" and not comp.codegen:
+                        on_event("stage_finished", {
+                            "stage": "sources",
+                            "step_id": "sources",
+                            "ok": True,
+                            "duration_s": 0.0,
+                            "errors": [],
+                        })
+
+        unsub = bus.subscribe("forge", _on_ev)
+        watcher_stop = threading.Event()
+
+        def _watch_cancel() -> None:
+            while not watcher_stop.wait(0.5):
+                if cancel_event is not None and cancel_event.is_set():
+                    try:
+                        executor.request_cancel()
+                    except Exception:
+                        pass
+                    return
+
+        watcher = None
+        if cancel_event is not None:
+            if cancel_event.is_set():
+                executor.request_cancel()
+            watcher = threading.Thread(target=_watch_cancel, name="create-game-cancel", daemon=True)
+            watcher.start()
+        try:
+            state = executor.run(state, rstore)
+        finally:
+            watcher_stop.set()
+            unsub()
+
+        ok = state.status == "DONE"
+        exe_path = pdir / "Packaged" / "Windows" / f"{gds.meta.project_name}.exe"
+        report_path = pdir / "Saved" / "GameForge" / "pipeline_report.json"
+        first_failed = next((sid for sid, r in state.records.items() if r.status == StepStatus.FAILED), None)
+
+        err_msg = None
+        if not ok:
+            if first_failed and state.records[first_failed].errors:
+                err_msg = "; ".join(state.records[first_failed].errors)
+            else:
+                err_msg = f"Run status: {state.status}"
+
+        out: Dict[str, Any] = {
+            "status": "SUCCESS" if ok else state.status,
+            "ok": ok,
+            "project_dir": str(pdir),
+            "run_id": state.run.run_id,
+            "report_path": str(report_path) if report_path.is_file() else None,
+            "failed_stage": first_failed,
+            "error": err_msg,
+        }
+        if dirty_steps is not None:
+            out["dirty_steps"] = list(dirty_steps)
+        if exe_path.is_file():
+            out["exe"] = str(exe_path)
+        out["stages"] = [
+            {"step_id": sid, "status": getattr(r.status, "value", str(r.status)),
+             "errors": list(r.errors or [])[:3]}
+            for sid, r in state.records.items()
+        ]
+        return out
+
+    def modify_game(
+        self,
+        prompt: str = "",
+        project_dir: Optional[Union[str, Path]] = None,
+        package: bool = True,
+        on_event: Optional[Callable[[str, Dict], None]] = None,
+        cancel_event=None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Modify an existing GameDesignSpec via RFC 6902 patch and execute incremental Forge rebuild."""
+        from ...core.projects import find_gds, list_all_project_dirs
+        from ...design.patch import apply_patch, propose_patch
+        from ...forge.impact import compute_dirty_steps
+
+        req_text = (prompt or kwargs.get("request") or "").strip()
+        if not req_text:
+            return {
+                "status": "FAILED",
+                "ok": False,
+                "error": "No modification request provided.",
+                "failed_stage": "spec",
+            }
+
+        # Resolve target project directory containing an existing GDS
+        pdir: Optional[Path] = None
+        if project_dir:
+            pdir = Path(project_dir).resolve()
+        elif kwargs.get("uproject"):
+            up = self._resolve_uproject(kwargs["uproject"])
+            if up:
+                pdir = up.parent
+
+        if pdir is None or design_store.load(pdir) is None:
+            found_ws = find_gds(self.workspace_root)
+            if found_ws and found_ws.is_file():
+                # <project>/GameForge/design/game.gds.json -> <project>
+                if found_ws.parent.name == "design" and found_ws.parent.parent.name == "GameForge":
+                    pdir = found_ws.parent.parent.parent
+                else:
+                    pdir = found_ws.parent
+            else:
+                for cand_dir in list_all_project_dirs(self.workspace_root).values():
+                    if design_store.load(cand_dir) is not None:
+                        pdir = cand_dir
+                        break
+
+        if pdir is None:
+            return {
+                "status": "FAILED",
+                "ok": False,
+                "error": "No existing GameDesignSpec found in workspace or projects root.",
+                "failed_stage": "spec",
+            }
+
+        gds = design_store.load(pdir)
+        if gds is None:
+            return {
+                "status": "FAILED",
+                "ok": False,
+                "project_dir": str(pdir),
+                "error": f"No GameDesignSpec found in {pdir}.",
+                "failed_stage": "spec",
+            }
+
+        complete_json, model = self._get_complete_json()
+        model_caller = None
+        if complete_json and model:
+            model_caller = lambda role, p: complete_json("You are a GameForge GDS RFC6902 patch generator.", p, {})
+
+        proposed = propose_patch(gds, req_text, complete_json=bool(complete_json), model_caller=model_caller)
+        if proposed.status == "NEEDS_INPUT" or not proposed.ops:
+            return {
+                "status": proposed.status or "NEEDS_INPUT",
+                "ok": False,
+                "project_dir": str(pdir),
+                "questions": list(proposed.questions),
+                "summary": proposed.summary,
+                "error": proposed.summary or "Could not produce a valid GDS patch.",
+                "failed_stage": "spec",
+            }
+
+        try:
+            patched_gds = apply_patch(gds, proposed.ops)
+        except Exception as exc:
+            return {
+                "status": "FAILED",
+                "ok": False,
+                "project_dir": str(pdir),
+                "error": f"Failed applying GDS patch: {exc}",
+                "failed_stage": "spec",
+            }
+
+        dirty_steps = list(compute_dirty_steps(proposed.ops))
+        has_uproject = any(pdir.glob("*.uproject"))
+        has_source = (pdir / "Source").is_dir() and any((pdir / "Source").rglob("*"))
+        if not has_uproject or not has_source:
+            if "scaffold" not in dirty_steps:
+                dirty_steps.insert(0, "scaffold")
+            if "build_editor" not in dirty_steps:
+                dirty_steps.append("build_editor")
+
+        def _save_patched(pdir_path: Path) -> Path:
+            stored = design_store.load(pdir_path)
+            if stored is not None and patched_gds.meta.revision <= stored.meta.revision:
+                patched_gds.meta.revision = stored.meta.revision + 1
+            return design_store.save(pdir_path, patched_gds)
+
+        out = self._execute_composer_forge_pipeline(
+            gds=patched_gds,
+            save_hook=_save_patched,
+            package=package,
+            on_event=on_event,
+            cancel_event=cancel_event,
+            project_dir=pdir,
+            origin="change_request",
+            dirty_steps=dirty_steps,
+        )
+        out["patch_ops"] = proposed.ops
+        out["summary"] = proposed.summary
         return out
 
     # ── live editor ────────────────────────────────────────────────────────
@@ -764,12 +924,15 @@ class GameTools:
         proc = subprocess.Popen([str(resolved_exe), "-windowed", "-ResX=1280", "-ResY=800"], cwd=str(resolved_exe.parent))
         return {"status": "SUCCESS", "pid": proc.pid, "exe": str(resolved_exe)}
 
+
 _MODEL_PROBE_CACHE: Dict[str, Any] = {}
 
 
 def _design_model_available(host: str, model: str, ttl_s: float = 30.0) -> bool:
     """Cheap /api/tags probe (2 s timeout, cached for ttl_s) telling whether Ollama serves ``model``."""
-    key = f"{host}|{model}"
+    raw_host = (host or "127.0.0.1:11434").strip().rstrip("/")
+    base_url = raw_host if raw_host.startswith(("http://", "https://")) else f"http://{raw_host}"
+    key = f"{base_url}|{model}"
     hit = _MODEL_PROBE_CACHE.get(key)
     now = time.monotonic()
     if hit and now - hit[0] < ttl_s:
@@ -777,7 +940,7 @@ def _design_model_available(host: str, model: str, ttl_s: float = 30.0) -> bool:
     ok = False
     try:
         import urllib.request
-        with urllib.request.urlopen(f"http://{host}/api/tags", timeout=2.0) as resp:
+        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=2.0) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="replace") or "{}")
         names = {m.get("name", "") for m in data.get("models", []) if isinstance(m, dict)}
         ok = model in names or f"{model}:latest" in names
@@ -787,7 +950,7 @@ def _design_model_available(host: str, model: str, ttl_s: float = 30.0) -> bool:
     return ok
 
 
-def resolve_design_model():
+def resolve_design_model(preferred_model: Optional[str] = None, host: Optional[str] = None):
     """(complete_json callable, model id) for game design, or (None, None) when no design model is reachable.
 
     Shared by the agent, the Home view and the /game command (no GameTools instance needed). Without a reachable
@@ -799,11 +962,18 @@ def resolve_design_model():
         from ..providers.ollama_provider import OllamaProvider
         from ...core.settings import get_settings
         settings = get_settings()
-        host = settings.ollama_url.replace("http://", "").replace("https://", "").rstrip("/")
-        model = settings.model_for("design")
-        if not model or not _design_model_available(host, model):
+        raw_url = (
+            host
+            or getattr(settings, "ollama_url", None)
+            or getattr(settings, "ollama_host", None)
+            or os.environ.get("GAMEFORGE_OLLAMA_HOST")
+            or "http://127.0.0.1:11434"
+        )
+        clean_host = str(raw_url).replace("http://", "").replace("https://", "").rstrip("/")
+        model = preferred_model or settings.model_for("design")
+        if not model or not _design_model_available(str(raw_url), model):
             return None, None
-        provider = OllamaProvider(host=host)
+        provider = OllamaProvider(host=clean_host)
         return (lambda s, u, sch: provider.complete_json(model, s, u, sch)), model
     except Exception:
         return None, None

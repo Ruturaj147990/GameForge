@@ -58,6 +58,9 @@ class IntentResult:
     seconds: float
 
 
+IntentClassification = IntentResult
+
+
 _cache: Dict[str, IntentResult] = {}
 _cache_lock = threading.Lock()
 
@@ -69,7 +72,14 @@ def _timeout_s() -> float:
         return 15.0
 
 
-def classify_intent(prompt: str, provider: Any, model_id: str) -> Optional[IntentResult]:
+def classify_intent(
+    prompt: str,
+    provider: Any,
+    model_id: str,
+    *,
+    has_existing_gds: bool = False,
+    active_plan_state: Optional[str] = None,
+) -> Optional[IntentResult]:
     """Return a confident model classification, or None to fall back to heuristics."""
     text = (prompt or "").strip()
     if not text or provider is None or not model_id:
@@ -78,7 +88,8 @@ def classify_intent(prompt: str, provider: Any, model_id: str) -> Optional[Inten
         return None
     if not hasattr(provider, "complete_json"):
         return None
-    key = f"{model_id}\x00{text}"
+    ctx_tag = f"gds={int(bool(has_existing_gds))}|plan={active_plan_state or ''}"
+    key = f"{model_id}\x00{ctx_tag}\x00{text}"
     with _cache_lock:
         if key in _cache:
             return _cache[key]
@@ -88,12 +99,17 @@ def classify_intent(prompt: str, provider: Any, model_id: str) -> Optional[Inten
     except Exception:
         return None
 
+    context_prefix = ""
+    if has_existing_gds or active_plan_state:
+        context_prefix = f"[Context: existing_game_spec={has_existing_gds}, active_plan={active_plan_state or 'none'}]\n"
+
     t0 = time.monotonic()
+    user_msg = f"{context_prefix}Message:\n{text[:4000]}"
     try:
         raw = provider.complete_json(
             model_id=model_id,
             system=_SYSTEM,
-            user=f"Message:\n{text[:4000]}",
+            user=user_msg,
             schema=_SCHEMA,
             temperature=0.0,
             timeout_s=_timeout_s(),
@@ -101,7 +117,7 @@ def classify_intent(prompt: str, provider: Any, model_id: str) -> Optional[Inten
     except TypeError:
         # Providers with a narrower complete_json signature.
         try:
-            raw = provider.complete_json(model_id, _SYSTEM, f"Message:\n{text[:4000]}", _SCHEMA)
+            raw = provider.complete_json(model_id, _SYSTEM, user_msg, _SCHEMA)
         except Exception as exc:
             logger.debug("Intent classification unavailable: %s", exc)
             return None

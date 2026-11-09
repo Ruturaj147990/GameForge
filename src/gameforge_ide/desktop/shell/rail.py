@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from ..icons import icon
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 # Primary active navigation items for the Studio Activity Rail.
 # Note: Separate Design and Build views are retired from the primary rail
@@ -54,7 +55,7 @@ class RailButton(QToolButton):
         self._apply_style()
 
     def _apply_style(self) -> None:
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QToolButton {{
                 background: transparent;
                 border: none;
@@ -84,7 +85,7 @@ class RailButton(QToolButton):
             QToolButton:disabled {{
                 opacity: 0.35;
             }}
-        """)
+        """))
 
     def update_theme(self) -> None:
         self.setIcon(icon(self.view_id, role="secondary", size=22))
@@ -123,7 +124,7 @@ class Rail(QWidget):
                 sep.setFrameShape(QFrame.HLine)
                 sep.setFrameShadow(QFrame.Plain)
                 sep.setFixedWidth(36)
-                sep.setStyleSheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;")
+                sep.setStyleSheet(theme_stylesheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;"))
                 layout.addWidget(sep, alignment=Qt.AlignCenter)
                 self._separators.append(sep)
                 continue
@@ -135,12 +136,12 @@ class Rail(QWidget):
 
         layout.addStretch(1)
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QWidget#studioRail {{
                 background: {tokens.BG_ROOT};
                 border-right: 1px solid {tokens.BORDER};
             }}
-        """)
+        """))
 
     def set_active_view(self, view_id: str) -> None:
         """Mark the corresponding rail button checked without triggering signals."""
@@ -201,15 +202,15 @@ class Rail(QWidget):
 
     def update_theme(self) -> None:
         """Repaint rail background and all rail button icons/styles with active theme tokens."""
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QWidget#studioRail {{
                 background: {tokens.BG_ROOT};
                 border-right: 1px solid {tokens.BORDER};
             }}
-        """)
+        """))
         for btn in self._buttons.values():
             btn.update_theme()
         for btn in self._retired_buttons.values():
             btn.update_theme()
         for sep in getattr(self, "_separators", []):
-            sep.setStyleSheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;")
+            sep.setStyleSheet(theme_stylesheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;"))

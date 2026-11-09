@@ -27,6 +27,12 @@ class ForgeService(QObject):
         self.store = RunStore(project_dir=None, workspace_dir=self.workspace_root)
         self._unsub = self.bus.subscribe("forge", self._on_bus_event)
 
+    def set_workspace(self, workspace_root: Path, project_dir: Optional[Path] = None) -> None:
+        """Update active workspace root and optional project directory on RunStore."""
+        self.workspace_root = Path(workspace_root).resolve()
+        p_dir = Path(project_dir).resolve() if project_dir else None
+        self.store = RunStore(project_dir=p_dir, workspace_dir=self.workspace_root)
+
     def _on_bus_event(self, topic: str, event: Dict[str, Any]) -> None:
         # Re-emit on UI thread via Qt signal
         self.runEvent.emit(event)

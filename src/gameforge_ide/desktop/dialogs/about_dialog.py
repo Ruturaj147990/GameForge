@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...core.settings import get_settings
 
 
@@ -29,12 +30,12 @@ class AboutDialog(QDialog):
         self.setWindowTitle("About GameForge IDE")
         self.setModal(True)
         self.resize(520, 360)
-        self.setStyleSheet(
+        self.setStyleSheet(theme_stylesheet(
             f"QDialog#{self.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  border: 1px solid {tokens.BORDER};"
             f"}}"
-        )
+        ))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(tokens.SPACE_LG, tokens.SPACE_LG, tokens.SPACE_LG, tokens.SPACE_LG)
@@ -143,11 +144,14 @@ class AboutDialog(QDialog):
         layout.addLayout(btn_layout)
 
     def _copy_system_info(self) -> None:
+        settings = get_settings()
         info = (
             f"GameForge IDE v1.0.0\n"
             f"Python: {sys.version}\n"
             f"Platform: {sys.platform}\n"
             f"Engine: Unreal Engine 5.7.4\n"
+            f"Projects Root: {getattr(settings, 'projects_root', 'default')}\n"
+            f"Ollama URL: {getattr(settings, 'ollama_url', 'http://127.0.0.1:11434')}\n"
         )
         clipboard = QGuiApplication.clipboard()
         if clipboard:

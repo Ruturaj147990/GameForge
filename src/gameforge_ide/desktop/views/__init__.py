@@ -52,3 +52,18 @@ from .settings_view import SettingsView
 from .onboarding import OnboardingWizard
 from .onboarding_view import OnboardingView
 
+
+__all__ = [
+    "BaseStudioView",
+    "HomeView",
+    "GamesView",
+    "DesignView",
+    "BuildView",
+    "PlayView",
+    "EvidenceView",
+    "AssetsView",
+    "CodeView",
+    "SettingsView",
+    "OnboardingWizard",
+    "OnboardingView",
+]

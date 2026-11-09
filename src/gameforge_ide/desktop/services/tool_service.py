@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 from typing import Any, Dict
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
@@ -61,18 +62,20 @@ class ToolService(QObject):
         self.workspace_root = workspace_root
         self._pool = QThreadPool.globalInstance()
         self._gateway = None
+        self._lock = threading.RLock()
 
     def set_workspace(self, new_workspace: Path) -> None:
         """Switch active workspace directory and recreate ToolGateway."""
-        self.workspace_root = Path(new_workspace).resolve()
-        self._gateway = None
-
+        with self._lock:
+            self.workspace_root = Path(new_workspace).resolve()
+            self._gateway = None
 
     def _ensure_gateway(self):
-        if self._gateway is not None:
-            return
-        from ...backend.tools.gateway import ToolGateway
-        self._gateway = ToolGateway(self.workspace_root)
+        with self._lock:
+            if self._gateway is None:
+                from ...backend.tools.gateway import ToolGateway
+                self._gateway = ToolGateway(self.workspace_root)
+            return self._gateway
 
     def execute(
         self,
@@ -82,9 +85,9 @@ class ToolService(QObject):
         approval_granted: bool = False,
     ) -> None:
         """Execute a tool asynchronously; result emitted via tool_result signal."""
-        self._ensure_gateway()
+        gw = self._ensure_gateway()
         runnable = _ToolRunnable(
-            self._gateway, name, arguments or {}, approval_granted=approval_granted, parent=self
+            gw, name, arguments or {}, approval_granted=approval_granted, parent=self
         )
         runnable.signals.finished.connect(self.tool_result)
         self._pool.start(runnable)
@@ -97,8 +100,8 @@ class ToolService(QObject):
         approval_granted: bool = False,
     ) -> Dict[str, Any]:
         """Execute a tool synchronously (call from non-UI threads only)."""
-        self._ensure_gateway()
-        return self._gateway.execute_tool(
+        gw = self._ensure_gateway()
+        return gw.execute_tool(
             name, arguments or {}, approval_granted=approval_granted
         )
 
@@ -110,5 +113,4 @@ class ToolService(QObject):
 
     @property
     def gateway(self):
-        self._ensure_gateway()
-        return self._gateway
+        return self._ensure_gateway()

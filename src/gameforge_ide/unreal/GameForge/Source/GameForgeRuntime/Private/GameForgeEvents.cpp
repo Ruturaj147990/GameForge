@@ -1,4 +1,5 @@
 #include "GameForgeEvents.h"
+#include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -10,6 +11,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 DEFINE_LOG_CATEGORY(LogGameForgeEvents);
 
@@ -42,6 +45,7 @@ void UGameForgeEventBus::Emit(FName Name, const FString& Source, const FString& 
 {
 	FGameForgeEvent Ev;
 	Ev.Name = Name;
+	Ev.EventName = Name.ToString();
 	Ev.Source = Source;
 	Ev.Entity = Entity;
 	Ev.DataJson = DataJson.TrimStartAndEnd().StartsWith(TEXT("{")) ? DataJson : TEXT("{}");
@@ -83,6 +87,45 @@ int32 UGameForgeEventBus::Count(FName Name, FName Entity) const
 	}
 }
 
+bool UGameForgeEventBus::GetLastEventDataField(FName Name, const FString& Key, FString& OutValue, FName Entity) const
+{
+	for (int32 i = Events.Num() - 1; i >= 0; --i)
+	{
+		const FGameForgeEvent& Ev = Events[i];
+		if (Ev.Name != Name)
+		{
+			continue;
+		}
+		if (!Entity.IsNone() && Ev.Entity != Entity)
+		{
+			continue;
+		}
+		TSharedPtr<FJsonObject> Obj;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Ev.DataJson);
+		if (FJsonSerializer::Deserialize(Reader, Obj) && Obj.IsValid() && Obj->HasField(Key))
+		{
+			if (Obj->TryGetStringField(Key, OutValue))
+			{
+				return true;
+			}
+			double NumVal = 0.0;
+			if (Obj->TryGetNumberField(Key, NumVal))
+			{
+				OutValue = FString::SanitizeFloat(NumVal);
+				return true;
+			}
+			bool bVal = false;
+			if (Obj->TryGetBoolField(Key, bVal))
+			{
+				OutValue = bVal ? TEXT("true") : TEXT("false");
+				return true;
+			}
+		}
+		return false;
+	}
+	return false;
+}
+
 void UGameForgeEventBus::ResetCounters()
 {
 	Events.Reset();
@@ -113,6 +156,13 @@ void UGameForgeEventLibrary::EmitGameForgeEvent(const UObject* WorldContextObjec
 {
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(WorldContextObject))
 	{
+		if (Entity.IsNone())
+		{
+			if (const AActor* AsActor = Cast<AActor>(WorldContextObject))
+			{
+				Entity = ResolveEntityId(AsActor, Entity);
+			}
+		}
 		Bus->Emit(Name, Source, DataJson, Entity);
 	}
 }

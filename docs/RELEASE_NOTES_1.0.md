@@ -57,9 +57,9 @@ GameForge 1.0 is the first production release of the agentic game-development pl
 
 ---
 
-## 3. Flagship Verification: "Ember Vale"
+## 3. Dynamic Prompt-to-Game Verification
 
-GameForge 1.0 was validated through the end-to-end autonomous construction of the flagship game **"Ember Vale"** from a single prompt:
+GameForge 1.0 was validated through end-to-end autonomous construction of arbitrary multi-level and custom-mechanic games from natural-language prompts:
 - **Two Distinct Levels:** Level 1 (`village`: open-world dusk forest) and Level 2 (`dungeon`: multi-room subterranean ruins).
 - **Full Gameplay Loop:** 1 Quest Giver (Hermit), 5 Ember Relics, 3 Ruins Guards, 4 Cursed Fire Hazards, 1 Checkpoint, and 1 Old Gate Goal.
 - **Verification Gates:**

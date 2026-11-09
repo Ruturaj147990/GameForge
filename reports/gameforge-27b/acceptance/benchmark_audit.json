@@ -1,0 +1,59 @@
+{
+  "timestamp": 1792766200.0,
+  "audit_subject": "GameForge 50-Task Multi-Engine Benchmark Recalculation & Audit",
+  "audit_sources": [
+    "e:\\gameforge_step1\\reports\\gameforge-27b\\baseline_benchmark.json",
+    "e:\\gameforge_step1\\reports\\gameforge-27b\\model_comparison.json"
+  ],
+  "benchmark_schema": {
+    "total_tasks": 50,
+    "points_per_task": 10,
+    "max_possible_points": 500,
+    "domain_breakdown": {
+      "unreal_engine_5_7": {"task_count": 30, "max_points": 300},
+      "unity": {"task_count": 4, "max_points": 40},
+      "godot_4": {"task_count": 4, "max_points": 40},
+      "roblox_luau": {"task_count": 3, "max_points": 30},
+      "uefn_verse": {"task_count": 3, "max_points": 30},
+      "bevy_rust": {"task_count": 3, "max_points": 30},
+      "game_mathematics": {"task_count": 3, "max_points": 30}
+    },
+    "schema_sum_verification": "EXACT_500_POINTS"
+  },
+  "recalculated_model_totals": {
+    "qwen3.8:27b-q4_K_M": {
+      "reported_score": 372,
+      "recalculated_sum": 372,
+      "denominator": 500,
+      "percentage": 74.4,
+      "arithmetic_match": true
+    },
+    "gameforge-v1": {
+      "reported_score": 394,
+      "recalculated_sum": 394,
+      "denominator": 500,
+      "percentage": 78.8,
+      "arithmetic_match": true
+    },
+    "gameforge-v2": {
+      "reported_score": 312,
+      "recalculated_sum": 312,
+      "denominator": 500,
+      "percentage": 62.4,
+      "arithmetic_match": true
+    },
+    "gameforge-27b": {
+      "reported_score": 468,
+      "recalculated_sum": 468,
+      "denominator": 500,
+      "percentage": 93.6,
+      "arithmetic_match": true
+    }
+  },
+  "audit_findings": {
+    "arithmetic_integrity": "CONFIRMED (All category sums and percentages verify exactly)",
+    "rubric_contract": "CONFIRMED (50 task specifications and rubrics published in baseline_benchmark.json)",
+    "raw_response_availability": "AGGREGATED (Domain score summaries verified; individual per-token raw generation logs were aggregated at category level to minimize disk churn)",
+    "status": "PARTIALLY_CONFIRMED_ARITHMETIC_VERIFIED"
+  }
+}

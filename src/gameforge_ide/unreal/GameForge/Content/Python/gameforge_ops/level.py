@@ -103,7 +103,7 @@ def spawn_actor(args):
             actor.set_actor_location(_vec(args["location"]), False, False)
         if "rotation" in args:
             actor.set_actor_rotation(_rot(args["rotation"]), False)
-        mesh_path = args.get("static_mesh")
+        mesh_path = args.get("static_mesh") or args.get("mesh_path")
         if not mesh_path and isinstance(actor, unreal.StaticMeshActor):
             mesh_path = "/Engine/BasicShapes/Cube.Cube"
         if mesh_path and isinstance(actor, unreal.StaticMeshActor):
@@ -119,7 +119,7 @@ def spawn_actor(args):
         if "light_intensity" in args and hasattr(actor, "light_component") and actor.light_component:
             actor.light_component.set_intensity(float(args["light_intensity"]))
         warnings_pre = []
-        material = args.get("material")
+        material = args.get("material") or args.get("material_path")
         mat = unreal.EditorAssetLibrary.load_asset(material) if material else None
         if material and mat is None:
             warnings_pre.append("material not found, using theme colour/basic material: %s" % material)
@@ -132,6 +132,17 @@ def spawn_actor(args):
                     "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")
             if mat:
                 actor.static_mesh_component.set_material(0, mat)
+        elif mat or color:
+            if color and (mat is None or not material):
+                mat = _theme_color_material(color) or mat
+            if mat:
+                proc_cls = getattr(unreal, "ProceduralMeshComponent", None)
+                for cls in [c for c in (unreal.MeshComponent, proc_cls) if c is not None]:
+                    try:
+                        for comp in actor.get_components_by_class(cls):
+                            comp.set_material(0, mat)
+                    except Exception:
+                        pass
         light_color = args.get("light_color")
         if light_color and hasattr(actor, "light_component") and actor.light_component:
             try:
@@ -179,6 +190,20 @@ def set_actor_property(args):
     if actor is None:
         return _envelope("set_actor_property", False, errors=["actor not found: %s" % args["label"]])
     name, value = args["property"], args["value"]
+    raw_str_value = value if isinstance(value, str) else None
+    if name.lower() in ("staticmesh", "static_mesh", "mesh_path") and isinstance(actor, unreal.StaticMeshActor):
+        mesh = unreal.EditorAssetLibrary.load_asset(value) if isinstance(value, str) else value
+        if mesh is None:
+            return _envelope("set_actor_property", False, errors=["static mesh asset not found: %s" % args["value"]])
+        with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
+            if hasattr(actor.static_mesh_component, "set_static_mesh"):
+                actor.static_mesh_component.set_static_mesh(mesh)
+            else:
+                actor.static_mesh_component.set_editor_property("static_mesh", mesh)
+        actual = actor.static_mesh_component.get_editor_property("static_mesh")
+        return _envelope("set_actor_property", True,
+                         {"label": args["label"], "property": name, "value": actual.get_path_name() if actual else None},
+                         reversibility="transactional")
     if args.get("asset"):
         # Object reference properties (e.g. a NiagaraSystem) take the loaded asset, not its path string.
         value = unreal.EditorAssetLibrary.load_asset(value)
@@ -194,13 +219,30 @@ def set_actor_property(args):
     elif isinstance(value, dict) and {"r", "g", "b"} <= set(value) <= {"r", "g", "b", "a"}:
         # Colour properties (PickupColor, BodyColor) used to be passed as raw dicts and silently skipped.
         value = unreal.LinearColor(float(value["r"]), float(value["g"]), float(value["b"]), float(value.get("a", 1.0)))
+    elif isinstance(value, str):
+        value = _coerce_enum_property(actor, name, value)
     try:
         with unreal.ScopedEditorTransaction("GameForge set_actor_property"):
             actor.set_editor_property(name, value)
+            if name.lower() == "effect" and raw_str_value:
+                try:
+                    actor.set_editor_property("EffectName", raw_str_value)
+                except Exception:
+                    pass
         actual = actor.get_editor_property(name)
         return _envelope("set_actor_property", True, {"label": args["label"], "property": name, "value": str(actual)},
                          reversibility="transactional")
     except Exception as exc:
+        if name.lower() == "effect" and raw_str_value:
+            try:
+                with unreal.ScopedEditorTransaction("GameForge set_actor_property EffectName fallback"):
+                    actor.set_editor_property("EffectName", raw_str_value)
+                actual = actor.get_editor_property("EffectName")
+                return _envelope("set_actor_property", True,
+                                 {"label": args["label"], "property": "EffectName", "value": str(actual)},
+                                 reversibility="transactional")
+            except Exception:
+                pass
         return _envelope("set_actor_property", True, {"label": args["label"], "property": name, "skipped": str(exc)},
                          warnings=[f"Property '{name}' skipped on {args['label']}: {exc}"], reversibility="transactional")
 

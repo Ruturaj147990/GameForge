@@ -8,16 +8,186 @@ Provides:
 - `extract_unified_diff`: cleanly extracts unified diffs from model text, stripping markdown code fences
   and conversational prose.
 - `run_code_repair_loop`: bounded repair loop with cycle detection, capped retries, and rollback.
+- `_verify_cpp` / `verify_cpp_source`: C/C++ brace balance (after stripping block/line comments, raw strings,
+  string literals, and char literals) and Unreal Header Tool `.generated.h` final-include verification.
 """
 from __future__ import annotations
 
 import difflib
 import json
+import py_compile
 import re
+import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from ...forge.model import RunSpec, StepKind, StepSpec
+
+# Broad MSVC + Linker + UHT diagnostic regex shared with repair_system.py
+MSVC_DIAG_RE = re.compile(
+    r"^(?:(?P<file>(?:[a-zA-Z]:[\\/])?[^\(\r\n:]+?)(?:\((?P<line>\d+)(?:,\s*(?P<col>\d+))?\))?\s*:\s*)?"
+    r"(?P<severity>fatal error|error|warning|Error|Warning)\s*"
+    r"(?P<code>(?:[A-Z]+\d+|LNK\d+|C\d+|UHT\d+))?\s*:\s*(?P<message>.+)$"
+)
+
+
+def _strip_cpp_comments_and_strings(content: str) -> str:
+    """Strip C/C++ block comments, line comments, raw strings, string literals, and char literals.
+
+    Preserves newlines so line numbers remain aligned while preventing braces inside comments or
+    literals from causing false-positive brace imbalance errors.
+    """
+    if not content:
+        return ""
+
+    out: List[str] = []
+    i = 0
+    n = len(content)
+
+    while i < n:
+        ch = content[i]
+
+        # 1. Raw string literal: R"delimiter(...)delimiter"
+        if ch == "R" and i + 1 < n and content[i + 1] == '"':
+            # Find opening '(' of raw string
+            paren_pos = content.find("(", i + 2)
+            if paren_pos != -1 and "\n" not in content[i + 2 : paren_pos] and len(content[i + 2 : paren_pos]) <= 16:
+                delim = content[i + 2 : paren_pos]
+                close_seq = f"){delim}\""
+                end_pos = content.find(close_seq, paren_pos + 1)
+                if end_pos != -1:
+                    raw_body = content[i : end_pos + len(close_seq)]
+                    out.append('""' + ("\n" * raw_body.count("\n")))
+                    i = end_pos + len(close_seq)
+                    continue
+
+        # 2. Line comment: // ...
+        if ch == "/" and i + 1 < n and content[i + 1] == "/":
+            nl_pos = content.find("\n", i + 2)
+            if nl_pos == -1:
+                break
+            i = nl_pos
+            continue
+
+        # 3. Block comment: /* ... */
+        if ch == "/" and i + 1 < n and content[i + 1] == "*":
+            end_pos = content.find("*/", i + 2)
+            if end_pos == -1:
+                # Unclosed block comment to EOF
+                out.append("\n" * content[i:].count("\n"))
+                break
+            comment_body = content[i : end_pos + 2]
+            out.append(" " + ("\n" * comment_body.count("\n")))
+            i = end_pos + 2
+            continue
+
+        # 4. Standard string literal: "..."
+        if ch == '"':
+            out.append('"')
+            i += 1
+            while i < n:
+                c2 = content[i]
+                if c2 == "\\":
+                    if i + 1 < n and content[i + 1] == "\n":
+                        out.append("\n")
+                    i += 2
+                    continue
+                if c2 == '"':
+                    out.append('"')
+                    i += 1
+                    break
+                if c2 == "\n":
+                    out.append("\n")
+                i += 1
+            continue
+
+        # 5. Character literal: '...' (Note: avoid C++14 digit separators like 1'000'000)
+        if ch == "'":
+            prev_ch = content[i - 1] if i > 0 else ""
+            if prev_ch.isalnum():
+                # Likely a C++14 numeric digit separator (e.g. 1'000)
+                out.append(ch)
+                i += 1
+                continue
+            out.append("'")
+            i += 1
+            while i < n:
+                c2 = content[i]
+                if c2 == "\\":
+                    i += 2
+                    continue
+                if c2 == "'":
+                    out.append("'")
+                    i += 1
+                    break
+                if c2 == "\n":
+                    out.append("\n")
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
+def _verify_cpp(content: str, file_path: Optional[Union[str, Path]] = None) -> Tuple[bool, List[str]]:
+    """Verify C/C++ brace balance and Unreal Header Tool (UHT) reflection invariants."""
+    errors: List[str] = []
+    if not content:
+        return True, errors
+
+    stripped = _strip_cpp_comments_and_strings(content)
+    open_braces = stripped.count("{")
+    close_braces = stripped.count("}")
+    if open_braces != close_braces:
+        errors.append(f"Unbalanced braces in C++ source: {open_braces} opening '{{' vs {close_braces} closing '}}'")
+
+    is_header = False
+    if file_path is not None:
+        ext = Path(file_path).suffix.lower()
+        is_header = ext in (".h", ".hpp", ".hxx")
+    elif re.search(r"\b(?:UCLASS|USTRUCT|UENUM)\s*\(", stripped) and not re.search(r"#include\s+[\"'][^\"']+\.cpp[\"']", stripped):
+        is_header = True
+
+    no_comments = re.sub(r"//[^\n]*|/\*[\s\S]*?\*/", "", content)
+    has_generated_body = bool(re.search(r"\b(?:GENERATED_BODY|GENERATED_UCLASS_BODY)\s*\(\s*\)", stripped))
+    if has_generated_body and (is_header or "#include" in no_comments):
+        all_includes = [m.group(1) for m in re.finditer(r'^\s*#\s*include\s+["<]([^">]+)[">]', no_comments, re.MULTILINE)]
+        gen_includes = [inc for inc in all_includes if inc.endswith(".generated.h")]
+        if not gen_includes:
+            errors.append("Header contains GENERATED_BODY() but is missing `#include \"*.generated.h\"`.")
+        elif all_includes and not all_includes[-1].endswith(".generated.h"):
+            errors.append(
+                f"`#include \"{gen_includes[-1]}\"` must be the final `#include` directive in the header "
+                f"(found `#include \"{all_includes[-1]}\"` after it)."
+            )
+
+    return len(errors) == 0, errors
+
+
+def verify_file_syntax(file_path: Union[str, Path], content: Optional[str] = None) -> Tuple[bool, List[str]]:
+    """Verify syntax and structural invariants for Python, JSON, INI, or C/C++ files."""
+    p = Path(file_path)
+    text = content if content is not None else (p.read_text(encoding="utf-8", errors="replace") if p.is_file() else "")
+    ext = p.suffix.lower()
+    if ext in (".h", ".hpp", ".hxx", ".cpp", ".c", ".cc", ".cxx"):
+        return _verify_cpp(text, p)
+    if ext == ".py":
+        try:
+            compile(text, str(p), "exec")
+            return True, []
+        except SyntaxError as exc:
+            return False, [f"Python syntax error at line {exc.lineno}: {exc.msg}"]
+    if ext == ".json":
+        try:
+            json.loads(text)
+            return True, []
+        except json.JSONDecodeError as exc:
+            return False, [f"JSON syntax error: {exc}"]
+    return True, []
 
 
 def _extract_symbol(message: str) -> Optional[str]:
@@ -28,12 +198,13 @@ def _extract_symbol(message: str) -> Optional[str]:
     quoted = re.search(r"['\"`]([a-zA-Z_][\w:]*)['\"`]", message)
     if quoted:
         return quoted.group(1)
-    # 2. Clang/GCC/MSVC unquoted patterns
+    # 2. Clang/GCC/MSVC/Linker unquoted patterns
     patterns = [
         r"\bundeclared identifier\s+([a-zA-Z_][\w:]*)",
         r"\bidentifier\s+([a-zA-Z_][\w:]*)\s+is undefined",
         r"\bno member named\s+([a-zA-Z_][\w:]*)\s+in",
         r"\bundefined reference to\s+([a-zA-Z_][\w:]*)",
+        r"\bunresolved external symbol\s+(?:[^\s]+\s+)?([a-zA-Z_~][\w:~]*)",
         r"\bcannot find symbol\s*:\s*(?:(?:class|variable|method|symbol)\s+)?([a-zA-Z_][\w:]*)",
         r"\bname\s+([a-zA-Z_][\w:]*)\s+is not defined",
     ]
@@ -45,7 +216,7 @@ def _extract_symbol(message: str) -> Optional[str]:
 
 
 def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
-    """Robustly parse compiler outputs, pytest tracebacks, and raw logs into structured diagnostics."""
+    """Robustly parse compiler outputs, linker errors (LNK), UHT errors, pytest tracebacks, and raw logs."""
     if not raw_diagnostics:
         return []
 
@@ -59,7 +230,6 @@ def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
                 norm.setdefault("column", int(item.get("column", 0) or 0))
                 norm.setdefault("message", item.get("message", ""))
                 norm.setdefault("severity", item.get("severity", "error"))
-                # Extract symbol if not present
                 if not norm.get("symbol") and norm.get("message"):
                     norm["symbol"] = _extract_symbol(norm["message"])
                 parsed.append(norm)
@@ -73,15 +243,24 @@ def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     lines = raw_diagnostics.splitlines()
 
-    # Pattern 1: GCC / Clang format: [drive:]path/file.cpp:12:5: error: message
+    # Pattern 1: GCC / Clang / UHT colon format: [drive:]path/file.cpp:12:5: error: message
     gcc_clang_pattern = re.compile(
-        r"^(?P<file>(?:[a-zA-Z]:[\\/])?[^:\r\n]+\.[a-zA-Z0-9]+):(?P<line>\d+):(?:(?P<col>\d+):)?\s*(?P<severity>error|warning|fatal error|note):\s*(?P<message>.*)$",
+        r"^(?P<file>(?:[a-zA-Z]:[\\/])?[^:\r\n]+\.[a-zA-Z0-9]+):(?P<line>\d+):(?:(?P<col>\d+):)?\s*(?P<severity>error|warning|fatal error|note)\s*(?:(?P<code>[A-Z]+\d+))?\s*:\s*(?P<message>.*)$",
         re.IGNORECASE,
     )
-    # Pattern 2: MSVC format: [drive:]path\file.cpp(12,5): error C1234: message or (12): error
+    # Pattern 2: MSVC / UHT parenthesis format: [drive:]path\file.cpp(12,5): error C1234: message or file.h(12): Error: message
     msvc_pattern = re.compile(
-        r"^(?P<file>(?:[a-zA-Z]:[\\/])?[^\(\r\n]+\.[a-zA-Z0-9]+)\((?P<line>\d+)(?:,\s*(?P<col>\d+))?\)\s*:\s*(?P<severity>error|warning|fatal error|note)\s*(?:[A-Z0-9]+)?\s*:\s*(?P<message>.*)$",
+        r"^(?P<file>(?:[a-zA-Z]:[\\/])?[^\(\r\n]+\.[a-zA-Z0-9]+)\((?P<line>\d+)(?:,\s*(?P<col>\d+))?\)\s*:\s*(?P<severity>error|warning|fatal error|note)\s*(?:(?P<code>[A-Z0-9]+))?\s*:\s*(?P<message>.*)$",
         re.IGNORECASE,
+    )
+    # Pattern 2b: Linker (LNK) and file-level UHT diagnostics without line numbers:
+    # e.g. "MyActor.cpp.obj : error LNK2019: unresolved external symbol ..." or "LINK : fatal error LNK1120: ..." or "Error: UHT ..."
+    linker_uht_pattern = re.compile(
+        r"^(?:(?P<file>(?:[a-zA-Z]:[\\/])?[^\r\n:]+?)\s*:\s*)?(?P<severity>fatal error|error|warning)\s+(?P<code>LNK\d+|UHT\d+|C\d+)\s*:\s*(?P<message>.+)$",
+        re.IGNORECASE,
+    )
+    uht_plain_pattern = re.compile(
+        r"^(?:(?P<file>(?:[a-zA-Z]:[\\/])?[^\(\r\n:]+\.(?:h|hpp|cpp|uproject))\s*:\s*)?(?P<severity>Error|Fatal Error)\s*:\s*(?P<message>.+)$"
     )
     # Pattern 3: Pytest failure/error format: FAILED/ERROR test_file.py::[Class::]test_func - AssertionError: message
     pytest_fail_pattern = re.compile(
@@ -102,12 +281,14 @@ def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
         m_gcc = gcc_clang_pattern.match(line_str)
         if m_gcc:
             msg = m_gcc.group("message").strip()
+            code = m_gcc.group("code") or ""
             sym = _extract_symbol(msg)
             results.append({
                 "file": m_gcc.group("file").replace("\\", "/"),
                 "line": int(m_gcc.group("line")),
                 "column": int(m_gcc.group("col") or 0),
                 "severity": m_gcc.group("severity").lower(),
+                "code": code,
                 "message": msg,
                 "symbol": sym,
             })
@@ -116,12 +297,51 @@ def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
         m_msvc = msvc_pattern.match(line_str)
         if m_msvc:
             msg = m_msvc.group("message").strip()
+            code = m_msvc.group("code") or ""
             sym = _extract_symbol(msg)
             results.append({
                 "file": m_msvc.group("file").replace("\\", "/"),
                 "line": int(m_msvc.group("line")),
                 "column": int(m_msvc.group("col") or 0),
                 "severity": m_msvc.group("severity").lower(),
+                "code": code,
+                "message": msg,
+                "symbol": sym,
+            })
+            continue
+
+        m_lnk = linker_uht_pattern.match(line_str)
+        if m_lnk:
+            raw_file = (m_lnk.group("file") or "").strip().replace("\\", "/")
+            if raw_file.upper() == "LINK":
+                raw_file = ""
+            elif raw_file.endswith(".cpp.obj") or raw_file.endswith(".c.obj"):
+                raw_file = raw_file[:-4]
+            msg = m_lnk.group("message").strip()
+            code = m_lnk.group("code") or ""
+            sym = _extract_symbol(msg)
+            results.append({
+                "file": raw_file,
+                "line": 0,
+                "column": 0,
+                "severity": m_lnk.group("severity").lower(),
+                "code": code,
+                "message": f"{code}: {msg}" if code and code not in msg else msg,
+                "symbol": sym,
+            })
+            continue
+
+        m_uht = uht_plain_pattern.match(line_str)
+        if m_uht:
+            raw_file = (m_uht.group("file") or "").strip().replace("\\", "/")
+            msg = m_uht.group("message").strip()
+            sym = _extract_symbol(msg)
+            results.append({
+                "file": raw_file,
+                "line": 0,
+                "column": 0,
+                "severity": "error",
+                "code": "UHT",
                 "message": msg,
                 "symbol": sym,
             })
@@ -145,7 +365,6 @@ def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
 
         m_pytrace = py_trace_pattern.match(line_str)
         if m_pytrace:
-            # Check next line for error message
             next_msg = lines[idx + 1].strip() if idx + 1 < len(lines) else "Exception raised"
             results.append({
                 "file": m_pytrace.group("file").replace("\\", "/"),
@@ -161,7 +380,7 @@ def parse_diagnostics(raw_diagnostics: Any) -> List[Dict[str, Any]]:
         # Fallback: treat non-empty error-sounding lines as general diagnostics
         for line in lines:
             line_str = line.strip()
-            if any(k in line_str.lower() for k in ("error", "failed", "exception", "assert")):
+            if any(k in line_str.lower() for k in ("error", "failed", "exception", "assert", "lnk")):
                 results.append({
                     "file": "",
                     "line": 0,
@@ -438,15 +657,7 @@ def run_code_repair_loop(
     max_attempts: int = 5,
     rollback_fn: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
-    """Autonomous bounded code repair loop with cycle detection and retry limits.
-
-    Guarantees:
-    - Bounded retries: capped at max_attempts (clamped between 1 and 5).
-    - Prevents infinite loops: tracks proposed diffs and halts on cycle detection.
-    - Early exit on success.
-    - Optional rollback on failure.
-    - Detailed audit history of all attempts.
-    """
+    """Autonomous bounded code repair loop with cycle detection and retry limits."""
     hard_cap = min(max(1, int(max_attempts)), 5)
     seen_diffs: Set[str] = set()
     history: List[Dict[str, Any]] = []

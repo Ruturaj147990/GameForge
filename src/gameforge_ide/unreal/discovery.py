@@ -30,12 +30,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_PINNED_VERSION = "5.7"
 
 # DEF-134 FIX: Module-level locks for thread-safe engine discovery.
-# Python 3.14's Path.glob() / glob.scandir() crashes with Windows access violations
-# when called from multiple threads concurrently (or even from a single background
-# thread while Qt's main thread iterates allWidgets()). Two complementary guards:
-#   1. _DRIVE_SCAN_LOCK   – serialises all drive filesystem scans.
-#   2. _DISCOVERY_LOCK    – serialises the entire discover_all_engines() body.
-#   3. _discovery_cache   – caches the result so subsequent calls are instant.
 _DRIVE_SCAN_LOCK = threading.Lock()
 _DISCOVERY_LOCK = threading.Lock()
 _discovery_cache: "Optional[List[DiscoveredEngine]]" = None
@@ -44,7 +38,8 @@ _discovery_cache: "Optional[List[DiscoveredEngine]]" = None
 def invalidate_discovery_cache() -> None:
     """Call when the engine environment changes (e.g. after reset_settings_cache())."""
     global _discovery_cache
-    _discovery_cache = None
+    with _DISCOVERY_LOCK:
+        _discovery_cache = None
 
 
 @dataclass
@@ -166,6 +161,26 @@ def _safe_read_json(path: Path, retries: int = 3, delay: float = 0.05) -> Option
     return None
 
 
+def scan_user_settings() -> List[Path]:
+    """Scan %APPDATA%\\GameForge\\settings.json for configured engine roots."""
+    roots: List[Path] = []
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return roots
+    settings_file = Path(appdata) / "GameForge" / "settings.json"
+    if not settings_file.is_file():
+        return roots
+    data = _safe_read_json(settings_file)
+    if isinstance(data, dict):
+        for key in ("engine_root", "unreal_engine_root", "ue_root"):
+            val = data.get(key)
+            if isinstance(val, str) and val.strip():
+                p = Path(val.strip())
+                if p.is_dir() and p not in roots:
+                    roots.append(p)
+    return roots
+
+
 def scan_manifest_items() -> List[Path]:
     """Scan Epic Games Launcher *.item manifests in %ProgramData%\\Epic\\EpicGamesLauncher\\Data\\Manifests."""
     roots: List[Path] = []
@@ -279,35 +294,25 @@ def scan_filesystem_drives() -> List[Path]:
     """Probe standard Unreal Engine paths across all available drive letters without modal hangs.
     
     Thread-safe: serialized with _DRIVE_SCAN_LOCK to prevent concurrent glob.scandir()
-    calls from multiple threads, which causes Windows access violations on Python 3.14.
+    calls from multiple threads.
     """
-    # Only one thread runs the glob scan at a time (DEF-134).
     with _DRIVE_SCAN_LOCK:
         return _scan_filesystem_drives_impl()
 
 
 def _scan_filesystem_drives_impl() -> List[Path]:
-    """Internal implementation of filesystem drive scanning (called under lock).
-    
-    Uses os.scandir() directly instead of Path.glob() to avoid Python 3.14's
-    new glob internals which crash with access violations when called from
-    background threads concurrently with Qt widget operations.
-    """
+    """Internal implementation of filesystem drive scanning (called under lock)."""
     roots: List[Path] = []
     if sys.platform == "win32":
         drives: List[str] = []
         try:
             import ctypes
             k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            # Disable Windows modal error dialogs (SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX)
-            # to prevent hangs on removable or unmounted drives during background discovery.
             try:
                 k32.SetErrorMode(0x0001 | 0x8000)
             except Exception:
                 pass
             mask = k32.GetLogicalDrives()
-            # Only scan Fixed (3) and RAMDisk (6) drives — skip Remote/Network (4)
-            # which can hang or corrupt state when scanned from background threads.
             for i in range(26):
                 if (mask >> i) & 1:
                     drive_letter = chr(ord('A') + i)
@@ -321,8 +326,6 @@ def _scan_filesystem_drives_impl() -> List[Path]:
     else:
         drives = ["/opt", "/home"]
 
-    # Candidate subdirectory structures: (parent_subpath, name_prefix)
-    # Using direct os.scandir() instead of Path.glob() to avoid Python 3.14 glob bugs.
     candidate_parents: List[tuple] = [
         ("",),                          # drive root: UE_*, UE5*
         ("UE",),                        # UE/UE_*, UE/UE5*
@@ -363,16 +366,8 @@ def _scan_filesystem_drives_impl() -> List[Path]:
 def discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION, use_cache: bool = True) -> List["DiscoveredEngine"]:
     """Discover all Unreal Engine installations across all detection sources, deduplicated.
 
-    Thread-safety contract (DEF-133/134 fix):
-    - Full discovery (manifest scanning, registry reads, drive glob) only runs on the
-      MAIN THREAD.  Python 3.14's pathlib.read_text / glob.scandir cause Windows
-      access violations when a background thread does file I/O while the main thread
-      is concurrently running QApplication.allWidgets() (Python 3.14 + PySide6 ABI).
-    - Background threads return an empty list if the cache is not yet warm, or the
-      cached result if the main thread has already populated it.
-    - Once the main thread populates _discovery_cache, every thread gets the result.
-    - When running unit tests (PYTEST_CURRENT_TEST set), caching is bypassed so tests
-      can configure different mock engine roots and environment variables safely.
+    Thread-safe: serialized with _DISCOVERY_LOCK so both main and worker threads safely
+    populate and read _discovery_cache.
     """
     global _discovery_cache
     is_pytest = bool(os.environ.get("PYTEST_CURRENT_TEST"))
@@ -380,20 +375,12 @@ def discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION, use_cache: 
         return _discovery_cache
 
     with _DISCOVERY_LOCK:
-        if not is_pytest and use_cache and _discovery_cache is not None:   # double-checked locking
+        if not is_pytest and use_cache and _discovery_cache is not None:
             return _discovery_cache
-            return _discovery_cache
-
-        # Only run expensive filesystem I/O from the main thread to avoid Python 3.14
-        # pathlib/glob ABI crashes when Qt C++ and Python file I/O run concurrently.
-        if threading.current_thread() is not threading.main_thread():
-            # Background thread: return empty list safely. Engine will be None in
-            # the resulting Settings object, which is acceptable for CapabilityRegistry
-            # (it only needs artifacts_root, not engine info).
-            return []
 
         result = _do_discover_all_engines(pinned_minor)
-        _discovery_cache = result
+        if not is_pytest:
+            _discovery_cache = result
         return result
 
 
@@ -419,27 +406,36 @@ def _do_discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION) -> List
         if val:
             add_candidate(Path(val), source=f"env:{env_key}")
 
-    # 2. Epic Launcher Manifest items (*.item)
+    # 2. User settings (%APPDATA%\GameForge\settings.json)
+    for p in scan_user_settings():
+        add_candidate(p, source="settings")
+
+    # 3. Epic Launcher Manifest items (*.item)
     for p in scan_manifest_items():
         add_candidate(p, source="epic_manifest_item")
 
-    # 3. Epic Launcher Installed.dat
+    # 4. Epic Launcher Installed.dat
     for p in scan_launcher_installed_dat():
         add_candidate(p, source="epic_launcher_dat")
 
-    # 4. Windows Registry
+    # 5. Windows Registry
     for p in scan_windows_registry():
         add_candidate(p, source="windows_registry")
 
-    # 5. Drive Scanning
+    # 6. Drive Scanning
     for p in scan_filesystem_drives():
         add_candidate(p, source="drive_scan")
 
     # Sort: explicit overrides first, then compatible, then highest changelist, then newest version
     def _engine_sort_key(e: DiscoveredEngine) -> Tuple[int, int, int, str]:
-        is_explicit = 1 if e.source.startswith("env:") or e.source in ("settings", "test") else 0
+        if e.source.startswith("env:"):
+            source_prio = 3
+        elif e.source in ("settings", "test"):
+            source_prio = 2
+        else:
+            source_prio = 1
         is_comp = 1 if e.is_compatible else 0
-        return (is_explicit, is_comp, e.changelist, e.version)
+        return (source_prio, is_comp, e.changelist, e.version)
 
     found.sort(key=_engine_sort_key, reverse=True)
     return found

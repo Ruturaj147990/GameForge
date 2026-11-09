@@ -111,7 +111,7 @@ static AActor* FindActorByTagOrName(UWorld* World, const FString& Identifier)
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Act = *It;
-		if (!Act || Act->IsPendingKillPending())
+		if (!IsValid(Act))
 		{
 			continue;
 		}
@@ -275,7 +275,7 @@ void UGameForgeScenarioSubsystem::HandleEvent(const FGameForgeEvent& Ev)
 		{
 			CapturedEvents.Add(ScreenshotName);
 			const FString ScreenshotPath = FPaths::GetPath(ScenarioOutPath) / ScreenshotName;
-			FScreenshotRequest::RequestScreenshot(ScreenshotPath, false, false);
+			FScreenshotRequest::RequestScreenshot(ScreenshotPath, true, false);
 		}
 	}
 }

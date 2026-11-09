@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0.0",
-  "last_updated": "2026-10-20T11:35:00Z",
+  "schema_version": "1.1.0",
+  "last_updated": "2026-10-31T12:00:00Z",
   "governing_policy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0 Section 28.2 / Section 30.1.3",
   "candidates": [
     {
@@ -96,7 +96,7 @@
         "currency": "USD"
       },
       "evaluation_date": "2026-10-20",
-      "permission_basis": "Official open-weights model downloaded to E:\\GameForge\\models\\ollama",
+      "permission_basis": "Official open-weights model stored in configured OLLAMA_MODELS directory",
       "allowed_use_confirmed": true,
       "status": "ELIGIBLE_AND_AVAILABLE",
       "limitations": [
@@ -129,7 +129,7 @@
         "currency": "USD"
       },
       "evaluation_date": "2026-10-20",
-      "permission_basis": "Custom Modelfile specialization on local user storage (E: drive); zero external data egress",
+      "permission_basis": "Custom Modelfile specialization on local user storage; zero external data egress",
       "allowed_use_confirmed": true,
       "status": "ELIGIBLE_AND_AVAILABLE",
       "limitations": [
@@ -151,7 +151,7 @@
       "max_context_window": 131072,
       "tool_support": ["function_calling", "structured_json"],
       "deployment": {
-        "path": "E:\\GameForge\\models\\hf\\Qwen3.8-27B",
+        "path": "${GAMEFORGE_DATA_ROOT}/models/hf/Qwen3.8-27B",
         "device": "Dedicated GPU Cluster (Target: NVIDIA A100/H100 80GB)",
         "backend": "PyTorch / Transformers / PEFT",
         "precision": "bfloat16"
@@ -186,7 +186,7 @@
       "max_context_window": 131072,
       "tool_support": ["function_calling", "structured_json"],
       "deployment": {
-        "path": "E:\\GameForge\\artifacts\\gameforge-v2\\hf-merged-bf16",
+        "path": "${GAMEFORGE_DATA_ROOT}/artifacts/gameforge-v2/hf-merged-bf16",
         "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
         "backend": "PyTorch DirectML / PEFT Merge",
         "precision": "bfloat16"
@@ -225,8 +225,8 @@
         "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
         "backend": "DirectML / Vulkan / ROCm Ollama runtime",
         "quantization": "Q4_K_M",
-        "gguf_path": "E:\\GameForge\\artifacts\\gameforge-v2\\gameforge-v2-q4_k_m.gguf",
-        "adapter_path": "E:\\GameForge\\training\\gameforge-v2-amd\\adapter"
+        "gguf_path": "${GAMEFORGE_DATA_ROOT}/artifacts/gameforge-v2/gameforge-v2-q4_k_m.gguf",
+        "adapter_path": "${GAMEFORGE_DATA_ROOT}/training/gameforge-v2-amd/adapter"
       },
       "pricing": {
         "input_cost_per_million": 0.0,
@@ -241,6 +241,74 @@
         "Trained with LoRA (r=16, alpha=32) on targeted projection modules",
         "Specialist in Unreal Engine 5.7 C++, Unity C#, Godot 4 GDScript, Roblox Luau, UEFN Verse, and Bevy Rust",
         "Inference speed: ~141 tokens/second on AMD Radeon RX 7700 XT"
+      ]
+    },
+    {
+      "candidate_id": "local-ollama-gameforge-qwen3.5-9b",
+      "display_name": "GameForge Qwen 3.5 9B Primary Coding & Vision Specialist",
+      "provider": "ollama",
+      "runtime_type": "local_inference",
+      "model_name": "gameforge-qwen3.5-9b:latest",
+      "revision": "c9f15a960506",
+      "base_model": "qwen3.5:9b",
+      "license": "Apache-2.0",
+      "license_verified": true,
+      "modality": "multimodal-text-vision",
+      "context_window": 8192,
+      "max_context_window": 32768,
+      "tool_support": ["function_calling", "structured_json", "vision"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+        "backend": "ROCm gfx1101 / Vulkan Ollama runtime",
+        "quantization": "Q4_K_M"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-31",
+      "permission_basis": "Primary IDE coding, planning, and vision specialist model on local hardware; zero external data egress",
+      "allowed_use_confirmed": true,
+      "status": "ELIGIBLE_AND_AVAILABLE",
+      "limitations": [
+        "Fits entirely inside 12 GB VRAM (~46 tok/s generation)",
+        "Primary model for planning, coding, and vision roles in configs/models_routing.json"
+      ]
+    },
+    {
+      "candidate_id": "local-ollama-gameforge-qwen3.5-4b",
+      "display_name": "GameForge Qwen 3.5 4B Fast Intent & Triage Specialist",
+      "provider": "ollama",
+      "runtime_type": "local_inference",
+      "model_name": "gameforge-qwen3.5-4b:latest",
+      "revision": "8f294d80482b",
+      "base_model": "qwen3.5:4b",
+      "license": "Apache-2.0",
+      "license_verified": true,
+      "modality": "text-to-code",
+      "context_window": 8192,
+      "max_context_window": 32768,
+      "tool_support": ["function_calling", "structured_json"],
+      "deployment": {
+        "host": "127.0.0.1:11434",
+        "device": "AMD Radeon RX 7700 XT (12GB VRAM)",
+        "backend": "ROCm gfx1101 / Vulkan Ollama runtime",
+        "quantization": "Q4_K_M"
+      },
+      "pricing": {
+        "input_cost_per_million": 0.0,
+        "output_cost_per_million": 0.0,
+        "currency": "USD"
+      },
+      "evaluation_date": "2026-10-31",
+      "permission_basis": "Fast IDE routing and low-latency completion specialist on local hardware; zero external data egress",
+      "allowed_use_confirmed": true,
+      "status": "ELIGIBLE_AND_AVAILABLE",
+      "limitations": [
+        "Compact 4B parameter footprint (~75 tok/s generation)",
+        "Primary model for fast role in configs/models_routing.json"
       ]
     }
   ]

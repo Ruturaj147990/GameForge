@@ -42,6 +42,8 @@ def test_stat_regex_patterns():
         "player.health",
         "player.max_health",
         "player.stamina",
+        "player.mana",
+        "player.gold",
         "player.lives",
         "game.score",
         "game.time_s",
@@ -57,8 +59,8 @@ def test_stat_regex_patterns():
         "player",
         "game",
         "entity",
-        "player.mana",
-        "game.gold",
+        "player.invalid_stat_xyz",
+        "game.invalid_stat_xyz",
         "custom.stat",
     ]
     for s in invalid_stats:

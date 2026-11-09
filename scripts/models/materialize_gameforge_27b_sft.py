@@ -26,7 +26,6 @@ from pathlib import Path
 
 import gguf
 import numpy as np
-import torch
 from safetensors import safe_open
 
 BASE_GGUF_BLOB = Path("E:/GameForge/models/ollama/blobs/sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d")
@@ -36,12 +35,12 @@ HF_MERGED_DIR = Path("E:/GameForge/artifacts/gameforge-27b-sft/hf-merged")
 FINAL_GGUF_PATH = Path("E:/GameForge/artifacts/gameforge-27b-sft/gameforge-27b-sft-q4_k_m.gguf")
 MODELFILE_PATH = Path("E:/GameForge/artifacts/gameforge-27b-sft/Modelfile")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = Path("e:/gameforge_step1/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
 
-HF_MERGED_DIR.mkdir(parents=True, exist_ok=True)
-FINAL_GGUF_PATH.parent.mkdir(parents=True, exist_ok=True)
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+# HF_MERGED_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# FINAL_GGUF_PATH.parent.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# REPORTS_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
+# MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
 
 def main():
     if not os.environ.get("GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY"):

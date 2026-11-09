@@ -9,7 +9,6 @@ Places instance in level, executes PIE, and verifies the runtime log marker in t
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -17,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink
 
 
@@ -28,7 +28,7 @@ def run_vertical_slice():
         "overall_status": "PENDING",
     }
     
-    uproject_path = Path(r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
+    uproject_path = get_settings().require_dev("probe_project")
     print(f"Connecting to live Unreal project: {uproject_path}")
     
     link = LiveEditorLink(uproject_path)

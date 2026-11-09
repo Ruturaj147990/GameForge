@@ -4,13 +4,17 @@
 
 #include "GameForgeEventNames.h"
 #include "GameForgeEvents.h"
-#include "Engine/GameInstance.h"
+#include "GameForgeGameState.h"
 #include "GameForgeObjectives.h"
+#include "GameForgePlayer.h"
+#include "GameForgeVisuals.h"
 #include "Components/AudioComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraComponent.h"
@@ -18,9 +22,8 @@
 #include "NiagaraSystem.h"
 #include "Sound/SoundAttenuation.h"
 #include "Sound/SoundBase.h"
-#include "UObject/ConstructorHelpers.h"
 #include "TimerManager.h"
-#include "GameForgeVisuals.h"
+#include "UObject/ConstructorHelpers.h"
 
 AGameForgePickup::AGameForgePickup()
 {
@@ -44,10 +47,39 @@ AGameForgePickup::AGameForgePickup()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+void AGameForgePickup::SyncEffectFromName()
+{
+	if (EffectName.IsEmpty())
+	{
+		return;
+	}
+	if (EffectName.Equals(TEXT("Heal"), ESearchCase::IgnoreCase) || EffectName.Equals(TEXT("heal"), ESearchCase::IgnoreCase))
+	{
+		Effect = EGameForgePickupEffect::Heal;
+	}
+	else if (EffectName.Equals(TEXT("GrantItem"), ESearchCase::IgnoreCase) || EffectName.Equals(TEXT("grant_item"), ESearchCase::IgnoreCase))
+	{
+		Effect = EGameForgePickupEffect::GrantItem;
+	}
+	else if (EffectName.Equals(TEXT("SpeedBoost"), ESearchCase::IgnoreCase) || EffectName.Equals(TEXT("speed_boost"), ESearchCase::IgnoreCase))
+	{
+		Effect = EGameForgePickupEffect::SpeedBoost;
+	}
+	else if (EffectName.Equals(TEXT("CustomEvent"), ESearchCase::IgnoreCase) || EffectName.Equals(TEXT("custom_event"), ESearchCase::IgnoreCase))
+	{
+		Effect = EGameForgePickupEffect::CustomEvent;
+	}
+	else if (EffectName.Equals(TEXT("AddScore"), ESearchCase::IgnoreCase) || EffectName.Equals(TEXT("add_score"), ESearchCase::IgnoreCase))
+	{
+		Effect = EGameForgePickupEffect::AddScore;
+	}
+}
+
 void AGameForgePickup::BeginPlay()
 {
 	Super::BeginPlay();
 	EntityId = UGameForgeEventLibrary::ResolveEntityId(this, EntityId);
+	SyncEffectFromName();
 	BaseVisualLocation = Visual->GetRelativeLocation();
 	Age = FMath::FRandRange(0.f, 6.f);   // de-synchronise the bobbing of neighbouring pickups
 	GameForgeVisuals::Tint(Visual, PickupColor);
@@ -81,6 +113,8 @@ void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, A
 	{
 		return;
 	}
+	SyncEffectFromName();
+
 	bCollected = true;
 	CollectedBy = Pawn->GetName();
 	Visual->SetVisibility(false);
@@ -93,6 +127,71 @@ void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, A
 	{
 		// Hidden actors drop out of the derived entity.<id>.remaining stat.
 		SetActorHiddenInGame(true);
+	}
+
+	AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr;
+	AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(Pawn);
+
+	switch (Effect)
+	{
+	case EGameForgePickupEffect::AddScore:
+		if (GS)
+		{
+			GS->AddStat(FName(TEXT("game.score")), static_cast<float>(Value));
+			GS->IncrementCounter(FName(TEXT("game.counter.collected")), 1);
+		}
+		break;
+	case EGameForgePickupEffect::Heal:
+		if (GFChar && GFChar->AttributeSet)
+		{
+			const float NewHP = FMath::Clamp(GFChar->AttributeSet->GetHealth() + static_cast<float>(Value), 0.f, GFChar->AttributeSet->GetMaxHealth());
+			GFChar->AttributeSet->SetHealth(NewHP);
+			if (GS)
+			{
+				GS->SetStat(FName(TEXT("player.health")), NewHP);
+			}
+		}
+		else if (GS)
+		{
+			GS->AddStat(FName(TEXT("player.health")), static_cast<float>(Value));
+		}
+		if (GS)
+		{
+			GS->IncrementCounter(FName(TEXT("game.counter.collected")), 1);
+		}
+		break;
+	case EGameForgePickupEffect::GrantItem:
+		if (GS)
+		{
+			if (!ItemId.IsNone())
+			{
+				GS->AddStat(FName(*(FString(TEXT("item.")) + ItemId.ToString())), static_cast<float>(FMath::Max(1, Value)));
+			}
+			GS->IncrementCounter(FName(TEXT("game.counter.collected")), 1);
+		}
+		break;
+	case EGameForgePickupEffect::SpeedBoost:
+		if (GFChar)
+		{
+			GFChar->MoveSpeed += FMath::Max(50.f, static_cast<float>(Value));
+			GFChar->ApplyMovementSettings();
+		}
+		if (GS)
+		{
+			GS->IncrementCounter(FName(TEXT("game.counter.collected")), 1);
+		}
+		break;
+	case EGameForgePickupEffect::CustomEvent:
+		if (!CustomEvent.IsNone())
+		{
+			UGameForgeEventLibrary::EmitGameForgeEvent(this, CustomEvent, GetName(),
+				FString::Printf(TEXT("{\"value\":%d}"), Value), EntityId);
+		}
+		if (GS)
+		{
+			GS->IncrementCounter(FName(TEXT("game.counter.collected")), 1);
+		}
+		break;
 	}
 
 	if (CollectVFX)
@@ -124,9 +223,11 @@ void AGameForgePickup::HandleOverlap(UPrimitiveComponent* OverlappedComponent, A
 	UE_LOG(LogTemp, Display, TEXT("GF_EVENT pickup actor=%s collected_by=%s vfx=%s spawned=%d sound=%s sound_playing=%d"),
 		*GetName(), *CollectedBy, CollectVFX ? *CollectVFX->GetName() : TEXT("None"), SpawnedVFX ? 1 : 0,
 		CollectSound ? *CollectSound->GetName() : TEXT("None"), SpawnedSound && SpawnedSound->IsPlaying() ? 1 : 0);
-	const FString DataJson = FString::Printf(TEXT("{\"objective\":\"%s\",\"by\":\"%s\",\"value\":%d}"),
+	const FString DataJson = FString::Printf(TEXT("{\"objective\":\"%s\",\"by\":\"%s\",\"value\":%d,\"item_id\":\"%s\"}"),
 		*ObjectiveId.ToString().ReplaceCharWithEscapedChar(),
-		*CollectedBy.ReplaceCharWithEscapedChar(), Value);
+		*CollectedBy.ReplaceCharWithEscapedChar(),
+		Value,
+		*ItemId.ToString().ReplaceCharWithEscapedChar());
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PickupCollected, GetName(), DataJson, EntityId);
 	OnCollected.Broadcast(Pawn);
 }

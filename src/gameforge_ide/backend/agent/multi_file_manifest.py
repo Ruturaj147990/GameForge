@@ -22,12 +22,164 @@ from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union
 from pydantic import BaseModel, Field
 
 from ..tools.gateway import ToolGateway
+from .code_verify import _strip_cpp_comments_and_strings
 
 logger = logging.getLogger(__name__)
 
 OperationKind = Literal["create", "modify", "delete"]
 FileType = Literal["header", "source", "config", "asset", "other"]
 ManifestStatus = Literal["staged", "applied", "verified", "failed", "rolled_back"]
+
+_CPP_SKIP_NAMES = {
+    "if", "for", "while", "switch", "return", "catch", "sizeof", "alignof",
+    "decltype", "static_assert", "UCLASS", "USTRUCT", "UENUM", "UPROPERTY",
+    "UFUNCTION", "GENERATED_BODY", "GENERATED_UCLASS_BODY", "TEXT",
+    "DECLARE_DYNAMIC_MULTICAST_DELEGATE", "DECLARE_DELEGATE",
+}
+
+
+def _extract_declared_methods(header_content: str, class_name: Optional[str] = None) -> List[str]:
+    """Extract C++ method names declared in a header that require a `.cpp` definition.
+
+    Ignores:
+    - `UFUNCTION(BlueprintImplementableEvent)` and `UFUNCTION(BlueprintNativeEvent)`
+    - Pure virtual methods (`= 0;`), `= default;`, and `= delete;`
+    - Inline header method definitions (`{ ... }`)
+    - Constructors (`ClassName(...)`) and destructors (`~ClassName(...)`)
+    - Macros and member variable value-initializers
+    """
+    if not header_content:
+        return []
+
+    stripped = _strip_cpp_comments_and_strings(header_content)
+    detected_classes: Set[str] = set()
+    if class_name:
+        detected_classes.add(class_name)
+    for cm in re.finditer(r"\b(?:class|struct)\s+(?:[A-Z0-9_]+_API\s+)?([A-Za-z_]\w*)\b\s*(?::|[^{;]*\{)", stripped):
+        detected_classes.add(cm.group(1))
+
+    # Strip inline function bodies `{ ... }` inside the class body while keeping class-level braces intact:
+    # We inspect line-by-line / statement-by-statement while tracking UFUNCTION specifiers.
+    lines = stripped.splitlines()
+    methods: List[str] = []
+    seen: Set[str] = set()
+    skip_next_ufunction = False
+
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+
+        # Check for UFUNCTION macro
+        if re.match(r"^UFUNCTION\s*\(", line):
+            ufunc_text = line
+            while ")" not in ufunc_text and i + 1 < n:
+                i += 1
+                ufunc_text += " " + lines[i].strip()
+            if re.search(r"\b(?:BlueprintImplementableEvent|BlueprintNativeEvent)\b", ufunc_text):
+                skip_next_ufunction = True
+            else:
+                skip_next_ufunction = False
+            i += 1
+            continue
+
+        # Skip other Unreal macros or preprocessor directives
+        if line.startswith("#") or re.match(r"^(?:UPROPERTY|UCLASS|USTRUCT|UENUM|GENERATED_BODY|GENERATED_UCLASS_BODY)\b", line):
+            i += 1
+            continue
+
+        # Ignore destructor declarations (`~ClassName(...)`)
+        if "~" in line:
+            skip_next_ufunction = False
+            i += 1
+            continue
+
+        # Join multi-line declaration up to `;` or `{`
+        stmt = line
+        j = i
+        while ";" not in stmt and "{" not in stmt and j + 1 < n and (j - i) < 6:
+            j += 1
+            nxt = lines[j].strip()
+            if nxt.startswith(("#", "UFUNCTION", "UPROPERTY", "public:", "protected:", "private:")):
+                break
+            stmt += " " + nxt
+
+        # If this statement opens an inline body `{`, skip past its closing `}`
+        if "{" in stmt and (";" not in stmt or stmt.find("{") < stmt.find(";")):
+            skip_next_ufunction = False
+            i = j + 1
+            continue
+
+        # Check for pure virtual `= 0`, `= default`, `= delete`
+        if re.search(r"=\s*(?:0|default|delete)\s*;", stmt):
+            skip_next_ufunction = False
+            i = j + 1
+            continue
+
+        m = re.match(
+            r"^(?:virtual\s+|static\s+|inline\s+|FORCEINLINE\s+|explicit\s+|constexpr\s+)*"
+            r"(?:const\s+)?"
+            r"(?P<ret>[A-Za-z_][\w:<>*&\s]*?)\s+"
+            r"(?P<name>[A-Za-z_]\w*)\s*"
+            r"\((?P<params>[^;{}]*)\)\s*"
+            r"(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?;\s*$",
+            stmt,
+        )
+        if m:
+            ret_type = m.group("ret").strip()
+            fn_name = m.group("name").strip()
+            params_str = m.group("params").strip()
+
+            if skip_next_ufunction:
+                skip_next_ufunction = False
+                i = j + 1
+                continue
+
+            # Ignore constructors, keywords, macros, or invalid return types
+            if (
+                fn_name not in _CPP_SKIP_NAMES
+                and fn_name not in detected_classes
+                and ret_type not in ("class", "struct", "enum", "namespace", "return", "typedef", "using")
+                and not fn_name.startswith("DECLARE_")
+            ):
+                # Filter out member variable constructor calls like `FVector Offset(0.f, 0.f, 100.f);`
+                # Valid parameter lists are either empty, `void`, or start with a type identifier (not a number/quote)
+                is_value_init = bool(params_str) and bool(re.match(r"^[\d\-\+\"']", params_str))
+                if not is_value_init and fn_name not in seen:
+                    seen.add(fn_name)
+                    methods.append(fn_name)
+            i = j + 1
+            continue
+
+        if ";" in stmt:
+            skip_next_ufunction = False
+        i += 1
+
+    return methods
+
+
+def check_missing_cpp_definitions(
+    header_content: str,
+    cpp_content: str,
+    class_name: Optional[str] = None,
+) -> List[str]:
+    """Return list of method names declared in `header_content` that lack a definition in `cpp_content`."""
+    declared = _extract_declared_methods(header_content, class_name=class_name)
+    if not declared:
+        return []
+    stripped_cpp = _strip_cpp_comments_and_strings(cpp_content or "")
+    missing: List[str] = []
+    for fn_name in declared:
+        if class_name:
+            pat = rf"\b{re.escape(class_name)}\s*::\s*{re.escape(fn_name)}\s*\("
+        else:
+            pat = rf"::\s*{re.escape(fn_name)}\s*\("
+        if not re.search(pat, stripped_cpp):
+            missing.append(fn_name)
+    return missing
 
 
 class FileChangeOperation(BaseModel):
@@ -107,9 +259,11 @@ class FileChangeOperation(BaseModel):
             matches = re.findall(pat, content)
             macros.extend(matches)
 
-        # Scan declared class / struct / enum names
-        class_matches = re.findall(r"\b(?:class|struct)\s+(?:[A-Z0-9_]+_API\s+)?([A-Za-z0-9_]+)", content)
-        declared.extend(class_matches)
+        # Scan declared class / struct / enum names (excluding forward declarations ending in ;)
+        for m in re.finditer(r"\b(?:class|struct)\s+(?:[A-Z0-9_]+_API\s+)?([A-Za-z0-9_]+)\s*([^;{]*?)(?=\{|;)", content):
+            tail = content[m.end() : m.end() + 1]
+            if tail == "{":
+                declared.append(m.group(1))
 
         enum_matches = re.findall(r"\benum\s+(?:class\s+)?([A-Za-z0-9_]+)", content)
         declared.extend(enum_matches)
@@ -147,6 +301,31 @@ class MultiFileChangeManifest(BaseModel):
 
     def add_operation(self, op: FileChangeOperation) -> None:
         self.operations.append(op)
+
+    @staticmethod
+    def _extract_declared_methods(header_content: str, class_name: Optional[str] = None) -> List[str]:
+        return _extract_declared_methods(header_content, class_name=class_name)
+
+    def validate_header_source_definitions(self) -> Tuple[bool, List[str]]:
+        """Check that header method declarations have matching definitions in paired `.cpp` operations."""
+        errors: List[str] = []
+        headers_by_stem: Dict[str, FileChangeOperation] = {}
+        sources_by_stem: Dict[str, FileChangeOperation] = {}
+        for op in self.operations:
+            stem = Path(op.subpath).stem
+            if op.file_type == "header":
+                headers_by_stem[stem] = op
+            elif op.file_type == "source":
+                sources_by_stem[stem] = op
+
+        for stem, h_op in headers_by_stem.items():
+            s_op = sources_by_stem.get(stem)
+            if s_op is None or not h_op.replacement_content or not s_op.replacement_content:
+                continue
+            missing = check_missing_cpp_definitions(h_op.replacement_content, s_op.replacement_content)
+            for fn in missing:
+                errors.append(f"{s_op.subpath}: Missing definition for method `{fn}` declared in `{h_op.subpath}`.")
+        return len(errors) == 0, errors
 
     def validate_reflection_consistency(self) -> Tuple[bool, List[str]]:
         """Verifies Unreal Engine reflection invariants across all staged operations:
@@ -242,44 +421,37 @@ class MultiFileChangeManifest(BaseModel):
         if len(ops) <= 1:
             return ops
 
-        # Map symbol name -> op index that declares it
         symbol_to_op: Dict[str, int] = {}
         for idx, op in enumerate(ops):
             for sym in op.symbols_declared:
                 symbol_to_op[sym] = idx
 
-        # Build in-degree and adjacency graph
         adj: Dict[int, Set[int]] = {i: set() for i in range(len(ops))}
         in_degree: Dict[int, int] = {i: 0 for i in range(len(ops))}
 
         for idx, op in enumerate(ops):
-            # Header before source preference for same module
             if op.file_type == "source":
                 header_name = Path(op.subpath).with_suffix(".h").name
                 for o_idx, other in enumerate(ops):
                     if o_idx != idx and other.file_type == "header" and Path(other.subpath).name == header_name:
                         adj[o_idx].add(idx)
 
-            # Declarations before consumers
             for ref_sym in op.symbols_referenced:
                 if ref_sym in symbol_to_op:
                     decl_idx = symbol_to_op[ref_sym]
                     if decl_idx != idx:
                         adj[decl_idx].add(idx)
 
-            # Explicit dependencies
             for dep_path in op.dependencies:
                 dep_clean = dep_path.replace("\\", "/")
                 for o_idx, other in enumerate(ops):
                     if o_idx != idx and (other.subpath == dep_clean or Path(other.subpath).name == dep_clean):
                         adj[o_idx].add(idx)
 
-        # Compute in-degrees
         for u in adj:
             for v in adj[u]:
                 in_degree[v] += 1
 
-        # Kahn's algorithm with stable secondary sort (headers first, then path)
         def _node_priority(i: int) -> Tuple[int, str]:
             is_hdr = 0 if ops[i].file_type == "header" else 1
             return (is_hdr, ops[i].subpath)
@@ -297,8 +469,6 @@ class MultiFileChangeManifest(BaseModel):
                     ready.append(neighbor)
             ready.sort(key=_node_priority)
 
-        # A dependency cycle is a malformed manifest. Never silently guess an
-        # execution order because doing so can compile against partially applied APIs.
         if len(ordered_indices) < len(ops):
             remaining = [ops[i].subpath for i in range(len(ops)) if i not in ordered_indices]
             raise ValueError(
@@ -317,12 +487,7 @@ class MultiFileChangeManifest(BaseModel):
         approval_granted: bool = False,
         permissions_mode: Any = None,
     ) -> MultiFileApplyResult:
-        """Apply a validated multi-file change set.
-
-        Paths are validated before snapshots are read. Tool permissions are
-        forwarded unchanged; this method never grants approval on the caller's
-        behalf. Rollback touches only files that were actually modified.
-        """
+        """Apply a validated multi-file change set."""
         result = MultiFileApplyResult(
             manifest_id=self.manifest_id,
             status="staged",
@@ -355,7 +520,6 @@ class MultiFileChangeManifest(BaseModel):
         validated_paths: Dict[str, Path] = {}
         snapshots: Dict[str, Optional[str]] = {}
 
-        # Validate every path before reading any file or executing any tool.
         for op in ordered_ops:
             raw = Path(op.subpath)
             if raw.is_absolute() or any(part == ".." for part in raw.parts):
@@ -376,7 +540,6 @@ class MultiFileChangeManifest(BaseModel):
                 result.error_message = f"Unsafe manifest path {op.subpath!r}: {exc}"
                 return result
 
-        # Snapshot only after all paths have passed validation.
         for op in ordered_ops:
             file_path = validated_paths[op.subpath]
             if file_path.exists():
@@ -420,10 +583,6 @@ class MultiFileChangeManifest(BaseModel):
                     res = _tool("write_file", {"subpath": op.subpath, "content": op.replacement_content})
                 else:
                     if not op.target_content:
-                        # A recovered prose manifest carries a complete file body
-                        # rather than a surgical old-text fragment. Treat it as a
-                        # full-file replacement, still through the permission-aware
-                        # atomic write tool.
                         res = _tool(
                             "write_file",
                             {"subpath": op.subpath, "content": op.replacement_content},
@@ -437,9 +596,6 @@ class MultiFileChangeManifest(BaseModel):
                                 "replacement_content": op.replacement_content,
                             },
                         )
-                        # propose_edit intentionally returns a pending diff preview.
-                        # The subsequent apply_edit call is the authoritative
-                        # permission gate and receives the caller's mode/approval.
                         if res.get("diff_id"):
                             res = _tool("apply_edit", {"diff_id": res["diff_id"]})
 
@@ -482,7 +638,7 @@ class MultiFileChangeManifest(BaseModel):
                     raise PermissionError("Compilation verification command requires approval.")
                 stdout_str = cmd_res.get("stdout", "")
                 stderr_str = cmd_res.get("stderr", "")
-                result.verification_output = stdout_str + ("\\n" + stderr_str if stderr_str else "")
+                result.verification_output = stdout_str + ("\n" + stderr_str if stderr_str else "")
                 if cmd_res.get("exit_code", -1) == 0 and cmd_res.get("status") == "SUCCESS":
                     result.verification_passed = True
                     result.status = "verified"
@@ -578,11 +734,6 @@ class BoundedRecoveryHandler:
         if not prose or "```" not in prose:
             return None
 
-        # Look for headers followed by code fences, e.g.:
-        # ### `Source/MyGame/Player.h`
-        # ```cpp
-        # ...
-        # ```
         pattern = re.compile(
             r"(?:###?\s*[`\"']?([A-Za-z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`\"']?|"
             r"//\s*(?:File|Path|Target):\s*([A-Za-z0-9_\-\./\\]+\.[a-zA-Z0-9]+)|"

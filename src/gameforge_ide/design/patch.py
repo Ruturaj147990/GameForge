@@ -70,9 +70,8 @@ def _parse_path(path: str) -> List[Union[str, int]]:
 def _is_protected(path: str) -> bool:
     norm = path.rstrip("/")
     if not norm:
-        return True  # Cannot replace root document directly
+        return True
     for prot in PROTECTED_PATHS:
-        # Protect the exact path, any child of protected, and any parent container of protected
         if norm == prot or norm.startswith(f"{prot}/") or prot.startswith(f"{norm}/"):
             return True
     return False
@@ -137,7 +136,6 @@ def apply_op(root: Dict[str, Any], op: Dict[str, Any], op_index: int = 0) -> Non
     except (KeyError, IndexError, TypeError) as err:
         raise PatchError(f"Navigation failed for path {path!r}: {err}", op_index=op_index, path=path) from err
 
-    # Resolve named identifier target on list if applicable
     if isinstance(parent, list) and isinstance(target, str) and target != "-":
         named_idx = _find_item_index_by_id(parent, target)
         if named_idx is not None:
@@ -190,22 +188,16 @@ def apply_op(root: Dict[str, Any], op: Dict[str, Any], op_index: int = 0) -> Non
 
 
 def apply_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> GameDesignSpec:
-    """Apply a sequence of JSON Patch operations to a GameDesignSpec.
-
-    Returns a new validated GameDesignSpec with bumped revision and generator="patch".
-    Raises PatchError on any failure.
-    """
+    """Apply a sequence of JSON Patch operations to a GameDesignSpec."""
     data = copy.deepcopy(gds.model_dump())
     for idx, op in enumerate(ops):
         apply_op(data, op, op_index=idx)
 
-    # Bump revision, set generator, and refresh updated_at
     curr_rev = gds.meta.revision or 1
     data["meta"]["revision"] = curr_rev + 1
     data["meta"]["generator"] = "patch"
     data["meta"]["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
-    # Normalize dot-separated event strings and condition kind aliases
     def _normalize_patch_data(obj: Any) -> Any:
         if isinstance(obj, dict):
             res = {}
@@ -226,14 +218,20 @@ def apply_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> GameDesignSpe
                     }
                     res[k] = kind_map.get(v, v)
                 elif k in ("stat", "binds") and isinstance(v, str):
-                    # Normalize single underscores in standard stats like player_health -> player.health
                     stat_map = {
                         "player_health": "player.health",
                         "player_max_health": "player.max_health",
                         "player_stamina": "player.stamina",
+                        "player_mana": "player.mana",
+                        "player_shield": "player.shield",
+                        "player_ammo": "player.ammo",
+                        "player_oxygen": "player.oxygen",
+                        "player_speed": "player.speed",
                         "player_lives": "player.lives",
                         "game_score": "game.score",
                         "game_time_s": "game.time_s",
+                        "game_gold": "game.gold",
+                        "game_laps": "game.laps",
                     }
                     res[k] = stat_map.get(v, v)
                 else:
@@ -262,7 +260,6 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
         path = op.get("path", "")
         val = op.get("value")
 
-        # Speed scaling summary
         m_speed = re.search(r"/entities/(\d+|[a-z0-9_]+)/props/(player_speed|move_speed|patrol_speed|speed)", path)
         if m_speed:
             idx_or_id = m_speed.group(1)
@@ -280,19 +277,16 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
                 sentences.append(f"{ent.entity_id.capitalize()}: {prop} {old_val} -> {val}")
                 continue
 
-        # Jump velocity summary
         m_jump = re.search(r"/entities/(\d+|[a-z0-9_]+)/props/jump_velocity", path)
         if m_jump:
             sentences.append(f"Jump velocity set to {val}")
             continue
 
-        # Health summary
         m_hp = re.search(r"/entities/(\d+|[a-z0-9_]+)/props/(player_max_health|enemy_max_health|health|max_health)", path)
         if m_hp:
             sentences.append(f"Health set to {val}")
             continue
 
-        # Entity count change
         m_cnt = re.search(r"/entities/(\d+|[a-z0-9_]+)/count", path)
         if m_cnt:
             idx_or_id = m_cnt.group(1)
@@ -308,7 +302,6 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
             sentences.append(f"{ent_name.capitalize()}: count {old_cnt} -> {val}")
             continue
 
-        # Lighting
         if path == "/scene/lighting" or path.endswith("/lighting"):
             level_0 = gds.scene.levels[0] if (hasattr(gds, "scene") and hasattr(gds.scene, "levels") and gds.scene.levels) else None
             old_light = getattr(level_0, "lighting", "default") if level_0 else "default"
@@ -316,33 +309,27 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
             sentences.append(f"Lighting: changed from {old_val} to {val}")
             continue
 
-        # Title
         if path in ("/overview/title", "/meta/title"):
             old_t = getattr(gds.overview, "title", None) or gds.meta.title
             sentences.append(f"Title: renamed from '{old_t}' to '{val}'")
             continue
 
-        # Difficulty
         if path == "/progression/difficulty":
             sentences.append(f"Difficulty set to '{val}'")
             continue
 
-        # Art style
         if path == "/art/style":
             sentences.append(f"Art style set to '{val}'")
             continue
 
-        # Camera
         if path == "/overview/camera":
             sentences.append(f"Camera mode set to '{val}'")
             continue
 
-        # Timer
         if "/goals/lose" in path and "seconds" in path:
             sentences.append(f"Lose timer set to {val} seconds")
             continue
 
-        # Entities add/remove
         if path == "/entities/-" or (path.startswith("/entities/") and action == "add"):
             ent_id = val.get("entity_id", "entity") if isinstance(val, dict) else "entity"
             kind = val.get("kind", "") if isinstance(val, dict) else ""
@@ -360,16 +347,63 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
                     sentences.append(f"Removed entity '{parts[1]}'")
                     continue
 
-        # Levels add
         if path == "/scene/levels/-" or (path.startswith("/scene/levels/") and action == "add"):
             lvl_id = val.get("level_id", "level") if isinstance(val, dict) else "level"
             sentences.append(f"Added level '{lvl_id}'")
             continue
 
-        # Generic fallback
         sentences.append(f"{action.capitalize()} {path}")
 
     return sentences
+
+
+def _match_compound_rules(gds: GameDesignSpec, request: str) -> Optional[ProposedPatch]:
+    """Split a compound natural-language request into atomic clauses and combine their patches."""
+    from .patch_rules import match_deterministic_rule
+
+    # Protect "door with a key" from splitting on "and"/"with"
+    if re.search(r"(?i)\b(?:door|gate)\s+(?:with|and)\s+(?:a\s+)?key\b", request):
+        return match_deterministic_rule(gds, request)
+
+    # Protect game completion with weapons/arsenal from splitting
+    if re.search(r"(?i)\b(?:complete|finish|expand|build\s+out)\b.*\b(?:pistol|rifle|knife|weapons?|guns?)\b", request):
+        return match_deterministic_rule(gds, request)
+
+    clauses = [
+        c.strip()
+        for c in re.split(r"(?:\s*[,;]\s*|\s+\band\b\s+|\s+\balso\b\s+|\s+\bplus\b\s+)", request, flags=re.I)
+        if c and c.strip()
+    ]
+    if len(clauses) <= 1:
+        return None
+
+    working_gds = gds
+    all_ops: List[Dict[str, Any]] = []
+    summaries: List[str] = []
+
+    for clause in clauses:
+        sub = match_deterministic_rule(working_gds, clause)
+        if sub is None or not sub.ops:
+            continue
+        try:
+            working_gds = apply_patch(working_gds, sub.ops)
+            all_ops.extend(sub.ops)
+            if sub.summary:
+                summaries.append(sub.summary)
+        except PatchError:
+            continue
+
+    if all_ops:
+        try:
+            apply_patch(gds, all_ops)
+            return ProposedPatch(
+                ops=all_ops,
+                summary="; ".join(summaries),
+                status="OK",
+            )
+        except PatchError:
+            return None
+    return None
 
 
 def propose_patch(
@@ -378,13 +412,7 @@ def propose_patch(
     complete_json: bool = False,
     model_caller: Optional[Callable[[str, str], str]] = None,
 ) -> ProposedPatch:
-    """Propose a patch from a user request.
-
-    Prefers model intelligence for compound, detailed, or narrative requests when
-    a model caller is available, with dry-run verification and automatic repair.
-    Falls back to deterministic shortcut rules when no model caller is present or
-    for simple single-attribute phrasing.
-    """
+    """Propose a patch from a user request."""
     from .patch_rules import match_deterministic_rule
 
     req_lower = request.lower().strip()
@@ -408,7 +436,7 @@ def propose_patch(
             "GDS RFC 6902 Patch Rules:\n"
             "- Valid lighting values: 'day', 'dusk', 'night', 'indoor' at path '/scene/levels/0/lighting'.\n"
             "- Existing entity props: '/entities/<idx>/props/<prop_name>' (e.g. move_speed, player_max_health, attack_mode, enemies_per_wave).\n"
-            "- New entity schema at '/entities/-': {'entity_id': str, 'kind': 'hazard'|'pickup'|'enemy'|'guard'|'spawner'|'door'|'key'|'checkpoint'|'goal', 'module': 'kit.<kind>', 'count': int, 'level_id': 'level_1', 'placement': {'strategy': 'scatter'}, 'tags': ['GF_Owned'], 'props': {}}.\n"
+            "- New entity schema at '/entities/-': {'entity_id': str, 'kind': 'hazard'|'pickup'|'enemy'|'guard'|'spawner'|'door'|'checkpoint'|'goal', 'module': 'kit.<kind>', 'count': int, 'level_id': 'level_1', 'placement': {'strategy': 'scatter'}, 'tags': ['GF_Owned'], 'props': {}}.\n"
             "- Goals: '/goals/win' or '/goals/lose'. Valid condition objects: {'kind': 'timer', 'seconds': float}, {'kind': 'event', 'event': 'goal.reached'}, {'kind': 'count_at_least', 'event': 'pickup.collected', 'n': int}. Multiple alternative conditions can use {'kind': 'any', 'items': [...]}.\n"
             "- Event names must be dot-separated (e.g. 'goal.reached', 'wave.cleared', 'pickup.collected', 'player.died').\n"
             "- Rules: '/rules/-' with {'rule_id': str, 'when': {'event': str, 'source': None}, 'conditions': [], 'effects': [{'kind': 'add_stat'|'end_game', ...}], 'description': str}."
@@ -439,7 +467,6 @@ def propose_patch(
             apply_patch(gds, ops)
             return ProposedPatch(ops=ops, summary=summary, questions=questions, status="OK")
         except Exception as exc:
-            # Attempt 2: One structured repair call with the verification error
             if resp_str:
                 repair_prompt = (
                     f"{prompt}\n\n"
@@ -466,7 +493,12 @@ def propose_patch(
                 except Exception as exc2:
                     logger.debug("Model patch repair failed: %s", exc2)
 
-    # 3. Fall back to deterministic rules if model was not available or failed
+    # 3. Fall back to compound or single deterministic rules if model was not available or failed
+    if is_compound:
+        compound_patch = _match_compound_rules(gds, request)
+        if compound_patch is not None:
+            return compound_patch
+
     shortcut = match_deterministic_rule(gds, request)
     if shortcut is not None:
         try:
@@ -497,7 +529,6 @@ def _compact_entities_list(
     if not entities_list:
         return []
 
-    # Priority sorting: match query terms, player, goal, spawner first
     priority: List[Dict[str, Any]] = []
     others: List[Dict[str, Any]] = []
 
@@ -555,7 +586,6 @@ def _select_relevant_sections(gds: GameDesignSpec, request: str) -> Dict[str, An
         result["rules"] = full.get("rules", [])
 
     if len(result) == 1:
-        # Default compact overview + entities
         result["overview"] = full.get("overview", {})
         result["entities"] = _compact_entities_list(full.get("entities", []), query_terms=query_terms)
 

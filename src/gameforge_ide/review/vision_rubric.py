@@ -96,11 +96,7 @@ def evaluate_vision_rubric(
     theme: str = "default",
     advisory_only: bool = False,
 ) -> VisionRubricScore:
-    """Evaluate screenshot against visual quality rubric.
-    
-    Inspects image file existence, dimensions, black/blank renders, and missing
-    texture artifacts (magenta checkerboard) via pixel analysis.
-    """
+    """Evaluate screenshot against visual quality rubric."""
     image_path = Path(image_path)
 
     if not image_path.is_file() or image_path.stat().st_size == 0:
@@ -136,7 +132,6 @@ def evaluate_vision_rubric(
             mean_lum = 0.299 * mean_rgb[0] + 0.587 * mean_rgb[1] + 0.114 * mean_rgb[2]
             total_var = sum(var_rgb) / 3.0
 
-            # 1. Blank or black frame detection
             if mean_lum < 3.0 or total_var < 1.0:
                 return VisionRubricScore(
                     readability=0.10,
@@ -148,7 +143,6 @@ def evaluate_vision_rubric(
                     notes=["Blank or black frame detected: rendering pipeline produced no visible output."],
                 )
 
-            # 2. Missing texture detection (magenta checkerboard pattern)
             thumb = rgb_img.resize((128, 128))
             pixel_iter = thumb.get_flattened_data() if hasattr(thumb, "get_flattened_data") else thumb.getdata()
             magenta_px = 0
@@ -187,7 +181,6 @@ def evaluate_vision_rubric(
             notes=[f"Failed to inspect image file: {exc}"],
         )
 
-    # Genuine image metric scoring from analyzed pixel data
     lum_score = max(0.2, min(1.0, 1.0 - abs(mean_lum - 120.0) / 120.0))
     contrast_score = max(0.2, min(1.0, total_var / 1500.0))
     readability = round(min(0.95, 0.4 + 0.3 * contrast_score + 0.3 * lum_score), 3)
@@ -238,9 +231,8 @@ def run_mesh_audit(
 ) -> MeshAuditResult:
     """Inspect level actors and verify compliance with art direction.
 
-    When placeholder_ok is False, static mesh components using BasicShapes or
-    LevelPrototyping meshes without a theme material instance, or using DefaultMaterial,
-    or with missing/unassigned materials, will fail the audit.
+    Recognizes actors tinted via `color` (from composer/theme.py:paint_geometry_ops)
+    as themed geometry in addition to `MI_` / `M_GF_` material instances.
     """
     total_comp = 0
     placeholder_comp = 0
@@ -249,7 +241,8 @@ def run_mesh_audit(
 
     for actor in actors:
         label = actor.get("label") or actor.get("name") or "UnnamedActor"
-        components = actor.get("components") or [actor]  # support flat records
+        actor_color = actor.get("color")
+        components = actor.get("components") or [actor]
 
         for comp in components:
             total_comp += 1
@@ -262,9 +255,10 @@ def run_mesh_audit(
             else:
                 materials = []
 
-            has_no_material = len(materials) == 0
+            has_color_tint = bool(comp.get("color") or actor_color)
+            has_no_material = len(materials) == 0 and not has_color_tint
             is_placeholder_mesh = any(mesh.startswith(pfx) for pfx in _PLACEHOLDER_MESH_PREFIXES)
-            has_theme_material = any("MI_" in mat or "M_GF_" in mat for mat in materials)
+            has_theme_material = has_color_tint or any("MI_" in mat or "M_GF_" in mat for mat in materials)
             has_default_material = any(any(kw.lower() in mat.lower() for kw in _DEFAULT_MATERIAL_KEYWORDS) for mat in materials)
 
             if has_no_material:
@@ -272,7 +266,7 @@ def run_mesh_audit(
                 if not placeholder_ok:
                     placeholder_comp += 1
                     unthemed_actors.append(f"{label} (unassigned material)")
-            elif has_default_material:
+            elif has_default_material and not has_color_tint:
                 default_mats.append(f"{label} uses default material: {materials}")
                 if not placeholder_ok:
                     placeholder_comp += 1

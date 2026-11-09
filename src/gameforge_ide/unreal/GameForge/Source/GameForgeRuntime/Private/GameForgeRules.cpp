@@ -3,8 +3,14 @@
 #include "GameForgeEventNames.h"
 #include "GameForgeGameDefinition.h"
 #include "GameForgeGameState.h"
+#include "GameForgeGuard.h"
+#include "GameForgeKitActors.h"
+#include "GameForgeObjectives.h"
+#include "GameForgePickup.h"
 #include "GameForgePlayer.h"
+#include "GameForgeVisuals.h"
 #include "Engine/World.h"
+#include "NavigationSystem.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Dom/JsonObject.h"
@@ -93,9 +99,13 @@ bool FGameForgeConditionEvaluator::Evaluate(
 			return false;
 		}
 
-		if (Op == TEXT("=="))
+		if (Op == TEXT("==") || Op == TEXT("="))
 		{
 			return FMath::IsNearlyEqual(CurrentVal, static_cast<float>(TargetVal), 1e-4f);
+		}
+		else if (Op == TEXT("!=") || Op == TEXT("<>"))
+		{
+			return !FMath::IsNearlyEqual(CurrentVal, static_cast<float>(TargetVal), 1e-4f);
 		}
 		else if (Op == TEXT("<="))
 		{
@@ -143,7 +153,84 @@ bool FGameForgeConditionEvaluator::Evaluate(
 		{
 			EntityName = FName(*Source);
 		}
-		return Ctx.HasEvent ? Ctx.HasEvent(FName(*EventName), EntityName) : false;
+		const FName EvFName(*EventName);
+		const bool bHas = Ctx.HasEvent ? Ctx.HasEvent(EvFName, EntityName) : false;
+		if (!bHas)
+		{
+			return false;
+		}
+
+		// Optional payload field matching ("where": {"key": "expected"})
+		const TSharedPtr<FJsonObject>* WhereObj = nullptr;
+		if (Condition->TryGetObjectField(TEXT("where"), WhereObj) && WhereObj && (*WhereObj).IsValid())
+		{
+			if (!Ctx.GetEventField)
+			{
+				return false;
+			}
+			for (const auto& Pair : (*WhereObj)->Values)
+			{
+				FString ActualVal;
+				if (!Ctx.GetEventField(EvFName, Pair.Key, ActualVal, EntityName))
+				{
+					return false;
+				}
+				FString ExpectedVal;
+				if (Pair.Value->TryGetString(ExpectedVal))
+				{
+					if (!ActualVal.Equals(ExpectedVal, ESearchCase::IgnoreCase))
+					{
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		// Default filter for board.win: ensure AI wins (winner == "ai") do not trigger player victory rules
+		if (EventName.Equals(TEXT("board.win"), ESearchCase::IgnoreCase) && Ctx.GetEventField)
+		{
+			FString WinnerVal;
+			if (Ctx.GetEventField(EvFName, TEXT("winner"), WinnerVal, EntityName))
+			{
+				if (WinnerVal.Equals(TEXT("ai"), ESearchCase::IgnoreCase))
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+	else if (Kind == TEXT("not"))
+	{
+		TSharedPtr<FJsonObject> SubCond;
+		const TSharedPtr<FJsonObject>* CondObj = nullptr;
+		if (Condition->TryGetObjectField(TEXT("condition"), CondObj) && CondObj && (*CondObj).IsValid())
+		{
+			SubCond = *CondObj;
+		}
+		else
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Items = nullptr;
+			if ((Condition->TryGetArrayField(TEXT("conditions"), Items) || Condition->TryGetArrayField(TEXT("items"), Items)) &&
+				Items && Items->Num() > 0 && (*Items)[0].IsValid())
+			{
+				SubCond = (*Items)[0]->AsObject();
+			}
+		}
+		if (!SubCond.IsValid())
+		{
+			Error = TEXT("'not' condition missing inner 'condition' object");
+			return false;
+		}
+		FString SubErr;
+		const bool bSubRes = Evaluate(SubCond, Ctx, SubErr, Depth + 1);
+		if (!SubErr.IsEmpty())
+		{
+			Error = SubErr;
+			return false;
+		}
+		return !bSubRes;
 	}
 	else if (Kind == TEXT("all"))
 	{
@@ -351,6 +438,37 @@ void UGameForgeRulesSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+void UGameForgeRulesSubsystem::SyncPlayerStatToAttributes(const FString& StatName, float NewVal) const
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return;
+	}
+	APlayerController* PC = UGameplayStatics::GetPlayerController(W, 0);
+	AGameForgeCharacter* GFChar = PC ? Cast<AGameForgeCharacter>(PC->GetPawn()) : nullptr;
+	if (!GFChar || !GFChar->AttributeSet)
+	{
+		return;
+	}
+	if (StatName.Equals(TEXT("player.health"), ESearchCase::IgnoreCase))
+	{
+		GFChar->AttributeSet->SetHealth(FMath::Clamp(NewVal, 0.f, GFChar->AttributeSet->GetMaxHealth()));
+	}
+	else if (StatName.Equals(TEXT("player.max_health"), ESearchCase::IgnoreCase))
+	{
+		GFChar->AttributeSet->SetMaxHealth(FMath::Max(1.f, NewVal));
+	}
+	else if (StatName.Equals(TEXT("player.stamina"), ESearchCase::IgnoreCase))
+	{
+		GFChar->AttributeSet->SetStamina(FMath::Clamp(NewVal, 0.f, GFChar->AttributeSet->GetMaxStamina()));
+	}
+	else if (StatName.Equals(TEXT("player.max_stamina"), ESearchCase::IgnoreCase))
+	{
+		GFChar->AttributeSet->SetMaxStamina(FMath::Max(1.f, NewVal));
+	}
+}
+
 void UGameForgeRulesSubsystem::HandleEvent(const FGameForgeEvent& Event)
 {
 	if (bGameEnded || !Def.IsValid())
@@ -420,6 +538,10 @@ void UGameForgeRulesSubsystem::HandleEvent(const FGameForgeEvent& Event)
 			{
 				return Bus ? (Bus->Count(E, Ent) > 0) : false;
 			};
+			Ctx.GetEventField = [Bus](FName E, const FString& Key, FString& OutVal, FName Ent) -> bool
+			{
+				return Bus ? Bus->GetLastEventDataField(E, Key, OutVal, Ent) : false;
+			};
 			Ctx.ElapsedSeconds = W ? static_cast<float>(W->GetTimeSeconds() - StartTime) : 0.f;
 
 			bool bConditionsMet = true;
@@ -474,11 +596,16 @@ void UGameForgeRulesSubsystem::ApplyEffect(const TSharedPtr<FJsonObject>& Effect
 	{
 		FString Stat;
 		double Delta = 0.0;
-		if (Effect->TryGetStringField(TEXT("stat"), Stat) && Effect->TryGetNumberField(TEXT("delta"), Delta))
+		if (!Effect->TryGetNumberField(TEXT("delta"), Delta))
+		{
+			Effect->TryGetNumberField(TEXT("amount"), Delta);
+		}
+		if (Effect->TryGetStringField(TEXT("stat"), Stat))
 		{
 			if (GS)
 			{
 				GS->AddStat(FName(*Stat), static_cast<float>(Delta));
+				SyncPlayerStatToAttributes(Stat, GS->GetStat(FName(*Stat)));
 			}
 		}
 	}
@@ -491,6 +618,7 @@ void UGameForgeRulesSubsystem::ApplyEffect(const TSharedPtr<FJsonObject>& Effect
 			if (GS)
 			{
 				GS->SetStat(FName(*Stat), static_cast<float>(Value));
+				SyncPlayerStatToAttributes(Stat, GS->GetStat(FName(*Stat)));
 			}
 		}
 	}
@@ -580,11 +708,42 @@ void UGameForgeRulesSubsystem::SpawnEntity(const FString& EntityId, int32 Count)
 	}
 
 	FString ClassPath;
+	FString EntityType;
 	FString SpawnTag;
 	(*EntSpec)->TryGetStringField(TEXT("class"), ClassPath);
+	(*EntSpec)->TryGetStringField(TEXT("type"), EntityType);
 	(*EntSpec)->TryGetStringField(TEXT("spawn_tag"), SpawnTag);
 
-	UClass* SpawnCls = LoadClass<AActor>(nullptr, *ClassPath);
+	UClass* SpawnCls = !ClassPath.IsEmpty() ? LoadClass<AActor>(nullptr, *ClassPath) : nullptr;
+	if (!SpawnCls)
+	{
+		if (EntityType.Equals(TEXT("enemy"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("ranged_enemy"), ESearchCase::IgnoreCase) ||
+			EntityType.Equals(TEXT("kit.enemy"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("kit.enemy_melee"), ESearchCase::IgnoreCase) ||
+			EntityType.Equals(TEXT("kit.enemy_ranged"), ESearchCase::IgnoreCase))
+		{
+			SpawnCls = AGameForgeEnemy::StaticClass();
+		}
+		else if (EntityType.Equals(TEXT("pickup"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("kit.pickup"), ESearchCase::IgnoreCase))
+		{
+			SpawnCls = AGameForgePickup::StaticClass();
+		}
+		else if (EntityType.Equals(TEXT("hazard"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("kit.hazard"), ESearchCase::IgnoreCase))
+		{
+			SpawnCls = AGameForgeHazard::StaticClass();
+		}
+		else if (EntityType.Equals(TEXT("goal"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("kit.goal"), ESearchCase::IgnoreCase))
+		{
+			SpawnCls = AGameForgeGoal::StaticClass();
+		}
+		else if (EntityType.Equals(TEXT("guard"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("kit.guard"), ESearchCase::IgnoreCase))
+		{
+			SpawnCls = AGameForgeGuard::StaticClass();
+		}
+		else if (EntityType.Equals(TEXT("npc"), ESearchCase::IgnoreCase) || EntityType.Equals(TEXT("kit.quest_giver"), ESearchCase::IgnoreCase))
+		{
+			SpawnCls = AGameForgeQuestGiver::StaticClass();
+		}
+	}
 	if (!SpawnCls)
 	{
 		return;
@@ -601,25 +760,83 @@ void UGameForgeRulesSubsystem::SpawnEntity(const FString& EntityId, int32 Count)
 	{
 		UGameplayStatics::GetAllActorsWithTag(W, FName(*SpawnTag), SpawnPoints);
 	}
+	if (SpawnPoints.Num() == 0)
+	{
+		UGameplayStatics::GetAllActorsWithTag(W, FName(*(FString(TEXT("GF_SP_")) + EntityId)), SpawnPoints);
+	}
+
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(W, 0);
+	const FVector BaseOrigin = PlayerPawn ? PlayerPawn->GetActorLocation() : FVector::ZeroVector;
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(W);
+
+	const TSharedPtr<FJsonObject>* Props = nullptr;
+	(*EntSpec)->TryGetObjectField(TEXT("properties"), Props);
 
 	for (int32 i = 0; i < Count; i++)
 	{
 		FTransform SpawnTransform = FTransform::Identity;
 		if (SpawnPoints.Num() > 0)
 		{
-			AActor* Sp = SpawnPoints[i % SpawnPoints.Num()];
-			if (Sp)
+			if (AActor* Sp = SpawnPoints[i % SpawnPoints.Num()])
 			{
 				SpawnTransform = Sp->GetActorTransform();
 			}
 		}
+		else
+		{
+			const float Angle = (static_cast<float>(i) / FMath::Max(1, Count)) * 2.f * PI;
+			FVector CandLoc = BaseOrigin + FVector(FMath::Cos(Angle) * 450.f, FMath::Sin(Angle) * 450.f, 90.f);
+			FNavLocation Proj;
+			if (NavSys && NavSys->ProjectPointToNavigation(CandLoc, Proj, FVector(300.f, 300.f, 500.f)))
+			{
+				CandLoc = Proj.Location + FVector(0.f, 0.f, 90.f);
+			}
+			SpawnTransform.SetLocation(CandLoc);
+		}
 
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-		AActor* Spawned = W->SpawnActor<AActor>(SpawnCls, SpawnTransform, Params);
+		AActor* Spawned = W->SpawnActorDeferred<AActor>(SpawnCls, SpawnTransform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		if (Spawned)
 		{
 			Spawned->Tags.AddUnique(FName(*(FString(TEXT("GF_E_")) + EntityId)));
+			Spawned->Tags.AddUnique(FName(TEXT("GF_Owned")));
+
+			if (Props && (*Props).IsValid())
+			{
+				const TSharedPtr<FJsonObject>& P = *Props;
+				double V = 0.0;
+				if (AGameForgeEnemy* Enemy = Cast<AGameForgeEnemy>(Spawned))
+				{
+					Enemy->EntityId = FName(*EntityId);
+					if (P->TryGetNumberField(TEXT("max_health"), V)) Enemy->MaxHealth = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("attack_damage"), V)) Enemy->AttackDamage = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("attack_range"), V)) Enemy->AttackRange = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("attack_cooldown"), V)) Enemy->AttackCooldown = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("move_speed"), V)) Enemy->MoveSpeed = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("aggro_range"), V)) Enemy->AggroRange = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("projectile_speed"), V)) { Enemy->ProjectileSpeed = static_cast<float>(V); Enemy->bRanged = true; }
+					bool bRangedFlag = false;
+					if (P->TryGetBoolField(TEXT("ranged"), bRangedFlag)) Enemy->bRanged = bRangedFlag;
+				}
+				else if (AGameForgePickup* Pickup = Cast<AGameForgePickup>(Spawned))
+				{
+					Pickup->EntityId = FName(*EntityId);
+					if (P->TryGetNumberField(TEXT("value"), V)) Pickup->Value = static_cast<int32>(V);
+					FString EffStr;
+					if (P->TryGetStringField(TEXT("effect"), EffStr)) Pickup->EffectName = EffStr;
+					FString ItemStr;
+					if (P->TryGetStringField(TEXT("item_id"), ItemStr)) Pickup->ItemId = FName(*ItemStr);
+				}
+				else if (AGameForgeGuard* Guard = Cast<AGameForgeGuard>(Spawned))
+				{
+					Guard->EntityId = FName(*EntityId);
+					if (P->TryGetNumberField(TEXT("patrol_radius"), V)) Guard->PatrolRadius = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("aggro_radius"), V)) Guard->AggroRadius = static_cast<float>(V);
+					if (P->TryGetNumberField(TEXT("move_speed"), V)) Guard->MoveSpeed = static_cast<float>(V);
+				}
+			}
+
+			UGameplayStatics::FinishSpawningActor(Spawned, SpawnTransform);
 		}
 	}
 }
@@ -652,6 +869,10 @@ void UGameForgeRulesSubsystem::CheckWinLose()
 	Ctx.HasEvent = [Bus](FName E, FName Ent) -> bool
 	{
 		return Bus ? (Bus->Count(E, Ent) > 0) : false;
+	};
+	Ctx.GetEventField = [Bus](FName E, const FString& Key, FString& OutVal, FName Ent) -> bool
+	{
+		return Bus ? Bus->GetLastEventDataField(E, Key, OutVal, Ent) : false;
 	};
 	Ctx.ElapsedSeconds = static_cast<float>(W->GetTimeSeconds() - StartTime);
 

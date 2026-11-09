@@ -1,0 +1,8 @@
+# GameForge Material: M_SM_ApiTestCube_Default
+newmtl M_SM_ApiTestCube_Default
+Ka 0.2000 0.2000 0.2000
+Kd 0.3500 0.5500 0.8500
+Ks 0.5000 0.5000 0.5000
+Ns 64.0
+d 1.0
+illum 2

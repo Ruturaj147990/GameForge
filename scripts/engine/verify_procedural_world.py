@@ -12,14 +12,14 @@ import ctypes
 from ctypes import wintypes
 import json
 import logging
-import os
 from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.pipeline.spec_from_prompt import match_prompt
 from src.gameforge_ide.pipeline.game_pipeline import GamePipeline
@@ -27,7 +27,6 @@ from src.gameforge_ide.unreal.real_input import (
     RealInputSession,
     find_windows_for_pid,
     find_window_by_title_contains,
-    focus_window,
     get_client_rect,
 )
 
@@ -142,7 +141,9 @@ def main():
     logger.info("Params: %s", spec.params)
 
     # 1. Run pipeline end-to-end (or load existing report if verified)
-    pipeline_report_path = Path(r"E:\GameForge\projects\GFProceduralWorld\Saved\GameForge\pipeline_report.json")
+    projects_root = get_settings().projects_root
+    repo_root = Path(__file__).resolve().parents[2]
+    pipeline_report_path = projects_root / "GFProceduralWorld" / "Saved" / "GameForge" / "pipeline_report.json"
     if "--skip-pipeline" in sys.argv and pipeline_report_path.exists():
         logger.info("Loading existing pipeline report from %s", pipeline_report_path)
         with open(pipeline_report_path, "r", encoding="utf-8") as f:
@@ -167,9 +168,9 @@ def main():
         pipeline_stages = [s.__dict__ for s in res.stages]
 
     # Find packaged executable
-    binary_exe = Path(r"E:\GameForge\projects\GFProceduralWorld\Packaged\Windows\GFProceduralWorld\Binaries\Win64\GFProceduralWorld.exe")
-    bootstrap_exe = Path(r"E:\GameForge\projects\GFProceduralWorld\Packaged\Windows\GFProceduralWorld.exe")
-    exe_path = binary_exe if binary_exe.exists() else bootstrap_exe
+    bootstrap_exe = projects_root / "GFProceduralWorld" / "Packaged" / "Windows" / "GFProceduralWorld.exe"
+    binary_exe = projects_root / "GFProceduralWorld" / "Packaged" / "Windows" / "GFProceduralWorld" / "Binaries" / "Win64" / "GFProceduralWorld.exe"
+    exe_path = bootstrap_exe if bootstrap_exe.exists() else binary_exe
     if not exe_path.exists():
         logger.error("Packaged executable not found: %s", exe_path)
         sys.exit(1)
@@ -182,7 +183,7 @@ def main():
     proc = subprocess.Popen(cmd)
     logger.info("Process launched with PID %d", proc.pid)
 
-    screenshot_path = Path(r"E:\gameforge_step1\reports\packaged_GFProceduralWorld_real_input.png")
+    screenshot_path = repo_root / "reports" / "packaged_GFProceduralWorld_real_input.png"
     real_input_results = {}
 
     try:
@@ -290,7 +291,7 @@ def main():
         "real_input_verification": real_input_results,
     }
 
-    report_file = Path(r"E:\gameforge_step1\reports\milestone8_procedural_world_demo.json")
+    report_file = repo_root / "reports" / "milestone8_procedural_world_demo.json"
     report_file.parent.mkdir(parents=True, exist_ok=True)
     report_file.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
     logger.info("Milestone 8 report written to %s", report_file)

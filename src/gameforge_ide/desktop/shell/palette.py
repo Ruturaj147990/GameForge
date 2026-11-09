@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,13 @@ class CommandPalette(QDialog):
         self.setModal(True)
         self.resize(560, 360)
 
+        self.setStyleSheet(theme_stylesheet(f"""
+            QDialog#command_palette_dialog {{
+                background: {tokens.BG_PANEL};
+                color: {tokens.TEXT_PRIMARY};
+            }}
+        """))
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
@@ -42,7 +50,7 @@ class CommandPalette(QDialog):
         self.search = QLineEdit(self)
         self.search.setObjectName("command_palette_search")
         self.search.setPlaceholderText("Type a command… (e.g. View: Design, Theme, Cancel)")
-        self.search.setStyleSheet(f"""
+        self.search.setStyleSheet(theme_stylesheet(f"""
             QLineEdit {{
                 background: {tokens.BG_SURFACE};
                 color: {tokens.TEXT_PRIMARY};
@@ -51,12 +59,12 @@ class CommandPalette(QDialog):
                 padding: 6px 10px;
                 font-size: 13px;
             }}
-        """)
+        """))
         layout.addWidget(self.search)
 
         self.list_widget = QListWidget(self)
         self.list_widget.setObjectName("command_palette_commands")
-        self.list_widget.setStyleSheet(f"""
+        self.list_widget.setStyleSheet(theme_stylesheet(f"""
             QListWidget {{
                 background: {tokens.BG_SURFACE};
                 color: {tokens.TEXT_PRIMARY};
@@ -75,7 +83,7 @@ class CommandPalette(QDialog):
                 background: {tokens.ACCENT_PRIMARY};
                 color: {tokens.TEXT_PRIMARY};
             }}
-        """)
+        """))
         layout.addWidget(self.list_widget)
 
         for label, callback in commands:

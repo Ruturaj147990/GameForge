@@ -1,37 +1,40 @@
 """GameForge Gameplay Kit v2 package (Phase 5)."""
-from .registry import KIT, KitModule, all_modules, get_module, register
-from .runtime_def import build_runtime_def, validate_runtime_def
 from .evaluator import ConditionEvaluator, EvaluationContext, RulesEvaluator
+from .registry import KIT, KitModule, all_modules, find_module_for_kind, get_module, register
 from .rules import (
+    ChessState,
+    GAME_TYPE_LAYOUT_MAP,
+    LudoRules,
+    PlayerSlotConfig,
     RaceProgress,
     RacerProgress,
-    sudoku_conflicts,
-    is_sudoku_solved,
-    parse_player_slots,
-    PlayerSlotConfig,
-    tic_tac_toe_result,
-    SnakesAndLaddersRules,
-    LudoRules,
-    TetrisState,
-    SnakeState,
-    ChessState,
-    TowerDefenseState,
     RoguelikeState,
+    SnakeState,
+    SnakesAndLaddersRules,
+    TetrisState,
+    TowerDefenseState,
     ZombieSurvivalState,
-    GAME_TYPE_LAYOUT_MAP,
+    check_composition_features,
     get_layout_for_game_type,
     get_required_modules_for_game_type,
+    is_sudoku_solved,
+    parse_player_slots,
     resolve_codegen_features,
-    check_composition_features,
+    sudoku_conflicts,
+    tic_tac_toe_result,
 )
+from .runtime_def import build_runtime_def, describe_controls, describe_objective, validate_runtime_def
 
 __all__ = [
     "KIT",
     "KitModule",
     "all_modules",
+    "find_module_for_kind",
     "get_module",
     "register",
     "build_runtime_def",
+    "describe_controls",
+    "describe_objective",
     "validate_runtime_def",
     "ConditionEvaluator",
     "EvaluationContext",

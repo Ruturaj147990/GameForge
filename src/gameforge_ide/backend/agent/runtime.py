@@ -683,7 +683,7 @@ class AgentRuntime:
         created_dirs: List[str] = []
         writes: List[Tuple[str, str]] = []
 
-        # 1. Directory creation interception: mkdir -p path1 path2 ...
+        # 1. Directory creation interception: mkdir -p path1 path2 ... (parse only; no disk mutation in parser)
         mkdir_matches = re.finditer(r"(?:^|\n)\s*mkdir(?:\s+-[a-zA-Z0-9]+)*\s+([^\r\n]+)", text, re.IGNORECASE)
         for mm in mkdir_matches:
             raw_dirs = mm.group(1).strip()
@@ -700,7 +700,9 @@ class AgentRuntime:
                             resolved_dir.mkdir(parents=True, exist_ok=True)
                             created_dirs.append(clean_dir)
                     except Exception as ex:
-                        logger.warning("Could not create directory '%s': %s", clean_dir, ex)
+                        logger.warning("Could not validate directory '%s': %s", clean_dir, ex)
+                else:
+                    created_dirs.append(clean_dir)
 
         # 2. Complete cat heredocs: cat > path << 'EOF' ... EOF
         cat_pat = r'(?:^|\n)\s*cat\s*>\s*([^\s<]+)\s*<<\s*[\x27\x22\\]?(\w+)[\x27\x22\\]?\s*\n(.*?)\n\s*\2'
@@ -1149,6 +1151,73 @@ class AgentRuntime:
         return "Verification" if has_modified_files else "Planning"
 
     @staticmethod
+    def _is_proceed_signal(user_prompt: str) -> bool:
+        """Return True when the user message confirms execution of an awaiting plan."""
+        p = (user_prompt or "").strip().lower()
+        p_clean = re.sub(r"[.!?,;:]+$", "", p).strip()
+        exact_signals = {
+            "proceed", "continue", "cont", "yes", "y", "ok", "okay",
+            "execute", "start", "run", "go ahead", "apply", "confirm",
+            "build it", "do it", "approved", "approve", "lgtm", "ship it",
+            "yes proceed", "yes, proceed", "ok proceed", "okay proceed",
+            "looks good", "looks good proceed", "looks good, proceed",
+            "looks good, go ahead", "looks good go ahead",
+            "go ahead and build it", "yes, go ahead and build it",
+            "yes go ahead and build it", "yes, go ahead", "yes go ahead",
+            "proceed with the plan", "execute the plan", "run the plan",
+            "let's proceed", "lets proceed", "approve and proceed",
+            "start building", "go ahead with the plan",
+        }
+        if p_clean in exact_signals:
+            return True
+        revision_blockers = (
+            " but ", " except ", " however ", " instead", " wait", " change ",
+            " modify ", " add ", " remove ", " replace ", " update ", " without ",
+        )
+        if any(rb in f" {p_clean} " for rb in revision_blockers):
+            return False
+        proceed_prefixes = (
+            "yes, proceed", "yes proceed", "looks good, proceed", "looks good proceed",
+            "go ahead and build", "yes, go ahead", "proceed with", "execute the plan",
+            "approved, proceed", "okay, proceed", "ok, proceed",
+        )
+        return any(p_clean.startswith(pfx) for pfx in proceed_prefixes)
+
+    @staticmethod
+    def _is_informational_question(user_prompt: str) -> bool:
+        """Return True when the prompt is a general/domain informational question without defect complaints or workspace mutation requests."""
+        p = (user_prompt or "").strip().lower()
+        if not p:
+            return False
+        defect_re = re.compile(
+            r"\b(not complete|incomplete|not working|broken|bug|error|errors|missing|nothing is playable|not playable|only \d+ tiles|just \d+ tiles|crash|crashes|failed|failing)\b",
+            re.I,
+        )
+        if defect_re.search(p):
+            return False
+        workspace_status_re = re.compile(
+            r"\b(my project|this project|our project|my game|this game|current project|current game|project status|build status|status of (?:the |this )?(?:project|game|files?)|project files|is the (?:game|project|build) (?:complete|completed|done|ready|finished)|what files|list files|show files|read file|in the workspace)\b",
+            re.I,
+        )
+        if workspace_status_re.search(p):
+            return False
+        mutation_verbs = (
+            "create ", "build ", "make ", "implement ", "generate ", "fix ",
+            "refactor ", "write ", "edit ", "modify ", "patch ", "update ",
+            "add ", "remove ", "delete ", "compile ", "package ", "scaffold ",
+            "spawn ", "run ", "execute ",
+        )
+        if any(p.startswith(mv) for mv in mutation_verbs):
+            return False
+        if re.search(r"\b(?:can you|please|could you)\s+(?:create|build|make|implement|generate|fix|refactor|write|edit|modify|patch|update|add|remove|delete|compile|package|run)\b", p):
+            return False
+        question_starters = (
+            "how ", "what ", "why ", "where ", "when ", "who ", "which ",
+            "explain ", "describe ", "can you explain", "tell me about",
+        )
+        return any(p.startswith(qs) for qs in question_starters)
+
+    @staticmethod
     def _is_conversational(user_prompt: str) -> bool:
         """Return True when the prompt is purely informational, explanatory, or conversational and should not trigger mutation tools."""
         p = user_prompt.strip().lower()
@@ -1161,7 +1230,7 @@ class AgentRuntime:
             "modify", "scaffold", "assemble", "patch", "repair", "proceed",
             "complete", "completed", "finish", "finished", "status", "progress",
             "state", "game", "project", "files", "file", "error", "errors",
-            "log", "logs", "show", "read", "view", "sudoku", "ready", "done",
+            "log", "logs", "show", "read", "view", "gameplay", "mechanics", "ready", "done",
             "package", "packaging",
         }
 
@@ -1172,6 +1241,10 @@ class AgentRuntime:
             "what can you do", "what are your capabilities", "who are you",
         )
         if any(mq in p for mq in meta_qa):
+            return True
+
+        # Conceptual / domain informational questions without defect or workspace status queries
+        if AgentRuntime._is_informational_question(user_prompt):
             return True
 
         # Inquiries about project status, completion, files, or builds require tools
@@ -1337,9 +1410,72 @@ class AgentRuntime:
         """
         llm_intent = getattr(self, "_llm_intent_by_prompt", {}).get(user_prompt)
         if llm_intent is not None:
-            return llm_intent.intent == "create_game"
+            intent_val = llm_intent if isinstance(llm_intent, str) else getattr(llm_intent, "intent", None)
+            if intent_val is not None:
+                return intent_val == "create_game"
         from ...pipeline.spec_from_prompt import is_game_creation_request
         return is_game_creation_request(user_prompt)
+
+    def _is_game_modification_request(self, user_prompt: str) -> bool:
+        """Determines if prompt is requesting a modification to an existing game design (GDS)."""
+        llm_intent = getattr(self, "_llm_intent_by_prompt", {}).get(user_prompt)
+        if llm_intent is not None:
+            intent_val = llm_intent if isinstance(llm_intent, str) else getattr(llm_intent, "intent", None)
+            if intent_val == "modify_game":
+                return True
+            if intent_val in ("create_game", "chat", "project_query"):
+                return False
+        if self._is_game_creation_request(user_prompt):
+            return False
+        p = (user_prompt or "").strip().lower()
+        if not p:
+            return False
+        # Do not hijack explicit source file edits (.cpp, .h, .py, .cs)
+        if re.search(r"[\w\-\./\\]+\.(?:cpp|h|hpp|py|cs)\b", p):
+            return False
+        mod_verbs = (
+            "change", "modify", "update", "adjust", "tweak", "increase", "decrease",
+            "make", "turn", "set", "switch", "add", "remove", "double", "halve",
+        )
+        game_nouns = (
+            "enemy", "enemies", "wave", "waves", "pickup", "pickups", "coin", "coins",
+            "relic", "relics", "guard", "guards", "hazard", "hazards", "player",
+            "speed", "health", "damage", "jump", "gravity", "lighting", "night",
+            "dusk", "day", "indoor", "environment", "theme", "level", "levels",
+            "board", "grid", "timer", "difficulty", "camera", "weapon", "rule", "rules",
+        )
+        has_mod = any(re.search(rf"\b{re.escape(v)}\b", p) for v in mod_verbs)
+        has_noun = any(re.search(rf"\b{re.escape(n)}\b", p) for n in game_nouns)
+        return has_mod and has_noun
+
+    def _has_existing_gds(self, session: Optional[Session] = None) -> bool:
+        """Returns True if an existing GameDesignSpec exists in the active project or workspace."""
+        try:
+            from ...core.projects import find_gds
+            from ...design import store as _design_store
+            ps = getattr(self, "projects_service", None)
+            pdir = (ps and getattr(ps, "active_project_dir", None)) or (session and getattr(session, "project_dir", None))
+            if pdir and _design_store.load(Path(pdir)) is not None:
+                return True
+            found = find_gds(self.workspace_root)
+            return bool(found and found.is_file())
+        except Exception:
+            return False
+
+    def _revise_plan_artifact(self, session_id: str, active_plan: PlanArtifact, user_feedback: str) -> PlanArtifact:
+        """Revises an active PlanArtifact via PlanGenerator.revise_plan_artifact."""
+        from .plan_generator import PlanGenerator
+        generator = PlanGenerator(
+            workspace_root=self.workspace_root,
+            tool_gateway=self.tool_gateway,
+            model_router=self.model_router,
+        )
+        return generator.revise_plan_artifact(
+            active_plan=active_plan,
+            user_feedback=user_feedback,
+            model_name=getattr(self, "active_model", None),
+            active_project_dir=getattr(self, "active_project_dir", None),
+        )
 
     def _build_plan_artifact(self, session_id: str, prompt: str, is_game: bool = False) -> PlanArtifact:
         """Constructs a structured, actionable technical plan artifact via genuine LLM planning."""
@@ -1465,11 +1601,10 @@ class AgentRuntime:
             return
 
         active_plan = getattr(session, "active_plan", None)
-        user_norm = user_prompt.strip().lower()
         is_proceed = (
             active_plan is not None
             and active_plan.status in ("awaiting_approval", "draft")
-            and user_norm in ("proceed", "execute", "start", "run", "go ahead", "apply", "confirm", "build it", "do it")
+            and self._is_proceed_signal(user_prompt)
         )
         # Model-assisted routing (falls back to the keyword heuristics when the model is
         # unavailable or not confident). See intent_classifier.py.
@@ -1480,7 +1615,12 @@ class AgentRuntime:
 
                 intent_provider = self.router.get_provider(getattr(session, "provider_type", None))
                 llm_intent = await asyncio.to_thread(
-                    classify_intent, user_prompt, intent_provider, getattr(session, "model_name", "")
+                    classify_intent,
+                    user_prompt,
+                    intent_provider,
+                    getattr(session, "model_name", ""),
+                    has_existing_gds=self._has_existing_gds(session),
+                    active_plan_state=getattr(active_plan, "status", None) if active_plan else None,
                 )
             except Exception as exc:
                 logger.debug("LLM intent routing skipped: %s", exc)
@@ -1491,10 +1631,14 @@ class AgentRuntime:
         if is_proceed:
             is_conversational = False
         elif llm_intent is not None:
-            # Safety net: If keyword heuristics know the prompt is an actionable project/code/defect task,
-            # never allow model to demote it to conversational 'chat'.
             is_keyword_conversational = self._is_conversational(user_prompt)
-            if not is_keyword_conversational:
+            if (
+                llm_intent.intent == "chat"
+                and getattr(llm_intent, "confidence", 0.0) >= 0.7
+                and (is_keyword_conversational or self._is_informational_question(user_prompt))
+            ):
+                is_conversational = True
+            elif not is_keyword_conversational:
                 is_conversational = False
             else:
                 is_conversational = llm_intent.intent == "chat"
@@ -1503,12 +1647,13 @@ class AgentRuntime:
         else:
             is_conversational = self._is_conversational(user_prompt)
         intent = "answer" if is_conversational else "mutate"
-        predicates = acceptance_predicates or self._propose_acceptance_predicates(user_prompt)
+        effective_goal_for_preds = (active_plan.goal if (is_proceed and active_plan and active_plan.goal) else user_prompt)
+        predicates = acceptance_predicates or self._propose_acceptance_predicates(effective_goal_for_preds)
 
         existing_task = self.get_task_state(session_id)
         task_state = TaskState(
             session_id=session_id,
-            goal=existing_task.goal if existing_task else user_prompt,
+            goal=(active_plan.goal if (is_proceed and active_plan and active_plan.goal) else (existing_task.goal if existing_task else user_prompt)),
             intent=intent,
             acceptance=predicates,
             budget=TaskBudget(max_iterations=self.max_iterations),
@@ -1647,15 +1792,10 @@ class AgentRuntime:
             autonomy_profile = AutonomyProfile.AGENTIC
 
         active_plan = getattr(session, "active_plan", None)
-        user_norm = user_prompt.strip().lower()
         is_proceed_command = (
             active_plan is not None
             and active_plan.status in ("awaiting_approval", "draft")
-            and user_norm in (
-                "proceed", "continue", "cont", "yes", "y", "ok", "okay",
-                "execute", "start", "run", "go ahead", "apply", "confirm",
-                "build it", "do it",
-            )
+            and self._is_proceed_signal(user_prompt)
         )
 
         if not is_conversational:
@@ -1692,8 +1832,10 @@ class AgentRuntime:
                     yield AgentEvent(event_type="status", content="RUNNING", metadata={"plan_id": active_plan.plan_id, "status": "approved"})
                     # Proceed to execution below
                 else:
-                    # User sent revision prompt for existing plan
-                    active_plan.record_revision(user_prompt, summary_of_changes=f"Reconciled requirements: {user_prompt[:80]}")
+                    # User sent revision prompt for existing plan: genuinely regenerate steps, goal, files_expected, and GDS
+                    active_plan = await asyncio.to_thread(
+                        self._revise_plan_artifact, session_id, active_plan, user_prompt
+                    )
                     self.session_manager.set_active_plan(session_id, active_plan)
                     plan_md = active_plan.to_markdown()
                     intro_text = f"Plan updated (v{active_plan.version}). Please review the revised steps below and click **Proceed** to begin execution."
@@ -1712,7 +1854,7 @@ class AgentRuntime:
                 is_create = self._is_game_creation_request(user_prompt)
                 is_actionable = is_create or self._is_actionable_task(user_prompt, "")
                 if is_actionable:
-                    plan = self._build_plan_artifact(session_id, user_prompt, is_game=is_create)
+                    plan = await asyncio.to_thread(self._build_plan_artifact, session_id, user_prompt, is_create)
                     self.session_manager.set_active_plan(session_id, plan)
                     plan_md = plan.to_markdown()
                     intro_text = f"I have formulated an actionable implementation plan for: **{plan.goal}**.\nPlease review the steps below and click **Proceed** to begin execution."
@@ -1879,7 +2021,7 @@ class AgentRuntime:
                         task_state.terminal_status = "COMPLETED"
                         self._save_task_state(task_state)
                         if active_plan:
-                            active_plan.status = "completed"
+                            active_plan.mark_completed()
                             self.session_manager.set_active_plan(session_id, active_plan)
                         yield AgentEvent(event_type="done", content=succ_msg, metadata={"terminal_status": "COMPLETED"})
                         return
@@ -1916,6 +2058,67 @@ class AgentRuntime:
                 except Exception as g_exc:
                     logger.exception("Game creation execution error: %s", g_exc)
                     err_msg = f"Game creation pipeline crashed: {type(g_exc).__name__}: {g_exc}"
+                    task_state.terminal_status = "FAILED"
+                    task_state.terminal_reason = err_msg
+                    self._save_task_state(task_state)
+                    yield AgentEvent(event_type="error", content=err_msg)
+                    return
+
+            # Autonomous Game Modification Execution (when GDS exists and prompt is modify_game):
+            is_modify = (
+                (self._is_game_modification_request(user_prompt) and self._has_existing_gds(session))
+                or (active_plan and active_plan.implementation_method in ("gds_patch", "modify_game") and is_proceed_command)
+            )
+            if is_modify:
+                effective_mod_prompt = active_plan.goal if (active_plan and active_plan.goal and is_proceed_command) else user_prompt
+                target_pdir = (
+                    (ps and getattr(ps, "active_project_dir", None))
+                    or (session and getattr(session, "project_dir", None))
+                )
+                yield AgentEvent(
+                    event_type="status",
+                    content="RUNNING",
+                    metadata={"stage": "Modify", "message": "Applying GDS patch and running incremental Forge rebuild..."},
+                )
+                try:
+                    mod_outcome = await asyncio.to_thread(
+                        self.tool_gateway.game_tools.modify_game,
+                        prompt=effective_mod_prompt,
+                        project_dir=target_pdir,
+                        package=True,
+                        cancel_event=self._thread_cancel.get(session_id),
+                    )
+                    outcome = mod_outcome if isinstance(mod_outcome, dict) else {"status": "ERROR", "error": str(mod_outcome)}
+                    if outcome.get("status") == "SUCCESS" and outcome.get("ok", True):
+                        summary_str = outcome.get("summary") or "Applied requested game design changes."
+                        dirty_list = outcome.get("dirty_steps") or []
+                        succ_msg = (
+                            f"Game modification complete: {summary_str}\n\n"
+                            f"- **Project directory:** `{outcome.get('project_dir', self.workspace_root)}`\n"
+                            + (f"- **Rebuilt stages:** `{', '.join(dirty_list)}`\n" if dirty_list else "")
+                        )
+                        yield AgentEvent(event_type="token", content=succ_msg)
+                        self.session_manager.append_message(session_id, "assistant", succ_msg)
+                        task_state.terminal_status = "COMPLETED"
+                        self._save_task_state(task_state)
+                        if active_plan:
+                            active_plan.mark_completed()
+                            self.session_manager.set_active_plan(session_id, active_plan)
+                        yield AgentEvent(event_type="done", content=succ_msg, metadata={"terminal_status": "COMPLETED"})
+                        return
+                    else:
+                        err = outcome.get("error") or outcome.get("summary") or "Modification failed"
+                        fail_msg = f"Game modification did not complete: {err}"
+                        yield AgentEvent(event_type="token", content=fail_msg)
+                        self.session_manager.append_message(session_id, "assistant", fail_msg)
+                        task_state.terminal_status = "FAILED"
+                        task_state.terminal_reason = str(err)
+                        self._save_task_state(task_state)
+                        yield AgentEvent(event_type="done", content=fail_msg, metadata={"terminal_status": "FAILED"})
+                        return
+                except Exception as m_exc:
+                    logger.exception("Game modification execution error: %s", m_exc)
+                    err_msg = f"Game modification pipeline crashed: {type(m_exc).__name__}: {m_exc}"
                     task_state.terminal_status = "FAILED"
                     task_state.terminal_reason = err_msg
                     self._save_task_state(task_state)
@@ -1973,13 +2176,38 @@ class AgentRuntime:
             )
             return
 
+        effective_task_prompt = user_prompt
+        if is_proceed_command and active_plan is not None:
+            effective_task_prompt = active_plan.goal or user_prompt
+            steps_summary = "\n".join(
+                f"{idx}. {st.title}: {st.description}"
+                + (f" (files: {', '.join(st.target_files)})" if st.target_files else "")
+                + (f" [tools: {', '.join(st.tools)}]" if st.tools else "")
+                for idx, st in enumerate(active_plan.steps, start=1)
+            )
+            plan_exec_prompt = (
+                f"Execute the approved implementation plan now.\n"
+                f"Goal: {active_plan.goal}\n"
+                f"Approved Steps:\n{steps_summary}\n\n"
+                "Invoke the required tools (e.g. read_file, propose_edit, write_file, run_command) to implement and verify every step."
+            )
+            pinned_prompt = {"role": "user", "content": plan_exec_prompt}
+            if conversation_history and conversation_history[-1].get("role") == "user":
+                conversation_history[-1] = dict(pinned_prompt)
+            else:
+                conversation_history.append(dict(pinned_prompt))
+            if not acceptance_predicates:
+                predicates = self._propose_acceptance_predicates(effective_task_prompt)
+                task_state.acceptance = predicates
+                task_state.goal = effective_task_prompt
+
         iteration = 0
         _tool_call_counts: Dict[str, int] = {}
         _cached_observations: Dict[str, Any] = {}
         _modified_files: set[str] = set(_session_modified_files)
         _tool_history: List[Dict[str, Any]] = []
         _edit_proposed = False
-        _task_needs_edit = self._is_actionable_task(user_prompt, "")
+        _task_needs_edit = self._is_actionable_task(effective_task_prompt, "") or bool(is_proceed_command and active_plan and active_plan.steps)
         _unmet_predicates_nudged = False
         _self_correction_nudged = False
         _phantom_edit_nudged = False
@@ -2171,15 +2399,36 @@ class AgentRuntime:
                                  metadata={"terminal_status": "CANCELLED"})
                 return
 
-            # Multi-file heredocs and mkdir extraction: write all files and create directories
+            # Multi-file heredocs and mkdir extraction: write all files and create directories respecting permissions
             extracted_writes, created_dirs = self._extract_all_file_writes_and_mkdir(
                 full_response,
                 workspace_root=self.workspace_root,
                 already_modified=_modified_files,
             )
+            perm_mode_curr = getattr(session, "permissions_mode", None)
+            write_approved = not self.tool_gateway.tool_requires_approval(
+                "write_file",
+                {},
+                autonomy_profile=autonomy_profile,
+                permissions_mode=perm_mode_curr,
+            )
+            if write_approved and created_dirs:
+                for cdir in created_dirs:
+                    try:
+                        valid_dir = self.tool_gateway.boundary.validate_path(cdir, allow_write=True)
+                        valid_dir.mkdir(parents=True, exist_ok=True)
+                    except Exception as ex:
+                        logger.warning("Could not create directory '%s': %s", cdir, ex)
+
             for fpath, fcontent in extracted_writes:
                 try:
-                    res = self.tool_gateway.execute_tool("write_file", {"subpath": fpath, "content": fcontent})
+                    res = self.tool_gateway.execute_tool(
+                        "write_file",
+                        {"subpath": fpath, "content": fcontent},
+                        autonomy_profile=autonomy_profile,
+                        permissions_mode=perm_mode_curr,
+                        approval_granted=write_approved,
+                    )
                     if res.get("status") == "SUCCESS":
                         _modified_files.add(fpath)
                         _session_modified_files.add(fpath)
@@ -2200,9 +2449,9 @@ class AgentRuntime:
                     logger.warning("Failed writing intercepted file %s: %s", fpath, ex)
 
             # Check for tool call in response
-            tool_call = native_call or self._extract_tool_call(full_response, user_prompt=user_prompt, already_modified=_modified_files)
+            tool_call = native_call or self._extract_tool_call(full_response, user_prompt=effective_task_prompt, already_modified=_modified_files)
             if not tool_call:
-                task_actionable = self._is_actionable_task(user_prompt, full_response)
+                task_actionable = self._is_actionable_task(effective_task_prompt, full_response)
 
                 # Evaluate predicates over real observed state
                 all_satisfied, unmet = task_state.evaluate_acceptance(
@@ -2328,6 +2577,9 @@ class AgentRuntime:
                             )
                             task_state.terminal_status = "COMPLETED"
                             self._save_task_state(task_state)
+                            if active_plan:
+                                active_plan.mark_completed()
+                                self.session_manager.set_active_plan(session_id, active_plan)
                             self.session_manager.append_message(session_id, "assistant", full_response)
                             yield AgentEvent(
                                 event_type="done",
@@ -2364,6 +2616,9 @@ class AgentRuntime:
                 # Genuine completion verified against acceptance predicates
                 task_state.terminal_status = "COMPLETED"
                 self._save_task_state(task_state)
+                if active_plan:
+                    active_plan.mark_completed()
+                    self.session_manager.set_active_plan(session_id, active_plan)
                 self.session_manager.append_message(session_id, "assistant", full_response)
                 yield AgentEvent(
                     event_type="done",
@@ -2614,7 +2869,7 @@ class AgentRuntime:
                 if autonomy_profile in (AutonomyProfile.AUTO_EDIT, AutonomyProfile.AGENTIC):
                     # In Auto-Edit and Agentic modes, auto-apply the safe workspace edit with rollback tracking
                     apply_outcome = self.tool_gateway.execute_tool(
-                        "apply_edit", {"diff_id": diff_id}, approval_granted=True
+                        "apply_edit", {"diff_id": diff_id}, autonomy_profile=autonomy_profile
                     )
                     if apply_outcome.get("status") == "SUCCESS":
                         target_fp = tool_result.get("file_path") or ""
@@ -3107,6 +3362,18 @@ def _design_summary_md(gds: Any) -> str:
                 feats.append(f"{player.props['lives']} lives")
             if feats:
                 lines.append("- **Player:** " + ", ".join(feats))
+        arch = getattr(gds, "architecture", None)
+        if arch is not None:
+            sys_names = [s.system_id for s in getattr(arch, "custom_systems", []) if getattr(s, "system_id", None)]
+            if sys_names:
+                lines.append("- **Custom Systems:** " + ", ".join(sys_names[:8]))
+            res_names = [
+                f"{r.display_name or r.resource_id} ({int(r.initial_value)}/{int(r.max_value)})"
+                for r in getattr(arch, "custom_resources", [])
+                if getattr(r, "resource_id", None)
+            ]
+            if res_names:
+                lines.append("- **Resources:** " + ", ".join(res_names[:8]))
         return "\n".join(lines)
     except Exception:
         return ""

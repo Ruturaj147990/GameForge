@@ -101,6 +101,10 @@ float AGameForgeGameState::GetStat(FName StatName) const
 	{
 		return *Found;
 	}
+	if (const int32* FoundCounter = Counters.Find(StatName))
+	{
+		return static_cast<float>(*FoundCounter);
+	}
 
 	return 0.f;
 }
@@ -124,6 +128,10 @@ void AGameForgeGameState::SetStat(FName StatName, float Value)
 	if (!Existing || !FMath::IsNearlyEqual(*Existing, ClampedVal, 1e-4f))
 	{
 		Stats.Add(StatName, ClampedVal);
+		if (StatName.ToString().StartsWith(TEXT("game.counter.")))
+		{
+			Counters.Add(StatName, FMath::RoundToInt(ClampedVal));
+		}
 		OnStatChanged.Broadcast(StatName, ClampedVal);
 	}
 }
@@ -132,4 +140,25 @@ void AGameForgeGameState::AddStat(FName StatName, float Delta)
 {
 	float Current = GetStat(StatName);
 	SetStat(StatName, Current + Delta);
+}
+
+int32 AGameForgeGameState::IncrementCounter(FName CounterName, int32 Delta)
+{
+	const int32 Next = GetCounter(CounterName) + Delta;
+	Counters.Add(CounterName, Next);
+	SetStat(CounterName, static_cast<float>(Next));
+	return Next;
+}
+
+int32 AGameForgeGameState::GetCounter(FName CounterName) const
+{
+	if (const int32* Found = Counters.Find(CounterName))
+	{
+		return *Found;
+	}
+	if (const float* FoundStat = Stats.Find(CounterName))
+	{
+		return FMath::RoundToInt(*FoundStat);
+	}
+	return 0;
 }

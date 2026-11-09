@@ -20,6 +20,7 @@ public:
 		TFunction<float(FName Stat)> GetStat;
 		TFunction<int32(FName Event, FName Entity)> CountEvents;
 		TFunction<bool(FName Event, FName Entity)> HasEvent;
+		TFunction<bool(FName Event, const FString& Key, FString& OutValue, FName Entity)> GetEventField;
 		float ElapsedSeconds = 0.f;
 	};
 
@@ -68,6 +69,7 @@ public:
 private:
 	void ApplyEffect(const TSharedPtr<FJsonObject>& Effect, const FGameForgeEvent& TriggerEvent);
 	void SpawnEntity(const FString& EntityId, int32 Count);
+	void SyncPlayerStatToAttributes(const FString& StatName, float NewVal) const;
 
 	TSharedPtr<FJsonObject> Def;
 	UPROPERTY()

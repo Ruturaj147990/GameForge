@@ -8,6 +8,7 @@ from .epic_packs import (
 from .themes import (
     THEMES,
     SurfaceRoleConfig,
+    get_theme,
     relative_luminance,
     wcag_contrast_ratio,
     validate_and_adjust_palette,
@@ -22,6 +23,7 @@ from .procedural_props import (
     _cone,
     compute_bounds,
     verify_recipe_watertight,
+    expand_prop_to_ops,
 )
 from .library import (
     ContentLibrary,
@@ -32,6 +34,7 @@ from .library import (
 )
 from .audio import (
     AudioService,
+    sfx_unreal_asset_path,
     verify_audio_loop,
     resample_audio,
     crossfade_loop,
@@ -66,6 +69,7 @@ __all__ = [
     "update_default_game_ini_cook_dirs",
     "THEMES",
     "SurfaceRoleConfig",
+    "get_theme",
     "relative_luminance",
     "wcag_contrast_ratio",
     "validate_and_adjust_palette",
@@ -78,12 +82,14 @@ __all__ = [
     "_cone",
     "compute_bounds",
     "verify_recipe_watertight",
+    "expand_prop_to_ops",
     "ContentLibrary",
     "LicenceDecl",
     "infer_role_from_name",
     "infer_asset_type_from_path",
     "VALID_LICENCE_CLASSES",
     "AudioService",
+    "sfx_unreal_asset_path",
     "verify_audio_loop",
     "resample_audio",
     "crossfade_loop",

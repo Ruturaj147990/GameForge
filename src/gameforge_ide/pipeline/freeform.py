@@ -192,9 +192,10 @@ class FreeformGamePipeline:
                 return FFStage("design", True, data={"design": ctx["design"]})
             text = author.complete(SYSTEM, [{"role": "user", "content": (
                 f"Game request: {prompt}\n\nThe game will be built with this framework:\n{api_doc(name)}\n"
-                "Write a short design (max 180 words): core rules, controls (mouse clicks and/or keys), "
-                "scene layout using basic shapes, score/win/lose conditions, and exactly what RunSelfTest will "
-                "check. Keep the scope small enough to implement in about 200 lines of C++.")}], "design", 1024)
+                "Write a structured game design (max 250 words): core mechanics and state machine, controls "
+                "(mouse clicks and/or keyboard input), visual scene layout using SpawnShape/SpawnProp/SpawnText, "
+                "camera perspective (GetCameraFocus/Distance/Pitch/Yaw), primary and secondary HUD readouts, "
+                "score/win/lose conditions, and the exact assertions RunSelfTest will verify.")}], "design", 1024)
             ctx["design"] = text.strip()
             return FFStage("design", bool(ctx["design"]), data={"design": ctx["design"][:2000]})
 

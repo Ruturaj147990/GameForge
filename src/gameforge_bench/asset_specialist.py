@@ -108,7 +108,27 @@ class AssetSpecialistJob:
     validation_errors: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serializes the job in strict compliance with schemas/asset_specialist_contract.json."""
+        result_dict: Optional[Dict[str, Any]] = None
+        if self.result is not None:
+            raw_metrics = dict(self.result.metrics or {})
+            normalized_metrics = {
+                "triangle_count": int(raw_metrics.get("triangle_count", raw_metrics.get("vertex_count", 0))),
+                "max_dimension": int(raw_metrics.get("max_dimension", raw_metrics.get("bounds_width", 0))),
+                "bone_count": int(raw_metrics.get("bone_count", raw_metrics.get("max_bone_influences", 0))),
+                "resolution": str(raw_metrics.get("resolution", f"{raw_metrics.get('max_dimension', 0)}x{raw_metrics.get('max_dimension', 0)}")),
+            }
+            normalized_metrics.update(raw_metrics)
+            result_dict = {
+                "artifact_path": self.result.artifact_path,
+                "artifact_sha256": self.result.artifact_sha256,
+                "metrics": normalized_metrics,
+                "error_message": self.result.error_message,
+            }
+
         return {
+            "schema_version": "1.0.0",
+            "task_id": self.request.task_id,
             "job_id": self.job_id,
             "modality": self.modality.value,
             "provider": asdict(self.provider),
@@ -119,12 +139,21 @@ class AssetSpecialistJob:
                 "target_format": self.request.target_format,
                 "destination_path": self.request.destination_path,
                 "constraints": asdict(self.request.constraints),
-                "provenance": asdict(self.request.provenance) if self.request.provenance else None,
+                "provenance": asdict(self.request.provenance) if self.request.provenance else {
+                    "license_id": "UNSPECIFIED",
+                    "rights_holder": "UNSPECIFIED",
+                    "rights_cleared": False,
+                    "evidence_reference": "",
+                },
             },
             "status": self.status.value,
             "engine_integration_status": self.engine_integration_status.value,
-            "result": asdict(self.result) if self.result else None,
-            "validation_errors": self.validation_errors,
+            "result": result_dict,
+            "validation": {
+                "is_valid": self.status == SpecialistStatus.VALIDATED and len(self.validation_errors) == 0,
+                "errors": list(self.validation_errors),
+            },
+            "validation_errors": list(self.validation_errors),
         }
 
 
@@ -294,7 +323,6 @@ class AssetSpecialistRouter:
             job.validation_errors.append(
                 f"Asset provenance evidence_reference '{ev_ref}' does not match canonical project provenance conventions."
             )
-            return False
             return False
 
         # 8. Modality-specific and configured metrics validation

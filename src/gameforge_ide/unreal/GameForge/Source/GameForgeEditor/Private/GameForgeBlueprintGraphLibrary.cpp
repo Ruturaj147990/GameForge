@@ -128,6 +128,7 @@ UEdGraph* UGameForgeBlueprintGraphLibrary::ResolveGraph(UBlueprint* BP, const FS
 	{
 		UEdGraph* EventGraph = FBlueprintEditorUtils::FindEventGraph(BP);
 		if (EventGraph) return EventGraph;
+		if (BP->UbergraphPages.Num() > 0) return BP->UbergraphPages[0];
 	}
 
 	OutError = FString::Printf(TEXT("Graph '%s' not found in Blueprint '%s'"), *TargetName, *BP->GetName());
@@ -492,7 +493,7 @@ FString UGameForgeBlueprintGraphLibrary::CreateNode(const FString& BlueprintPath
 			NewNode = EventNode;
 		}
 	}
-	else if (NodeType.Equals(TEXT("VariableGet"), ESearchCase::IgnoreCase))
+	else if (NodeType.Equals(TEXT("VariableGet"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("K2Node_VariableGet"), ESearchCase::IgnoreCase))
 	{
 		FString VarName = ExtraParams->GetStringField(TEXT("variable_name"));
 		UK2Node_VariableGet* GetNode = NewObject<UK2Node_VariableGet>(Graph);
@@ -505,10 +506,27 @@ FString UGameForgeBlueprintGraphLibrary::CreateNode(const FString& BlueprintPath
 		Graph->AddNode(GetNode, true, true);
 		NewNode = GetNode;
 	}
+	else if (NodeType.Equals(TEXT("VariableSet"), ESearchCase::IgnoreCase) || NodeType.Equals(TEXT("K2Node_VariableSet"), ESearchCase::IgnoreCase))
+	{
+		FString VarName = ExtraParams->GetStringField(TEXT("variable_name"));
+		if (VarName.IsEmpty())
+		{
+			return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_create_node"), nullptr, {TEXT("ExtraParams 'variable_name' is required for VariableSet node")});
+		}
+		UK2Node_VariableSet* SetNode = NewObject<UK2Node_VariableSet>(Graph);
+		SetNode->VariableReference.SetSelfMember(FName(*VarName));
+		SetNode->NodePosX = PosX;
+		SetNode->NodePosY = PosY;
+		SetNode->CreateNewGuid();
+		SetNode->PostPlacedNewNode();
+		SetNode->AllocateDefaultPins();
+		Graph->AddNode(SetNode, true, true);
+		NewNode = SetNode;
+	}
 	else
 	{
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_create_node"), nullptr,
-			{FString::Printf(TEXT("Unsupported node type: %s. Supported: CallFunction, Event, VariableGet"), *NodeType)});
+			{FString::Printf(TEXT("Unsupported node type: %s. Supported: CallFunction, Event, VariableGet, VariableSet"), *NodeType)});
 	}
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(BP);
@@ -539,7 +557,7 @@ FString UGameForgeBlueprintGraphLibrary::CreateNode(const FString& BlueprintPath
 }
 
 // 4. blueprint_set_pin_default
-FString UGameForgeBlueprintGraphLibrary::SetPinDefault(const FString& BlueprintPath, const FString& NodeId, const FString& PinName, const FString& DefaultValue)
+FString UGameForgeBlueprintGraphLibrary::SetPinDefault(const FString& BlueprintPath, const FString& NodeId, const FString& PinName, const FString& DefaultValue, const FString& GraphName)
 {
 	FString Err;
 	UBlueprint* BP = ResolveBlueprint(BlueprintPath, Err);
@@ -548,11 +566,10 @@ FString UGameForgeBlueprintGraphLibrary::SetPinDefault(const FString& BlueprintP
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_set_pin_default"), nullptr, {Err});
 	}
 
-	UEdGraph* Graph = FBlueprintEditorUtils::FindEventGraph(BP);
-	if (!Graph && BP->UbergraphPages.Num() > 0) Graph = BP->UbergraphPages[0];
+	UEdGraph* Graph = ResolveGraph(BP, GraphName, Err);
 	if (!Graph)
 	{
-		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_set_pin_default"), nullptr, {TEXT("No graph found in Blueprint")});
+		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_set_pin_default"), nullptr, {Err});
 	}
 
 	UEdGraphNode* Node = ResolveNode(Graph, NodeId, Err);
@@ -592,6 +609,7 @@ FString UGameForgeBlueprintGraphLibrary::SetPinDefault(const FString& BlueprintP
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("blueprint_path"), BlueprintPath);
+	Data->SetStringField(TEXT("graph_name"), Graph->GetName());
 	Data->SetStringField(TEXT("node_id"), Node->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens));
 	Data->SetStringField(TEXT("pin_name"), Pin->PinName.ToString());
 	Data->SetStringField(TEXT("requested_value"), DefaultValue);
@@ -603,7 +621,7 @@ FString UGameForgeBlueprintGraphLibrary::SetPinDefault(const FString& BlueprintP
 }
 
 // 5. blueprint_connect_pins
-FString UGameForgeBlueprintGraphLibrary::ConnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId, const FString& ToPinName)
+FString UGameForgeBlueprintGraphLibrary::ConnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId, const FString& ToPinName, const FString& GraphName)
 {
 	FString Err;
 	UBlueprint* BP = ResolveBlueprint(BlueprintPath, Err);
@@ -612,11 +630,10 @@ FString UGameForgeBlueprintGraphLibrary::ConnectPins(const FString& BlueprintPat
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_connect_pins"), nullptr, {Err});
 	}
 
-	UEdGraph* Graph = FBlueprintEditorUtils::FindEventGraph(BP);
-	if (!Graph && BP->UbergraphPages.Num() > 0) Graph = BP->UbergraphPages[0];
+	UEdGraph* Graph = ResolveGraph(BP, GraphName, Err);
 	if (!Graph)
 	{
-		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_connect_pins"), nullptr, {TEXT("No graph found in Blueprint")});
+		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_connect_pins"), nullptr, {Err});
 	}
 
 	UEdGraphNode* FromNode = ResolveNode(Graph, FromNodeId, Err);
@@ -679,6 +696,7 @@ FString UGameForgeBlueprintGraphLibrary::ConnectPins(const FString& BlueprintPat
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("blueprint_path"), BlueprintPath);
+	Data->SetStringField(TEXT("graph_name"), Graph->GetName());
 	Data->SetStringField(TEXT("from_node"), FromNode->GetName());
 	Data->SetStringField(TEXT("from_pin"), FromPin->PinName.ToString());
 	Data->SetStringField(TEXT("to_node"), ToNode->GetName());
@@ -690,7 +708,7 @@ FString UGameForgeBlueprintGraphLibrary::ConnectPins(const FString& BlueprintPat
 }
 
 // 6. blueprint_disconnect_pins
-FString UGameForgeBlueprintGraphLibrary::DisconnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId, const FString& ToPinName)
+FString UGameForgeBlueprintGraphLibrary::DisconnectPins(const FString& BlueprintPath, const FString& FromNodeId, const FString& FromPinName, const FString& ToNodeId, const FString& ToPinName, const FString& GraphName)
 {
 	FString Err;
 	UBlueprint* BP = ResolveBlueprint(BlueprintPath, Err);
@@ -699,11 +717,10 @@ FString UGameForgeBlueprintGraphLibrary::DisconnectPins(const FString& Blueprint
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_disconnect_pins"), nullptr, {Err});
 	}
 
-	UEdGraph* Graph = FBlueprintEditorUtils::FindEventGraph(BP);
-	if (!Graph && BP->UbergraphPages.Num() > 0) Graph = BP->UbergraphPages[0];
+	UEdGraph* Graph = ResolveGraph(BP, GraphName, Err);
 	if (!Graph)
 	{
-		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_disconnect_pins"), nullptr, {TEXT("No graph found in Blueprint")});
+		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_disconnect_pins"), nullptr, {Err});
 	}
 
 	UEdGraphNode* FromNode = ResolveNode(Graph, FromNodeId, Err);
@@ -750,6 +767,7 @@ FString UGameForgeBlueprintGraphLibrary::DisconnectPins(const FString& Blueprint
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("blueprint_path"), BlueprintPath);
+	Data->SetStringField(TEXT("graph_name"), Graph->GetName());
 	Data->SetStringField(TEXT("node"), FromNode->GetName());
 	Data->SetStringField(TEXT("pin"), FromPin->PinName.ToString());
 	Data->SetNumberField(TEXT("remaining_links"), FromPin->LinkedTo.Num());
@@ -758,7 +776,7 @@ FString UGameForgeBlueprintGraphLibrary::DisconnectPins(const FString& Blueprint
 }
 
 // 7. blueprint_delete_node
-FString UGameForgeBlueprintGraphLibrary::DeleteNode(const FString& BlueprintPath, const FString& NodeId)
+FString UGameForgeBlueprintGraphLibrary::DeleteNode(const FString& BlueprintPath, const FString& NodeId, const FString& GraphName)
 {
 	FString Err;
 	UBlueprint* BP = ResolveBlueprint(BlueprintPath, Err);
@@ -767,11 +785,10 @@ FString UGameForgeBlueprintGraphLibrary::DeleteNode(const FString& BlueprintPath
 		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_delete_node"), nullptr, {Err});
 	}
 
-	UEdGraph* Graph = FBlueprintEditorUtils::FindEventGraph(BP);
-	if (!Graph && BP->UbergraphPages.Num() > 0) Graph = BP->UbergraphPages[0];
+	UEdGraph* Graph = ResolveGraph(BP, GraphName, Err);
 	if (!Graph)
 	{
-		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_delete_node"), nullptr, {TEXT("No graph found in Blueprint")});
+		return GameForgeJsonHelpers::MakeEnvelope(false, TEXT("blueprint_delete_node"), nullptr, {Err});
 	}
 
 	UEdGraphNode* Node = ResolveNode(Graph, NodeId, Err);
@@ -792,6 +809,7 @@ FString UGameForgeBlueprintGraphLibrary::DeleteNode(const FString& BlueprintPath
 
 	TSharedPtr<FJsonObject> Data = MakeShared<FJsonObject>();
 	Data->SetStringField(TEXT("blueprint_path"), BlueprintPath);
+	Data->SetStringField(TEXT("graph_name"), Graph->GetName());
 	Data->SetStringField(TEXT("deleted_node_id"), NodeId);
 	Data->SetStringField(TEXT("deleted_node_name"), NodeName);
 	Data->SetStringField(TEXT("deleted_node_title"), NodeTitle);

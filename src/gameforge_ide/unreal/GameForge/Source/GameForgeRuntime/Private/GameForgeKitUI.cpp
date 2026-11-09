@@ -3,10 +3,12 @@
 #include "GameForgeGameDefinition.h"
 #include "GameForgeGameState.h"
 #include "GameForgeEventNames.h"
+#include "GameForgeObjectives.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "TimerManager.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
@@ -97,8 +99,15 @@ void UGameForgeHUDWidget::BuildRows(UCanvasPanel* Root)
 	RowBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RowBox"));
 	Place(RowBox, FAnchors(0.f, 0.f, 0.f, 0.f), FVector2D(0.f, 0.f), FVector2D(24.f, 24.f));
 
+	QuestTrackerText = MakeText(TEXT("QuestTrackerText"), 18, FLinearColor(0.75f, 0.95f, 0.8f));
+	QuestTrackerText->SetJustification(ETextJustify::Right);
+	Place(QuestTrackerText, FAnchors(1.f, 0.f, 1.f, 0.f), FVector2D(1.f, 0.f), FVector2D(-24.f, 24.f));
+
 	MessageText = MakeText(TEXT("MessageText"), 28, FLinearColor(1.f, 0.95f, 0.7f));
 	Place(MessageText, FAnchors(0.5f, 0.22f, 0.5f, 0.22f), FVector2D(0.5f, 0.5f));
+
+	DialogueText = MakeText(TEXT("DialogueText"), 22, FLinearColor(0.95f, 0.95f, 1.f));
+	Place(DialogueText, FAnchors(0.5f, 0.82f, 0.5f, 0.82f), FVector2D(0.5f, 0.5f));
 
 	TitleCardText = MakeText(TEXT("TitleCard"), 54, FLinearColor::White);
 	Place(TitleCardText, FAnchors(0.5f, 0.36f, 0.5f, 0.36f), FVector2D(0.5f, 0.5f));
@@ -183,8 +192,29 @@ void UGameForgeHUDWidget::BuildRows(UCanvasPanel* Root)
 
 				Row.BarWidget = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass());
 				Row.BarWidget->SetPercent(1.0f);
-				Row.BarWidget->SetFillColorAndOpacity(Row.StatName == FName(TEXT("player.health"))
-					? FLinearColor(0.2f, 0.85f, 0.3f) : FLinearColor(0.3f, 0.6f, 1.f));
+				FLinearColor BarColor(0.3f, 0.6f, 1.f);
+				const FString StatLower = StatStr.ToLower();
+				if (StatLower.Contains(TEXT("health")))
+				{
+					BarColor = FLinearColor(0.2f, 0.85f, 0.3f);
+				}
+				else if (StatLower.Contains(TEXT("mana")) || StatLower.Contains(TEXT("magic")))
+				{
+					BarColor = FLinearColor(0.55f, 0.35f, 0.95f);
+				}
+				else if (StatLower.Contains(TEXT("oxygen")) || StatLower.Contains(TEXT("shield")))
+				{
+					BarColor = FLinearColor(0.15f, 0.85f, 0.95f);
+				}
+				else if (StatLower.Contains(TEXT("energy")) || StatLower.Contains(TEXT("fuel")) || StatLower.Contains(TEXT("combo")))
+				{
+					BarColor = FLinearColor(0.95f, 0.75f, 0.15f);
+				}
+				else if (StatLower.Contains(TEXT("heat")) || StatLower.Contains(TEXT("rage")))
+				{
+					BarColor = FLinearColor(0.95f, 0.35f, 0.15f);
+				}
+				Row.BarWidget->SetFillColorAndOpacity(BarColor);
 				if (UVerticalBoxSlot* BarSlot = RowBox->AddChildToVerticalBox(Row.BarWidget))
 				{
 					BarSlot->SetPadding(FMargin(0.f, 2.f, 0.f, 8.f));
@@ -248,6 +278,7 @@ void UGameForgeHUDWidget::NativeDestruct()
 		W->GetTimerManager().ClearTimer(TimerRefreshHandle);
 		W->GetTimerManager().ClearTimer(MessageFadeHandle);
 		W->GetTimerManager().ClearTimer(TitleCardHandle);
+		W->GetTimerManager().ClearTimer(DialogueFadeHandle);
 		if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(W))
 		{
 			Bus->OnEvent.Remove(BusHandle);
@@ -256,8 +287,40 @@ void UGameForgeHUDWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+void UGameForgeHUDWidget::RefreshObjectives()
+{
+	if (!QuestTrackerText)
+	{
+		return;
+	}
+	UGameForgeObjectiveSubsystem* ObjSub = UGameForgeObjectiveSubsystem::GetForWorld(this);
+	if (!ObjSub || ObjSub->GetObjectives().Num() == 0)
+	{
+		QuestTrackerText->SetText(FText::GetEmpty());
+		return;
+	}
+
+	TArray<FString> Lines;
+	for (const FGameForgeObjective& O : ObjSub->GetObjectives())
+	{
+		if (O.State == EGameForgeObjectiveState::Active)
+		{
+			Lines.Add(FString::Printf(TEXT("[Quest] %s (%d/%d)"),
+				O.Title.IsEmpty() ? *O.Id.ToString() : *O.Title, O.Progress, O.Target));
+		}
+		else if (O.State == EGameForgeObjectiveState::Completed)
+		{
+			Lines.Add(FString::Printf(TEXT("[Done] %s (%d/%d)"),
+				O.Title.IsEmpty() ? *O.Id.ToString() : *O.Title, O.Progress, O.Target));
+		}
+	}
+	QuestTrackerText->SetText(FText::FromString(FString::Join(Lines, TEXT("\n"))));
+}
+
 void UGameForgeHUDWidget::RefreshRows()
 {
+	RefreshObjectives();
+
 	UWorld* W = GetWorld();
 	AGameForgeGameState* GS = W ? W->GetGameState<AGameForgeGameState>() : nullptr;
 	if (!GS)
@@ -329,6 +392,45 @@ void UGameForgeHUDWidget::HandleBusEvent(const FGameForgeEvent& Event)
 			}
 		}
 		return;
+	}
+	if (Event.Name == GFEvent::DialogueLine)
+	{
+		TSharedPtr<FJsonObject> Payload;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Event.DataJson);
+		if (FJsonSerializer::Deserialize(Reader, Payload) && Payload.IsValid())
+		{
+			FString Line, Speaker;
+			Payload->TryGetStringField(TEXT("line"), Line);
+			Payload->TryGetStringField(TEXT("speaker"), Speaker);
+			if (!Line.IsEmpty() && !bEndShown)
+			{
+				const FString Formatted = Speaker.IsEmpty() ? Line : FString::Printf(TEXT("%s: \"%s\""), *Speaker, *Line);
+				if (DialogueText)
+				{
+					DialogueText->SetText(FText::FromString(Formatted));
+					if (UWorld* W = GetWorld())
+					{
+						TWeakObjectPtr<UGameForgeHUDWidget> WeakThis(this);
+						W->GetTimerManager().SetTimer(DialogueFadeHandle, [WeakThis]()
+						{
+							if (UGameForgeHUDWidget* Self = WeakThis.Get())
+							{
+								if (Self->DialogueText)
+								{
+									Self->DialogueText->SetText(FText::GetEmpty());
+								}
+							}
+						}, 4.5f, false);
+					}
+				}
+			}
+		}
+		RefreshObjectives();
+		return;
+	}
+	if (Event.Name == GFEvent::ObjectiveStarted || Event.Name == GFEvent::ObjectiveUpdated || Event.Name == GFEvent::ObjectiveCompleted)
+	{
+		RefreshObjectives();
 	}
 	if (Event.Name == GFEvent::GameWon || Event.Name == GFEvent::GameLost)
 	{
@@ -471,6 +573,11 @@ void UGameForgeMenuWidget::ShowPauseMenu()
 	if (TitleText) TitleText->SetText(FText::FromString(TEXT("Paused")));
 }
 
+void UGameForgeMenuWidget::ShowGameOver(bool bWon, const FString& Reason, float Score)
+{
+	ShowEndScreen(bWon, Reason, Score);
+}
+
 void UGameForgeMenuWidget::ShowEndScreen(bool bWon, const FString& Reason, float Score)
 {
 	if (TitleText)
@@ -531,12 +638,19 @@ void UGameForgeFeedbackSubsystem::HandleEvent(const FGameForgeEvent& Event)
 				UWorld* W = GetWorld();
 				if (!W) continue;
 
-				FVector Location = FVector::ZeroVector;
-				if (APlayerController* PC = UGameplayStatics::GetPlayerController(W, 0))
+				APlayerController* PC = UGameplayStatics::GetPlayerController(W, 0);
+				FVector Location = (PC && PC->GetPawn()) ? PC->GetPawn()->GetActorLocation() : FVector::ZeroVector;
+
+				// Prefer Event.Source actor location so enemy death explosions / pickup FX spawn at the event origin
+				if (!Event.Source.IsEmpty())
 				{
-					if (PC->GetPawn())
+					for (TActorIterator<AActor> It(W); It; ++It)
 					{
-						Location = PC->GetPawn()->GetActorLocation();
+						if (IsValid(*It) && It->GetName().Equals(Event.Source, ESearchCase::IgnoreCase))
+						{
+							Location = It->GetActorLocation();
+							break;
+						}
 					}
 				}
 
@@ -557,6 +671,23 @@ void UGameForgeFeedbackSubsystem::HandleEvent(const FGameForgeEvent& Event)
 					if (USoundBase* SB = LoadObject<USoundBase>(nullptr, *SfxPath))
 					{
 						UGameplayStatics::PlaySoundAtLocation(W, SB, Location);
+					}
+				}
+
+				// Camera Shake
+				if (PC)
+				{
+					double ShakeNum = 0.0;
+					FString ShakeStr;
+					if (FObj->TryGetNumberField(TEXT("shake"), ShakeNum) && ShakeNum > 0.0)
+					{
+						PC->ClientStartCameraShake(UGameForgeCameraShake::StaticClass(), static_cast<float>(ShakeNum));
+					}
+					else if (FObj->TryGetStringField(TEXT("shake"), ShakeStr) && !ShakeStr.IsEmpty())
+					{
+						const float Scale = ShakeStr.Equals(TEXT("heavy"), ESearchCase::IgnoreCase) ? 1.5f
+							: ShakeStr.Equals(TEXT("light"), ESearchCase::IgnoreCase) ? 0.5f : 1.0f;
+						PC->ClientStartCameraShake(UGameForgeCameraShake::StaticClass(), Scale);
 					}
 				}
 			}
@@ -590,8 +721,17 @@ void UGameForgeSaveSubsystem::HandleEvent(const FGameForgeEvent& Event)
 void UGameForgeSaveSubsystem::SaveGame()
 {
 	bool bOk = false;
-	if (USaveGame* SaveObj = UGameplayStatics::CreateSaveGameObject(USaveGame::StaticClass()))
+	if (UGameForgeRuntimeSaveGame* SaveObj = Cast<UGameForgeRuntimeSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UGameForgeRuntimeSaveGame::StaticClass())))
 	{
+		if (UWorld* W = GetWorld())
+		{
+			if (const AGameForgeGameState* GS = W->GetGameState<AGameForgeGameState>())
+			{
+				SaveObj->SavedStats = GS->GetAllStats();
+				SaveObj->SavedCounters = GS->GetAllCounters();
+			}
+		}
 		bOk = UGameplayStatics::SaveGameToSlot(SaveObj, SaveSlotName, 0);
 	}
 	if (bOk)
@@ -610,6 +750,23 @@ void UGameForgeSaveSubsystem::LoadGame()
 	{
 		USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(SaveSlotName, 0);
 		bOk = (Loaded != nullptr);
+		if (const UGameForgeRuntimeSaveGame* GFSave = Cast<UGameForgeRuntimeSaveGame>(Loaded))
+		{
+			if (UWorld* W = GetWorld())
+			{
+				if (AGameForgeGameState* GS = W->GetGameState<AGameForgeGameState>())
+				{
+					for (const auto& Pair : GFSave->SavedStats)
+					{
+						GS->SetStat(Pair.Key, Pair.Value);
+					}
+					for (const auto& Pair : GFSave->SavedCounters)
+					{
+						GS->SetStat(Pair.Key, static_cast<float>(Pair.Value));
+					}
+				}
+			}
+		}
 	}
 	if (bOk)
 	{

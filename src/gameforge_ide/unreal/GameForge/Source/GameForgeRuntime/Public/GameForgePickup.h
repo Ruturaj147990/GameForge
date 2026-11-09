@@ -14,6 +14,16 @@ class USoundBase;
 class USphereComponent;
 class UStaticMeshComponent;
 
+UENUM(BlueprintType)
+enum class EGameForgePickupEffect : uint8
+{
+	AddScore UMETA(DisplayName = "Add Score"),
+	Heal UMETA(DisplayName = "Heal"),
+	GrantItem UMETA(DisplayName = "Grant Item"),
+	SpeedBoost UMETA(DisplayName = "Speed Boost"),
+	CustomEvent UMETA(DisplayName = "Custom Event")
+};
+
 /**
  * Gameplay kit pickup: when a player-controlled pawn overlaps it, it is collected once and plays its feedback
  * at its location: a Niagara effect (tagged "GF_VFX:<VFXLabel>" so tools can read live particle counts) and a
@@ -56,9 +66,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	FName EntityId;
 
-	/** Points carried by the pickup (reported in the event payload; score rules read it). The kit module's
-	 *  property map always targeted Value / bRespawns / RespawnSeconds, but the class had none of them, so every
-	 *  set_actor_property for them was silently skipped. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	EGameForgePickupEffect Effect = EGameForgePickupEffect::AddScore;
+
+	/** String fallback for Effect when configured from JSON or string property overrides. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	FString EffectName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	FName ItemId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
+	FName CustomEvent;
+
+	/** Points/amount carried by the pickup (reported in the event payload; score/heal rules read it). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
 	int32 Value = 1;
 
@@ -67,6 +88,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup")
 	float RespawnSeconds = 10.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup|Visual")
+	FString VisualStyle = TEXT("coin");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup|Visual")
 	FLinearColor PickupColor = FLinearColor(1.f, 0.78f, 0.1f, 1.f);
@@ -99,6 +123,7 @@ public:
 	FOnCollected OnCollected;
 
 protected:
+	void SyncEffectFromName();
 	void Respawn();
 	FVector BaseVisualLocation = FVector::ZeroVector;
 	float Age = 0.f;

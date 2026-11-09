@@ -31,7 +31,9 @@ class _OllamaProbe(QRunnable):
     def run(self) -> None:
         out: Dict = {"online": False, "models": []}
         try:
-            with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=1) as r:
+            from ...core.settings import get_settings
+            url = get_settings().ollama_url.rstrip("/") + "/api/ps"
+            with urllib.request.urlopen(url, timeout=1) as r:
                 data = json.loads(r.read().decode("utf-8"))
             out = {"online": True, "models": [{"name": m.get("name"), "vram_mb": round((m.get("size_vram") or 0) / 2**20)}
                                               for m in data.get("models", [])]}
@@ -315,4 +317,5 @@ class MissionPanel(QWidget):
             return
         path = g["report"] if what == "report" else g["dir"]
         if Path(path).exists():
-            os.startfile(path)  # noqa: S606 - opens a GameForge-created file or folder
+            from ...core.projects import open_folder_in_file_manager
+            open_folder_in_file_manager(Path(path))

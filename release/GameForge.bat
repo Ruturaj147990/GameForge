@@ -8,7 +8,10 @@ pushd "%SCRIPT_DIR%.."
 set "REPO_ROOT=%CD%"
 popd
 
-if exist "%SCRIPT_DIR%app\src\gameforge_ide\launcher.py" (
+if exist "%SCRIPT_DIR%src\gameforge_ide\launcher.py" (
+    set "LAUNCH_DIR=%SCRIPT_DIR%"
+    set "PYTHONPATH=%SCRIPT_DIR%;%PYTHONPATH%"
+) else if exist "%SCRIPT_DIR%app\src\gameforge_ide\launcher.py" (
     set "LAUNCH_DIR=%SCRIPT_DIR%"
     set "PYTHONPATH=%SCRIPT_DIR%app;%PYTHONPATH%"
 ) else if exist "%REPO_ROOT%\src\gameforge_ide\launcher.py" (
@@ -16,6 +19,7 @@ if exist "%SCRIPT_DIR%app\src\gameforge_ide\launcher.py" (
     set "PYTHONPATH=%REPO_ROOT%;%PYTHONPATH%"
 ) else (
     set "LAUNCH_DIR=%SCRIPT_DIR%"
+    set "PYTHONPATH=%SCRIPT_DIR%;%PYTHONPATH%"
 )
 
 cd /d "%LAUNCH_DIR%"

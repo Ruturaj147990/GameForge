@@ -15,10 +15,11 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.qa.manifest import LevelManifest, ManifestActor
 from src.gameforge_ide.qa.runner import run_packaged
@@ -42,7 +43,7 @@ from src.gameforge_ide.unreal.live_editor import LiveEditorLink
 from src.gameforge_ide.unreal.toolchain import UnrealToolchain
 
 NAME = "GFKitTest"
-ROOT = Path(r"E:\GameForge\validation\P3_kittest_20261031")
+ROOT = (get_settings().require_dev("validation_root") / r"P3_kittest_20261031")
 MAP_PATH = "/Game/Maps/KitTestMap"
 REPORT_PATH = REPO_ROOT / "reports" / "P5" / "kit_scenarios_final.json"
 

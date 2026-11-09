@@ -9,6 +9,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/Button.h"
 #include "Camera/CameraShakeBase.h"
+#include "GameFramework/SaveGame.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "GameForgeEvents.h"
@@ -16,6 +17,22 @@
 #include "GameForgeKitUI.generated.h"
 
 class AGameForgeGameState;
+
+/**
+ * SaveGame object serializing AGameForgeGameState stats and counters (WI-5.11).
+ */
+UCLASS()
+class GAMEFORGERUNTIME_API UGameForgeRuntimeSaveGame : public USaveGame
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(SaveGame)
+	TMap<FName, float> SavedStats;
+
+	UPROPERTY(SaveGame)
+	TMap<FName, int32> SavedCounters;
+};
 
 /**
  * Native HUD widget created dynamically from gfdef/1 hud specification (WI-5.10).
@@ -40,6 +57,7 @@ private:
 	/** Re-reads every bound stat (derived stats such as entity.<id>.collected never broadcast OnStatChanged, so
 	 *  pickup counters used to stay at "--" for the whole game). */
 	void RefreshRows();
+	void RefreshObjectives();
 	void HandleBusEvent(const FGameForgeEvent& Event);
 	void ShowEndScreen(bool bWon);
 	UTextBlock* MakeText(const FName& Name, int32 Size, const FLinearColor& Color);
@@ -49,6 +67,12 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> MessageText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> QuestTrackerText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> DialogueText;
 
 	/** Game title + objective shown for a few seconds at start. */
 	UPROPERTY()
@@ -73,6 +97,7 @@ private:
 	TSharedPtr<FJsonObject> Def;
 	FDelegateHandle BusHandle;
 	FTimerHandle TitleCardHandle;
+	FTimerHandle DialogueFadeHandle;
 	bool bEndShown = false;
 
 	struct FHudRow
@@ -104,6 +129,7 @@ public:
 
 	void ShowMainMenu();
 	void ShowPauseMenu();
+	void ShowGameOver(bool bWon, const FString& Reason, float Score = 0.f);
 	void ShowEndScreen(bool bWon, const FString& Reason, float Score = 0.f);
 
 	/** Automation helper so scenarios bypass the main menu. */

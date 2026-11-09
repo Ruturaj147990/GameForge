@@ -10,7 +10,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import psutil
+
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -123,15 +127,18 @@ def safe_subprocess_run(
             return_code = proc.returncode
         except subprocess.TimeoutExpired:
             timed_out = True
-            # Safely terminate child processes using psutil
+            # Safely terminate child processes using psutil if available
             try:
-                parent = psutil.Process(proc.pid)
-                for child in parent.children(recursive=True):
-                    try:
-                        child.kill()
-                    except psutil.NoSuchProcess:
-                        pass
-                parent.kill()
+                if psutil is not None:
+                    parent = psutil.Process(proc.pid)
+                    for child in parent.children(recursive=True):
+                        try:
+                            child.kill()
+                        except Exception:
+                            pass
+                    parent.kill()
+                else:
+                    proc.kill()
             except Exception:
                 proc.kill()
             out, err = proc.communicate()

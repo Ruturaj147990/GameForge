@@ -1,9 +1,12 @@
 """Forge handler for TOOL_CALL steps (AD-11, Blueprint §8.1)."""
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
+import inspect
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ...backend.agent.plan_executor import FAILURE_STATUSES, _step_failure
 from ...backend.agent.task_state import TaskAcceptancePredicate, TaskState
@@ -20,7 +23,30 @@ def get_gateway(workspace_dir: Path) -> ToolGateway:
     return _GATEWAY_CACHE[ws]
 
 
-def tool_call_handler(ctx: StepContext) -> StepOutcome:
+def _resolve_maybe_awaitable(value: Any) -> Any:
+    """Resolve value if it is a coroutine or awaitable, supporting both sync and running-loop contexts."""
+    if not inspect.isawaitable(value):
+        return value
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop is not None and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, value)
+            return future.result()
+    return asyncio.run(value)
+
+
+def make_tool_call_handler(gateway: Optional[Any] = None) -> Callable[[StepContext], StepOutcome]:
+    """Return a step handler bound to an optional custom/async gateway instance."""
+    def _handler(ctx: StepContext) -> StepOutcome:
+        return tool_call_handler(ctx, gateway=gateway)
+    return _handler
+
+
+def tool_call_handler(ctx: StepContext, gateway: Optional[Any] = None) -> StepOutcome:
     """Executes a single tool call or evaluation step, verifies acceptance predicates, and records evidence."""
     inputs = ctx.step.inputs
     tool = inputs.get("tool") or ""
@@ -58,7 +84,7 @@ def tool_call_handler(ctx: StepContext) -> StepOutcome:
             blocked=True,
         )
 
-    gateway = get_gateway(ctx.workspace_dir)
+    gw = gateway or inputs.get("gateway") or get_gateway(ctx.workspace_dir)
 
     step_output: Any = None
     step_error: Optional[str] = None
@@ -71,11 +97,12 @@ def tool_call_handler(ctx: StepContext) -> StepOutcome:
     if tool:
         ctx.log(f"Executing tool '{tool}' with args {list(arguments.keys())}")
         try:
-            step_output = gateway.execute_tool(
+            raw_out = gw.execute_tool(
                 tool,
                 arguments,
                 approval_granted=user_approved,
             )
+            step_output = _resolve_maybe_awaitable(raw_out)
             if (
                 isinstance(step_output, dict)
                 and step_output.get("status") in ("PENDING_APPROVAL", "AWAITING_APPROVAL")
@@ -97,13 +124,15 @@ def tool_call_handler(ctx: StepContext) -> StepOutcome:
                 and step_output.get("status") == "PENDING_APPROVAL"
                 and step_output.get("diff_id")
             ):
-                apply_res = gateway.execute_tool(
+                raw_apply = gw.execute_tool(
                     "apply_edit",
                     {"diff_id": step_output["diff_id"]},
                     approval_granted=user_approved,
                 )
-                apply_res["diff_id"] = step_output["diff_id"]
-                apply_res["file_path"] = step_output.get("file_path")
+                apply_res = _resolve_maybe_awaitable(raw_apply)
+                if isinstance(apply_res, dict):
+                    apply_res["diff_id"] = step_output["diff_id"]
+                    apply_res["file_path"] = step_output.get("file_path")
                 step_output = apply_res
         except Exception as exc:
             step_error = f"{type(exc).__name__}: {exc}"

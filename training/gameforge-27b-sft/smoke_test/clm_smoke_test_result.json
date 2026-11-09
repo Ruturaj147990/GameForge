@@ -1,0 +1,348 @@
+{
+  "status": "failed",
+  "timestamp": "2026-10-23 20:49:02",
+  "hardware": {
+    "ram_total_gb": 30.88,
+    "ram_initial_used_gb": 5.44,
+    "device": "DirectML (AMD Radeon RX 7700 XT\u0000)"
+  },
+  "architecture": {
+    "name": "Qwen3.8-27B",
+    "hidden_size": 5120,
+    "intermediate_size": 17408,
+    "full_target_layers": 64,
+    "vocab_size": 248320
+  },
+  "layer_allocations": [
+    {
+      "layer": 1,
+      "ram_used_gb": 8.2,
+      "ram_available_gb": 22.68
+    },
+    {
+      "layer": 2,
+      "ram_used_gb": 9.67,
+      "ram_available_gb": 21.21
+    },
+    {
+      "layer": 3,
+      "ram_used_gb": 10.47,
+      "ram_available_gb": 20.42
+    },
+    {
+      "layer": 4,
+      "ram_used_gb": 11.13,
+      "ram_available_gb": 19.75
+    },
+    {
+      "layer": 5,
+      "ram_used_gb": 11.92,
+      "ram_available_gb": 18.96
+    },
+    {
+      "layer": 6,
+      "ram_used_gb": 12.56,
+      "ram_available_gb": 18.32
+    },
+    {
+      "layer": 7,
+      "ram_used_gb": 13.29,
+      "ram_available_gb": 17.59
+    },
+    {
+      "layer": 8,
+      "ram_used_gb": 14.0,
+      "ram_available_gb": 16.88
+    },
+    {
+      "layer": 9,
+      "ram_used_gb": 14.78,
+      "ram_available_gb": 16.1
+    },
+    {
+      "layer": 10,
+      "ram_used_gb": 15.4,
+      "ram_available_gb": 15.48
+    },
+    {
+      "layer": 11,
+      "ram_used_gb": 16.12,
+      "ram_available_gb": 14.76
+    },
+    {
+      "layer": 12,
+      "ram_used_gb": 16.8,
+      "ram_available_gb": 14.08
+    },
+    {
+      "layer": 13,
+      "ram_used_gb": 17.6,
+      "ram_available_gb": 13.28
+    },
+    {
+      "layer": 14,
+      "ram_used_gb": 18.19,
+      "ram_available_gb": 12.69
+    },
+    {
+      "layer": 15,
+      "ram_used_gb": 18.99,
+      "ram_available_gb": 11.9
+    },
+    {
+      "layer": 16,
+      "ram_used_gb": 19.72,
+      "ram_available_gb": 11.17
+    },
+    {
+      "layer": 17,
+      "ram_used_gb": 20.4,
+      "ram_available_gb": 10.48
+    },
+    {
+      "layer": 18,
+      "ram_used_gb": 21.13,
+      "ram_available_gb": 9.75
+    },
+    {
+      "layer": 19,
+      "ram_used_gb": 21.84,
+      "ram_available_gb": 9.04
+    },
+    {
+      "layer": 20,
+      "ram_used_gb": 22.57,
+      "ram_available_gb": 8.31
+    },
+    {
+      "layer": 21,
+      "ram_used_gb": 23.24,
+      "ram_available_gb": 7.64
+    },
+    {
+      "layer": 22,
+      "ram_used_gb": 24.18,
+      "ram_available_gb": 6.7
+    },
+    {
+      "layer": 23,
+      "ram_used_gb": 24.85,
+      "ram_available_gb": 6.04
+    },
+    {
+      "layer": 24,
+      "ram_used_gb": 25.47,
+      "ram_available_gb": 5.42
+    },
+    {
+      "layer": 25,
+      "ram_used_gb": 26.18,
+      "ram_available_gb": 4.7
+    },
+    {
+      "layer": 26,
+      "ram_used_gb": 26.67,
+      "ram_available_gb": 4.21
+    },
+    {
+      "layer": 27,
+      "ram_used_gb": 27.39,
+      "ram_available_gb": 3.49
+    },
+    {
+      "layer": 28,
+      "ram_used_gb": 28.13,
+      "ram_available_gb": 2.75
+    },
+    {
+      "layer": 29,
+      "ram_used_gb": 28.82,
+      "ram_available_gb": 2.06
+    },
+    {
+      "layer": 30,
+      "ram_used_gb": 29.68,
+      "ram_available_gb": 1.2
+    },
+    {
+      "layer": 31,
+      "ram_used_gb": 30.22,
+      "ram_available_gb": 0.66
+    },
+    {
+      "layer": 32,
+      "ram_used_gb": 30.87,
+      "ram_available_gb": 0.01
+    },
+    {
+      "layer": 33,
+      "ram_used_gb": 30.86,
+      "ram_available_gb": 0.02
+    },
+    {
+      "layer": 34,
+      "ram_used_gb": 30.67,
+      "ram_available_gb": 0.21
+    },
+    {
+      "layer": 35,
+      "ram_used_gb": 30.79,
+      "ram_available_gb": 0.09
+    },
+    {
+      "layer": 36,
+      "ram_used_gb": 30.71,
+      "ram_available_gb": 0.17
+    },
+    {
+      "layer": 37,
+      "ram_used_gb": 30.72,
+      "ram_available_gb": 0.16
+    },
+    {
+      "layer": 38,
+      "ram_used_gb": 30.53,
+      "ram_available_gb": 0.35
+    },
+    {
+      "layer": 39,
+      "ram_used_gb": 29.57,
+      "ram_available_gb": 1.32
+    },
+    {
+      "layer": 40,
+      "ram_used_gb": 29.21,
+      "ram_available_gb": 1.67
+    },
+    {
+      "layer": 41,
+      "ram_used_gb": 28.51,
+      "ram_available_gb": 2.37
+    },
+    {
+      "layer": 42,
+      "ram_used_gb": 28.78,
+      "ram_available_gb": 2.1
+    },
+    {
+      "layer": 43,
+      "ram_used_gb": 29.21,
+      "ram_available_gb": 1.67
+    },
+    {
+      "layer": 44,
+      "ram_used_gb": 29.01,
+      "ram_available_gb": 1.88
+    },
+    {
+      "layer": 45,
+      "ram_used_gb": 28.68,
+      "ram_available_gb": 2.21
+    },
+    {
+      "layer": 46,
+      "ram_used_gb": 28.6,
+      "ram_available_gb": 2.28
+    },
+    {
+      "layer": 47,
+      "ram_used_gb": 27.96,
+      "ram_available_gb": 2.92
+    },
+    {
+      "layer": 48,
+      "ram_used_gb": 27.54,
+      "ram_available_gb": 3.34
+    },
+    {
+      "layer": 49,
+      "ram_used_gb": 26.64,
+      "ram_available_gb": 4.24
+    },
+    {
+      "layer": 50,
+      "ram_used_gb": 26.53,
+      "ram_available_gb": 4.35
+    },
+    {
+      "layer": 51,
+      "ram_used_gb": 25.67,
+      "ram_available_gb": 5.21
+    },
+    {
+      "layer": 52,
+      "ram_used_gb": 23.98,
+      "ram_available_gb": 6.9
+    },
+    {
+      "layer": 53,
+      "ram_used_gb": 22.33,
+      "ram_available_gb": 8.55
+    },
+    {
+      "layer": 54,
+      "ram_used_gb": 22.76,
+      "ram_available_gb": 8.12
+    },
+    {
+      "layer": 55,
+      "ram_used_gb": 23.48,
+      "ram_available_gb": 7.4
+    },
+    {
+      "layer": 56,
+      "ram_used_gb": 24.22,
+      "ram_available_gb": 6.67
+    },
+    {
+      "layer": 57,
+      "ram_used_gb": 24.93,
+      "ram_available_gb": 5.95
+    },
+    {
+      "layer": 58,
+      "ram_used_gb": 25.87,
+      "ram_available_gb": 5.01
+    },
+    {
+      "layer": 59,
+      "ram_used_gb": 25.63,
+      "ram_available_gb": 5.25
+    },
+    {
+      "layer": 60,
+      "ram_used_gb": 26.52,
+      "ram_available_gb": 4.36
+    },
+    {
+      "layer": 61,
+      "ram_used_gb": 27.28,
+      "ram_available_gb": 3.6
+    },
+    {
+      "layer": 62,
+      "ram_used_gb": 28.05,
+      "ram_available_gb": 2.83
+    },
+    {
+      "layer": 63,
+      "ram_used_gb": 28.84,
+      "ram_available_gb": 2.04
+    },
+    {
+      "layer": 64,
+      "ram_used_gb": 28.72,
+      "ram_available_gb": 2.17
+    }
+  ],
+  "clm_execution_error": "expected m1 and m2 to have the same dtype, but got: float != struct c10::BFloat16",
+  "allocated_layers": 64,
+  "failed_at_layer": null,
+  "failure_reason": null,
+  "final_memory": {
+    "used_gb": 28.1,
+    "total_gb": 30.88,
+    "available_gb": 2.78,
+    "percent": 91.0
+  }
+}

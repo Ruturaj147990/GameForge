@@ -36,7 +36,7 @@ def test_tier_b_registry_mappings():
         "racing": ("course", ["kit.player_character", "kit.goal"]),
         "tower_defense": ("lanes", ["kit.spawner", "kit.goal"]),
         "roguelike": ("rooms", ["kit.player_character", "kit.enemy_melee", "kit.door"]),
-        "zombie_survival": ("arena", ["kit.player_character", "kit.enemy_melee", "kit.spawner"]),
+        "wave_survival": ("arena", ["kit.player_character", "kit.enemy_melee", "kit.spawner"]),
     }
     for gt, (expected_layout, expected_mods) in expected_mappings.items():
         assert get_layout_for_game_type(gt) == expected_layout
@@ -53,9 +53,9 @@ def test_tier_b_intent_classification():
         ("build a tetris block puzzle", Genre.PUZZLE),
         ("develop a classic snake game", Genre.PUZZLE),
         ("create a high speed racing game", Genre.PLATFORMER),
-        ("build a tower defense game defending the base", Genre.TOP_DOWN_SHOOTER),
+        ("build a tower defense game defending the base", Genre.ARENA_COMBAT),
         ("make a roguelike dungeon crawl", Genre.DUNGEON_CRAWLER),
-        ("create a zombie survival arena", Genre.ARENA_COMBAT),
+        ("create a wave survival arena", Genre.ARENA_COMBAT),
     ]
     for prompt, expected_genre in test_cases:
         assert is_game_creation_request(prompt) is True
@@ -70,7 +70,7 @@ def test_tier_b_scratch_architectures():
         ("racing", "scratch_racing", "ARaceGameMode"),
         ("tower defense", "scratch_tower_defense", "ATowerDefenseGameMode"),
         ("roguelike", "scratch_roguelike", "ARoguelikeGameMode"),
-        ("zombie survival", "scratch_zombie_survival", "AZombieSurvivalGameMode"),
+        ("wave survival", "scratch_wave_survival", "AWaveSurvivalGameMode"),
     ]
     for prompt, expected_plan_kind, expected_class in tier_b_prompts:
         profile = default_registry.analyze_prompt(prompt)

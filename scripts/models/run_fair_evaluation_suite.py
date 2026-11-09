@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Tuple
 
 BASE_BENCHMARK_PATH = Path("E:/GameForge/reports/gameforge-27b/baseline_benchmark.json")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = Path("e:/gameforge_step1/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -468,7 +468,7 @@ def main():
         for idx, item in enumerate(benchmark_50, 1):
             task_id = item.get("id", f"TASK-{idx:02d}")
             prompt = item.get("prompt", "")
-            keywords = item.get("expected_keywords", [])
+            keywords = item.get("rubric", item.get("expected_keywords", []))
             max_score = 10
 
             res = query_model(model, prompt, max_tokens=250)

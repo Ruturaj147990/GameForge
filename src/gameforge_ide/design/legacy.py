@@ -1,8 +1,7 @@
-"""Legacy recipe adapter: maps GameDesignSpec back to legacy recipe params (P1 WI-1.8)."""
+"""Legacy recipe adapter: maps untouched explicit presets back to legacy recipe params (P1 WI-1.8)."""
 from __future__ import annotations
 
 import os
-import re
 from typing import Union
 
 from ..legacy_recipes.arena_combat.recipe import ArenaCombatParams
@@ -31,20 +30,23 @@ def _hex_to_rgb(hex_code: str) -> tuple[float, float, float]:
 def to_legacy_params(
     gds: GameDesignSpec,
 ) -> Union[GridBoardParams, PlatformerParams, ArenaCombatParams, CardBattlerParams, ProceduralWorldParams]:
-    """Convert a preset-derived GDS to legacy recipe params, or raise LegacyUnsupported."""
+    """Convert an explicit preset-derived GDS to legacy recipe params, or raise LegacyUnsupported."""
     generator = getattr(gds.meta, "generator", "") or ""
-    # Only untouched presets go to the legacy recipe builders. Those builders keep just a handful of numbers (board
-    # size, pickup count, wave count) and drop everything else - named enemies, hazards, guards, themes, rules - so
-    # sending prompt-derived or edited designs there was the main reason games ignored what the user asked for.
     if not generator.startswith("preset:"):
         raise LegacyUnsupported(f"{generator or 'user'} designs route to the Composer + Forge DAG path")
-    # Real-time presets also use the composer now: it has the reworked jump course, themed levels, visible
-    # characters and working combat/respawn. The legacy recipes remain for the turn-based board and card presets,
-    # whose dedicated generated rules the kit does not replace.
+
+    if getattr(gds, "architecture", None) is not None:
+        raise LegacyUnsupported("Designs with custom architecture specs route to Composer + Forge DAG path")
+
+    if any(any(getattr(eff, "kind", "") == "custom_code" for eff in r.effects) for r in gds.rules):
+        raise LegacyUnsupported("Designs with custom C++ rule handlers route to Composer + Forge DAG path")
+
     if gds.overview.genre in (Genre.PLATFORMER, Genre.ARENA_COMBAT, Genre.EXPLORATION) and \
             os.environ.get("GAMEFORGE_LEGACY_ACTION_RECIPES", "").strip().lower() not in ("1", "true", "yes"):
-        raise LegacyUnsupported("real-time presets are built by the Composer (set GAMEFORGE_LEGACY_ACTION_RECIPES=1 "
-                                "to use the legacy recipe builders)")
+        raise LegacyUnsupported(
+            "real-time presets are built by the Composer (set GAMEFORGE_LEGACY_ACTION_RECIPES=1 "
+            "to use the legacy recipe builders)"
+        )
     if hasattr(gds.overview, "camera") and str(getattr(gds.overview.camera, "value", gds.overview.camera)) == "first_person":
         raise LegacyUnsupported("First-person games route to modern Composer + Forge DAG path")
     genre = gds.overview.genre
@@ -54,6 +56,10 @@ def to_legacy_params(
         if not board:
             raise LegacyUnsupported("grid_board requires a board entity")
         props = dict(board.props)
+
+        bmode = str(props.get("board_mode", "n_in_a_row"))
+        if bmode not in ("n_in_a_row", "connect_four", "gomoku"):
+            raise LegacyUnsupported(f"board_mode {bmode!r} routes to modern Composer + Forge DAG path")
 
         if gds.art.palette == DEFAULT_PALETTE and "player1_color" not in props:
             p1_color = (0.10, 0.45, 1.00)
@@ -96,7 +102,7 @@ def to_legacy_params(
             collectible_target=target,
             difficulty=gds.progression.difficulty,
             starting_level="Level1",
-            player_speed=float(props.get("player_speed", 600.0)),
+            player_speed=float(props.get("player_speed", props.get("move_speed", 600.0))),
             jump_velocity=float(props.get("jump_velocity", 650.0)),
             gravity_scale=float(props.get("gravity_scale", 1.2)),
             air_control=float(props.get("air_control", 0.35)),
@@ -116,10 +122,10 @@ def to_legacy_params(
             starting_level="Level1",
             wave_count=int(s_props.get("wave_count", 3)),
             enemies_per_wave=int(s_props.get("enemies_per_wave", 4)),
-            player_max_health=float(p_props.get("player_max_health", 100.0)),
-            player_attack_damage=float(p_props.get("player_attack_damage", 35.0)),
-            player_attack_range=float(p_props.get("player_attack_range", 250.0)),
-            player_attack_cooldown=float(p_props.get("player_attack_cooldown", 0.4)),
+            player_max_health=float(p_props.get("player_max_health", p_props.get("max_health", 100.0))),
+            player_attack_damage=float(p_props.get("player_attack_damage", p_props.get("attack_damage", 35.0))),
+            player_attack_range=float(p_props.get("player_attack_range", p_props.get("attack_range", 250.0))),
+            player_attack_cooldown=float(p_props.get("player_attack_cooldown", p_props.get("attack_cooldown", 0.4))),
             enemy_max_health=float(s_props.get("enemy_max_health", 50.0)),
             enemy_attack_damage=float(s_props.get("enemy_attack_damage", 15.0)),
             enemy_attack_range=float(s_props.get("enemy_attack_range", 120.0)),
@@ -146,7 +152,7 @@ def to_legacy_params(
 
     elif genre == Genre.EXPLORATION:
         if not gds.scene.levels or not gds.scene.levels[0].layout_params:
-            raise LegacyUnsupported("exploration genre without procedural layout_params needs the composer (planned for phase 6)")
+            raise LegacyUnsupported("exploration genre without procedural layout_params needs the composer")
         lvl = gds.scene.levels[0]
         lp = dict(lvl.layout_params)
 
@@ -168,7 +174,7 @@ def to_legacy_params(
         )
 
     else:
-        raise LegacyUnsupported(f"genre '{genre.value}' needs the composer (planned for phase 6)")
+        raise LegacyUnsupported(f"genre '{genre.value}' needs the composer")
 
     params.validate()
     return params

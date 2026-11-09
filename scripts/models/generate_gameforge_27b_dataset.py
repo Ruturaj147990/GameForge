@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict, List
 
 DATASET_DIR = Path("E:/GameForge/datasets/gameforge-27b")
-REGISTER_PATH = Path("E:/gameforge_step1/configs/dataset_source_register.json")
+REGISTER_PATH = (Path(__file__).resolve().parents[1] / r"configs/dataset_source_register.json")
 
 SYSTEM_PROMPT = (
     "You are GameForge, a master game systems architect and principal engine programmer. "

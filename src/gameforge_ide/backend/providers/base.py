@@ -87,3 +87,5 @@ class ModelProvider(ABC):
     ) -> ChatResponse:
         """Executes a synchronous completion request."""
         pass
+
+ModelCapabilities = ProviderCapabilities

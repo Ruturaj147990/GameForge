@@ -16,13 +16,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.core import jobs  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 from src.gameforge_ide.unreal.toolchain import UnrealToolchain  # noqa: E402
 
 NAME = "GFInjectSpike"
-VALIDATION_ROOT = Path(r"E:\GameForge\validation\GFInjectSpike")
+VALIDATION_ROOT = (get_settings().require_dev("validation_root") / r"GFInjectSpike")
 REPORT_PATH = REPO_ROOT / "reports" / "P3" / "spike_inject.json"
 MAP_PATH = "/Game/Maps/SpikeMap"
 

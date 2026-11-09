@@ -41,7 +41,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 "sections_per_component": 1,
                 # Gentle rolling terrain: 20 m of relief buried most placed actors (which were spawned at z=100)
                 # and made the walk to the goal a climb over walls of rock. Actors now snap to the ground.
-                "elevation_scale": float(biomes.BIOMES[biome_name].elevation_scale) * 0.35 if biome_name in biomes.BIOMES else 600.0,
+                "elevation_scale": float((getattr(level, "layout_params", {}) or {}).get("elevation_scale") or (float(biomes.BIOMES[biome_name].elevation_scale) * 0.35 if biome_name in biomes.BIOMES else 600.0)),
                 "seed": seed,
                 "terrain_type": biomes.BIOMES[biome_name].terrain_type if biome_name in biomes.BIOMES else "Valley",
                 "material_path": "/Engine/BasicShapes/BasicShapeMaterial",

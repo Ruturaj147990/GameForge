@@ -106,6 +106,37 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     actors: List[PlacedActor] = [goal_actor]
 
+    # Place doors and switches in intermediate rooms when requested in GDS
+    if hasattr(gds, "entities") and len(rooms) >= 3:
+        mid_room = rooms[len(rooms) // 2]
+        mx = (mid_room.x + mid_room.w / 2.0) * grid_cm
+        my = (mid_room.y + mid_room.h / 2.0) * grid_cm
+        door_ent = next((e for e in gds.entities if str(getattr(e.kind, "value", e.kind)) == "door"), None)
+        if door_ent is not None:
+            actors.append(PlacedActor(
+                actor_id=f"{door_ent.entity_id}_0",
+                entity_id=door_ent.entity_id,
+                runtime_class="/Script/GameForgeRuntime.GameForgeDoor",
+                location=(round(mx, 1), round(my, 1), 100.0),
+                yaw=0.0,
+                tags=[f"GF_E_{door_ent.entity_id}", "GF_Owned", "door", "Door", f"{door_ent.entity_id}_0"],
+                properties={},
+            ))
+        sw_ent = next((e for e in gds.entities if str(getattr(e.kind, "value", e.kind)) == "switch"), None)
+        if sw_ent is not None and int(getattr(sw_ent, "count", 1) or 1) == 1:
+            r1 = rooms[1]
+            sx = (r1.x + r1.w / 2.0) * grid_cm
+            sy = (r1.y + r1.h / 2.0) * grid_cm
+            actors.append(PlacedActor(
+                actor_id=f"{sw_ent.entity_id}_0",
+                entity_id=sw_ent.entity_id,
+                runtime_class="/Script/GameForgeRuntime.GameForgeSwitch",
+                location=(round(sx, 1), round(sy, 1), 100.0),
+                yaw=0.0,
+                tags=[f"GF_E_{sw_ent.entity_id}", "GF_Owned", "switch", "Switch", f"{sw_ent.entity_id}_0"],
+                properties={},
+            ))
+
     # Spawn PointLights in room centres (WI-6.4: indoor preset: intensity 5000, attenuation 1500cm)
     for r_idx, rm in enumerate(rooms):
         rx = (rm.x + rm.w / 2.0) * grid_cm

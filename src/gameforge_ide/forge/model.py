@@ -35,9 +35,28 @@ class StepStatus(str, Enum):
     BLOCKED = "BLOCKED"
     SKIPPED = "SKIPPED"
     CANCELLED = "CANCELLED"
+    INTERRUPTED = "INTERRUPTED"
 
 
-TERMINAL = {StepStatus.DONE, StepStatus.FAILED, StepStatus.BLOCKED, StepStatus.SKIPPED, StepStatus.CANCELLED}
+class RunStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
+    DONE = "DONE"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    BLOCKED = "BLOCKED"
+    INTERRUPTED = "INTERRUPTED"
+
+
+TERMINAL = {
+    StepStatus.DONE,
+    StepStatus.FAILED,
+    StepStatus.BLOCKED,
+    StepStatus.SKIPPED,
+    StepStatus.CANCELLED,
+    StepStatus.INTERRUPTED,
+}
 
 
 def canonical_hash(obj: Any) -> str:
@@ -56,6 +75,10 @@ class StepSpec(BaseModel):
     max_attempts: int = Field(1, ge=1, le=5)
     timeout_s: float = Field(3600, gt=0, le=6 * 3600)
     checkpoint: bool = True  # commit the project after DONE (needs a project repo)
+
+    @property
+    def id(self) -> str:
+        return self.step_id
 
     @property
     def input_hash(self) -> str:
@@ -82,6 +105,10 @@ class StepRecord(BaseModel):
     errors: List[str] = Field(default_factory=list)
     artifacts: List[ArtifactRef] = Field(default_factory=list)
     checkpoint: Optional[str] = None  # git commit sha after DONE
+
+    @property
+    def id(self) -> str:
+        return self.step_id
 
     @property
     def duration_s(self) -> Optional[float]:
@@ -153,7 +180,16 @@ class RunState(BaseModel):
     model_config = ConfigDict(extra="forbid")
     run: RunSpec
     records: Dict[str, StepRecord]
-    status: Literal["PENDING", "RUNNING", "WAITING_APPROVAL", "DONE", "FAILED", "CANCELLED", "BLOCKED"] = "PENDING"
+    status: Literal[
+        "PENDING",
+        "RUNNING",
+        "WAITING_APPROVAL",
+        "DONE",
+        "FAILED",
+        "CANCELLED",
+        "BLOCKED",
+        "INTERRUPTED",
+    ] = "PENDING"
     approvals: Dict[str, str] = Field(default_factory=dict)  # "run" or step_id -> approval_id
     updated_at: float = Field(default_factory=time.time)
 

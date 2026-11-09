@@ -1,12 +1,12 @@
 import json
 import re
 from pathlib import Path
-from typing import Set, List, Dict
+from typing import Set
 
 TRAIN_PATH = Path(r"E:\GameForge\datasets\gameforge-27b\gameforge_27b_train.jsonl")
 VAL_PATH = Path(r"E:\GameForge\datasets\gameforge-27b\gameforge_27b_val.jsonl")
-BENCHMARK_PATH = Path(r"E:\gameforge_step1\reports\gameforge-27b\baseline_benchmark.json")
-REGISTER_PATH = Path(r"E:\gameforge_step1\configs\dataset_source_register.json")
+BENCHMARK_PATH = (Path(__file__).resolve().parents[1] / r"reports\gameforge-27b\baseline_benchmark.json")
+REGISTER_PATH = (Path(__file__).resolve().parents[1] / r"configs\dataset_source_register.json")
 
 def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower().strip())

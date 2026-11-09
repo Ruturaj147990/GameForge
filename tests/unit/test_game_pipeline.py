@@ -177,7 +177,7 @@ def test_runtime_fast_path_suspends_for_approval(tmp_path):
     assert waiting and waiting[0].metadata["approval"]["tool"] == "create_game"
     assert events[-1].event_type == "done"
     pending = ApprovalStore(tmp_path).list_pending()
-    assert len(pending) == 1 and pending[0]["args"]["params"]["project_name"] == "TicTacToe"
+    assert len(pending) == 1 and (pending[0]["args"].get("params", pending[0]["args"]).get("project_name") == "TicTacToe")
 
 
 # ── cancellation ─────────────────────────────────────────────────────────────

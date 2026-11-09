@@ -11,8 +11,9 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 from src.gameforge_ide.pipeline.game_pipeline import GamePipeline  # noqa: E402
-from src.gameforge_ide.recipes.grid_board_game.recipe import GridBoardParams  # noqa: E402
+from src.gameforge_ide.legacy_recipes.grid_board_game.recipe import GridBoardParams  # noqa: E402
 
 
 def main() -> int:
@@ -28,14 +29,16 @@ def main() -> int:
     ap.add_argument("--ai", default="perfect")
     ap.add_argument("--skip-package", action="store_true")
     ap.add_argument("--stop-after", default=None)
-    ap.add_argument("--projects-root", default=r"E:\GameForge\projects")
+    ap.add_argument("--projects-root", default=None, help="Override projects root (defaults to get_settings().projects_root)")
     a = ap.parse_args()
+
+    projects_root = Path(a.projects_root) if a.projects_root else get_settings().projects_root
 
     if a.resume:
         print(f"Resuming pipeline run for: {a.resume}")
         res = GamePipeline.resume(
             Path(a.resume),
-            projects_root=Path(a.projects_root),
+            projects_root=projects_root,
             on_event=lambda k, d: print(k, json.dumps(d, default=str)[:300], flush=True),
         )
         print("REPORT", res.report_path, "OK" if res.ok else f"FAILED at {res.failed_stage}")
@@ -53,6 +56,7 @@ def main() -> int:
             return 1
         gds = gds_res.gds
         params = to_legacy_params(gds)
+
         def save_gds_hook(pdir: Path):
             stored = design_store.load(pdir)
             if stored is not None and gds.meta.revision <= stored.meta.revision:
@@ -60,7 +64,7 @@ def main() -> int:
             design_store.save(pdir, gds)
 
         pipe = GamePipeline(
-            Path(a.projects_root),
+            projects_root,
             max_parallel_actions=8,
             on_event=lambda k, d: print(k, json.dumps(d, default=str)[:300], flush=True),
             on_project_dir_ready=save_gds_hook,
@@ -76,7 +80,7 @@ def main() -> int:
             gravity=a.gravity,
         )
         pipe = GamePipeline(
-            Path(a.projects_root),
+            projects_root,
             max_parallel_actions=8,
             on_event=lambda k, d: print(k, json.dumps(d, default=str)[:300], flush=True),
         )

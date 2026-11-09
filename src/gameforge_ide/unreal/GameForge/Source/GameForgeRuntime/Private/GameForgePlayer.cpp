@@ -56,6 +56,29 @@ namespace
 		UGameForgeEventLibrary::EmitGameForgeEvent(Ctx, FName(TEXT("ui.message")), TEXT("GameMode"),
 			FString::Printf(TEXT("{\"text\":\"%s\",\"seconds\":%.2f}"), *Escaped, Seconds));
 	}
+
+	AActor* FindBoardOrTableActor(UWorld* World)
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+		for (TActorIterator<AGameForgeGridBoard> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				return *It;
+			}
+		}
+		for (TActorIterator<AGameForgeCardTable> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
 }
 
 // ── Character ─────────────────────────────────────────────────────────────────
@@ -110,16 +133,43 @@ AGameForgeCharacter::AGameForgeCharacter()
 void AGameForgeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	if (AbilitySystemComponent)
+	if (!FMath::IsNearlyEqual(WalkSpeed, 600.f) && FMath::IsNearlyEqual(MoveSpeed, 600.f))
+	{
+		MoveSpeed = WalkSpeed;
+	}
+	if (!FMath::IsNearlyEqual(JumpZVelocity, 650.f) && FMath::IsNearlyEqual(JumpVelocity, 650.f))
+	{
+		JumpVelocity = JumpZVelocity;
+	}
+	if (bRangedAttack)
+	{
+		bProjectileAttack = true;
+	}
+	if (bDoubleJump && MaxJumps < 2)
+	{
+		MaxJumps = 2;
+	}
+
+	if (AbilitySystemComponent && AttributeSet)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 		AttributeSet->SetMaxHealth(MaxHealth);
 		AttributeSet->SetHealth(MaxHealth);
+		AttributeSet->SetMaxStamina(MaxStamina);
+		AttributeSet->SetStamina(MaxStamina);
 	}
 
 	if (AGameForgeGameState* GS = GetWorld()->GetGameState<AGameForgeGameState>())
 	{
 		GS->SetStat(FName(TEXT("player.health")), MaxHealth);
+		GS->SetStat(FName(TEXT("player.max_health")), MaxHealth);
+		GS->SetStat(FName(TEXT("player.stamina")), MaxStamina);
+		GS->SetStat(FName(TEXT("player.max_stamina")), MaxStamina);
+	}
+
+	if (Weapons.Num() > 0)
+	{
+		SwitchWeapon(FMath::Clamp(ActiveWeaponIndex, 0, Weapons.Num() - 1));
 	}
 
 	ApplyMovementSettings();
@@ -148,9 +198,16 @@ void AGameForgeCharacter::PossessedBy(AController* NewController)
 
 void AGameForgeCharacter::ApplyMovementSettings()
 {
+	if (bDoubleJump && MaxJumps < 2)
+	{
+		MaxJumps = 2;
+	}
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
-		Move->MaxWalkSpeed = bSprinting ? MoveSpeed * SprintMultiplier : MoveSpeed;
+		const float EffectiveSprintSpeed = (SprintSpeed > MoveSpeed && FMath::IsNearlyEqual(SprintMultiplier, 1.5f))
+			? SprintSpeed
+			: MoveSpeed * SprintMultiplier;
+		Move->MaxWalkSpeed = bSprinting ? EffectiveSprintSpeed : MoveSpeed;
 		Move->JumpZVelocity = JumpVelocity;
 		Move->AirControl = FMath::Clamp(AirControl, 0.f, 1.f);
 		Move->GravityScale = FMath::Clamp(GravityScale, 0.1f, 10.f);
@@ -163,7 +220,14 @@ void AGameForgeCharacter::ApplyMovementSettings()
 
 void AGameForgeCharacter::SetSprinting(bool bNewSprinting)
 {
-	bSprinting = bNewSprinting;
+	if (bNewSprinting && AttributeSet && AttributeSet->GetStamina() <= 1.0f)
+	{
+		bSprinting = false;
+	}
+	else
+	{
+		bSprinting = bNewSprinting;
+	}
 	ApplyMovementSettings();
 }
 
@@ -206,7 +270,12 @@ void AGameForgeCharacter::ApplyVisuals(const FString& MeshPath, const FString& A
 	}
 
 	const bool bFirstPerson = (CameraMode == EGameForgeCameraMode::FirstPerson);
-	const bool bUseProxy = !bHasSkeletal;
+	const bool bFixedBoard = (CameraMode == EGameForgeCameraMode::FixedBoard);
+	if (SkelComp && bFixedBoard)
+	{
+		SkelComp->SetVisibility(false, true);
+	}
+	const bool bUseProxy = !bHasSkeletal && !bFixedBoard;
 	for (UStaticMeshComponent* Part : { ProxyBody.Get(), ProxyHead.Get(), ProxyVisor.Get() })
 	{
 		if (!Part)
@@ -214,7 +283,7 @@ void AGameForgeCharacter::ApplyVisuals(const FString& MeshPath, const FString& A
 			continue;
 		}
 		Part->SetVisibility(bUseProxy);
-		Part->SetOwnerNoSee(bFirstPerson);
+		Part->SetOwnerNoSee(bFirstPerson || bFixedBoard);
 	}
 	if (bUseProxy)
 	{
@@ -225,7 +294,7 @@ void AGameForgeCharacter::ApplyVisuals(const FString& MeshPath, const FString& A
 		GameForgeVisuals::Tint(ProxyHead, FLinearColor(0.95f, 0.8f, 0.65f));
 		GameForgeVisuals::Tint(ProxyVisor, FLinearColor(0.05f, 0.05f, 0.08f));
 	}
-	else if (SkelComp)
+	else if (SkelComp && !bFixedBoard)
 	{
 		for (int32 Slot = 0; Slot < SkelComp->GetNumMaterials(); ++Slot)
 		{
@@ -242,6 +311,49 @@ void AGameForgeCharacter::ApplyCameraMode()
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	switch (CameraMode)
 	{
+	case EGameForgeCameraMode::FixedBoard:
+	{
+		if (AActor* BoardAct = FindBoardOrTableActor(GetWorld()))
+		{
+			FVector Origin, BoxExtent;
+			BoardAct->GetActorBounds(false, Origin, BoxExtent);
+			SetActorLocation(FVector(Origin.X, Origin.Y, Origin.Z + 90.f), false, nullptr, ETeleportType::TeleportPhysics);
+		}
+		CameraBoom->TargetArmLength = 1100.f;
+		CameraBoom->bUsePawnControlRotation = false;
+		CameraBoom->SetUsingAbsoluteRotation(true);
+		CameraBoom->SetRelativeLocation(FVector::ZeroVector);
+		CameraBoom->SocketOffset = FVector::ZeroVector;
+		CameraBoom->SetRelativeRotation(FRotator(-75.f, 0.f, 0.f));
+		CameraBoom->bInheritYaw = false;
+		CameraBoom->bDoCollisionTest = false;
+		CameraBoom->bEnableCameraLag = false;
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+		if (UCapsuleComponent* Cap = GetCapsuleComponent())
+		{
+			Cap->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+		}
+		if (GetMesh())
+		{
+			GetMesh()->SetVisibility(false, true);
+		}
+		if (WeaponMesh)
+		{
+			WeaponMesh->SetVisibility(false);
+		}
+		if (PC)
+		{
+			PC->bShowMouseCursor = true;
+			PC->bEnableClickEvents = true;
+			PC->bEnableMouseOverEvents = true;
+			FInputModeGameAndUI Mode;
+			Mode.SetHideCursorDuringCapture(false);
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			PC->SetInputMode(Mode);
+		}
+		break;
+	}
 	case EGameForgeCameraMode::TopDown:
 		CameraBoom->TargetArmLength = 1500.f;
 		CameraBoom->bUsePawnControlRotation = false;
@@ -364,11 +476,16 @@ void AGameForgeCharacter::ApplyCameraMode()
 	}
 	// Keep proxy-body owner visibility in sync with the camera mode.
 	const bool bFirstPerson = (CameraMode == EGameForgeCameraMode::FirstPerson);
+	const bool bFixedBoard = (CameraMode == EGameForgeCameraMode::FixedBoard);
 	for (UStaticMeshComponent* Part : { ProxyBody.Get(), ProxyHead.Get(), ProxyVisor.Get() })
 	{
 		if (Part)
 		{
-			Part->SetOwnerNoSee(bFirstPerson);
+			Part->SetOwnerNoSee(bFirstPerson || bFixedBoard);
+			if (bFixedBoard)
+			{
+				Part->SetVisibility(false);
+			}
 		}
 	}
 }
@@ -397,6 +514,31 @@ void AGameForgeCharacter::Tick(float DeltaSeconds)
 					Move->DisableMovement();
 				}
 			}
+
+			// Stamina drain on sprinting and regeneration when not sprinting
+			const float MaxStam = FMath::Max(1.0f, AttributeSet->GetMaxStamina());
+			float CurStam = AttributeSet->GetStamina();
+			const bool bMoving = GetVelocity().SizeSquared2D() > 100.0f;
+			if (!bDead)
+			{
+				if (bSprinting && bMoving)
+				{
+					CurStam = FMath::Max(0.0f, CurStam - 20.0f * DeltaSeconds);
+					if (CurStam <= 0.0f)
+					{
+						SetSprinting(false);
+					}
+				}
+				else if (CurStam < MaxStam)
+				{
+					CurStam = FMath::Min(MaxStam, CurStam + 15.0f * DeltaSeconds);
+				}
+				AttributeSet->SetStamina(CurStam);
+			}
+			if (!FMath::IsNearlyEqual(GS->GetStat(FName(TEXT("player.stamina"))), CurStam, 0.05f))
+			{
+				GS->SetStat(FName(TEXT("player.stamina")), CurStam);
+			}
 		}
 	}
 }
@@ -408,11 +550,14 @@ void AGameForgeCharacter::ResetForRespawn()
 	{
 		AttributeSet->SetMaxHealth(MaxHealth);
 		AttributeSet->SetHealth(MaxHealth);
+		AttributeSet->SetMaxStamina(MaxStamina);
+		AttributeSet->SetStamina(MaxStamina);
 		AttributeSet->ResetDeathState();
 	}
 	if (AGameForgeGameState* GS = GetWorld()->GetGameState<AGameForgeGameState>())
 	{
 		GS->SetStat(FName(TEXT("player.health")), MaxHealth);
+		GS->SetStat(FName(TEXT("player.stamina")), MaxStamina);
 	}
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
@@ -420,6 +565,90 @@ void AGameForgeCharacter::ResetForRespawn()
 		Move->SetMovementMode(MOVE_Walking);
 	}
 	ApplyMovementSettings();
+}
+
+void AGameForgeCharacter::PerformDash()
+{
+	if (bDead || CameraMode == EGameForgeCameraMode::FixedBoard)
+	{
+		return;
+	}
+	const float CurTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	if (CurTime - LastDashTime < 0.75f)
+	{
+		return;
+	}
+	if (AttributeSet)
+	{
+		const float CurStam = AttributeSet->GetStamina();
+		if (CurStam < 20.0f)
+		{
+			return;
+		}
+		const float NextStam = FMath::Max(0.0f, CurStam - 20.0f);
+		AttributeSet->SetStamina(NextStam);
+		if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+		{
+			GS->SetStat(FName(TEXT("player.stamina")), NextStam);
+		}
+	}
+	LastDashTime = CurTime;
+
+	FVector DashDir = GetLastMovementInputVector();
+	DashDir.Z = 0.f;
+	if (DashDir.IsNearlyZero())
+	{
+		DashDir = GetActorForwardVector();
+		DashDir.Z = 0.f;
+	}
+	DashDir = DashDir.GetSafeNormal();
+	if (DashDir.IsNearlyZero())
+	{
+		DashDir = FVector::ForwardVector;
+	}
+
+	LaunchCharacter(DashDir * DashImpulse + FVector(0.f, 0.f, 120.f), true, false);
+	UGameForgeEventLibrary::EmitGameForgeEvent(this, FName(TEXT("player.dashed")), GetName(), TEXT("{}"));
+}
+
+void AGameForgeCharacter::SwitchWeapon(int32 NewWeaponIndex)
+{
+	if (Weapons.Num() == 0)
+	{
+		return;
+	}
+	if (NewWeaponIndex < 0)
+	{
+		ActiveWeaponIndex = (ActiveWeaponIndex + 1) % Weapons.Num();
+	}
+	else
+	{
+		ActiveWeaponIndex = FMath::Clamp(NewWeaponIndex, 0, Weapons.Num() - 1);
+	}
+
+	const FString& ActiveWeapon = Weapons[ActiveWeaponIndex];
+	const FString Lower = ActiveWeapon.ToLower();
+	if (Lower.Contains(TEXT("bow")) || Lower.Contains(TEXT("gun")) || Lower.Contains(TEXT("rifle")) ||
+		Lower.Contains(TEXT("pistol")) || Lower.Contains(TEXT("staff")) || Lower.Contains(TEXT("wand")) ||
+		Lower.Contains(TEXT("blaster")) || Lower.Contains(TEXT("launcher")))
+	{
+		bProjectileAttack = true;
+		bRangedAttack = true;
+	}
+	else if ((Lower.Contains(TEXT("sword")) || Lower.Contains(TEXT("axe")) || Lower.Contains(TEXT("hammer")) ||
+			  Lower.Contains(TEXT("dagger")) || Lower.Contains(TEXT("club")) || Lower.Contains(TEXT("spear")) ||
+			  Lower.Contains(TEXT("blade"))) && CameraMode != EGameForgeCameraMode::FirstPerson)
+	{
+		bProjectileAttack = false;
+		bRangedAttack = false;
+	}
+
+	UGameForgeEventLibrary::EmitGameForgeEvent(
+		this,
+		FName(TEXT("player.weapon_switched")),
+		GetName(),
+		FString::Printf(TEXT("{\"weapon\":\"%s\",\"index\":%d}"), *ActiveWeapon.ReplaceCharWithEscapedChar(), ActiveWeaponIndex)
+	);
 }
 
 FVector AGameForgeCharacter::ComputeAimDirection(FVector& OutMuzzle) const
@@ -489,11 +718,11 @@ FVector AGameForgeCharacter::ComputeAimDirection(FVector& OutMuzzle) const
 
 void AGameForgeCharacter::PerformAttack()
 {
-	if (bDead)
+	if (bDead || CameraMode == EGameForgeCameraMode::FixedBoard)
 	{
 		return;
 	}
-	if (bProjectileAttack || CameraMode == EGameForgeCameraMode::FirstPerson)
+	if (bProjectileAttack || bRangedAttack || CameraMode == EGameForgeCameraMode::FirstPerson)
 	{
 		PerformRangedAttack();
 	}
@@ -703,6 +932,8 @@ void AGameForgePlayerController::BuildDefaultInput()
 	UInputAction* RollDice = Make(TEXT("IA_RollDice"), EInputActionValueType::Boolean);
 	UInputAction* Interact = Make(TEXT("IA_Interact"), EInputActionValueType::Boolean);
 	UInputAction* Sprint = Make(TEXT("IA_Sprint"), EInputActionValueType::Boolean);
+	UInputAction* Dash = Make(TEXT("IA_Dash"), EInputActionValueType::Boolean);
+	UInputAction* SwitchWep = Make(TEXT("IA_SwitchWeapon"), EInputActionValueType::Boolean);
 	UInputAction* Pause = Make(TEXT("IA_Pause"), EInputActionValueType::Boolean);
 	UInputAction* Restart = Make(TEXT("IA_Restart"), EInputActionValueType::Boolean);
 	// Pause and restart must work while the game is paused / over.
@@ -734,11 +965,19 @@ void AGameForgePlayerController::BuildDefaultInput()
 	MappingContext->MapKey(Fire, EKeys::LeftMouseButton);
 	MappingContext->MapKey(PrimaryAttack, EKeys::LeftMouseButton);
 	MappingContext->MapKey(RollDice, EKeys::LeftMouseButton);
+	MappingContext->MapKey(RollDice, EKeys::SpaceBar);
 	MappingContext->MapKey(Interact, EKeys::E);
 	MappingContext->MapKey(Interact, EKeys::Gamepad_FaceButton_Left);
 	MappingContext->MapKey(Sprint, EKeys::LeftShift);
 	MappingContext->MapKey(Sprint, EKeys::Gamepad_LeftThumbstick);
+	MappingContext->MapKey(Dash, EKeys::LeftControl);
+	MappingContext->MapKey(Dash, EKeys::C);
+	MappingContext->MapKey(Dash, EKeys::Gamepad_FaceButton_Right);
+	MappingContext->MapKey(SwitchWep, EKeys::Q);
+	MappingContext->MapKey(SwitchWep, EKeys::Tab);
+	MappingContext->MapKey(SwitchWep, EKeys::Gamepad_FaceButton_Top);
 	MappingContext->MapKey(Pause, EKeys::P);
+	MappingContext->MapKey(Pause, EKeys::Escape);
 	MappingContext->MapKey(Pause, EKeys::Gamepad_Special_Right);
 	MappingContext->MapKey(Restart, EKeys::R);
 }
@@ -757,10 +996,12 @@ void AGameForgePlayerController::SetupInputComponent()
 		EIC->BindAction(FindAction(TEXT("IA_Attack")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
 		EIC->BindAction(FindAction(TEXT("IA_Fire")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
 		EIC->BindAction(FindAction(TEXT("IA_PrimaryAttack")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAttack);
-		EIC->BindAction(FindAction(TEXT("IA_RollDice")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSelect);
+		EIC->BindAction(FindAction(TEXT("IA_RollDice")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleRollDice);
 		EIC->BindAction(FindAction(TEXT("IA_Interact")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleInteract);
 		EIC->BindAction(FindAction(TEXT("IA_Sprint")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSprintStarted);
 		EIC->BindAction(FindAction(TEXT("IA_Sprint")), ETriggerEvent::Completed, this, &AGameForgePlayerController::HandleSprintCompleted);
+		EIC->BindAction(FindAction(TEXT("IA_Dash")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleDash);
+		EIC->BindAction(FindAction(TEXT("IA_SwitchWeapon")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSwitchWeapon);
 		EIC->BindAction(FindAction(TEXT("IA_Pause")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandlePause);
 		EIC->BindAction(FindAction(TEXT("IA_Restart")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleRestart);
 	}
@@ -780,9 +1021,22 @@ void AGameForgePlayerController::BeginPlay()
 	}
 	if (IsLocalController())
 	{
-		// Mouse input goes to the game (clicks select board cells / fire) while the cursor stays usable.
-		FInputModeGameOnly Mode;
-		SetInputMode(Mode);
+		AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(GetPawn());
+		if (GFChar && (GFChar->CameraMode == EGameForgeCameraMode::FixedBoard || GFChar->CameraMode == EGameForgeCameraMode::TopDown))
+		{
+			bShowMouseCursor = true;
+			bEnableClickEvents = true;
+			bEnableMouseOverEvents = true;
+			FInputModeGameAndUI Mode;
+			Mode.SetHideCursorDuringCapture(false);
+			Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			SetInputMode(Mode);
+		}
+		else
+		{
+			FInputModeGameOnly Mode;
+			SetInputMode(Mode);
+		}
 		UGameForgeHUDWidget* HUD = CreateWidget<UGameForgeHUDWidget>(this, UGameForgeHUDWidget::StaticClass());
 		if (HUD)
 		{
@@ -804,6 +1058,19 @@ bool AGameForgePlayerController::IsGameplayBlocked() const
 	return false;
 }
 
+bool AGameForgePlayerController::IsCursorOverSelectable() const
+{
+	FHitResult Hit;
+	if (GetHitResultUnderCursor(ECC_Visibility, false, Hit))
+	{
+		if (Cast<IGameForgeSelectable>(Hit.GetComponent()) || Cast<IGameForgeSelectable>(Hit.GetActor()))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void AGameForgePlayerController::HandleMove(const FInputActionValue& Value)
 {
 	if (IsGameplayBlocked())
@@ -816,7 +1083,7 @@ void AGameForgePlayerController::HandleMove(const FInputActionValue& Value)
 		FRotator BasisRot = FRotator(0.f, GetControlRotation().Yaw, 0.f);
 		if (AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(P))
 		{
-			if (GFChar->IsDead())
+			if (GFChar->IsDead() || GFChar->CameraMode == EGameForgeCameraMode::FixedBoard)
 			{
 				return;
 			}
@@ -844,7 +1111,9 @@ void AGameForgePlayerController::HandleLook(const FInputActionValue& Value)
 	}
 	if (const AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(GetPawn()))
 	{
-		if (GFChar->CameraMode == EGameForgeCameraMode::TopDown || GFChar->CameraMode == EGameForgeCameraMode::SideScroller)
+		if (GFChar->CameraMode == EGameForgeCameraMode::TopDown ||
+			GFChar->CameraMode == EGameForgeCameraMode::SideScroller ||
+			GFChar->CameraMode == EGameForgeCameraMode::FixedBoard)
 		{
 			return;
 		}
@@ -862,7 +1131,7 @@ void AGameForgePlayerController::HandleJumpStarted(const FInputActionValue& Valu
 	}
 	if (AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(GetPawn()))
 	{
-		if (GFChar->IsDead())
+		if (GFChar->IsDead() || GFChar->CameraMode == EGameForgeCameraMode::FixedBoard)
 		{
 			return;
 		}
@@ -892,6 +1161,49 @@ void AGameForgePlayerController::HandleSelect(const FInputActionValue& Value)
 	if (GetMousePosition(Mouse.X, Mouse.Y))
 	{
 		SelectAtScreenPosition(Mouse);
+		return;
+	}
+	// Fallback when no OS mouse cursor position is available (e.g. headless scenario or controller)
+	int32 SizeX = 1280, SizeY = 720;
+	GetViewportSize(SizeX, SizeY);
+	if (SelectAtScreenPosition(FVector2D(SizeX * 0.5f, SizeY * 0.5f)))
+	{
+		return;
+	}
+	if (AActor* Board = FindBoardOrTableActor(GetWorld()))
+	{
+		if (IGameForgeSelectable* Sel = Cast<IGameForgeSelectable>(Board))
+		{
+			Sel->OnSelected(this);
+		}
+	}
+}
+
+void AGameForgePlayerController::HandleRollDice(const FInputActionValue& Value)
+{
+	if (IsGameplayBlocked())
+	{
+		return;
+	}
+	for (TActorIterator<AGameForgeGridBoard> It(GetWorld()); It; ++It)
+	{
+		if (AGameForgeGridBoard* Board = *It)
+		{
+			if (Board->BoardMode.Equals(TEXT("snakes_and_ladders"), ESearchCase::IgnoreCase) ||
+				Board->BoardMode.Equals(TEXT("ludo"), ESearchCase::IgnoreCase))
+			{
+				const int32 Sides = FMath::Max(2, Board->DiceSides);
+				const int32 Roll = FMath::RandRange(1, Sides);
+				UGameForgeEventLibrary::EmitGameForgeEvent(
+					this,
+					GFEvent::DiceRolled,
+					GetName(),
+					FString::Printf(TEXT("{\"value\":%d,\"sides\":%d}"), Roll, Sides),
+					Board->EntityId
+				);
+				return;
+			}
+		}
 	}
 }
 
@@ -903,6 +1215,10 @@ void AGameForgePlayerController::HandleAttack(const FInputActionValue& Value)
 	}
 	if (AGameForgeCharacter* C = Cast<AGameForgeCharacter>(GetPawn()))
 	{
+		if (C->CameraMode == EGameForgeCameraMode::FixedBoard || IsCursorOverSelectable())
+		{
+			return;
+		}
 		C->PerformAttack();
 	}
 }
@@ -935,6 +1251,30 @@ void AGameForgePlayerController::HandleSprintCompleted(const FInputActionValue& 
 	}
 }
 
+void AGameForgePlayerController::HandleDash(const FInputActionValue& Value)
+{
+	if (IsGameplayBlocked())
+	{
+		return;
+	}
+	if (AGameForgeCharacter* C = Cast<AGameForgeCharacter>(GetPawn()))
+	{
+		C->PerformDash();
+	}
+}
+
+void AGameForgePlayerController::HandleSwitchWeapon(const FInputActionValue& Value)
+{
+	if (IsGameplayBlocked())
+	{
+		return;
+	}
+	if (AGameForgeCharacter* C = Cast<AGameForgeCharacter>(GetPawn()))
+	{
+		C->SwitchWeapon(-1);
+	}
+}
+
 void AGameForgePlayerController::HandlePause(const FInputActionValue& Value)
 {
 	if (const AGameForgeGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AGameForgeGameMode>() : nullptr)
@@ -946,6 +1286,29 @@ void AGameForgePlayerController::HandlePause(const FInputActionValue& Value)
 	}
 	const bool bNowPaused = !IsPaused();
 	SetPause(bNowPaused);
+	if (IsLocalController())
+	{
+		if (bNowPaused)
+		{
+			if (!PauseMenuWidget)
+			{
+				PauseMenuWidget = CreateWidget<UGameForgeMenuWidget>(this, UGameForgeMenuWidget::StaticClass());
+			}
+			if (PauseMenuWidget)
+			{
+				PauseMenuWidget->ShowPauseMenu();
+				if (!PauseMenuWidget->IsInViewport())
+				{
+					PauseMenuWidget->AddToViewport(10);
+				}
+				PauseMenuWidget->SetVisibility(ESlateVisibility::Visible);
+			}
+		}
+		else if (PauseMenuWidget)
+		{
+			PauseMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, bNowPaused ? GFEvent::GamePaused : GFEvent::GameResumed, GetName(), TEXT("{}"));
 }
 
@@ -1032,15 +1395,26 @@ void AGameForgeGameModeBase::ConfigurePlayer(AController* Controller)
 	if (Def->TryGetObjectField(TEXT("player"), PlayerObj) && PlayerObj)
 	{
 		(*PlayerObj)->TryGetStringField(TEXT("camera"), CamModeStr);
+		if (CamModeStr.IsEmpty())
+		{
+			(*PlayerObj)->TryGetStringField(TEXT("camera_mode"), CamModeStr);
+		}
 	}
 	if (CamModeStr.IsEmpty())
 	{
 		Def->TryGetStringField(TEXT("camera"), CamModeStr);
 	}
 
-	if (CamModeStr.Equals(TEXT("first_person"), ESearchCase::IgnoreCase) ||
-		CamModeStr.Equals(TEXT("fps"), ESearchCase::IgnoreCase) ||
-		CamModeStr.Equals(TEXT("FirstPerson"), ESearchCase::IgnoreCase))
+	if (CamModeStr.Equals(TEXT("fixed_board"), ESearchCase::IgnoreCase) ||
+		CamModeStr.Equals(TEXT("FixedBoard"), ESearchCase::IgnoreCase) ||
+		CamModeStr.Equals(TEXT("board"), ESearchCase::IgnoreCase))
+	{
+		Char->CameraMode = EGameForgeCameraMode::FixedBoard;
+		Char->bProjectileAttack = false;
+	}
+	else if (CamModeStr.Equals(TEXT("first_person"), ESearchCase::IgnoreCase) ||
+			 CamModeStr.Equals(TEXT("fps"), ESearchCase::IgnoreCase) ||
+			 CamModeStr.Equals(TEXT("FirstPerson"), ESearchCase::IgnoreCase))
 	{
 		Char->CameraMode = EGameForgeCameraMode::FirstPerson;
 		Char->bProjectileAttack = true;
@@ -1066,11 +1440,18 @@ void AGameForgeGameModeBase::ConfigurePlayer(AController* Controller)
 	if (PlayerObj && *PlayerObj)
 	{
 		const TSharedPtr<FJsonObject>& P = *PlayerObj;
-		double Speed = Char->MoveSpeed, JumpZ = Char->JumpVelocity, MaxHP = Char->MaxHealth;
-		int32 LivesVal = 0;
-		P->TryGetNumberField(TEXT("move_speed"), Speed);
-		P->TryGetNumberField(TEXT("jump_velocity"), JumpZ);
+		double Speed = Char->MoveSpeed, JumpZ = Char->JumpVelocity, MaxHP = Char->MaxHealth, MaxStam = Char->MaxStamina;
+		int32 LivesVal = Char->Lives;
+		if (!P->TryGetNumberField(TEXT("move_speed"), Speed))
+		{
+			P->TryGetNumberField(TEXT("walk_speed"), Speed);
+		}
+		if (!P->TryGetNumberField(TEXT("jump_velocity"), JumpZ))
+		{
+			P->TryGetNumberField(TEXT("jump_z"), JumpZ);
+		}
 		P->TryGetNumberField(TEXT("max_health"), MaxHP);
+		P->TryGetNumberField(TEXT("max_stamina"), MaxStam);
 		P->TryGetNumberField(TEXT("lives"), LivesVal);
 
 		FString AttackMode;
@@ -1080,25 +1461,68 @@ void AGameForgeGameModeBase::ConfigurePlayer(AController* Controller)
 				AttackMode.Equals(TEXT("ranged"), ESearchCase::IgnoreCase))
 			{
 				Char->bProjectileAttack = true;
+				Char->bRangedAttack = true;
 			}
 			else if (AttackMode.Equals(TEXT("melee"), ESearchCase::IgnoreCase) && Char->CameraMode != EGameForgeCameraMode::FirstPerson)
 			{
 				Char->bProjectileAttack = false;
+				Char->bRangedAttack = false;
 			}
 		}
+		bool bRangedFlag = false;
+		if (P->TryGetBoolField(TEXT("ranged"), bRangedFlag))
+		{
+			Char->bProjectileAttack = bRangedFlag;
+			Char->bRangedAttack = bRangedFlag;
+		}
+
 		double V = 0.0;
 		if (P->TryGetNumberField(TEXT("attack_damage"), V) && V > 0.0) { Char->AttackDamage = static_cast<float>(V); }
 		if (P->TryGetNumberField(TEXT("attack_range"), V) && V > 0.0) { Char->AttackRange = static_cast<float>(V); }
 		if (P->TryGetNumberField(TEXT("attack_cooldown"), V) && V > 0.0) { Char->AttackCooldown = static_cast<float>(V); }
 		if (P->TryGetNumberField(TEXT("projectile_speed"), V) && V > 0.0) { Char->ProjectileSpeed = static_cast<float>(V); }
+		if (P->TryGetNumberField(TEXT("dash_impulse"), V) && V > 0.0) { Char->DashImpulse = static_cast<float>(V); }
 		if (P->TryGetNumberField(TEXT("air_control"), V)) { Char->AirControl = static_cast<float>(V); }
 		if (P->TryGetNumberField(TEXT("gravity_scale"), V) && V > 0.0) { Char->GravityScale = static_cast<float>(V); }
 		if (P->TryGetNumberField(TEXT("sprint_multiplier"), V) && V >= 1.0) { Char->SprintMultiplier = static_cast<float>(V); }
+		if (P->TryGetNumberField(TEXT("sprint_speed"), V) && V > 0.0)
+		{
+			Char->SprintSpeed = static_cast<float>(V);
+			if (Speed > 0.0)
+			{
+				Char->SprintMultiplier = FMath::Max(1.0f, static_cast<float>(V / Speed));
+			}
+		}
 		if (P->TryGetNumberField(TEXT("kill_z"), V)) { Char->KillZ = static_cast<float>(V); }
 		int32 Jumps = Char->MaxJumps;
 		if (P->TryGetNumberField(TEXT("max_jumps"), Jumps)) { Char->MaxJumps = FMath::Clamp(Jumps, 1, 4); }
 		bool bDouble = false;
-		if (P->TryGetBoolField(TEXT("double_jump"), bDouble) && bDouble) { Char->MaxJumps = FMath::Max(Char->MaxJumps, 2); }
+		if (P->TryGetBoolField(TEXT("double_jump"), bDouble))
+		{
+			Char->bDoubleJump = bDouble;
+			if (bDouble)
+			{
+				Char->MaxJumps = FMath::Max(Char->MaxJumps, 2);
+			}
+		}
+
+		const TArray<TSharedPtr<FJsonValue>>* WeaponsArr = nullptr;
+		if (P->TryGetArrayField(TEXT("weapons"), WeaponsArr) && WeaponsArr)
+		{
+			Char->Weapons.Empty();
+			for (const TSharedPtr<FJsonValue>& WVal : *WeaponsArr)
+			{
+				FString WStr;
+				if (WVal.IsValid() && WVal->TryGetString(WStr) && !WStr.IsEmpty())
+				{
+					Char->Weapons.Add(WStr);
+				}
+			}
+			if (Char->Weapons.Num() > 0)
+			{
+				Char->SwitchWeapon(0);
+			}
+		}
 
 		const TArray<TSharedPtr<FJsonValue>>* Tint = nullptr;
 		if (P->TryGetArrayField(TEXT("material_tint"), Tint) && Tint && Tint->Num() >= 3)
@@ -1116,19 +1540,26 @@ void AGameForgeGameModeBase::ConfigurePlayer(AController* Controller)
 		P->TryGetStringField(TEXT("anim_class"), AnimPath);
 
 		Char->MoveSpeed = static_cast<float>(Speed);
+		Char->WalkSpeed = static_cast<float>(Speed);
 		Char->JumpVelocity = static_cast<float>(JumpZ);
+		Char->JumpZVelocity = static_cast<float>(JumpZ);
 		Char->MaxHealth = static_cast<float>(MaxHP);
+		Char->MaxStamina = static_cast<float>(MaxStam);
 		Char->Lives = LivesVal;
 
 		if (Char->AttributeSet)
 		{
 			Char->AttributeSet->SetMaxHealth(Char->MaxHealth);
 			Char->AttributeSet->SetHealth(Char->MaxHealth);
+			Char->AttributeSet->SetMaxStamina(Char->MaxStamina);
+			Char->AttributeSet->SetStamina(Char->MaxStamina);
 		}
 		if (AGameForgeGameState* GS = GetWorld()->GetGameState<AGameForgeGameState>())
 		{
 			GS->SetStat(FName(TEXT("player.health")), Char->MaxHealth);
 			GS->SetStat(FName(TEXT("player.max_health")), Char->MaxHealth);
+			GS->SetStat(FName(TEXT("player.stamina")), Char->MaxStamina);
+			GS->SetStat(FName(TEXT("player.max_stamina")), Char->MaxStamina);
 			if (LivesVal > 0)
 			{
 				GS->SetStat(FName(TEXT("player.lives")), static_cast<float>(LivesVal));

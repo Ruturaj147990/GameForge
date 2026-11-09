@@ -32,15 +32,13 @@ import base64
 import csv
 import io
 import json
-import os
 import re
-import sys
 import time
 import urllib.request
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-WORKSPACE_ROOT = Path("E:/gameforge_step1")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = WORKSPACE_ROOT / "reports"
 OLLAMA_API = "http://127.0.0.1:11434/api/generate"
 

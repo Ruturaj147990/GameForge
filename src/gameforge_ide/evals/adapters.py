@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import abc
 import json
+import re
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class ModelAdapter(abc.ABC):
@@ -69,7 +70,6 @@ class OllamaAdapter(ModelAdapter):
             },
         }
 
-        # If schema or json is requested
         if schema_json is not None:
             payload["format"] = "json"
 
@@ -132,7 +132,6 @@ class HostedAdapter(ModelAdapter):
         return f"hosted:{self._provider_id}"
 
     def complete(self, prompt: str, schema_json: Optional[Dict[str, Any]] = None, num_ctx: int = 4096) -> Dict[str, Any]:
-        # Without explicit approval/keys, this returns BLOCKED
         return {
             "text": "",
             "duration_s": 0.0,
@@ -162,33 +161,185 @@ class DeterministicMockAdapter(ModelAdapter):
     def get_version_info(self) -> str:
         return "mock-1.0.0"
 
+    def _build_mock_gds_patch(self, prompt: str) -> Dict[str, Any]:
+        ops: List[Dict[str, Any]] = []
+        base_doc: Dict[str, Any] = {}
+        m_base = re.search(r"Base GDS JSON:\n(\{.*?\})\n", prompt, re.DOTALL)
+        if m_base:
+            try:
+                base_doc = json.loads(m_base.group(1))
+            except Exception:
+                base_doc = {}
+
+        entities = base_doc.get("entities", []) if isinstance(base_doc, dict) else []
+        plower = prompt.lower()
+
+        if "guards faster" in plower:
+            for idx, ent in enumerate(entities):
+                props = ent.get("props", {})
+                if "movement_speed" in props:
+                    ops.append({"op": "replace", "path": f"/entities/{idx}/props/movement_speed", "value": float(props["movement_speed"]) * 1.5})
+        elif "player faster" in plower:
+            for idx, ent in enumerate(entities):
+                props = ent.get("props", {})
+                if "speed" in props:
+                    ops.append({"op": "replace", "path": f"/entities/{idx}/props/speed", "value": float(props["speed"]) * 1.5})
+                elif ent.get("entity_id") == "player":
+                    ops.append({"op": "add", "path": f"/entities/{idx}/props/speed", "value": 900.0})
+        elif "guards slower" in plower:
+            for idx, ent in enumerate(entities):
+                props = ent.get("props", {})
+                if "movement_speed" in props:
+                    ops.append({"op": "replace", "path": f"/entities/{idx}/props/movement_speed", "value": float(props["movement_speed"]) * 0.5})
+        elif "more relics" in plower or "more coins" in plower:
+            delta = 5 if "5" in plower else 3
+            for idx, ent in enumerate(entities):
+                if ent.get("kind") in ("collectible", "pickup") or "relic" in ent.get("entity_id", "") or "coin" in ent.get("entity_id", ""):
+                    ops.append({"op": "replace", "path": f"/entities/{idx}/count", "value": int(ent.get("count", 1)) + delta})
+                    break
+        elif "reduce enemies" in plower:
+            for idx, ent in enumerate(entities):
+                if ent.get("count", 1) > 1 and ent.get("entity_id") != "player":
+                    ops.append({"op": "replace", "path": f"/entities/{idx}/count", "value": max(1, int(ent["count"] * 0.4))})
+        elif "remove all guards" in plower:
+            for idx in range(len(entities) - 1, -1, -1):
+                if entities[idx].get("kind") == "guard" or "guard" in entities[idx].get("entity_id", ""):
+                    ops.append({"op": "remove", "path": f"/entities/{idx}"})
+        elif "remove all hazards" in plower:
+            for idx in range(len(entities) - 1, -1, -1):
+                if entities[idx].get("kind") == "hazard" or "hazard" in entities[idx].get("entity_id", ""):
+                    ops.append({"op": "remove", "path": f"/entities/{idx}"})
+        elif "hazard" in plower or "spikes" in plower:
+            ops.append({
+                "op": "add",
+                "path": f"/entities/{len(entities)}",
+                "value": {"entity_id": "hazard_zone", "display_name": "Hazard Zone", "kind": "hazard", "count": 2, "props": {"damage": 25.0}},
+            })
+        elif "checkpoint" in plower:
+            ops.append({
+                "op": "add",
+                "path": f"/entities/{len(entities)}",
+                "value": {"entity_id": "checkpoint_station", "display_name": "Checkpoint", "kind": "checkpoint", "count": 2, "props": {}},
+            })
+        elif "locked door" in plower:
+            ops.append({
+                "op": "add",
+                "path": f"/entities/{len(entities)}",
+                "value": {"entity_id": "locked_door", "display_name": "Locked Door", "kind": "door", "count": 1, "props": {}},
+            })
+        elif "lighting" in plower:
+            val = "night" if "night" in plower else ("dusk" if "dusk" in plower else "day")
+            ops.append({"op": "replace", "path": "/scene/levels/0/lighting", "value": val})
+            ops.append({"op": "add", "path": "/scene/lighting", "value": val})
+        elif "escape gate" in plower or "also require" in plower:
+            goals = base_doc.get("goals", []) if isinstance(base_doc, dict) else []
+            ops.append({
+                "op": "add",
+                "path": f"/goals/{len(goals)}",
+                "value": {"goal_id": "reach_escape_gate", "kind": "reach_zone", "target_entity": "exit_zone", "target_count": 1},
+            })
+        elif "shadow keep" in plower:
+            ops.append({"op": "replace", "path": "/meta/title", "value": "Shadow Keep"})
+        elif "crystal valley" in plower:
+            ops.append({"op": "replace", "path": "/meta/title", "value": "Crystal Valley"})
+        elif "second level" in plower:
+            levels = base_doc.get("scene", {}).get("levels", []) if isinstance(base_doc, dict) else []
+            ops.append({
+                "op": "add",
+                "path": f"/scene/levels/{len(levels)}",
+                "value": {"level_id": "level_2", "title": "Level 2", "lighting": "dusk", "layout": "arena", "size_meters": [60, 60]},
+            })
+
+        if not ops:
+            ops = [{"op": "replace", "path": "/scene/levels/0/lighting", "value": "night"}]
+
+        return {"ops": ops, "summary": "Applied requested GDS patch", "questions": []}
+
+    def _build_mock_cpp_repair(self, prompt: str) -> Dict[str, Any]:
+        plower = prompt.lower()
+        if "c2065" in plower or "maxspeed" in plower:
+            code = '#include "CoreMinimal.h"\nfloat s = 600.0f;\n'
+        elif "c2440" in plower or "fromint" in plower or "cannot convert from 'int' to 'fstring'" in plower:
+            code = '#include "CoreMinimal.h"\nFString Name = FString::FromInt(42);\n'
+        elif "c2027" in plower or "ugameforgeeventbus" in plower:
+            code = '#include "CoreMinimal.h"\n#include "GameForgeEventBus.h"\nUGameForgeEventBus* Bus = nullptr;\n'
+        elif "c2511" in plower or "overloaded member function" in plower:
+            code = '#include "CoreMinimal.h"\nvoid Apply(AGameForgeCharacter* Character) override;\n'
+        elif "c2662" in plower or "const_qualification" in plower:
+            code = '#include "CoreMinimal.h"\nfloat GetValue() const { return Value; }\n'
+        elif "c4716" in plower or "must return a value" in plower:
+            code = '#include "CoreMinimal.h"\nfloat Calculate() { float x = 10.0f; return x; }\n'
+        elif "c6011" in plower or "dereferencing null pointer" in plower:
+            code = '#include "CoreMinimal.h"\nif (Player) { Player->SetActorLocation(Loc); }\n'
+        elif "lnk2019" in plower or "unresolved external" in plower:
+            code = '#include "CoreMinimal.h"\nvoid Reset() {}\n'
+        elif "c2664" in plower or "wrong_cast" in plower:
+            code = '#include "CoreMinimal.h"\nProcessChar(Cast<AGameForgeCharacter>(GetOwner()));\n'
+        else:
+            code = '#include "CoreMinimal.h"\nHealth = 100.0f;\n}\n'
+        return {"fixed_code": code, "explanation": "Repaired compiler diagnostic"}
+
     def complete(self, prompt: str, schema_json: Optional[Dict[str, Any]] = None, num_ctx: int = 4096) -> Dict[str, Any]:
         t0 = time.time()
+        if self._fail_on_id and self._fail_on_id in prompt:
+            return {
+                "text": "",
+                "duration_s": 0.005,
+                "tokens_in": len(prompt) // 4,
+                "tokens_out": 0,
+                "tok_per_sec": 0.0,
+                "cost_usd": 0.0,
+                "error": f"Simulated failure for {self._fail_on_id}",
+            }
+
         plower = prompt.lower()
-        if "design agent" in plower or "draft" in plower or "genre" in plower:
-            genre = "grid_board" if ("tic tac toe" in plower or "connect four" in plower) else "action_adventure"
+        if "rfc 6902" in plower or ("patch" in plower and "ops" in plower):
+            res_dict = self._build_mock_gds_patch(prompt)
+        elif "compiler error" in plower or "diagnostic:" in plower or "cpp_repair" in plower:
+            res_dict = self._build_mock_cpp_repair(prompt)
+        elif "gameplay rule" in plower or "codegen" in plower or "uclass" in plower:
+            res_dict = {
+                "class_name": "UGameForgeRule_Custom",
+                "code": '#pragma once\n#include "CoreMinimal.h"\nUCLASS()\nclass UGameForgeRule_Custom : public UObject {};',
+            }
+        elif "visual quality rubric" in plower or "framerate_stability" in plower:
+            res_dict = {
+                "criteria": {
+                    "mesh_quality": 4,
+                    "lighting_coherence": 4,
+                    "composition_readability": 4,
+                    "thematic_consistency": 4,
+                    "no_placeholders": 5,
+                    "framerate_stability": 5,
+                },
+                "overall": 4.33,
+                "passed": True,
+            }
+        elif "design agent" in plower or "draft" in plower or "genre" in plower:
+            if "tic tac toe" in plower or "connect four" in plower:
+                genre = "grid_board"
+            elif "platformer" in plower:
+                genre = "platformer"
+            elif "card" in plower or "deck" in plower:
+                genre = "card_battler"
+            elif "shooter" in plower:
+                genre = "top_down_shooter"
+            elif "arena" in plower or "wave" in plower:
+                genre = "arena_combat"
+            elif "dungeon" in plower:
+                genre = "dungeon_crawler"
+            elif "puzzle" in plower:
+                genre = "puzzle"
+            elif "procedural" in plower or "island" in plower or "exploration" in plower:
+                genre = "exploration"
+            else:
+                genre = "action_adventure"
             res_dict = {
                 "title": "Evaluated Game",
                 "genre": genre,
                 "camera": "third_person" if genre != "grid_board" else "top_down",
                 "pitch": "A thrilling evaluated game.",
                 "win": [{"type": "collect", "target": 5}],
-            }
-        elif "rfc 6902" in plower or "patch" in plower or "ops" in plower:
-            res_dict = {
-                "ops": [{"op": "replace", "path": "/scene/levels/0/lighting", "value": "night"}],
-                "summary": "Applied lighting patch to night",
-                "questions": [],
-            }
-        elif "compiler error" in plower or "diagnostic" in plower or "cpp_repair" in plower:
-            res_dict = {
-                "fixed_code": "#include \"CoreMinimal.h\"\nHealth = 100.0f;\n}",
-                "explanation": "Added missing semicolon",
-            }
-        elif "gameplay rule" in plower or "codegen" in plower or "uclass" in plower:
-            res_dict = {
-                "class_name": "UGameForgeRule_Custom",
-                "code": "#pragma once\n#include \"CoreMinimal.h\"\nUCLASS()\nclass UGameForgeRule_Custom : public UObject {};",
             }
         else:
             res_dict = {"status": "OK", "evaluated": True}

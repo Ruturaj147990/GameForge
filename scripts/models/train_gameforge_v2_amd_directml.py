@@ -14,13 +14,12 @@ Key Safeguards:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 import torch
 import torch_directml
@@ -202,8 +201,14 @@ def train_directml(
             input_ids = encodings["input_ids"].to(dml_device)
             attention_mask = encodings["attention_mask"].to(dml_device)
             labels = input_ids.clone()
+            # Mask out system + user prompt prefix tokens so loss is computed only on assistant completion
+            prompt_prefix = full_text.split("<|im_start|>assistant\n")[0] + "<|im_start|>assistant\n"
+            prompt_ids = tokenizer(prompt_prefix, truncation=True, max_length=max_seq_len, add_special_tokens=False)["input_ids"]
+            prompt_len = min(len(prompt_ids), labels.shape[1])
+            labels[:, :prompt_len] = -100
             # Mask out padding tokens from loss
-            labels[labels == tokenizer.pad_token_id] = -100
+            if tokenizer.pad_token_id is not None:
+                labels[labels == tokenizer.pad_token_id] = -100
 
             # Forward pass
             outputs = peft_model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
@@ -296,8 +301,9 @@ def train_directml(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GameForge V2 AMD DirectML Training Runner")
     parser.add_argument("--manifest", default="configs/gameforge_v2_local_training_manifest.json")
-    parser.add_argument("--base-model", default=r"E:\GameForge\models\hf\Qwen2.5-Coder-3B-Instruct")
-    parser.add_argument("--output-dir", default=r"E:\GameForge\training\gameforge-v2-amd\adapter")
+    default_data_root = os.environ.get("GAMEFORGE_DATA_ROOT", "artifacts")
+    parser.add_argument("--base-model", default=os.path.join(default_data_root, "models", "hf", "Qwen2.5-Coder-3B-Instruct"))
+    parser.add_argument("--output-dir", default=os.path.join(default_data_root, "training", "gameforge-v2-amd", "adapter"))
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--lr", type=float, default=1e-4)

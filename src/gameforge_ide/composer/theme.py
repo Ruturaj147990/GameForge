@@ -186,7 +186,8 @@ _ROLE_RULES: Tuple[Tuple[str, str], ...] = (
     ("walkway", "path"), ("bridge", "path"), ("ramp", "path"), ("road", "path"), ("lane", "floor_alt"),
     ("platform", "platform"), ("cover", "cover"), ("crate", "prop"), ("pillar", "wall"),
     ("wall", "wall"), ("floor", "floor"), ("ground", "floor"), ("board", "floor_alt"), ("table", "prop"),
-    ("tile", "floor_alt"), ("cell", "floor_alt"),
+    ("tile", "floor_alt"), ("cell", "floor_alt"), ("guardrail", "accent2"),
+    ("console", "accent"), ("terminal", "accent"), ("switch", "accent"), ("door", "prop"), ("turret", "accent2"),
 )
 
 

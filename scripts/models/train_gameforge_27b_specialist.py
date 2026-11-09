@@ -13,12 +13,17 @@ Saves:
 
 from __future__ import annotations
 
+# DEMO_ONLY DISCLAIMER & REFUSAL GUARD (DEF-REM-P5D)
+# Synthetic embedding training and direct GGUF tensor mutation scripts are for experimental demonstrations only.
+# They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
+DEMO_ONLY = True
+
 import json
 import math
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -36,7 +41,7 @@ VAL_DATA_PATH = Path("E:/GameForge/datasets/gameforge-27b/gameforge_27b_val.json
 TOKENIZER_DIR = Path("E:/GameForge/models/hf/Qwen3.8-27B")
 OUTPUT_ADAPTER_DIR = Path("E:/GameForge/training/gameforge-27b/adapter")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b")
-MIRROR_REPORTS_DIR = Path("E:/gameforge_step1/reports/gameforge-27b")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b")
 
 # Architecture parameters for Qwen3.8-27B
 HIDDEN_SIZE = 5120
@@ -101,6 +106,12 @@ def load_dataset(file_path: Path) -> List[str]:
 
 
 def main() -> None:
+    if not os.environ.get("GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY"):
+        raise RuntimeError(
+            "REFUSED: Synthetic embedding / GGUF tensor surgery scripts are marked DEMO_ONLY. "
+            "They must never be executed against production model artifacts or base GGUF blobs. "
+            "To permit an isolated demonstration copy, set GAMEFORGE_ALLOW_DEMO_TENSOR_SURGERY=1."
+        )
     print("=" * 80)
     print(" GAMEFORGE 27B — SPECIALIST WEIGHT TRAINING ENGINE")
     print(f" Target Foundation Architecture: Qwen3.8-27B ({NUM_LAYERS} Layers, {HIDDEN_SIZE} Hidden Dim)")

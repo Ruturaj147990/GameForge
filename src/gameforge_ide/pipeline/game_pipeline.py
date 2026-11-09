@@ -166,17 +166,86 @@ class GamePipeline:
     ) -> PipelineResult:
         if isinstance(params, GameDesignSpec):
             gds = params
-            try:
-                params = to_legacy_params(gds)
-            except Exception as exc:
-                # Only untouched presets have a legacy recipe; everything else is built by the composer
-                # (GameTools.create_game routes automatically). Fail with an actionable message, not a bare raise.
-                raise ValueError(
-                    f"GamePipeline only builds legacy preset designs ({exc}); use GameTools.create_game, which "
-                    f"routes prompt-derived designs through the Composer + Forge DAG"
-                ) from exc
             if self.on_project_dir_ready is None:
                 self.on_project_dir_ready = lambda pdir: design_store.save(pdir, gds)
+            try:
+                params = to_legacy_params(gds)
+            except Exception:
+                # Dynamic prompt-derived GDS: route directly through Composer + ForgeExecutor
+                from ..composer.compose import compose
+                from ..forge.executor import ForgeExecutor
+                from ..forge.handlers import HANDLERS
+                from ..forge.model import RunState, StepStatus
+                from ..forge.store import RunStore
+                from ..core.events import default_bus
+
+                project_dir = self.projects_root / gds.meta.project_name
+                project_dir.mkdir(parents=True, exist_ok=True)
+                design_store.save(project_dir, gds)
+                if self.on_project_dir_ready:
+                    self.on_project_dir_ready(project_dir)
+
+                comp = compose(gds, self.projects_root)
+                run_spec = comp.forge_run
+                state = RunState.new(run_spec)
+                if stop_after:
+                    topo = run_spec.topo_order()
+                    stop_idx = next((i for i, s in enumerate(topo) if s.step_id == stop_after), None)
+                    if stop_idx is not None:
+                        for s in topo[stop_idx + 1:]:
+                            state.records[s.step_id].status = StepStatus.SKIPPED
+
+                store = RunStore(project_dir=project_dir, workspace_dir=self.projects_root)
+                bus = default_bus()
+
+                def _on_comp_event(topic: str, ev: Dict[str, Any]) -> None:
+                    kind = ev.get("kind")
+                    if kind == "step_started":
+                        self._emit("stage_started", stage=ev.get("step_id"))
+                    elif kind == "step_finished":
+                        self._emit(
+                            "stage_finished",
+                            stage=ev.get("step_id"),
+                            ok=ev.get("ok", False),
+                            duration_s=ev.get("duration_s", 0.0),
+                            errors=ev.get("errors", []),
+                        )
+
+                unsub = bus.subscribe("forge", _on_comp_event)
+                try:
+                    executor = ForgeExecutor(HANDLERS, bus=bus)
+                    if self.cancel_event is not None and self.cancel_event.is_set():
+                        executor.request_cancel()
+                    state = executor.run(state, store)
+                finally:
+                    unsub()
+
+                stages_out: List[StageRecord] = []
+                failed_st: Optional[str] = None
+                for step in state.run.steps:
+                    rec = state.records.get(step.step_id)
+                    if rec is None:
+                        continue
+                    sr = StageRecord(
+                        stage=step.step_id,
+                        ok=bool(rec.ok if rec.ok is not None else (rec.status == StepStatus.DONE)),
+                        duration_s=rec.duration_s or 0.0,
+                        data=rec.data,
+                        errors=rec.errors,
+                    )
+                    stages_out.append(sr)
+                    if not sr.ok and failed_st is None and rec.status != StepStatus.SKIPPED:
+                        failed_st = step.step_id
+                rep_file = project_dir / "Saved" / "GameForge" / "pipeline_report.json"
+                res = PipelineResult(
+                    ok=(state.status == "DONE" and failed_st is None),
+                    project_dir=str(project_dir),
+                    stages=stages_out,
+                    report_path=str(rep_file),
+                    failed_stage=failed_st,
+                )
+                self._emit("pipeline_finished", ok=res.ok, report=str(res.report_path), failed_stage=res.failed_stage)
+                return res
 
         project_dir = self.projects_root / params.project_name
         evidence_dir = project_dir / "Saved" / "GameForge"

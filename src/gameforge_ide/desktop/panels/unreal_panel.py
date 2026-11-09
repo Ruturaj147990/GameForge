@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from ..services.tool_service import ToolService
 from ..styles import tokens
 from ...core.projects import open_folder_in_file_manager
+from ...core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +299,7 @@ class UnrealPanel(QWidget):
             if links:
                 self._row_bridge.set_value(f"✅ Active ({len(links)} bridge session{'s' if len(links) > 1 else ''})")
             else:
-                self._row_bridge.set_value("⚪ Standby (127.0.0.1:8000)")
+                self._row_bridge.set_value(f"⚪ Standby (127.0.0.1:{get_settings().bridge_port})")
         except Exception:
             self._row_bridge.set_value("⚪ Standby")
 

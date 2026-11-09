@@ -32,6 +32,7 @@ class PlayerCharacterParams(BaseModel):
     max_jumps: Optional[int] = Field(None, ge=1, le=4)
     double_jump: Optional[bool] = None
     sprint_multiplier: Optional[float] = Field(None, ge=1.0, le=3.0)
+    dash_impulse: Optional[float] = Field(None, ge=100.0, le=5000.0)
 
 
 register(
@@ -43,14 +44,27 @@ register(
         params_model=PlayerCharacterParams,
         property_map={
             "move_speed": "MoveSpeed",
+            "player_speed": "MoveSpeed",
             "jump_velocity": "JumpVelocity",
             "max_health": "MaxHealth",
+            "player_max_health": "MaxHealth",
             "max_stamina": "MaxStamina",
             "attack_damage": "AttackDamage",
+            "player_attack_damage": "AttackDamage",
             "attack_range": "AttackRange",
+            "player_attack_range": "AttackRange",
             "attack_cooldown": "AttackCooldown",
+            "player_attack_cooldown": "AttackCooldown",
             "lives": "Lives",
             "kill_z": "KillZ",
+            "double_jump": "bDoubleJump",
+            "max_jumps": "MaxJumps",
+            "gravity_scale": "GravityScale",
+            "air_control": "AirControl",
+            "sprint_multiplier": "SprintMultiplier",
+            "dash_impulse": "DashImpulse",
+            "attack_mode": "AttackMode",
+            "projectile_speed": "ProjectileSpeed",
         },
         emits=(
             "player.spawned",
@@ -58,6 +72,9 @@ register(
             "player.died",
             "player.respawned",
             "player.jumped",
+            "player.dashed",
+            "player.sprinted",
+            "weapon.switched",
         ),
         automation_tests=("GameForge.Kit.Player",),
         status="PASS",
@@ -109,7 +126,7 @@ register(
         entity_kinds=frozenset(["checkpoint", "respawn_point", "campfire"]),
         params_model=CheckpointParams,
         property_map={"activate_once": "bActivateOnce"},
-        emits=("checkpoint.reached",),
+        emits=("checkpoint.reached", "lap.completed", "race.finished"),
         automation_tests=("GameForge.Kit.Checkpoint",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -135,7 +152,7 @@ register(
             "required_stat": "RequiredStat",
             "required_value": "RequiredValue",
         },
-        emits=("goal.reached",),
+        emits=("goal.reached", "race.finished"),
         automation_tests=("GameForge.Kit.Goal",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -175,6 +192,9 @@ register(
 class EnemyMeleeParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
     attack_damage: float = Field(15.0, ge=0.0, le=1000.0)
+    stationary_turret: Optional[bool] = None
+    team_id: Optional[int] = Field(None, ge=0, le=4)
+    target_goal_entity_id: Optional[str] = Field(None, max_length=64)
     attack_range: float = Field(180.0, ge=50.0, le=1000.0)
     attack_cooldown: float = Field(1.0, ge=0.1, le=10.0)
     move_speed: float = Field(350.0, ge=50.0, le=1500.0)
@@ -196,6 +216,9 @@ register(
             "move_speed": "MoveSpeed",
             "aggro_range": "AggroRange",
             "max_health": "MaxHealth",
+            "stationary_turret": "bStationaryTurret",
+            "team_id": "TeamId",
+            "target_goal_entity_id": "TargetGoalEntityId",
         },
         emits=("enemy.spawned", "enemy.attacked", "enemy.killed"),
         automation_tests=("GameForge.Kit.Enemy",),
@@ -209,6 +232,9 @@ register(
 class EnemyRangedParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
     attack_damage: float = Field(10.0, ge=0.0, le=1000.0)
+    stationary_turret: Optional[bool] = None
+    team_id: Optional[int] = Field(None, ge=0, le=4)
+    target_goal_entity_id: Optional[str] = Field(None, max_length=64)
     attack_range: float = Field(900.0, ge=200.0, le=5000.0)
     attack_cooldown: float = Field(1.5, ge=0.1, le=10.0)
     move_speed: float = Field(280.0, ge=50.0, le=1500.0)
@@ -232,8 +258,11 @@ register(
             "aggro_range": "AggroRange",
             "projectile_speed": "ProjectileSpeed",
             "max_health": "MaxHealth",
+            "stationary_turret": "bStationaryTurret",
+            "team_id": "TeamId",
+            "target_goal_entity_id": "TargetGoalEntityId",
         },
-        emits=("enemy.spawned", "enemy.attacked", "enemy.killed"),
+        emits=("enemy.spawned", "enemy.attacked", "enemy.killed", "tower.attacked"),
         automation_tests=("GameForge.Kit.Enemy",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -270,8 +299,13 @@ register(
             "enemies_per_wave": "EnemiesPerWave",
             "seconds_between_waves": "SecondsBetweenWaves",
             "spawn_radius": "SpawnRadius",
+            "enemy_max_health": "EnemyMaxHealth",
+            "enemy_attack_damage": "EnemyAttackDamage",
+            "enemy_attack_range": "EnemyAttackRange",
+            "enemy_attack_cooldown": "EnemyAttackCooldown",
+            "enemy_speed": "EnemySpeed",
         },
-        emits=("wave.started", "wave.cleared"),
+        emits=("wave.started", "wave.cleared", "tower.built"),
         automation_tests=("GameForge.Kit.Spawner",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -314,6 +348,8 @@ class QuestGiverParams(BaseModel):
     objective_title: str = Field("Recover relics", max_length=100)
     objective_target: int = Field(3, ge=1, le=100)
     talk_on_overlap: bool = True
+    intro_lines: Optional[List[str]] = Field(default=None)
+    turn_in_line: Optional[str] = Field(default=None, max_length=200)
 
 
 register(
@@ -328,8 +364,10 @@ register(
             "objective_title": "ObjectiveTitle",
             "objective_target": "ObjectiveTarget",
             "talk_on_overlap": "bTalkOnOverlap",
+            "intro_lines": "IntroLines",
+            "turn_in_line": "TurnInLine",
         },
-        emits=("dialogue.line",),
+        emits=("dialogue.line", "objective.started", "objective.completed"),
         automation_tests=("GameForge.Kit.QuestGiver",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -413,7 +451,7 @@ register(
         entity_kinds=frozenset(["switch", "lever", "button"]),
         params_model=SwitchParams,
         property_map={"target_tag": "TargetTag", "toggle": "bToggle"},
-        emits=("interact.used", "switch.toggled"),
+        emits=("interact.used", "switch.toggled", "switch.activated"),
         automation_tests=("GameForge.Kit.Switch",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -495,8 +533,11 @@ register(
         params_model=PropParams,
         property_map={
             "mesh_path": "StaticMesh",
+            "scale_x": "ScaleX",
+            "scale_y": "ScaleY",
+            "scale_z": "ScaleZ",
         },
-        emits=(),
+        emits=("tower.built", "interact.used"),
         automation_tests=(),
         status="PASS",
     )
@@ -506,6 +547,7 @@ register(
 # 17. Grid Board
 class GridBoardParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    board_mode: Optional[str] = Field("n_in_a_row", max_length=64)
     board_size: int = Field(3, ge=3, le=100)
     win_length: Optional[int] = Field(3, ge=1, le=100)
     gravity: bool = False
@@ -523,20 +565,22 @@ register(
         module_id="kit.grid_board",
         version="2.0.0",
         runtime_class="/Script/GameForgeRuntime.GameForgeGridBoard",
-        entity_kinds=frozenset(["board", "grid", "tictactoe", "connect_four", "gomoku", "snakes_and_ladders", "board_game"]),
+        entity_kinds=frozenset(["board", "grid", "tictactoe", "connect_four", "gomoku", "roll_and_move", "board_game"]),
         params_model=GridBoardParams,
         property_map={
+            "board_mode": "BoardMode",
             "board_size": "BoardSize",
             "win_length": "WinLength",
             "gravity": "bGravity",
             "vs_ai": "bVsAI",
+            "ai_level": "AILevel",
             "cell_size_cm": "CellSizeCm",
-            "snakes": "Snakes",
-            "ladders": "Ladders",
+            "snakes": "SnakesCount",
+            "ladders": "LaddersCount",
             "dice_sides": "DiceSides",
             "players": "Players",
         },
-        emits=("board.move", "board.win", "board.draw", "turn.ended"),
+        emits=("board.move", "board.win", "board.lose", "board.draw", "board.warp", "turn.ended", "dice.rolled", "tile.revealed", "line.cleared", "snake.transition", "ladder.transition"),
         automation_tests=("GameForge.Kit.GridBoard",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
@@ -570,10 +614,47 @@ register(
             "deck_size": "DeckSize",
             "hand_size": "HandSize",
             "energy_per_turn": "EnergyPerTurn",
+            "player_base_health": "PlayerBaseHealth",
+            "opponent_base_health": "OpponentBaseHealth",
+            "starting_hand_size": "StartingHandSize",
+            "max_hand_size": "MaxHandSize",
+            "base_energy_per_turn": "BaseEnergyPerTurn",
+            "lane_count": "LaneCount",
         },
         emits=("card.played", "turn.ended", "lane.resolved", "match.won", "match.lost"),
         automation_tests=("GameForge.Kit.CardMatch",),
         status="PASS",
         evidence=("reports/P5/kit_scenarios_final.json",),
+    )
+)
+
+
+# 19. Bomb Site (Tactical FPS)
+class BombSiteParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    site_name: str = Field("A", max_length=16)
+    plant_seconds: float = Field(3.0, ge=0.5, le=30.0)
+    defuse_seconds: float = Field(5.0, ge=0.5, le=30.0)
+    detonate_seconds: float = Field(40.0, ge=5.0, le=300.0)
+    fuse_seconds: Optional[float] = Field(None, ge=5.0, le=300.0)
+
+
+register(
+    KitModule(
+        module_id="kit.bomb_site",
+        version="2.0.0",
+        runtime_class="/Script/GameForgeRuntime.GameForgeBombSite",
+        entity_kinds=frozenset(["bomb_site", "bombsite"]),
+        params_model=BombSiteParams,
+        property_map={
+            "site_name": "SiteName",
+            "plant_seconds": "PlantSeconds",
+            "defuse_seconds": "DefuseSeconds",
+            "detonate_seconds": "DetonateSeconds",
+            "fuse_seconds": "DetonateSeconds",
+        },
+        emits=("bombsite.planted", "bombsite.defused", "objective.completed", "interact.used"),
+        automation_tests=("GameForge.Kit.BombSite",),
+        status="PASS",
     )
 )

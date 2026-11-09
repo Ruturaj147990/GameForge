@@ -4,7 +4,7 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 warnings.filterwarnings("ignore", message='.*shadows an attribute in parent "BaseModel".*', category=UserWarning)
 
@@ -180,6 +180,7 @@ class BlueprintConnectPinsArgs(BaseModel):
     from_node_id: Any | None = None
     from_pin: Any | None = None
     from_pin_name: Any | None = None
+    graph_name: Any | None = None
     to_node: Any | None = None
     to_node_id: Any | None = None
     to_pin: Any | None = None
@@ -200,6 +201,7 @@ class BlueprintCreateNodeArgs(BaseModel):
 class BlueprintDeleteNodeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     blueprint_path: Any | None = None
+    graph_name: Any | None = None
     node_id: Any | None = None
     node_name: Any | None = None
 
@@ -211,6 +213,7 @@ class BlueprintDisconnectPinsArgs(BaseModel):
     from_node_id: Any | None = None
     from_pin: Any | None = None
     from_pin_name: Any | None = None
+    graph_name: Any | None = None
     to_node: Any | None = None
     to_node_id: Any | None = None
     to_pin: Any | None = None
@@ -239,6 +242,7 @@ class BlueprintSetPinDefaultArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     blueprint_path: Any | None = None
     default_value: str | None = None
+    graph_name: Any | None = None
     node_id: Any | None = None
     node_name: Any | None = None
     pin_name: Any | None = None
@@ -322,7 +326,7 @@ class GamedefInspectArgs(BaseModel):
 class GamedefWriteArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     asset_path: str | None = None
-    json: str | None = None
+    json_payload: str | None = Field(None, alias="json")
 
 
 class GameplayGetStateArgs(BaseModel):
@@ -384,6 +388,15 @@ class LogTailArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     log_path: Any | None = None
     max_lines: float | None = None
+
+
+class MaterialAssignToActorArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    actor_label: Any | None = None
+    label: Any | None = None
+    material: Any | None = None
+    material_path: Any | None = None
+    slot: float | None = None
 
 
 class MaterialBuildGraphArgs(BaseModel):
@@ -639,6 +652,8 @@ class SpawnActorArgs(BaseModel):
     light_intensity: Any | None = None
     location: Any | None = None
     material: Any | None = None
+    material_path: Any | None = None
+    mesh_path: Any | None = None
     mobility: Any | None = None
     rotation: Any | None = None
     scale: Any | None = None
@@ -877,6 +892,7 @@ GENERATED: dict[str, type[BaseModel]] = {
     "list_assets": ListAssetsArgs,
     "load_level": LoadLevelArgs,
     "log_tail": LogTailArgs,
+    "material_assign_to_actor": MaterialAssignToActorArgs,
     "material_build_graph": MaterialBuildGraphArgs,
     "material_function_build": MaterialFunctionBuildArgs,
     "material_function_inspect": MaterialFunctionInspectArgs,

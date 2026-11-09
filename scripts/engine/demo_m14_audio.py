@@ -18,14 +18,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts"))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
+sys.path.insert(0, str(REPO / "scripts" / "engine"))
 
 import demo_m11_landscape as land  # noqa: E402
 from src.gameforge_ide.backend.tools.sfx_synth import SFXSpec, generate_sfx  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
 REPORT = REPO / "reports" / "m14_audio_demo.json"
-SFX_OUT = Path(rf"E:\GameForge\assets\generated\audio\m14_demo_{time.strftime('%Y%m%d')}")
+SFX_OUT = (get_settings().data_root / "assets" / f"generated/audio/m14_demo_{time.strftime('%Y%m%d')}")
 ATT = "/Game/M14/Audio/ATT_GFDefault"
 SOUNDS = {"Pickup": SFXSpec(name="Pickup", kind="pickup", seed=4), "Wind": SFXSpec(name="Wind", kind="wind_loop", seed=9)}
 

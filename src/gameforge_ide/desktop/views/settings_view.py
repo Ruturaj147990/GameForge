@@ -255,6 +255,16 @@ class SettingsView(QWidget):
         self._lbl_routing_source.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
         layout.addWidget(self._lbl_routing_source)
 
+        hosted_row = QHBoxLayout()
+        self._btn_hosted_providers = QPushButton("Configure Hosted Providers & Spend Caps…", box)
+        self._btn_hosted_providers.setObjectName("btnConfigureHostedProviders")
+        self._btn_hosted_providers.setAccessibleName("Configure hosted model providers and spend caps")
+        self._btn_hosted_providers.setCursor(Qt.PointingHandCursor)
+        self._btn_hosted_providers.clicked.connect(self._open_hosted_settings_dialog)
+        hosted_row.addWidget(self._btn_hosted_providers)
+        hosted_row.addStretch(1)
+        layout.addLayout(hosted_row)
+
         return box
 
     def _build_appearance_section(self) -> QGroupBox:
@@ -334,6 +344,11 @@ class SettingsView(QWidget):
         )
 
     # ── Browse Slots ─────────────────────────────────────────────────────────
+
+    def _open_hosted_settings_dialog(self) -> None:
+        from ..dialogs.hosted_settings import HostedSettingsDialog
+        dlg = HostedSettingsDialog(self._workspace, self)
+        dlg.exec()
 
     def _browse_engine(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Unreal Engine Root")
@@ -430,7 +445,7 @@ class SettingsView(QWidget):
 
         app_inst = QApplication.instance()
         if app_inst and not os.environ.get("PYTEST_CURRENT_TEST"):
-            apply_theme(app_inst, new_theme)
+            apply_theme(app_inst, new_theme, font_scale=self._font_scale_spin.value())
 
     @Slot(int)
     def _on_font_scale_changed(self, value: int) -> None:
@@ -653,7 +668,7 @@ class SettingsView(QWidget):
 
         app_inst = QApplication.instance()
         if app_inst and not os.environ.get("PYTEST_CURRENT_TEST"):
-            apply_theme(app_inst, new_theme)
+            apply_theme(app_inst, new_theme, font_scale=self._font_scale_spin.value())
 
         self._btn_save.setText("Saved ✓")
         QTimer.singleShot(2000, self._safe_reset_save_text)

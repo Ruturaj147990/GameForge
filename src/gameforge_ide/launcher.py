@@ -126,7 +126,10 @@ def _resolve_workspace(workspace_arg: Optional[Path | str] = None, portable: boo
 
     if portable or _is_portable_mode():
         # In portable mode, use a self-contained local workspace folder
-        app_root = Path(__file__).resolve().parents[2]
+        if getattr(sys, "frozen", False):
+            app_root = Path(sys.executable).resolve().parent
+        else:
+            app_root = Path(__file__).resolve().parents[2]
         portable_ws = app_root / "workspace"
         try:
             portable_ws.mkdir(parents=True, exist_ok=True)
@@ -167,6 +170,8 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose:
 
     app = QApplication(sys.argv)
     app.setApplicationName("GameForge IDE")
+    from .desktop.diagnostics.stall_monitor import setup_stall_monitor
+    setup_stall_monitor()
     app.setApplicationDisplayName("GameForge IDE")
     app.setOrganizationName("GameForge")
     app.setApplicationVersion("1.0.0")

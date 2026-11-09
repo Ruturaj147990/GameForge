@@ -13,24 +13,65 @@ from typing import Any, Dict, List, Optional
 from .base import EngineDiscoveryResult
 
 
+def _load_host_profile_paths() -> Dict[str, str]:
+    """Resolves host profile paths if GAMEFORGE_HOST_PROFILE or a host profile JSON exists."""
+    repo_root = Path(__file__).resolve().parents[3]
+    profile_name = os.environ.get("GAMEFORGE_HOST_PROFILE", "dev-rx7700xt")
+    profile_path = Path(profile_name)
+    if not profile_path.is_file():
+        profile_path = repo_root / "configs" / "host_profiles" / f"{profile_name}.json"
+    if profile_path.is_file():
+        try:
+            return json.loads(profile_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
 def discover_unreal_engine() -> EngineDiscoveryResult:
     """Discovers installed Unreal Engine installations on the local system."""
-    # 1. Check explicit environment override
-    custom_ue = os.environ.get("GAMEFORGE_UE_PATH") or os.environ.get("UNREAL_ENGINE_PATH")
+    repo_root = Path(__file__).resolve().parents[3]
+    custom_ue = os.environ.get("GAMEFORGE_UE_PATH") or os.environ.get("UNREAL_ENGINE_PATH") or os.environ.get("GAMEFORGE_UNREAL_ENGINE_ROOT")
     candidate_dirs: List[Path] = []
     if custom_ue:
         candidate_dirs.append(Path(custom_ue))
 
-    # 2. Known local drives and standard install directories
-    candidate_dirs.extend([
-        Path(r"E:\UE\UE_5.7"),
-        Path(r"C:\Program Files\Epic Games\UE_5.7"),
-        Path(r"C:\Program Files\Epic Games\UE_5.6"),
-        Path(r"C:\Program Files\Epic Games\UE_5.5"),
-        Path(r"C:\Program Files\Epic Games\UE_5.4"),
-        Path(r"D:\UE\UE_5.7"),
-        Path(r"E:\UE\UE_5.6"),
-    ])
+    profile = _load_host_profile_paths()
+    if profile.get("unreal_engine_root"):
+        candidate_dirs.append(Path(profile["unreal_engine_root"]))
+    if profile.get("engine_root"):
+        candidate_dirs.append(Path(profile["engine_root"]))
+
+    # Also check configs/engine.json
+    engine_json = repo_root / "configs" / "engine.json"
+    if engine_json.is_file():
+        try:
+            ej = json.loads(engine_json.read_text(encoding="utf-8"))
+            if ej.get("engine_root"):
+                candidate_dirs.append(Path(ej["engine_root"]))
+        except Exception:
+            pass
+
+    # Delegate to gameforge_ide discovery if available
+    try:
+        from src.gameforge_ide.unreal.discovery import discover_all_engines
+        for inst in discover_all_engines():
+            inst_root = Path(inst.root) if not isinstance(inst.root, Path) else inst.root
+            if inst_root not in candidate_dirs:
+                candidate_dirs.append(inst_root)
+    except Exception:
+        try:
+            from gameforge_ide.unreal.discovery import discover_all_engines
+            for inst in discover_all_engines():
+                inst_root = Path(inst.root) if not isinstance(inst.root, Path) else inst.root
+                if inst_root not in candidate_dirs:
+                    candidate_dirs.append(inst_root)
+        except Exception:
+            pass
+
+    program_files = Path(os.environ.get("ProgramFiles", "/Program Files"))
+    for ver in ("5.7", "5.6", "5.5", "5.4"):
+        candidate_dirs.append(program_files / "Epic Games" / f"UE_{ver}")
 
     for ue_dir in candidate_dirs:
         if not ue_dir.is_dir():
@@ -65,7 +106,7 @@ def discover_unreal_engine() -> EngineDiscoveryResult:
     return EngineDiscoveryResult(
         engine_name="unreal",
         is_installed=False,
-        notes="Unreal Engine not found in default paths or environment variables.",
+        notes="Unreal Engine not found in configured host profile or environment variables.",
     )
 
 
@@ -76,15 +117,13 @@ def discover_unity_engine() -> EngineDiscoveryResult:
     if custom_unity:
         candidate_dirs.append(Path(custom_unity))
 
-    # Standard Unity Hub / Unity paths
+    program_files = Path(os.environ.get("ProgramFiles", "/Program Files"))
+    hub_editors = program_files / "Unity" / "Hub" / "Editor"
     candidate_dirs.extend([
-        Path(r"C:\Program Files\Unity\Hub\Editor"),
-        Path(r"C:\Program Files\Unity\Editor"),
-        Path(r"E:\Unity\Hub\Editor"),
+        hub_editors,
+        program_files / "Unity" / "Editor",
     ])
 
-    # Search Hub editor directory if it exists
-    hub_editors = Path(r"C:\Program Files\Unity\Hub\Editor")
     if hub_editors.is_dir():
         for sub in hub_editors.iterdir():
             candidate_dirs.append(sub)
@@ -134,14 +173,15 @@ def discover_toolchains() -> Dict[str, Any]:
             results["dotnet"] = "installed (version check timeout)"
 
     # MSBuild
-    vs_msbuild = Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe")
+    program_files = Path(os.environ.get("ProgramFiles", "/Program Files"))
+    vs_msbuild = program_files / "Microsoft Visual Studio" / "2022" / "Community" / "MSBuild" / "Current" / "Bin" / "MSBuild.exe"
     if vs_msbuild.is_file():
         results["msbuild"] = str(vs_msbuild)
     elif shutil.which("msbuild"):
         results["msbuild"] = shutil.which("msbuild")
 
     # MSVC
-    msvc_dir = Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC")
+    msvc_dir = program_files / "Microsoft Visual Studio" / "2022" / "Community" / "VC" / "Tools" / "MSVC"
     if msvc_dir.is_dir():
         versions = [p.name for p in msvc_dir.iterdir() if p.is_dir()]
         results["msvc"] = versions[-1] if versions else "detected"

@@ -16,11 +16,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.backend.tools.csv_profile import parse_csv_profile  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-PROJECT = Path(rf"E:\GameForge\validation\m8v2_village_{time.strftime('%Y%m%d')}")
+PROJECT = (get_settings().require_dev("validation_root") / f"m8v2_village_{time.strftime('%Y%m%d')}")
 REPORT = REPO / "reports" / "m19_perf_village.json"
 
 

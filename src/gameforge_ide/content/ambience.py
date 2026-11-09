@@ -89,6 +89,20 @@ def generate_ambience_loop(
             drips[start:start + drip_dur] += 0.3 * np.sin(2.0 * np.pi * drip_freq * dt) * decay
 
         audio = drone + sub_noise + drips
+    elif kind == "city":
+        # Distant urban traffic rumble + subtle electrical hum + sporadic horn/siren harmonic sweeps
+        traffic = _filtered_noise(duration_s, lfo_hz=0.22, sample_rate=sample_rate) * 0.65
+        hum = 0.12 * np.sin(2.0 * np.pi * 60.0 * t) + 0.06 * np.sin(2.0 * np.pi * 120.0 * t)
+        pulses = np.zeros(n_samples)
+        num_pulses = max(1, int(duration_s * 0.5))
+        for _ in range(num_pulses):
+            start = np.random.randint(0, max(1, n_samples - int(0.4 * sample_rate)))
+            p_dur = int(0.35 * sample_rate)
+            pt = np.linspace(0.0, 0.35, p_dur, endpoint=False)
+            f0 = np.random.choice([380.0, 440.0, 520.0])
+            env = np.sin(np.pi * np.linspace(0.0, 1.0, p_dur)) * 0.18
+            pulses[start:start + p_dur] += env * (np.sin(2.0 * np.pi * f0 * pt) + 0.5 * np.sin(2.0 * np.pi * (f0 * 1.25) * pt))
+        audio = traffic + hum + pulses
     else:
         audio = _filtered_noise(duration_s, sample_rate=sample_rate)
 

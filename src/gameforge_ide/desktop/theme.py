@@ -22,12 +22,16 @@ from .styles.dark_theme import (
 from .icons import clear_icon_cache
 
 
-def apply_theme(app: Optional[QApplication] = None, theme: str = "dark") -> str:
+def apply_theme(
+    app: Optional[QApplication] = None,
+    theme: str = "dark",
+    font_scale: Optional[int] = None,
+) -> str:
     """Apply a studio theme (dark or light) and update active widget styles."""
     target_app = app or QApplication.instance()
     if target_app is None:
         return normalize_theme_name(theme)
-    result = _apply_theme_internal(target_app, theme)
+    result = _apply_theme_internal(target_app, theme, font_scale=font_scale)
     clear_icon_cache()
     return result
 

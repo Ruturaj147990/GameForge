@@ -9,6 +9,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_color
 from ...forge.model import StepRecord
 
 STEP_ROLE = Qt.UserRole + 1
@@ -48,15 +49,15 @@ class StepRowDelegate(QStyledItemDelegate):
         has_focus = bool(option.state & QStyle.State_HasFocus)
 
         # Background & WCAG focus outline
-        bg_col = QColor(tokens.BG_HOVER) if is_hover else (QColor(tokens.BG_ACTIVE) if is_selected else QColor(tokens.BG_SURFACE))
+        bg_col = QColor(theme_color(tokens.BG_HOVER)) if is_hover else (QColor(theme_color(tokens.BG_ACTIVE)) if is_selected else QColor(theme_color(tokens.BG_SURFACE)))
         if has_focus:
-            border_col = QColor(tokens.BORDER_FOCUS)
+            border_col = QColor(theme_color(tokens.BORDER_FOCUS))
             border_width = 1.5
         elif is_selected:
-            border_col = QColor(tokens.ACCENT_PRIMARY)
+            border_col = QColor(theme_color(tokens.ACCENT_PRIMARY))
             border_width = 1.0
         else:
-            border_col = QColor(tokens.BORDER)
+            border_col = QColor(theme_color(tokens.BORDER))
             border_width = 1.0
 
         painter.setBrush(QBrush(bg_col))
@@ -66,7 +67,7 @@ class StepRowDelegate(QStyledItemDelegate):
         # Status icon
         st = (step.status or "").upper()
         icon_symbol, icon_color = self._get_status_icon(st)
-        painter.setPen(QColor(icon_color))
+        painter.setPen(QColor(theme_color(icon_color)))
         font = painter.font()
         font.setPointSize(tokens.FONT_BODY)
         font.setBold(True)
@@ -77,23 +78,23 @@ class StepRowDelegate(QStyledItemDelegate):
         right_x = r.right() - 8
         dur_str = format_step_duration(step.started_at, step.finished_at)
 
-        painter.setPen(QColor(tokens.TEXT_MUTED))
+        painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
         font.setPointSize(tokens.FONT_BODY_SM)
         painter.setFont(font)
 
         if step.checkpoint:
             ckpt_w = 48
             ckpt_rect = QRect(right_x - ckpt_w, r.y() + (r.height() - 18) // 2, ckpt_w, 18)
-            painter.setBrush(QBrush(QColor(tokens.BG_PANEL)))
-            painter.setPen(QPen(QColor(tokens.ACCENT_HOVER), 0.75))
+            painter.setBrush(QBrush(QColor(theme_color(tokens.BG_PANEL))))
+            painter.setPen(QPen(QColor(theme_color(tokens.ACCENT_HOVER)), 0.75))
             painter.drawRoundedRect(ckpt_rect, 3, 3)
-            painter.setPen(QColor(tokens.ACCENT_HOVER))
+            painter.setPen(QColor(theme_color(tokens.ACCENT_HOVER)))
             painter.drawText(ckpt_rect, Qt.AlignCenter, "⎘ ckpt")
             right_x -= (ckpt_w + 6)
 
         if dur_str:
             dur_w = max(60, painter.fontMetrics().horizontalAdvance(dur_str) + 8)
-            painter.setPen(QColor(tokens.TEXT_MUTED))
+            painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
             painter.drawText(QRect(right_x - dur_w, r.y(), dur_w, r.height()), Qt.AlignRight | Qt.AlignVCenter, dur_str)
             right_x -= (dur_w + 8)
 
@@ -102,7 +103,7 @@ class StepRowDelegate(QStyledItemDelegate):
         font.setBold(False)
         painter.setFont(font)
         text_color = tokens.TEXT_PRIMARY if st in ("DONE", "RUNNING", "FAILED", "FAIL", "CANCELLED", "CANCELED") else tokens.TEXT_MUTED
-        painter.setPen(QColor(text_color))
+        painter.setPen(QColor(theme_color(text_color)))
         title_text = step.step_id.replace("_", " ").capitalize()
         title_left = r.x() + 32
         avail_w = max(30, right_x - title_left - 8)

@@ -1,0 +1,11 @@
+{
+  "path": "E:\\GameForge\\artifacts\\gameforge-27b\\gameforge-27b-q4_k_m.gguf",
+  "size_bytes": 16810714464,
+  "size_gib": 15.656197875738144,
+  "size_gb": 16.810714464,
+  "magic": "GGUF",
+  "version": 3,
+  "tensor_count": 866,
+  "kv_count": 42,
+  "sha256": "5d525cfd5dbad1f27eb1cd6c561e00f5a5c7806e9b8c797712dfeb2c5da5ba71"
+}

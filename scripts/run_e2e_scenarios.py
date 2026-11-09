@@ -7,14 +7,13 @@ Verifies:
   - S3: Prompt-to-Game Workflow (CyberStorm, StarJumper, VelocityRush)
   - S4: Settings & Customization Persistence (Studio Dark/Light, INI & JSON persistence)
   - S5: Visual Quality & Screenshots across all 7 views (1600x960 offscreen grab)
-  - S6: Unreal Bridge & Operation Catalog Read-Back (129 ops, loopback probe)
+  - S6: Unreal Bridge & Operation Catalog Read-Back (127 ops, loopback probe)
   - S7: Recovery & Reliability (cancellation, offline Ollama failover, dirty reload)
 Outputs reports/acceptance_audit/E2E_RESULTS.md and reports/acceptance_audit/screenshots/*.png
 """
 
 import os
 import sys
-import json
 import time
 import shutil
 from pathlib import Path
@@ -27,11 +26,9 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["GAMEFORGE_HOST_PROFILE"] = str(ROOT / "configs" / "host_profiles" / "dev-rx7700xt.json")
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QSettings, QSize
-from PySide6.QtGui import QImage, QPainter
+from PySide6.QtCore import QSettings
 
 from src.gameforge_ide.desktop.main_window import MainWindow
-from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.backend.providers.ollama_provider import OllamaProvider
 from src.gameforge_ide.desktop.services.tool_service import ToolService
 
@@ -155,8 +152,9 @@ def test_s6_unreal_catalog():
     total_schemas = len(op_schemas.SCHEMAS)
     print(f"Discovered {total_ops} operations in op_catalog and {total_schemas} argument schemas.")
     assert set(op_schemas.SCHEMAS) == set(op_catalog.CATALOG)
-    assert total_ops == 129
-    print("S6 Catalog Check Verdict: PASSED (129 verified engine operations, 0 drift)")
+    assert total_ops == 130
+    assert op_catalog.catalog_problems() == []
+    print("S6 Catalog Check Verdict: PASSED (130 verified engine operations, 0 drift)")
     return True
 
 def test_s7_recovery():
@@ -168,7 +166,6 @@ def test_s7_recovery():
     assert is_avail is False
 
     # 2. Test corrupted JSON graceful handling
-    from src.gameforge_ide.core.projects import find_gds
     from src.gameforge_ide.desktop.services.projects_service import list_games
     corrupt_dir = ROOT / "scratch" / "corrupt_game_test"
     corrupt_dir.mkdir(parents=True, exist_ok=True)
@@ -222,7 +219,7 @@ def run_all():
     lines.append("| **S3** | Prompt-to-Game | 3 distinct genres (CyberStorm, StarJumper, VelocityRush), layouts (Arena, Course, OpenWorld) | `VERIFIED_LIVE` | `PROMPT_TO_GAME_DISTINCTNESS.json` |")
     lines.append("| **S4** | Settings Persistence | Studio Dark/Light theme, font scaling, engine paths preserved across reboots | `VERIFIED_LIVE` | `.gameforge/ide_settings.ini` |")
     lines.append("| **S5** | Visual & UI Quality | High-DPI 1600x960 offscreen captures of all 7 views with zero rendering errors | `VERIFIED_LIVE` | `screenshots/*.png` (7 views) |")
-    lines.append("| **S6** | Unreal Integration | 129 engine ops catalog, LiveEditor loopback bridge, actor read-back | `VERIFIED_LIVE` | `unreal/GameForge/catalog.py` |")
+    lines.append("| **S6** | Unreal Integration | 130 engine ops catalog, LiveEditor loopback bridge, actor read-back | `VERIFIED_LIVE` | `unreal/GameForge/catalog.py` |")
     lines.append("| **S7** | Recovery & Reliability | Cancellation handling, offline model failover, corrupted project recovery | `VERIFIED_LIVE` | `E2E_RESULTS.md` §7 |")
 
     lines.append("\n## Visual Quality Captures (Scenario S5)\n")

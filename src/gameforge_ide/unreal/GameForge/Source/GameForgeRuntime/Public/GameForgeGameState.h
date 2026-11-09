@@ -38,16 +38,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Stats")
 	void AddStat(FName StatName, float Delta);
 
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Stats")
+	int32 IncrementCounter(FName CounterName, int32 Delta = 1);
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Stats")
+	int32 GetCounter(FName CounterName) const;
+
 	void SetStatBounds(FName StatName, float MinVal, float MaxVal, bool bMin, bool bMax);
 
 	UPROPERTY(BlueprintAssignable, Category = "GameForge|Stats")
 	FOnGameForgeStatChanged OnStatChanged;
 
 	const TMap<FName, float>& GetAllStats() const { return Stats; }
+	const TMap<FName, int32>& GetAllCounters() const { return Counters; }
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Stats")
 	TMap<FName, float> Stats;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Stats")
+	TMap<FName, int32> Counters;
 
 	TMap<FName, FGameForgeStatBounds> StatBounds;
 

@@ -310,6 +310,15 @@ class ExplorerPanel(QWidget):
     @Slot(str)
     def _on_search(self, text: str) -> None:
         text = text.strip().lower()
+        if text and self._tree.topLevelItemCount() > 0:
+            root_item = self._tree.topLevelItem(0)
+            for i in range(root_item.childCount()):
+                child = root_item.child(i)
+                if (
+                    child.data(0, Qt.UserRole + 1) == "dir"
+                    and child.text(0) in ("Source", "Config", "Content", "GameForge")
+                ):
+                    self._on_expand(child)
         self._filter_items(self._tree.invisibleRootItem(), text)
 
     def _filter_items(self, parent: QTreeWidgetItem, query: str) -> bool:

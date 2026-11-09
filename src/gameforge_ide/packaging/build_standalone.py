@@ -9,6 +9,7 @@ Compliant with GameForge Master Blueprint:
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -48,6 +49,27 @@ class StandalonePackager:
                 h.update(chunk)
         return h.hexdigest()
 
+    @classmethod
+    def _matches_forbidden_pattern(cls, rel_posix: str, item_name: str) -> bool:
+        """Match a relative POSIX path or item filename against FORBIDDEN_PATTERNS using fnmatch and path segments."""
+        rel_lower = rel_posix.strip("/").lower()
+        item_lower = item_name.lower()
+        rel_parts = [p for p in rel_lower.split("/") if p]
+
+        for pattern in cls.FORBIDDEN_PATTERNS:
+            pat = pattern.replace("\\", "/").strip("/").lower()
+            if "/" in pat:
+                pat_parts = [p for p in pat.split("/") if p]
+                n = len(pat_parts)
+                if any(rel_parts[i : i + n] == pat_parts for i in range(len(rel_parts) - n + 1)):
+                    return True
+                if fnmatch.fnmatch(rel_lower, pat) or fnmatch.fnmatch(rel_lower, f"*/{pat}") or fnmatch.fnmatch(rel_lower, f"{pat}/*"):
+                    return True
+            else:
+                if fnmatch.fnmatch(item_lower, pat) or any(fnmatch.fnmatch(seg, pat) for seg in rel_parts):
+                    return True
+        return False
+
     def assemble_bundle(self, clean: bool = True) -> Dict[str, Any]:
         """Assembles standalone distribution directory and writes launcher and manifest."""
         if clean and self.dist_root.exists():
@@ -66,12 +88,9 @@ class StandalonePackager:
             ignored = []
             for item in contents:
                 full = os.path.join(directory, item)
-                rel = os.path.relpath(full, self.repo_root).replace("\\", "/").lower()
-                for pattern in self.FORBIDDEN_PATTERNS:
-                    clean_pat = pattern.replace("*", "").lower()
-                    if clean_pat in rel or item == "__pycache__":
-                        ignored.append(item)
-                        break
+                rel = os.path.relpath(full, self.repo_root).replace("\\", "/")
+                if self._matches_forbidden_pattern(rel, item):
+                    ignored.append(item)
             return ignored
 
         shutil.copytree(
@@ -174,10 +193,11 @@ class StandalonePackager:
                 p = Path(root) / f
                 total_bytes += p.stat().st_size
                 name_lower = p.name.lower()
+                rel_posix = p.relative_to(self.dist_root).as_posix()
                 if name_lower.endswith(".gguf") or name_lower.endswith(".bin"):
                     errors.append(f"Model weight binary mistakenly bundled: {p}")
-                if "protected" in str(p).lower():
-                    errors.append(f"Protected grader mistakenly bundled: {p}")
+                if self._matches_forbidden_pattern(rel_posix, p.name):
+                    errors.append(f"Forbidden artifact mistakenly bundled: {p}")
 
         total_mb = total_bytes / (1024.0 * 1024.0)
         if total_mb > self.MAX_PACKAGE_SIZE_MB:

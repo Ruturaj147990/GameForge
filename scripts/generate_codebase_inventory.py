@@ -8,9 +8,8 @@ and generates reports/acceptance_audit/FILE_INVENTORY.md and ARCHITECTURE_AUDIT.
 import os
 import sys
 import ast
-import json
 from pathlib import Path
-from typing import Dict, List, Set, Any
+from typing import Dict, Any
 from datetime import datetime
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +19,7 @@ IGNORE_DIRS = {
     ".git", ".pytest_cache", ".ruff_cache", "__pycache__", "venv", ".venv",
     "scratch", ".system_generated"
 }
+
 
 def analyze_python_file(path: Path) -> Dict[str, Any]:
     try:
@@ -43,8 +43,7 @@ def analyze_python_file(path: Path) -> Dict[str, Any]:
                 imports.append(f"{mod}.{n.name}" if mod else n.name)
         elif isinstance(node, ast.ClassDef):
             classes.append(node.name)
-        elif isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-            # Only top-level or method
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             functions.append(node.name)
 
     lines = len(content.splitlines())
@@ -55,6 +54,7 @@ def analyze_python_file(path: Path) -> Dict[str, Any]:
         "classes": classes,
         "functions": functions,
     }
+
 
 def analyze_cpp_file(path: Path) -> Dict[str, Any]:
     try:
@@ -73,6 +73,7 @@ def analyze_cpp_file(path: Path) -> Dict[str, Any]:
         "lines": lines,
         "includes": includes,
     }
+
 
 def scan_all_files():
     file_records = []
@@ -108,15 +109,15 @@ def scan_all_files():
             cat = "other"
             if rel.startswith("src/gameforge_ide/desktop/"):
                 cat = "desktop_ui"
-            elif rel.startswith("src/gameforge_ide/core/"):
+            elif rel.startswith("src/gameforge_ide/core/") or rel.startswith("src/gameforge_ide/core/settings.py"):
                 cat = "core_ide"
-            elif rel.startswith("src/gameforge_ide/agent/"):
+            elif rel.startswith(("src/gameforge_ide/backend/agent/", "src/gameforge_ide/backend/providers/", "src/gameforge_ide/evals/")):
                 cat = "agent_runtime"
             elif rel.startswith("src/gameforge_ide/unreal/") or rel.startswith("unreal/"):
                 cat = "unreal_bridge"
-            elif rel.startswith("src/gameforge_ide/pipeline/") or rel.startswith("pipeline/"):
+            elif rel.startswith(("src/gameforge_ide/pipeline/", "src/gameforge_ide/composer/", "src/gameforge_ide/design/")):
                 cat = "pipeline_composer"
-            elif rel.startswith("src/gameforge_ide/tools/") or rel.startswith("tools/"):
+            elif rel.startswith("src/gameforge_ide/backend/tools/") or rel.startswith("src/gameforge_ide/backend/models/"):
                 cat = "tool_gateway"
             elif rel.startswith("Source/") or rel.startswith("Plugins/") or rel.endswith((".cpp", ".h", ".cs")):
                 cat = "cpp_gameplay"
@@ -130,7 +131,7 @@ def scan_all_files():
                 cat = "reports_audits"
             elif rel.startswith("scripts/"):
                 cat = "scripts_tools"
-            elif p.name in ["pyproject.toml", "package.json", "CMakeLists.txt", "setup.py", ".gitignore"]:
+            elif p.name in ["pyproject.toml", "requirements.txt", "GameForge.spec", "entrypoint.py", ".gitignore"]:
                 cat = "config_build"
 
             info = {
@@ -165,10 +166,11 @@ def scan_all_files():
 
     return file_records, categories
 
+
 def generate_inventory_markdown(records, categories):
     lines = []
     lines.append("# GameForge 1.0 — Complete Repository File Inventory")
-    lines.append(f"Generated: {datetime.now().isoformat()} | Verified by Antigravity Autonomous Inspector\n")
+    lines.append(f"Generated: {datetime.now().isoformat()}\n")
     lines.append("## Executive Summary")
     lines.append(f"- **Total Tracked Files Analyzed:** {len(records):,}")
     py_recs = [r for r in records if r["ext"] == ".py"]
@@ -185,20 +187,20 @@ def generate_inventory_markdown(records, categories):
     lines.append("|---|---|---|---|")
 
     cat_desc = {
-        "core_ide": "Application lifecycle, settings, unified project resolver, logging, async event loops",
-        "desktop_ui": "PySide6 Studio shell, 7 major views (Home, Games, Design, Build, Play, Evidence, Settings), custom widgets",
-        "agent_runtime": "Local Ollama LLM provider, prompt orchestration, plan execution, tool calling, memory context",
-        "unreal_bridge": "Live Unreal Editor bridge (loopback HTTP/REST), toolchain, Cook/Stage/Package runner, 129 engine operations",
-        "pipeline_composer": "Game design specification (GDS) generation, 3 procedural level generators (arena, course, lanes), asset placement",
+        "core_ide": "Application lifecycle, settings, host profile resolution, project registry, logging",
+        "desktop_ui": "PySide6 Studio shell, 5 primary navigation rail views (Home, Assistant, Unreal, Play & QA, Models) + Settings dialog",
+        "agent_runtime": "Local Ollama LLM provider, prompt orchestration, DAG task planner, tool calling, memory context",
+        "unreal_bridge": "Live Unreal Editor bridge (loopback HTTP/REST), toolchain, Cook/Stage/Package runner, 127 engine operations",
+        "pipeline_composer": "Game design specification (GDS) generation, composer lowering, kit stages, asset placement",
         "tool_gateway": "Sandboxed tool execution, approval gateway, diff reviewer, filesystem & process containment",
-        "cpp_gameplay": "Unreal Engine 5.7 C++ components, gameplay attribute systems, projectiles, pickups, HUD widgets",
-        "tests_unit": "764+ fast unit tests verifying isolated module behavior, PySide6 widgets, mock adapters",
-        "tests_protected": "45 tamper-proof protected grading oracles (t2_005, t2_008, t3_016, t3_017)",
-        "config_build": "pyproject.toml, package manifests, build scripts",
-        "docs_specs": "Canonical architecture docs (01_ARCHITECTURE.md to 08_TESTING_AND_EVIDENCE.md), roadmaps, handovers",
-        "reports_audits": "Evaluation logs, benchmark reports, acceptance audit ledger and screenshots",
-        "scripts_tools": "Automation scripts, acceptance tests, catalog checkers, launcher utilities",
-        "other": "Asset templates, static test fixtures, misc data"
+        "cpp_gameplay": "Unreal Engine 5.7 C++ plugin modules, gameplay libraries, runtime bridge",
+        "tests_unit": "Unit tests verifying isolated module behavior, PySide6 widgets, and adapters",
+        "tests_protected": "Tamper-proof protected grading oracles",
+        "config_build": "pyproject.toml, requirements.txt, PyInstaller spec, build configs",
+        "docs_specs": "Canonical architecture docs (00_STATUS.md to 08_TESTING_AND_EVIDENCE.md), roadmaps, handovers",
+        "reports_audits": "Evaluation logs, benchmark reports, acceptance audit ledger",
+        "scripts_tools": "Automation scripts, engine demos, model evaluation harnesses, op schema generators",
+        "other": "Benchmark foundation modules, schemas, configs"
     }
 
     for cat, recs in categories.items():
@@ -226,53 +228,36 @@ def generate_inventory_markdown(records, categories):
 
     return "\n".join(lines)
 
+
 def generate_architecture_audit_markdown(records, categories):
     lines = []
     lines.append("# GameForge 1.0 — Architecture Audit & Subsystem Verification")
-    lines.append(f"Generated: {datetime.now().isoformat()} | Verified by Antigravity Autonomous Inspector\n")
+    lines.append(f"Generated: {datetime.now().isoformat()}\n")
 
     lines.append("## 1. Desktop Application Architecture and UI")
-    lines.append("- **Framework:** PySide6 6.12.0 (Qt 6) desktop shell.")
-    lines.append("- **Layout Architecture:** Dual-mode shell supporting Studio Layout (`StudioShell`, dock-free modern multi-view) and classic Dock Layout (`StudioWindow`).")
-    lines.append("- **The 7 Canonical Views:**")
-    lines.append("  1. **Home (`HomeView`):** Dashboard, quick project launcher, system readiness telemetry, recent builds.")
-    lines.append("  2. **Games (`GamesView`):** Interactive project catalog, package status indicators, quick open/play actions.")
-    lines.append("  3. **Design (`DesignView`):** GDS viewer/editor, prompt-to-game interactive design, revision history, diff inspector.")
-    lines.append("  4. **Build (`BuildView`):** Forge executor pipeline monitor, live step log streaming, pause/resume, checkpoint rollback.")
-    lines.append("  5. **Play (`PlayView`):** Integrated game launcher, automated playthrough runner, QA metrics, FPS/performance HUD.")
-    lines.append("  6. **Evidence (`EvidenceView`):** Audit artifact gallery, test reports, screenshot inspect, protected oracle logs.")
-    lines.append("  7. **Settings (`SettingsView`):** Ollama model selector, engine paths, directories, theme toggle (Studio Dark/Light), font scaling.")
+    lines.append("- **Framework:** PySide6 (Qt 6) desktop shell (`MainWindow`).")
+    lines.append("- **Navigation Rail (5 Canonical Views + Settings Dialog):**")
+    lines.append("  1. **Home (`HomeView`):** Recent projects, genre cards, system readiness summary.")
+    lines.append("  2. **Assistant (`UnifiedAssistantView`):** Single natural-language prompt surface, GDS inspector, live build progress, and chat.")
+    lines.append("  3. **Unreal (`UnrealStudioView`):** Live Unreal Editor link status, level/actor inspector, viewport capture.")
+    lines.append("  4. **Play & QA (`QAPanel`):** Packaged game launcher, automated playthrough runner, QA metrics.")
+    lines.append("  5. **Models (`ModelsView`):** Local Ollama model routing, role assignments, and benchmark inspection.")
     lines.append("\n## 2. Directory Lifecycle & Project Identity Architecture")
-    lines.append("- **Canonical Resolver:** `src/gameforge_ide/core/projects.py` provides authoritative project identity and multi-root discovery.")
-    lines.append("- **Supported Project Roots:**")
-    lines.append("  - Configured `settings.projects_root`")
-    lines.append("  - Active IDE workspace directory")
-    lines.append("  - Dedicated large-storage path `E:\\GameForge\\projects`")
+    lines.append("- **Canonical Resolver:** `src/gameforge_ide/core/projects.py` and `src/gameforge_ide/core/settings.py` resolve paths via host profiles (`GAMEFORGE_HOST_PROFILE`).")
     lines.append("- **Project Marker Rules:** Directory containing `<ProjectName>.uproject` OR `design/spec.json` OR `gameforge.json`.")
-    lines.append("- **Cross-View Synchronization:** `MainWindow._on_project_selected` synchronizes `_agent`, `_tools`, `_chat_panel`, `_explorer`, `_terminal`, and views.")
     lines.append("\n## 3. Agent Runtime, Planning and Task Orchestration")
-    lines.append("- **Model Provider:** Local Ollama HTTP daemon on `127.0.0.1:11434` with model `gameforge-qwen3.5-9b:latest` (or `27b-sft`).")
-    lines.append("- **Constraint:** Programmatic calls enforce `\"think\": False` and bounded context `num_ctx: 4096`.")
-    lines.append("- **Streaming & Threading:** `ChatWorker` (QThread) handles streaming responses asynchronously without blocking Qt GUI thread.")
+    lines.append("- **Model Provider:** Local Ollama HTTP daemon configured via `configs/models_routing.json` (`gameforge-qwen3.5-9b:latest` primary, `gameforge-qwen3.5-4b:latest` fast).")
+    lines.append("- **Backend Modules:** `src/gameforge_ide/backend/agent/` (`agent_loop.py`, `task_planner.py`, `context_manager.py`, `repair_system.py`).")
     lines.append("\n## 4. Unreal Engine Bridge and Operation Catalogue")
-    lines.append("- **Toolchain:** `unreal/toolchain.py` interfaces with Unreal Build Tool (UBT) and Cook/Package pipelines.")
-    lines.append("- **Editor Bridge:** `unreal/live_editor.py` connects via loopback REST API (`127.0.0.1`) to the Unreal Engine Remote Execution plugin.")
-    lines.append("- **Operation Catalog:** Exactly 129 verified engine operations across actor spawning, level geometry, lighting, materials, and physics.")
-    lines.append("\n## 5. Procedural Composer & Generation Pipelines")
-    lines.append("- **Generator Engines:** 3 distinct topological algorithms in `pipeline/level_generator.py`:")
-    lines.append("  1. `arena`: Circular / radial walled combat arena with central focal points and perimeter cover.")
-    lines.append("  2. `course`: Sequential 3D obstacle and platforming route with elevation variations and checkpoints.")
-    lines.append("  3. `lanes`: Multi-path linear circuit with checkpoints and obstacle gates suited for racing/time trials.")
-    lines.append("- **Proof of Interpretation:** GDS parameters dynamically control room dimensions, obstacles, enemy count, and hazard density based on the player's text prompt.")
-    lines.append("\n## 6. Tool Gateway & Containment")
-    lines.append("- **Approval Protocol:** Modifying critical files or running destructive engine operations triggers PySide6 `ApprovalDialog`.")
-    lines.append("- **Diff Inspection:** Proposed GDS or code modifications generate unified diffs presented to the user prior to execution.")
-    lines.append("- **Containment:** Operations strictly contained to the active project workspace.")
-    lines.append("\n## 7. Protected Oracle Verification")
-    lines.append("- **Integrity:** `graders/protected/` is strictly read-only and passed 45/45 tests.")
-    lines.append("- **Coverage:** Pickup collection (t2_005), Projectile collision (t2_008), Player composition (t3_016), Health/Stamina HUD (t3_017).")
+    lines.append("- **Toolchain:** `src/gameforge_ide/unreal/toolchain.py` interfaces with Unreal Build Tool (UBT) and UAT Cook/Stage/Package pipelines.")
+    lines.append("- **Editor Bridge:** `src/gameforge_ide/unreal/live_editor.py` connects via loopback HTTP (`127.0.0.1:47815`) to the GameForge Unreal plugin.")
+    lines.append("- **Operation Catalog:** 127 verified engine operations in `src/gameforge_ide/unreal/GameForge/Content/Python/gameforge_ops/`.")
+    lines.append("\n## 5. Composer & Generation Pipelines")
+    lines.append("- **Composer Modules:** `src/gameforge_ide/composer/` (`composer.py`, `codegen.py`, `kit_map.py`, `level_layout.py`, `ui_builder.py`, `world_builder.py`).")
+    lines.append("- **Pipeline Stages:** `src/gameforge_ide/pipeline/` (`game_pipeline.py`, `stage_kit_level.py`, `stage_kit_assets.py`, `stage_kit_polish.py`, `stage_package.py`).")
 
     return "\n".join(lines)
+
 
 def main():
     print(f"Scanning repository: {ROOT}...")
@@ -294,6 +279,7 @@ def main():
     arch_path.write_text(arch_md, encoding="utf-8")
 
     print("File inventory and architecture audit successfully generated!")
+
 
 if __name__ == "__main__":
     main()

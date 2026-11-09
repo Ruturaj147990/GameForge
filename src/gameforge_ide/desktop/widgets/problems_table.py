@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from functools import lru_cache
 from ..styles import tokens
+from ..styles.dark_theme import theme_color, theme_stylesheet
 
 
-def _make_severity_icon(severity: str) -> QIcon:
-    """Generate crisp high-contrast icon for Error, Warning, or Info."""
+@lru_cache(maxsize=16)
+def _make_severity_icon_cached(sev: str, color_hex: str) -> QIcon:
     pixmap = QPixmap(16, 16)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
@@ -25,18 +27,18 @@ def _make_severity_icon(severity: str) -> QIcon:
     font.setPointSize(9)
     font.setBold(True)
     painter.setFont(font)
-    sev = severity.upper()
-    if "ERR" in sev:
-        painter.setPen(QColor(tokens.ACCENT_ERROR))
-        painter.drawText(QRect(0, 0, 16, 16), Qt.AlignCenter, "✕")
-    elif "WARN" in sev:
-        painter.setPen(QColor(tokens.ACCENT_WARNING))
-        painter.drawText(QRect(0, 0, 16, 16), Qt.AlignCenter, "▲")
-    else:
-        painter.setPen(QColor(tokens.ACCENT_PRIMARY))
-        painter.drawText(QRect(0, 0, 16, 16), Qt.AlignCenter, "ℹ")
+    painter.setPen(QColor(color_hex))
+    glyph = "✕" if "ERR" in sev else ("▲" if "WARN" in sev else "ℹ")
+    painter.drawText(QRect(0, 0, 16, 16), Qt.AlignCenter, glyph)
     painter.end()
     return QIcon(pixmap)
+
+
+def _make_severity_icon(severity: str) -> QIcon:
+    """Generate crisp high-contrast icon for Error, Warning, or Info."""
+    sev = severity.upper()
+    raw_col = tokens.ACCENT_ERROR if "ERR" in sev else (tokens.ACCENT_WARNING if "WARN" in sev else tokens.ACCENT_PRIMARY)
+    return _make_severity_icon_cached(sev, theme_color(raw_col))
 
 
 class ProblemsTable(QTableWidget):
@@ -100,7 +102,7 @@ class ProblemsTable(QTableWidget):
             item_sev = QTableWidgetItem(sev)
             item_sev.setFlags(item_sev.flags() & ~Qt.ItemIsEditable)
             col_str = tokens.ACCENT_ERROR if "ERR" in sev else (tokens.ACCENT_WARNING if "WARN" in sev else tokens.ACCENT_PRIMARY)
-            item_sev.setForeground(QColor(col_str))
+            item_sev.setForeground(QColor(theme_color(col_str)))
             item_sev.setIcon(_make_severity_icon(sev))
             item_sev.setToolTip(f"Severity: {sev}")
             item_sev.setData(Qt.UserRole, (file_path, line_no))
@@ -124,21 +126,21 @@ class ProblemsTable(QTableWidget):
             item_code = QTableWidgetItem(code)
             item_code.setFlags(item_code.flags() & ~Qt.ItemIsEditable)
             item_code.setData(Qt.UserRole, (file_path, line_no))
-            item_code.setForeground(QColor(tokens.TEXT_SECONDARY))
+            item_code.setForeground(QColor(theme_color(tokens.TEXT_SECONDARY)))
             self.setItem(r, 3, item_code)
 
             # Col 4: Source File
             item_file = QTableWidgetItem(file_path or "—")
             item_file.setFlags(item_file.flags() & ~Qt.ItemIsEditable)
             item_file.setData(Qt.UserRole, (file_path, line_no))
-            item_file.setForeground(QColor(tokens.TEXT_PRIMARY))
+            item_file.setForeground(QColor(theme_color(tokens.TEXT_PRIMARY)))
             self.setItem(r, 4, item_file)
 
             # Col 5: Line
             item_line = QTableWidgetItem(str(line_no) if line_no else "—")
             item_line.setFlags(item_line.flags() & ~Qt.ItemIsEditable)
             item_line.setData(Qt.UserRole, (file_path, line_no))
-            item_line.setForeground(QColor(tokens.TEXT_MUTED))
+            item_line.setForeground(QColor(theme_color(tokens.TEXT_MUTED)))
             self.setItem(r, 5, item_line)
 
     @Slot(QModelIndex)

@@ -1,0 +1,72 @@
+{
+  "name": "GFProcRock",
+  "generator": "GameForge-ProceduralPBR-V1",
+  "generator_version": "1.0.0",
+  "provenance": "procedural",
+  "license": "CC0-1.0",
+  "spec": {
+    "name": "GFProcRock",
+    "size": 512,
+    "seed": 11,
+    "base_color": [
+      0.62,
+      0.3,
+      0.18
+    ],
+    "color_variation": 0.5,
+    "roughness_range": [
+      0.45,
+      0.9
+    ],
+    "metallic": 0.0,
+    "normal_strength": 4.0,
+    "ao_strength": 0.8,
+    "base_frequency": 4,
+    "octaves": 5,
+    "persistence": 0.5,
+    "tags": []
+  },
+  "size": 512,
+  "normal_convention": "DirectX (Unreal)",
+  "orm_packing": {
+    "R": "AO",
+    "G": "Roughness",
+    "B": "Metallic"
+  },
+  "files": {
+    "BaseColor": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_BaseColor.png",
+      "sha256": "1e0dba1e7990334740acfb7c65578e6741dcf44946e01dd929c128728e087660",
+      "srgb": true,
+      "compression": "TC_Default",
+      "channels": 3
+    },
+    "Normal": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_Normal.png",
+      "sha256": "ebbe1621b1b7c4ad1421f2e5dd848b308317db661dfec6a6bd6c3bb37272364e",
+      "srgb": false,
+      "compression": "TC_Normalmap",
+      "channels": 3
+    },
+    "ORM": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_ORM.png",
+      "sha256": "444d6c8abd266b87d2f8e234db3631789c1394236dfadb885e057112dd28fe13",
+      "srgb": false,
+      "compression": "TC_Masks",
+      "channels": 3
+    },
+    "Height": {
+      "path": "E:\\GameForge\\assets\\generated\\textures\\m11_demo_20261031\\T_GFProcRock_Height.png",
+      "sha256": "a165ed04f56f68198955a6f673eed938924571e11dbfb578af807e329ff2ebb2",
+      "srgb": false,
+      "compression": "TC_Grayscale",
+      "channels": 1
+    }
+  },
+  "registry_ids": {
+    "BaseColor": "texture:T_GFProcRock_BaseColor:031c31c44d27",
+    "Normal": "texture:T_GFProcRock_Normal:0fbc453a93fa",
+    "ORM": "texture:T_GFProcRock_ORM:33602f932170",
+    "Height": "texture:T_GFProcRock_Height:6f1dd973769b"
+  }
+}

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from ...core.systems import SystemRow, SystemsSnapshot
 from ..icons import icon
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 
 class TopBar(QWidget):
@@ -45,6 +46,7 @@ class TopBar(QWidget):
         self.setFixedHeight(48)
         self._current_project: str = ""
         self._current_project_dir: Optional[Path] = None
+        self._last_system_state: str = "ok"
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 0)
@@ -56,7 +58,7 @@ class TopBar(QWidget):
         self.logo_btn.setAccessibleName("GameForge Home")
         self.logo_btn.setCursor(Qt.PointingHandCursor)
         self.logo_btn.setFocusPolicy(Qt.TabFocus)
-        self.logo_btn.setStyleSheet(f"""
+        self.logo_btn.setStyleSheet(theme_stylesheet(f"""
             QPushButton {{
                 color: {tokens.TEXT_PRIMARY};
                 font-weight: bold;
@@ -73,7 +75,7 @@ class TopBar(QWidget):
                 outline: 2px solid {tokens.BORDER_FOCUS};
                 background: {tokens.BG_HOVER};
             }}
-        """)
+        """))
         self.logo_btn.clicked.connect(self.homeRequested.emit)
         layout.addWidget(self.logo_btn)
 
@@ -85,7 +87,7 @@ class TopBar(QWidget):
         self.project_combo.setInsertPolicy(QComboBox.NoInsert)
         self.project_combo.setMinimumWidth(180)
         self.project_combo.setFocusPolicy(Qt.TabFocus)
-        self.project_combo.setStyleSheet(f"""
+        self.project_combo.setStyleSheet(theme_stylesheet(f"""
             QComboBox {{
                 background: {tokens.BG_SURFACE};
                 color: {tokens.TEXT_PRIMARY};
@@ -100,7 +102,7 @@ class TopBar(QWidget):
             QComboBox:focus {{
                 border: 2px solid {tokens.BORDER_FOCUS};
             }}
-        """)
+        """))
         self.project_combo.currentIndexChanged.connect(self._on_combo_index_changed)
         layout.addWidget(self.project_combo)
 
@@ -113,7 +115,7 @@ class TopBar(QWidget):
         # 3. Breadcrumb
         self.breadcrumb_label = QLabel("› Home", self)
         self.breadcrumb_label.setObjectName("topBarBreadcrumb")
-        self.breadcrumb_label.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 13px;")
+        self.breadcrumb_label.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 13px;"))
         layout.addWidget(self.breadcrumb_label)
 
         # 3a. Task Mode Selector (Authoritative controls in Chat header; hidden in TopBar to eliminate duplicate UI)
@@ -193,7 +195,7 @@ class TopBar(QWidget):
         self.assistant_btn.setFixedSize(32, 32)
         self.assistant_btn.setCursor(Qt.PointingHandCursor)
         self.assistant_btn.setFocusPolicy(Qt.TabFocus)
-        self.assistant_btn.setStyleSheet(f"""
+        self.assistant_btn.setStyleSheet(theme_stylesheet(f"""
             QToolButton {{
                 background: transparent;
                 border: 1px solid {tokens.BORDER};
@@ -207,7 +209,7 @@ class TopBar(QWidget):
                 outline: 2px solid {tokens.BORDER_FOCUS};
                 border-color: {tokens.BORDER_FOCUS};
             }}
-        """)
+        """))
         self.assistant_btn.clicked.connect(self.assistantToggled.emit)
         layout.addWidget(self.assistant_btn)
 
@@ -220,7 +222,7 @@ class TopBar(QWidget):
         self.palette_btn.setFixedSize(32, 32)
         self.palette_btn.setCursor(Qt.PointingHandCursor)
         self.palette_btn.setFocusPolicy(Qt.TabFocus)
-        self.palette_btn.setStyleSheet(f"""
+        self.palette_btn.setStyleSheet(theme_stylesheet(f"""
             QToolButton {{
                 background: transparent;
                 border: 1px solid {tokens.BORDER};
@@ -234,16 +236,16 @@ class TopBar(QWidget):
                 outline: 2px solid {tokens.BORDER_FOCUS};
                 border-color: {tokens.BORDER_FOCUS};
             }}
-        """)
+        """))
         self.palette_btn.clicked.connect(self.paletteRequested.emit)
         layout.addWidget(self.palette_btn)
 
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QWidget#studioTopBar {{
                 background: {tokens.BG_PANEL};
                 border-bottom: 1px solid {tokens.BORDER};
             }}
-        """)
+        """))
 
     def set_breadcrumb(self, text: str) -> None:
         self.breadcrumb_label.setText(text)
@@ -302,14 +304,6 @@ class TopBar(QWidget):
             self.project_path_label.setText("📁 No Project")
             self.project_path_label.setToolTip("No active project selected")
 
-    def _on_project_path_clicked(self) -> None:
-        """Reveal active project folder in Windows File Explorer or trigger open."""
-        if self._current_project_dir and self._current_project_dir.is_dir():
-            from ...core.projects import open_folder_in_file_manager
-            open_folder_in_file_manager(self._current_project_dir)
-        else:
-            self.openFolderRequested.emit()
-
     def _on_combo_index_changed(self, index: int) -> None:
         data = self.project_combo.itemData(index)
         if data == "__new_project__":
@@ -350,7 +344,7 @@ class TopBar(QWidget):
 
         self.run_chip.setText(label)
         bg = tokens.ACCENT_WARNING if waiting_approval else tokens.ACCENT_PRIMARY
-        self.run_chip.setStyleSheet(f"""
+        self.run_chip.setStyleSheet(theme_stylesheet(f"""
             QPushButton {{
                 background: {bg};
                 color: {tokens.TEXT_PRIMARY};
@@ -360,18 +354,19 @@ class TopBar(QWidget):
                 font-size: 12px;
                 font-weight: bold;
             }}
-        """)
+        """))
         self.run_chip.setVisible(True)
 
     def update_systems(self, snapshot: SystemsSnapshot) -> None:
         """Update systems pill state and popover menu."""
         state = snapshot.overall
+        self._last_system_state = state
         label_text = "● Ready ▾" if state == "ok" else "● Degraded ▾" if state == "degraded" else "● Offline ▾"
         self.systems_btn.setText(label_text)
         self._set_pill_style(state)
 
         self.systems_menu.clear()
-        self.systems_menu.setStyleSheet(f"""
+        self.systems_menu.setStyleSheet(theme_stylesheet(f"""
             QMenu {{
                 background: {tokens.BG_PANEL};
                 color: {tokens.TEXT_PRIMARY};
@@ -379,14 +374,15 @@ class TopBar(QWidget):
                 border-radius: {tokens.RADIUS}px;
                 padding: 6px;
             }}
-        """)
+        """))
 
         for row in snapshot.rows:
             self._add_system_menu_item(row)
 
     def _set_pill_style(self, state: str) -> None:
+        self._last_system_state = state
         color = tokens.ACCENT_SUCCESS if state == "ok" else tokens.ACCENT_WARNING if state == "degraded" else tokens.ACCENT_ERROR
-        self.systems_btn.setStyleSheet(f"""
+        self.systems_btn.setStyleSheet(theme_stylesheet(f"""
             QPushButton {{
                 background: {tokens.BG_SURFACE};
                 color: {color};
@@ -399,7 +395,7 @@ class TopBar(QWidget):
             QPushButton:hover {{
                 border-color: {tokens.BORDER_FOCUS};
             }}
-        """)
+        """))
 
     def refresh_icons(self) -> None:
         """Refresh toolbar icons to match active theme."""
@@ -418,15 +414,95 @@ class TopBar(QWidget):
 
     def update_theme(self) -> None:
         """Repaint top bar background and tool button icons with active theme tokens."""
-        self.setStyleSheet(f"""
+        self.setStyleSheet(theme_stylesheet(f"""
             QWidget#studioTopBar {{
                 background: {tokens.BG_PANEL};
                 border-bottom: 1px solid {tokens.BORDER};
             }}
-        """)
+        """))
+        if hasattr(self, "logo_btn"):
+            self.logo_btn.setStyleSheet(theme_stylesheet(f"""
+                QPushButton {{
+                    color: {tokens.TEXT_PRIMARY};
+                    font-weight: bold;
+                    font-size: 14px;
+                    background: transparent;
+                    border: none;
+                    padding: 4px 8px;
+                    border-radius: {tokens.RADIUS}px;
+                }}
+                QPushButton:hover {{
+                    background: {tokens.BG_HOVER};
+                }}
+                QPushButton:focus {{
+                    outline: 2px solid {tokens.BORDER_FOCUS};
+                    background: {tokens.BG_HOVER};
+                }}
+            """))
+        if hasattr(self, "project_combo"):
+            self.project_combo.setStyleSheet(theme_stylesheet(f"""
+                QComboBox {{
+                    background: {tokens.BG_SURFACE};
+                    color: {tokens.TEXT_PRIMARY};
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {tokens.RADIUS}px;
+                    padding: 4px 8px;
+                    font-size: 13px;
+                }}
+                QComboBox:hover {{
+                    border-color: {tokens.BORDER_FOCUS};
+                }}
+                QComboBox:focus {{
+                    border: 2px solid {tokens.BORDER_FOCUS};
+                }}
+            """))
+        if hasattr(self, "breadcrumb_label"):
+            self.breadcrumb_label.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 13px;"))
+        if hasattr(self, "systems_btn"):
+            self._set_pill_style(getattr(self, "_last_system_state", "ok"))
+        if hasattr(self, "systems_menu"):
+            self.systems_menu.setStyleSheet(theme_stylesheet(f"""
+                QMenu {{
+                    background: {tokens.BG_PANEL};
+                    color: {tokens.TEXT_PRIMARY};
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {tokens.RADIUS}px;
+                    padding: 6px;
+                }}
+            """))
         if hasattr(self, "assistant_btn"):
+            self.assistant_btn.setStyleSheet(theme_stylesheet(f"""
+                QToolButton {{
+                    background: transparent;
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {tokens.RADIUS}px;
+                }}
+                QToolButton:hover {{
+                    background: {tokens.BG_HOVER};
+                    border-color: {tokens.BORDER_FOCUS};
+                }}
+                QToolButton:focus {{
+                    outline: 2px solid {tokens.BORDER_FOCUS};
+                    border-color: {tokens.BORDER_FOCUS};
+                }}
+            """))
             self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
         if hasattr(self, "palette_btn"):
+            self.palette_btn.setStyleSheet(theme_stylesheet(f"""
+                QToolButton {{
+                    background: transparent;
+                    border: 1px solid {tokens.BORDER};
+                    border-radius: {tokens.RADIUS}px;
+                }}
+                QToolButton:hover {{
+                    background: {tokens.BG_HOVER};
+                    border-color: {tokens.BORDER_FOCUS};
+                }}
+                QToolButton:focus {{
+                    outline: 2px solid {tokens.BORDER_FOCUS};
+                    border-color: {tokens.BORDER_FOCUS};
+                }}
+            """))
             self.palette_btn.setIcon(icon("search", role="secondary", size=18))
 
     def _on_task_mode_changed(self, text: str) -> None:
@@ -448,7 +524,6 @@ class TopBar(QWidget):
 
     def _on_autonomy_profile_changed(self, text: str) -> None:
         # Keep permissions combo in sync
-        perm_map = {"manual": "Request All", "auto-edit": "Auto", "auto_edit": "Auto", "agentic": "Agentic"}
         perm_text = "Request All" if text.lower() == "manual" else ("Auto" if "auto" in text.lower() else "Unrestricted")
         self.permissions_mode_combo.blockSignals(True)
         self.permissions_mode_combo.setCurrentText(perm_text)

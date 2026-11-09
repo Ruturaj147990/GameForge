@@ -384,21 +384,21 @@ class GdsForm(QWidget):
 
         # ── 5. Collapsible Sections ───────────────────────────────────────────
         self._sec_look_sound = CollapsibleSection("Look & Sound", self, object_name="secLookSound")
-        lbl_look = QLabel("Art style: Low-poly stylized | Audio: Procedural SFX & Ambient music", self._sec_look_sound)
-        lbl_look.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
-        self._sec_look_sound.add_widget(lbl_look)
+        self._lbl_look = QLabel("Art style: Low-poly stylized | Audio: Procedural SFX & Ambient music", self._sec_look_sound)
+        self._lbl_look.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        self._sec_look_sound.add_widget(self._lbl_look)
         main_layout.addWidget(self._sec_look_sound)
 
         self._sec_hud_menus = CollapsibleSection("HUD & Menus", self, object_name="secHudMenus")
-        lbl_hud = QLabel("HUD: Reticle, Score, Health bar | Menus: Pause, Game Over screen", self._sec_hud_menus)
-        lbl_hud.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
-        self._sec_hud_menus.add_widget(lbl_hud)
+        self._lbl_hud = QLabel("HUD: Reticle, Score, Health bar | Menus: Pause, Game Over screen", self._sec_hud_menus)
+        self._lbl_hud.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        self._sec_hud_menus.add_widget(self._lbl_hud)
         main_layout.addWidget(self._sec_hud_menus)
 
         self._sec_tech = CollapsibleSection("Tech & Budgets", self, object_name="secTech")
-        lbl_tech = QLabel("Target: 60 FPS Win64 | Max draw calls: 1500 | Memory budget: 4 GB", self._sec_tech)
-        lbl_tech.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
-        self._sec_tech.add_widget(lbl_tech)
+        self._lbl_tech = QLabel("Target: 60 FPS Win64 | Max draw calls: 1500 | Memory budget: 4 GB", self._sec_tech)
+        self._lbl_tech.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        self._sec_tech.add_widget(self._lbl_tech)
         main_layout.addWidget(self._sec_tech)
 
         self._sec_acceptance = CollapsibleSection("Acceptance Tests (Scenarios)", self, object_name="secAcceptance")
@@ -523,6 +523,27 @@ class GdsForm(QWidget):
             self._edit_win.setText(", ".join(win_texts) if win_texts else "entity.relics.collected >= 5")
             self._edit_lose.setText(", ".join(lose_texts) if lose_texts else "player.health <= 0")
 
+            # Look & Sound / HUD / Tech dynamic updates
+            look_obj = getattr(spec, "look_and_sound", None) or getattr(spec, "presentation", None)
+            if look_obj and hasattr(self, "_lbl_look"):
+                art = getattr(look_obj, "art_style", None) or getattr(look_obj, "visual_style", "Low-poly stylized")
+                aud = getattr(look_obj, "audio_style", None) or getattr(look_obj, "music", "Procedural SFX & Ambient music")
+                self._lbl_look.setText(f"Art style: {art} | Audio: {aud}")
+            hud_obj = getattr(spec, "hud_and_menus", None) or getattr(spec, "ui", None)
+            if hud_obj and hasattr(self, "_lbl_hud"):
+                hud_elems = getattr(hud_obj, "hud_elements", None) or getattr(hud_obj, "elements", None)
+                menus = getattr(hud_obj, "menus", None)
+                hud_str = ", ".join(str(x) for x in hud_elems) if isinstance(hud_elems, (list, tuple)) and hud_elems else "Reticle, Score, Health bar"
+                menu_str = ", ".join(str(x) for x in menus) if isinstance(menus, (list, tuple)) and menus else "Pause, Game Over screen"
+                self._lbl_hud.setText(f"HUD: {hud_str} | Menus: {menu_str}")
+            tech_obj = getattr(spec, "tech_budgets", None) or getattr(spec, "budgets", None) or getattr(spec, "tech", None)
+            if tech_obj and hasattr(self, "_lbl_tech"):
+                fps = getattr(tech_obj, "target_fps", 60)
+                draws = getattr(tech_obj, "max_draw_calls", 1500)
+                mem = getattr(tech_obj, "memory_budget_gb", getattr(tech_obj, "max_memory_mb", 4096))
+                mem_str = f"{mem} GB" if mem < 128 else f"{mem} MB"
+                self._lbl_tech.setText(f"Target: {fps} FPS Win64 | Max draw calls: {draws} | Memory budget: {mem_str}")
+
             # Scenarios
             if spec.acceptance and spec.acceptance.scenarios:
                 s_lines = [f"• {sc.scenario_id}: {sc.derived_from} ({'must-pass' if sc.must_pass else 'optional'})" for sc in spec.acceptance.scenarios]
@@ -597,7 +618,7 @@ class GdsForm(QWidget):
                 from ...design.gds import StatCompare
                 stat_name, op, val = m.group(1).lower(), m.group(2), float(m.group(3))
                 # Normalize common shorthand stats
-                if stat_name in ("health", "lives", "stamina", "max_health"):
+                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
                     stat_name = f"player.{stat_name}"
                 elif stat_name in ("score", "time_s"):
                     stat_name = f"game.{stat_name}"

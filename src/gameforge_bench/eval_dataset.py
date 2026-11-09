@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Dict, Any
 
 
@@ -518,7 +519,22 @@ EVALUATION_QUESTIONS: List[Dict[str, Any]] = [
 ]
 
 
-def get_evaluation_dataset() -> List[Dict[str, Any]]:
+def get_evaluation_dataset(workspace_root: Path | None = None) -> List[Dict[str, Any]]:
+    """Loads the 60-question evaluation dataset from configs/gameforge_v1_eval_dataset.json with fallback."""
+    candidates = []
+    if workspace_root is not None:
+        candidates.append(Path(workspace_root) / "configs" / "gameforge_v1_eval_dataset.json")
+    candidates.append(Path(__file__).resolve().parents[2] / "configs" / "gameforge_v1_eval_dataset.json")
+    for cand in candidates:
+        if cand.is_file():
+            try:
+                data = json.loads(cand.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and isinstance(data.get("questions"), list):
+                    return data["questions"]
+                if isinstance(data, list):
+                    return data
+            except Exception:
+                pass
     return EVALUATION_QUESTIONS
 
 

@@ -428,7 +428,7 @@ BENCHMARK_TASKS = [
 def main():
     target_dirs = [
         Path("E:/GameForge/reports/gameforge-27b"),
-        Path("E:/gameforge_step1/reports/gameforge-27b")
+        (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b")
     ]
     for d in target_dirs:
         d.mkdir(parents=True, exist_ok=True)

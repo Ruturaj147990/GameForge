@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -28,12 +27,13 @@ sys.path.insert(0, str(ROOT))
 from src.gameforge_ide.backend.agent.plan_executor import PlanEvent, TaskPlanExecutor
 from src.gameforge_ide.backend.agent.plan_generator import PlanGenerator
 from src.gameforge_ide.backend.tools.gateway import ToolGateway
+from src.gameforge_ide.core.settings import get_settings
 
 
 def main() -> int:
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("uproject", nargs="?", default=r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
+    ap.add_argument("uproject", nargs="?", default=str(get_settings().require_dev("probe_project")))
     ap.add_argument("--forge", action="store_true", help="Run with Forge executor")
     args = ap.parse_args()
     uproject = Path(args.uproject)

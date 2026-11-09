@@ -15,9 +15,17 @@ class UCameraComponent;
 class USpringArmComponent;
 class UInputAction;
 class UInputMappingContext;
+class UGameForgeMenuWidget;
 
 UENUM(BlueprintType)
-enum class EGameForgeCameraMode : uint8 { ThirdPerson, TopDown, FirstPerson, SideScroller };
+enum class EGameForgeCameraMode : uint8
+{
+	ThirdPerson UMETA(DisplayName = "Third Person"),
+	TopDown UMETA(DisplayName = "Top Down"),
+	FirstPerson UMETA(DisplayName = "First Person"),
+	SideScroller UMETA(DisplayName = "Side Scroller"),
+	FixedBoard UMETA(DisplayName = "Fixed Board")
+};
 
 UCLASS(Blueprintable)
 class GAMEFORGERUNTIME_API AGameForgeCharacter : public ACharacter, public IAbilitySystemInterface
@@ -44,56 +52,86 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	EGameForgeCameraMode CameraMode = EGameForgeCameraMode::ThirdPerson;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float MoveSpeed = 600.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float WalkSpeed = 600.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float SprintSpeed = 900.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float JumpVelocity = 650.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float JumpZVelocity = 650.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float AttackDamage = 35.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float AttackRange = 250.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float AttackCooldown = 0.4f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float MaxHealth = 100.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float MaxStamina = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float DashImpulse = 1200.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	int32 Lives = 0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	bool bProjectileAttack = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	bool bRangedAttack = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float ProjectileSpeed = 2500.f;
 
 	/** Movement feel (previously engine defaults: AirControl 0.05 made platforming nearly impossible). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
-	float AirControl = 0.4f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float AirControl = 0.5f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
-	float GravityScale = 1.2f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float GravityScale = 1.0f;
 
 	/** 2 = double jump. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	int32 MaxJumps = 1;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
-	float SprintMultiplier = 1.6f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	bool bDoubleJump = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float SprintMultiplier = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	TArray<FString> Weapons;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	int32 ActiveWeaponIndex = 0;
 
 	/** Falling below this Z counts as a death (fall-out-of-world used to destroy the pawn and soft-lock the game). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float KillZ = -2000.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	FLinearColor BodyColor = FLinearColor(0.15f, 0.45f, 1.f, 1.f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	FString VisualStyle = TEXT("humanoid");
 
 	/** Primitive body used when the project has no character content (the player used to be an invisible capsule). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
@@ -105,7 +143,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UStaticMeshComponent> ProxyVisor;
 
-	UFUNCTION(BlueprintCallable, Category = "GameForge")
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void ApplyCameraMode();
 
 	/** Loads MeshPath/AnimClassPath (falling back to the Mannequins, then to the primitive proxy body). */
@@ -116,10 +154,23 @@ public:
 	void ResetForRespawn();
 	bool IsDead() const { return bDead; }
 
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void PerformAttack();
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void PerformMeleeAttack();
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void PerformRangedAttack();
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void PerformInteract();
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
+	void PerformDash();
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
+	void SwitchWeapon(int32 NewWeaponIndex = -1);
 
 	virtual void FellOutOfWorld(const UDamageType& dmgType) override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -133,6 +184,7 @@ private:
 	FVector ComputeAimDirection(FVector& OutMuzzle) const;
 
 	float LastAttackTime = -100.f;
+	float LastDashTime = -100.f;
 	bool bSprinting = false;
 	bool bDead = false;
 	bool bVisualsApplied = false;
@@ -155,6 +207,9 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "GameForge|Input")
 	TObjectPtr<UInputMappingContext> MappingContext;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UGameForgeMenuWidget> PauseMenuWidget;
+
 	bool IsContextAdded() const { return bContextAdded; }
 
 protected:
@@ -166,14 +221,18 @@ protected:
 	void HandleJumpStarted(const FInputActionValue& Value);
 	void HandleJumpCompleted(const FInputActionValue& Value);
 	void HandleSelect(const FInputActionValue& Value);
+	void HandleRollDice(const FInputActionValue& Value);
 	void HandleAttack(const FInputActionValue& Value);
 	void HandleInteract(const FInputActionValue& Value);
 	void HandleSprintStarted(const FInputActionValue& Value);
 	void HandleSprintCompleted(const FInputActionValue& Value);
+	void HandleDash(const FInputActionValue& Value);
+	void HandleSwitchWeapon(const FInputActionValue& Value);
 	void HandlePause(const FInputActionValue& Value);
 	void HandleRestart(const FInputActionValue& Value);
 	/** True while the game is over or paused: gameplay input (move, attack) is ignored, menu keys still work. */
 	bool IsGameplayBlocked() const;
+	bool IsCursorOverSelectable() const;
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UInputAction>> Actions;

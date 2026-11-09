@@ -5,8 +5,7 @@ and schema validation helpers.
 """
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Union
 
 from .draft import DesignDraft, DraftEntity, DraftLose, DraftWin
 from .gds import (
@@ -14,6 +13,7 @@ from .gds import (
     AddStat,
     AllOf,
     AnyOf,
+    ArchitectureSpec,
     ArtDirection,
     AudioSpec,
     Biome,
@@ -35,6 +35,7 @@ from .gds import (
     HudElement,
     InputActionSpec,
     InputSpec,
+    IntroSpec,
     LayoutKind,
     LevelSpec,
     Lighting,
@@ -60,10 +61,8 @@ from .gds import (
 )
 
 __all__ = [
-    # Top-level documents
     "GameDesignSpec",
     "DesignDraft",
-    # Submodels - Spec
     "Meta",
     "Overview",
     "Scene",
@@ -97,25 +96,24 @@ __all__ = [
     "HudElement",
     "ArtDirection",
     "AudioSpec",
+    "IntroSpec",
     "PresentationSpec",
     "TechSpec",
     "Acceptance",
+    "ArchitectureSpec",
     "ScenarioRef",
     "Vec2",
     "Vec3",
     "EventRef",
-    # Submodels - Draft
     "DraftEntity",
-    "DraftWin",
     "DraftLose",
-    # Enums
+    "DraftWin",
     "Genre",
     "CameraKind",
     "LayoutKind",
     "Biome",
     "Lighting",
     "EntityKind",
-    # Helpers
     "validate_gds",
     "validate_draft",
     "gds_json_schema",

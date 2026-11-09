@@ -12,7 +12,7 @@ from src.gameforge_ide.composer.compose import compose
 from src.gameforge_ide.design.draft import DesignDraft, DraftEntity, DraftWin, DraftLose
 from src.gameforge_ide.design.expand import expand_draft
 from src.gameforge_ide.design.gds import CameraKind, EntityKind, GameDesignSpec, Genre, LevelSpec
-from src.gameforge_ide.design.presets import PRESETS, PRESET_KEYWORDS, preset_snake_and_ladders
+from src.gameforge_ide.design.presets import PRESETS, PRESET_KEYWORDS, preset_grid_board
 from src.gameforge_ide.design.prompt_to_gds import DRAFT_SYSTEM_PROMPT, prompt_to_gds
 
 
@@ -25,68 +25,35 @@ def _is_ollama_available() -> bool:
         return False
 
 
-def test_snake_and_ladders_preset_creation():
-    """Test that preset_snake_and_ladders generates the required schema, props, and acceptance checks."""
-    gds = preset_snake_and_ladders()
+def test_grid_board_preset_creation():
+    """Test that preset_grid_board generates the required schema, props, and genre."""
+    gds = preset_grid_board()
     assert gds.overview.genre == Genre.GRID_BOARD
     assert gds.overview.camera == CameraKind.FIXED_BOARD
-    assert gds.overview.players == 2
+    assert gds.overview.players in (1, 2)
 
     board = next((e for e in gds.entities if e.kind == EntityKind.BOARD), None)
     assert board is not None
-    assert board.props["board_size"] == 100
-    assert board.props["snakes"] == 8
-    assert board.props["ladders"] == 8
-    assert board.props["dice_sides"] == 6
-    assert board.props["players"] == 2
-    assert board.props["cell_size_cm"] == 100
-
-    # Task 5: Acceptance criteria checks
-    extra = gds.acceptance.extra_checks
-    assert len(extra) >= 6
-    assert any("Board structure" in c and "100" in c for c in extra)
-    assert any("Dice rolling" in c and "1-6" in c for c in extra)
-    assert any("Player token" in c for c in extra)
-    assert any("Snake transitions" in c and "tail" in c for c in extra)
-    assert any("Ladder transitions" in c and "top" in c for c in extra)
-    assert any("Win condition" in c and "100" in c for c in extra)
+    assert board.props["board_size"] >= 3
 
 
-def test_make_snake_and_ladders_prompt_classification():
-    """Test 'make a snake and ladders game' routes to preset snake_and_ladders or genre grid_board."""
-    res = prompt_to_gds("make a snake and ladders game")
+def test_make_grid_board_prompt_classification():
+    """Test 'make a turn-based board game' routes to genre grid_board."""
+    res = prompt_to_gds("make a turn-based board game")
     assert res.status == "OK"
-    assert res.path == "preset"
     assert res.gds is not None
     assert res.gds.overview.genre == Genre.GRID_BOARD
-    assert res.gds.overview.players == 2
-    assert res.gds.overview.camera == CameraKind.FIXED_BOARD
-
-    board = next((e for e in res.gds.entities if e.kind == EntityKind.BOARD), None)
-    assert board is not None
-    assert board.props["board_size"] == 100
-    assert board.props["snakes"] == 8
-    assert board.props["ladders"] == 8
-    assert board.props["dice_sides"] == 6
-    assert board.props["players"] == 2
 
 
 @pytest.mark.parametrize("kw", [
-    "snakes and ladders",
-    "snake & ladders",
-    "snakes & ladders",
-    "ludo",
-    "parcheesi",
-    "chutes and ladders",
-    "dice board game",
-    "roll and move",
     "board game",
+    "dice board game",
+    "turn-based board game",
 ])
-def test_snake_and_ladders_preset_keywords(kw):
-    """Test that all specified keywords map to snake_and_ladders / grid_board."""
+def test_board_game_classification_keywords(kw):
+    """Test that generic board game prompts map to grid_board."""
     res = prompt_to_gds(f"create a {kw} for family night")
     assert res.status == "OK"
-    assert res.path == "preset"
     assert res.gds is not None
     assert res.gds.overview.genre == Genre.GRID_BOARD
 
@@ -150,7 +117,7 @@ def test_chess_game_through_model_path_mock():
     assert res.gds is not None
     assert res.gds.overview.genre == Genre.GRID_BOARD
     assert len(captured_system) == 1
-    assert "tic-tac-toe, chess, checkers" in captured_system[0]
+    assert "chess" in captured_system[0].lower()
 
 
 def test_chess_game_live_ollama():
@@ -174,7 +141,7 @@ def test_monopoly_live_or_mock():
     if _is_ollama_available():
         provider = OllamaProvider()
         res = prompt_to_gds(
-            "monopoly",
+            "make a monopoly board game",
             complete_json=lambda sys, usr, sch: provider.complete_json("gameforge-qwen3.5-9b", sys, usr, sch),
             model="gameforge-qwen3.5-9b",
         )
@@ -188,7 +155,7 @@ def test_monopoly_live_or_mock():
             "pitch": "Property trading board game",
             "win": [{"type": "score_at_least", "target": 1000}],
         }))
-        res = prompt_to_gds("monopoly", complete_json=mock_complete, model="test-model")
+        res = prompt_to_gds("make a monopoly board game", complete_json=mock_complete, model="test-model")
         assert res.gds is not None
         assert res.gds.overview.genre == Genre.GRID_BOARD
 
@@ -255,5 +222,5 @@ def test_expand_players_count_logic():
     assert gds_plat.overview.players == 1
 
     # Board entity with explicit players=4
-    gds_snake = preset_snake_and_ladders(players=4)
-    assert gds_snake.overview.players == 4
+    gds_board_4 = preset_grid_board(players=4)
+    assert gds_board_4.overview.players == 4

@@ -19,7 +19,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts"))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
+sys.path.insert(0, str(REPO / "scripts" / "engine"))
 
 import demo_m11_landscape as land  # noqa: E402
 
@@ -55,7 +56,7 @@ def walk_until(link, spot: dict, pred, timeout_s: float = 15.0):
 
 def run(rep: dict) -> None:
     checks, steps = rep["checks"], rep["steps"]
-    land.PLUGIN_BUILD = Path(r"E:\GameForge\validation\GameForgePlugin_neutral")
+    land.PLUGIN_BUILD = (get_settings().require_dev("validation_root") / r"GameForgePlugin_neutral")
     land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "m15_quest_"))
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()

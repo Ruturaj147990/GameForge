@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from ..services.projects_service import GameSummary
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +37,12 @@ class DeleteGameDialog(QDialog):
         self.setWindowTitle(f"Delete Game: {game.title}")
         self.setModal(True)
         self.resize(500, 320)
-        self.setStyleSheet(
+        self.setStyleSheet(theme_stylesheet(
             f"QDialog#{self.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  border: 1px solid {tokens.BORDER};"
             f"}}"
-        )
+        ))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(tokens.SPACE_LG, tokens.SPACE_LG, tokens.SPACE_LG, tokens.SPACE_LG)

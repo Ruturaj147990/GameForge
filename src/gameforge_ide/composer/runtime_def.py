@@ -30,6 +30,10 @@ def build(gds: Any, comp: Optional[Any] = None) -> Dict[str, Any]:
             )
         gfdef["custom_rules"] = custom_rules
 
+    if getattr(gds, "architecture", None) is not None:
+        arch = gds.architecture
+        gfdef["architecture"] = arch.model_dump() if hasattr(arch, "model_dump") else dict(arch)
+
     errors = validate_runtime_def(gfdef)
     if errors:
         raise ValueError(f"gfdef schema validation failed: {errors}")

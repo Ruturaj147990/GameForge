@@ -11,7 +11,6 @@ import ctypes
 from ctypes import wintypes
 import json
 import logging
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -19,14 +18,11 @@ import time
 from typing import Dict, Any, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.unreal.real_input import (
     RealInputSession,
     find_game_window_for_pid,
-    find_windows_for_pid,
-    find_window_by_title_contains,
-    focus_window,
-    get_client_rect,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -221,8 +217,8 @@ def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LOG_DIR = Path(r"E:\GameForge\validation\real_input_logs")
-PROJECTS = Path(r"E:\GameForge\projects")
+LOG_DIR = get_settings().require_dev("validation_root") / "real_input_logs"
+PROJECTS = get_settings().projects_root
 
 # Click targets are the HUD's own hitbox rectangles at 1280x720 (card_battler AGFCardHUD::DrawHUD):
 # 4-card hand -> card 0 centre (392, 600); player half of lane index 1 -> centre (640, 280).
@@ -264,9 +260,9 @@ def main(argv=None) -> int:
     for g in games:
         name = "Audit" + g
         packaged = PROJECTS / name / "Packaged" / "Windows"
-        exe = packaged / name / "Binaries" / "Win64" / f"{name}.exe"
+        exe = packaged / f"{name}.exe"
         if not exe.is_file():
-            exe = packaged / f"{name}.exe"
+            exe = packaged / name / "Binaries" / "Win64" / f"{name}.exe"
         reports.append(test_game(exe, name, GAME_TESTS[g]))
 
     summary_path = ROOT / "reports" / "packaged_real_input_summary.json"

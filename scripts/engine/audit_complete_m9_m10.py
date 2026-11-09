@@ -20,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.backend.models.animation_spec import LocomotionSetSpec  # noqa: E402
 from src.gameforge_ide.backend.models.character_spec import CharacterSpec  # noqa: E402
@@ -28,10 +29,10 @@ from src.gameforge_ide.backend.tools.character_rig_validator import CharacterRig
 from src.gameforge_ide.backend.tools.motion_generator import ProceduralKinematicMotionSynthesizer  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-UPROJECT = Path(r"E:\GameForge\validation\live_ops_probe\GFProbe.uproject")
+UPROJECT = (get_settings().require_dev("validation_root") / r"live_ops_probe\GFProbe.uproject")
 SHOTS = UPROJECT.parent / "Saved" / "Screenshots"
-CHAR_DIR = Path(r"E:\GameForge\assets\generated\characters\audit_20261030")
-ANIM_DIR = Path(r"E:\GameForge\assets\generated\animations\audit_20261030")
+CHAR_DIR = (get_settings().data_root / "assets" / r"generated\characters\audit_20261030")
+ANIM_DIR = (get_settings().data_root / "assets" / r"generated\animations\audit_20261030")
 QUARANTINE = "/Game/Quarantine/Characters/GFAdventurerHero"
 PROMOTED = "/Game/Characters/GFAdventurerHero"
 ANIMS = "/Game/Characters/GFAdventurerHero/Animations"

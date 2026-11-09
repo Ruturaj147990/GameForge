@@ -15,15 +15,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
-import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
 DATASET_DIR = Path("E:/GameForge/datasets/gameforge-27b-sft")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = Path("e:/gameforge_step1/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
 
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)

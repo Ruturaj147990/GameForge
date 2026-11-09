@@ -155,7 +155,7 @@ def base_sample_record() -> dict:
 def test_s7_i5_01_step5_prose_cannot_bypass_gate(tmp_path: Path):
     runner = TrainingRunner(
         workspace_root=Path("."),
-        config_path=Path("configs/training_config_step7_prototype.json"),
+        config_path=Path("configs/training_config_gameforge_v2.json"),
     )
     s5_ok, s6_ok, blockers = runner.check_prerequisite_gates()
     assert s5_ok is False
@@ -169,7 +169,7 @@ def test_s7_i5_01_step5_prose_cannot_bypass_gate(tmp_path: Path):
     shutil.copy("schemas/training_config_schema.json", fake_ws / "schemas" / "training_config_schema.json")
     (fake_ws / "GAMEFORGE_ROADMAP.csv").write_text("STEP_5,Baseline,Reported complete\n", encoding="utf-8")
 
-    fake_cfg = json.loads(Path("configs/training_config_step7_prototype.json").read_text(encoding="utf-8"))
+    fake_cfg = json.loads(Path("configs/training_config_gameforge_v2.json").read_text(encoding="utf-8"))
     cfg_file = fake_ws / "test_cfg.json"
     cfg_file.write_text(json.dumps(fake_cfg), encoding="utf-8")
 
@@ -230,7 +230,7 @@ def test_s7_i5_01_step5_prose_cannot_bypass_gate(tmp_path: Path):
 def test_s7_i5_02_step6_cannot_pass_without_real_eligible_records():
     runner = TrainingRunner(
         workspace_root=Path("."),
-        config_path=Path("configs/training_config_step7_prototype.json"),
+        config_path=Path("configs/training_config_gameforge_v2.json"),
     )
     _, s6_ok, blockers = runner.check_prerequisite_gates()
     assert s6_ok is False
@@ -473,7 +473,7 @@ def test_s7_i5_07_asset_provenance_and_metrics_enforcement(tmp_path: Path):
 # S7-I5-08: Full nested training-config schema and semantic validation
 # -----------------------------------------------------------------------------
 def test_s7_i5_08_training_config_schema_validation(tmp_path: Path):
-    cfg_path = Path("configs/training_config_step7_prototype.json")
+    cfg_path = Path("configs/training_config_gameforge_v2.json")
     runner = TrainingRunner(workspace_root=Path("."), config_path=cfg_path)
     ok, blockers = runner.validate_configuration_syntax()
     assert ok is True, f"Valid config rejected: {blockers}"
@@ -537,7 +537,7 @@ def test_s7_i5_09_dataset_identity_sensitivity(training_validator, base_sample_r
 # -----------------------------------------------------------------------------
 def test_s7_i5_10_dry_run_non_mutating(tmp_path: Path):
     target_out = tmp_path / "nonexistent_training_output_dir"
-    cfg = json.loads(Path("configs/training_config_step7_prototype.json").read_text(encoding="utf-8"))
+    cfg = json.loads(Path("configs/training_config_gameforge_v2.json").read_text(encoding="utf-8"))
     cfg["resource_budget"]["output_dir"] = str(target_out)
 
     cfg_file = tmp_path / "cfg.json"
@@ -557,7 +557,7 @@ def test_s7_i5_10_dry_run_non_mutating(tmp_path: Path):
 def test_s7_i5_11_hardware_incompatibility_blocks_execution():
     runner = TrainingRunner(
         workspace_root=Path("."),
-        config_path=Path("configs/training_config_step7_prototype.json"),
+        config_path=Path("configs/training_config_gameforge_v2.json"),
     )
     hw_ok, measurements, blockers = runner.check_hardware_and_resources()
     # PyTorch CPU-only build with GPU requested must fail closed
@@ -569,7 +569,7 @@ def test_s7_i5_11_hardware_incompatibility_blocks_execution():
 # S7-I5-12: Benchmark version/digest mismatches block readiness
 # -----------------------------------------------------------------------------
 def test_s7_i5_12_benchmark_version_integrity(tmp_path: Path):
-    cfg = json.loads(Path("configs/training_config_step7_prototype.json").read_text(encoding="utf-8"))
+    cfg = json.loads(Path("configs/training_config_gameforge_v2.json").read_text(encoding="utf-8"))
     cfg["evaluation_manifest"]["frozen_manifest_id"] = "mismatched-bench-v9.9.9"
 
     cfg_file = tmp_path / "mismatch_cfg.json"
@@ -643,7 +643,7 @@ def test_s7_i5_14_value_decision_rule_enforces_all_thresholds():
 def test_s7_i5_15_blocked_execution_fail_closed(tmp_path: Path):
     runner = TrainingRunner(
         workspace_root=Path("."),
-        config_path=Path("configs/training_config_step7_prototype.json"),
+        config_path=Path("configs/training_config_gameforge_v2.json"),
     )
     res = runner.execute_training()
     assert res["success"] is False
@@ -651,7 +651,7 @@ def test_s7_i5_15_blocked_execution_fail_closed(tmp_path: Path):
     assert len(res["blockers"]) > 0
 
     # Ensure no checkpoint or weights directories were created
-    chk_dir = Path("artifacts/training_checkpoints/exp_step7_prototype")
+    chk_dir = Path("artifacts/training/gameforge-v2/adapter")
     if chk_dir.exists():
         assert len(list(chk_dir.glob("*.bin"))) == 0
         assert len(list(chk_dir.glob("*.safetensors"))) == 0
@@ -674,7 +674,7 @@ def test_s7_i6_01_step5_acceptance_cannot_bypass_with_placeholder(tmp_path: Path
     shutil.copy("schemas/training_config_schema.json", fake_ws / "schemas" / "training_config_schema.json")
     shutil.copy("schemas/step5_acceptance_schema.json", fake_ws / "schemas" / "step5_acceptance_schema.json")
 
-    fake_cfg = json.loads(Path("configs/training_config_step7_prototype.json").read_text(encoding="utf-8"))
+    fake_cfg = json.loads(Path("configs/training_config_gameforge_v2.json").read_text(encoding="utf-8"))
     cfg_file = fake_ws / "test_cfg.json"
     cfg_file.write_text(json.dumps(fake_cfg), encoding="utf-8")
     runner = TrainingRunner(fake_ws, cfg_file)
@@ -740,7 +740,7 @@ def test_s7_i6_02_and_03_step6_readiness_unified_and_no_synthetic_authorization(
     shutil.copy("configs/dataset_source_register.json", fake_ws / "configs" / "dataset_source_register.json")
 
     # Config with missing manifest
-    cfg = json.loads(Path("configs/training_config_step7_prototype.json").read_text(encoding="utf-8"))
+    cfg = json.loads(Path("configs/training_config_gameforge_v2.json").read_text(encoding="utf-8"))
     cfg_file = fake_ws / "test_cfg.json"
     cfg_file.write_text(json.dumps(cfg), encoding="utf-8")
     runner = TrainingRunner(fake_ws, cfg_file)
@@ -825,7 +825,7 @@ def test_s7_i6_04_mandatory_contamination_scanning(tmp_path: Path, base_sample_r
 
 def test_s7_i6_06_configuration_schema_strictness(tmp_path: Path):
     """S7-I6-06: Complete schema and strict semantic validation reject malformed nested settings and non-finite numbers."""
-    cfg = json.loads(Path("configs/training_config_step7_prototype.json").read_text(encoding="utf-8"))
+    cfg = json.loads(Path("configs/training_config_gameforge_v2.json").read_text(encoding="utf-8"))
     cfg["hyperparameters"]["learning_rate"] = float("inf")
 
     cfg_file = tmp_path / "inf_cfg.json"
@@ -856,7 +856,7 @@ def test_s7_i6_07_no_invented_dataset_identity(training_validator, base_sample_r
 
 def test_s7_i6_08_benchmark_version_and_frozen_metadata(tmp_path: Path):
     """S7-I6-08: Benchmark release ID, version, status, and task reconciliation are verified."""
-    runner = TrainingRunner(Path("."), Path("configs/training_config_step7_prototype.json"))
+    runner = TrainingRunner(Path("."), Path("configs/training_config_gameforge_v2.json"))
     ok, blockers = runner.check_benchmark_version_integrity()
     assert ok is True, f"Valid frozen manifest failed: {blockers}"
 
@@ -871,8 +871,8 @@ def test_s7_i6_08_benchmark_version_and_frozen_metadata(tmp_path: Path):
     (ws / "configs").mkdir()
     shutil.copy(f_bm, ws / "configs" / "baseline_release_manifest.json")
     shutil.copy("schemas/training_config_schema.json", ws / "training_config_schema.json")
-    shutil.copy("configs/training_config_step7_prototype.json", ws / "configs" / "training_config_step7_prototype.json")
-    runner_corrupt = TrainingRunner(ws, ws / "configs" / "training_config_step7_prototype.json")
+    shutil.copy("configs/training_config_gameforge_v2.json", ws / "configs" / "training_config_gameforge_v2.json")
+    runner_corrupt = TrainingRunner(ws, ws / "configs" / "training_config_gameforge_v2.json")
     ok_c, b_c = runner_corrupt.check_benchmark_version_integrity()
     assert ok_c is False
     assert any("FROZEN" in item for item in b_c)

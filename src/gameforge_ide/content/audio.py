@@ -24,11 +24,20 @@ DEFAULT_SAMPLE_RATE = 44100
 ENGINE_SAMPLE_RATE = 48000
 
 
+def sfx_unreal_asset_path(preset_name: str) -> str:
+    """Return canonical Unreal asset path matching kit/runtime_def.py and composer/content.py."""
+    clean = preset_name.split(".", 1)[-1]
+    alias = {
+        "pickup": "pickup_chime",
+        "hit": "impact",
+        "win": "fanfare",
+        "lose": "defeat",
+    }.get(clean, clean)
+    return f"/Game/GameForge/SFX/S_{alias.title().replace('_', '')}"
+
+
 def resample_audio(samples: np.ndarray, in_rate: int, out_rate: int) -> np.ndarray:
-    """Resample 1D floating-point audio buffer from in_rate to out_rate.
-    
-    Uses band-safe linear interpolation across normalized time indices.
-    """
+    """Resample 1D floating-point audio buffer from in_rate to out_rate."""
     if in_rate <= 0 or out_rate <= 0:
         raise ValueError(f"Sample rates must be positive, got in_rate={in_rate}, out_rate={out_rate}")
     if in_rate == out_rate or len(samples) <= 1:
@@ -43,11 +52,7 @@ def resample_audio(samples: np.ndarray, in_rate: int, out_rate: int) -> np.ndarr
 
 
 def crossfade_loop(audio: np.ndarray, crossfade_samples: int, curve: str = "equal_power") -> np.ndarray:
-    """Seamlessly crossfade the tail of an audio buffer into its head.
-    
-    Eliminates loop pops, phase clicks, and silence dropouts.
-    Supports circular equal-power crossfade (sine/cosine) and linear crossfade.
-    """
+    """Seamlessly crossfade the tail of an audio buffer into its head."""
     fade = int(crossfade_samples)
     n = len(audio)
     if n <= 2 * fade or fade <= 0:
@@ -58,7 +63,6 @@ def crossfade_loop(audio: np.ndarray, crossfade_samples: int, curve: str = "equa
     tail = result[-fade:].copy()
 
     if curve == "equal_power":
-        # Circular sine/cosine equal-power crossfade prevents volume dips
         theta = 0.5 * np.pi * np.linspace(0.0, 1.0, fade, endpoint=False)
         ramp_head = np.sin(theta)
         ramp_tail = np.cos(theta)
@@ -144,7 +148,7 @@ class AudioService:
             aid = registry.register(rec)
             registry.advance(aid, "GENERATE", True, artifact_path=str(out))
             registry.advance(aid, "ENGINE_VERIFY", True, detail="PCM16 WAV validated")
-            registry.advance(aid, "PROMOTE", True, unreal_path=f"/Game/Audio/SFX_{preset_name}")
+            registry.advance(aid, "PROMOTE", True, unreal_path=sfx_unreal_asset_path(preset_name))
         return out
 
     def generate_music(
@@ -170,7 +174,7 @@ class AudioService:
             aid = registry.register(rec)
             registry.advance(aid, "GENERATE", True, artifact_path=str(out))
             registry.advance(aid, "ENGINE_VERIFY", True, detail="16-bar seamless loop validated")
-            registry.advance(aid, "PROMOTE", True, unreal_path=f"/Game/Audio/Music_{mood.capitalize()}")
+            registry.advance(aid, "PROMOTE", True, unreal_path=f"/Game/GameForge/Audio/Music_{mood.capitalize()}")
         return out
 
     def generate_ambience(
@@ -197,7 +201,7 @@ class AudioService:
             aid = registry.register(rec)
             registry.advance(aid, "GENERATE", True, artifact_path=str(out))
             registry.advance(aid, "ENGINE_VERIFY", True, detail="Seamless ambient loop validated")
-            registry.advance(aid, "PROMOTE", True, unreal_path=f"/Game/Audio/Ambience_{kind.capitalize()}")
+            registry.advance(aid, "PROMOTE", True, unreal_path=f"/Game/GameForge/Audio/Ambience_{kind.capitalize()}")
         return out
 
     def generate_full_suite(

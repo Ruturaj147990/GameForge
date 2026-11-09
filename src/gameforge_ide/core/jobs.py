@@ -22,6 +22,9 @@ _ACTIVE_PROCESSES: Set[subprocess.Popen] = set()
 _PROC_LOCK = threading.Lock()
 ENGINE_LOCK = threading.RLock()  # serialises every engine-mutating job and Forge step (design rule 6)
 
+PROCESS_SET_QUOTA = 0x0100
+PROCESS_TERMINATE = 0x0001
+
 if sys.platform == "win32":
     _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
@@ -64,8 +67,13 @@ if sys.platform == "win32":
     _k32.CreateJobObjectW.restype = wintypes.HANDLE
     _k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
     _k32.SetInformationJobObject.argtypes = (wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD)
+    _k32.SetInformationJobObject.restype = wintypes.BOOL
+    _k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    _k32.OpenProcess.restype = wintypes.HANDLE
     _k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    _k32.AssignProcessToJobObject.restype = wintypes.BOOL
     _k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    _k32.TerminateJobObject.restype = wintypes.BOOL
     _k32.CloseHandle.argtypes = (wintypes.HANDLE,)
     _k32.CloseHandle.restype = wintypes.BOOL
 
@@ -92,32 +100,45 @@ def adopt(proc: subprocess.Popen) -> bool:
     """Put an already-started child into the IDE job. Returns False (and logs) if Windows refuses."""
     with _PROC_LOCK:
         _ACTIVE_PROCESSES.add(proc)
-        # Prune terminated processes
         dead = [p for p in _ACTIVE_PROCESSES if p.poll() is not None]
         for p in dead:
             _ACTIVE_PROCESSES.discard(p)
 
     job = _job()
-    if job is None or not hasattr(proc, "_handle") or proc._handle is None:
+    if job is None:
         return False
-    try:
-        handle = wintypes.HANDLE(int(proc._handle))
-        ok = bool(_k32.AssignProcessToJobObject(job, handle))
-        if not ok:
-            err = ctypes.get_last_error()
+
+    raw_handle = getattr(proc, "_handle", None)
+    if raw_handle is not None:
+        try:
+            handle = wintypes.HANDLE(int(raw_handle))
+            ok = bool(_k32.AssignProcessToJobObject(job, handle))
+            if not ok:
+                err = ctypes.get_last_error()
+                logger.warning(
+                    "AssignProcessToJobObject failed for PID %s (error %s); tracked in fallback registry",
+                    getattr(proc, "pid", "?"),
+                    err,
+                )
+            return ok
+        except Exception as exc:
             logger.warning(
-                "AssignProcessToJobObject failed for PID %s (error %s); tracked in fallback registry",
+                "AssignProcessToJobObject exception for PID %s: %s; tracked in fallback registry",
                 getattr(proc, "pid", "?"),
-                err,
+                exc,
             )
-        return ok
-    except Exception as exc:
-        logger.warning(
-            "AssignProcessToJobObject exception for PID %s: %s; tracked in fallback registry",
-            getattr(proc, "pid", "?"),
-            exc,
-        )
-        return False
+            return False
+
+    pid = getattr(proc, "pid", None)
+    if pid is not None and sys.platform == "win32":
+        proc_handle = _k32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, int(pid))
+        if not proc_handle:
+            return False
+        try:
+            return bool(_k32.AssignProcessToJobObject(job, proc_handle))
+        finally:
+            _k32.CloseHandle(proc_handle)
+    return False
 
 
 def kill_process_tree(proc: subprocess.Popen) -> None:
@@ -155,7 +176,7 @@ def kill_process_tree(proc: subprocess.Popen) -> None:
                 pass
     try:
         proc.kill()
-    except Exception:
+    except (ProcessLookupError, Exception):
         pass
     try:
         proc.wait(timeout=0.2)
@@ -181,7 +202,6 @@ def terminate_all_children(exit_code: int = 1) -> bool:
                         pass
                     _JOB = None
 
-    # Terminate all processes tracked in fallback registry
     with _PROC_LOCK:
         procs = list(_ACTIVE_PROCESSES)
         _ACTIVE_PROCESSES.clear()
@@ -205,7 +225,7 @@ def terminate_all_children(exit_code: int = 1) -> bool:
         try:
             if p.poll() is None:
                 p.kill()
-        except Exception:
+        except (ProcessLookupError, Exception):
             pass
 
     return terminated_job or bool(procs)
@@ -253,7 +273,6 @@ class JobHandle:
         self.name = name or f"job_{id(self)}"
         self.cancel_event = cancel_event
 
-        # Ensure unhandled background exceptions are logged and published to event bus
         def _on_future_done(fut: concurrent.futures.Future) -> None:
             if not fut.cancelled():
                 try:
@@ -307,9 +326,7 @@ class JobHandle:
 
 
 class _DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
-    """ThreadPoolExecutor variant that creates daemon worker threads.
-    Daemon threads do not prevent interpreter exit and eliminate shutdown access violations.
-    """
+    """ThreadPoolExecutor variant that creates daemon worker threads."""
     def _adjust_thread_count(self) -> None:
         try:
             if hasattr(self, "_idle_semaphore") and self._idle_semaphore.acquire(timeout=0):
@@ -335,7 +352,6 @@ class _DaemonThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
                 self._threads.add(t)
                 _threads_queues[t] = self._work_queue
         except Exception:
-            # Fallback to base ThreadPoolExecutor thread creation if internals change
             super()._adjust_thread_count()
 
 
@@ -390,7 +406,6 @@ class JobManager:
         """Return list of currently pending or running jobs."""
         with self._jobs_lock:
             active = [h for h in self._jobs.values() if not h.done()]
-            # Prune completed jobs from dictionary
             self._jobs = {h.name: h for h in active}
             return active
 
@@ -458,4 +473,3 @@ def _cleanup_at_exit() -> None:
 
 
 atexit.register(_cleanup_at_exit)
-

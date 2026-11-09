@@ -12,7 +12,6 @@ Demonstrates:
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 import time
@@ -25,8 +24,7 @@ from src.gameforge_ide.composer.compose import compose
 from src.gameforge_ide.composer.plan import composition_to_run_spec
 from src.gameforge_ide.design.patch import apply_patch, propose_patch
 from src.gameforge_ide.forge.executor import ForgeExecutor, StepOutcome
-from src.gameforge_ide.forge.model import RunState, StepStatus
-from src.gameforge_ide.forge.project_graph import ProjectGraph
+from src.gameforge_ide.forge.model import RunState
 from src.gameforge_ide.forge.store import RunStore
 from src.gameforge_ide.pipeline.project_import import (
     enable_gameforge_management,

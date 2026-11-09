@@ -1,9 +1,24 @@
-"""Preset GameDesignSpecs matching the 5 legacy recipe genres (P1 WI-1.5)."""
+"""Baseline Archetype Presets for explicit `preset:<id>` invocation (P1 WI-1.5).
+
+Note: Natural-language prompts do NOT automatically select from these presets; they are
+used only when explicitly requested via `preset:<id>` syntax or as baseline structural
+references for test harnesses.
+"""
 from __future__ import annotations
 
 import re
 from typing import Any, Callable, Dict, List, Optional
 
+from .draft import DesignDraft, DraftLose, DraftWin
+from .expand import expand_draft
+from .gds import (
+    CameraKind,
+    EntityKind,
+    EntitySpec,
+    GameDesignSpec,
+    Genre,
+    Placement,
+)
 from .spec_from_prompt import (
     _AI_EASY,
     _AI_MED,
@@ -18,21 +33,6 @@ from .spec_from_prompt import (
     _TARGET,
     _WAVES,
     _WIN,
-    _pascal,
-)
-from .draft import DesignDraft, DraftEntity, DraftLose, DraftWin
-from .expand import expand_draft
-from .gds import (
-    CameraKind,
-    EndGame,
-    EntityKind,
-    EntitySpec,
-    EventRef,
-    GameDesignSpec,
-    Genre,
-    Placement,
-    RuleSpec,
-    StatCompare,
 )
 
 
@@ -57,6 +57,7 @@ def preset_tic_tac_toe(title: Optional[str] = None, **overrides) -> GameDesignSp
     board = _find_entity(gds, EntityKind.BOARD)
     if board:
         board.props = {
+            "board_mode": "n_in_a_row",
             "board_size": 3,
             "win_length": 3,
             "vs_ai": True,
@@ -65,7 +66,7 @@ def preset_tic_tac_toe(title: Optional[str] = None, **overrides) -> GameDesignSp
             "cell_size_cm": 200,
         }
         board.props.update(overrides.get("board_props", {}))
-        for k in ("board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm"):
+        for k in ("board_mode", "board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm"):
             if k in overrides:
                 board.props[k] = overrides[k]
     return gds
@@ -85,6 +86,7 @@ def preset_connect_four(title: Optional[str] = None, **overrides) -> GameDesignS
     board = _find_entity(gds, EntityKind.BOARD)
     if board:
         board.props = {
+            "board_mode": "n_in_a_row",
             "board_size": 7,
             "win_length": 4,
             "vs_ai": True,
@@ -93,7 +95,7 @@ def preset_connect_four(title: Optional[str] = None, **overrides) -> GameDesignS
             "cell_size_cm": 200,
         }
         board.props.update(overrides.get("board_props", {}))
-        for k in ("board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm"):
+        for k in ("board_mode", "board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm"):
             if k in overrides:
                 board.props[k] = overrides[k]
     return gds
@@ -113,6 +115,7 @@ def preset_gomoku(title: Optional[str] = None, **overrides) -> GameDesignSpec:
     board = _find_entity(gds, EntityKind.BOARD)
     if board:
         board.props = {
+            "board_mode": "n_in_a_row",
             "board_size": 15,
             "win_length": 5,
             "vs_ai": True,
@@ -121,7 +124,7 @@ def preset_gomoku(title: Optional[str] = None, **overrides) -> GameDesignSpec:
             "cell_size_cm": 150,
         }
         board.props.update(overrides.get("board_props", {}))
-        for k in ("board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm"):
+        for k in ("board_mode", "board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm"):
             if k in overrides:
                 board.props[k] = overrides[k]
     return gds
@@ -142,7 +145,8 @@ def preset_platformer(title: Optional[str] = None, **overrides) -> GameDesignSpe
     gds = expand_draft(draft)
     player = _find_entity(gds, EntityKind.PLAYER)
     if player:
-        player.props = {**player.props,
+        player.props = {
+            **player.props,
             "player_speed": 600,
             "jump_velocity": 650,
             "gravity_scale": 1.2,
@@ -172,7 +176,8 @@ def preset_arena_combat(title: Optional[str] = None, **overrides) -> GameDesignS
     gds = expand_draft(draft)
     spawner = _find_entity(gds, EntityKind.SPAWNER)
     if spawner:
-        spawner.props = {**spawner.props,
+        spawner.props = {
+            **spawner.props,
             "wave_count": waves,
             "enemies_per_wave": enemies,
             "enemy_max_health": 50,
@@ -184,7 +189,8 @@ def preset_arena_combat(title: Optional[str] = None, **overrides) -> GameDesignS
         spawner.props.update(overrides.get("spawner_props", {}))
     player = _find_entity(gds, EntityKind.PLAYER)
     if player:
-        player.props = {**player.props,
+        player.props = {
+            **player.props,
             "player_max_health": 100,
             "player_attack_damage": 35,
             "player_attack_range": 250,
@@ -240,7 +246,6 @@ def preset_procedural_world(title: Optional[str] = None, **overrides) -> GameDes
         "landmark_type": overrides.get("landmark_type", "Ruins"),
     }
     lvl.seed = int(overrides.get("seed", 2026))
-
     landmark = _find_entity(gds, EntityKind.LANDMARK)
     if not landmark:
         gds.entities.append(
@@ -269,7 +274,6 @@ def preset_relic_hunt(title: Optional[str] = None, **overrides) -> GameDesignSpe
     lvl = gds.scene.levels[0]
     lvl.layout = "open_world"
     lvl.lighting = "day"
-
     gds.entities = [
         EntitySpec(
             entity_id="player",
@@ -338,7 +342,8 @@ def preset_top_down_shooter(title: Optional[str] = None, **overrides) -> GameDes
 
     spawner = _find_entity(gds, EntityKind.SPAWNER)
     if spawner:
-        spawner.props = {**spawner.props,
+        spawner.props = {
+            **spawner.props,
             "wave_count": waves,
             "enemies_per_wave": enemies,
             "seconds_between_waves": 3.0,
@@ -347,45 +352,36 @@ def preset_top_down_shooter(title: Optional[str] = None, **overrides) -> GameDes
     return gds
 
 
-def preset_snake_and_ladders(title: Optional[str] = None, **overrides) -> GameDesignSpec:
-    t = title or "Snakes and Ladders"
+def preset_grid_board(title: Optional[str] = None, **overrides) -> GameDesignSpec:
+    """Generic configurable grid board archetype."""
+    t = title or "Grid Board Game"
+    bsize = int(overrides.get("board_size", 8))
+    bmode = str(overrides.get("board_mode", "n_in_a_row"))
     draft = DesignDraft(
         title=t,
         genre=Genre.GRID_BOARD,
         camera=CameraKind.FIXED_BOARD,
-        pitch="Snakes and ladders dice board game: roll 1-6, climb ladders, slide down snakes, reach cell 100 to win",
+        pitch="Configurable turn-based grid board game",
         win=[DraftWin(type="board_win")],
         lose=[DraftLose(type="board_loss")],
     )
     gds = expand_draft(draft)
-    gds.overview.players = 2
-    gds.meta.generator = "preset:snake_and_ladders"
+    gds.overview.players = int(overrides.get("players", 2))
     board = _find_entity(gds, EntityKind.BOARD)
     if board:
         board.props = {
-            "board_size": 100,
-            "snakes": 8,
-            "ladders": 8,
-            "dice_sides": 6,
-            "players": 2,
-            "cell_size_cm": 100,
+            "board_mode": bmode,
+            "board_size": bsize,
+            "win_length": int(overrides.get("win_length", min(bsize, 4))),
+            "vs_ai": bool(overrides.get("vs_ai", True)),
+            "gravity": bool(overrides.get("gravity", False)),
+            "ai_level": str(overrides.get("ai_level", "greedy")),
+            "cell_size_cm": float(overrides.get("cell_size_cm", 100.0)),
         }
         board.props.update(overrides.get("board_props", {}))
-        for k in ("board_size", "snakes", "ladders", "dice_sides", "players", "cell_size_cm"):
+        for k in ("board_mode", "board_size", "win_length", "vs_ai", "gravity", "ai_level", "cell_size_cm", "players", "dice_sides"):
             if k in overrides:
                 board.props[k] = overrides[k]
-        gds.overview.players = int(board.props.get("players", 2))
-    else:
-        gds.overview.players = 2
-
-    gds.acceptance.extra_checks = [
-        "Board structure (10x10 = 100 cells)",
-        "Dice rolling (1-6 outcomes)",
-        "Player token placement and movement",
-        "Snake transitions (land on snake head → move to tail)",
-        "Ladder transitions (land on ladder bottom → climb to top)",
-        "Win condition (player reaches cell 100)",
-    ]
     return gds
 
 
@@ -399,49 +395,21 @@ PRESETS: Dict[str, Callable[..., GameDesignSpec]] = {
     "procedural_world": preset_procedural_world,
     "relic_hunt": preset_relic_hunt,
     "top_down_shooter": preset_top_down_shooter,
-    "snake_and_ladders": preset_snake_and_ladders,
-    "board_game": preset_snake_and_ladders,
-    "dice_board": preset_snake_and_ladders,
+    "grid_board": preset_grid_board,
+    "board_game": preset_grid_board,
+    "dice_board": preset_grid_board,
 }
 
 PRESET_KEYWORDS: Dict[str, List[str]] = {
-    "snake_and_ladders": [
-        "snake and ladders", "snakes and ladders", "snake & ladders", "snakes & ladders",
-        "ludo", "parcheesi", "chutes and ladders", "dice board game", "roll and move",
-        "board game",
-    ],
-    "tic_tac_toe": [
-        "tic tac toe", "tic-tac-toe", "tictactoe", "noughts and crosses",
-        "naughts and crosses", "xs and os", "x and o", "x's and o's",
-    ],
-    "connect_four": [
-        "four in a row", "4 in a row", "connect four", "connect 4",
-    ],
-    "gomoku": [
-        "gomoku", "five in a row", "5 in a row", "omok", "renju",
-    ],
-    "platformer": [
-        "platformer", "3d platformer", "jump and run", "jumping game",
-        "platform game", "parkour",
-    ],
-    "arena_combat": [
-        "arena combat", "arena", "gladiator", "wave combat", "brawler", "action arena",
-    ],
-    "card_battler": [
-        "card battler", "card game", "deck battler", "deck builder",
-        "card battle", "lane battler", "hearthstone",
-    ],
-    "procedural_world": [
-        "procedural world", "procedural landscape", "procedural terrain",
-        "terrain generation", "procedural environment", "landscape generation", "hiking trail",
-    ],
-    "top_down_shooter": [
-        "top-down shooter", "top down shooter", "topdown shooter", "twin stick shooter",
-        "twin-stick shooter", "arena shooter",
-    ],
-    "relic_hunt": [
-        "relic hunt", "relic quest", "forest adventure", "collect relics",
-    ],
+    "tic_tac_toe": ["tic tac toe", "tic-tac-toe", "tictactoe", "noughts and crosses"],
+    "connect_four": ["four in a row", "4 in a row", "connect four", "connect 4"],
+    "gomoku": ["gomoku", "five in a row", "5 in a row"],
+    "platformer": ["platformer", "3d platformer", "jump and run", "platform game"],
+    "arena_combat": ["arena combat", "gladiator", "wave combat", "action arena"],
+    "card_battler": ["card battler", "card game", "card battle", "deck battler", "deck builder"],
+    "procedural_world": ["procedural world", "procedural landscape", "procedural terrain", "procedural environment"],
+    "top_down_shooter": ["top-down shooter", "top down shooter", "twin stick shooter"],
+    "relic_hunt": ["relic hunt", "relic quest"],
 }
 
 
@@ -452,7 +420,7 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
     if m:
         overrides["title"] = m.group(1).strip()
 
-    if preset_id in ("tic_tac_toe", "connect_four", "gomoku"):
+    if preset_id in ("tic_tac_toe", "connect_four", "gomoku", "grid_board", "board_game", "dice_board"):
         m = _SIZE.search(prompt)
         if m and m.group(1) == m.group(2):
             overrides["board_size"] = int(m.group(1))
@@ -461,6 +429,7 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
             overrides["win_length"] = int(m.group(1))
         if _HOTSEAT.search(prompt):
             overrides["vs_ai"] = False
+            overrides["players"] = 2
         if _AI_EASY.search(prompt):
             overrides["ai_level"] = "random"
         elif _AI_MED.search(prompt):
@@ -472,17 +441,7 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
         m = _DIFF.search(prompt)
         if m:
             overrides["difficulty"] = m.group(1).lower()
-    elif preset_id == "arena_combat":
-        m = _WAVES.search(prompt)
-        if m:
-            overrides["wave_count"] = int(m.group(1))
-        m = _ENEMIES.search(prompt)
-        if m:
-            overrides["enemies_per_wave"] = int(m.group(1))
-        m = _DIFF.search(prompt)
-        if m:
-            overrides["difficulty"] = m.group(1).lower()
-    elif preset_id == "top_down_shooter":
+    elif preset_id in ("arena_combat", "top_down_shooter"):
         m = _WAVES.search(prompt)
         if m:
             overrides["wave_count"] = int(m.group(1))
@@ -519,9 +478,6 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
         m = _DENSITY.search(prompt)
         if m:
             overrides["foliage_density"] = float(m.group(1))
-    elif preset_id in ("snake_and_ladders", "board_game", "dice_board"):
-        if _HOTSEAT.search(prompt):
-            overrides["players"] = 2
 
     return overrides
 
@@ -538,9 +494,9 @@ def get_preset_spec(name: str) -> GameDesignSpec:
         "tic_tac_toe": preset_tic_tac_toe,
         "connect_four": preset_connect_four,
         "gomoku": preset_gomoku,
-        "snake_and_ladders": preset_snake_and_ladders,
-        "board_game": preset_snake_and_ladders,
-        "dice_board": preset_snake_and_ladders,
+        "grid_board": preset_grid_board,
+        "board_game": preset_grid_board,
+        "dice_board": preset_grid_board,
     }
     factory = factories.get(name)
     if factory is None:
@@ -548,11 +504,8 @@ def get_preset_spec(name: str) -> GameDesignSpec:
     return factory()
 
 
-
 def _tag_generator(preset_id: str, factory: Callable[..., GameDesignSpec]) -> Callable[..., GameDesignSpec]:
-    """Every preset design carries generator "preset:<id>" so build routing can tell an untouched preset (which the
-    legacy recipe builders reproduce faithfully) from prompt-derived or edited designs (which need the composer)."""
-    canonical = {"board_game": "snake_and_ladders", "dice_board": "snake_and_ladders"}.get(preset_id, preset_id)
+    canonical = {"board_game": "grid_board", "dice_board": "grid_board"}.get(preset_id, preset_id)
 
     def _wrapped(*args: Any, **kwargs: Any) -> GameDesignSpec:
         gds = factory(*args, **kwargs)
@@ -571,11 +524,11 @@ PRESETS = {pid: _tag_generator(pid, fn) for pid, fn in PRESETS.items()}
 _get_preset_spec_untagged = get_preset_spec
 
 
-def get_preset_spec(name: str) -> GameDesignSpec:  # noqa: F811  (re-defined to tag the generator)
+def get_preset_spec(name: str) -> GameDesignSpec:  # noqa: F811
     """Retrieve a default GameDesignSpec for a named preset (generator tagged ``preset:<id>``)."""
     return _tag_generator(name, lambda: _get_preset_spec_untagged(name))()
 
-# Re-bind module-level factory functions so direct calls also carry generator "preset:<id>"
+
 preset_tic_tac_toe = PRESETS["tic_tac_toe"]
 preset_connect_four = PRESETS["connect_four"]
 preset_gomoku = PRESETS["gomoku"]
@@ -585,5 +538,4 @@ preset_card_battler = PRESETS["card_battler"]
 preset_procedural_world = PRESETS["procedural_world"]
 preset_relic_hunt = PRESETS["relic_hunt"]
 preset_top_down_shooter = PRESETS["top_down_shooter"]
-preset_snake_and_ladders = PRESETS["snake_and_ladders"]
-
+preset_grid_board = PRESETS["grid_board"]

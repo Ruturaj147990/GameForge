@@ -40,6 +40,7 @@ from ..panels.terminal_panel import TerminalPanel
 from ..panels.unreal_panel import UnrealPanel
 from ..services.tool_service import ToolService
 from ..styles import tokens
+from ..styles.dark_theme import theme_color, theme_stylesheet
 
 logger = logging.getLogger(__name__)
 
@@ -57,34 +58,36 @@ class CodeHighlighter(QSyntaxHighlighter):
 
         # Keyword format
         kw_format = QTextCharFormat()
-        kw_format.setForeground(QColor(tokens.ACCENT_PRIMARY))
+        kw_format.setForeground(QColor(theme_color(tokens.ACCENT_PRIMARY)))
         kw_format.setFontWeight(QFont.Bold)
 
         # Type format
         type_format = QTextCharFormat()
-        type_format.setForeground(QColor(tokens.ACCENT_HOVER))
+        type_format.setForeground(QColor(theme_color(tokens.ACCENT_HOVER)))
         type_format.setFontWeight(QFont.DemiBold)
 
         # String format
         str_format = QTextCharFormat()
-        str_format.setForeground(QColor(tokens.ACCENT_SUCCESS))
+        str_format.setForeground(QColor(theme_color(tokens.ACCENT_SUCCESS)))
 
         # Comment format
         comment_format = QTextCharFormat()
-        comment_format.setForeground(QColor(tokens.TEXT_MUTED))
+        comment_format.setForeground(QColor(theme_color(tokens.TEXT_MUTED)))
         comment_format.setFontItalic(True)
+        self._comment_format = comment_format
+        self._language = language.lower()
 
         # Number format
         num_format = QTextCharFormat()
-        num_format.setForeground(QColor(tokens.ACCENT_WARNING))
+        num_format.setForeground(QColor(theme_color(tokens.ACCENT_WARNING)))
 
         # Preprocessor format
         pre_format = QTextCharFormat()
-        pre_format.setForeground(QColor(tokens.ACCENT_WARNING))
+        pre_format.setForeground(QColor(theme_color(tokens.ACCENT_WARNING)))
 
         # Unreal macros format
         ue_format = QTextCharFormat()
-        ue_format.setForeground(QColor(tokens.ACCENT_PRIMARY))
+        ue_format.setForeground(QColor(theme_color(tokens.ACCENT_PRIMARY)))
         ue_format.setFontWeight(QFont.Bold)
 
         cpp_keywords = [
@@ -140,14 +143,14 @@ class CodeHighlighter(QSyntaxHighlighter):
         elif lang_lower == "json":
             # JSON keys
             key_format = QTextCharFormat()
-            key_format.setForeground(QColor(tokens.ACCENT_PRIMARY))
+            key_format.setForeground(QColor(theme_color(tokens.ACCENT_PRIMARY)))
             key_format.setFontWeight(QFont.Bold)
             self._rules.append((re.compile(r'"[^"\\]*(\\.[^"\\]*)*"\s*:'), key_format))
             # JSON values
             self._rules.append((re.compile(r'"[^"\\]*(\\.[^"\\]*)*"'), str_format))
             # JSON booleans and null
             lit_format = QTextCharFormat()
-            lit_format.setForeground(QColor(tokens.ACCENT_HOVER))
+            lit_format.setForeground(QColor(theme_color(tokens.ACCENT_HOVER)))
             lit_format.setFontWeight(QFont.DemiBold)
             for lit in (r"\btrue\b", r"\bfalse\b", r"\bnull\b"):
                 self._rules.append((re.compile(lit), lit_format))
@@ -169,6 +172,20 @@ class CodeHighlighter(QSyntaxHighlighter):
         for pattern, fmt in self._rules:
             for match in pattern.finditer(text):
                 self.setFormat(match.start(), match.end() - match.start(), fmt)
+        if getattr(self, "_language", "cpp") not in ("py", "python", "json"):
+            self.setCurrentBlockState(0)
+            start_idx = 0
+            if self.previousBlockState() != 1:
+                start_idx = text.find("/*")
+            while start_idx >= 0:
+                end_idx = text.find("*/", start_idx)
+                if end_idx == -1:
+                    self.setCurrentBlockState(1)
+                    comment_len = len(text) - start_idx
+                else:
+                    comment_len = end_idx - start_idx + 2
+                self.setFormat(start_idx, comment_len, self._comment_format)
+                start_idx = text.find("/*", start_idx + comment_len)
 
 
 class LineNumberArea(QWidget):
@@ -225,10 +242,10 @@ class CodePlainTextEdit(QPlainTextEdit):
 
     def line_number_area_paint_event(self, event: QPaintEvent) -> None:
         painter = QPainter(self._line_number_area)
-        painter.fillRect(event.rect(), QColor(tokens.BG_PANEL))
+        painter.fillRect(event.rect(), QColor(theme_color(tokens.BG_PANEL)))
 
         # Right divider border
-        painter.setPen(QColor(tokens.BORDER))
+        painter.setPen(QColor(theme_color(tokens.BORDER)))
         painter.drawLine(event.rect().topRight(), event.rect().bottomRight())
 
         block = self.firstVisibleBlock()
@@ -242,9 +259,9 @@ class CodePlainTextEdit(QPlainTextEdit):
             if block.isVisible() and bottom >= event.rect().top():
                 number = str(block_number + 1)
                 if block_number == current_block:
-                    painter.setPen(QColor(tokens.TEXT_PRIMARY))
+                    painter.setPen(QColor(theme_color(tokens.TEXT_PRIMARY)))
                 else:
-                    painter.setPen(QColor(tokens.TEXT_MUTED))
+                    painter.setPen(QColor(theme_color(tokens.TEXT_MUTED)))
                 painter.setFont(self.font())
                 painter.drawText(
                     0,
@@ -262,7 +279,7 @@ class CodePlainTextEdit(QPlainTextEdit):
     def _highlight_current_line(self) -> None:
         extra_selections = []
         selection = QTextEdit.ExtraSelection()
-        line_color = QColor(tokens.BG_HOVER)
+        line_color = QColor(theme_color(tokens.BG_HOVER))
         selection.format.setBackground(line_color)
         selection.format.setProperty(QTextFormat.FullWidthSelection, True)
         selection.cursor = self.textCursor()

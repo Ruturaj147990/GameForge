@@ -6,6 +6,9 @@ Ensures maximum text legibility, balanced contrast hierarchy, and robust DPI sca
 
 from __future__ import annotations
 
+import re
+from typing import Optional
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette, QTextCursor
 from PySide6.QtWidgets import QApplication, QPlainTextEdit, QTextEdit
@@ -748,13 +751,13 @@ _DARK_TO_LIGHT = {
     "#090810": "#f8f6fc", "#0f0c1a": "#ffffff", "#181326": "#e0d7ee",
     "#2a223d": "#dcd0f0", "#17111c": "#f5f0f8", "#33243a": "#e3d2ea",
     "#0b0912": "#f3effa", "#1a1524": "#e4ddf0", "#3d2f59": "#cfbee6",
-    "#524b61": "#857b9c", "#9d95b0": "#5e5473", "#675f78": "#786e8e",
+    "#524b61": "#857b9c", "#9d95b0": "#5e5473", "#8a819e": "#645a7a", "#675f78": "#786e8e",
     "#f5f3ff": "#181226", "#a78bfa": "#5b21b6", "#c4b5fd": "#3b0764",
 
     # Preserved backward-compatible tokens from prior Studio Dark for inline styles & test assertions
     "#0c0e14": "#f6f7fb", "#121622": "#fbfcfe", "#181f30": "#eff2f8",
     "#222a42": "#e1e7f1", "#2b3553": "#d4dced", "#26304a": "#cbd3e1",
-    "#0f131d": "#f8f9fc", "#0e121c": "#f4f6fa", "#111520": "#e7ebf3",
+    "#0f131d": "#f8f9fc", "#0f121c": "#f4f6fa", "#0e121c": "#f4f6fa", "#111520": "#e7ebf3",
     "#141a29": "#f7f8fb", "#1e2333": "#e9edf4", "#1e2436": "#dfe4ed",
     "#1f273d": "#c4ccd9", "#2d3752": "#b9c5d8", "#0b0e15": "#f1f3f8",
     "#111622": "#e9edf5", "#131b26": "#e5eaf2", "#161d2d": "#e0e6f0",
@@ -772,22 +775,31 @@ _DARK_TO_LIGHT = {
     "#7c75ff": "#3730a3",
     "#6c63ff": "#5b21b6",
 
-    # Status / diff colors
+    # Status / diff / badge colors
     "#00d9a3": "#047857", "#ff6b6b": "#c2413a", "#ef4444": "#b91c1c",
     "#f59e0b": "#a16207", "#f87171": "#a12a22", "#ff9f43": "#9a4d00",
     "#059669": "#065f46", "#10b981": "#0f766e", "#34d399": "#15803d",
     "#dc2626": "#991b1b", "#fbbf24": "#8a5a00",
+    "#052e16": "#dcfce7", "#1e1b4b": "#e0e7ff", "#450a0a": "#fee2e2",
+    "#18181b": "#f4f4f5", "#312e81": "#e0e7ff", "#c7d2fe": "#312e81",
+    "#064e3b": "#d1fae5", "#6ee7b7": "#065f46", "#451a03": "#fef3c7",
+    "#fde68a": "#92400e",
 
     # Additional panel & toolbar inline styles
     "#262f45": "#cbd5e1", "#182030": "#ede8f7", "#28354f": "#d8cee8",
     "#232e46": "#dfd5f0", "#e2e8f0": "#1f182c", "#0e2922": "#e2f7f0",
     "#161c28": "#ede8f5",
 }
-_LIGHT_TO_DARK = {light: dark for dark, light in _DARK_TO_LIGHT.items()}
+# Ensure canonical primary dark tokens win in reverse mapping
+_LIGHT_TO_DARK = {}
+for _dark, _light in reversed(list(_DARK_TO_LIGHT.items())):
+    _LIGHT_TO_DARK[_light] = _dark
+_LIGHT_TO_DARK["#5b21b6"] = "#7c3aed"
+_LIGHT_TO_DARK["#4c1d95"] = "#6d28d9"
+_LIGHT_TO_DARK["#ffffff"] = "#0d0b14"
 
 
 def _build_theme_regex_replacer(mapping: dict[str, str]):
-    import re
     sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
     pattern = re.compile("|".join(re.escape(k) for k in sorted_keys), flags=re.IGNORECASE)
     lower_map = {k.lower(): v for k, v in mapping.items()}
@@ -805,11 +817,26 @@ _replace_light_to_dark = _build_theme_regex_replacer(_LIGHT_TO_DARK)
 
 GAMEFORGE_LIGHT_QSS = _replace_dark_to_light(GAMEFORGE_DARK_QSS)
 
+_FONT_SIZE_PATTERN = re.compile(r"(font-size\s*:\s*)(\d+)(px)", flags=re.IGNORECASE)
+
+
+def _scale_qss_fonts(qss: str, font_scale: int) -> str:
+    if not qss or font_scale == 100:
+        return qss
+    factor = max(0.5, min(2.5, float(font_scale) / 100.0))
+
+    def _sub(match: re.Match) -> str:
+        px = int(match.group(2))
+        scaled = max(8, int(round(px * factor)))
+        return f"{match.group(1)}{scaled}{match.group(3)}"
+
+    return _FONT_SIZE_PATTERN.sub(_sub, qss)
+
 
 def normalize_theme_name(theme: str) -> str:
     """Normalize user-facing or internal theme identifiers to 'dark' or 'light'."""
     t = str(theme).strip().lower()
-    if t in ("light", "glossy", "glossy_purple_light", "glossy_light", "glossy purple light"):
+    if t in ("light", "glossy", "glossy_purple_light", "glossy_light", "glossy purple light", "studio light"):
         return "light"
     return "dark"
 
@@ -821,11 +848,7 @@ def get_theme_display_name(theme: str) -> str:
 
 
 def _build_palette(theme: str) -> QPalette:
-    """Base palette matching the stylesheet.
-
-    Only a stylesheet was applied on top of Fusion's default *light* palette, so every widget the stylesheet did not
-    cover (scroll-area viewports, table corner buttons, group-box backgrounds) rendered white in the dark theme -
-    visible as white bands in Settings and Design and as unreadable titles."""
+    """Base palette matching the stylesheet."""
     pal = QPalette()
     if theme == "light":
         bg, base, alt, text, sub, btn = "#f7f5fc", "#ffffff", "#f1edf9", "#1d1730", "#5b5470", "#ece7f7"
@@ -845,30 +868,58 @@ def _build_palette(theme: str) -> QPalette:
     return pal
 
 
-def apply_theme(app, theme: str = "dark") -> str:  # type: ignore[type-arg]
+def apply_theme(app, theme: str = "dark", font_scale: Optional[int] = None) -> str:  # type: ignore[type-arg]
     """Apply a studio palette and convert existing inline widget styles."""
     theme = normalize_theme_name(theme)
+    if font_scale is not None:
+        try:
+            scale_val = max(50, min(250, int(font_scale)))
+        except (ValueError, TypeError):
+            scale_val = 100
+        app.setProperty("gameforgeFontScale", scale_val)
+    else:
+        try:
+            scale_val = int(app.property("gameforgeFontScale") or 100)
+        except (ValueError, TypeError):
+            scale_val = 100
+
     app.setStyle("Fusion")
     app.setPalette(_build_palette(theme))
-    app.setStyleSheet(GAMEFORGE_LIGHT_QSS if theme == "light" else GAMEFORGE_DARK_QSS)
+    base_qss = GAMEFORGE_LIGHT_QSS if theme == "light" else GAMEFORGE_DARK_QSS
+    app.setStyleSheet(_scale_qss_fonts(base_qss, scale_val))
     app.setProperty("gameforgeTheme", theme)
     try:
         from ..icons import clear_icon_cache
         clear_icon_cache()
     except Exception:
         pass
-    replacer = _replace_dark_to_light if theme == "light" else _replace_light_to_dark
     mapping = _DARK_TO_LIGHT if theme == "light" else _LIGHT_TO_DARK
     for widget in QApplication.allWidgets():
         try:
             previous = widget.property("gameforgeTheme") or "dark"
-            if previous == theme:
-                continue
             orig_style = widget.styleSheet()
-            new_style = replacer(orig_style)
-            if new_style != orig_style:
-                widget.setStyleSheet(new_style)
-            if isinstance(widget, (QTextEdit, QPlainTextEdit)):
+            if orig_style:
+                dark_stored = widget.property("gameforgeDarkStyleSheet")
+                if previous == "dark" and theme == "light":
+                    dark_stored = orig_style
+                    widget.setProperty("gameforgeDarkStyleSheet", dark_stored)
+                elif not dark_stored and previous == "dark":
+                    dark_stored = orig_style
+                    widget.setProperty("gameforgeDarkStyleSheet", dark_stored)
+
+                if theme == "light":
+                    source_style = dark_stored if dark_stored else orig_style
+                    new_style = _replace_dark_to_light(source_style)
+                else:
+                    if dark_stored and (_replace_dark_to_light(dark_stored) == orig_style or previous == "dark"):
+                        new_style = dark_stored
+                    else:
+                        new_style = _replace_light_to_dark(orig_style)
+                        widget.setProperty("gameforgeDarkStyleSheet", new_style)
+                if new_style != orig_style:
+                    widget.setStyleSheet(new_style)
+
+            if previous != theme and isinstance(widget, (QTextEdit, QPlainTextEdit)):
                 document = widget.document()
                 document_css = widget.property("gameforgeDocumentCss")
                 if document_css:
@@ -926,4 +977,3 @@ def theme_stylesheet(dark_stylesheet: str) -> str:
     if QApplication.instance() is None or QApplication.instance().property("gameforgeTheme") != "light":
         return dark_stylesheet
     return _replace_dark_to_light(dark_stylesheet)
-

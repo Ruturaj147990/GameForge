@@ -15,15 +15,13 @@ Tests practical long-context capacity (16K, 32K, 64K, 100K, 128K) on local model
 from __future__ import annotations
 
 import json
-import math
-import os
 import sys
 import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-REPORTS_DIR = Path("E:/gameforge_step1/reports")
+REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Haystack filler: Authentic UE 5.7 C++ Actor Component implementations

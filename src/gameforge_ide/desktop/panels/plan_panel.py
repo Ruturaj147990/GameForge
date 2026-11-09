@@ -7,6 +7,7 @@ Complies with GameForge Master Blueprint and Milestone 1 specification.
 
 from __future__ import annotations
 
+import html as html_lib
 import json
 import time
 from pathlib import Path
@@ -52,7 +53,7 @@ class PlanPanel(QWidget):
 
     run_requested = Signal(object)
     cancel_requested = Signal()
-    approval_review_requested = Signal(str)
+    approval_review_requested = Signal(object)
 
     def __init__(self, workspace_root: Path, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -284,19 +285,20 @@ class PlanPanel(QWidget):
             return
 
         color = STATUS_COLORS.get(task.status, tokens.TEXT_MUTED)
+        esc = html_lib.escape
         html = [
-            f"<h3 style='margin: 0; color: {tokens.TEXT_PRIMARY};'>{task.title} <span style='color: {color}; font-size: 12px;'>[{task.status}]</span></h3>",
-            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'><b>Objective:</b> {task.objective}</p>",
-            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'><b>Expected Result:</b> {task.expected_result}</p>",
-            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'>Type: <code>{task.task_type}</code> | Reversibility: <code>{task.reversibility}</code> | Approval Required: <code>{task.requires_approval}</code></p>",
-            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'>Permitted Tools: <code>{', '.join(task.permitted_tools) or 'None'}</code></p>",
+            f"<h3 style='margin: 0; color: {tokens.TEXT_PRIMARY};'>{esc(str(task.title))} <span style='color: {color}; font-size: 12px;'>[{esc(str(task.status))}]</span></h3>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'><b>Objective:</b> {esc(str(task.objective))}</p>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'><b>Expected Result:</b> {esc(str(task.expected_result))}</p>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'>Type: <code>{esc(str(task.task_type))}</code> | Reversibility: <code>{esc(str(task.reversibility))}</code> | Approval Required: <code>{esc(str(task.requires_approval))}</code></p>",
+            f"<p style='color: {tokens.TEXT_SECONDARY}; margin: 4px 0;'>Permitted Tools: <code>{esc(', '.join(task.permitted_tools) or 'None')}</code></p>",
         ]
 
         if task.error_message:
-            html.append(f"<div style='background: {tokens.BG_PANEL}; border: 1px solid {tokens.ACCENT_ERROR}; color: {tokens.ACCENT_ERROR}; padding: 6px; border-radius: {tokens.RADIUS}px; margin: 6px 0;'><b>Error/Blocker:</b> {task.error_message}</div>")
+            html.append(f"<div style='background: {tokens.BG_PANEL}; border: 1px solid {tokens.ACCENT_ERROR}; color: {tokens.ACCENT_ERROR}; padding: 6px; border-radius: {tokens.RADIUS}px; margin: 6px 0;'><b>Error/Blocker:</b> {esc(str(task.error_message))}</div>")
 
         if task.approval_id:
-            html.append(f"<p style='color: {tokens.ACCENT_WARNING}; margin: 4px 0;'><b>Pending Approval ID:</b> <code>{task.approval_id}</code></p>")
+            html.append(f"<p style='color: {tokens.ACCENT_WARNING}; margin: 4px 0;'><b>Pending Approval ID:</b> <code>{esc(str(task.approval_id))}</code></p>")
 
         # Acceptance Criteria
         html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Acceptance Criteria & Evidence:</h4>")
@@ -304,8 +306,8 @@ class PlanPanel(QWidget):
             html.append("<ul style='margin: 0; padding-left: 20px;'>")
             for pred in task.acceptance:
                 mark = f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ SATISFIED</span>" if pred.satisfied else f"<span style='color: {tokens.ACCENT_ERROR};'>✘ UNMET</span>"
-                ev = f"<br/><span style='color: {tokens.TEXT_MUTED};'>Evidence: {pred.evidence}</span>" if pred.evidence else ""
-                html.append(f"<li style='color: {tokens.TEXT_PRIMARY}; margin-bottom: 4px;'>{mark} <b>{pred.predicate_type}</b>(<code>{pred.target}</code>){ev}</li>")
+                ev = f"<br/><span style='color: {tokens.TEXT_MUTED};'>Evidence: {esc(str(pred.evidence))}</span>" if pred.evidence else ""
+                html.append(f"<li style='color: {tokens.TEXT_PRIMARY}; margin-bottom: 4px;'>{mark} <b>{esc(str(pred.predicate_type))}</b>(<code>{esc(str(pred.target))}</code>){ev}</li>")
             html.append("</ul>")
         else:
             html.append(f"<p style='color: {tokens.TEXT_MUTED};'>No explicit machine predicates attached.</p>")
@@ -313,14 +315,14 @@ class PlanPanel(QWidget):
         # Tool Call / Output
         if task.tool_call:
             html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Tool Call:</h4>")
-            html.append(f"<pre style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; color: {tokens.TEXT_PRIMARY};'>{json.dumps(task.tool_call, indent=2)}</pre>")
+            html.append(f"<pre style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; color: {tokens.TEXT_PRIMARY};'>{esc(json.dumps(task.tool_call, indent=2))}</pre>")
 
         if task.evidence:
             html.append(f"<h4 style='color: {tokens.TEXT_PRIMARY}; margin: 8px 0 4px 0;'>Execution Observations:</h4>")
             for idx, ev in enumerate(task.evidence):
                 if not isinstance(ev, dict):  # older task stores persisted plain-string observations
                     ev = {"attempt": idx + 1, "output": ev}
-                html.append(f"<div style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; margin-bottom: 4px; color: {tokens.TEXT_PRIMARY};'><b>Attempt {ev.get('attempt')}:</b><pre>{json.dumps(ev.get('output', {}), indent=2, default=str)[:600]}</pre></div>")
+                html.append(f"<div style='background: {tokens.BG_SURFACE}; padding: 6px; border-radius: {tokens.RADIUS}px; margin-bottom: 4px; color: {tokens.TEXT_PRIMARY};'><b>Attempt {esc(str(ev.get('attempt')))}:</b><pre>{esc(json.dumps(ev.get('output', {}), indent=2, default=str)[:600])}</pre></div>")
 
         self._detail_browser.setHtml("".join(html))
 

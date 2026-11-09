@@ -331,6 +331,12 @@ public:
 	FName EntityId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FName TargetGoalEntityId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	bool bStationaryTurret = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	float AttackDamage = 15.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
@@ -349,13 +355,22 @@ public:
 	float MaxHealth = 50.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float ScoreValue = 10.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	float PatrolRadius = 600.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	bool bRanged = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	float ProjectileSpeed = 1500.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
-	uint8 TeamId = 1; // 0 = CT / Friendly, 1 = Terrorist / Enemy
+	uint8 TeamId = 1; // 0 = CT / Friendly / Allied Turret, 1 = Terrorist / Hostile Enemy
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FString VisualStyle = TEXT("humanoid");
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
@@ -410,6 +425,8 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
+	AActor* ResolveHostileOrGoalTarget(AGameForgeEnemy* EnemyPawn, bool& bOutIsGoal) const;
+
 	TWeakObjectPtr<AActor> CurrentTarget;
 	float MoveCooldown = 0.f;
 	float WanderCooldown = 0.f;
@@ -425,28 +442,66 @@ class GAMEFORGERUNTIME_API AGameForgeSpawner : public AActor
 public:
 	AGameForgeSpawner();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	TSubclassOf<AActor> EnemyClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	FName EntityId;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	FName EnemyEntityId = FName(TEXT("enemy"));
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	int32 WaveCount = 3;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	int32 MaxWaves = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	int32 EnemiesPerWave = 3;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	int32 MaxAlive = 12;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	float SecondsBetweenWaves = 5.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	float WaveIntervalSeconds = 5.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
 	float SpawnRadius = 400.f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	bool bAutoStart = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	FString VisualStyle = TEXT("humanoid");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	FLinearColor BodyColor = FLinearColor(0.85f, 0.15f, 0.12f, 1.f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	float EnemyMaxHealth = -1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	float EnemyAttackDamage = -1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	float EnemyAttackRange = -1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	float EnemyAttackCooldown = -1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Spawner")
+	float EnemySpeed = -1.f;
+
 	virtual void BeginPlay() override;
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Spawner")
+	void SpawnWave();
+
+	void OnEnemyDied(const FString& DeadActorName);
 
 private:
 	void StartWave();

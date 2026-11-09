@@ -12,6 +12,7 @@ class ViewHost(QStackedWidget):
     """Hosts application views with lazy instantiation and enable-guards."""
 
     viewChanged = Signal(str)
+    viewBlocked = Signal(str, str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -47,8 +48,9 @@ class ViewHost(QStackedWidget):
         if view_id not in self._factories:
             return False
 
-        enabled, _ = self.is_enabled(view_id)
+        enabled, reason = self.is_enabled(view_id)
         if not enabled:
+            self.viewBlocked.emit(view_id, reason)
             return False
 
         if view_id not in self._widgets:

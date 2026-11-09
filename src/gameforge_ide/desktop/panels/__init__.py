@@ -1,5 +1,6 @@
 """GameForge IDE — panels package init."""
 
+from .activity_card import StatusActivityItem, ToolActivityItem
 from .approval_card import ApprovalCard
 from .asset_panel import AssetPanel
 from .chat_panel import ChatPanel
@@ -25,6 +26,8 @@ __all__ = [
     "MissionPanel",
     "PlanCard",
     "PlanPanel",
+    "StatusActivityItem",
     "TerminalPanel",
+    "ToolActivityItem",
     "UnrealPanel",
 ]

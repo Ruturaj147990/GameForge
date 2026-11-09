@@ -38,9 +38,14 @@ EVENT_PHRASES: dict[str, str] = {
     "player.died": "player dies",
     "player.respawned": "player respawns",
     "player.jumped": "player jumps",
+    "player.dashed": "player dashes",
+    "player.sprinted": "player sprints",
+    "weapon.switched": "player switches weapon",
     # Pickups & Objectives
     "pickup.collected": "pickup is collected",
     "checkpoint.reached": "checkpoint is reached",
+    "lap.completed": "lap is completed",
+    "race.finished": "race is finished",
     "goal.reached": "goal is reached",
     "hazard.touched": "hazard is touched",
     # Enemies & Combat
@@ -49,6 +54,8 @@ EVENT_PHRASES: dict[str, str] = {
     "enemy.killed": "enemy is killed",
     "wave.started": "wave starts",
     "wave.cleared": "wave is cleared",
+    "tower.built": "defense tower is built",
+    "tower.attacked": "defense tower attacks",
     # Stealth & AI
     "guard.state": "guard changes state",
     "guard.spotted_player": "guard spots player",
@@ -58,6 +65,9 @@ EVENT_PHRASES: dict[str, str] = {
     "objective.started": "objective starts",
     "objective.updated": "objective is updated",
     "objective.completed": "objective is completed",
+    # Bomb site
+    "bombsite.planted": "bomb is planted",
+    "bombsite.defused": "bomb is defused",
     # Persistence
     "save.loaded": "save game is loaded",
     "save.written": "game is saved",
@@ -66,12 +76,20 @@ EVENT_PHRASES: dict[str, str] = {
     "door.opened": "door opens",
     "door.closed": "door closes",
     "switch.toggled": "switch is toggled",
+    "switch.activated": "switch is activated",
     "landmark.discovered": "landmark is discovered",
     # Board games
     "board.move": "board move is played",
     "board.win": "board line is completed (win)",
+    "board.lose": "board match is lost",
+    "board.warp": "board token warps across tiles",
+    "tile.revealed": "board tile is revealed",
+    "line.cleared": "matrix line is cleared",
     "board.draw": "board ends in a draw",
     "turn.ended": "turn ends",
+    "dice.rolled": "dice is rolled",
+    "snake.transition": "player slides down a snake",
+    "ladder.transition": "player climbs a ladder",
     # Card games
     "card.played": "card is played",
     "lane.resolved": "lane combat is resolved",
@@ -88,7 +106,9 @@ def _fmt_num(n: float | int) -> str:
 
 _STAT_NAMES = {
     "game.score": "the score", "game.time_s": "elapsed time", "player.health": "player health",
-    "player.lives": "lives", "game.counter.collected": "collected items",
+    "player.lives": "lives", "player.shield": "player shield", "player.mana": "player mana",
+    "player.stamina": "player stamina", "player.ammo": "player ammo", "player.oxygen": "player oxygen",
+    "game.gold": "gold", "game.laps": "laps", "game.counter.collected": "collected items",
     "game.counter.waves_cleared": "cleared waves", "game.counter.enemies_killed": "enemies killed",
 }
 
@@ -107,7 +127,6 @@ def _stat_name(stat: str) -> str:
 def sentence(item: Union[Condition, Effect, RuleSpec]) -> str:
     """Format a Condition, Effect or whole Rule as a natural-language sentence."""
     if isinstance(item, RuleSpec):
-        # Rules used to fall through to str(rule) and showed as raw pydantic reprs in the Design view.
         when = EVENT_PHRASES.get(item.when.event, item.when.event)
         if item.when.source:
             when += f" ({item.when.source.replace('_', ' ')})"
@@ -263,6 +282,20 @@ def render_markdown(gds: GameDesignSpec) -> str:
             cond_str = f" when {', '.join(sentence(c) for c in r.conditions)}" if r.conditions else ""
             eff_str = ", ".join(sentence(eff) for eff in r.effects)
             lines.append(f"- **{r.rule_id}**: On {trigger_phrase}{src_str}{cond_str} → {eff_str}")
+        lines.append("")
+
+    # Architecture
+    if getattr(gds, "architecture", None) is not None:
+        arch = gds.architecture
+        lines.append("## Architecture")
+        lines.append("")
+        lines.append(f"- **Method:** `{arch.method}`")
+        if arch.plan_kind:
+            lines.append(f"- **Plan Kind:** `{arch.plan_kind}`")
+        if arch.target_classes:
+            lines.append(f"- **Target Classes:** {', '.join(f'`{c}`' for c in arch.target_classes)}")
+        if arch.target_widgets:
+            lines.append(f"- **Target Widgets:** {', '.join(f'`{w}`' for w in arch.target_widgets)}")
         lines.append("")
 
     # HUD & UI

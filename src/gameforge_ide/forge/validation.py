@@ -34,7 +34,7 @@ def _is_generic_test(name: str) -> bool:
     if n in GENERIC_KIT_TESTS or n == "smoke":
         return True
     if n.startswith("gameforge.kit") and not any(
-        kw in n for kw in ("snake", "ladder", "jump", "combat", "pickup", "enemy", "shooter", "goal")
+        kw in n for kw in ("jump", "combat", "pickup", "enemy", "shooter", "goal", "board", "card", "race", "stealth", "puzzle", "quest", "switch", "hazard", "win", "lose")
     ):
         return True
     return False
@@ -249,7 +249,7 @@ def validate_stage_output(
         # For grid board games, card battlers, and puzzles, the board or table actor itself is the primary objective container.
         has_goal = any(
             k in all_actor_text
-            for k in ("goal", "finish", "target", "win", "gf_goal", "checkpoint", "landmark", "relic")
+            for k in ("goal", "finish", "target", "win", "gf_goal", "checkpoint", "landmark", "relic", "switch", "door", "zone", "npc")
         )
         is_combat = (
             genre_val in (
@@ -325,6 +325,13 @@ def validate_stage_output(
                 or "board" in all_actor_text
                 or "grid" in all_actor_text
                 or "table" in all_actor_text
+                or "switch" in all_actor_text
+                or "door" in all_actor_text
+                or "checkpoint" in all_actor_text
+                or "zone" in all_actor_text
+                or "npc" in all_actor_text
+                or "hazard" in all_actor_text
+                or "mover" in all_actor_text
                 or is_combat
             )
             if not has_main:
@@ -351,15 +358,29 @@ def validate_stage_output(
     # ──────────────────────────────────────────────────────────────────────────
     # 3. SCENARIO_GEN STAGE (QA Scenario Generation)
     # ──────────────────────────────────────────────────────────────────────────
-    elif s_norm == "scenario_gen":
+    elif s_norm == "scenario_gen" or (
+        any(k in s_norm for k in ("scenario", "design"))
+        and "scenarios" in result
+        and "results" not in result
+        and ("out_dir" in result or all(isinstance(x, dict) and "passed" not in x for x in (result.get("scenarios") or []) if isinstance(x, dict)))
+        and "params" not in result
+    ):
         scs = result.get("scenarios") or []
         count = result.get("count", len(scs))
         if count == 0 and not scs:
             issues.append("Scenario generation produced no QA scenarios")
-        if pdir is not None:
-            sc_dir = pdir / "Saved" / "GameForge" / "evidence" / "scenarios"
-            if not sc_dir.is_dir() and count > 0:
-                issues.append(f"Scenario output directory '{sc_dir}' not found on disk")
+        if pdir is not None and count > 0:
+            candidate_dirs = [
+                pdir / "GameForge" / "scenarios",
+                pdir / "Saved" / "GameForge" / "evidence" / "scenarios",
+            ]
+            if result.get("out_dir"):
+                od = Path(str(result["out_dir"]))
+                candidate_dirs.insert(0, od if od.is_absolute() else (pdir / od))
+            if not any(d.is_dir() for d in candidate_dirs):
+                issues.append(
+                    f"Scenario output directory not found on disk (checked {[str(d) for d in candidate_dirs]})"
+                )
 
     # ──────────────────────────────────────────────────────────────────────────
     # 3b. SCENARIOS STAGE (Packaged QA Acceptance Scenarios)
@@ -375,7 +396,13 @@ def validate_stage_output(
         if isinstance(test_results, list):
             for t in test_results:
                 if isinstance(t, dict):
-                    name = t.get("scenario_id") or t.get("test_id") or t.get("name") or ""
+                    name = (
+                        t.get("scenario_id")
+                        or t.get("test_id")
+                        or t.get("id")
+                        or t.get("name")
+                        or ""
+                    )
                     test_names.append(name)
                     if t.get("passed") is False:
                         fails = t.get("failures") or ["test marked passed=False"]

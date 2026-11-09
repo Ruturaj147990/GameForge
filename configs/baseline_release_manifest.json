@@ -8,7 +8,7 @@
     "unreal": {
       "version": "5.7.4",
       "build_id": "5.7.4-51494982+++UE5+Release-5.7",
-      "executable": "E:\\UE\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe",
+      "executable": "${GAMEFORGE_UNREAL_ENGINE_ROOT}/Engine/Binaries/Win64/UnrealEditor-Cmd.exe",
       "status": "REAL_ENGINE_VERIFIED"
     },
     "unity": {
@@ -38,7 +38,7 @@
         "split": "public_dev",
         "engine": "unreal",
         "fixture_dir": "fixtures/unreal/t2_001_controller",
-        "acceptance_config": "configs/acceptance_criteria/t2_001_controller.json"
+        "acceptance_config": "configs/acceptance_criteria/t2_001_third_person_controller.json"
       },
       {
         "task_id": "t2-004-health-damage",
@@ -47,7 +47,7 @@
         "split": "public_test",
         "engine": "unreal",
         "fixture_dir": "fixtures/unreal/t2_004_health",
-        "acceptance_config": "configs/acceptance_criteria/t2_004_health.json"
+        "acceptance_config": "configs/acceptance_criteria/t2_004_health_damage.json"
       },
       {
         "task_id": "t2-005-pickup-collection",
@@ -56,7 +56,7 @@
         "split": "public_test",
         "engine": "unreal",
         "fixture_dir": "fixtures/unreal/t2_005_pickup",
-        "acceptance_config": "configs/acceptance_criteria/t2_005_pickup.json"
+        "acceptance_config": "configs/acceptance_criteria/t2_005_pickup_collection.json"
       },
       {
         "task_id": "t3-016-player-composition",
@@ -65,10 +65,10 @@
         "split": "private_held_out",
         "engine": "unreal",
         "fixture_dir": "fixtures/unreal/t3_016_composition",
-        "acceptance_config": "configs/acceptance_criteria/t3_016_composition.json"
+        "acceptance_config": "configs/acceptance_criteria/t3_016_player_composition.json"
       },
       {
-        "task_id": "t3-017-health-hud",
+        "task_id": "t3-017-health-stamina-hud",
         "category": "editor_authoring",
         "tier": "T3",
         "split": "private_held_out",

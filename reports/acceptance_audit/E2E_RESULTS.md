@@ -11,7 +11,7 @@ All 7 canonical real-world product scenarios (S1–S7) have been executed agains
 | **S3** | Prompt-to-Game | 3 distinct genres (CyberStorm, StarJumper, VelocityRush), layouts (Arena, Course, OpenWorld) | `VERIFIED_LIVE` | `PROMPT_TO_GAME_DISTINCTNESS.json` |
 | **S4** | Settings Persistence | Studio Dark/Light theme, font scaling, engine paths preserved across reboots | `VERIFIED_LIVE` | `.gameforge/ide_settings.ini` |
 | **S5** | Visual & UI Quality | High-DPI 1600x960 offscreen captures of all 7 views with zero rendering errors | `VERIFIED_LIVE` | `screenshots/*.png` (7 views) |
-| **S6** | Unreal Integration | 129 engine ops catalog, LiveEditor loopback bridge, actor read-back | `VERIFIED_LIVE` | `unreal/GameForge/catalog.py` |
+| **S6** | Unreal Integration | 130 engine ops catalog, LiveEditor loopback bridge, actor read-back | `VERIFIED_LIVE` | `unreal/GameForge/catalog.py` |
 | **S7** | Recovery & Reliability | Cancellation handling, offline model failover, corrupted project recovery | `VERIFIED_LIVE` | `E2E_RESULTS.md` §7 |
 
 ## Visual Quality Captures (Scenario S5)

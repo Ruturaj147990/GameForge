@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -32,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from ...core.settings import get_settings
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 
 def find_ollama_executable() -> Optional[Path]:
@@ -137,6 +139,8 @@ class OllamaSetupDialog(QDialog):
 
     serviceStarted = Signal()
     settingsRequested = Signal()
+    _poll_status_ready = Signal(bool, list)
+    _initial_status_ready = Signal(bool, list)
 
     def __init__(
         self,
@@ -156,6 +160,9 @@ class OllamaSetupDialog(QDialog):
         self._poll_timer.setInterval(500)
         self._poll_timer.timeout.connect(self._on_poll_tick)
         self._poll_attempts = 0
+        self._poll_in_flight = False
+        self._poll_status_ready.connect(self._apply_poll_result)
+        self._initial_status_ready.connect(self._apply_initial_status)
 
         self._settings = get_settings()
         self._ollama_url = getattr(self._settings, "ollama_url", "http://127.0.0.1:11434")
@@ -349,7 +356,24 @@ class OllamaSetupDialog(QDialog):
         root.addLayout(btn_layout)
 
     def _refresh_status(self) -> None:
-        online, models = check_ollama_status(self._ollama_url, timeout_s=1.0)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            online, models = check_ollama_status(self._ollama_url, timeout_s=1.0)
+            self._apply_initial_status(online, models)
+            return
+
+        url = self._ollama_url
+
+        def _worker() -> None:
+            online, models = check_ollama_status(url, timeout_s=1.0)
+            try:
+                self._initial_status_ready.emit(online, models)
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=_worker, name="gf-ollama-init-status", daemon=True).start()
+
+    @Slot(bool, list)
+    def _apply_initial_status(self, online: bool, models: list) -> None:
         if online:
             count = len(models)
             model_info = f"{count} model{'s' if count != 1 else ''} loaded"
@@ -389,12 +413,33 @@ class OllamaSetupDialog(QDialog):
 
     @Slot()
     def _on_poll_tick(self) -> None:
+        if getattr(self, "_poll_in_flight", False):
+            return
         self._poll_attempts += 1
-        online, models = check_ollama_status(self._ollama_url, timeout_s=0.5)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            online, models = check_ollama_status(self._ollama_url, timeout_s=0.5)
+            self._apply_poll_result(online, models)
+            return
+
+        self._poll_in_flight = True
+        url = self._ollama_url
+
+        def _worker() -> None:
+            online, models = check_ollama_status(url, timeout_s=0.5)
+            try:
+                self._poll_status_ready.emit(online, models)
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=_worker, name="gf-ollama-poll", daemon=True).start()
+
+    @Slot(bool, list)
+    def _apply_poll_result(self, online: bool, models: list) -> None:
+        self._poll_in_flight = False
         if online:
             self._poll_timer.stop()
             count = len(models)
-            self._dot_lbl.setStyleSheet(f"font-size: 14px; color: {tokens.ACCENT_SUCCESS};")
+            self._dot_lbl.setStyleSheet(theme_stylesheet(f"font-size: 14px; color: {tokens.ACCENT_SUCCESS};"))
             self._status_text_lbl.setText(f"Online — {count} model{'s' if count != 1 else ''} ready!")
             self._btn_start.setText("✔ Service Started")
             self._btn_start.setEnabled(False)

@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type: ignore
 
 from .settings import Settings, get_settings
 
@@ -145,6 +148,8 @@ def probe_editor() -> SystemRow:
 
 def probe_ram() -> SystemRow:
     try:
+        if psutil is None:
+            return SystemRow(key="ram", state="unknown", summary="psutil not installed", fix_action=None)
         vm = psutil.virtual_memory()
         pct = vm.percent
         used_gb = (vm.total - vm.available) / (1024 ** 3)

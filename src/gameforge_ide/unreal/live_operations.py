@@ -79,24 +79,33 @@ class LiveOperations:
         return await self._call("blueprint_create_node", args, "transactional")
 
     async def blueprint_set_pin_default(self, blueprint_path: str, node_id: str, pin_name: str,
-                                        default_value: str) -> OperationResult:
-        args = {"blueprint_path": blueprint_path, "node_id": node_id, "pin_name": pin_name, "default_value": default_value}
+                                        default_value: str, graph_name: str = "") -> OperationResult:
+        args: Dict[str, Any] = {"blueprint_path": blueprint_path, "node_id": node_id, "pin_name": pin_name, "default_value": default_value}
+        if graph_name:
+            args["graph_name"] = graph_name
         return await self._call("blueprint_set_pin_default", args, "transactional")
 
     async def blueprint_connect_pins(self, blueprint_path: str, from_node: str, from_pin: str,
-                                     to_node: str, to_pin: str) -> OperationResult:
-        args = {"blueprint_path": blueprint_path, "from_node": from_node, "from_pin": from_pin,
-                "to_node": to_node, "to_pin": to_pin}
+                                     to_node: str, to_pin: str, graph_name: str = "") -> OperationResult:
+        args: Dict[str, Any] = {"blueprint_path": blueprint_path, "from_node": from_node, "from_pin": from_pin,
+                                "to_node": to_node, "to_pin": to_pin}
+        if graph_name:
+            args["graph_name"] = graph_name
         return await self._call("blueprint_connect_pins", args, "transactional")
 
     async def blueprint_disconnect_pins(self, blueprint_path: str, from_node: str, from_pin: str,
-                                        to_node: str = "", to_pin: str = "") -> OperationResult:
-        args = {"blueprint_path": blueprint_path, "from_node": from_node, "from_pin": from_pin,
-                "to_node": to_node, "to_pin": to_pin}
+                                        to_node: str = "", to_pin: str = "", graph_name: str = "") -> OperationResult:
+        args: Dict[str, Any] = {"blueprint_path": blueprint_path, "from_node": from_node, "from_pin": from_pin,
+                                "to_node": to_node, "to_pin": to_pin}
+        if graph_name:
+            args["graph_name"] = graph_name
         return await self._call("blueprint_disconnect_pins", args, "transactional")
 
-    async def blueprint_delete_node(self, blueprint_path: str, node_id: str) -> OperationResult:
-        return await self._call("blueprint_delete_node", {"blueprint_path": blueprint_path, "node_id": node_id}, "transactional")
+    async def blueprint_delete_node(self, blueprint_path: str, node_id: str, graph_name: str = "") -> OperationResult:
+        args: Dict[str, Any] = {"blueprint_path": blueprint_path, "node_id": node_id}
+        if graph_name:
+            args["graph_name"] = graph_name
+        return await self._call("blueprint_delete_node", args, "transactional")
 
     async def blueprint_compile(self, blueprint_path: str) -> OperationResult:
         return await self._call("blueprint_compile", {"blueprint_path": blueprint_path}, "transactional")
@@ -193,12 +202,14 @@ class LiveOperations:
 
     async def spline_create_road(self, road_name: str = "Road_HighlandPass", road_width: float = 350.0,
                                  points: Optional[List[Dict[str, float]]] = None,
-                                 road_material: str = "") -> OperationResult:
+                                 road_material: str = "", material_path: str = "") -> OperationResult:
+        resolved_mat = material_path or road_material
         args = {
             "road_name": road_name,
             "road_width": road_width,
             "points": points or [],
-            "road_material": road_material,
+            "material_path": resolved_mat,
+            "road_material": resolved_mat,
         }
         return await self._call("spline_create_road", args, "transactional")
 
@@ -206,7 +217,8 @@ class LiveOperations:
                               seed: int = 888, area_radius: float = 3000.0,
                               min_elevation: float = -500.0, max_elevation: float = 2000.0,
                               max_slope_degrees: float = 35.0, road_clearance: float = 400.0,
-                              static_mesh: str = "") -> OperationResult:
+                              static_mesh: str = "", mesh_path: str = "") -> OperationResult:
+        resolved_mesh = mesh_path or static_mesh
         args = {
             "cluster_name": cluster_name,
             "instance_count": instance_count,
@@ -216,7 +228,8 @@ class LiveOperations:
             "max_elevation": max_elevation,
             "max_slope_degrees": max_slope_degrees,
             "road_clearance": road_clearance,
-            "static_mesh": static_mesh,
+            "mesh_path": resolved_mesh,
+            "static_mesh": resolved_mesh,
         }
         return await self._call("foliage_scatter", args, "transactional")
 
@@ -292,4 +305,3 @@ class LiveOperations:
             "destination_name": destination_name,
         }
         return await self._call("anim_retarget_sequence", args, "snapshot-only")
-

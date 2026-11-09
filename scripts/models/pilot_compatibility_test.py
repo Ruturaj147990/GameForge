@@ -10,10 +10,7 @@ Validates end-to-end execution on AMD Radeon RX 7700 XT:
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
