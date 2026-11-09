@@ -37,13 +37,14 @@ class GAMEFORGERUNTIME_API UGameForgeCustomRule : public UObject
 	GENERATED_BODY()
 
 public:
-	virtual void Initialize(UWorld* InWorld) { World = InWorld; }
+	virtual void Initialize(UWorld* InWorld) { CachedWorld = InWorld; }
+	virtual UWorld* GetWorld() const override { return CachedWorld.Get(); }
 	virtual void OnEvent(const FGameForgeEvent& Event) {}
 	virtual void Tick(float DeltaSeconds) {}
 
 protected:
 	UPROPERTY()
-	TObjectPtr<UWorld> World;
+	TObjectPtr<UWorld> CachedWorld;
 
 	AGameForgeGameState* GameState() const;
 	void Emit(FName Name, const FString& DataJson = TEXT("{}"), FName Entity = NAME_None);

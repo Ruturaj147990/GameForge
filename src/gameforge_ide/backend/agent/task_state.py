@@ -331,17 +331,20 @@ class TaskState(BaseModel):
                 # Check for genuine state change: preimage vs postimage hash, or approved diff, or verified creation
                 matched = False
                 matched_reason = ""
-                target_path = (workspace_root / pred.target).resolve()
-                if not target_path.exists():
-                    t_name = Path(pred.target).name
-                    if t_name and workspace_root.is_dir():
-                        for p in workspace_root.rglob(t_name):
-                            p_parts = p.parts
-                            if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
-                                continue
-                            if p.is_file():
-                                target_path = p
-                                break
+                is_glob_target = any(c in pred.target for c in "*?[]")
+                target_path = None
+                if not is_glob_target:
+                    target_path = (workspace_root / pred.target).resolve()
+                    if not target_path.exists():
+                        t_name = Path(pred.target).name
+                        if t_name and workspace_root.is_dir():
+                            for p in workspace_root.rglob(t_name):
+                                p_parts = p.parts
+                                if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
+                                    continue
+                                if p.is_file():
+                                    target_path = p
+                                    break
 
                 # 1. Check tool history for diff application or edits with hash evidence
                 for th in tool_history:
@@ -356,16 +359,27 @@ class TaskState(BaseModel):
                         if fpath and _matches_target(str(fpath), pred.target):
                             pre_h = out.get("original_sha256") or th.get("pre_state_hash")
                             post_h = out.get("new_sha256") or th.get("post_state_hash")
+                            # Determine the actual on-disk file for this tool action
+                            actual_target = target_path if (target_path and target_path.is_file()) else (workspace_root / str(fpath)).resolve()
+                            if not actual_target.exists():
+                                f_name = Path(str(fpath)).name
+                                if f_name and workspace_root.is_dir():
+                                    for p in workspace_root.rglob(f_name):
+                                        if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
+                                            continue
+                                        if p.is_file():
+                                            actual_target = p
+                                            break
                             # If hashes are available, require genuine state comparison: pre_hash != post_hash
-                            if pre_h and post_h and pre_h != post_h and target_path.is_file():
-                                cur_hash = hashlib.sha256(target_path.read_bytes()).hexdigest()
+                            if pre_h and post_h and pre_h != post_h and actual_target and actual_target.is_file():
+                                cur_hash = hashlib.sha256(actual_target.read_bytes()).hexdigest()
                                 if cur_hash == post_h:
                                     matched = True
-                                    matched_reason = f"Verified content hash change ({pre_h[:8]} -> {post_h[:8]}) matches disk"
+                                    matched_reason = f"Verified content hash change ({pre_h[:8]} -> {post_h[:8]}) matches disk ({fpath})"
                                     break
-                            elif str(th.get("status", "")).upper() in ("SUCCESS", "APPLIED") and th.get("tool_name") in ("write_file", "apply_diff"):
+                            elif str(th.get("status", "")).upper() in ("SUCCESS", "APPLIED") and th.get("tool_name") in ("write_file", "apply_diff", "propose_edit"):
                                 matched = True
-                                matched_reason = f"Verified edit applied via tool '{th.get('tool_name')}'"
+                                matched_reason = f"Verified edit applied via tool '{th.get('tool_name')}' ({fpath})"
                                 break
 
                 # 2. Check if file was in modified_files set from an actual edit action

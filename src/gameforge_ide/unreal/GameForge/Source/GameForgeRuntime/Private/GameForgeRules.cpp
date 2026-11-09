@@ -293,14 +293,14 @@ bool FGameForgeConditionEvaluator::Evaluate(
 
 AGameForgeGameState* UGameForgeCustomRule::GameState() const
 {
-	return World ? World->GetGameState<AGameForgeGameState>() : nullptr;
+	return CachedWorld ? CachedWorld->GetGameState<AGameForgeGameState>() : nullptr;
 }
 
 void UGameForgeCustomRule::Emit(FName Name, const FString& DataJson, FName Entity)
 {
-	if (World)
+	if (CachedWorld)
 	{
-		if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(World))
+		if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(CachedWorld))
 		{
 			Bus->Emit(Name, GetName(), DataJson, Entity);
 		}

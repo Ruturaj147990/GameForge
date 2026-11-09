@@ -103,11 +103,23 @@ class FreeformGamePipeline:
 
     def _write_impl(self, src_dir: Path, files: Dict[str, str]) -> None:
         for name, content in files.items():
-            (src_dir / name).write_text(content, encoding="utf-8", newline="\n")
+            dest = src_dir / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8", newline="\n")
 
     def _read_impl(self, src_dir: Path) -> Dict[str, str]:
-        return {n: (src_dir / n).read_text(encoding="utf-8") for n in ("GFGameImpl.h", "GFGameImpl.cpp")
-                if (src_dir / n).exists()}
+        files = {n: (src_dir / n).read_text(encoding="utf-8") for n in ("GFGameImpl.h", "GFGameImpl.cpp")
+                 if (src_dir / n).exists()}
+        if src_dir.is_dir():
+            for p in src_dir.rglob("*"):
+                if p.is_file() and p.suffix in (".h", ".cpp"):
+                    rel = p.relative_to(src_dir).as_posix()
+                    if rel not in files:
+                        try:
+                            files[rel] = p.read_text(encoding="utf-8")
+                        except Exception:
+                            pass
+        return files
 
     @staticmethod
     def _diag_context(src_dir: Path, diags: List[Dict], limit: int = 12) -> str:
@@ -258,7 +270,7 @@ class FreeformGamePipeline:
                 if author is None or attempt == budget:
                     break
                 current = self._read_impl(src_dir)
-                fixed_files, notes = autofix(current)
+                fixed_files, notes = autofix(current, diags=diags)
                 if notes and fixed_files != current and not safety_scan(fixed_files):
                     self._write_impl(src_dir, fixed_files)
                     attempts[-1]["repair"] = "autofix: " + "; ".join(notes)

@@ -58,7 +58,7 @@
     "Source/GameForgeRuntime/Private/GameForgeObjectives.cpp": "8d71d2a7067b619f2a5e90391532d78738feefb5170857b2dd4f43504b4a0216",
     "Source/GameForgeRuntime/Private/GameForgePickup.cpp": "4e3eb01fa05a43ac15e8919a2adf925099d5b78e77bafb36251d83c2f075ffae",
     "Source/GameForgeRuntime/Private/GameForgePlayer.cpp": "b3b21b63f766cc2d3c22fc5dd8277f75f2db6072513e0c2c773da70d003daa58",
-    "Source/GameForgeRuntime/Private/GameForgeRules.cpp": "c01af234d95247b49a8fb401057f0034fe4e0cb5ebd28d9f40414ca57432af59",
+    "Source/GameForgeRuntime/Private/GameForgeRules.cpp": "a03e3ebc5263a79c47c7f84996f52db732c702b63f339dd5b3b9a16fccff696e",
     "Source/GameForgeRuntime/Private/GameForgeRuntimeModule.cpp": "21196fe07e4100dd30a851ac6bade153129b627e7fab8fbc08d2b2a8b952b530",
     "Source/GameForgeRuntime/Private/GameForgeScenario.cpp": "b3f082226499e7163ba265899af3615fcc5229b849bead6762f66f6ae629d715",
     "Source/GameForgeRuntime/Private/Tests/GameForgeRulesTests.cpp": "db858177dee735a8cc907c7043390fef82d77e3834a1d19f8fc1115723680e87",
@@ -79,11 +79,11 @@
     "Source/GameForgeRuntime/Public/GameForgeObjectives.h": "2040ed444557ef3acbf819866c7d471d511b0489b32a8a36b4b13e38bec93fe6",
     "Source/GameForgeRuntime/Public/GameForgePickup.h": "42fc6bc7b70711eb75f64c7a2c50293dc9f89dca0c3c414edbd1cd5b6d0dace7",
     "Source/GameForgeRuntime/Public/GameForgePlayer.h": "d92972063b1bb849c9a3a286b77a1c6cadf7b5cfc2259e0ad0f8ca8317be921f",
-    "Source/GameForgeRuntime/Public/GameForgeRules.h": "5b90a08dac2d38685f683dd56a6d902cb423e35bffd8a6599e041cd8e2e5ce36",
+    "Source/GameForgeRuntime/Public/GameForgeRules.h": "6ff88998aade3afa2097d84084f5f4fbdb7f32ac74c9f678d5c31afec1a60341",
     "Source/GameForgeRuntime/Public/GameForgeScenario.h": "3ef56b05a32e2d06940f0679a1788f0281d9920c0c38bf72c09ede43b35d9fcf",
     "Source/GameForgeRuntime/Public/GameForgeVisuals.h": "ff903940f735806699681b26926ebf5253d87a756fd0c691b4d9543777437deb"
   },
-  "generated_at": "2026-11-09T14:20:29.168379+00:00",
+  "generated_at": "2026-11-09T16:20:40.822009+00:00",
   "interfaces": {
     "GameForge.uplugin": "e927d07eb57a7d1a250ce4fb325cdee99c89bb4774b2613095dbe4d59b3b0d12",
     "Source/GameForgeRuntime/Public/GameForgeAttributes.h": "622f854adda4dda3c4523d63609367f0ad30206ed1d5f39264de0c080393960c",
@@ -93,7 +93,7 @@
     "Source/GameForgeRuntime/Public/GameForgeKitActors.h": "6b17ec8c7797ebaad184f9d14774e9a18f4e91c4f301e1682bef6d6e70e056ec",
     "Source/GameForgeRuntime/Public/GameForgeObjectives.h": "2040ed444557ef3acbf819866c7d471d511b0489b32a8a36b4b13e38bec93fe6",
     "Source/GameForgeRuntime/Public/GameForgePlayer.h": "d92972063b1bb849c9a3a286b77a1c6cadf7b5cfc2259e0ad0f8ca8317be921f",
-    "Source/GameForgeRuntime/Public/GameForgeRules.h": "5b90a08dac2d38685f683dd56a6d902cb423e35bffd8a6599e041cd8e2e5ce36",
+    "Source/GameForgeRuntime/Public/GameForgeRules.h": "6ff88998aade3afa2097d84084f5f4fbdb7f32ac74c9f678d5c31afec1a60341",
     "Source/GameForgeRuntime/Public/GameForgeScenario.h": "3ef56b05a32e2d06940f0679a1788f0281d9920c0c38bf72c09ede43b35d9fcf"
   },
   "manifest_version": 1,

@@ -59,8 +59,8 @@ def synthesize_cpp_bodies_for_architecture(
         "scratch_puzzle" in plan_kind and mechanics.get("subgrid_size") == 3
     ):
         on_event = (
-            "\tUWorld* World = GetWorld();\n"
-            "\tAGameForgeGameState* GS = World ? World->GetGameState<AGameForgeGameState>() : nullptr;\n"
+            "\tUWorld* CurrentWorld = GetWorld();\n"
+            "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
             "\tif (Event.EventName == TEXT(\"board.move\") || Event.EventName == TEXT(\"pickup.collected\"))\n"
             "\t{\n"
             "\t\tMovesPlayed += 1;\n"
@@ -94,8 +94,8 @@ def synthesize_cpp_bodies_for_architecture(
 
     if "scratch_board" in plan_kind or "chess" in target_classes or "checkers" in target_classes:
         on_event = (
-            "\tUWorld* World = GetWorld();\n"
-            "\tAGameForgeGameState* GS = World ? World->GetGameState<AGameForgeGameState>() : nullptr;\n"
+            "\tUWorld* CurrentWorld = GetWorld();\n"
+            "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
             "\tif (Event.EventName == TEXT(\"board.move\") || Event.EventName == TEXT(\"turn.ended\"))\n"
             "\t{\n"
             "\t\tMovesPlayed += 1;\n"
@@ -118,8 +118,8 @@ def synthesize_cpp_bodies_for_architecture(
 
     if "falling_blocks" in plan_kind or "tetris" in plan_kind or "tetris" in target_classes:
         on_event = (
-            "\tUWorld* World = GetWorld();\n"
-            "\tAGameForgeGameState* GS = World ? World->GetGameState<AGameForgeGameState>() : nullptr;\n"
+            "\tUWorld* CurrentWorld = GetWorld();\n"
+            "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
             "\tif (Event.EventName == TEXT(\"board.move\") || Event.EventName == TEXT(\"line.cleared\"))\n"
             "\t{\n"
             "\t\tMovesPlayed += 1;\n"
@@ -143,8 +143,8 @@ def synthesize_cpp_bodies_for_architecture(
 
     if "scratch_snake" in plan_kind:
         on_event = (
-            "\tUWorld* World = GetWorld();\n"
-            "\tAGameForgeGameState* GS = World ? World->GetGameState<AGameForgeGameState>() : nullptr;\n"
+            "\tUWorld* CurrentWorld = GetWorld();\n"
+            "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
             "\tif (Event.EventName == TEXT(\"pickup.collected\") || Event.EventName == TEXT(\"board.move\"))\n"
             "\t{\n"
             "\t\tValidPlacements += 1;\n"
@@ -166,15 +166,15 @@ def synthesize_cpp_bodies_for_architecture(
     # 2. Composable Real-Time / Action / Strategy / Exploration C++ Synthesis
     event_blocks: List[str] = [
         f"\t// Dynamic gameplay subsystem: {safe_summary or plan_kind or 'Active mechanics'}\n"
-        "\tUWorld* World = GetWorld();\n"
-        "\tAGameForgeGameState* GS = World ? World->GetGameState<AGameForgeGameState>() : nullptr;\n"
+        "\tUWorld* CurrentWorld = GetWorld();\n"
+        "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
         "\tUGameForgeEventBus* Bus = UGameForgeEventBus::Get(this);"
     ]
     tick_blocks: List[str] = [
         "\tElapsedRuleTime += DeltaSeconds;\n"
         "\tStepAccumulator += DeltaSeconds;\n"
-        "\tUWorld* World = GetWorld();\n"
-        "\tAGameForgeGameState* GS = World ? World->GetGameState<AGameForgeGameState>() : nullptr;"
+        "\tUWorld* CurrentWorld = GetWorld();\n"
+        "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;"
     ]
 
     # Capability A: Lap & Checkpoint Circuit Tracker

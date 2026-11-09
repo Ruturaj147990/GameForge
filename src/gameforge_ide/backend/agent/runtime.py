@@ -2208,7 +2208,7 @@ class AgentRuntime:
         _tool_history: List[Dict[str, Any]] = []
         _edit_proposed = False
         _task_needs_edit = self._is_actionable_task(effective_task_prompt, "") or bool(is_proceed_command and active_plan and active_plan.steps)
-        _unmet_predicates_nudged = False
+        _unmet_predicates_nudges: int = 0
         _self_correction_nudged = False
         _phantom_edit_nudged = False
         _narrative_promise_nudged = False
@@ -2547,24 +2547,43 @@ class AgentRuntime:
                         continue
 
                 if not all_satisfied and (task_state.intent == "mutate" or _task_needs_edit or task_actionable):
-                    if not _unmet_predicates_nudged and iteration < self.max_iterations:
-                        # Structured nudge listing unmet predicates and available tools
-                        _unmet_predicates_nudged = True
+                    _max_unmet_nudges = 3
+                    if _unmet_predicates_nudges < _max_unmet_nudges and iteration < self.max_iterations:
+                        _unmet_predicates_nudges += 1
                         conversation_history.append({"role": "assistant", "content": full_response})
+                        candidate_files = []
+                        for th in _tool_history:
+                            args = th.get("arguments", {})
+                            subp = args.get("subpath") or args.get("path")
+                            if subp and not str(subp).endswith(("/", "\\", ".")) and subp not in candidate_files:
+                                candidate_files.append(str(subp))
+                        target_hint = candidate_files[-1] if candidate_files else "Source/<Project>/<File>.cpp"
+                        nudge_content = (
+                            "[Acceptance Predicates Unmet]: The following required predicates are not yet satisfied:\n"
+                            + "\n".join(f"- {u}" for u in (unmet or ["file_changed: Required project files have not been created/modified"]))
+                            + f"\n\nYou must invoke an editing tool (`propose_edit` or `write_file`) to apply file changes to disk.\n"
+                            f"Example JSON tool invocation:\n"
+                            f"```json\n"
+                            f"{{\n"
+                            f'  "tool": "propose_edit",\n'
+                            f'  "args": {{\n'
+                            f'    "subpath": "{target_hint}",\n'
+                            f'    "target_content": "<existing code from file to replace>",\n'
+                            f'    "replacement_content": "<new code>"\n'
+                            f'  }}\n'
+                            f"}}\n"
+                            f"```\n\n"
+                            f"Available tools:\n{self._format_tools_description()}\n\n"
+                            "Do NOT output narrative explanations, apologies, or plans. Emit a tool call now."
+                        )
                         conversation_history.append({
                             "role": "user",
-                            "content": (
-                                "[Acceptance Predicates Unmet]: The following required predicates are not yet satisfied:\n"
-                                + "\n".join(f"- {u}" for u in (unmet or ["file_changed: Required project files have not been created/modified"]))
-                                + "\n\nAvailable tools:\n"
-                                + self._format_tools_description()
-                                + "\n\nYou MUST call a tool now to make progress. Narrative explanations alone cannot complete this task."
-                            ),
+                            "content": nudge_content,
                         })
                         yield AgentEvent(
                             event_type="status",
                             content="PLANNING",
-                            metadata={"action": "nudge_unmet_predicates", "unmet": unmet, "iteration": iteration, "engineering_stage": "Planning"},
+                            metadata={"action": "nudge_unmet_predicates", "unmet": unmet, "nudge_count": _unmet_predicates_nudges, "iteration": iteration, "engineering_stage": "Planning"},
                         )
                         continue
                     else:
@@ -2594,7 +2613,7 @@ class AgentRuntime:
                             )
                             return
                         else:
-                            # Second text-only output while predicates remain unmet and no files modified — fail closed!
+                            # Model exceeded unmet predicate budget without modifying files — fail closed!
                             task_state.terminal_status = "BLOCKED"
                             task_state.terminal_reason = "model_not_acting"
                             self._save_task_state(task_state)
@@ -2630,6 +2649,7 @@ class AgentRuntime:
             tool_name = tool_call["name"]
             tool_args = tool_call["arguments"]
             _last_tool_error = False
+            _unmet_predicates_nudges = 0
 
             # --- Repetition and Loop Control (Rule 4 & Blueprint §4.E) ---
             try:

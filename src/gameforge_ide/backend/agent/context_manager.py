@@ -254,6 +254,29 @@ class ContextManager:
                 pkg_exe = find_packaged_executable(p_path)
                 is_playable = pkg_exe is not None and pkg_exe.is_file()
                 pkg_str = f"READY at {pkg_exe}" if is_playable else "NOT PACKAGED YET (Executable does not exist on disk)"
+
+                # Check for recent build failure diagnostics in the project
+                build_diag_note = ""
+                logs_dir = p_path / "Saved" / "GameForge" / "logs"
+                if logs_dir.is_dir():
+                    build_logs = sorted(logs_dir.glob("build_*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+                    if build_logs:
+                        latest_log = build_logs[0]
+                        try:
+                            log_text = latest_log.read_text(encoding="utf-8", errors="replace")
+                            err_lines = [
+                                l.strip() for l in log_text.splitlines()
+                                if ("error C" in l or "error LNK" in l or "fatal error" in l or "Error:" in l)
+                            ]
+                            if err_lines:
+                                top_errs = "\n".join(f"  * {l}" for l in err_lines[:8])
+                                build_diag_note = (
+                                    f"- Recent Build Status: FAILED (from {latest_log.name})\n"
+                                    f"- Compiler Diagnostics to Fix:\n{top_errs}\n"
+                                )
+                        except Exception:
+                            pass
+
                 proj_note = (
                     f"\n=== ACTIVE PROJECT STATE ===\n"
                     f"- Project Name: {p_path.name}\n"
@@ -262,6 +285,7 @@ class ContextManager:
                     f"- Game Design Spec: {'FOUND' if gds_f else 'NOT FOUND'}\n"
                     f"- Packaged Executable: {pkg_str}\n"
                     f"- Playable: {is_playable}\n"
+                    f"{build_diag_note}"
                     f"GROUNDING RULES:\n"
                     f"- If the user asks whether the game is playable, finished, or ready: answer truthfully based on the Packaged Executable status above.\n"
                     f"- NEVER claim the game is playable or located in Packaged/Windows if Packaged Executable is 'NOT PACKAGED YET'.\n"

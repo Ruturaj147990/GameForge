@@ -18,7 +18,7 @@ Features:
 
 from __future__ import annotations
 
-import json
+import codecs, json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -51,9 +51,11 @@ DEFAULT_KNOWN_TOOLS: Set[str] = {
     "search_index",
     "propose_edit",
     "apply_edit",
+    "apply_diff",
     "reject_edit",
     "rollback_edit",
     "apply_batch",
+    "apply_diffs_batch",
     "rollback_batch",
     "write_file",
     "delete_file",
@@ -79,8 +81,8 @@ DEFAULT_KNOWN_TOOLS: Set[str] = {
 }
 
 DEFAULT_ALIASES: Dict[str, str] = {
-    "apply_diff": "apply_edit",
-    "apply_diffs_batch": "apply_batch",
+
+
     "reject_diff": "reject_edit",
     "rollback_diff": "rollback_edit",
     "rollback_diffs_batch": "rollback_batch",
@@ -420,6 +422,62 @@ def parse_text_for_tool_calls(
                     spans_to_remove.append((start, end))
             else:
                 spans_to_remove.append((start, end))
+
+    # 4. Python-style function call pattern: e.g. propose_edit(subpath="...", ...) or read_file(subpath="...")
+    if not calls:
+        func_call_pat = re.compile(
+            r"(?:^|\n|\b)(?P<name>[a-zA-Z_]\w*)\s*\((?P<args>[^()]*?)\)",
+            re.DOTALL,
+        )
+        for m in func_call_pat.finditer(text):
+            raw_name = m.group("name").strip()
+            name = alias_map.get(raw_name, raw_name)
+            if name in tools:
+                args_str = m.group("args").strip()
+                parsed_args = {}
+                for kw in re.finditer(r'([a-zA-Z_]\w*)\s*=\s*(?:(["\'])([\s\S]*?)\2|([0-9.]+)|(True|False|None))', args_str):
+                    k = kw.group(1)
+                    if kw.group(3) is not None:
+                        val_str = kw.group(3)
+                        try:
+                            parsed_args[k] = codecs.decode(val_str, "unicode_escape")
+                        except Exception:
+                            parsed_args[k] = val_str
+                    elif kw.group(4) is not None:
+                        val_num = kw.group(4)
+                        parsed_args[k] = float(val_num) if "." in val_num else int(val_num)
+                    elif kw.group(5) is not None:
+                        val_bool = kw.group(5)
+                        parsed_args[k] = True if val_bool == "True" else (False if val_bool == "False" else None)
+                if parsed_args or not args_str:
+                    calls.append(ParsedToolCall(
+                        name=name,
+                        arguments=parsed_args,
+                        start=m.start(),
+                        end=m.end(),
+                        source="func_call",
+                    ))
+                    spans_to_remove.append((m.start(), m.end()))
+                    break
+
+    # 5. Unified diff format: --- a/... +++ b/... @@ ... @@
+    if not calls and ("apply_diff" in tools or "apply_edit" in tools):
+        diff_pat = re.compile(
+            r"(?:^|\n)(?:```(?:diff)?\s*\n)?(?:diff\s+--git\s+\S+\s+\S+\s*\n)?---\s+[ab]/(?P<old_file>\S+)\s*\n\+\+\+\s+[ab]/(?P<new_file>\S+)\s*\n(?P<hunks>@@[\s\S]+?)(?=(?:\n```|\Z))",
+            re.MULTILINE,
+        )
+        m_diff = diff_pat.search(text)
+        if m_diff:
+            target_f = m_diff.group("new_file").strip()
+            diff_text = m_diff.group(0).strip("` \r\n")
+            calls.append(ParsedToolCall(
+                name="apply_diff",
+                arguments={"subpath": target_f, "diff": diff_text},
+                start=m_diff.start(),
+                end=m_diff.end(),
+                source="unified_diff",
+            ))
+            spans_to_remove.append((m_diff.start(), m_diff.end()))
 
     # Construct cleaned narrative text by excising spans
     if not spans_to_remove:

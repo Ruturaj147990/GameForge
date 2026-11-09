@@ -190,12 +190,12 @@ void AGFGameBase::Tick(float DeltaSeconds)
 
 AActor* AGFGameBase::SpawnShape(EGFShape Shape, const FVector& Location, const FVector& Scale, const FLinearColor& Color)
 {
-	UWorld* World = GetWorld();
-	if (!World) return nullptr;
+	UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld) return nullptr;
 	FActorSpawnParameters Params;
 	Params.Owner = this;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	AStaticMeshActor* A = World->SpawnActor<AStaticMeshActor>(Location, FRotator::ZeroRotator, Params);
+	AStaticMeshActor* A = CurrentWorld->SpawnActor<AStaticMeshActor>(Location, FRotator::ZeroRotator, Params);
 	if (!A) return nullptr;
 	A->SetMobility(EComponentMobility::Movable);
 	UStaticMeshComponent* C = A->GetStaticMeshComponent();
@@ -253,13 +253,13 @@ AActor* AGFGameBase::SpawnProp(const FString& Recipe, const FVector& Location, c
 
 AActor* AGFGameBase::SpawnText(const FString& Text, const FVector& Location, float HeightCm, const FLinearColor& Color)
 {
-	UWorld* World = GetWorld();
-	if (!World) return nullptr;
+	UWorld* CurrentWorld = GetWorld();
+	if (!CurrentWorld) return nullptr;
 	FActorSpawnParameters Params;
 	Params.Owner = this;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	const FRotator Facing(-GetCameraPitch(), GetCameraYaw() + 180.f, 0.f);
-	ATextRenderActor* A = World->SpawnActor<ATextRenderActor>(Location, Facing, Params);
+	ATextRenderActor* A = CurrentWorld->SpawnActor<ATextRenderActor>(Location, Facing, Params);
 	if (!A) return nullptr;
 	UTextRenderComponent* T = A->GetTextRender();
 	T->SetText(FText::FromString(Text));

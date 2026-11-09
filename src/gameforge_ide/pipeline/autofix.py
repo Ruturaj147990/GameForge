@@ -9,9 +9,19 @@ with error-code-specific hints.
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-CONST_OVERRIDES = {"GetStatusText", "GetControlsText", "GetCameraFocus", "GetCameraDistance", "GetCameraPitch"}
+CONST_OVERRIDES = {
+    "GetStatusText",
+    "GetSecondaryStatusText",
+    "GetControlsText",
+    "GetCameraFocus",
+    "GetCameraDistance",
+    "GetCameraPitch",
+    "GetCameraYaw",
+    "GetCameraFOV",
+}
 
 _DEF = re.compile(
     r"^(?P<ret>[A-Za-z_][\w:<>,\s\*&]*?)\s+AGFGameImpl::(?P<name>\w+)\s*\((?P<params>[^)]*)\)\s*(?P<const>const)?\s*(?:override)?\s*\{",
@@ -28,9 +38,116 @@ def _declared_names(header: str) -> set:
     return set(re.findall(r"\b(\w+)\s*\(", body))
 
 
-def autofix(files: Dict[str, str]) -> Tuple[Dict[str, str], List[str]]:
-    h = files.get("GFGameImpl.h", "")
-    cpp = files.get("GFGameImpl.cpp", "")
+def _make_member_func_const(name: str, h: str, cpp: str) -> Tuple[str, str, bool]:
+    """Adds const to the declaration of member function `name` in header and its definition in cpp."""
+    modified = False
+    decl_pat = re.compile(rf"^(\s*(?:virtual\s+)?[\w:<>\*&]+(?:\s+[\*&])?\s+{name}\s*\([^)]*\))(?!\s*const)\s*(?:override)?\s*;", re.M)
+    if decl_pat.search(h):
+        h = decl_pat.sub(r"\1 const;", h)
+        modified = True
+
+    def_pat = re.compile(rf"^((?:[\w:<>\*&]+(?:\s+[\*&])?\s+)?\w+::{name}\s*\([^)]*\))(?!\s*const)\s*(?:override)?\s*\{{", re.M)
+    if def_pat.search(cpp):
+        cpp = def_pat.sub(r"\1 const\n{", cpp)
+        modified = True
+
+    return h, cpp, modified
+
+
+def _default_return_for(ret_type: str) -> str:
+    r = ret_type.strip().rstrip("&").strip()
+    if r == "void":
+        return ""
+    if r == "bool":
+        return "return false;"
+    if r in ("int", "int32", "int64", "uint32", "uint8", "float", "double", "size_t"):
+        return "return 0;"
+    if r == "FVector":
+        return "return FVector::ZeroVector;"
+    if r == "FRotator":
+        return "return FRotator::ZeroRotator;"
+    if r == "FQuat":
+        return "return FQuat::Identity;"
+    if r == "FString":
+        return "return FString();"
+    if r == "FName":
+        return "return FName();"
+    if r == "FText":
+        return "return FText::GetEmpty();"
+    if r.endswith("*"):
+        return "return nullptr;"
+    return f"return {r}();"
+
+
+def _stub_missing_definitions(h: str, cpp: str, class_name: Optional[str] = None) -> Tuple[str, List[str]]:
+    """Synthesizes default definitions in cpp for member functions declared in h but not defined in cpp."""
+    notes = []
+    if not h or not cpp:
+        return cpp, notes
+
+    stripped_h = _strip_comments(h)
+    class_blocks = list(re.finditer(r"class\s+(?:\w+_API\s+)?(?P<cls>\w+)(?:\s*:[^{;]+)?\{(?P<body>[\s\S]*?)\};", stripped_h))
+
+    blocks_to_check = []
+    if class_blocks:
+        for cb in class_blocks:
+            c_cls = cb.group("cls")
+            if class_name and c_cls != class_name:
+                continue
+            blocks_to_check.append((c_cls, cb.group("body")))
+    elif class_name:
+        blocks_to_check.append((class_name, stripped_h))
+
+    decl_pat = re.compile(
+        r"^\s*(?:virtual\s+|static\s+)?(?P<ret>[\w:<>\*&]+(?:\s+[\*&])?)\s+(?P<name>\w+)\s*\((?P<params>[^)]*)\)\s*(?P<const>const)?\s*(?:override)?\s*;",
+        re.M,
+    )
+
+    new_stubs = []
+    for cls, body in blocks_to_check:
+        def_pat = re.compile(rf"{cls}::(?P<name>\w+)\s*\(", re.M)
+        existing_defs = set(def_pat.findall(cpp))
+
+        for m in decl_pat.finditer(body):
+            name = m.group("name")
+            if (
+                name in existing_defs
+                or name == cls
+                or name.startswith("DECLARE_")
+                or name in ("GENERATED_BODY", "UCLASS", "UPROPERTY")
+            ):
+                continue
+
+            raw_ret = m.group("ret").strip()
+            ret = re.sub(r"\b(virtual|static|public:|private:|protected:)\b", "", raw_ret).strip()
+            ret = ret.replace("public:", "").replace("private:", "").replace("protected:", "").strip()
+            if not ret:
+                continue
+
+            params = m.group("params").strip()
+            clean_params = re.sub(r"\s*=\s*[^,)]+", "", params).strip()
+            is_const = bool(m.group("const"))
+            const_suffix = " const" if is_const else ""
+
+            ret_stmt = _default_return_for(ret)
+            body_stmt = f"\t{ret_stmt}\n" if ret_stmt else ""
+
+            stub = f"{ret} {cls}::{name}({clean_params}){const_suffix}\n{{\n{body_stmt}}}\n"
+            new_stubs.append(stub)
+            notes.append(f"synthesized missing definition for {cls}::{name} (preventing LNK2019)")
+            existing_defs.add(name)
+
+    if new_stubs:
+        cpp = cpp.rstrip() + "\n\n// Definitions synthesized by GameForge autofix for declared helpers\n" + "\n".join(new_stubs)
+
+    return cpp, notes
+
+
+def autofix(files: Dict[str, str], diags: Optional[List[Dict]] = None) -> Tuple[Dict[str, str], List[str]]:
+    h_key = next((k for k in files if k.endswith("GFGameImpl.h")), "GFGameImpl.h")
+    cpp_key = next((k for k in files if k.endswith("GFGameImpl.cpp")), "GFGameImpl.cpp")
+    h = files.get(h_key, "")
+    cpp = files.get(cpp_key, "")
     notes: List[str] = []
 
     # 1. generated header must only be included by the header, last
@@ -120,11 +237,104 @@ def autofix(files: Dict[str, str]) -> Tuple[Dict[str, str], List[str]]:
             cpp = cpp.replace("FLinearColor::Orange", "FLinearColor(FColor::Orange)")
             notes.append("replaced invalid FLinearColor::Orange with FLinearColor(FColor::Orange)")
 
+    # 10. Fix C2662: const member functions calling non-const helpers
+    if diags:
+        for d in diags:
+            if d.get("code") == "C2662":
+                msg = d.get("message", "")
+                m_fn = re.search(r"::(?P<name>\w+)\s*\(", msg)
+                if m_fn:
+                    fname = m_fn.group("name")
+                    h, cpp, ok = _make_member_func_const(fname, h, cpp)
+                    if ok:
+                        notes.append(f"added const to {fname} (fixing C2662)")
+
+    # Static analysis: find member functions called from inside const member functions
+    const_defs = list(re.finditer(r"\b\w+::(?P<name>\w+)\s*\([^)]*\)\s*const\s*(?:override)?\s*\{", cpp))
+    for m_def in const_defs:
+        open_brace = m_def.end() - 1
+        depth = 1
+        pos = open_brace + 1
+        n = len(cpp)
+        while pos < n and depth > 0:
+            if cpp[pos] == "{":
+                depth += 1
+            elif cpp[pos] == "}":
+                depth -= 1
+            pos += 1
+        if depth == 0:
+            body = cpp[open_brace + 1 : pos - 1]
+            called_names = set(re.findall(r"\b([A-Za-z_]\w*)\s*\(", body))
+            declared = _declared_names(h)
+            for cname in called_names:
+                if cname in declared and cname not in CONST_OVERRIDES and cname != "AGFGameImpl":
+                    if re.search(rf"\b{cname}\s*\([^)]*\)(?!\s*const)\s*;", h):
+                        h, cpp, ok = _make_member_func_const(cname, h, cpp)
+                        if ok:
+                            notes.append(f"added const to helper {cname} called from const method {m_def.group('name')}")
+
+    cpp, stub_notes = _stub_missing_definitions(h, cpp, class_name="AGFGameImpl")
+    notes.extend(stub_notes)
+
     out = dict(files)
     if h:
-        out["GFGameImpl.h"] = h
+        out[h_key] = h
     if cpp:
-        out["GFGameImpl.cpp"] = cpp
+        out[cpp_key] = cpp
+
+    # Synthesize missing definitions for any other class (.h/.cpp pairs)
+    for fn, c_content in list(out.items()):
+        if fn.endswith(".cpp") and fn != cpp_key:
+            stem = fn[:-4]
+            h_matching = f"{stem}.h"
+            if h_matching in out:
+                h_c = out[h_matching]
+                m_cls = re.search(r"class\s+(?:\w+_API\s+)?(?P<cls>\w+)\s*:\s*public", h_c)
+                if m_cls:
+                    cls_name = m_cls.group("cls")
+                    new_cpp_c, c_notes = _stub_missing_definitions(h_c, c_content, class_name=cls_name)
+                    if new_cpp_c != c_content:
+                        out[fn] = new_cpp_c
+                        notes.extend(c_notes)
+
+    # 11. Fix C4458: declaration of 'World' hides class member across any C++ file
+    for fn, content in list(out.items()):
+        if fn.endswith((".cpp", ".h")):
+            if "UWorld* World = GetWorld();" in content or "UWorld* World = InWorld;" in content or "UWorld* CurrentWorld = GetWorld();" in content:
+                new_c = re.sub(r"\bUWorld\*\s+World\s*=\s*(?:GetWorld\(\)|InWorld);", "UWorld* CurrentWorld = GetWorld();", content)
+                new_c = re.sub(r"(!\s*)World\b", r"\g<1>CurrentWorld", new_c)
+                new_c = re.sub(r"\bWorld\s*\?", "CurrentWorld ?", new_c)
+                new_c = re.sub(r"\bWorld\s*->", "CurrentWorld->", new_c)
+                new_c = re.sub(r"\bWorld\s*==\s*nullptr", "CurrentWorld == nullptr", new_c)
+                new_c = re.sub(r"\bWorld\s*!=\s*nullptr", "CurrentWorld != nullptr", new_c)
+                out[fn] = new_c
+                notes.append(f"renamed shadowing World to CurrentWorld in {fn} (fixing C4458)")
+
+    if diags:
+        for d in diags:
+            if d.get("code") == "C4458":
+                msg = d.get("message", "")
+                m_var = re.search(r"declaration of '(\w+)' hides class member", msg)
+                d_file = Path(d.get("file") or "").name
+                for fn, content in list(out.items()):
+                    if Path(fn).name == d_file and m_var:
+                        var_name = m_var.group(1)
+                        if var_name != "World":
+                            repl = f"Local{var_name}"
+                            new_c = re.sub(rf"\b([\w:<>\*&]+\s+){var_name}\b", rf"\g<1>{repl}", content)
+                            new_c = re.sub(rf"\b{var_name}\b", repl, new_c)
+                            out[fn] = new_c
+                            notes.append(f"renamed shadowing {var_name} to {repl} in {fn} (fixing C4458)")
+            if d.get("code") == "C2065" and "'World'" in d.get("message", ""):
+                d_file = Path(d.get("file") or "").name
+                for fn, content in list(out.items()):
+                    if Path(fn).name == d_file:
+                        new_c = re.sub(r"(!\s*)World\b", r"\g<1>CurrentWorld", content)
+                        new_c = re.sub(r"\bWorld\s*\?", "CurrentWorld ?", new_c)
+                        new_c = re.sub(r"\bWorld\s*->", "CurrentWorld->", new_c)
+                        out[fn] = new_c
+                        notes.append(f"repaired undeclared World to CurrentWorld in {fn} (fixing C2065)")
+
     return out, notes
 
 
