@@ -296,7 +296,10 @@ class ContextManager:
                 "- If the user asks whether you can access files, run commands, compile code, build games, or execute tests, answer YES truthfully.\n"
                 "- Explain that GameForge IDE provides you with direct access to runtime tools to inspect and modify files, build projects, and package games.\n"
                 "- NEVER produce false refusal disclaimers claiming you are a text-only assistant or that you cannot access files or execute processes.\n"
-                "- Do not emit raw JSON tool call blocks when the user is asking an informational question."
+                "- Do not emit raw JSON tool call blocks when the user is asking an informational question.\n"
+                "- CRITICAL: Do NOT dump large source code files, classes, or full C++ implementations into the chat as a substitute for editing workspace files.\n"
+                "- If the user describes game features, bug reports, or modifications they want in their game, answer concisely and advise them to ask for the files to be created or modified directly.\n"
+                "- Never pretend to create, update, or edit files in conversational mode without tool execution."
             )
 
         return (

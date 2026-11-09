@@ -428,5 +428,5 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
             "count": len(scenarios),
             "gaps": [{"scenario_id": g.scenario_id, "reason": g.reason} for g in gaps],
         },
-        artifacts=[{"path": str(a), "kind": "scenario_result"} for a in artifacts],
+        artifacts=[{"path": str(a), "kind": "other"} for a in artifacts],
     )

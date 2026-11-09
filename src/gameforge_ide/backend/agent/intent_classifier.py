@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -34,12 +35,15 @@ _SCHEMA: Dict[str, Any] = {
 _SYSTEM = (
     "You route requests inside GameForge, an IDE that builds Unreal Engine games from prompts.\n"
     "Classify the user's message into exactly one intent:\n"
-    "- chat: greetings, thanks, opinions, or questions that can be answered from knowledge alone "
+    "- chat: greetings, thanks, opinions, or general theoretical questions that can be answered from knowledge alone "
     "(e.g. 'how do shooters handle recoil?', 'what is a GameMode?').\n"
     "- code_change: write, edit, fix, refactor, or delete source code or files in the workspace.\n"
     "- create_game: make a NEW complete game from a description.\n"
-    "- modify_game: change gameplay, levels, rules or content of the current/existing game.\n"
+    "- modify_game: change gameplay, levels, rules, board dimensions, mechanics, or content of the current/existing game.\n"
     "- project_query: questions that need looking at this workspace/project/build state/logs/files.\n"
+    "CRITICAL ROUTING RULES:\n"
+    "- Defect reports, bug reports, incompleteness complaints, or missing feature reports (e.g. 'not complete', 'broken', 'missing tiles', 'nothing is playable', 'not working', 'fix error') MUST be classified as modify_game or code_change, NEVER chat.\n"
+    "- Requests mentioning specific game mechanics, tiles, actors, or numbers to be fixed or added are modify_game or code_change, NEVER chat.\n"
     "Return JSON only. confidence is 0..1."
 )
 
@@ -114,6 +118,13 @@ def classify_intent(prompt: str, provider: Any, model_id: str) -> Optional[Inten
         return None
     if intent not in INTENTS or not (0.0 <= conf <= 1.0) or conf < MIN_CONFIDENCE:
         return None
+    _defect_re = re.compile(
+        r"\b(not complete|incomplete|not working|broken|bug|error|missing|nothing is playable|not playable|tiles|only \d+ tiles|just \d+ tiles)\b",
+        re.I,
+    )
+    if intent == "chat" and _defect_re.search(text):
+        intent = "modify_game"
+        conf = max(conf, 0.85)
     result = IntentResult(intent=intent, confidence=conf, source="model", seconds=round(time.monotonic() - t0, 2))
     with _cache_lock:
         if len(_cache) > 256:

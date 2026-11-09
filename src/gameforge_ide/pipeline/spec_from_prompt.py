@@ -43,6 +43,9 @@ class RecipeEntry:
 
 
 RECIPES: List[RecipeEntry] = [
+    RecipeEntry("grid_board_game", "Sudoku", ["sudoku", "number puzzle", "9x9 grid", "su doku"],
+                "9x9 grid board puzzle with 81 cells", {"board_size": 9, "win_length": 9, "vs_ai": False,
+                                                        "display_title": "Sudoku", "project_name": "Sudoku"}),
     RecipeEntry("grid_board_game", "Tic-Tac-Toe", ["tic tac toe", "tic-tac-toe", "tictactoe", "noughts and crosses",
                                                    "naughts and crosses", "xs and os", "x and o", "x's and o's"],
                 "3x3 board, three in a row", {"board_size": 3, "win_length": 3, "display_title": "Tic-Tac-Toe",

@@ -693,6 +693,18 @@ def brief_to_draft(brief: PromptBrief) -> DesignDraft:
         entities.append(DraftEntity(kind=EntityKind.CHECKPOINT, count=2, note="Checkpoint"))
     if brief.has_moving_platforms:
         entities.append(DraftEntity(kind=EntityKind.MOVING_PLATFORM, count=3, note="Moving platform"))
+    if genre in (Genre.GRID_BOARD, Genre.PUZZLE) or "sudoku" in brief.prompt.lower():
+        b_size = 9 if ("sudoku" in brief.prompt.lower() or genre == Genre.PUZZLE) else 8 if any(k in brief.prompt.lower() for k in ("chess", "checkers", "draughts")) else 7 if any(k in brief.prompt.lower() for k in ("connect four", "connect 4")) else 3
+        entities.append(DraftEntity(
+            kind=EntityKind.BOARD,
+            count=1,
+            note="Sudoku Grid" if "sudoku" in brief.prompt.lower() else "Game Board",
+            props={
+                "board_size": b_size,
+                "win_length": b_size,
+                "vs_ai": False if ("sudoku" in brief.prompt.lower() or genre == Genre.PUZZLE) else True,
+            }
+        ))
     if genre in (Genre.EXPLORATION, Genre.ACTION_ADVENTURE):
         entities.append(DraftEntity(kind=EntityKind.LANDMARK, count=1, note="Landmark"))
     if brief.wants_goal or genre in (Genre.PLATFORMER, Genre.DUNGEON_CRAWLER):
@@ -907,6 +919,16 @@ def reconcile_draft(draft: DesignDraft, brief: PromptBrief) -> Tuple[DesignDraft
                                     props={"wave_count": brief.waves}).model_dump())
             kinds.append("spawner")
             fixes.append(f"added wave spawner ({brief.waves} waves)")
+
+    if brief.is_board_like or "sudoku" in brief.prompt.lower():
+        b_ent = next((e for e, k in zip(ents, kinds) if k == "board"), None)
+        if b_ent is not None:
+            props = dict(b_ent.get("props") or {})
+            if "sudoku" in brief.prompt.lower() or brief.genre == Genre.PUZZLE:
+                props.setdefault("board_size", 9)
+                props.setdefault("win_length", 9)
+                props.setdefault("vs_ai", False)
+                b_ent["props"] = props
 
     # Player facts
     player_props: Dict[str, Any] = {}

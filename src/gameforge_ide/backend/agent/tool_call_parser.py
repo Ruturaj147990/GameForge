@@ -259,6 +259,14 @@ def is_in_ranges(pos: int, ranges: List[Tuple[int, int]]) -> bool:
     return any(start <= pos < end for start, end in ranges)
 
 
+def find_enclosing_code_fence(pos: int, ranges: List[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+    """Returns the (start, end) range of the code fence enclosing pos, or None."""
+    for start, end in ranges:
+        if start <= pos < end:
+            return (start, end)
+    return None
+
+
 def find_balanced_json_objects(text: str) -> List[Tuple[int, int, str]]:
     """Scans text character by character for balanced JSON objects `{ ... }`.
 
@@ -372,8 +380,12 @@ def parse_text_for_tool_calls(
             continue
 
         # Check if candidate is enclosed in a markdown code fence
-        if is_in_ranges(start, code_fences):
-            continue
+        enclosing_fence = find_enclosing_code_fence(start, code_fences)
+        if enclosing_fence is not None:
+            f_s, f_e = enclosing_fence
+            surrounding = (text[max(0, f_s - 120):f_s] + " " + text[f_e:min(len(text), f_e + 120)]).lower()
+            if any(kw in surrounding for kw in ("example", "syntax", "sample", "template", "such as", "e.g.")):
+                continue
 
         try:
             data = json.loads(candidate)
@@ -391,7 +403,16 @@ def parse_text_for_tool_calls(
                 end=end,
                 source=source,
             ))
-            spans_to_remove.append((start, end))
+            if enclosing_fence is not None:
+                f_s, f_e = enclosing_fence
+                lead = text[f_s:start].replace("`", "").strip()
+                trail = text[end:f_e].replace("`", "").strip()
+                if lead in ("", "json", "JSON") and not trail:
+                    spans_to_remove.append((f_s, f_e))
+                else:
+                    spans_to_remove.append((start, end))
+            else:
+                spans_to_remove.append((start, end))
 
     # Construct cleaned narrative text by excising spans
     if not spans_to_remove:
@@ -526,6 +547,6 @@ class StreamingToolGuard:
     @staticmethod
     def _find_candidate_start(text: str) -> int:
         """Finds the index of the first character that could start a tool call."""
-        triggers = ["{", "<tool_call", "<tool_use", "<invoke", "Action:"]
+        triggers = ["```json", "```JSON", "{", "<tool_call", "<tool_use", "<invoke", "Action:"]
         indices = [text.find(tr) for tr in triggers if text.find(tr) != -1]
         return min(indices) if indices else -1

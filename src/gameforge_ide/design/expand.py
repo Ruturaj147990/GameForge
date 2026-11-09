@@ -623,6 +623,21 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
             for key in ("attack_damage", "max_health"):
                 if key in final_props:
                     final_props[key] = round(float(final_props[key]) * diff_scale, 1)
+        if kind == EntityKind.BOARD:
+            draft_text = f"{draft.title} {getattr(draft, 'pitch', '')} {getattr(draft, 'core_mechanic', '')}".lower()
+            if "sudoku" in draft_text or draft.genre == Genre.PUZZLE:
+                final_props["board_size"] = 9
+                final_props["win_length"] = 9
+                final_props["vs_ai"] = False
+                final_props["cell_size_cm"] = 80.0
+            elif any(k in draft_text for k in ("chess", "checkers", "draughts")):
+                final_props["board_size"] = 8
+                final_props["win_length"] = 8
+                final_props["cell_size_cm"] = 100.0
+            elif any(k in draft_text for k in ("connect four", "connect 4", "connect_four", "four in a row")):
+                final_props["board_size"] = 7
+                final_props["win_length"] = 4
+                final_props["gravity"] = True
         if kind == EntityKind.PICKUP and "objective_id" not in user_props:
             final_props["objective_id"] = candidate_id
         if kind == EntityKind.PLAYER and "attack_mode" not in user_props and (

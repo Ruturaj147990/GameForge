@@ -166,3 +166,22 @@ def test_unknown_command_not_executed():
     res = parse_text_for_tool_calls(text)
     assert len(res.calls) == 0
     assert "format_c_drive" in res.cleaned_text
+
+
+def test_fenced_tool_call_executed_when_not_example():
+    """Verify that a tool call inside a markdown code fence without example context is parsed and excised."""
+    text = (
+        "I will now create the header file:\n\n"
+        "```json\n"
+        '{\n  "command": "write_file",\n  "subpath": "Source/Game/MyActor.h",\n  "content": "#pragma once"\n}\n'
+        "```\n\n"
+        "Please inspect the result."
+    )
+    res = parse_text_for_tool_calls(text)
+    assert len(res.calls) == 1
+    assert res.calls[0].name == "write_file"
+    assert res.calls[0].arguments["subpath"] == "Source/Game/MyActor.h"
+    assert "I will now create the header file:" in res.cleaned_text
+    assert "Please inspect the result." in res.cleaned_text
+    assert "```json" not in res.cleaned_text
+    assert "write_file" not in res.cleaned_text

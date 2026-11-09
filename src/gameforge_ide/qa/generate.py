@@ -28,6 +28,8 @@ from .scenario import (
     NavigateToStep,
     NoEventExpectation,
     Scenario,
+    SelectActorArgs,
+    SelectActorStep,
     WaitArgs,
     WaitEventArgs,
     WaitEventStep,
@@ -273,6 +275,29 @@ def generate(
                 )
                 continue
 
+            if cond.event in ("board.win", "match.won", "match_win"):
+                boards = [
+                    a for a in actors
+                    if "Board" in a.cls or "Card" in a.cls or a.tag.startswith("GF_Board") or a.tag.startswith("GF_Card")
+                ]
+                steps = []
+                if boards:
+                    steps.append(SelectActorStep(select_actor=SelectActorArgs(tag=boards[0].tag)))
+                steps.append(WaitStep(wait_s=WaitArgs(seconds=5.0)))
+                scenarios.append(
+                    Scenario(
+                        scenario_id=scenario_id,
+                        description=f"Interact with board/match to trigger {cond.event}",
+                        timeout_s=60.0,
+                        steps=steps,
+                        expect=[
+                            EventExpectation(event=cond.event),
+                            LegsOkExpectation(legs_ok=True),
+                        ],
+                    )
+                )
+                continue
+
             gaps.append(
                 ScenarioGap(scenario_id, f"no strategy for EventOccurred on {cond.event}")
             )
@@ -305,6 +330,52 @@ def generate(
                             WaitStep(wait_s=WaitArgs(seconds=10.0)),
                         ],
                         expect=[EventExpectation(event="player.died")],
+                    )
+                )
+                continue
+            elif cond.stat == "game.score" and cond.op in (">=", ">"):
+                target_score = float(cond.value)
+                pickups = [
+                    a for a in actors
+                    if "Pickup" in a.cls or a.tag.startswith("GF_Pickup") or a.tag.startswith("GF_Coin")
+                ]
+                enemies = [
+                    a for a in actors
+                    if "Enemy" in a.cls or a.tag.startswith("GF_Enemy")
+                ]
+                steps = []
+                cur = player_start
+                if pickups:
+                    pool = list(pickups)
+                    count = min(len(pool), max(1, int(target_score)))
+                    for _ in range(count):
+                        nearest = min(pool, key=lambda a: _dist2d(cur, a.location))
+                        steps.append(NavigateToStep(navigate_to=NavigateToArgs(tag=nearest.tag)))
+                        cur = nearest.location
+                        pool.remove(nearest)
+                elif enemies:
+                    pool = list(enemies)
+                    count = min(len(pool), max(1, int(target_score)))
+                    for _ in range(count):
+                        nearest = min(pool, key=lambda a: _dist2d(cur, a.location))
+                        steps.append(NavigateToStep(navigate_to=NavigateToArgs(tag=nearest.tag)))
+                        cur = nearest.location
+                        pool.remove(nearest)
+                else:
+                    boards = [a for a in actors if "Board" in a.cls or "Card" in a.cls or a.tag.startswith("GF_Board")]
+                    if boards:
+                        steps.append(SelectActorStep(select_actor=SelectActorArgs(tag=boards[0].tag)))
+                    steps.append(WaitStep(wait_s=WaitArgs(seconds=5.0)))
+
+                scenarios.append(
+                    Scenario(
+                        scenario_id=scenario_id,
+                        description=f"Achieve score >= {target_score}",
+                        timeout_s=max(60.0, 15.0 * max(1, len(steps))),
+                        steps=steps,
+                        expect=[
+                            LegsOkExpectation(legs_ok=True),
+                        ],
                     )
                 )
                 continue

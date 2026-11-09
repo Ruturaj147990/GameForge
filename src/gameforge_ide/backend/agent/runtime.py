@@ -1491,9 +1491,15 @@ class AgentRuntime:
         if is_proceed:
             is_conversational = False
         elif llm_intent is not None:
-            is_conversational = llm_intent.intent == "chat"
-            logger.info("[AgentRuntime] Routed by model: %s (confidence %.2f, %.1fs)",
-                        llm_intent.intent, llm_intent.confidence, llm_intent.seconds)
+            # Safety net: If keyword heuristics know the prompt is an actionable project/code/defect task,
+            # never allow model to demote it to conversational 'chat'.
+            is_keyword_conversational = self._is_conversational(user_prompt)
+            if not is_keyword_conversational:
+                is_conversational = False
+            else:
+                is_conversational = llm_intent.intent == "chat"
+            logger.info("[AgentRuntime] Routed by model: %s (confidence %.2f, %.1fs, is_conversational=%s)",
+                        llm_intent.intent, llm_intent.confidence, llm_intent.seconds, is_conversational)
         else:
             is_conversational = self._is_conversational(user_prompt)
         intent = "answer" if is_conversational else "mutate"
@@ -1754,7 +1760,7 @@ class AgentRuntime:
 
                     effective_game_prompt = active_plan.goal if (active_plan and active_plan.goal and is_proceed_command) else user_prompt
                     gds_obj = None
-                    if active_plan and getattr(active_plan, "metadata", None) and "gds" in active_plan.metadata:
+                    if active_plan and getattr(active_plan, "metadata", None) and active_plan.metadata.get("gds"):
                         try:
                             from ...design.gds import GameDesignSpec
                             gds_data = active_plan.metadata["gds"]

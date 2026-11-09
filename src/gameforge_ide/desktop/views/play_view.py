@@ -302,6 +302,11 @@ class PlayView(QWidget):
                         full_path = project_dir / art_path
                     if full_path.is_file():
                         try:
+                            # Scenario specifications (schema scenario/1) are not execution results (schema scenario_result/1)
+                            if not art_path.endswith("_result.json"):
+                                header = full_path.read_text(encoding="utf-8", errors="ignore")[:300]
+                                if "scenario_result" not in header:
+                                    continue
                             result = ScenarioResult.from_file(full_path)
                             if not any(r.scenario_id == result.scenario_id for r in self._results):
                                 self._results.append(result)
