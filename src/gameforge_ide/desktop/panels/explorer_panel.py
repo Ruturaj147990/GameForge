@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
 
 from ..services.tool_service import ToolService
 from ..styles import tokens
+from ..styles.dark_theme import theme_color, theme_stylesheet
+
 
 
 @lru_cache(maxsize=32)
@@ -34,18 +36,21 @@ def _make_type_icon(label: str, bg_color: str, fg_color: str = "#ffffff") -> QIc
     pm = QPixmap(16, 16)
     pm.fill(Qt.transparent)
     p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    p.setBrush(QColor(bg_color))
-    p.setPen(Qt.NoPen)
-    p.drawRoundedRect(0, 1, 16, 14, 3, 3)
-    p.setPen(QColor(fg_color))
-    font = p.font()
-    font.setPixelSize(7 if len(label) > 2 else 8)
-    font.setBold(True)
-    p.setFont(font)
-    p.drawText(pm.rect(), Qt.AlignCenter, label)
-    p.end()
+    try:
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor(theme_color(bg_color)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(0, 1, 16, 14, 3, 3)
+        p.setPen(QColor(theme_color(fg_color)))
+        font = p.font()
+        font.setPixelSize(7 if len(label) > 2 else 8)
+        font.setBold(True)
+        p.setFont(font)
+        p.drawText(pm.rect(), Qt.AlignCenter, label)
+    finally:
+        p.end()
     return QIcon(pm)
+
 
 
 def _get_entry_icon(name: str, is_dir: bool) -> QIcon:
@@ -80,7 +85,8 @@ class ExplorerPanel(QWidget):
     file_selected = Signal(str)   # absolute path of selected file
     open_folder_requested = Signal()
 
-    def __init__(self, tool_service: ToolService, workspace_root: Path, parent=None) -> None:
+    def __init__(self, tool_service: ToolService, workspace_root: Path, parent: Optional[QWidget] = None) -> None:
+
         super().__init__(parent)
         self.setObjectName("explorerPanel")
         self.setAccessibleName("Workspace file explorer")

@@ -131,6 +131,8 @@ class SessionManager:
         token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         now = time.time()
         with self._lock:
+            # Prune expired tokens to prevent unbounded in-memory accumulation
+            self._tokens = {k: v for k, v in self._tokens.items() if v.expires_at > now}
             self._tokens[safe_id] = SessionTokenRecord(
                 token_hash=token_hash,
                 session_id=safe_id,
@@ -156,6 +158,19 @@ class SessionManager:
                 return False
             expected_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
             return hmac.compare_digest(expected_hash, rec.token_hash)
+
+    def validate_any_session_token(self, raw_token: str) -> bool:
+        """Validate bearer token against any active unexpired session token."""
+        if not raw_token:
+            return False
+        now = time.time()
+        expected_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        with self._lock:
+            for rec in self._tokens.values():
+                if not rec.revoked and rec.expires_at > now:
+                    if hmac.compare_digest(expected_hash, rec.token_hash):
+                        return True
+        return False
 
     def revoke_session_token(self, session_id: str) -> None:
         """Revoke active token for session_id."""

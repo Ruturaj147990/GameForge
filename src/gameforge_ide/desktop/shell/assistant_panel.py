@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
+
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -188,10 +189,12 @@ class AssistantPanel(QWidget):
     def autonomyCombo(self):
         return getattr(self.chat_panel, "autonomy_combo", None)
 
+    @Slot(list)
     def _on_models_loaded(self, models: List[str]) -> None:
         """Slot triggered when ChatPanel discovers available models."""
         if models:
             self.set_models(models, getattr(self.chat_panel, "_current_model", None))
+
 
     def _refresh_models_from_source(self) -> None:
         """Query available models from agent service or chat panel."""
@@ -229,6 +232,7 @@ class AssistantPanel(QWidget):
         self.model_combo.setToolTip(f"Active Model: {self.model_combo.currentText()}")
         self.model_combo.blockSignals(False)
 
+    @Slot(str)
     def _on_model_changed(self, text: str) -> None:
         if text:
             self.model_combo.setToolTip(f"Active Model: {text}")
@@ -237,13 +241,16 @@ class AssistantPanel(QWidget):
                 self.chat_panel.set_model(text)
             self.modelChanged.emit(text)
 
+    @Slot()
     def _on_new_chat(self) -> None:
         if hasattr(self.chat_panel, "_new_session"):
             self.chat_panel._new_session()
 
+    @Slot()
     def _on_clear_chat(self) -> None:
         if hasattr(self.chat_panel, "_clear_chat"):
             self.chat_panel._clear_chat()
+
 
     def refresh_icons(self) -> None:
         """Refresh header button icons on theme change."""

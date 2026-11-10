@@ -29,7 +29,7 @@
     },
     "training_method": {
       "type": "string",
-      "enum": ["lora", "qlora", "sft_full", "prefix_tuning"]
+      "enum": ["lora", "qlora", "sft_full", "full", "prefix_tuning", "dpo", "orpo"]
     },
     "adapter_config": {
       "type": "object",
@@ -63,6 +63,9 @@
         "seed": { "type": "integer" },
         "optimizer": { "type": "string" },
         "lr_scheduler": { "type": "string" },
+        "warmup_ratio": { "type": "number" },
+        "weight_decay": { "type": "number" },
+        "logging_steps": { "type": "integer" },
         "max_seq_length": { "type": "integer" }
       }
     },

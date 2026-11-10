@@ -3,7 +3,7 @@
 ### Architecture: Hybrid linear/full attention with frozen vision tower
 
 # Model arguments
-model_name_or_path: models/hf/Qwen3.8-27B
+model_name_or_path: E:/GameForge_AI_Models/models/hf/Qwen3.8-27B
 trust_remote_code: true
 template: qwen3_8
 
@@ -33,12 +33,13 @@ overwrite_cache: true
 preprocessing_num_workers: 4
 
 # Output and checkpoints
-output_dir: artifacts/training/gameforge-v2/adapter
+output_dir: E:/GameForge_AI_Models/artifacts/training/gameforge-v2/adapter
 logging_steps: 5
 save_steps: 50
 eval_steps: 25
-evaluation_strategy: steps
+eval_strategy: steps
 save_total_limit: 3
+plot_loss: true
 
 # Optimization arguments
 learning_rate: 1.0e-5
@@ -46,11 +47,13 @@ num_train_epochs: 1.0
 lr_scheduler_type: cosine
 warmup_ratio: 0.03
 per_device_train_batch_size: 1
+per_device_eval_batch_size: 1
 gradient_accumulation_steps: 8
 gradient_checkpointing: true
 weight_decay: 0.01
 max_grad_norm: 1.0
 bf16: true
+fp16: false
 seed: 42
 
 # Report and tracking

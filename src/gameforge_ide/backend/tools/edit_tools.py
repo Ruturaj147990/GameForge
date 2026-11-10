@@ -1229,7 +1229,25 @@ class EditTools:
             if resolved.is_dir():
                 return {"status": "ERROR", "error": f"Path is a directory, not a file: {effective_path}. Only individual files can be deleted."}
 
-            resolved.unlink()
+            try:
+                os.chmod(resolved, stat.S_IWRITE | stat.S_IREAD)
+            except Exception:
+                pass
+            deleted = False
+            for attempt in range(5):
+                try:
+                    resolved.unlink()
+                    deleted = True
+                    break
+                except (PermissionError, OSError):
+                    time.sleep(0.05 * (2 ** attempt))
+                    try:
+                        os.chmod(resolved, stat.S_IWRITE | stat.S_IREAD)
+                    except Exception:
+                        pass
+            if not deleted and resolved.exists():
+                resolved.unlink()
+
             rel_str = str(resolved.relative_to(self.boundary.workspace_root)).replace("\\", "/")
             return {
                 "status": "SUCCESS",
@@ -1252,11 +1270,16 @@ class EditTools:
                 return {"status": "ERROR", "verified": False, "error": f"File does not exist: {subpath}"}
             data = resolved.read_text(encoding="utf-8", errors="replace")
             verified = (expected_fragment in data) if expected_fragment else True
+            file_sz = 0
+            try:
+                file_sz = resolved.stat().st_size
+            except OSError:
+                file_sz = len(data.encode("utf-8"))
             return {
                 "status": "SUCCESS",
                 "verified": verified,
                 "file_path": str(resolved.relative_to(self.boundary.workspace_root)).replace("\\", "/"),
-                "bytes": resolved.stat().st_size,
+                "bytes": file_sz,
                 "sha256": self._digest(resolved.read_bytes()),
             }
         except Exception as exc:

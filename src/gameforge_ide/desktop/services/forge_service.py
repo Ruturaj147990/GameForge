@@ -35,10 +35,13 @@ class ForgeService(QObject):
 
     def _on_bus_event(self, topic: str, event: Dict[str, Any]) -> None:
         # Re-emit on UI thread via Qt signal
-        self.runEvent.emit(event)
-        kind = event.get("kind")
-        if kind in ("run_started", "run_finished"):
-            self.runListChanged.emit()
+        try:
+            self.runEvent.emit(event)
+            kind = event.get("kind")
+            if kind in ("run_started", "run_finished"):
+                self.runListChanged.emit()
+        except RuntimeError:
+            pass
 
     def active_runs(self) -> List[Dict[str, Any]]:
         index = self.store.get_runs_index()
@@ -64,5 +67,13 @@ class ForgeService(QObject):
 
     def close(self) -> None:
         if self._unsub:
-            self._unsub()
+            try:
+                self._unsub()
+            except Exception:
+                pass
             self._unsub = None
+
+    def deleteLater(self) -> None:
+        self.close()
+        super().deleteLater()
+

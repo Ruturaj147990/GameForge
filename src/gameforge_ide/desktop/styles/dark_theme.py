@@ -7,11 +7,11 @@ Ensures maximum text legibility, balanced contrast hierarchy, and robust DPI sca
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Callable, Dict, Optional, Tuple
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette, QTextCursor
-from PySide6.QtWidgets import QApplication, QPlainTextEdit, QTextEdit
+from PySide6.QtWidgets import QApplication, QPlainTextEdit, QTextEdit, QWidget
 
 GAMEFORGE_DARK_QSS = """
 /* ────────────────────────────────────────────────────────────────
@@ -799,7 +799,7 @@ _LIGHT_TO_DARK["#4c1d95"] = "#6d28d9"
 _LIGHT_TO_DARK["#ffffff"] = "#0d0b14"
 
 
-def _build_theme_regex_replacer(mapping: dict[str, str]):
+def _build_theme_regex_replacer(mapping: Dict[str, str]) -> Callable[[str], str]:
     sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
     pattern = re.compile("|".join(re.escape(k) for k in sorted_keys), flags=re.IGNORECASE)
     lower_map = {k.lower(): v for k, v in mapping.items()}
@@ -868,26 +868,45 @@ def _build_palette(theme: str) -> QPalette:
     return pal
 
 
-def apply_theme(app, theme: str = "dark", font_scale: Optional[int] = None) -> str:  # type: ignore[type-arg]
+def apply_theme(
+    app: Optional[QApplication] = None,
+    theme: str = "dark",
+    font_scale: Optional[int] = None,
+) -> str:
     """Apply a studio palette and convert existing inline widget styles."""
     theme = normalize_theme_name(theme)
+    target_app = app or QApplication.instance()
+    if target_app is None:
+        return theme
+
     if font_scale is not None:
         try:
             scale_val = max(50, min(250, int(font_scale)))
         except (ValueError, TypeError):
             scale_val = 100
-        app.setProperty("gameforgeFontScale", scale_val)
     else:
         try:
-            scale_val = int(app.property("gameforgeFontScale") or 100)
+            scale_val = int(target_app.property("gameforgeFontScale") or 100)
         except (ValueError, TypeError):
             scale_val = 100
 
-    app.setStyle("Fusion")
-    app.setPalette(_build_palette(theme))
+    current_theme = target_app.property("gameforgeTheme")
+    current_scale = target_app.property("gameforgeFontScale")
+    if current_theme == theme and current_scale == scale_val:
+        return theme
+
+    target_app.setProperty("gameforgeFontScale", scale_val)
+
+    if getattr(target_app, "_gameforge_style_name", None) != "Fusion":
+        try:
+            target_app.setStyle("Fusion")
+            target_app._gameforge_style_name = "Fusion"
+        except Exception:
+            pass
+    target_app.setPalette(_build_palette(theme))
     base_qss = GAMEFORGE_LIGHT_QSS if theme == "light" else GAMEFORGE_DARK_QSS
-    app.setStyleSheet(_scale_qss_fonts(base_qss, scale_val))
-    app.setProperty("gameforgeTheme", theme)
+    target_app.setStyleSheet(_scale_qss_fonts(base_qss, scale_val))
+    target_app.setProperty("gameforgeTheme", theme)
     try:
         from ..icons import clear_icon_cache
         clear_icon_cache()
@@ -896,6 +915,8 @@ def apply_theme(app, theme: str = "dark", font_scale: Optional[int] = None) -> s
     mapping = _DARK_TO_LIGHT if theme == "light" else _LIGHT_TO_DARK
     for widget in QApplication.allWidgets():
         try:
+            if not widget:
+                continue
             previous = widget.property("gameforgeTheme") or "dark"
             orig_style = widget.styleSheet()
             if orig_style:

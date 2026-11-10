@@ -9,16 +9,23 @@ Evidence: reports/m12_asset_demo.json. Usage: python scripts/engine/demo_m12_ass
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shutil
+import stat
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 from src.gameforge_ide.core.settings import get_settings  # noqa: E402
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+ENGINE_SCRIPTS = str(REPO / "scripts" / "engine")
+if ENGINE_SCRIPTS not in sys.path:
+    sys.path.insert(0, ENGINE_SCRIPTS)
 
 import demo_m11_material as m11  # noqa: E402
 from src.gameforge_ide.backend.assets.registry import AssetRecord, AssetRegistry  # noqa: E402
@@ -26,12 +33,34 @@ from src.gameforge_ide.backend.models.asset_spec import LODSpec, MaterialSlotSpe
 from src.gameforge_ide.backend.tools.pbr_texture_generator import PBRTextureSpec, generate_texture_set  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-PROBE = (get_settings().require_dev("validation_root") / r"live_ops_probe")
-DATE = time.strftime("%Y%m%d")
-PROJECT_DIR = (get_settings().require_dev("validation_root") / f"m12_demo_{DATE}")
-TEX_OUT = (get_settings().data_root / "assets" / f"generated/textures/m12_demo_{DATE}")
 REPORT = REPO / "reports" / "m12_asset_demo.json"
-SHOTS = PROJECT_DIR / "Saved" / "Screenshots"
+
+
+def _get_paths() -> Tuple[Path, Path, Path, Path, Path]:
+    s = get_settings()
+    try:
+        val_root = s.require_dev("validation_root")
+        probe = val_root / "live_ops_probe"
+        data_root = s.data_root
+    except Exception:
+        val_root = REPO / "scratch" / "validation"
+        probe = REPO / "probe"
+        data_root = REPO / "scratch" / "data"
+    date_str = time.strftime("%Y%m%d")
+    project_dir = val_root / f"m12_demo_{date_str}"
+    tex_out = data_root / "assets" / f"generated/textures/m12_demo_{date_str}"
+    shots = project_dir / "Saved" / "Screenshots"
+    uproject = project_dir / "GFProbe.uproject"
+    return probe, project_dir, tex_out, shots, uproject
+
+
+def _remove_readonly(func: Any, path: str, exc_info: Any) -> None:
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except OSError:
+        pass
+
 
 SPEC = StaticMeshAssetSpec(asset_id="prop_crate_01", name="GFCrate", purpose="Recessed-panel wooden crate",
                            category="container", size_cm=(80.0, 80.0, 80.0), triangle_budget=2000,
@@ -62,23 +91,27 @@ def crate_parts() -> list[dict]:
     return parts
 
 
-def make_disposable() -> Path:
-    if PROJECT_DIR.exists():
-        shutil.rmtree(PROJECT_DIR)
-    shutil.copytree(PROBE, PROJECT_DIR, ignore=shutil.ignore_patterns(
+def make_disposable() -> Tuple[Path, Path, Path, Path, Path]:
+    probe_dir, project_dir, tex_out, shots, uproject = _get_paths()
+    if project_dir.exists():
+        shutil.rmtree(project_dir, onexc=lambda f, p, e: _remove_readonly(f, p, e))
+    shutil.copytree(probe_dir, project_dir, ignore=shutil.ignore_patterns(
         "DerivedDataCache", "Intermediate", "Saved", "__pycache__", ".gameforge"))
-    uproject = PROJECT_DIR / "GFProbe.uproject"
-    data = json.loads(uproject.read_text(encoding="utf-8"))
-    if not any(p.get("Name") == "GeometryScripting" for p in data.get("Plugins", [])):
-        data.setdefault("Plugins", []).append({"Name": "GeometryScripting", "Enabled": True})
-        uproject.write_text(json.dumps(data, indent="\t"), encoding="utf-8")
-    return uproject
+    if uproject.exists():
+        try:
+            data = json.loads(uproject.read_text(encoding="utf-8"))
+            if not any(p.get("Name") == "GeometryScripting" for p in data.get("Plugins", [])):
+                data.setdefault("Plugins", []).append({"Name": "GeometryScripting", "Enabled": True})
+                uproject.write_text(json.dumps(data, indent="\t"), encoding="utf-8")
+        except Exception:
+            pass
+    return probe_dir, project_dir, tex_out, shots, uproject
 
 
 def run(rep: dict) -> None:
     checks, steps = rep["checks"], rep["steps"]
-    uproject = make_disposable()
-    reg = AssetRegistry(PROJECT_DIR)
+    _, project_dir, tex_out, shots_dir, uproject = make_disposable()
+    reg = AssetRegistry(project_dir)
     rid = reg.register(AssetRecord(name=SPEC.asset_name(), asset_type="mesh", purpose=SPEC.purpose,
                                    provenance="procedural", backend="UE5.7.4-GeometryScript", backend_version="5.7.4",
                                    license="project-owned (procedural)", spec=SPEC.model_dump(), tags=SPEC.tags))
@@ -89,11 +122,11 @@ def run(rep: dict) -> None:
 
     slot = SPEC.material_slots[0]
     manifest = generate_texture_set(PBRTextureSpec(name="GFProcRock", size=512, seed=slot.pbr_seed,
-                                                   base_color=slot.base_color, color_variation=0.45), TEX_OUT)
+                                                   base_color=slot.base_color, color_variation=0.45), tex_out)
 
     link = LiveEditorLink(uproject)
     link.prepare_project()
-    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=PROJECT_DIR / "m12_editor.log")
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=project_dir / "m12_editor.log")
     try:
         link.connect(discovery_timeout_s=900)
         api = link.call("api_introspect", {"classes": ["GeometryScript_Primitives", "GeometryScript_MeshBooleans",
@@ -155,14 +188,15 @@ def run(rep: dict) -> None:
         link.call("set_viewport_camera", {"location": {"x": 230, "y": 0, "z": 120},
                                           "rotation": {"pitch": -15, "yaw": 180, "roll": 0}})
         time.sleep(8.0)
-        shot = link.capture_screenshot(SHOTS / "m12_crate.png", wait_s=60.0)
+        shot = link.capture_screenshot(shots_dir / "m12_crate.png", wait_s=60.0) or {}
         path = (shot.get("data") or {}).get("path")
         stats = m11.crop_stats(Path(path)) if path else None
         steps["screenshot"] = {"path": path, "stats": stats, "errors": shot.get("errors")}
         checks["screenshot_shows_textured_prop"] = bool(stats) and stats["crop_lum_std"] > 3.0 and \
             stats["red_over_blue"] > 1.2 and sum(stats["crop_mean_rgb"]) > 60
+        rel_report = str(REPORT.relative_to(REPO)).replace("\\", "/") if REPORT.is_relative_to(REPO) else str(REPORT)
         reg.advance(rid, "ENGINE_VERIFY", checks["screenshot_shows_textured_prop"] and valid,
-                    "read-back + screenshot pixel statistics", [str(REPORT.relative_to(REPO)).replace("\\", "/")])
+                    "read-back + screenshot pixel statistics", [rel_report])
 
         # Promotion out of quarantine, only after the registry holds a passed ENGINE_VERIFY
         if reg.get(rid)["stage"] != "ENGINE_VERIFY":
@@ -190,7 +224,8 @@ def run(rep: dict) -> None:
 
 
 def main() -> int:
-    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "project": str(PROJECT_DIR), "spec": SPEC.model_dump(),
+    _, project_dir, _, _, _ = _get_paths()
+    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "project": str(project_dir), "spec": SPEC.model_dump(),
            "checks": {}, "steps": {}}
     try:
         run(rep)
@@ -198,7 +233,15 @@ def main() -> int:
         rep["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
         rep["ok"] = bool(rep["checks"]) and all(rep["checks"].values()) and "exception" not in rep
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        tmp = REPORT.with_name(f".{REPORT.name}.tmp.{os.getpid()}")
+        try:
+            tmp.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, REPORT)
+        finally:
+            if tmp.exists():
+                with contextlib.suppress(OSError):
+                    tmp.unlink()
     print(json.dumps(rep["checks"], indent=2), rep.get("exception", ""))
     return 0 if rep["ok"] else 1
 

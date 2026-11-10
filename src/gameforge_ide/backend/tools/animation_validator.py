@@ -33,6 +33,8 @@ class ClipValidationReport:
 
 def quaternion_distance_degrees(q1: Tuple[float, float, float, float], q2: Tuple[float, float, float, float]) -> float:
     """Computes angular distance between two unit quaternions in degrees."""
+    if len(q1) < 4 or len(q2) < 4:
+        return 0.0
     dot = abs(q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3])
     dot = max(-1.0, min(1.0, dot))
     angle_rad = 2.0 * math.acos(dot)
@@ -87,6 +89,8 @@ class AnimationValidator:
         max_loop_err = 0.0
         if spec.is_looping and expected_frames > 1:
             for b_name, trk in bundle.tracks.items():
+                if not trk.keyframes:
+                    continue
                 first_k = trk.keyframes[0]
                 last_k = trk.keyframes[-1]
                 ang_err = quaternion_distance_degrees(first_k.rotation_quat, last_k.rotation_quat)
@@ -122,9 +126,10 @@ class AnimationValidator:
 
         is_valid = fc_passed and quat_passed and loop_passed and smooth_passed and (len(errors) == 0)
 
+        action_name = spec.action.value if hasattr(spec.action, "value") else str(spec.action)
         return ClipValidationReport(
             clip_name=spec.name,
-            action=spec.action.value,
+            action=action_name,
             is_valid=is_valid,
             frame_count_passed=fc_passed,
             quaternions_passed=quat_passed,

@@ -263,6 +263,7 @@ class OllamaProvider(ModelProvider):
                             raw_bytes = resp.read()
                         finally:
                             monitor_stopped.set()
+                            t_mon.join(timeout=0.2)
                     else:
                         raw_bytes = resp.read()
                     if not raw_bytes or not raw_bytes.strip():
@@ -272,7 +273,10 @@ class OllamaProvider(ModelProvider):
                                 "Ollama returned empty response body, retrying in %.1fs (attempt %d/%d)",
                                 sleep_time, attempt + 1, max_retries
                             )
-                            time.sleep(sleep_time)
+                            if cancel_event is not None and cancel_event.wait(timeout=sleep_time):
+                                raise RuntimeError("Operation cancelled by user")
+                            elif cancel_event is None:
+                                time.sleep(sleep_time)
                             continue
                         raise RuntimeError("Ollama returned an empty response body")
                     return json.loads(raw_bytes.decode("utf-8"))
@@ -285,7 +289,10 @@ class OllamaProvider(ModelProvider):
                         "Ollama HTTP %s (transient busy state), retrying in %.1fs (attempt %d/%d): %s",
                         exc.code, sleep_time, attempt + 1, max_retries, body[:200]
                     )
-                    time.sleep(sleep_time)
+                    if cancel_event is not None and cancel_event.wait(timeout=sleep_time):
+                        raise RuntimeError("Operation cancelled by user")
+                    elif cancel_event is None:
+                        time.sleep(sleep_time)
                     continue
                 raise last_exc from exc
             except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError, ValueError) as exc:
@@ -303,7 +310,10 @@ class OllamaProvider(ModelProvider):
                         "Ollama connection/decode error '%s', retrying in %.1fs (attempt %d/%d)",
                         exc, sleep_time, attempt + 1, max_retries
                     )
-                    time.sleep(sleep_time)
+                    if cancel_event is not None and cancel_event.wait(timeout=sleep_time):
+                        raise RuntimeError("Operation cancelled by user")
+                    elif cancel_event is None:
+                        time.sleep(sleep_time)
                     continue
                 raise RuntimeError(f"Ollama connection failed after {max_retries} attempts: {exc}") from exc
         if last_exc:

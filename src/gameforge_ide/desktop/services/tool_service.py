@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 import threading
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
+
 
 
 class _ToolRunnable(QRunnable):
@@ -57,8 +58,9 @@ class ToolService(QObject):
 
     tool_result = Signal(str, dict)  # (tool_name, result)
 
-    def __init__(self, workspace_root: Path, parent=None) -> None:
+    def __init__(self, workspace_root: Path, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
+
         self.workspace_root = workspace_root
         self._pool = QThreadPool.globalInstance()
         self._gateway = None

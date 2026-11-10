@@ -123,42 +123,38 @@ class PromptToGdsResult:
 
 
 def _build_scratch_gds(prompt: str, decision: StrategyDecision) -> GameDesignSpec:
-    """Synthesizes a clean, tailored GameDesignSpec directly for scratch-generated games (e.g. Sudoku, Chess, Tetris, Snake)."""
+    """Synthesizes a clean, tailored GameDesignSpec directly for scratch-generated games."""
     arch = decision.suggested_architecture
     profile = decision.profile
-    title = profile.title_hint or (
-        "Sudoku" if "sudoku" in profile.keywords_matched else
-        "Chess" if "chess" in profile.keywords_matched else
-        "Tetris" if "tetris" in profile.keywords_matched else
-        "Snake" if "snake" in profile.keywords_matched else
-        "Puzzle Game" if profile.detected_genre == Genre.PUZZLE else
-        "Custom Game"
-    )
-    custom_rules = [
-        f"Architecture: {arch.get('plan_kind', 'scratch')}",
-        f"Target classes: {', '.join(arch.get('target_classes', [])[:4])}",
-    ]
+    brief = analyze_prompt(prompt)
+    draft = brief_to_draft(brief)
+
+    custom_rules = list(draft.custom_rules or [])
+    custom_rules.append(f"Architecture: {arch.get('plan_kind', 'scratch')}")
+    if arch.get("target_classes"):
+        custom_rules.append(f"Target classes: {', '.join(arch.get('target_classes', [])[:4])}")
     if "mechanics" in arch and isinstance(arch["mechanics"], dict):
         for k, v in list(arch["mechanics"].items())[:2]:
             custom_rules.append(f"{k}: {v}")
 
-    win_list = [DraftWin(type="board_win")]
-    lose_list = []
-    if arch.get("lose_condition"):
-        lose_list = [DraftLose(type="timer_runs_out", seconds=300)]
+    title = profile.title_hint or draft.title or "Custom Game"
+    updated_fields: Dict[str, Any] = {
+        "title": title,
+        "pitch": prompt,
+        "custom_rules": custom_rules[:6],
+        "architecture": arch,
+    }
+    if arch.get("genre"):
+        updated_fields["genre"] = arch["genre"]
+    if arch.get("camera"):
+        updated_fields["camera"] = arch["camera"]
+    if not draft.win:
+        updated_fields["win"] = [DraftWin(type="board_win")]
+    if arch.get("lose_condition") and not draft.lose:
+        updated_fields["lose"] = [DraftLose(type="timer_runs_out", seconds=300)]
 
-    draft = DesignDraft(
-        title=title,
-        genre=arch.get("genre", Genre.PUZZLE),
-        camera=arch.get("camera", CameraKind.FIXED_BOARD),
-        pitch=prompt,
-        entities=[],
-        win=win_list,
-        lose=lose_list,
-        custom_rules=custom_rules[:3],
-        architecture=arch,
-    )
-    gds = expand_draft(draft)
+    draft = draft.model_copy(update=updated_fields)
+    gds = expand_draft(draft, source_prompt=prompt)
     gds.meta.generator = "fallback:scratch"
     return gds
 
@@ -255,10 +251,7 @@ def prompt_to_gds(
         or any(k in decision.profile.keywords_matched for k in ("sudoku", "chess", "tetris", "snake", "racing"))
     )
     if scratch_ok:
-        deterministic_supported = any(
-            k in decision.profile.keywords_matched
-            for k in ("sudoku", "chess", "tetris", "snake")
-        ) or decision.profile.title_hint in ("Sudoku", "Chess", "Tetris", "Snake")
+        deterministic_supported = True
         if have_model:
             scratch_system_prompt = (
                 f"{DRAFT_SYSTEM_PROMPT}\n\n"
@@ -358,13 +351,12 @@ def _brief_is_plain(brief: PromptBrief, preset_id: str) -> bool:
             words -= set(re.findall(r"\b[a-z0-9_-]+\b", kw))
     if words & CUSTOM_DETAIL_KEYWORDS:
         return False
-    if _is_board_preset(preset_id):
-        return True   # board/card presets carry their own rules; extra flavour text cannot be honoured anyway
     named_enemies = [e for e in brief.enemies if e.label not in ("Enemy", "Foe", "Minion")]
     named_items = [c for c in brief.collectibles if c.label not in ("Pickup", "Collectible", "Item", "Coin")]
     return not (named_enemies or named_items or brief.hazards or brief.theme or brief.has_guards or brief.has_npc
                 or brief.survive_seconds or brief.time_limit_seconds or brief.score_target or brief.lives
-                or brief.double_jump or (brief.camera_explicit and preset_id not in ("top_down_shooter",)))
+                or brief.double_jump or brief.mechanics or brief.player_abilities
+                or (brief.camera_explicit and preset_id not in ("top_down_shooter",)))
 
 
 def _mark_preset(gds: GameDesignSpec, preset_id: str, prompt: str) -> None:
@@ -442,7 +434,9 @@ _KIND_SYNONYMS = {
     "shooter": "ranged_enemy", "turret": "ranged_enemy", "trap": "hazard", "spike": "hazard", "lava": "hazard",
     "exit": "goal", "portal": "goal", "flag": "goal", "finish": "goal", "villager": "npc", "quest_giver": "npc",
     "platform": "moving_platform", "wave_spawner": "spawner", "enemy_spawner": "spawner", "lever": "switch",
-    "button": "switch", "gate": "door", "statue": "landmark", "tower": "landmark", "decoration": "prop",
+    "button": "switch", "terminal": "switch", "console": "switch", "gate": "door", "statue": "landmark",
+    "tower": "landmark", "decoration": "prop", "crate": "prop", "barrel": "prop", "bombsite": "bomb_site",
+    "site": "bomb_site",
 }
 
 
@@ -503,7 +497,7 @@ def _coerce_draft(data: Dict[str, Any]) -> Dict[str, Any]:
             out[key] = [str(x)[:200] for x in out[key] if x][:3]
     for key, allowed_vals, default in (("difficulty", ("easy", "normal", "hard"), "normal"),
                                        ("art_style", ("stylized", "realistic", "low_poly", "toon"), "stylized"),
-                                       ("music_mood", ("none", "calm", "tense", "heroic", "playful"), "none"),
+                                       ("music_mood", ("none", "calm", "tense", "heroic", "playful", "boss", "action", "mysterious"), "none"),
                                        ("level_size", ("small", "medium", "large"), "small")):
         if key in out and str(out[key]).lower() not in allowed_vals:
             out[key] = default

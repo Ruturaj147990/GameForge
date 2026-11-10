@@ -32,7 +32,7 @@ class StepContext:
         d = base / "Saved" / "GameForge" / "evidence"
         try:
             d.mkdir(parents=True, exist_ok=True)
-        except Exception:
+        except OSError:
             pass
         return d
 
@@ -155,10 +155,11 @@ class ForgeExecutor:
         return self.run(state, store, editor_running)
 
     def resume(self, state: RunState, store: RunStore, editor_running: Callable[[], bool] = lambda: False) -> RunState:
-        """Resume a failed, cancelled or interrupted run, unblocking failed/cancelled/blocked steps."""
+        """Resume a failed, cancelled, blocked, or interrupted run, resetting interrupted/blocked steps to PENDING."""
         for rec in state.records.values():
-            if rec.status in (StepStatus.FAILED, StepStatus.CANCELLED, StepStatus.BLOCKED):
+            if rec.status in (StepStatus.FAILED, StepStatus.CANCELLED, StepStatus.BLOCKED, StepStatus.INTERRUPTED):
                 rec.status = StepStatus.PENDING
+                rec.ok = None
                 rec.errors = []
         return self.run(state, store, editor_running)
 
@@ -184,7 +185,7 @@ class ForgeExecutor:
 
         try:
             steps_order = run.topo_order()
-        except (ValueError, Exception) as exc:
+        except Exception as exc:
             state.status = "FAILED"
             for rec in state.records.values():
                 if rec.status in (StepStatus.PENDING, StepStatus.RUNNING):
@@ -352,6 +353,8 @@ class ForgeExecutor:
                         if not stage_ok:
                             out.ok = False
                             out.errors.extend([f"Validation: {issue}" for issue in validation_issues])
+                            rec.ok = False
+                            rec.errors = list(out.errors)
 
                 if out.ok:
                     if repo is not None and step.checkpoint and repo.available:
@@ -465,8 +468,9 @@ class ForgeExecutor:
             except Exception:
                 pass
             t.join(timeout=1.0)
-            if "out" in box and box["out"].ok:
-                return box["out"]
+            out_val = box.get("out")
+            if out_val is not None and getattr(out_val, "ok", False):
+                return out_val
             return StepOutcome(False, errors=["Cancelled by user"])
 
         if "exc" in box:

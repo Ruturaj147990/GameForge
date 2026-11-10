@@ -41,6 +41,20 @@ class BackendAgentService:
     def get_session(self, session_id: str) -> Any:
         return self.session_manager.get_session(session_id)
 
+    def list_sessions(self) -> List[Any]:
+        return self.session_manager.list_sessions()
+
+    def delete_session(self, session_id: str) -> bool:
+        return self.session_manager.delete_session(session_id)
+
+    def shutdown(self) -> None:
+        """Gracefully release runtime resources and sessions."""
+        try:
+            if hasattr(self.runtime, "cancel_active"):
+                self.runtime.cancel_active()
+        except Exception as exc:
+            logger.debug("Error canceling active runtime tasks during shutdown: %s", exc)
+
 
 # Expose alias
 AgentService = BackendAgentService

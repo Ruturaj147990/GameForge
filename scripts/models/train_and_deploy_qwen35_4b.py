@@ -18,24 +18,42 @@ from __future__ import annotations
 # They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
 DEMO_ONLY = True
 
+import argparse
 import hashlib
 import json
 import math
 import os
 import shutil
 import subprocess
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import gguf
-import numpy as np
-import torch
-import torch.nn as nn
-from safetensors import safe_open
-from safetensors.torch import save_file
-from transformers import AutoTokenizer
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import gguf
+    import numpy as np
+    import torch
+    import torch.nn as nn
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+    from transformers import AutoTokenizer
+    has_deps = True
+except ImportError:
+    has_deps = False
+    gguf = None
+    np = None
+    torch = None
+    nn = type("nn", (), {"Module": object})
+    safe_open = None
+    save_file = None
+    AutoTokenizer = None
 
 try:
     import torch_directml
@@ -599,9 +617,30 @@ def main():
 """
 
     report_path = REPORTS_DIR / "GAMEFORGE_QWEN35_4B_TRAINING_REPORT.md"
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report_md)
+    temp_report = report_path.with_suffix(".tmp")
+    try:
+        temp_report.write_text(report_md, encoding="utf-8")
+        temp_report.replace(report_path)
+    except Exception:
+        if temp_report.exists():
+            temp_report.unlink()
+        raise
+
     print(f"\nFinal training report written to {report_path}")
+    return 0
+
+
+def main_cli() -> int:
+    parser = argparse.ArgumentParser(description="GameForge Qwen3.5-4B Training, Merge & Deployment Engine")
+    parser.add_argument("--dry-run", action="store_true", help="Validate setup and refusal guard without mutating weights")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Refusal guard active (DEMO_ONLY={DEMO_ONLY}). DirectML available: {dml_available}.")
+        return 0
+
+    return main()
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main_cli())

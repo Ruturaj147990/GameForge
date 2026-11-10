@@ -79,31 +79,38 @@ latest_unreal_context: Dict[str, Any] = {
 
 
 class CreateSessionRequest(BaseModel):
-    name: str = "New Session"
-    model_name: str = Field(default_factory=lambda: get_settings().model_for("chat"))
-    provider_type: str = "ollama"
+    name: str = Field(default="New Session", max_length=200)
+    model_name: str = Field(default_factory=lambda: get_settings().model_for("chat"), max_length=150)
+    provider_type: str = Field(default="ollama", max_length=50)
 
 
 class ExecuteToolRequest(BaseModel):
-    name: str
-    arguments: Dict[str, Any] = {}
+    name: str = Field(..., min_length=1, max_length=100)
+    arguments: Dict[str, Any] = Field(default_factory=dict)
 
 
 class GenerateAssetRequest(BaseModel):
-    name: str = "SM_BlockoutCube"
-    size: float = 100.0
+    name: str = Field(default="SM_BlockoutCube", min_length=1, max_length=120)
+    size: float = Field(default=100.0, gt=0.0, le=50000.0)
 
 
 @app.get("/api/health")
 def get_health() -> Dict[str, Any]:
-    ollama_ok = model_router.get_provider("ollama").is_available()
-    engine_info = tool_gateway.unreal_tools.get_engine_info()
+    try:
+        provider = model_router.get_provider("ollama")
+        ollama_ok = bool(provider.is_available()) if provider else False
+    except Exception:
+        ollama_ok = False
+    try:
+        engine_info = tool_gateway.unreal_tools.get_engine_info()
+    except Exception:
+        engine_info = {"installed": False, "version": None}
     return {
         "status": "ok",
         "version": "1.0.0",
         "workspace": str(WORKSPACE_ROOT),
         "local_ollama_online": ollama_ok,
-        "unreal_engine_5_7_detected": engine_info.get("installed", False),
+        "unreal_engine_5_7_detected": bool(engine_info.get("installed", False)),
     }
 
 
@@ -126,11 +133,8 @@ def require_session_auth(authorization: Optional[str] = Header(default=None)) ->
 
     # 2. Check dynamic session bearer tokens
     if session_manager is not None:
-        with session_manager._lock:
-            sids = list(session_manager._tokens.keys())
-        for sid in sids:
-            if session_manager.validate_session_token(sid, token):
-                return
+        if session_manager.validate_any_session_token(token):
+            return
 
     raise HTTPException(status_code=401, detail="Invalid, expired, or revoked API bearer token.")
 
@@ -174,11 +178,14 @@ def list_sessions() -> List[Dict[str, Any]]:
 
 @app.post("/api/sessions", dependencies=[Depends(require_session_auth)])
 def create_session(req: CreateSessionRequest) -> Dict[str, Any]:
-    session = session_manager.create_session(
-        name=req.name,
-        model_name=req.model_name,
-        provider_type=req.provider_type,
-    )
+    try:
+        session = session_manager.create_session(
+            name=req.name,
+            model_name=req.model_name,
+            provider_type=req.provider_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     token = session_manager.issue_session_token(session.session_id)
     resp = session.model_dump()
     resp["bearer_token"] = token

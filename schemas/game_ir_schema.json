@@ -18,7 +18,7 @@
     },
     "ir_version": {
       "type": "string",
-      "enum": ["0.1.0"]
+      "enum": ["0.1.0", "1.0.0"]
     },
     "module_name": {
       "type": "string",
@@ -26,7 +26,7 @@
     },
     "target_engines": {
       "type": "array",
-      "items": { "type": "string", "enum": ["unreal", "unity", "neutral"] },
+      "items": { "type": "string", "enum": ["unreal", "unity", "godot", "neutral"] },
       "minItems": 1
     },
     "coordinate_system": {
@@ -90,7 +90,7 @@
         "required": ["hatch_id", "target_engine", "code_block"],
         "properties": {
           "hatch_id": { "type": "string" },
-          "target_engine": { "type": "string", "enum": ["unreal", "unity"] },
+          "target_engine": { "type": "string", "enum": ["unreal", "unity", "godot"] },
           "file_target": { "type": "string" },
           "code_block": { "type": "string" }
         }

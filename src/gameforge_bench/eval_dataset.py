@@ -15,12 +15,50 @@ Total: 60 comprehensive evaluation questions.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Optional
 
 
-EVALUATION_QUESTIONS: List[Dict[str, Any]] = [
+def get_question(question_id: str) -> Optional[dict[str, Any]]:
+    """Retrieves a single evaluation question by its ID."""
+    qid_upper = question_id.upper().strip()
+    for q in EVALUATION_QUESTIONS:
+        if q["id"].upper() == qid_upper:
+            return dict(q)
+    return None
+
+
+def get_questions_by_category(category: str) -> list[dict[str, Any]]:
+    """Returns all questions belonging to a specific category."""
+    cat_lower = category.lower().strip()
+    return [dict(q) for q in EVALUATION_QUESTIONS if q.get("category", "").lower() == cat_lower]
+
+
+def get_categories() -> list[str]:
+    """Returns unique ordered categories present in the dataset."""
+    seen = []
+    for q in EVALUATION_QUESTIONS:
+        cat = q.get("category", "")
+        if cat and cat not in seen:
+            seen.append(cat)
+    return seen
+
+
+def get_evaluation_dataset() -> list[dict[str, Any]]:
+    """Returns all 60 evaluation questions."""
+    return [dict(q) for q in EVALUATION_QUESTIONS]
+
+
+
+def export_dataset_json(out_path: Optional[Path | str] = None) -> Path:
+    """Exports the evaluation questions to JSON format."""
+    target = Path(out_path) if out_path else Path("configs/gameforge_v1_eval_dataset.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"questions": EVALUATION_QUESTIONS}, indent=2), encoding="utf-8")
+    return target
+
+
+EVALUATION_QUESTIONS: list[dict[str, Any]] = [
     # Category 1: Engine-Independent Math & Physics (1-10)
     {
         "id": "MATH_01",

@@ -13,21 +13,29 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 REPO = Path(__file__).resolve().parents[2]
-os.environ.setdefault("GAMEFORGE_HOST_PROFILE", str(REPO / "configs" / "host_profiles" / "dev-rx7700xt.json"))
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+if "GAMEFORGE_HOST_PROFILE" not in os.environ:
+    dev_prof = REPO / "configs" / "host_profiles" / "dev-rx7700xt.json"
+    if dev_prof.exists():
+        os.environ["GAMEFORGE_HOST_PROFILE"] = str(dev_prof)
+
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+engine_scripts = REPO / "scripts" / "engine"
+if str(engine_scripts) not in sys.path:
+    sys.path.insert(0, str(engine_scripts))
 
 from _harness import disposable_probe, start_editor, write_report  # noqa: E402
 
 
-def run_undo_spotcheck():
+def run_undo_spotcheck() -> int:
     uproject = disposable_probe("undo_spotcheck")
     print(f"Disposable probe created at {uproject}")
 
     link = start_editor(uproject, "undo_spotcheck")
-    evidence = {
+    evidence: Dict[str, Any] = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "uproject": str(uproject),
         "steps": [],
@@ -87,13 +95,21 @@ for a in unreal.EditorActorSubsystem().get_all_level_actors():
         break
 print("@@PROP@@" + json.dumps({"found": found, "tags": tags}))
 """
-        def get_cube_prop():
-            res = link._rx.run_command(check_prop_snippet, unattended=True, exec_mode=link._rx_module.MODE_EXEC_FILE)
+        def get_cube_prop() -> Optional[Dict[str, Any]]:
+            rx = getattr(link, "_rx", None)
+            rx_module = getattr(link, "_rx_module", None)
+            if not rx or not rx_module:
+                return None
+            res = rx.run_command(check_prop_snippet, unattended=True, exec_mode=rx_module.MODE_EXEC_FILE)
             for o in (res.get("output") or []):
                 text = o.get("output") if isinstance(o, dict) else str(o)
                 for line in text.splitlines():
                     if "@@PROP@@" in line:
-                        return json.loads(line.partition("@@PROP@@")[2])
+                        payload = line.partition("@@PROP@@")[2].strip()
+                        try:
+                            return json.loads(payload)
+                        except Exception:
+                            return None
             return None
 
         prop_after_set = get_cube_prop()
@@ -107,13 +123,18 @@ import unreal
 unreal.SystemLibrary.execute_console_command(None, "TRANSACTION UNDO")
 print("@@UNDO@@DONE")
 """
-        undo_res = link._rx.run_command(undo_snippet, unattended=True, exec_mode=link._rx_module.MODE_EXEC_FILE)
-        evidence["steps"].append({"step": "execute_undo", "raw_output": undo_res.get("output")})
+        rx = getattr(link, "_rx", None)
+        rx_module = getattr(link, "_rx_module", None)
+        if rx and rx_module:
+            undo_res = rx.run_command(undo_snippet, unattended=True, exec_mode=rx_module.MODE_EXEC_FILE)
+            evidence["steps"].append({"step": "execute_undo", "raw_output": undo_res.get("output")})
+        else:
+            evidence["steps"].append({"step": "execute_undo", "raw_output": "rx unavailable"})
 
         # Step 6: Verify property reverted
         prop_after_undo = get_cube_prop()
         print(f"Property after undo: {prop_after_undo}")
-        tags_reverted = prop_after_undo and "UndoTestTag" not in prop_after_undo.get("tags", [])
+        tags_reverted = prop_after_undo is not None and "UndoTestTag" not in prop_after_undo.get("tags", [])
         evidence["steps"].append({
             "step": "property_after_undo",
             "tags": prop_after_undo.get("tags") if prop_after_undo else None,
@@ -130,12 +151,13 @@ print("@@UNDO@@DONE")
 
         evidence["verdict"] = "PASS"
         print("Spot check PASS: ScopedEditorTransaction + TRANSACTION UNDO works in 5.7.4")
+        return 0
 
     except Exception as exc:
         evidence["verdict"] = "FAIL"
         evidence["error"] = f"{type(exc).__name__}: {exc}"
         print(f"Spot check FAIL: {exc}")
-        raise
+        return 1
     finally:
         link.stop()
         out_path = write_report("undo_spotcheck", evidence, "P0")
@@ -143,4 +165,4 @@ print("@@UNDO@@DONE")
 
 
 if __name__ == "__main__":
-    run_undo_spotcheck()
+    sys.exit(run_undo_spotcheck())

@@ -9,18 +9,17 @@ Handler Contract (AD-11):
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
-import time
 from typing import Dict
-from ..executor import Handler, StepContext, StepOutcome
-from . import legacy_stages
-from . import tool_call
-from . import scenario
+from ..executor import Handler
 from . import content
+from . import legacy_stages
 from . import review
+from . import scenario
+from . import tool_call
 from .report import report_handler
 from .scaffold import scaffold_handler
+
+__all__ = ["HANDLERS", "register_handler"]
 
 
 HANDLERS: Dict[str, Handler] = {
@@ -51,4 +50,6 @@ HANDLERS: Dict[str, Handler] = {
 
 
 def register_handler(kind: str, handler: Handler) -> None:
+    if not isinstance(kind, str) or not kind.strip():
+        raise ValueError("handler kind must be a non-empty string")
     HANDLERS[kind] = handler

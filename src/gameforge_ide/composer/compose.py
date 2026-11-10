@@ -486,6 +486,16 @@ _BINDABLE: Dict[str, Tuple[str, ...]] = {
 
 
 def _bind_layout_actors(plan: LevelPlan, gds: Any) -> None:
+    bound_entities: Set[str] = set()
+    # First pass: preserve any exact entity_id matches
+    for actor in plan.actors:
+        if actor.entity_id:
+            ent = next((e for e in gds.entities if e.entity_id == actor.entity_id), None)
+            if ent:
+                mod = get_module(ent.module)
+                actor.properties = {**_actor_properties(ent, mod), **actor.properties}
+                bound_entities.add(ent.entity_id)
+
     for actor in plan.actors:
         module_ids = _BINDABLE.get(actor.runtime_class)
         if not module_ids:
@@ -493,9 +503,17 @@ def _bind_layout_actors(plan: LevelPlan, gds: Any) -> None:
         # Do not bind friendly stationary turrets in tower defense to hostile enemy entities
         if actor.Properties.get("bStationaryTurret") if hasattr(actor, "Properties") else actor.properties.get("bStationaryTurret"):
             continue
-        ent = next((e for e in gds.entities if e.module in module_ids), None)
+        if actor.entity_id in bound_entities:
+            continue
+
+        # Find an unbound entity of matching module, or fallback to any matching entity
+        ent = next((e for e in gds.entities if e.module in module_ids and e.entity_id not in bound_entities), None)
+        if ent is None:
+            ent = next((e for e in gds.entities if e.module in module_ids), None)
         if ent is None:
             continue
+
+        bound_entities.add(ent.entity_id)
         mod = get_module(ent.module)
         if actor.entity_id == ent.entity_id:
             actor.properties = {**_actor_properties(ent, mod), **actor.properties}

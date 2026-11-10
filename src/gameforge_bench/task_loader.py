@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import yaml
@@ -16,6 +16,9 @@ class TaskLimits(BaseModel):
     max_model_tokens: Optional[int] = None
     network_access: str = "disabled"
 
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
+
 
 class TaskPermissions(BaseModel):
     allowed_edit_paths: List[str] = Field(default_factory=list)
@@ -24,12 +27,18 @@ class TaskPermissions(BaseModel):
     can_modify_grader: bool = False
     can_install_dependencies: bool = False
 
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
+
 
 class TaskAcceptance(BaseModel):
     required_behavior: List[str] = Field(default_factory=list)
     required_assets: List[str] = Field(default_factory=list)
     invariants: List[str] = Field(default_factory=list)
     performance_budgets: List[str] = Field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
 
 
 class TaskGrading(BaseModel):
@@ -43,12 +52,18 @@ class TaskGrading(BaseModel):
     visual_review: str = "none"
     regression_suite_ref: Optional[str] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
+
 
 class TaskReproducibility(BaseModel):
     fixed_timestep_seconds: Optional[float] = 0.016667
     random_seed: Optional[int] = 42
     tolerance_policy: str = "documented_tolerances"
     clean_snapshot_required: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
 
 
 class TaskProvenance(BaseModel):
@@ -59,6 +74,9 @@ class TaskProvenance(BaseModel):
     allowed_use_review_status: str = "pending"
     reviewer: Optional[str] = None
     notes: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
 
 
 class TaskSpec(BaseModel):
@@ -92,6 +110,19 @@ class TaskSpec(BaseModel):
     data_provenance_status: str = "verified"
     raw_source_path: Optional[str] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert specification to serializable dictionary."""
+        return self.model_dump()
+
+    def save_yaml(self, output_path: Path | str) -> Path:
+        """Saves task specification back to YAML format."""
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        dump_data = self.to_dict()
+        with out.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(dump_data, f, sort_keys=False, indent=2)
+        return out
+
 
 @dataclass
 class LogicalTask:
@@ -104,6 +135,10 @@ class LogicalTask:
     primary_grading: str
     pilot: bool
     notes: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert logical task to serializable dictionary."""
+        return asdict(self)
 
 
 def normalize_task_dict(raw: Dict[str, Any], source_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -221,20 +256,22 @@ def load_task_inventory(csv_path: Path | str) -> List[LogicalTask]:
         raise FileNotFoundError(f"Task inventory file not found: {path}")
 
     tasks: List[LogicalTask] = []
-    with path.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            pilot_val = row.get("pilot", "").strip().lower()
+            if not row or not row.get("id"):
+                continue
+            pilot_val = (row.get("pilot") or "").strip().lower()
             tasks.append(
                 LogicalTask(
                     id=row["id"].strip(),
-                    tier=row["tier"].strip(),
-                    title=row["title"].strip(),
-                    category=row["category"].strip(),
-                    engine_pairing=row["engine_pairing"].strip(),
-                    primary_grading=row["primary_grading"].strip(),
+                    tier=row.get("tier", "").strip(),
+                    title=row.get("title", "").strip(),
+                    category=row.get("category", "").strip(),
+                    engine_pairing=row.get("engine_pairing", "").strip(),
+                    primary_grading=row.get("primary_grading", "").strip(),
                     pilot=(pilot_val in ("yes", "true", "1")),
-                    notes=row.get("notes", "").strip(),
+                    notes=(row.get("notes") or "").strip(),
                 )
             )
     return tasks

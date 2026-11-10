@@ -135,7 +135,7 @@ def classify_intent(
     if intent not in INTENTS or not (0.0 <= conf <= 1.0) or conf < MIN_CONFIDENCE:
         return None
     _defect_re = re.compile(
-        r"\b(not complete|incomplete|not working|broken|bug|error|missing|nothing is playable|not playable|tiles|only \d+ tiles|just \d+ tiles)\b",
+        r"\b(not complete|incomplete|not working|broken|bug|error|fails|failing|crash|crashes|stuck|fix|missing|nothing is playable|not playable|tiles|only \d+ tiles|just \d+ tiles)\b",
         re.I,
     )
     if intent == "chat" and _defect_re.search(text):

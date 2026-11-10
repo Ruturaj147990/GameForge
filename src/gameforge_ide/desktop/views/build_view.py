@@ -30,6 +30,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -48,6 +49,7 @@ from PySide6.QtWidgets import (
 
 from ..services.forge_service import ForgeService
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ..widgets.log_view import LogView
 from ..widgets.problems_table import ProblemsTable
 from ..widgets.step_row import STEP_ROLE, StepRowDelegate, format_step_duration
@@ -391,9 +393,51 @@ class BuildView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: Optional[QShowEvent] = None) -> None:
         super().showEvent(event)
         self.refresh_runs()
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update view stylesheets for active theme."""
+        if hasattr(self, "_runs_combo"):
+            self._runs_combo.setStyleSheet(theme_stylesheet(
+                f"QComboBox#{self._runs_combo.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_timeline_view"):
+            self._timeline_view.setStyleSheet(theme_stylesheet(
+                f"QListView#{self._timeline_view.objectName()} {{"
+                f"  background-color: {tokens.BG_PANEL};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"}}"
+                f"QListView#{self._timeline_view.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"}}"
+            ))
+        if hasattr(self, "_log_view") and hasattr(self._log_view, "update_theme"):
+            self._log_view.update_theme()
+        if hasattr(self, "_problems_table") and hasattr(self._problems_table, "update_theme"):
+            self._problems_table.update_theme()
+
+    def deleteLater(self) -> None:
+        """Clean up background timers and service connections on disposal."""
+        if hasattr(self, "_duration_timer") and self._duration_timer.isActive():
+            self._duration_timer.stop()
+        if self._forge_service is not None:
+            try:
+                self._forge_service.runEvent.disconnect(self._on_forge_event)
+            except Exception:
+                pass
+            try:
+                self._forge_service.runListChanged.disconnect(self.refresh_runs)
+            except Exception:
+                pass
+        super().deleteLater()
 
     def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         """Filter runs for project_name and switch store scope."""

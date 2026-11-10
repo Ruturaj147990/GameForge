@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,35 +14,49 @@ from ...qa.scenario import (
     EventExpectation,
     NoEventExpectation,
     Scenario,
-    ScenarioResult,
     WaitArgs,
     WaitStep,
 )
+from ...storage.atomic import atomic_write_text
 from ..executor import StepContext, StepOutcome
+
+__all__ = ["scenario_handler", "scenario_gen_handler"]
+
+
+def _is_cancelled(ctx: StepContext) -> bool:
+    cancel = getattr(ctx, "cancel", None)
+    return cancel is not None and cancel.is_set() is True
 
 
 def scenario_handler(ctx: StepContext) -> StepOutcome:
     """Execute scenario playtests on the packaged build."""
+    if _is_cancelled(ctx):
+        return StepOutcome(False, errors=["Cancelled by user"])
+
     cfg = ctx.step.inputs.get("configuration", "Development")
     scenario_ids = ctx.step.inputs.get("scenario_ids")
 
     # Find exe from shared context or search workspace
-    exe_str = ctx.shared.get("package", {}).get("exe")
+    exe_str = ctx.shared.get("package", {}).get("exe") or ctx.step.inputs.get("exe")
     exe_path: Optional[Path] = Path(exe_str) if exe_str else None
 
     base_dir = Path(ctx.project_dir) if ctx.project_dir else Path(ctx.workspace_dir)
-    p_name = base_dir.name
+    uprojects = list(base_dir.glob("*.uproject")) if base_dir.is_dir() else []
+    p_name = ctx.step.inputs.get("project_name") or (uprojects[0].stem if uprojects else base_dir.name)
+    exe_names = list(dict.fromkeys([p_name, base_dir.name]))
 
     if not exe_path or not exe_path.is_file():
         # Fallback search strictly for packaged executables in Packaged/ (DEF-308: NEVER accept raw Binaries/Win64)
-        candidates = [
-            base_dir / "Packaged" / "Windows" / f"{p_name}.exe",
-            base_dir / "Packaged" / "WindowsNoEditor" / f"{p_name}.exe",
-            base_dir / "package_dev" / "Windows" / f"{p_name}.exe",
-            base_dir / "package_ship" / "Windows" / f"{p_name}.exe",
-        ]
-        candidates += list(base_dir.glob(f"**/Packaged/**/{p_name}.exe")) + \
-                      list(base_dir.glob(f"**/package_*/**/{p_name}.exe"))
+        candidates: List[Path] = []
+        for name in exe_names:
+            candidates.extend([
+                base_dir / "Packaged" / "Windows" / f"{name}.exe",
+                base_dir / "Packaged" / "WindowsNoEditor" / f"{name}.exe",
+                base_dir / "package_dev" / "Windows" / f"{name}.exe",
+                base_dir / "package_ship" / "Windows" / f"{name}.exe",
+            ])
+            candidates += list(base_dir.glob(f"**/Packaged/**/{name}.exe")) + \
+                          list(base_dir.glob(f"**/package_*/**/{name}.exe"))
         for c in candidates:
             if c.is_file() and "binaries" not in c.as_posix().lower() and not c.name.lower().endswith("crashreportclient.exe"):
                 exe_path = c
@@ -68,7 +81,7 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
     ]
     for m_dir in manifest_dirs:
         if m_dir.is_dir():
-            for mf in m_dir.glob("*.manifest.json"):
+            for mf in sorted(m_dir.glob("*.manifest.json")):
                 try:
                     manifests.append(LevelManifest.from_file(mf))
                 except Exception:
@@ -120,6 +133,13 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
                 except Exception:
                     pass
 
+    advisory_ids: set[str] = set()
+    if gds is not None:
+        try:
+            advisory_ids = {r.scenario_id for r in gds.acceptance.scenarios if not getattr(r, "must_pass", True)}
+        except Exception:
+            advisory_ids = set()
+
     # Fail closed if any mandatory acceptance criterion has a ScenarioGap (Section 5A.24)
     if gds is not None and scenario_gaps:
         mandatory_refs = [
@@ -130,7 +150,10 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         if scenario_ids:
             mandatory_ids = mandatory_ids.intersection(set(scenario_ids))
 
-        mandatory_gaps = [g for g in scenario_gaps if not mandatory_ids or g.scenario_id in mandatory_ids]
+        mandatory_gaps = [
+            g for g in scenario_gaps
+            if (g.scenario_id in mandatory_ids) or (not mandatory_ids and g.scenario_id not in advisory_ids)
+        ]
         if mandatory_gaps:
             gap_msgs = [f"{g.scenario_id}: {g.reason}" for g in mandatory_gaps]
             return StepOutcome(
@@ -166,7 +189,7 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
     existing_ids = {s.scenario_id for s in scenarios}
     for sc_dir in sc_dirs:
         if sc_dir.is_dir():
-            for sf in sc_dir.glob("*.json"):
+            for sf in sorted(sc_dir.glob("*.json")):
                 try:
                     sc_obj = Scenario.from_file(sf)
                     if sc_obj.scenario_id not in existing_ids:
@@ -175,13 +198,23 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
                 except Exception:
                     pass
 
-    # Filter by scenario_ids if provided
+    # Filter or append by scenario_ids / scenarios input
     input_scenarios = ctx.step.inputs.get("scenarios")
     if scenario_ids:
         scenarios = [s for s in scenarios if s.scenario_id in scenario_ids]
     elif input_scenarios and isinstance(input_scenarios, list):
-        if all(isinstance(x, str) for x in input_scenarios):
-            allowed = set(input_scenarios)
+        str_ids = [x for x in input_scenarios if isinstance(x, str)]
+        obj_items = [x for x in input_scenarios if isinstance(x, (dict, Scenario))]
+        for x in obj_items:
+            try:
+                sc_obj = x if isinstance(x, Scenario) else Scenario.model_validate(x)
+                if sc_obj.scenario_id not in existing_ids:
+                    scenarios.append(sc_obj)
+                    existing_ids.add(sc_obj.scenario_id)
+            except Exception:
+                pass
+        if str_ids and not obj_items:
+            allowed = set(str_ids)
             if gds is not None:
                 try:
                     from ...qa.game_spec_tests import generate_acceptance_tests
@@ -191,12 +224,6 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
             filtered = [s for s in scenarios if s.scenario_id in allowed]
             if filtered:
                 scenarios = filtered
-        elif all(isinstance(x, dict) for x in input_scenarios):
-            for x in input_scenarios:
-                try:
-                    scenarios.append(Scenario.model_validate(x))
-                except Exception:
-                    pass
 
     if not scenarios:
         # Default fallback smoke scenario
@@ -241,17 +268,8 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         elif (base_dir / "Content" / "Maps" / f"{p_name}Map.umap").is_file():
             target_map = f"/Game/Maps/{p_name}Map"
 
-    # Scenarios the design marks must_pass=False (e.g. a jump course the navmesh autopilot cannot traverse) are
-    # advisory: their failures are reported but do not fail the build.
-    advisory_ids = set()
-    if gds is not None:
-        try:
-            advisory_ids = {r.scenario_id for r in gds.acceptance.scenarios if not getattr(r, "must_pass", True)}
-        except Exception:
-            advisory_ids = set()
-
     for sc in scenarios:
-        if ctx.cancel.is_set():
+        if _is_cancelled(ctx):
             return StepOutcome(False, errors=["Cancelled by user"])
 
         res = run_packaged(exe_path, sc, out_dir=out_dir, timeout_s=sc.timeout_s, map_path=target_map)
@@ -287,8 +305,8 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
             if not stage_ok:
                 all_passed = False
                 errors.extend([f"Scenario validation: {issue}" for issue in stage_issues])
-        except Exception:
-            pass
+        except Exception as exc:
+            ctx.log(f"Warning: scenario stage validation raised: {exc}")
 
     return StepOutcome(
         ok=all_passed,
@@ -300,21 +318,33 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
 
 def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
     """Forge SCENARIO_GEN step: generate QA playtest scenarios from GDS, manifests, or composer inputs."""
+    if _is_cancelled(ctx):
+        return StepOutcome(False, errors=["Cancelled by user"])
+
     base_dir = Path(ctx.project_dir) if ctx.project_dir else Path(ctx.workspace_dir)
-    p_name = base_dir.name
+    p_name = ctx.step.inputs.get("project_name") or base_dir.name
     scenarios_dir = base_dir / "GameForge" / "scenarios"
-    scenarios_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        scenarios_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return StepOutcome(False, errors=[f"Failed to create scenarios directory {scenarios_dir}: {exc}"])
 
     scenarios: List[Scenario] = []
+    existing_ids: set[str] = set()
 
     # 1. Inputs from composer plan
     input_scenarios = ctx.step.inputs.get("scenarios") or []
     for sc_data in input_scenarios:
         try:
             if isinstance(sc_data, Scenario):
-                scenarios.append(sc_data)
+                if sc_data.scenario_id not in existing_ids:
+                    scenarios.append(sc_data)
+                    existing_ids.add(sc_data.scenario_id)
             elif isinstance(sc_data, dict):
-                scenarios.append(Scenario.model_validate(sc_data))
+                sc_obj = Scenario.model_validate(sc_data)
+                if sc_obj.scenario_id not in existing_ids:
+                    scenarios.append(sc_obj)
+                    existing_ids.add(sc_obj.scenario_id)
         except Exception:
             pass
 
@@ -360,7 +390,7 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
     ]
     for m_dir in manifest_dirs:
         if m_dir.is_dir():
-            for mf in m_dir.glob("*.manifest.json"):
+            for mf in sorted(m_dir.glob("*.manifest.json")):
                 try:
                     manifests.append(LevelManifest.from_file(mf))
                 except Exception:
@@ -371,13 +401,12 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
         try:
             scs, gen_gaps = generate(gds, manifests)
             gaps.extend(gen_gaps)
-            existing_ids = {s.scenario_id for s in scenarios}
             for s in scs:
                 if s.scenario_id not in existing_ids:
                     scenarios.append(s)
                     existing_ids.add(s.scenario_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            ctx.log(f"Warning: QA generate() failed: {exc}")
 
         try:
             from ...qa.game_spec_tests import (
@@ -386,13 +415,12 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
             )
             spec_tests = generate_acceptance_tests(gds)
             spec_scs = acceptance_tests_to_scenarios(spec_tests)
-            existing_ids = {s.scenario_id for s in scenarios}
             for s in spec_scs:
                 if s.scenario_id not in existing_ids:
                     scenarios.append(s)
                     existing_ids.add(s.scenario_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            ctx.log(f"Warning: acceptance test conversion failed: {exc}")
 
     if not scenarios:
         # Default fallback smoke scenario
@@ -411,14 +439,23 @@ def scenario_gen_handler(ctx: StepContext) -> StepOutcome:
         )
 
     # Write generated scenarios to disk
-    artifacts = []
+    artifacts: List[Path] = []
+    write_errors: List[str] = []
     for s in scenarios:
-        sc_path = scenarios_dir / f"{s.scenario_id}.json"
+        if _is_cancelled(ctx):
+            return StepOutcome(False, errors=["Cancelled by user"])
+        safe_id = re.sub(r"[^A-Za-z0-9._-]+", "_", s.scenario_id).strip("._") or "scenario"
+        sc_path = scenarios_dir / f"{safe_id}.json"
         try:
-            sc_path.write_text(s.model_dump_json(indent=2), encoding="utf-8")
+            atomic_write_text(sc_path, s.model_dump_json(indent=2))
             artifacts.append(sc_path)
-        except Exception:
-            pass
+        except OSError as exc:
+            msg = f"Failed to write scenario {sc_path}: {exc}"
+            ctx.log(f"Warning: {msg}")
+            write_errors.append(msg)
+
+    if write_errors and not artifacts:
+        return StepOutcome(False, errors=write_errors)
 
     ctx.log(f"Generated {len(scenarios)} QA playtest scenarios in {scenarios_dir}")
     return StepOutcome(

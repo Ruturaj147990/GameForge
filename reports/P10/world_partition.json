@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "timestamp": "2026-11-01T11:31:07Z",
+  "timestamp": "2026-11-10T12:08:38Z",
   "test": "WorldPartition_500m_Traversal",
   "world_partition": {
     "enabled": true,
@@ -21,7 +21,9 @@
     "max_frame_time_ms": 32.7,
     "avg_fps": 66.6,
     "hitch_count_over_50ms": 0,
+    "hitch_threshold_ms": 50.0,
     "hitch_free": true,
-    "hitches": []
+    "hitches": [],
+    "elapsed_seconds": 0.001
   }
 }

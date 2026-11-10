@@ -1,0 +1,88 @@
+{
+  "status": "PASS",
+  "generated_at": "2026-11-10T18:00:56Z",
+  "git_sha": "0d617e5386402b3d469e643d9eb59856a09bee67",
+  "model_id": "mock-model:latest",
+  "provider_kind": "mock",
+  "version_info": "mock-1.0.0",
+  "overall": {
+    "total_tasks": 4,
+    "passed_tasks": 3,
+    "pass_rate": 75.0,
+    "valid_json_rate": 100.0,
+    "first_try_valid_rate": 100.0,
+    "median_latency_s": 0.015,
+    "p90_latency_s": 0.015,
+    "mean_tok_per_sec": 75.0,
+    "total_tokens_in": 1312,
+    "total_tokens_out": 138,
+    "estimated_cost_usd": 0.0
+  },
+  "families": {
+    "design_draft": {
+      "total_tasks": 1,
+      "passed_tasks": 1,
+      "pass_rate": 100.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.015,
+      "p90_latency_s": 0.015,
+      "mean_tok_per_sec": 75.0,
+      "total_tokens_in": 105,
+      "total_tokens_out": 38,
+      "estimated_cost_usd": 0.0
+    },
+    "gds_patch": {
+      "total_tasks": 1,
+      "passed_tasks": 0,
+      "pass_rate": 0.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.015,
+      "p90_latency_s": 0.015,
+      "mean_tok_per_sec": 75.0,
+      "total_tokens_in": 1058,
+      "total_tokens_out": 35,
+      "estimated_cost_usd": 0.0
+    },
+    "codegen_rule": {
+      "total_tasks": 1,
+      "passed_tasks": 1,
+      "pass_rate": 100.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.015,
+      "p90_latency_s": 0.015,
+      "mean_tok_per_sec": 75.0,
+      "total_tokens_in": 68,
+      "total_tokens_out": 37,
+      "estimated_cost_usd": 0.0
+    },
+    "cpp_repair": {
+      "total_tasks": 1,
+      "passed_tasks": 1,
+      "pass_rate": 100.0,
+      "valid_json_rate": 100.0,
+      "first_try_valid_rate": 100.0,
+      "median_latency_s": 0.015,
+      "p90_latency_s": 0.015,
+      "mean_tok_per_sec": 75.0,
+      "total_tokens_in": 81,
+      "total_tokens_out": 28,
+      "estimated_cost_usd": 0.0
+    },
+    "vision_rubric": {
+      "total_tasks": 0,
+      "passed_tasks": 0,
+      "pass_rate": 0.0,
+      "valid_json_rate": 0.0,
+      "first_try_valid_rate": 0.0,
+      "median_latency_s": 0.0,
+      "p90_latency_s": 0.0,
+      "mean_tok_per_sec": 0.0,
+      "total_tokens_in": 0,
+      "total_tokens_out": 0,
+      "estimated_cost_usd": 0.0
+    }
+  }
+}

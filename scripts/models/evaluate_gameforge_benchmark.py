@@ -14,15 +14,24 @@ Generates:
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import requests
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 BENCHMARK_FILE = Path("E:/GameForge/reports/gameforge-27b/baseline_benchmark.json")
+REPO_BENCHMARK_FILE = REPO_ROOT / "reports" / "gameforge-27b" / "baseline_benchmark.json"
+
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b")
-MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b")
+MIRROR_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b"
 
 MODELS = [
     "qwen3.8:27b-q4_K_M",
@@ -39,6 +48,7 @@ def query_ollama(model: str, prompt: str, max_tokens: int = 200) -> Dict[str, An
         "model": model,
         "prompt": prompt,
         "stream": False,
+        "think": False,
         "options": {
             "temperature": 0.2,
             "top_p": 0.9,
@@ -54,7 +64,7 @@ def query_ollama(model: str, prompt: str, max_tokens: int = 200) -> Dict[str, An
             response_text = data.get("response", "")
             eval_count = data.get("eval_count", len(response_text.split()))
             eval_duration_ns = data.get("eval_duration", 1)
-            tps = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else (eval_count / dur)
+            tps = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else (eval_count / dur if dur > 0 else 0)
             return {
                 "text": response_text,
                 "latency_sec": round(dur, 2),
@@ -66,6 +76,17 @@ def query_ollama(model: str, prompt: str, max_tokens: int = 200) -> Dict[str, An
             return {"text": "", "latency_sec": round(dur, 2), "tokens_per_sec": 0, "tokens": 0, "error": resp.text}
     except Exception as e:
         return {"text": "", "latency_sec": round(time.time() - t0, 2), "tokens_per_sec": 0, "tokens": 0, "error": str(e)}
+
+
+def unload_model(model: str) -> None:
+    try:
+        requests.post(
+            OLLAMA_API_URL,
+            json={"model": model, "keep_alive": 0},
+            timeout=10,
+        )
+    except Exception:
+        pass
 
 
 def score_response(text: str, rubric: List[str], max_points: float = 10.0) -> Tuple[float, List[str]]:
@@ -80,17 +101,33 @@ def score_response(text: str, rubric: List[str], max_points: float = 10.0) -> Tu
     return round(score, 2), matches
 
 
-def main():
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Automated Comparative Benchmark Evaluation Harness for GameForge")
+    parser.add_argument("--benchmark-file", type=Path, default=None, help="Custom benchmark tasks json")
+    parser.add_argument("--dry-run", action="store_true", help="Perform setup check without firing model generation")
+    args = parser.parse_args()
+
     print("=" * 80)
     print(" GAMEFORGE COMPARATIVE BENCHMARK EVALUATION (MODEL-BATCHED)")
     print(f" Models under test: {', '.join(MODELS)}")
     print("=" * 80)
 
-    tasks: List[Dict[str, Any]] = json.loads(BENCHMARK_FILE.read_text(encoding="utf-8"))
+    bench_path = args.benchmark_file or (BENCHMARK_FILE if BENCHMARK_FILE.exists() else REPO_BENCHMARK_FILE)
+    if not bench_path.exists():
+        print(f"Error: Benchmark file not found at {bench_path}", file=sys.stderr)
+        return 1
+
+    tasks: List[Dict[str, Any]] = json.loads(bench_path.read_text(encoding="utf-8"))
     
     # 6 representative core benchmark tasks
-    selected_indices = [0, 1, 2, 6, 34, 44]
+    selected_indices = [i for i in [0, 1, 2, 6, 34, 44] if i < len(tasks)]
+    if not selected_indices:
+        selected_indices = list(range(min(6, len(tasks))))
     evaluation_subset = [tasks[i] for i in selected_indices]
+
+    if args.dry_run:
+        print(f"Dry run passed: Loaded {len(tasks)} benchmark tasks, selected {len(evaluation_subset)} tasks.")
+        return 0
 
     results_by_model: Dict[str, Dict[str, Any]] = {
         m: {
@@ -104,44 +141,51 @@ def main():
         for m in MODELS
     }
 
-    # Outer loop over models (only 4 model loads!)
-    for model in MODELS:
-        print(f"\n=======================================================")
-        print(f" EVALUATING MODEL: {model}")
-        print(f"=======================================================")
+    try:
+        # Outer loop over models (only 4 model loads!)
+        for model in MODELS:
+            print(f"\n=======================================================")
+            print(f" EVALUATING MODEL: {model}")
+            print(f"=======================================================")
 
-        for task in evaluation_subset:
-            tid = task["id"]
-            cat = task["category"]
-            engine = task["engine"]
-            prompt = task["prompt"]
-            rubric = task["rubric"]
-            max_pts = task["max_points"]
+            for task in evaluation_subset:
+                tid = task.get("id", "task")
+                cat = task.get("category", "core")
+                engine = task.get("engine", "generic")
+                prompt = task.get("prompt", "")
+                rubric = task.get("rubric", [])
+                max_pts = task.get("max_points", 10.0)
 
-            print(f"  [{tid} - {engine} - {cat}] Generating...", end="", flush=True)
-            res = query_ollama(model, prompt, max_tokens=200)
-            score, matches = score_response(res["text"], rubric, max_pts)
+                print(f"  [{tid} - {engine} - {cat}] Generating...", end="", flush=True)
+                res = query_ollama(model, prompt, max_tokens=200)
+                score, matches = score_response(res["text"], rubric, max_pts)
 
-            results_by_model[model]["total_score"] += score
-            results_by_model[model]["max_possible"] += max_pts
-            results_by_model[model]["scores_by_task"].append({
-                "task_id": tid,
-                "engine": engine,
-                "category": cat,
-                "score": score,
-                "max_score": max_pts,
-                "matched_rubric": matches,
-                "latency": res["latency_sec"],
-                "tokens_per_sec": res["tokens_per_sec"],
-                "sample_output": res["text"][:120].replace("\n", " ") + "..."
-            })
+                results_by_model[model]["total_score"] += score
+                results_by_model[model]["max_possible"] += max_pts
+                results_by_model[model]["scores_by_task"].append({
+                    "task_id": tid,
+                    "engine": engine,
+                    "category": cat,
+                    "score": score,
+                    "max_score": max_pts,
+                    "matched_rubric": matches,
+                    "latency": res["latency_sec"],
+                    "tokens_per_sec": res["tokens_per_sec"],
+                    "sample_output": res["text"][:120].replace("\n", " ") + "..."
+                })
 
-            if engine not in results_by_model[model]["category_scores"]:
-                results_by_model[model]["category_scores"][engine] = {"score": 0.0, "max": 0.0}
-            results_by_model[model]["category_scores"][engine]["score"] += score
-            results_by_model[model]["category_scores"][engine]["max"] += max_pts
+                if engine not in results_by_model[model]["category_scores"]:
+                    results_by_model[model]["category_scores"][engine] = {"score": 0.0, "max": 0.0}
+                results_by_model[model]["category_scores"][engine]["score"] += score
+                results_by_model[model]["category_scores"][engine]["max"] += max_pts
 
-            print(f" Score: {score}/{max_pts} ({res['latency_sec']}s, {res['tokens_per_sec']} t/s)")
+                print(f" Score: {score}/{max_pts} ({res['latency_sec']}s, {res['tokens_per_sec']} t/s)")
+
+            # Teardown current model from VRAM before moving to next
+            unload_model(model)
+    finally:
+        for m in MODELS:
+            unload_model(m)
 
     # Compute summary aggregates
     summary_table = []
@@ -169,7 +213,7 @@ def main():
     # Produce comparison markdown report
     md_content = f"""# GAMEFORGE — COMPARATIVE BENCHMARK EVALUATION REPORT
 
-**Date:** 2026-10-23  
+**Date:** {time.strftime('%Y-%m-%d')}  
 **Status:** COMPLETE & VERIFIED  
 **Harness:** Automated Objective Rubric Scorer  
 **Inference Parameters:** Temperature: 0.2, Top-P: 0.9, Ollama Vulkan Accelerated Runtime  
@@ -193,12 +237,12 @@ def main():
 | :--- | :--- | :--- | :--- | :--- |
 """
 
-    all_engines = list(results_by_model["gameforge-27b:latest"]["category_scores"].keys())
+    all_engines = list(results_by_model.get("gameforge-27b:latest", {}).get("category_scores", {}).keys())
     for eng in all_engines:
-        s_base = results_by_model["qwen3.8:27b-q4_K_M"]["category_scores"].get(eng, {"score": 0, "max": 10})
-        s_v1 = results_by_model["gameforge-v1:latest"]["category_scores"].get(eng, {"score": 0, "max": 10})
-        s_v2 = results_by_model["gameforge-v2:latest"]["category_scores"].get(eng, {"score": 0, "max": 10})
-        s_27b = results_by_model["gameforge-27b:latest"]["category_scores"].get(eng, {"score": 0, "max": 10})
+        s_base = results_by_model.get("qwen3.8:27b-q4_K_M", {}).get("category_scores", {}).get(eng, {"score": 0, "max": 10})
+        s_v1 = results_by_model.get("gameforge-v1:latest", {}).get("category_scores", {}).get(eng, {"score": 0, "max": 10})
+        s_v2 = results_by_model.get("gameforge-v2:latest", {}).get("category_scores", {}).get(eng, {"score": 0, "max": 10})
+        s_27b = results_by_model.get("gameforge-27b:latest", {}).get("category_scores", {}).get(eng, {"score": 0, "max": 10})
         md_content += f"| **{eng}** | {s_base['score']:.1f}/{s_base['max']:.1f} | {s_v1['score']:.1f}/{s_v1['max']:.1f} | {s_v2['score']:.1f}/{s_v2['max']:.1f} | **{s_27b['score']:.1f}/{s_27b['max']:.1f}** |\n"
 
     md_content += f"""
@@ -227,12 +271,20 @@ def main():
 """
 
     for target_dir in [REPORTS_DIR, MIRROR_REPORTS_DIR]:
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "model_comparison.json").write_text(json.dumps(results_by_model, indent=2), encoding="utf-8")
-        (target_dir / "model_comparison.md").write_text(md_content, encoding="utf-8")
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            temp_json = target_dir / "model_comparison.json.tmp"
+            temp_md = target_dir / "model_comparison.md.tmp"
+            temp_json.write_text(json.dumps(results_by_model, indent=2), encoding="utf-8")
+            temp_md.write_text(md_content, encoding="utf-8")
+            temp_json.replace(target_dir / "model_comparison.json")
+            temp_md.replace(target_dir / "model_comparison.md")
+        except Exception as e:
+            print(f"Warning: Failed to write to {target_dir}: {e}", file=sys.stderr)
 
     print("\nBenchmark evaluation complete. Reports saved.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

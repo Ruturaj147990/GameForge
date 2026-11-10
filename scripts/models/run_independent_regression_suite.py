@@ -1,8 +1,18 @@
+import argparse
 import json
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
 from typing import Dict, Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+REPORTS_DIR = Path(r"E:\GameForge\reports\gameforge-27b\acceptance")
+REPO_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b" / "acceptance"
 
 MODELS = ["qwen3.8:27b-q4_K_M", "gameforge-27b"]
 
@@ -198,6 +208,7 @@ def query_ollama(model: str, prompt: str) -> Dict[str, Any]:
         "model": model,
         "prompt": prompt,
         "stream": False,
+        "think": False,
         "options": {
             "temperature": 0.2,
             "top_p": 0.9,
@@ -234,6 +245,19 @@ def query_ollama(model: str, prompt: str) -> Dict[str, Any]:
             "elapsed_seconds": time.time() - t0
         }
 
+def unload_model(model: str) -> None:
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:11434/api/generate",
+            data=json.dumps({"model": model, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as _:
+            pass
+    except Exception:
+        pass
+
+
 def evaluate_response(response_text: str, task: Dict[str, Any]) -> Dict[str, Any]:
     score = 0
     rubric_results = []
@@ -260,7 +284,7 @@ def evaluate_response(response_text: str, task: Dict[str, Any]) -> Dict[str, Any
         "deprecated_matches": deprecated_matches
     }
 
-def main():
+def run_suite() -> int:
     print("=" * 80)
     print(" GAMEFORGE-27B INDEPENDENT REGRESSION SUITE (15 TASKS)")
     print(f" Target Models: {MODELS}")
@@ -324,17 +348,38 @@ def main():
         results["models"][model_name] = model_results
         pct = (model_results["total_score"] / model_results["max_possible_score"]) * 100
         print(f"Model {model_name} Finished: {model_results['total_score']}/{model_results['max_possible_score']} ({pct:.1f}%) | Avg Throughput: {model_results['mean_tokens_per_sec']:.1f} tps")
+        unload_model(model_name)
 
-    out_file = Path(r"E:\GameForge\reports\gameforge-27b\acceptance\independent_regression_results.json")
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    out_file.write_text(json.dumps(results, indent=2))
-    print(f"\nSaved regression results to {out_file}")
+    target_reports = [REPORTS_DIR, REPO_REPORTS_DIR]
+    for r_dir in target_reports:
+        try:
+            r_dir.mkdir(parents=True, exist_ok=True)
+            out_file = r_dir / "independent_regression_results.json"
+            temp_out = out_file.with_suffix(".tmp")
+            temp_out.write_text(json.dumps(results, indent=2), encoding="utf-8")
+            temp_out.replace(out_file)
+            print(f"Saved regression results to {out_file}")
+        except Exception as e:
+            print(f"Warning: Failed to write results to {r_dir}: {e}", file=sys.stderr)
 
-    # Mirror to workspace
-    mirror_file = (Path(__file__).resolve().parents[1] / r"reports\gameforge-27b\acceptance\independent_regression_results.json")
-    mirror_file.parent.mkdir(parents=True, exist_ok=True)
-    mirror_file.write_text(json.dumps(results, indent=2))
-    print(f"Mirrored regression results to {mirror_file}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge 27B Independent Regression Suite")
+    parser.add_argument("--dry-run", action="store_true", help="Validate tasks without querying models")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Loaded {len(REGRESSION_TASKS)} independent regression tasks.")
+        return 0
+
+    try:
+        return run_suite()
+    finally:
+        for m in MODELS:
+            unload_model(m)
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

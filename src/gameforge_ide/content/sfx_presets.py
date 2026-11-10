@@ -34,6 +34,12 @@ SFX_SETS: Dict[str, Dict[str, SFXPreset]] = {
         "laser": SFXPreset("laser", "whoosh", gain=0.80, duration_s=0.22, description="High-energy sci-fi laser zap"),
         "explosion": SFXPreset("explosion", "impact", gain=0.92, duration_s=0.75, description="Deep concussive blast"),
         "switch": SFXPreset("switch", "click", gain=0.78, duration_s=0.14, description="Mechanical latch switch activation"),
+        "ability_ready": SFXPreset("ability_ready", "pickup", gain=0.82, duration_s=0.45, description="Harmonic resonant ability charged chime"),
+        "stealth_enter": SFXPreset("stealth_enter", "whoosh", gain=0.60, duration_s=0.25, description="Quiet cloaking whoosh"),
+        "boss_roar": SFXPreset("boss_roar", "impact", gain=0.95, duration_s=0.85, description="Intimidating deep boss enrage roar"),
+        "dash": SFXPreset("dash", "whoosh", gain=0.70, duration_s=0.18, description="Swift air dash impulse"),
+        "weapon_shoot": SFXPreset("weapon_shoot", "impact", gain=0.85, duration_s=0.20, description="Crisp ballistic weapon discharge"),
+        "gate_unlock": SFXPreset("gate_unlock", "pickup", gain=0.88, duration_s=0.90, description="Heavy latch unlock fanfare chime"),
     },
     "retro": {
         "pickup_chime": SFXPreset("pickup_chime", "pickup", gain=0.80, duration_s=0.25, description="8-bit arpeggio burst"),
@@ -46,6 +52,12 @@ SFX_SETS: Dict[str, Dict[str, SFXPreset]] = {
         "laser": SFXPreset("laser", "pickup", gain=0.78, duration_s=0.18, description="8-bit pew laser pulse"),
         "explosion": SFXPreset("explosion", "impact", gain=0.88, duration_s=0.60, description="Retro noise rumble blast"),
         "switch": SFXPreset("switch", "click", gain=0.75, duration_s=0.10, description="Retro toggle beep"),
+        "ability_ready": SFXPreset("ability_ready", "pickup", gain=0.80, duration_s=0.30, description="8-bit powerup rising blip"),
+        "stealth_enter": SFXPreset("stealth_enter", "click", gain=0.55, duration_s=0.15, description="8-bit cloak shimmer"),
+        "boss_roar": SFXPreset("boss_roar", "impact", gain=0.92, duration_s=0.70, description="8-bit noise roar"),
+        "dash": SFXPreset("dash", "whoosh", gain=0.72, duration_s=0.14, description="8-bit rapid sweep"),
+        "weapon_shoot": SFXPreset("weapon_shoot", "pickup", gain=0.80, duration_s=0.16, description="8-bit shot blip"),
+        "gate_unlock": SFXPreset("gate_unlock", "pickup", gain=0.85, duration_s=0.80, description="8-bit victory latch melody"),
     },
     "soft": {
         "pickup_chime": SFXPreset("pickup_chime", "pickup", gain=0.60, duration_s=0.40, description="Soft mellow bell ring"),
@@ -58,6 +70,12 @@ SFX_SETS: Dict[str, Dict[str, SFXPreset]] = {
         "laser": SFXPreset("laser", "whoosh", gain=0.58, duration_s=0.25, description="Soft harmonic energy pulse"),
         "explosion": SFXPreset("explosion", "whoosh", gain=0.68, duration_s=0.65, description="Warm low-end swell"),
         "switch": SFXPreset("switch", "click", gain=0.55, duration_s=0.12, description="Muted wooden toggle click"),
+        "ability_ready": SFXPreset("ability_ready", "pickup", gain=0.60, duration_s=0.45, description="Gentle glass resonance"),
+        "stealth_enter": SFXPreset("stealth_enter", "whoosh", gain=0.45, duration_s=0.25, description="Soft mist exhale"),
+        "boss_roar": SFXPreset("boss_roar", "whoosh", gain=0.75, duration_s=0.75, description="Deep resonant swell"),
+        "dash": SFXPreset("dash", "whoosh", gain=0.50, duration_s=0.18, description="Silken air glide"),
+        "weapon_shoot": SFXPreset("weapon_shoot", "whoosh", gain=0.60, duration_s=0.22, description="Muffled mechanical click-pulse"),
+        "gate_unlock": SFXPreset("gate_unlock", "pickup", gain=0.65, duration_s=0.85, description="Mellow harmonic resolution"),
     },
 }
 
@@ -72,15 +90,16 @@ def synthesize_sfx_preset(
     """Synthesize a named SFX preset to a 16-bit PCM WAV file with sample-rate support."""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    clean_name = preset_name.split(".", 1)[-1].lower()
     sfx_set = SFX_SETS.get(style, SFX_SETS["default"])
-    preset = sfx_set.get(preset_name, sfx_set["pickup_chime"])
+    preset = sfx_set.get(clean_name, sfx_set.get("pickup_chime"))
 
     spec = SFXSpec(
-        name=preset_name,
-        kind=preset.kind,
+        name=clean_name,
+        kind=preset.kind if preset else "pickup",
         seed=seed,
-        duration_s=preset.duration_s,
-        gain=preset.gain,
+        duration_s=preset.duration_s if preset else 0.35,
+        gain=preset.gain if preset else 0.8,
     )
     samples = synthesize(spec)
 
@@ -106,8 +125,9 @@ def synthesize_sfx_preset(
 
 def get_sfx_preset(preset_name: str, style: str = "default") -> Optional[SFXPreset]:
     """Retrieve an SFXPreset definition by name and style."""
+    clean_name = preset_name.split(".", 1)[-1].lower()
     sfx_set = SFX_SETS.get(style, SFX_SETS["default"])
-    return sfx_set.get(preset_name)
+    return sfx_set.get(clean_name)
 
 
 def list_sfx_presets(style: str = "default") -> List[str]:

@@ -211,10 +211,15 @@ class ContextManager:
         context_snippet = ""
         if self.context_file.exists():
             try:
+                lines = []
                 with open(self.context_file, "r", encoding="utf-8", errors="replace") as f:
-                    lines = f.readlines()
+                    for _ in range(50):
+                        line = f.readline()
+                        if not line:
+                            break
+                        lines.append(line)
                 # Extract Current Milestone or Last updated line for identity
-                for line in lines[:10]:
+                for line in lines[:20]:
                     if line.startswith("**Current Milestone:**"):
                         milestone = line.replace("**Current Milestone:**", "").strip()[:200]
                         context_snippet = f"Milestone: {milestone}"
@@ -259,7 +264,13 @@ class ContextManager:
                 build_diag_note = ""
                 logs_dir = p_path / "Saved" / "GameForge" / "logs"
                 if logs_dir.is_dir():
-                    build_logs = sorted(logs_dir.glob("build_*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+                    def _safe_mtime(f: Path) -> float:
+                        try:
+                            return f.stat().st_mtime
+                        except (OSError, ValueError):
+                            return 0.0
+
+                    build_logs = sorted(logs_dir.glob("build_*.log"), key=_safe_mtime, reverse=True)
                     if build_logs:
                         latest_log = build_logs[0]
                         try:

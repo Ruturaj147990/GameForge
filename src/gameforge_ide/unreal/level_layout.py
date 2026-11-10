@@ -8,6 +8,7 @@ Compliant with GameForge Master Blueprint:
 
 from __future__ import annotations
 
+import inspect
 import math
 from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
@@ -88,9 +89,25 @@ class LevelLayoutGenerator:
         """Verifies spatial integrity, containment, collision overlaps, and navigation clearance."""
         errors: List[str] = []
 
-        # 1. Verify rooms are valid
+        # 1. Verify rooms and scalar layout constraints are valid
+        if spec.navigation_clearance_radius < 0.0:
+            errors.append(f"navigation_clearance_radius must be >= 0 (got {spec.navigation_clearance_radius})")
+
         if not spec.rooms:
             errors.append("Layout spec must define at least one room")
+        else:
+            for room in spec.rooms:
+                b = room.bounds
+                if b.min_x > b.max_x or b.min_y > b.max_y or b.min_z > b.max_z:
+                    errors.append(
+                        f"Room '{room.room_id}' has inverted bounds: "
+                        f"({b.min_x}, {b.min_y}, {b.min_z})..({b.max_x}, {b.max_y}, {b.max_z})"
+                    )
+
+        for prop in spec.props:
+            dx, dy, dz = prop.extent
+            if dx < 0.0 or dy < 0.0 or dz < 0.0:
+                errors.append(f"Prop '{prop.label}' has negative extent {prop.extent}")
 
         # 2. Verify all props are contained inside a room
         for prop in spec.props:
@@ -166,13 +183,22 @@ class LevelLayoutGenerator:
 
         # Read-back verification (Rule 7)
         level_actors = self.operations.actors_in_level(spec.level_path)
-        spawned_labels = [a.get("label") for a in level_actors]
-        all_present = all(p in spawned_labels for p in placed_actors)
+        if inspect.isawaitable(level_actors):
+            level_actors = await level_actors
+        if not isinstance(level_actors, list):
+            level_actors = []
+        spawned_labels = {
+            (a.get("label") if isinstance(a, dict) else getattr(a, "label", None))
+            for a in level_actors
+        }
+        missing_actors = [p for p in placed_actors if p not in spawned_labels]
+        all_present = len(missing_actors) == 0
 
         return {
             "ok": all_present,
             "level_path": spec.level_path,
             "placed_count": len(placed_actors),
             "placed_actors": placed_actors,
+            "missing_actors": missing_actors,
             "verified_in_level": all_present,
         }

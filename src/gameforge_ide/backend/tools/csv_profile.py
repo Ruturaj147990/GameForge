@@ -26,10 +26,11 @@ def parse_csv_profile(path: str | Path, skip_frames: int = 10) -> dict:
         # The first column is EVENTS: usually empty, sometimes an event name such as "Cmd: csvprofile stop".
         if not row or row[0].startswith("[") or row == header or len(row) < len(header) // 2:
             continue
-        try:
-            float(row[index.get("FrameTime", 0)])
-        except (ValueError, IndexError):
-            continue  # metadata / header-at-end rows
+        if "FrameTime" in index:
+            try:
+                float(row[index["FrameTime"]])
+            except (ValueError, IndexError):
+                continue  # metadata / header-at-end rows
         frames.append(row)
     frames = frames[skip_frames:] if len(frames) > skip_frames * 2 else frames
     summary = {"frames": len(frames), "columns_present": [c for c in TIMING_COLUMNS if c in index]}
@@ -48,5 +49,6 @@ def parse_csv_profile(path: str | Path, skip_frames: int = 10) -> dict:
                             "p95_ms": round(ordered[min(len(ordered) - 1, int(0.95 * len(ordered)))], 3),
                             "max_ms": round(ordered[-1], 3)}
     if "FrameTime" in summary:
-        summary["avg_fps"] = round(1000.0 / summary["FrameTime"]["mean_ms"], 1) if summary["FrameTime"]["mean_ms"] else None
+        mean_ms = summary["FrameTime"]["mean_ms"]
+        summary["avg_fps"] = round(1000.0 / mean_ms, 1) if mean_ms and mean_ms > 0 else None
     return summary

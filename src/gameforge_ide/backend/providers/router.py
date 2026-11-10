@@ -186,12 +186,23 @@ class ModelRouter:
 
     def resolve_model(self, model_id: str) -> tuple[ModelProvider, str]:
         """Resolves model_id to its matching provider without silent fallback."""
-        ollama = self.providers.get("ollama")
-        if ollama and ollama.is_available():
-            for m in ollama.list_models():
-                if m.id == model_id or m.name == model_id:
-                    return ollama, m.id
+        # 1. Check explicit provider prefix (e.g. "hosted:anthropic:claude-3-7-sonnet" or "openai_compatible:gpt-4o")
+        if ":" in model_id:
+            for pid, prov in self.providers.items():
+                if model_id.startswith(f"{pid}:"):
+                    target_model = model_id[len(pid) + 1 :]
+                    return prov, target_model
 
-        # Return default if matching
+        # 2. Check all available registered providers for matching model ID
+        for pid, prov in self.providers.items():
+            try:
+                if prov.is_available():
+                    for m in prov.list_models():
+                        if m.id == model_id or m.name == model_id:
+                            return prov, m.id
+            except Exception:
+                continue
+
+        # 3. Fall back to default provider
         prov = self.get_provider()
         return prov, model_id

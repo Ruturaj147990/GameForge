@@ -8,10 +8,12 @@ Provides:
 
 from __future__ import annotations
 
+import html
 from typing import Any, Dict, Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
+
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -93,14 +95,16 @@ class DiffApprovalCard(QFrame):
         info_row.setContentsMargins(0, 0, 0, 0)
         info_row.setSpacing(10)
 
-        lbl_file = QLabel(f"File: <code>{self.file_path}</code>", self)
+        escaped_file = html.escape(str(self.file_path))
+        lbl_file = QLabel(f"File: <code>{escaped_file}</code>", self)
         lbl_file.setTextFormat(Qt.RichText)
         lbl_file.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 11px;")
         info_row.addWidget(lbl_file)
 
-        lbl_id = QLabel(f"Diff ID: {self.diff_id}", self)
+        lbl_id = QLabel(f"Diff ID: {html.escape(str(self.diff_id))}", self)
         lbl_id.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: 10px;")
         info_row.addWidget(lbl_id)
+
 
         # Diff additions / deletions stats
         additions = sum(1 for line in self.diff_patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
@@ -216,6 +220,7 @@ class DiffApprovalCard(QFrame):
         cursor.movePosition(QTextCursor.Start)
         self._diff_view.setTextCursor(cursor)
 
+    @Slot()
     def _on_accept(self) -> None:
         self.btn_accept.setEnabled(False)
         self.btn_reject.setEnabled(False)
@@ -224,6 +229,7 @@ class DiffApprovalCard(QFrame):
         self._lbl_status.setStyleSheet(f"color: {tokens.ACCENT_SUCCESS}; font-size: 11px; font-weight: 600;")
         self.diff_approved.emit(self.diff_id)
 
+    @Slot()
     def _on_reject(self) -> None:
         self.btn_accept.setEnabled(False)
         self.btn_reject.setEnabled(False)
@@ -231,6 +237,7 @@ class DiffApprovalCard(QFrame):
         self._lbl_status.setText("Diff rejected by developer.")
         self._lbl_status.setStyleSheet(f"color: {tokens.ACCENT_ERROR}; font-size: 11px; font-weight: 600;")
         self.diff_rejected.emit(self.diff_id)
+
 
 
 class FileChangedNotification(QFrame):

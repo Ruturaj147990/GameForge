@@ -298,33 +298,35 @@ class UnrealToolchain:
         if proc is None:
             return
         pid = getattr(proc, "pid", None)
-        try:
-            import psutil
-            parent = psutil.Process(pid)
-            for child in parent.children(recursive=True):
-                try:
-                    child.kill()
-                except psutil.Error:
-                    pass
-            parent.kill()
-        except Exception:
-            pass
-
-        if pid and sys.platform == "win32":
+        valid_pid = isinstance(pid, int) and pid > 4
+        if valid_pid:
             try:
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                si.wShowWindow = subprocess.SW_HIDE
-                subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(pid)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
-                    startupinfo=si,
-                )
+                import psutil
+                parent = psutil.Process(pid)
+                for child in parent.children(recursive=True):
+                    try:
+                        child.kill()
+                    except psutil.Error:
+                        pass
+                parent.kill()
             except Exception:
                 pass
+
+            if sys.platform == "win32":
+                try:
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = subprocess.SW_HIDE
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                        creationflags=NO_WINDOW,
+                        startupinfo=si,
+                    )
+                except Exception:
+                    pass
 
         try:
             proc.kill()
@@ -530,6 +532,8 @@ class UnrealToolchain:
                                 candidates.append(sub)
                 except Exception:
                     pass
+                if auth_root.is_dir() and auth_root not in candidates:
+                    candidates.append(auth_root)
 
                 binary_source = next((c for c in candidates if c.is_dir() and (c / "Binaries" / "Win64").is_dir() and any((c / "Binaries" / "Win64").glob("*.dll"))), None)
                 if binary_source and (binary_source / "Binaries" / "Win64").is_dir():
@@ -595,8 +599,8 @@ class UnrealToolchain:
         try:
             if uproject.is_file():
                 uproj_data = json.loads(uproject.read_text(encoding="utf-8", errors="replace"))
-                plugins = uproj_data.get("Plugins", [])
-                if any(p.get("Name") == "GameForge" for p in plugins):
+                plugins = uproj_data.get("Plugins", []) if isinstance(uproj_data, dict) else []
+                if isinstance(plugins, list) and any(isinstance(p, dict) and p.get("Name") == "GameForge" for p in plugins):
                     self.deploy_gameforge_plugin(uproject.parent)
         except Exception as exc:
             logger.warning("Could not check/deploy plugin before build: %s", exc)
@@ -752,7 +756,8 @@ class UnrealToolchain:
             ],
         })
         if v_data.get("packaged_exe"):
-            res.data["archive_bytes"] = sum(f.stat().st_size for f in (Path(archive_dir) / "Windows").rglob("*") if f.is_file())
+            pkg_root = Path(v_data["packaged_exe"]).parent
+            res.data["archive_bytes"] = sum(f.stat().st_size for f in pkg_root.rglob("*") if f.is_file())
 
         if not verified_ok:
             res.ok = False
@@ -787,6 +792,7 @@ class UnrealToolchain:
         """Launch a packaged game, wait for it to exit, require exit 0 and an expected log line."""
         exe = Path(exe)
         log_path = Path(log_path or exe.parent / "GameForgeSmoke.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         argv = [str(exe)] + list(args) + [f"-abslog={log_path}", "-unattended", "-nosplash", "-NoSound"]
         cmd = format_unreal_cmd(argv)
         started = time.monotonic()

@@ -88,20 +88,33 @@ def download_checkpoint(
                 token=token,
             )
             local_file = Path(downloaded_path)
-            file_bytes = local_file.read_bytes()
-            sha256_hash = hashlib.sha256(file_bytes).hexdigest()
+            sha256 = hashlib.sha256()
+            size_bytes = 0
+            with open(local_file, "rb") as f:
+                while chunk := f.read(65536):
+                    sha256.update(chunk)
+                    size_bytes += len(chunk)
+            sha256_hash = sha256.hexdigest()
             manifest_record["files"][fname] = {
-                "size_bytes": len(file_bytes),
+                "size_bytes": size_bytes,
                 "sha256": sha256_hash,
             }
-            print(f" DONE ({len(file_bytes)} bytes | SHA: {sha256_hash[:12]}...)")
+            print(f" DONE ({size_bytes} bytes | SHA: {sha256_hash[:12]}...)")
         except Exception as exc:
             print(f" FAILED: {exc}", file=sys.stderr)
             return 1
 
-    # Write local manifest
+    # Write local manifest atomically
     manifest_file = target_dir / "gameforge_checkpoint_manifest.json"
-    manifest_file.write_text(json.dumps(manifest_record, indent=2), encoding="utf-8")
+    temp_manifest = manifest_file.with_suffix(".tmp")
+    try:
+        temp_manifest.write_text(json.dumps(manifest_record, indent=2), encoding="utf-8")
+        temp_manifest.replace(manifest_file)
+    except Exception:
+        if temp_manifest.exists():
+            temp_manifest.unlink()
+        raise
+
     print("=" * 80)
     print(f"Checkpoint verification manifest written to: {manifest_file}")
     print("=" * 80)

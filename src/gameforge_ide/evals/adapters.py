@@ -101,6 +101,19 @@ class OllamaAdapter(ModelAdapter):
                     "cost_usd": 0.0,
                     "error": None,
                 }
+        except urllib.error.HTTPError as e:
+            duration_s = time.time() - t0
+            body_err = e.read().decode("utf-8", errors="ignore") if hasattr(e, "read") else ""
+            err_msg = f"HTTP {e.code}: {body_err.strip() or e.reason}"
+            return {
+                "text": "",
+                "duration_s": duration_s,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "tok_per_sec": 0.0,
+                "cost_usd": 0.0,
+                "error": err_msg,
+            }
         except Exception as e:
             duration_s = time.time() - t0
             return {
@@ -228,7 +241,18 @@ class DeterministicMockAdapter(ModelAdapter):
                 "value": {"entity_id": "locked_door", "display_name": "Locked Door", "kind": "door", "count": 1, "props": {}},
             })
         elif "lighting" in plower:
-            val = "night" if "night" in plower else ("dusk" if "dusk" in plower else "day")
+            if "night" in plower:
+                val = "night"
+            elif "dusk" in plower:
+                val = "dusk"
+            elif "dawn" in plower:
+                val = "dawn"
+            elif "sunset" in plower:
+                val = "sunset"
+            elif "overcast" in plower:
+                val = "overcast"
+            else:
+                val = "day"
             ops.append({"op": "replace", "path": "/scene/levels/0/lighting", "value": val})
             ops.append({"op": "add", "path": "/scene/lighting", "value": val})
         elif "escape gate" in plower or "also require" in plower:
@@ -354,3 +378,11 @@ class DeterministicMockAdapter(ModelAdapter):
             "cost_usd": 0.0,
             "error": None,
         }
+
+
+__all__ = [
+    "ModelAdapter",
+    "OllamaAdapter",
+    "HostedAdapter",
+    "DeterministicMockAdapter",
+]

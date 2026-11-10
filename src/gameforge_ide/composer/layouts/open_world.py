@@ -76,14 +76,23 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     # Goal near opposite edge
     goal_loc = (half_x_cm * 0.75, 0.0, 100.0)
+    goal_ent = next((e for e in getattr(gds, "entities", []) if str(getattr(e, "kind", "")) in ("goal", "exit", "flag") or getattr(e, "module", "") == "kit.goal"), None)
+    goal_id = goal_ent.entity_id if goal_ent is not None else "goal"
+    goal_props: Dict[str, Any] = {}
+    if goal_ent is not None and getattr(goal_ent, "props", None):
+        gp = goal_ent.props if isinstance(goal_ent.props, dict) else goal_ent.props.model_dump()
+        if "required_stat" in gp:
+            goal_props["RequiredStat"] = gp["required_stat"]
+            goal_props["RequiredValue"] = gp.get("required_value", 0.0)
+
     goal_actor = PlacedActor(
-        actor_id="goal_0",
-        entity_id="goal",
+        actor_id=f"{goal_id}_0",
+        entity_id=goal_id,
         runtime_class="/Script/GameForgeRuntime.GameForgeGoal",
         location=goal_loc,
         yaw=0.0,
         tags=[
-            "GF_E_goal",
+            f"GF_E_{goal_id}",
             "GF_Owned",
             "GF_Goal",
             "goal",
@@ -92,23 +101,25 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             "goal_1",
             "GF_Goal_1",
             "GF_goal_1",
-            "goal_0",
+            f"{goal_id}_0",
         ],
-        properties={},
+        properties=goal_props,
         snap_to_ground=True,
         ground_offset=60.0,
     )
 
     # Landmark mid-way
     landmark_loc = (0.0, half_y_cm * 0.3, 100.0)
+    landmark_ent = next((e for e in getattr(gds, "entities", []) if str(getattr(e, "kind", "")) in ("landmark", "monument", "tower") or getattr(e, "module", "") == "kit.landmark"), None)
+    landmark_id = landmark_ent.entity_id if landmark_ent is not None else "landmark"
     landmark_actor = PlacedActor(
-        actor_id="landmark_0",
-        entity_id="landmark",
+        actor_id=f"{landmark_id}_0",
+        entity_id=landmark_id,
         runtime_class="/Script/GameForgeRuntime.GameForgeLandmark",
         location=landmark_loc,
         yaw=0.0,
         tags=[
-            "GF_E_landmark",
+            f"GF_E_{landmark_id}",
             "GF_Owned",
             "GF_Landmark",
             "landmark",
@@ -116,7 +127,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             "Landmark_1",
             "landmark_1",
             "GF_Landmark_1",
-            "landmark_0",
+            f"{landmark_id}_0",
         ],
         properties={},
         snap_to_ground=True,
@@ -128,6 +139,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     center = (0.0, 0.0, 100.0)
     extent = (half_x_cm + 500.0, half_y_cm + 500.0, 1000.0)
 
+    lighting_str = getattr(lighting_preset, "value", str(lighting_preset))
     return LevelPlan(
         level_id=level_id,
         map_path=map_path,
@@ -136,6 +148,6 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         nav_bounds=(center, extent),
         geometry_ops=geometry_ops,
         actors=actors,
-        lighting=lighting_preset,
-        nav_checks=[("player_start", "landmark_0"), ("landmark_0", "goal_0")],
+        lighting=lighting_str,
+        nav_checks=[("player_start", f"{landmark_id}_0"), (f"{landmark_id}_0", f"{goal_id}_0")],
     )

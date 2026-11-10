@@ -17,17 +17,32 @@ from __future__ import annotations
 # They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
 DEMO_ONLY = True
 
+import argparse
 import json
 import math
 import os
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import torch
-import torch.nn as nn
-from safetensors.torch import save_file
-from transformers import AutoTokenizer
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import torch
+    import torch.nn as nn
+    from safetensors.torch import save_file
+    from transformers import AutoTokenizer
+    has_deps = True
+except ImportError:
+    has_deps = False
+    torch = None
+    nn = type("nn", (), {"Module": object})
+    save_file = None
+    AutoTokenizer = None
 
 try:
     import torch_directml
@@ -396,10 +411,37 @@ def main():
 """
 
     report_path = REPORTS_DIR / "training_report.md"
-    report_path.write_text(training_report, encoding="utf-8")
-    (MIRROR_REPORTS_DIR / "training_report.md").write_text(training_report, encoding="utf-8")
+    temp_report = report_path.with_suffix(".tmp")
+    try:
+        temp_report.write_text(training_report, encoding="utf-8")
+        temp_report.replace(report_path)
+    except Exception:
+        if temp_report.exists():
+            temp_report.unlink()
+        raise
+
+    try:
+        temp_mirror = (MIRROR_REPORTS_DIR / "training_report.md").with_suffix(".tmp")
+        temp_mirror.write_text(training_report, encoding="utf-8")
+        temp_mirror.replace(MIRROR_REPORTS_DIR / "training_report.md")
+    except Exception:
+        pass
 
     print(f"Training report generated at: {report_path}")
+    return 0
+
+
+def main_cli() -> int:
+    parser = argparse.ArgumentParser(description="GameForge 27B SFT Training Engine with DirectML GPU Acceleration")
+    parser.add_argument("--dry-run", action="store_true", help="Validate setup and refusal guard without mutating weights")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Refusal guard active (DEMO_ONLY={DEMO_ONLY}). DirectML available: {dml_available}.")
+        return 0
+
+    return main()
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main_cli())

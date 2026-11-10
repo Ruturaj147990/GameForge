@@ -16,6 +16,7 @@ import logging
 import os
 import random
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -58,11 +59,18 @@ def assign_pid_to_job_object(job_handle: Any, pid: int) -> bool:
     """Assign a process by PID to a Windows Job Object, guaranteeing CloseHandle runs in finally."""
     if sys.platform != "win32" or not job_handle or not pid:
         return False
-    proc_handle = _k32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, int(pid))
+    try:
+        pid_int = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid_int <= 0:
+        return False
+    proc_handle = _k32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid_int)
     if not proc_handle:
         return False
     try:
-        return bool(_k32.AssignProcessToJobObject(wintypes.HANDLE(int(job_handle)), proc_handle))
+        job_h = job_handle if isinstance(job_handle, wintypes.HANDLE) else wintypes.HANDLE(int(job_handle))
+        return bool(_k32.AssignProcessToJobObject(job_h, proc_handle))
     finally:
         _k32.CloseHandle(proc_handle)
 
@@ -87,22 +95,32 @@ def sanitize_environment(
     Removes administrative API tokens, secrets, and sensitive GAMEFORGE_* variables.
     """
     raw = dict(base_env if base_env is not None else os.environ)
+    allow_upper = {ak.upper() for ak in allowlist_keys} if allowlist_keys else set()
     clean: Dict[str, str] = {}
     for k, v in raw.items():
-        k_upper = k.upper()
-        if allowlist_keys and k in allowlist_keys:
-            clean[k] = v
+        if v is None:
+            continue
+        k_str = str(k)
+        k_upper = k_str.upper()
+        is_allowed = bool(allowlist_keys and (k_str in allowlist_keys or (sys.platform == "win32" and k_upper in allow_upper)))
+        if is_allowed:
+            clean[k_str] = str(v)
             continue
         if k_upper in SENSITIVE_ENV_KEYS or any(k_upper.startswith(prefix) for prefix in SENSITIVE_ENV_PREFIXES):
             continue
-        clean[k] = v
+        clean[k_str] = str(v)
     if extra_env:
         for k, v in extra_env.items():
-            k_upper = k.upper()
-            if not allowlist_keys or k not in allowlist_keys:
+            k_str = str(k)
+            k_upper = k_str.upper()
+            is_allowed = bool(allowlist_keys and (k_str in allowlist_keys or (sys.platform == "win32" and k_upper in allow_upper)))
+            if not is_allowed:
                 if k_upper in SENSITIVE_ENV_KEYS or any(k_upper.startswith(prefix) for prefix in SENSITIVE_ENV_PREFIXES):
                     continue
-            clean[k] = v
+            if v is None:
+                clean.pop(k_str, None)
+                continue
+            clean[k_str] = str(v)
     return clean
 
 
@@ -389,7 +407,14 @@ def safe_remove_file(
             return False
 
     def _unlink() -> None:
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except PermissionError:
+            try:
+                os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+                path.unlink(missing_ok=True)
+            except Exception:
+                raise
 
     try:
         retry_on_sharing_violation(
@@ -408,6 +433,10 @@ def safe_remove_file(
             exc,
         )
         try:
+            try:
+                os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+            except Exception:
+                pass
             quarantine_name = path.with_name(f".quarantine_{uuid.uuid4().hex[:6]}_{path.name}")
             path.rename(quarantine_name)
             try:
@@ -443,8 +472,21 @@ def safe_remove_directory(
             logger.warning("Could not unlink directory symlink %s: %s", path, exc)
             return False
 
+    def _on_rm_exc(exc_func: Any, target_path: Any, exc_info: Any) -> None:
+        try:
+            os.chmod(target_path, stat.S_IWRITE | stat.S_IREAD)
+            if os.path.isdir(target_path):
+                os.rmdir(target_path)
+            else:
+                os.unlink(target_path)
+        except Exception:
+            pass
+
     def _rmtree() -> None:
-        shutil.rmtree(path, ignore_errors=False)
+        try:
+            shutil.rmtree(path, onexc=_on_rm_exc)
+        except TypeError:
+            shutil.rmtree(path, onerror=lambda f, p, e: _on_rm_exc(f, p, e))
 
     try:
         retry_on_sharing_violation(

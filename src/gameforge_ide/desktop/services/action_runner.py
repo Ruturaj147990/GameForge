@@ -53,19 +53,31 @@ class ActionRunner(QObject):
         cancel_ev = threading.Event()
         self._cancel_events[approval_id] = cancel_ev
 
+        def _safe_emit_finished(aid: str, res: dict) -> None:
+            try:
+                self.finished.emit(aid, res)
+            except RuntimeError:
+                pass
+
+        def _safe_emit_progress(aid: str, kind: str, data: dict) -> None:
+            try:
+                self.progress.emit(aid, kind, data)
+            except RuntimeError:
+                pass
+
         def _worker_fn() -> None:
             gateway = ToolGateway(self._workspace_root)
             store = gateway.game_tools.approvals
             rec = store.transition(approval_id, "APPROVED")
             if rec is None:
-                self.finished.emit(
+                _safe_emit_finished(
                     approval_id,
                     {"status": "BLOCKED", "error": "approval is no longer pending (already used or rejected)"},
                 )
                 return
 
             if rec.get("plan_id"):
-                self.finished.emit(
+                _safe_emit_finished(
                     approval_id,
                     {
                         "status": "SUCCESS",
@@ -95,7 +107,7 @@ class ActionRunner(QObject):
                         bus = default_bus()
 
                         def _on_forge(topic: str, ev: Dict[str, Any]) -> None:
-                            self.progress.emit(approval_id, ev.get("kind", "forge"), ev)
+                            _safe_emit_progress(approval_id, ev.get("kind", "forge"), ev)
 
                         unsub = bus.subscribe("forge", _on_forge)
                         try:
@@ -112,7 +124,7 @@ class ActionRunner(QObject):
                         gds_or_params,
                         package=args.get("package", True),
                         project_dir=args.get("project_dir"),
-                        on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
+                        on_event=lambda kind, data: _safe_emit_progress(approval_id, kind, data),
                         cancel_event=cancel_ev,
                     )
                 elif tool == "create_game_freeform":
@@ -120,7 +132,7 @@ class ActionRunner(QObject):
                         args["prompt"],
                         args.get("title"),
                         project_dir=args.get("project_dir"),
-                        on_event=lambda kind, data: self.progress.emit(approval_id, kind, data),
+                        on_event=lambda kind, data: _safe_emit_progress(approval_id, kind, data),
                         cancel_event=cancel_ev,
                     )
                 else:
@@ -135,7 +147,8 @@ class ActionRunner(QObject):
                 {k: result.get(k) for k in ("status", "report_path", "failed_stage", "exe", "error")},
             )
             result["approval_id"] = approval_id
-            self.finished.emit(approval_id, result)
+            _safe_emit_finished(approval_id, result)
+
 
         handle = self.job_manager.submit(
             _worker_fn,

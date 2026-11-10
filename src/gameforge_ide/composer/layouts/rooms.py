@@ -83,14 +83,23 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     # Goal in last room center
     goal_x = (last_room.x + last_room.w / 2.0) * grid_cm
     goal_y = (last_room.y + last_room.h / 2.0) * grid_cm
+    goal_ent = next((e for e in getattr(gds, "entities", []) if str(getattr(e, "kind", "")) in ("goal", "exit") or getattr(e, "module", "") == "kit.goal"), None)
+    goal_id = goal_ent.entity_id if goal_ent is not None else "goal"
+    goal_props: Dict[str, Any] = {}
+    if goal_ent is not None and getattr(goal_ent, "props", None):
+        gp = goal_ent.props if isinstance(goal_ent.props, dict) else goal_ent.props.model_dump()
+        if "required_stat" in gp:
+            goal_props["RequiredStat"] = gp["required_stat"]
+            goal_props["RequiredValue"] = float(gp.get("required_value", 0.0) or 0.0)
+
     goal_actor = PlacedActor(
-        actor_id="goal_0",
-        entity_id="goal",
+        actor_id=f"{goal_id}_0",
+        entity_id=goal_id,
         runtime_class="/Script/GameForgeRuntime.GameForgeGoal",
         location=(goal_x, goal_y, 100.0),
         yaw=0.0,
         tags=[
-            "GF_E_goal",
+            f"GF_E_{goal_id}",
             "GF_Owned",
             "GF_Goal",
             "goal",
@@ -99,12 +108,79 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             "goal_1",
             "GF_Goal_1",
             "GF_goal_1",
-            "goal_0",
+            f"{goal_id}_0",
         ],
-        properties={},
+        properties=goal_props,
     )
 
     actors: List[PlacedActor] = [goal_actor]
+
+    # Boss enemy placed in final room guarding the goal
+    boss_ent = next(
+        (
+            e for e in getattr(gds, "entities", [])
+            if str(getattr(e.kind, "value", e.kind)) == "enemy"
+            and (
+                getattr(e, "properties", {}).get("bIsBoss")
+                or getattr(e, "props", {}).get("bIsBoss")
+                or "boss" in (getattr(e, "tags", []) or [])
+                or "boss" in getattr(e, "entity_id", "").lower()
+            )
+        ),
+        None,
+    )
+    if boss_ent is not None:
+        boss_props = dict(getattr(boss_ent, "properties", {}) or getattr(boss_ent, "props", {}) or {})
+        boss_props.setdefault("bIsBoss", True)
+        boss_props.setdefault("BossName", getattr(boss_ent, "entity_id", "BossEnemy").replace("_", " ").title())
+        boss_props.setdefault("BossPhase", 1)
+        bx = (last_room.x + last_room.w / 2.0) * grid_cm
+        by = (last_room.y + last_room.h / 2.0) * grid_cm
+        actors.append(
+            PlacedActor(
+                actor_id=f"{boss_ent.entity_id}_0",
+                entity_id=boss_ent.entity_id,
+                runtime_class="/Script/GameForgeRuntime.GameForgeEnemy",
+                location=(round(bx, 1), round(by, 1), 100.0),
+                yaw=180.0,
+                tags=[f"GF_E_{boss_ent.entity_id}", "GF_Owned", "enemy", "boss", "Boss", f"{boss_ent.entity_id}_0"],
+                properties=boss_props,
+            )
+        )
+        # When boss guards the room, place the goal slightly behind the boss near the far wall
+        goal_actor.location = (round(bx, 1), round(by + 250.0, 1), 100.0)
+
+    # Key pickups distributed across intermediate rooms (between room 1 and last_room)
+    key_ent = next(
+        (
+            e for e in getattr(gds, "entities", [])
+            if str(getattr(e.kind, "value", e.kind)) == "pickup"
+            and (
+                "key" in getattr(e, "entity_id", "").lower()
+                or "key" in (getattr(e, "tags", []) or [])
+            )
+        ),
+        None,
+    )
+    if key_ent is not None and len(rooms) >= 3:
+        key_count = int(getattr(key_ent, "count", 1) or getattr(key_ent, "props", {}).get("count", 1) or 1)
+        intermediate_rooms = rooms[1:-1]
+        for k_idx in range(key_count):
+            target_rm = intermediate_rooms[k_idx % len(intermediate_rooms)]
+            kx = (target_rm.x + target_rm.w / 2.0) * grid_cm + ((k_idx // len(intermediate_rooms)) * 120.0)
+            ky = (target_rm.y + target_rm.h / 2.0) * grid_cm + ((k_idx // len(intermediate_rooms)) * 120.0)
+            k_props = dict(getattr(key_ent, "properties", {}) or getattr(key_ent, "props", {}) or {})
+            actors.append(
+                PlacedActor(
+                    actor_id=f"{key_ent.entity_id}_{k_idx}",
+                    entity_id=key_ent.entity_id,
+                    runtime_class="/Script/GameForgeRuntime.GameForgePickup",
+                    location=(round(kx, 1), round(ky, 1), 75.0),
+                    yaw=0.0,
+                    tags=[f"GF_E_{key_ent.entity_id}", "GF_Owned", "pickup", "key", f"{key_ent.entity_id}_{k_idx}"],
+                    properties=k_props,
+                )
+            )
 
     # Place doors and switches in intermediate rooms when requested in GDS
     if hasattr(gds, "entities") and len(rooms) >= 3:
@@ -113,20 +189,27 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         my = (mid_room.y + mid_room.h / 2.0) * grid_cm
         door_ent = next((e for e in gds.entities if str(getattr(e.kind, "value", e.kind)) == "door"), None)
         if door_ent is not None:
+            door_props = dict(getattr(door_ent, "properties", {}) or getattr(door_ent, "props", {}) or {})
+            if key_ent is not None:
+                door_props.setdefault("RequiredStat", "game.counter.keys_collected")
+                door_props.setdefault("RequiredValue", float(key_count))
+            door_x = (last_room.x) * grid_cm if boss_ent is not None else mx
+            door_y = (last_room.y + last_room.h / 2.0) * grid_cm if boss_ent is not None else my
             actors.append(PlacedActor(
                 actor_id=f"{door_ent.entity_id}_0",
                 entity_id=door_ent.entity_id,
                 runtime_class="/Script/GameForgeRuntime.GameForgeDoor",
-                location=(round(mx, 1), round(my, 1), 100.0),
+                location=(round(door_x, 1), round(door_y, 1), 100.0),
                 yaw=0.0,
                 tags=[f"GF_E_{door_ent.entity_id}", "GF_Owned", "door", "Door", f"{door_ent.entity_id}_0"],
-                properties={},
+                properties=door_props,
             ))
         sw_ent = next((e for e in gds.entities if str(getattr(e.kind, "value", e.kind)) == "switch"), None)
         if sw_ent is not None and int(getattr(sw_ent, "count", 1) or 1) == 1:
             r1 = rooms[1]
             sx = (r1.x + r1.w / 2.0) * grid_cm
             sy = (r1.y + r1.h / 2.0) * grid_cm
+            sw_props = dict(getattr(sw_ent, "properties", {}) or getattr(sw_ent, "props", {}) or {})
             actors.append(PlacedActor(
                 actor_id=f"{sw_ent.entity_id}_0",
                 entity_id=sw_ent.entity_id,
@@ -134,7 +217,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 location=(round(sx, 1), round(sy, 1), 100.0),
                 yaw=0.0,
                 tags=[f"GF_E_{sw_ent.entity_id}", "GF_Owned", "switch", "Switch", f"{sw_ent.entity_id}_0"],
-                properties={},
+                properties=sw_props,
             ))
 
     # Spawn PointLights in room centres (WI-6.4: indoor preset: intensity 5000, attenuation 1500cm)
@@ -186,5 +269,5 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         geometry_ops=geometry_ops,
         actors=actors,
         lighting="indoor",
-        nav_checks=[("player_start", "goal_0")],
+        nav_checks=[("player_start", f"{goal_id}_0")],
     )

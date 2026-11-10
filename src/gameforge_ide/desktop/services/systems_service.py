@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from ...core.jobs import JobHandle, JobManager, default_job_manager
 from ...core.systems import SystemsSnapshot, probe_all
+
 
 
 class SystemsService(QObject):
@@ -53,6 +54,7 @@ class SystemsService(QObject):
             # 30s when active and visible
             self._timer.setInterval(30_000)
 
+    @Slot()
     def refresh_now(self) -> None:
         """Trigger an asynchronous systems probe via JobManager."""
         if self._is_probing:
@@ -83,7 +85,7 @@ class SystemsService(QObject):
             if snapshot is not None:
                 self._last_snapshot = snapshot
                 self.snapshotChanged.emit(snapshot)
-        except Exception:
+        except (RuntimeError, Exception):
             pass
 
     @property
@@ -92,4 +94,10 @@ class SystemsService(QObject):
 
     def stop(self) -> None:
         """Stop background polling timer."""
-        self._timer.stop()
+        if hasattr(self, "_timer") and self._timer.isActive():
+            self._timer.stop()
+
+    def deleteLater(self) -> None:
+        self.stop()
+        super().deleteLater()
+

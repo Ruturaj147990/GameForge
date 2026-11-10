@@ -202,7 +202,10 @@ def read_png(path: Path) -> np.ndarray:
 # ── generation + validation ────────────────────────────────────────────────
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return ""
 
 
 def generate_texture_set(spec: PBRTextureSpec, output_dir: str | Path, asset_registry=None) -> dict:
@@ -242,6 +245,8 @@ def validate_texture_set(manifest: dict, min_std: float = 2.0, tile_ratio: float
     Tiling: the step across the wrap seam (last column → first column, last row → first row) must be no
     larger than ``tile_ratio`` times the mean interior step; a non-tiling map has a visible seam.
     """
+    if not isinstance(manifest, dict) or "files" not in manifest or "size" not in manifest:
+        return {"valid": False, "errors": ["manifest missing 'files' or 'size'"], "metrics": {}}
     errors, metrics = [], {}
     size = manifest["size"]
     for role, info in manifest["files"].items():

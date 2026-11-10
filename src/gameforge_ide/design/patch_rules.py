@@ -155,6 +155,11 @@ def match_deterministic_rule(gds: GameDesignSpec, request: str) -> Optional[Prop
     if patch:
         return patch
 
+    # Rule 24: Audio music mood and ambience
+    patch = _match_audio(gds, req)
+    if patch:
+        return patch
+
     return None
 
 
@@ -394,6 +399,8 @@ def _match_add_n(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
         "door": (EntityKind.DOOR, "kit.door", {"open_seconds": 1.0, "required_value": 1.0}),
         "platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {"end_offset_z": 300.0, "seconds": 3.0, "pause_seconds": 1.0}),
         "moving_platform": (EntityKind.MOVING_PLATFORM, "kit.moving_platform", {"end_offset_z": 300.0, "seconds": 3.0, "pause_seconds": 1.0}),
+        "bomb_site": (EntityKind.BOMB_SITE, "kit.bomb_site", {"plant_seconds": 3.0, "defuse_seconds": 5.0, "fuse_seconds": 35.0}),
+        "bombsite": (EntityKind.BOMB_SITE, "kit.bomb_site", {"plant_seconds": 3.0, "defuse_seconds": 5.0, "fuse_seconds": 35.0}),
     }
 
     if target_clean in kind_map:
@@ -443,23 +450,25 @@ def _match_add_pickup(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
 
 def _match_lighting(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
-    # Match patterns like: "make it night", "night lighting", "change lighting to dusk", "daytime lighting"
-    m = re.search(r"(?i)\b(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn)\s*(?:lighting|light)?\b", req)
+    # Match patterns like: "make it night", "night lighting", "change lighting to dusk", "daytime lighting", "sunset lighting", "overcast lighting"
+    m = re.search(r"(?i)\b(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn|overcast|cloudy)\s*(?:lighting|light)?\b", req)
     if not m:
-        m = re.search(r"(?i)\bmake\s+it\s+(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn)\b", req)
+        m = re.search(r"(?i)\bmake\s+it\s+(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn|overcast|cloudy)\b", req)
         if not m:
-            m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?lighting\s+(?:to\s+)?(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn)\b", req)
+            m = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?lighting\s+(?:to\s+)?(night(?:time)?|dusk|day(?:time)?|indoor|sunset|dark|morning|dawn|overcast|cloudy)\b", req)
             if not m:
                 return None
 
     raw_val = m.group(1).lower()
     val_map = {
-        "sunset": "dusk",
+        "sunset": "sunset",
         "dark": "night",
         "nighttime": "night",
         "daytime": "day",
-        "morning": "day",
-        "dawn": "dusk",
+        "morning": "dawn",
+        "dawn": "dawn",
+        "overcast": "overcast",
+        "cloudy": "overcast",
     }
     val = val_map.get(raw_val, raw_val)
     ops = [{"op": "replace", "path": "/scene/levels/0/lighting", "value": val}]
@@ -1263,3 +1272,26 @@ def _match_lives(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
 
     ops = [{"op": "add", "path": f"/entities/{player_idx}/props/lives", "value": lives_val}]
     return ProposedPatch(ops=ops, summary=f"Player lives set to {lives_val}", status="OK")
+
+
+def _match_audio(gds: GameDesignSpec, req: str) -> Optional[ProposedPatch]:
+    """Matches requests to set background music mood or ambience bed."""
+    m_music = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?music(?:\s+mood)?\s+(?:to\s+)?(none|calm|tense|heroic|playful|boss|action|mysterious)\b", req)
+    if not m_music:
+        m_music = re.search(r"(?i)\b(boss|action|calm|tense|heroic|playful|mysterious)\s+music\b", req)
+
+    if m_music:
+        mood = m_music.group(1).lower()
+        ops = [{"op": "replace", "path": "/audio/music_mood", "value": mood}]
+        return ProposedPatch(ops=ops, summary=f"Audio music mood set to '{mood}'", status="OK")
+
+    m_amb = re.search(r"(?i)\b(?:set|change|switch)\s+(?:the\s+)?ambience\s+(?:to\s+)?(none|wind|forest|dungeon|city|ocean|space)\b", req)
+    if not m_amb:
+        m_amb = re.search(r"(?i)\b(ocean|space|forest|dungeon|city|wind)\s+ambience\b", req)
+
+    if m_amb:
+        amb = m_amb.group(1).lower()
+        ops = [{"op": "replace", "path": "/audio/ambience", "value": amb}]
+        return ProposedPatch(ops=ops, summary=f"Audio ambience set to '{amb}'", status="OK")
+
+    return None

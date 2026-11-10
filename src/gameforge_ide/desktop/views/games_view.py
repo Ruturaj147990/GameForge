@@ -41,6 +41,7 @@ from PySide6.QtGui import (
     QPainterPath,
     QPen,
     QPixmap,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QComboBox,
@@ -640,9 +641,79 @@ class GamesView(QWidget):
         else:
             self.refresh_games()
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: Optional[QShowEvent] = None) -> None:
         super().showEvent(event)
         self.refresh_games()
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update view styles and clear delegate caches for active theme."""
+        if hasattr(self, "_delegate"):
+            self._delegate.clear_cache()
+        if hasattr(self, "_search_input"):
+            self._search_input.setStyleSheet(theme_stylesheet(
+                f"QLineEdit#{self._search_input.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px;"
+                f"  font-size: {tokens.FONT_BODY}px;"
+                f"}}"
+                f"QLineEdit#{self._search_input.objectName()}:focus {{"
+                f"  border-color: {tokens.BORDER_FOCUS};"
+                f"  outline: none;"
+                f"}}"
+            ))
+        if hasattr(self, "_filter_combo"):
+            self._filter_combo.setStyleSheet(theme_stylesheet(
+                f"QComboBox#{self._filter_combo.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_sort_combo"):
+            self._sort_combo.setStyleSheet(theme_stylesheet(
+                f"QComboBox#{self._sort_combo.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_list_view"):
+            self._list_view.viewport().update()
+
+    def deleteLater(self) -> None:
+        """Safely remove event filters and disconnect service on disposal."""
+        if hasattr(self, "_search_input"):
+            try:
+                self._search_input.removeEventFilter(self)
+            except (RuntimeError, TypeError):
+                pass
+        if hasattr(self, "_list_view"):
+            try:
+                self._list_view.removeEventFilter(self)
+            except (RuntimeError, TypeError):
+                pass
+        if self._projects_service is not None:
+            try:
+                self._projects_service.gamesLoaded.disconnect(self._on_service_games_loaded)
+            except Exception:
+                pass
+            try:
+                self._projects_service.gameDeleted.disconnect(self._on_service_game_deleted)
+            except Exception:
+                pass
+            try:
+                self._projects_service.operationFailed.disconnect(self._on_service_operation_failed)
+            except Exception:
+                pass
+        super().deleteLater()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._search_input and event.type() == QEvent.KeyPress:

@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,11 @@ def check_uasset_integrity(path: Path) -> Tuple[bool, Optional[str]]:
     if not path.is_file():
         return False, f"Asset file does not exist: {path}"
 
-    size = path.stat().st_size
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        return False, f"Failed to stat asset '{path.name}': {exc}"
+
     if size == 0:
         return False, f"Asset '{path.name}' is an empty file (0 bytes)"
 
@@ -67,7 +71,7 @@ def check_uasset_integrity(path: Path) -> Tuple[bool, Optional[str]]:
                     pass
                 # Some procedural or imported assets may have valid binary structure without standard package tag,
                 # but any plaintext or corrupted asset is rejected
-                if all(b < 128 for b in sample[:16]):
+                if sample and all(b < 128 for b in sample[:16]):
                     return False, f"Asset '{path.name}' contains ASCII/text data instead of Unreal binary package header"
     except OSError as exc:
         return False, f"Failed to read asset '{path.name}': {exc}"
@@ -108,34 +112,37 @@ def validate_content_directory(
             rel_path = fpath.relative_to(content_path).as_posix()
             suffix = fpath.suffix.lower()
 
-            # 1. Check for mock naming contamination
+            # 1. Classify extension cleanly
+            if suffix == ".uasset":
+                stats["uasset_count"] += 1
+            elif suffix == ".umap":
+                stats["umap_count"] += 1
+            else:
+                stats["other_count"] += 1
+
+            # 2. Check for mock naming contamination
             if not allow_mock_assets and is_mock_or_test_asset_name(fname):
                 issues.append(f"Mock asset contamination detected in production content: '{rel_path}'")
                 stats["mock_count"] += 1
 
-            # 2. Check for empty files
+            # 3. Check for empty or unreadable files
             try:
                 fsize = fpath.stat().st_size
                 if fsize == 0:
                     issues.append(f"Corrupt 0-byte asset in content: '{rel_path}'")
                     stats["corrupt_count"] += 1
                     continue
-            except OSError:
+            except OSError as exc:
+                issues.append(f"Unreadable file in content '{rel_path}': {exc}")
+                stats["corrupt_count"] += 1
                 continue
 
-            # 3. Check binary integrity for Unreal asset extensions
+            # 4. Check binary integrity for Unreal asset extensions
             if suffix in (".uasset", ".umap"):
-                if suffix == ".uasset":
-                    stats["uasset_count"] += 1
-                else:
-                    stats["umap_count"] += 1
-
                 valid, err = check_uasset_integrity(fpath)
                 if not valid:
                     issues.append(f"Asset integrity violation in '{rel_path}': {err}")
                     stats["corrupt_count"] += 1
-            else:
-                stats["other_count"] += 1
 
     is_valid = (len(issues) == 0)
     return is_valid, issues, stats

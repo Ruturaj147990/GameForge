@@ -115,9 +115,25 @@ THEMES: Dict[str, Dict[str, SurfaceRoleConfig]] = {
 }
 
 
+_THEME_LOOKUP_ALIASES: Dict[str, str] = {
+    "scifi": "scifi_metal",
+    "sci_fi": "scifi_metal",
+    "snow": "snow_ice",
+    "cyberpunk": "cyber",
+    "volcanic": "volcano",
+    "haunted_house": "haunted",
+    "spooky": "haunted",
+    "tropical": "island",
+    "pirate": "island",
+    "retro": "toon_flat",
+}
+
+
 def get_theme(theme_name: str = "default") -> Dict[str, SurfaceRoleConfig]:
-    """Return surface role configuration dict for the requested theme."""
-    return THEMES.get(theme_name, THEMES["default"])
+    """Return surface role configuration dict for the requested theme with robust alias support."""
+    clean = str(theme_name or "default").strip().lower().replace("-", "_").replace(" ", "_")
+    target = _THEME_LOOKUP_ALIASES.get(clean, clean)
+    return THEMES.get(target, THEMES["default"])
 
 
 def relative_luminance(rgb: Tuple[float, float, float] | List[float]) -> float:

@@ -14,7 +14,8 @@ from pathlib import Path
 import time
 from typing import Dict, Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
+
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ...pipeline.game_pipeline import STAGES
@@ -432,6 +433,7 @@ class ApprovalCard(QFrame):
             lbl.setText(f"{mark}  {text} ({dur}s){extra}")
             lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
 
+    @Slot()
     def _update_elapsed(self, final: bool = False) -> None:
         secs = int(time.monotonic() - self._started) if self._started else 0
         label = "Finished in" if final else "Running for"
@@ -447,17 +449,19 @@ class ApprovalCard(QFrame):
         if result.get("status") == "SUCCESS":
             self._exe = result.get("exe")
             report = result.get("report_path", "")
-            html = f"<b style='color: {tokens.ACCENT_SUCCESS};'>✔ Done — all acceptance checks passed.</b>"
+            res_html = f"<b style='color: {tokens.ACCENT_SUCCESS};'>✔ Done — all acceptance checks passed.</b>"
             if self._exe:
-                html += f"<br>Game: <code>{self._exe}</code>"
+                res_html += f"<br>Game: <code>{html.escape(str(self._exe))}</code>"
             if report:
-                html += f"<br>Evidence: <a href='file:///{report.replace(os.sep, '/')}' style='color: {tokens.ACCENT_HOVER};'>pipeline report</a>"
-            self._show_result(html)
+                clean_report = report.replace(os.sep, "/")
+                res_html += f"<br>Evidence: <a href='file:///{clean_report}' style='color: {tokens.ACCENT_HOVER};'>pipeline report</a>"
+            self._show_result(res_html)
             self._btn_play.setVisible(bool(self._exe))
         else:
             err = result.get("error") or f"failed at stage {result.get('failed_stage')}"
-            self._show_result(f"<b style='color: {tokens.ACCENT_ERROR};'>✖ Not complete:</b> {err}")
+            self._show_result(f"<b style='color: {tokens.ACCENT_ERROR};'>✖ Not complete:</b> {html.escape(str(err))}")
         self._btn_folder.setVisible(bool(self._project_dir))
+
 
     def show_already_handled(self, status: str) -> None:
         self._btn_approve.setVisible(False)

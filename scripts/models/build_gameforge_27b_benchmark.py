@@ -2,13 +2,24 @@
 
 Generates:
   E:\\GameForge\\reports\\gameforge-27b\\baseline_benchmark.json
-  E:\\gameforge_step1\\reports\\gameforge-27b\\baseline_benchmark.json
+  <REPO_ROOT>\\reports\\gameforge-27b\\baseline_benchmark.json
 """
 
-import json
-from pathlib import Path
+from __future__ import annotations
 
-BENCHMARK_TASKS = [
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+from typing import Any, Dict, List, Optional
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+BENCHMARK_TASKS: List[Dict[str, Any]] = [
     # --- UNREAL ENGINE 5.7 (30 Tasks) ---
     {
         "id": "GF-BENCH-01",
@@ -251,41 +262,39 @@ BENCHMARK_TASKS = [
         "max_points": 10
     },
 
-    # --- UNITY C# (4 Tasks) ---
+    # --- CROSS-ENGINE / GODOT / ROBLOX / UEFN / BEVY / MATH (20 Tasks) ---
     {
         "id": "GF-BENCH-31",
-        "engine": "Unity",
-        "category": "Job System & Burst",
-        "prompt": "Write an IJobParallelFor struct in Unity C# using Unity.Mathematics to calculate distance between an array of positions and a target position with BurstCompile.",
-        "rubric": ["IJobParallelFor", "NativeArray", "Unity.Mathematics", "BurstCompile", "Execute(int index)"],
+        "engine": "Cross-Engine Architecture",
+        "category": "Data-Oriented Design",
+        "prompt": "Explain Data-Oriented Design (DOD) principles in modern game engine architectures compared to traditional object-oriented scene hierarchies.",
+        "rubric": ["Data-Oriented Design", "cache locality", "structure of arrays", "AOS vs SOA", "CPU cache lines"],
         "max_points": 10
     },
     {
         "id": "GF-BENCH-32",
-        "engine": "Unity",
-        "category": "ScriptableObjects",
-        "prompt": "Create an architectural ScriptableObject in Unity for GameEventListener pattern with RegisterListener and OnEventRaised.",
-        "rubric": ["ScriptableObject", "GameEvent", "RegisterListener", "UnregisterListener", "Action or UnityAction"],
+        "engine": "Cross-Engine Architecture",
+        "category": "State Synchronization",
+        "prompt": "Explain lockstep deterministic simulation vs client-side prediction with server reconciliation in multiplayer action games.",
+        "rubric": ["Lockstep", "deterministic simulation", "client-side prediction", "server reconciliation", "rollback"],
         "max_points": 10
     },
     {
         "id": "GF-BENCH-33",
-        "engine": "Unity",
-        "category": "Physics & FixedUpdate",
-        "prompt": "How do you implement client-authoritative character movement with Rigidbody.MovePosition in FixedUpdate without jitter in Update?",
-        "rubric": ["FixedUpdate", "Rigidbody.MovePosition", "Interpolate", "Time.fixedDeltaTime"],
+        "engine": "Cross-Engine Architecture",
+        "category": "Memory Management",
+        "prompt": "Describe frame-based linear arena allocators and pool allocators in real-time game engines and why they avoid fragmentation.",
+        "rubric": ["Arena allocator", "linear allocation", "pool allocator", "fragmentation", "O(1) reset"],
         "max_points": 10
     },
     {
         "id": "GF-BENCH-34",
-        "engine": "Unity",
-        "category": "Async & UniTask",
-        "prompt": "Write an async Unity method using UniTask or Task to load an Addressable asset with cancellation token support.",
-        "rubric": ["UniTask or Task", "Addressables.LoadAssetAsync", "CancellationToken", "GetAwaiter"],
+        "engine": "Cross-Engine Architecture",
+        "category": "Asset Pipelines",
+        "prompt": "How do virtualized geometry asset pipelines (e.g. Nanite) dynamically determine cluster LODs based on projected screen pixels?",
+        "rubric": ["Virtualized geometry", "cluster hierarchy", "screen-space error", "DAG traversal", "GPU culling"],
         "max_points": 10
     },
-
-    # --- GODOT 4 (4 Tasks) ---
     {
         "id": "GF-BENCH-35",
         "engine": "Godot 4",
@@ -318,8 +327,6 @@ BENCHMARK_TASKS = [
         "rubric": ["_init", "_enter_tree", "_ready", "_exit_tree", "parent-first vs child-first order"],
         "max_points": 10
     },
-
-    # --- ROBLOX LUAU (3 Tasks) ---
     {
         "id": "GF-BENCH-39",
         "engine": "Roblox",
@@ -344,8 +351,6 @@ BENCHMARK_TASKS = [
         "rubric": ["Session locking", "ProfileService or DataStore", "active session tag", "release on server exit", "BindToClose"],
         "max_points": 10
     },
-
-    # --- UEFN VERSE (3 Tasks) ---
     {
         "id": "GF-BENCH-42",
         "engine": "UEFN",
@@ -370,8 +375,6 @@ BENCHMARK_TASKS = [
         "rubric": ["creative_device", "@editable", "end_game_device", "team", "OnBegin"],
         "max_points": 10
     },
-
-    # --- BEVY RUST ECS (3 Tasks) ---
     {
         "id": "GF-BENCH-45",
         "engine": "Bevy",
@@ -396,8 +399,6 @@ BENCHMARK_TASKS = [
         "rubric": ["Res<T> immutable", "ResMut<T> mutable", "scheduler parallelization", "Rust borrow checker rules", "exclusive access"],
         "max_points": 10
     },
-
-    # --- GAME MATHEMATICS & ARCHITECTURE (3 Tasks) ---
     {
         "id": "GF-BENCH-48",
         "engine": "Game Mathematics",
@@ -425,17 +426,43 @@ BENCHMARK_TASKS = [
 ]
 
 
-def main():
-    target_dirs = [
-        Path("E:/GameForge/reports/gameforge-27b"),
-        (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b")
+def _write_atomic_json(target_path: Path, data: Any) -> None:
+    """Atomically write JSON data to file using a temporary file and replace."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target_path.parent, delete=False, suffix=".tmp") as tf:
+        json.dump(data, tf, indent=2)
+        tf_name = tf.name
+    os.replace(tf_name, target_path)
+
+
+def build_benchmark(output_dirs: Optional[List[Path]] = None) -> List[Path]:
+    written_files: List[Path] = []
+    default_dirs = [
+        REPO_ROOT / "reports" / "gameforge-27b",
     ]
+    e_dir = Path("E:/GameForge/reports/gameforge-27b")
+    if e_dir.parent.parent.exists():
+        default_dirs.append(e_dir)
+
+    target_dirs = output_dirs or default_dirs
     for d in target_dirs:
-        d.mkdir(parents=True, exist_ok=True)
         out_file = d / "baseline_benchmark.json"
-        out_file.write_text(json.dumps(BENCHMARK_TASKS, indent=2), encoding="utf-8")
+        _write_atomic_json(out_file, BENCHMARK_TASKS)
+        written_files.append(out_file)
         print(f"Wrote {len(BENCHMARK_TASKS)} benchmark tasks to {out_file}")
+
+    return written_files
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build authoritative 50-task GameForge Engineering Benchmark")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Custom output directory")
+    args = parser.parse_args()
+
+    targets = [args.output_dir] if args.output_dir else None
+    written = build_benchmark(targets)
+    return 0 if written else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -13,8 +13,9 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional, Union
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
+
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -506,6 +507,7 @@ class PlanCard(QFrame):
 
         self._update_progress()
 
+    @Slot()
     def _on_proceed_clicked(self) -> None:
         self.btn_proceed.setEnabled(False)
         self.btn_proceed.setText("Executing…")
@@ -513,9 +515,11 @@ class PlanCard(QFrame):
         self._lbl_status.setText("APPROVED")
         self.proceed_clicked.emit(self.plan_id)
 
+    @Slot()
     def _on_revise_clicked(self) -> None:
         text = self.txt_revision.text().strip()
         if not text:
             return
         self.txt_revision.clear()
         self.revision_requested.emit(self.plan_id, text)
+

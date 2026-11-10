@@ -19,14 +19,20 @@ Outputs evidence to reports/P8/change_requests.json.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
+from src.gameforge_ide.core.settings import get_settings
 from src.gameforge_ide.composer.compose import compose
 from src.gameforge_ide.composer.plan import composition_to_run_spec
 from src.gameforge_ide.design.patch import apply_patch, propose_patch
@@ -39,10 +45,20 @@ from src.gameforge_ide.forge.reconciliation import TAG_GF_OWNED, apply_resolutio
 from src.gameforge_ide.forge.store import RunStore
 
 
-def create_mock_handlers():
+def _get_work_dir() -> Path:
+    try:
+        val_root = getattr(get_settings(), "validation_root", None)
+        if val_root:
+            return Path(val_root) / "P8_change_requests"
+    except Exception:
+        pass
+    return REPO_ROOT / "scratch" / "validation" / "P8_change_requests"
+
+
+def create_mock_handlers() -> Dict[str, Callable[[Any], StepOutcome]]:
     """Execution handlers for pipeline stages that record outputs and simulate work."""
     def _generic_handler(ctx):
-        return StepOutcome(True, data={"step_id": ctx.step.step_id, "done_at": time.time()})
+        return StepOutcome(True, data={"step_id": ctx.step.step_id, "done_at": time.monotonic()})
 
     def _scenario_handler(ctx):
         # Scenario runner returns green pass
@@ -66,16 +82,15 @@ def create_mock_handlers():
     }
 
 
-def run_change_requests_suite() -> Dict[str, Any]:
+def run_change_requests_suite(report_path: Optional[Path] = None) -> Dict[str, Any]:
     print("=" * 70)
     print("Running Phase 8 Change Requests Suite (10 Scripted CRs + User Edit)")
     print("=" * 70)
 
-    from src.gameforge_ide.core.settings import get_settings
-    work_dir = get_settings().validation_root / "P8_change_requests"
+    work_dir = _get_work_dir()
     work_dir.mkdir(parents=True, exist_ok=True)
-    report_path = Path("reports/P8/change_requests.json")
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    target_report = report_path or (REPO_ROOT / "reports" / "P8" / "change_requests.json")
+    target_report.parent.mkdir(parents=True, exist_ok=True)
 
     handlers = create_mock_handlers()
     executor = ForgeExecutor(handlers)
@@ -105,12 +120,12 @@ def run_change_requests_suite() -> Dict[str, Any]:
         ("CR-10", "add a door with a key", "Door and bronze key entities added"),
     ]
 
-    cr_results = []
+    cr_results: List[Dict[str, Any]] = []
     current_gds = base_gds
 
     for cr_id, req_text, expected_desc in change_requests:
         print(f"\n[{cr_id}] Request: {req_text!r}")
-        t_start = time.time()
+        t_start = time.monotonic()
 
         # 1. Propose and validate patch
         prop = propose_patch(current_gds, req_text)
@@ -141,7 +156,7 @@ def run_change_requests_suite() -> Dict[str, Any]:
         scen_rec = result_state.records.get("scenarios") or result_state.records.get("scenario_gen")
         assert scen_rec is not None and scen_rec.status == StepStatus.DONE
 
-        duration = round(time.time() - t_start, 3)
+        duration = round(time.monotonic() - t_start, 3)
         cr_results.append({
             "id": cr_id,
             "request": req_text,
@@ -220,7 +235,7 @@ def run_change_requests_suite() -> Dict[str, Any]:
     assert resolved_plan.to_update == []  # Plan does not overwrite guard!
 
     node_after = graph.find_node("level_1/guard_1")
-    assert node_after.owner == "user", "Expected guard ownership to become 'user'"
+    assert node_after is not None and node_after.owner == "user", "Expected guard ownership to become 'user'"
     print("  [OK] 'keep_mine' resolution converted ownership to 'user' and preserved actor.")
 
     user_edit_evidence = {
@@ -230,7 +245,7 @@ def run_change_requests_suite() -> Dict[str, Any]:
         "modified_location": {"x": 777.0, "y": 888.0, "z": 0.0},
         "conflict_detected": True,
         "resolution_applied": "keep_mine",
-        "final_owner": node_after.owner,
+        "final_owner": node_after.owner if node_after else None,
         "preserved_in_plan": "guard_1" in resolved_plan.preserved_user_actors,
     }
 
@@ -242,10 +257,21 @@ def run_change_requests_suite() -> Dict[str, Any]:
         "user_edit_protection": user_edit_evidence,
     }
 
-    report_path.write_text(json.dumps(suite_evidence, indent=2), encoding="utf-8")
-    print(f"\nAll 10 change requests & user-edit protection PASSED! Report saved to {report_path}")
+    tmp_rep = target_report.with_suffix(".tmp")
+    tmp_rep.write_text(json.dumps(suite_evidence, indent=2), encoding="utf-8")
+    tmp_rep.replace(target_report)
+    print(f"\nAll 10 change requests & user-edit protection PASSED! Report saved to {target_report}")
     return suite_evidence
 
 
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run Phase 8 Change Requests Suite")
+    parser.add_argument("--out", type=Path, default=None, help="Output JSON report path")
+    args = parser.parse_args()
+
+    res = run_change_requests_suite(report_path=args.out)
+    return 0 if res.get("overall_status") == "PASS" else 1
+
+
 if __name__ == "__main__":
-    run_change_requests_suite()
+    sys.exit(main())

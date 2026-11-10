@@ -2,4 +2,4 @@
 
 | Model | Provider | Pass Rate (%) | Valid JSON (%) | First Try (%) | p90 Latency (s) | Speed (tok/s) |
 |---|---|---|---|---|---|---|
-| `gameforge-27b-sft:latest` | ollama | **25.0%** | 75.0% | 75.0% | 120.01s | 6.0 |
+| `mock-model:latest` | mock | **75.0%** | 100.0% | 100.0% | 0.01s | 75.0 |

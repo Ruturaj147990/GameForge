@@ -13,19 +13,23 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import random
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-DATASET_DIR = Path("E:/GameForge/datasets/gameforge-27b-sft")
-REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-DATASET_DIR.mkdir(parents=True, exist_ok=True)
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+DATASET_DIR = Path("E:/GameForge/datasets/gameforge-27b-sft")
+REPO_DATASET_DIR = REPO_ROOT / "datasets" / "gameforge-27b-sft"
+REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b-sft"
 
 SYSTEM_PROMPT = (
     "You are GameForge, an elite game systems architect and principal engine programmer. "
@@ -803,9 +807,23 @@ struct FQuat_{idx}
         samples.append(make_sample(f"gamemath-{idx:03d}", "Game Mathematics", "Quaternions & 3D Spatial Math", user_q, code))
     return samples
 
-def main():
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge 27B SFT Specialist Dataset Generator")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Target dataset directory")
+    parser.add_argument("--reports-dir", type=Path, default=None, help="Target reports directory")
+    args = parser.parse_args()
+
+    target_data_dir = args.output_dir or (DATASET_DIR if DATASET_DIR.parent.exists() else REPO_DATASET_DIR)
+    target_reports_dir = args.reports_dir or (REPORTS_DIR if REPORTS_DIR.parent.exists() else MIRROR_REPORTS_DIR)
+    
+    target_data_dir.mkdir(parents=True, exist_ok=True)
+    target_reports_dir.mkdir(parents=True, exist_ok=True)
+    MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
     print("=" * 80)
     print(" GAMEFORGE 27B SFT — 520-SAMPLE QUALITY-CONTROLLED DATASET GENERATOR")
+    print(f" Target dataset dir: {target_data_dir}")
+    print(f" Target reports dir: {target_reports_dir}")
     print("=" * 80)
 
     all_samples: List[Dict[str, Any]] = []
@@ -828,22 +846,28 @@ def main():
     train_samples = all_samples[:470]
     val_samples = all_samples[470:]
 
-    train_path = DATASET_DIR / "gameforge_27b_sft_train.jsonl"
-    val_path = DATASET_DIR / "gameforge_27b_sft_val.jsonl"
+    train_path = target_data_dir / "gameforge_27b_sft_train.jsonl"
+    val_path = target_data_dir / "gameforge_27b_sft_val.jsonl"
 
-    train_hashes = []
-    with open(train_path, "w", encoding="utf-8") as f:
-        for s in train_samples:
-            line = json.dumps(s, ensure_ascii=False)
-            f.write(line + "\n")
-            train_hashes.append(hashlib.sha256(line.encode("utf-8")).hexdigest())
+    temp_train = train_path.with_suffix(".tmp")
+    temp_val = val_path.with_suffix(".tmp")
 
-    val_hashes = []
-    with open(val_path, "w", encoding="utf-8") as f:
-        for s in val_samples:
-            line = json.dumps(s, ensure_ascii=False)
-            f.write(line + "\n")
-            val_hashes.append(hashlib.sha256(line.encode("utf-8")).hexdigest())
+    try:
+        with open(temp_train, "w", encoding="utf-8") as f:
+            for s in train_samples:
+                f.write(json.dumps(s, ensure_ascii=False) + "\n")
+        temp_train.replace(train_path)
+
+        with open(temp_val, "w", encoding="utf-8") as f:
+            for s in val_samples:
+                f.write(json.dumps(s, ensure_ascii=False) + "\n")
+        temp_val.replace(val_path)
+    except Exception:
+        if temp_train.exists():
+            temp_train.unlink()
+        if temp_val.exists():
+            temp_val.unlink()
+        raise
 
     train_file_sha = hashlib.sha256(train_path.read_bytes()).hexdigest()
     val_file_sha = hashlib.sha256(val_path.read_bytes()).hexdigest()
@@ -875,13 +899,6 @@ def main():
             "held_out_regression_leakage": "0.0%"
         }
     }
-
-    manifest_path = REPORTS_DIR / "dataset_manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-
-    with open(MIRROR_REPORTS_DIR / "dataset_manifest.json", "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
 
     # Quality Report Markdown
     quality_report = f"""# GameForge 27B SFT Dataset Quality Report
@@ -917,13 +934,26 @@ def main():
 3. **Deduplication:** All 520 instruction-response pairs verified bitwise unique via SHA-256 hashes.
 """
 
-    report_path = REPORTS_DIR / "dataset_quality_report.md"
-    report_path.write_text(quality_report, encoding="utf-8")
-    (MIRROR_REPORTS_DIR / "dataset_quality_report.md").write_text(quality_report, encoding="utf-8")
+    for r_dir in {target_reports_dir, MIRROR_REPORTS_DIR}:
+        try:
+            r_dir.mkdir(parents=True, exist_ok=True)
+            manifest_file = r_dir / "dataset_manifest.json"
+            temp_manifest = manifest_file.with_suffix(".tmp")
+            temp_manifest.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            temp_manifest.replace(manifest_file)
 
-    print(f"Manifest written to: {manifest_path}")
-    print(f"Quality report written to: {report_path}")
+            report_file = r_dir / "dataset_quality_report.md"
+            temp_report = report_file.with_suffix(".tmp")
+            temp_report.write_text(quality_report, encoding="utf-8")
+            temp_report.replace(report_file)
+        except Exception as e:
+            print(f"Warning: Failed to write reports to {r_dir}: {e}", file=sys.stderr)
+
+    print(f"Manifest written to: {target_reports_dir / 'dataset_manifest.json'}")
+    print(f"Quality report written to: {target_reports_dir / 'dataset_quality_report.md'}")
     print("Dataset generation and validation successfully completed!")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

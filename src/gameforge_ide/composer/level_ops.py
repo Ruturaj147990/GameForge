@@ -52,6 +52,11 @@ NON_UE_GDS_PROPS = frozenset({
     "ScaleX",
     "ScaleY",
     "ScaleZ",
+    "source_prompt",
+    "brief",
+    "custom_capabilities",
+    "target_classes",
+    "plan_kind",
 })
 
 
@@ -221,8 +226,11 @@ def plan_to_op_calls(
                 continue
             if not p_clean.isidentifier():
                 continue
-            if isinstance(prop_val, dict) and not (set(prop_val).issubset({"x", "y", "z"}) or set(prop_val).issubset({"r", "g", "b", "a"})):
-                continue
+            if isinstance(prop_val, dict):
+                is_vector_or_color = set(prop_val).issubset({"x", "y", "z"}) or set(prop_val).issubset({"r", "g", "b", "a"})
+                is_map_dict = p_clean in ("ForwardWarps", "BackwardWarps") or all(isinstance(k, (int, str)) for k in prop_val.keys())
+                if not (is_vector_or_color or is_map_dict):
+                    continue
 
             is_asset = (
                 isinstance(prop_val, str)

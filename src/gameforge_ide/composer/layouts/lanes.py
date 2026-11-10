@@ -141,7 +141,16 @@ def _plan_tower_defense_lanes(level_id: str, map_path: str, level: Any, gds: Any
                         "bRanged": True,
                         "MoveSpeed": 0.0,
                         "AttackRange": 1400.0,
-                        "AttackDamage": float(next((e.props.get("attack_damage", 25.0) for e in getattr(gds, "entities", []) if "turret" in str(getattr(e, "tags", []))), 25.0)),
+                        "AttackDamage": float(
+                            next(
+                                (
+                                    (getattr(e, "props", {}) or {}).get("attack_damage", 25.0)
+                                    for e in getattr(gds, "entities", [])
+                                    if "turret" in str(getattr(e, "tags", []))
+                                ),
+                                25.0,
+                            )
+                        ),
                         "AttackCooldown": 0.8,
                     },
                 )
@@ -224,6 +233,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         or "tower_defense" in text_corpus
         or "defend the base" in text_corpus
         or "turret" in text_corpus
+        or "moba" in text_corpus
+        or "lane defense" in text_corpus
         or genre_str in ("arena_combat", "top_down_shooter")
         or (table_ent is None and genre_str != "card_battler" and any(
             str(getattr(e, "kind", "")) in ("spawner", "enemy", "ranged_enemy") for e in getattr(gds, "entities", [])

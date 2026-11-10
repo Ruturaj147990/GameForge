@@ -144,6 +144,12 @@ IA_SPRINT = InputActionSpec(
     bindings=["LeftShift"],
     purpose="Sprint faster",
 )
+IA_ABILITY = InputActionSpec(
+    action_id="IA_Ability",
+    value_type="bool",
+    bindings=["Q"],
+    purpose="Trigger special ability (smoke bomb / stealth / spell)",
+)
 IA_ROLL_DICE = InputActionSpec(
     action_id="IA_RollDice",
     value_type="bool",
@@ -520,7 +526,13 @@ def _compile_custom_rules(
 
         # 1. Determine trigger event from open-vocabulary rule description
         ev = "game.started"
-        if any(k in low for k in ("enemy dies", "enemy is killed", "on kill", "defeat", "killed", "slain", "destroy")) and "enemy.killed" in allowed_events:
+        if any(k in low for k in ("ability", "smoke bomb", "invisibility", "stealth ability", "spell", "channel")) and "player.ability_used" in allowed_events:
+            ev = "player.ability_used"
+        elif any(k in low for k in ("boss phase", "phase 2", "boss damaged", "enrage")) and "boss.phase_changed" in allowed_events:
+            ev = "boss.phase_changed"
+        elif any(k in low for k in ("boss defeated", "defeat boss", "slay boss", "slain boss")) and "boss.defeated" in allowed_events:
+            ev = "boss.defeated"
+        elif any(k in low for k in ("enemy dies", "enemy is killed", "on kill", "defeat", "killed", "slain", "destroy")) and "enemy.killed" in allowed_events:
             ev = "enemy.killed"
         elif any(k in low for k in ("on pickup", "collect", "coin", "item", "relic", "gather", "grab", "salvage", "core", "crystal", "gem")) and "pickup.collected" in allowed_events:
             ev = "pickup.collected"
@@ -544,6 +556,14 @@ def _compile_custom_rules(
             ev = "guard.spotted_player"
         elif any(k in low for k in ("hazard", "lava", "acid", "trap", "radiation")) and "hazard.touched" in allowed_events:
             ev = "hazard.touched"
+        elif any(k in low for k in ("bomb planted", "planted bomb", "plant the bomb")) and "bomb.planted" in allowed_events:
+            ev = "bomb.planted"
+        elif any(k in low for k in ("bomb defused", "defused bomb", "defuse the bomb")) and "bomb.defused" in allowed_events:
+            ev = "bomb.defused"
+        elif any(k in low for k in ("shoot", "fire weapon", "attack fired", "gunshot")) and "weapon.fired" in allowed_events:
+            ev = "weapon.fired"
+        elif any(k in low for k in ("quest complete", "finish quest", "mission accomplished")) and "quest.completed" in allowed_events:
+            ev = "quest.completed"
 
         # 2. Extract conditions
         conds: List[Condition] = []
@@ -590,13 +610,24 @@ def _compile_custom_rules(
             effects.append(AddStat(stat="player.ammo", delta=delta))
         elif any(k in low for k in ("gold", "credits", "currency", "bounty", "scrap")):
             delta = -min(500.0, max(1.0, num_val)) if is_drain else min(500.0, max(5.0, num_val))
-            effects.append(AddStat(stat="game.gold", delta=delta))
+            effects.append(AddStat(stat="player.gold", delta=delta))
+        elif any(k in low for k in ("resource", "resources", "material", "materials", "ore", "timber", "wood", "stone")):
+            delta = -min(200.0, max(1.0, num_val)) if is_drain else min(200.0, max(5.0, num_val))
+            effects.append(AddStat(stat="game.score", delta=delta))
         elif any(k in low for k in ("speed", "move faster", "haste", "accelerate")):
             effects.append(AddStat(stat="player.speed", delta=min(400.0, max(25.0, num_val))))
         elif any(k in low for k in ("lives", "extra life", "1up")):
             effects.append(AddStat(stat="player.lives", delta=1.0))
+        elif any(k in low for k in ("stealth", "invisibility", "invisible", "cloak")):
+            effects.append(AddStat(stat="player.stealth", delta=1.0))
+        elif any(k in low for k in ("boss phase", "enrage", "phase 2")):
+            effects.append(AddStat(stat="boss.phase", delta=1.0))
+        elif any(k in low for k in ("ancient key", "keys")) and any(k in low for k in ("collect", "pickup", "find", "gather")):
+            effects.append(AddStat(stat="game.counter.keys_collected", delta=1.0))
 
-        if any(k in low for k in ("score", "points", "bonus", "combo")):
+        if any(k in low for k in ("combo", "streak")):
+            effects.append(AddStat(stat="game.combo", delta=1.0))
+        elif any(k in low for k in ("score", "points", "bonus")):
             effects.append(AddStat(stat="game.score", delta=min(1000.0, max(5.0, num_val))))
 
         if any(k in low for k in ("spawn", "reinforcement", "ambush", "summon")) and enemy_ent is not None:
@@ -704,6 +735,9 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
     elif game_type_hint == "tower_defense" or re.search(r"\b(tower\s+defense|lane\s+defense|defend\s+the\s+(?:base|core|nexus|crystal))\b", pitch_title):
         layout = LayoutKind.LANES
         layout_params["lane_mode"] = "tower_defense"
+    elif game_type_hint == "tactical_fps" or re.search(r"\b(tactical\s+fps|bomb\s+defus(?:al|e)|search\s+and\s+destroy|counter[- ]terrorist)\b", pitch_title):
+        layout = LayoutKind.TACTICAL_FPS
+        layout_params["site_mode"] = "defusal"
 
     if re.search(r"\b(zero[- ]gravity|0g|weightless)\b", pitch_title):
         layout_params["gravity_z"] = -150.0
@@ -919,10 +953,12 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
             }
 
     # Wire switches to doors automatically if switches have no target_tag
-    door_ent = next((e for e in entities if e.kind == EntityKind.DOOR), None)
-    for sw in [e for e in entities if e.kind == EntityKind.SWITCH]:
-        if not sw.props.get("target_tag") and door_ent is not None:
-            sw.props = {**sw.props, "target_tag": door_ent.entity_id}
+    door_ents = [e for e in entities if e.kind == EntityKind.DOOR]
+    switches = [e for e in entities if e.kind == EntityKind.SWITCH]
+    for sw_i, sw in enumerate(switches):
+        if not sw.props.get("target_tag") and door_ents:
+            target_door = door_ents[sw_i % len(door_ents)]
+            sw.props = {**sw.props, "target_tag": target_door.entity_id}
 
     # 3. Rules & Goals
     rules: List[RuleSpec] = []
@@ -1136,6 +1172,16 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
                     actions.append(ia_w)
                     action_ids.add(ia_w.action_id)
 
+    has_ability = (
+        bool(arch_input.get("player_abilities")) if isinstance(arch_input, dict) else False
+    ) or any(
+        any(k in cr.lower() for k in ("ability", "smoke", "stealth", "(q)", "spell", "magic", "skill", "dash"))
+        for cr in draft.custom_rules
+    ) or ("stealth" in (getattr(draft, "pitch", "") or "").lower() and any(e.kind == EntityKind.GUARD for e in entities))
+    if has_ability and IA_ABILITY.action_id not in action_ids and len(actions) < 16:
+        actions.append(IA_ABILITY)
+        action_ids.add(IA_ABILITY.action_id)
+
     board_ent_for_input = next((e for e in entities if e.kind == EntityKind.BOARD), None)
     if board_ent_for_input:
         bmode = str(board_ent_for_input.props.get("board_mode", ""))
@@ -1165,16 +1211,34 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
                 referenced_stats.add(str(getattr(eff, "stat")))
 
     dynamic_hud_map = [
+        ("boss.health", "hud_boss", "bar", "Boss"),
         ("player.shield", "hud_shield", "bar", "Shield"),
         ("player.oxygen", "hud_oxygen", "bar", "Oxygen"),
         ("player.mana", "hud_mana", "bar", "Mana"),
         ("player.stamina", "hud_stamina", "bar", "Stamina"),
         ("player.ammo", "hud_ammo", "counter", "Ammo"),
+        ("player.ability_cooldown", "hud_ability", "counter", "Ability CD"),
         ("game.gold", "hud_gold", "counter", "Gold"),
+        ("game.resources", "hud_resources", "counter", "Resources"),
+        ("game.combo", "hud_combo", "counter", "Combo"),
+        ("game.counter.keys_collected", "hud_keys", "counter", "Keys"),
     ]
     for stat_name, el_id, el_kind, el_label in dynamic_hud_map:
-        if stat_name in referenced_stats and len(hud_elements) < 8:
+        if stat_name in referenced_stats and len(hud_elements) < 10:
             hud_elements.append(HudElement(element_id=el_id, kind=el_kind, binds=stat_name, label=el_label))  # type: ignore[arg-type]
+
+    has_boss = any("boss" in (e.tags or []) or e.props.get("bIsBoss") for e in entities)
+    if has_boss and not any(h.element_id == "hud_boss" for h in hud_elements) and len(hud_elements) < 10:
+        boss_ent = next((e for e in entities if "boss" in (e.tags or []) or e.props.get("bIsBoss")), None)
+        boss_label = (boss_ent.props.get("BossName") if boss_ent and boss_ent.props.get("BossName") else "Boss")
+        hud_elements.append(HudElement(element_id="hud_boss", kind="bar", binds="boss.health", label=f"{boss_label} HP"))
+
+    if has_ability and not any(h.element_id == "hud_ability" for h in hud_elements) and len(hud_elements) < 10:
+        hud_elements.append(HudElement(element_id="hud_ability", kind="counter", binds="player.ability_cooldown", label="Ability"))
+
+    if any(e.kind == EntityKind.DOOR and "key" in str(e.props.get("required_stat", "")).lower() for e in entities):
+        if not any(h.element_id == "hud_keys" for h in hud_elements) and len(hud_elements) < 10:
+            hud_elements.append(HudElement(element_id="hud_keys", kind="counter", binds="game.counter.keys_collected", label="Keys"))
 
     if layout_params.get("track_mode") == "racing" and len(hud_elements) < 9:
         hud_elements.append(HudElement(element_id="hud_laps", kind="counter", binds="game.laps", label="Laps"))
@@ -1323,9 +1387,11 @@ def expand_draft(draft: DesignDraft, source_prompt: Optional[str] = None) -> Gam
         placeholder_ok=False,
         **art_kwargs,
     )
+    valid_music = {"none", "calm", "tense", "heroic", "playful", "boss", "action", "mysterious"}
+    valid_ambience = {"none", "wind", "forest", "dungeon", "city", "ocean", "space"}
     audio = AudioSpec(
-        music_mood=music if music in ("none", "calm", "tense", "heroic", "playful") else "none",
-        ambience=ambience if ambience in ("none", "wind", "forest", "dungeon", "city") else "none",
+        music_mood=music if music in valid_music else "none",
+        ambience=ambience if ambience in valid_ambience else "none",
         sfx_set="soft" if draft.art_style == "toon" else "default",
     )
     tech = TechSpec(

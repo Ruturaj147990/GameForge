@@ -45,17 +45,17 @@ class CrashRecoveryManager:
                 if tool_name in ("propose_edit", "apply_edit"):
                     subpath = args.get("subpath") or args.get("path")
                     if subpath:
-                        target_file = self.workspace_root / subpath
-                        if target_file.exists():
-                            replacement = args.get("replacement_content")
-                            if replacement:
-                                try:
+                        try:
+                            target_file = (self.workspace_root / str(subpath)).resolve()
+                            if self.workspace_root in target_file.parents and target_file.exists():
+                                replacement = args.get("replacement_content")
+                                if replacement:
                                     current_content = target_file.read_text(encoding="utf-8", errors="replace")
                                     if replacement.strip() in current_content:
                                         completed_prior_to_crash = True
                                         reconciliation_detail = f"Verified replacement content observed in {subpath}"
-                                except Exception as e:
-                                    reconciliation_detail = f"Could not verify file: {e}"
+                        except Exception as e:
+                            reconciliation_detail = f"Could not verify file: {e}"
 
                 elif tool_name == "import_asset":
                     dest = args.get("destination_path", "")
@@ -91,12 +91,15 @@ class CrashRecoveryManager:
         expected_base_hash = pending.base_hash
 
         # Verify base file still matches expected base hash
-        target_path = self.workspace_root / pending.file_path
-        if not target_path.exists():
-            return False, pending, f"Target file '{pending.file_path}' missing on disk"
+        target_path = (self.workspace_root / pending.file_path).resolve()
+        if self.workspace_root not in target_path.parents or not target_path.exists():
+            return False, pending, f"Target file '{pending.file_path}' missing or invalid on disk"
 
-        current_bytes = target_path.read_bytes()
-        current_hash = hashlib.sha256(current_bytes).hexdigest()
+        try:
+            current_bytes = target_path.read_bytes()
+            current_hash = hashlib.sha256(current_bytes).hexdigest()
+        except OSError as exc:
+            return False, pending, f"Could not read target file '{pending.file_path}': {exc}"
 
         if current_hash != expected_base_hash:
             return (

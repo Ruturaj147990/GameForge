@@ -1,6 +1,6 @@
 {
   "demonstration": "Demonstration C: Real Failure Handling",
-  "elapsed_seconds": 0.06,
+  "elapsed_seconds": 0.66,
   "status": "FAILED",
   "verdict_ok": true,
   "tasks": {
@@ -10,13 +10,13 @@
       "error": null,
       "acceptance": [
         {
-          "predicate_id": "901fcbca",
+          "predicate_id": "bdc1349b",
           "predicate_type": "file_exists",
           "target": "AGENTS.md",
           "expected": null,
           "satisfied": true,
-          "evidence": "File exists at AGENTS.md (5930 bytes)",
-          "evaluated_at": 1793451994.7896955
+          "evidence": "File exists at AGENTS.md (6039 bytes)",
+          "evaluated_at": 1794294541.5880759
         }
       ],
       "evidence_count": 1
@@ -27,24 +27,24 @@
       "error": "Acceptance predicates unmet: file_exists(nonexistent_file_for_failure_check_9999.xyz): File does not exist on disk",
       "acceptance": [
         {
-          "predicate_id": "cea63ba1",
+          "predicate_id": "89badf11",
           "predicate_type": "file_exists",
           "target": "nonexistent_file_for_failure_check_9999.xyz",
           "expected": null,
           "satisfied": false,
           "evidence": null,
-          "evaluated_at": 1793451994.8014982
+          "evaluated_at": 1794294542.154101
         }
       ],
-      "evidence_count": 1
+      "evidence_count": 2
     },
     "t_blocked_op": {
       "title": "Dependent task on failed branch",
       "status": "BLOCKED",
-      "error": "dependency not done: ['t_fail_op']",
+      "error": "Blocked: upstream dependency 't_fail_op' failed (Acceptance predicates unmet: file_exists(nonexistent_file_for_failure_check_9999.xyz): File does not exist on disk)",
       "acceptance": [
         {
-          "predicate_id": "f04f4f53",
+          "predicate_id": "458e96ff",
           "predicate_type": "file_exists",
           "target": "AGENTS.md",
           "expected": null,
@@ -61,13 +61,13 @@
       "error": null,
       "acceptance": [
         {
-          "predicate_id": "6f70edc9",
+          "predicate_id": "c7bf1daf",
           "predicate_type": "file_exists",
           "target": "context.md",
           "expected": null,
           "satisfied": true,
-          "evidence": "File exists at context.md (7691 bytes)",
-          "evaluated_at": 1793451994.8182533
+          "evidence": "File exists at context.md (198260 bytes)",
+          "evaluated_at": 1794294542.2196908
         }
       ],
       "evidence_count": 1
@@ -76,75 +76,152 @@
   "events": [
     {
       "event_type": "plan_started",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": null,
       "status": "RUNNING",
-      "message": "Plan started",
+      "message": "Executing plan 'Test branched failure containment, transitive blocking, and independent execution'",
       "data": {},
-      "timestamp": 1793451994.7744534
+      "timestamp": 1794294541.5826492
+    },
+    {
+      "event_type": "task_ready",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_root",
+      "status": "READY",
+      "message": "Task 'Inspect repository root' is ready",
+      "data": {},
+      "timestamp": 1794294541.5826921
     },
     {
       "event_type": "task_started",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": "t_root",
       "status": "RUNNING",
       "message": "Starting task 'Inspect repository root'",
       "data": {},
-      "timestamp": 1793451994.7872338
+      "timestamp": 1794294541.582707
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_root",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Inspect repository root'",
+      "data": {},
+      "timestamp": 1794294541.5880356
     },
     {
       "event_type": "task_completed",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": "t_root",
       "status": "COMPLETED",
-      "message": "Task 'Inspect repository root' COMPLETED",
+      "message": "Task 'Inspect repository root' COMPLETED with verified acceptance",
       "data": {},
-      "timestamp": 1793451994.7950637
+      "timestamp": 1794294541.5882668
+    },
+    {
+      "event_type": "task_ready",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_fail_op",
+      "status": "READY",
+      "message": "Task 'Attempt operation on nonexistent file' is ready",
+      "data": {},
+      "timestamp": 1794294541.5911052
     },
     {
       "event_type": "task_started",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": "t_fail_op",
       "status": "RUNNING",
       "message": "Starting task 'Attempt operation on nonexistent file'",
       "data": {},
-      "timestamp": 1793451994.799663
+      "timestamp": 1794294541.5911214
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_fail_op",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Attempt operation on nonexistent file'",
+      "data": {},
+      "timestamp": 1794294541.5918195
+    },
+    {
+      "event_type": "task_repairing",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_fail_op",
+      "status": "REPAIRING",
+      "message": "Acceptance verification failed: Acceptance predicates unmet: file_exists(nonexistent_file_for_failure_check_9999.xyz): File does not exist on disk. Attempting repair 1/1",
+      "data": {
+        "unmet": [
+          "file_exists(nonexistent_file_for_failure_check_9999.xyz): File does not exist on disk"
+        ],
+        "diagnostics": []
+      },
+      "timestamp": 1794294541.6520457
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_fail_op",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Attempt operation on nonexistent file'",
+      "data": {},
+      "timestamp": 1794294542.1540504
     },
     {
       "event_type": "task_failed",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": "t_fail_op",
       "status": "FAILED",
-      "message": "Task 'Attempt operation on nonexistent file' FAILED",
+      "message": "Task 'Attempt operation on nonexistent file' FAILED acceptance: Acceptance predicates unmet: file_exists(nonexistent_file_for_failure_check_9999.xyz): File does not exist on disk",
       "data": {},
-      "timestamp": 1793451994.8069086
+      "timestamp": 1794294542.2026734
+    },
+    {
+      "event_type": "task_ready",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_independent_ok",
+      "status": "READY",
+      "message": "Task 'Independent parallel inspection' is ready",
+      "data": {},
+      "timestamp": 1794294542.2131507
     },
     {
       "event_type": "task_started",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": "t_independent_ok",
       "status": "RUNNING",
       "message": "Starting task 'Independent parallel inspection'",
       "data": {},
-      "timestamp": 1793451994.8161633
+      "timestamp": 1794294542.2131672
+    },
+    {
+      "event_type": "task_verifying",
+      "plan_id": "plan_a0e91b1e49aa",
+      "task_id": "t_independent_ok",
+      "status": "VERIFYING",
+      "message": "Verifying acceptance predicates for task 'Independent parallel inspection'",
+      "data": {},
+      "timestamp": 1794294542.2196553
     },
     {
       "event_type": "task_completed",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": "t_independent_ok",
       "status": "COMPLETED",
-      "message": "Task 'Independent parallel inspection' COMPLETED",
+      "message": "Task 'Independent parallel inspection' COMPLETED with verified acceptance",
       "data": {},
-      "timestamp": 1793451994.8235085
+      "timestamp": 1794294542.2198586
     },
     {
       "event_type": "plan_failed",
-      "plan_id": "plan_4e8a19cca232",
+      "plan_id": "plan_a0e91b1e49aa",
       "task_id": null,
       "status": "FAILED",
-      "message": "Plan FAILED",
+      "message": "Plan FAILED due to subtask failures",
       "data": {},
-      "timestamp": 1793451994.8285193
+      "timestamp": 1794294542.229418
     }
   ]
 }

@@ -1,4 +1,10 @@
-"""Studio UX shell package (WI-4.3)."""
+"""GameForge IDE — Studio UX Desktop Shell Package.
+
+Provides core shell frame components: activity rail navigation, command palette,
+view host container, top navigation bar, collapsible assistant panel, and toast overlays.
+"""
+
+from __future__ import annotations
 
 from .view_host import ViewHost
 from .rail import Rail, RailButton
@@ -17,3 +23,4 @@ __all__ = [
     "ToastCard",
     "CommandPalette",
 ]
+

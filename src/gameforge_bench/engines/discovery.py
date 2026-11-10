@@ -8,9 +8,13 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .base import EngineDiscoveryResult
+
+
+def _creationflags() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) if os.name == "nt" else 0
 
 
 def _load_host_profile_paths() -> Dict[str, str]:
@@ -72,6 +76,10 @@ def discover_unreal_engine() -> EngineDiscoveryResult:
     program_files = Path(os.environ.get("ProgramFiles", "/Program Files"))
     for ver in ("5.7", "5.6", "5.5", "5.4"):
         candidate_dirs.append(program_files / "Epic Games" / f"UE_{ver}")
+        # Common secondary drives
+        for drive in ("E:", "D:", "C:"):
+            candidate_dirs.append(Path(drive) / "UE" / f"UE_{ver}")
+            candidate_dirs.append(Path(drive) / "Epic Games" / f"UE_{ver}")
 
     for ue_dir in candidate_dirs:
         if not ue_dir.is_dir():
@@ -167,30 +175,49 @@ def discover_toolchains() -> Dict[str, Any]:
     dotnet_bin = shutil.which("dotnet")
     if dotnet_bin:
         try:
-            res = subprocess.run(["dotnet", "--version"], capture_output=True, text=True, timeout=5)
+            res = subprocess.run(
+                ["dotnet", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=_creationflags(),
+            )
             results["dotnet"] = res.stdout.strip()
         except Exception:
             results["dotnet"] = "installed (version check timeout)"
 
-    # MSBuild
+    # MSBuild and MSVC across all Visual Studio editions
     program_files = Path(os.environ.get("ProgramFiles", "/Program Files"))
-    vs_msbuild = program_files / "Microsoft Visual Studio" / "2022" / "Community" / "MSBuild" / "Current" / "Bin" / "MSBuild.exe"
-    if vs_msbuild.is_file():
-        results["msbuild"] = str(vs_msbuild)
-    elif shutil.which("msbuild"):
+    vs_editions = ("Community", "Professional", "Enterprise", "BuildTools")
+    for ed in vs_editions:
+        vs_msbuild = program_files / "Microsoft Visual Studio" / "2022" / ed / "MSBuild" / "Current" / "Bin" / "MSBuild.exe"
+        if vs_msbuild.is_file():
+            results["msbuild"] = str(vs_msbuild)
+            break
+
+    if not results["msbuild"] and shutil.which("msbuild"):
         results["msbuild"] = shutil.which("msbuild")
 
     # MSVC
-    msvc_dir = program_files / "Microsoft Visual Studio" / "2022" / "Community" / "VC" / "Tools" / "MSVC"
-    if msvc_dir.is_dir():
-        versions = [p.name for p in msvc_dir.iterdir() if p.is_dir()]
-        results["msvc"] = versions[-1] if versions else "detected"
+    for ed in vs_editions:
+        msvc_dir = program_files / "Microsoft Visual Studio" / "2022" / ed / "VC" / "Tools" / "MSVC"
+        if msvc_dir.is_dir():
+            versions = [p.name for p in msvc_dir.iterdir() if p.is_dir()]
+            if versions:
+                results["msvc"] = versions[-1]
+                break
 
     # Git
     git_bin = shutil.which("git")
     if git_bin:
         try:
-            res = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=5)
+            res = subprocess.run(
+                ["git", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=_creationflags(),
+            )
             results["git"] = res.stdout.strip()
         except Exception:
             results["git"] = "installed"

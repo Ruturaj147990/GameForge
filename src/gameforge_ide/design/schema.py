@@ -118,19 +118,21 @@ __all__ = [
     "validate_draft",
     "gds_json_schema",
     "draft_json_schema",
+    "to_gds_json",
+    "to_draft_json",
 ]
 
 
-def validate_gds(data: Union[str, Dict[str, Any]]) -> GameDesignSpec:
-    """Validate a JSON string or dict against GameDesignSpec schema."""
-    if isinstance(data, str):
+def validate_gds(data: Union[str, bytes, Dict[str, Any]]) -> GameDesignSpec:
+    """Validate a JSON string, bytes, or dict against GameDesignSpec schema."""
+    if isinstance(data, (str, bytes)):
         return GameDesignSpec.model_validate_json(data)
     return GameDesignSpec.model_validate(data)
 
 
-def validate_draft(data: Union[str, Dict[str, Any]]) -> DesignDraft:
-    """Validate a JSON string or dict against DesignDraft schema."""
-    if isinstance(data, str):
+def validate_draft(data: Union[str, bytes, Dict[str, Any]]) -> DesignDraft:
+    """Validate a JSON string, bytes, or dict against DesignDraft schema."""
+    if isinstance(data, (str, bytes)):
         return DesignDraft.model_validate_json(data)
     return DesignDraft.model_validate(data)
 
@@ -143,3 +145,13 @@ def gds_json_schema() -> Dict[str, Any]:
 def draft_json_schema() -> Dict[str, Any]:
     """Return the JSON Schema for DesignDraft."""
     return DesignDraft.model_json_schema()
+
+
+def to_gds_json(gds: GameDesignSpec, indent: int = 2) -> str:
+    """Serialize a GameDesignSpec to formatted JSON."""
+    return gds.model_dump_json(indent=indent)
+
+
+def to_draft_json(draft: DesignDraft, indent: int = 2) -> str:
+    """Serialize a DesignDraft to formatted JSON."""
+    return draft.model_dump_json(indent=indent)

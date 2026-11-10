@@ -1,5 +1,7 @@
 """GameForge IDE — styles package init."""
 
+from __future__ import annotations
+
 from .tokens import (
     SPACE_XS,
     SPACE_SM,

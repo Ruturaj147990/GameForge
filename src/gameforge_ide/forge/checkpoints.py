@@ -63,28 +63,34 @@ class ProjectRepo:
         except Exception:
             pass
 
-    def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         if not self.git:
             raise CheckpointError("git is not installed; checkpoints are disabled")
         self._clear_stale_index_lock()
-        extra_kw = {}
+        extra_kw: dict[str, object] = {}
         if sys.platform == "win32":
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             si.wShowWindow = subprocess.SW_HIDE
             extra_kw = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": si}
-        res = subprocess.run(
-            [self.git, "-C", str(self.dir), *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-            **extra_kw,
-        )
+        try:
+            res = subprocess.run(
+                [self.git, "-C", str(self.dir), *args],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+                **extra_kw,  # type: ignore[arg-type]
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            raise CheckpointError(f"git {' '.join(args)} failed to execute: {exc}") from exc
         if check and res.returncode != 0:
             raise CheckpointError(f"git {' '.join(args)} failed: {res.stderr.strip()[:500]}")
         return res
+
+    def _has_head(self) -> bool:
+        return self._run("rev-parse", "--verify", "HEAD", check=False).returncode == 0
 
     def ensure(self) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -102,7 +108,7 @@ class ProjectRepo:
         gi = self.dir / ".gitignore"
         if not gi.exists():
             gi.write_text(UE_GITIGNORE, encoding="utf-8", newline="\n")
-        if is_new:
+        if is_new or not self._has_head():
             self._run("add", "-A")
             self._run("commit", "-q", "--allow-empty", "-m", "forge: initial")
 
@@ -113,9 +119,12 @@ class ProjectRepo:
         """Commit everything not ignored; returns HEAD (unchanged if nothing changed)."""
         self._clear_stale_index_lock()
         self._run("add", "-A")
+        has_head = self._has_head()
         if not self._run("status", "--porcelain").stdout.strip():
+            if not has_head:
+                self._run("commit", "-q", "--allow-empty", "-m", message or "forge: initial")
             return self.head()
-        staged = self._run("diff", "--cached", "--numstat").stdout  # binary files show "-\t-"
+        staged = self._run("-c", "core.quotePath=false", "diff", "--cached", "--numstat").stdout  # binary files show "-\t-"
         size_mb = 0.0
         for line in staged.splitlines():
             parts = line.split("\t")
@@ -134,23 +143,32 @@ class ProjectRepo:
                 if fpath.is_file():
                     size_mb += fpath.stat().st_size / 1e6
         if size_mb > MAX_COMMIT_MB:
-            self._run("reset", "-q")
+            if has_head:
+                self._run("reset", "-q")
+            else:
+                self._run("rm", "-r", "--cached", "-q", ".", check=False)
             raise CheckpointError(f"checkpoint would add {size_mb:.0f} MB (> {MAX_COMMIT_MB} MB); refusing")
-        self._run("commit", "-q", "-m", message)
+        self._run("commit", "-q", "-m", (message or "forge: checkpoint").strip())
         return self.head()
 
     def reset_to(self, sha: str, editor_running: bool) -> None:
         """Hard reset + clean of non-ignored files. Refuses while an editor holds the project's files."""
         if editor_running:
             raise CheckpointError("stop the Unreal Editor for this project before rolling back")
-        self._run("cat-file", "-e", f"{sha}^{{commit}}")
+        clean_sha = (sha or "").strip()
+        if not clean_sha:
+            raise CheckpointError("invalid checkpoint commit sha")
+        self._run("cat-file", "-e", f"{clean_sha}^{{commit}}")
         self._clear_stale_index_lock()
         self._clear_readonly_flags()
-        self._run("reset", "-q", "--hard", sha)
+        self._run("reset", "-q", "--hard", clean_sha)
         self._clear_readonly_flags()
         self._run("clean", "-q", "-fd")
 
     def changed_since(self, sha: str) -> List[str]:
-        out = self._run("diff", "--name-only", sha, "--").stdout.splitlines()
-        untracked = self._run("ls-files", "--others", "--exclude-standard").stdout.splitlines()
+        clean_sha = (sha or "").strip()
+        if not clean_sha:
+            raise CheckpointError("invalid checkpoint commit sha")
+        out = self._run("-c", "core.quotePath=false", "diff", "--name-only", clean_sha, "--").stdout.splitlines()
+        untracked = self._run("-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard").stdout.splitlines()
         return sorted(set(out) | set(untracked))

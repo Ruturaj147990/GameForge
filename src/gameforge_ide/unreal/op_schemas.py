@@ -457,6 +457,8 @@ SCHEMAS: dict[str, type[BaseModel]] = {**GENERATED, **REVIEWED}
 
 def validate_args(op: str, args: dict, strict: bool = False) -> tuple[Optional[dict], list[str]]:
     """Return (clean_args, errors). ``clean_args`` is None when validation failed."""
+    if not isinstance(args, dict):
+        return None, [f"<args>: expected dict, got {type(args).__name__}"]
     model = SCHEMAS.get(op)
     if model is None:
         return (None, [f"no argument schema for op {op!r}"]) if strict else (dict(args), [])

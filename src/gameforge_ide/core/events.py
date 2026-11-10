@@ -22,9 +22,13 @@ class EventBus:
 
     def subscribe(self, topic: Optional[str], callback: Subscriber) -> Callable[[], None]:
         """Subscribe to a specific topic, wildcard pattern (e.g. 'run.*'), or all topics ('*'/None). Returns unsubscribe callable."""
+        if not callable(callback):
+            raise TypeError(f"Subscriber callback must be callable, got {type(callback).__name__}")
+
         with self._lock:
             if topic is None or topic == "*":
-                self._global_subscribers.append(callback)
+                if callback not in self._global_subscribers:
+                    self._global_subscribers.append(callback)
 
                 def unsubscribe() -> None:
                     with self._lock:
@@ -33,7 +37,9 @@ class EventBus:
 
                 return unsubscribe
             elif "*" in topic or "?" in topic:
-                self._pattern_subscribers.setdefault(topic, []).append(callback)
+                target_p_list = self._pattern_subscribers.setdefault(topic, [])
+                if callback not in target_p_list:
+                    target_p_list.append(callback)
 
                 def unsubscribe() -> None:
                     with self._lock:
@@ -44,7 +50,9 @@ class EventBus:
 
                 return unsubscribe
             else:
-                self._subscribers.setdefault(topic, []).append(callback)
+                target_list = self._subscribers.setdefault(topic, [])
+                if callback not in target_list:
+                    target_list.append(callback)
 
                 def unsubscribe() -> None:
                     with self._lock:
@@ -78,14 +86,19 @@ class EventBus:
             return removed
 
     def _invoke_subscriber(self, s: Subscriber, topic: str, payload: Dict[str, Any]) -> None:
-        """Invokes a subscriber safely, supporting both (topic, event) and (event) signatures and isolating errors."""
+        """Invokes a subscriber safely, supporting (topic, event), (event), and () signatures and isolating errors."""
         try:
             try:
                 s(topic, dict(payload))
             except TypeError as te:
-                # If subscriber takes only 1 argument (the event payload), call it with payload
+                # If subscriber takes 1 argument (event payload) or 0 arguments, fallback gracefully
                 try:
                     s(dict(payload))  # type: ignore[call-arg]
+                except TypeError:
+                    try:
+                        s()  # type: ignore[call-arg]
+                    except Exception:
+                        raise te
                 except Exception:
                     raise te
         except Exception as exc:
@@ -95,6 +108,9 @@ class EventBus:
 
     def publish(self, topic: str, event: Any) -> None:
         """Publish an event dict to a topic in a thread-safe manner, isolating subscriber failures."""
+        if not isinstance(topic, str):
+            topic = str(topic)
+
         if isinstance(event, dict):
             evt_copy = dict(event)
         else:

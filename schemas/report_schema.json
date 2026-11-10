@@ -44,7 +44,8 @@
         "os": { "type": "string" },
         "python_version": { "type": "string" },
         "toolchain_versions": { "type": "object" },
-        "git_commit": { "type": ["string", "null"] }
+        "git_commit": { "type": ["string", "null"] },
+        "hardware": { "type": "object" }
       }
     },
     "candidate": {
@@ -78,7 +79,13 @@
         "FAIL_BUILD",
         "POLICY_FAIL",
         "HARNESS_INVALID",
-        "FLAKY_QUARANTINED"
+        "FLAKY_QUARANTINED",
+        "FAIL_NO_PATCHES_APPLIED",
+        "FAIL_NO_GENUINE_CHANGES",
+        "PARTIAL_PATCH_APPLICATION_FAILURE",
+        "INVOCATION_TIMEOUT",
+        "MODEL_INVOCATION_ERROR",
+        "UNVERIFIED"
       ]
     },
     "first_mandatory_failure_layer": { "type": ["string", "null"] },
@@ -117,7 +124,8 @@
       "properties": {
         "stdout_log": { "type": "string" },
         "stderr_log": { "type": "string" },
-        "engine_log": { "type": "string" }
+        "engine_log": { "type": "string" },
+        "eval_log_dir": { "type": "string" }
       }
     },
     "isolation": {

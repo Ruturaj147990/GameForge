@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import secrets
 import stat
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -25,48 +26,54 @@ class UnrealSecurityBoundary:
     """Manages session tokens and enforces mutual authentication with Unreal Engine."""
 
     def __init__(self, workspace_root: Path):
-        self.workspace_root = workspace_root.resolve()
+        self.workspace_root = Path(workspace_root).resolve()
         self.token_file = self.workspace_root / ".gameforge" / "unreal_session.token"
         self._current_token: Optional[str] = None
+        self._lock = threading.Lock()
 
     def initialize_session_token(self) -> str:
         """Generates a high-entropy session token and writes it with user-only file ACLs."""
-        self.token_file.parent.mkdir(parents=True, exist_ok=True)
-        token = secrets.token_hex(32)
-        self._current_token = token
+        with self._lock:
+            self.token_file.parent.mkdir(parents=True, exist_ok=True)
+            token = secrets.token_hex(32)
+            self._current_token = token
 
-        # Write token file
-        self.token_file.write_text(token, encoding="utf-8")
+            # Write token file
+            self.token_file.write_text(token, encoding="utf-8", newline="\n")
 
-        # Restrict permissions: Windows user-only read/write
-        try:
-            os.chmod(self.token_file, stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:
-            pass
+            # Restrict permissions: Windows user-only read/write
+            try:
+                os.chmod(self.token_file, stat.S_IRUSR | stat.S_IWUSR)
+            except Exception:
+                pass
 
-        return token
+            return token
 
     def get_session_token(self) -> str:
         """Retrieves or creates the active session token."""
-        if self._current_token:
-            return self._current_token
-        if self.token_file.exists():
-            try:
-                tok = self.token_file.read_text(encoding="utf-8").strip()
-                if tok:
-                    self._current_token = tok
-                    return tok
-            except Exception:
-                pass
+        with self._lock:
+            if self._current_token:
+                return self._current_token
+            if self.token_file.exists():
+                try:
+                    tok = self.token_file.read_text(encoding="utf-8", errors="replace").strip()
+                    if tok:
+                        self._current_token = tok
+                        return tok
+                except Exception:
+                    pass
         return self.initialize_session_token()
 
     def validate_caller_token(self, provided_token: Optional[str]) -> bool:
         """Validates that a mutation request carries the exact active session token."""
-        active = self.get_session_token()
-        if not provided_token or not active:
+        if not isinstance(provided_token, str):
+            return False
+        provided_clean = provided_token.strip()
+        active = self.get_session_token().strip()
+        if not provided_clean or not active:
             return False
         # Constant-time comparison to prevent timing side-channels
-        return secrets.compare_digest(provided_token.strip(), active.strip())
+        return secrets.compare_digest(provided_clean, active)
 
     def authorize_mutation(self, provided_token: Optional[str], operation_name: str) -> None:
         """Enforces fail-closed security boundary: raises EditorSecurityError if invalid."""

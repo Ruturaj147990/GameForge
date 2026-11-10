@@ -18,18 +18,24 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import random
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-OUTPUT_DATA_DIR = Path("E:/GameForge/datasets/gameforge-qwen35")
-EXISTING_DATA_DIR = Path("E:/GameForge/datasets/gameforge-27b-sft")
-REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-OUTPUT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DATA_DIR = Path("E:/GameForge/datasets/gameforge-qwen35")
+REPO_OUTPUT_DATA_DIR = REPO_ROOT / "datasets" / "gameforge-qwen35"
+EXISTING_DATA_DIR = Path("E:/GameForge/datasets/gameforge-27b-sft")
+REPO_EXISTING_DATA_DIR = REPO_ROOT / "datasets" / "gameforge-27b-sft"
+REPORTS_DIR = REPO_ROOT / "reports"
 
 SYSTEM_PROMPT = (
     "You are GameForge, an elite autonomous game systems architect and principal engine programmer. "
@@ -225,14 +231,30 @@ def build_agent_tool_use_samples() -> List[Dict[str, Any]]:
         samples.append(make_sample(f"GF-AGENT-TOOL-{idx:03d}", "GameForge Agent Protocol", "Structured Tool Calling", q, ans))
     return samples
 
-def main():
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge Qwen3.5 Specialist Dataset Generator")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Target dataset directory")
+    parser.add_argument("--existing-dir", type=Path, default=None, help="Directory containing baseline 27b-sft dataset")
+    parser.add_argument("--reports-dir", type=Path, default=None, help="Directory for training data manifest report")
+    args = parser.parse_args()
+
+    target_output_dir = args.output_dir or (OUTPUT_DATA_DIR if OUTPUT_DATA_DIR.parent.exists() else REPO_OUTPUT_DATA_DIR)
+    source_existing_dir = args.existing_dir or (EXISTING_DATA_DIR if EXISTING_DATA_DIR.exists() else REPO_EXISTING_DATA_DIR)
+    target_reports_dir = args.reports_dir or REPORTS_DIR
+
+    target_output_dir.mkdir(parents=True, exist_ok=True)
+    target_reports_dir.mkdir(parents=True, exist_ok=True)
+
     print("=" * 80)
     print(" GAMEFORGE QWEN3.5 DATASET & MANIFEST BUILDER")
+    print(f" Target dataset dir: {target_output_dir}")
+    print(f" Existing source dir: {source_existing_dir}")
+    print(f" Target reports dir: {target_reports_dir}")
     print("=" * 80)
 
     # 1. Load existing verified 518 samples
-    existing_train_path = EXISTING_DATA_DIR / "gameforge_27b_sft_train.jsonl"
-    existing_val_path = EXISTING_DATA_DIR / "gameforge_27b_sft_val.jsonl"
+    existing_train_path = source_existing_dir / "gameforge_27b_sft_train.jsonl"
+    existing_val_path = source_existing_dir / "gameforge_27b_sft_val.jsonl"
 
     all_samples = []
     if existing_train_path.is_file():
@@ -283,16 +305,29 @@ def main():
 
     print(f"Split: {len(train_set)} train samples, {len(val_set)} validation samples.")
 
-    # 5. Write JSONL files
-    train_out = OUTPUT_DATA_DIR / "gameforge_qwen35_train.jsonl"
-    val_out = OUTPUT_DATA_DIR / "gameforge_qwen35_val.jsonl"
+    # 5. Write JSONL files atomically
+    train_out = target_output_dir / "gameforge_qwen35_train.jsonl"
+    val_out = target_output_dir / "gameforge_qwen35_val.jsonl"
 
-    with open(train_out, "w", encoding="utf-8") as f:
-        for s in train_set:
-            f.write(json.dumps(s) + "\n")
-    with open(val_out, "w", encoding="utf-8") as f:
-        for s in val_set:
-            f.write(json.dumps(s) + "\n")
+    temp_train = train_out.with_suffix(".tmp")
+    temp_val = val_out.with_suffix(".tmp")
+
+    try:
+        with open(temp_train, "w", encoding="utf-8") as f:
+            for s in train_set:
+                f.write(json.dumps(s) + "\n")
+        temp_train.replace(train_out)
+
+        with open(temp_val, "w", encoding="utf-8") as f:
+            for s in val_set:
+                f.write(json.dumps(s) + "\n")
+        temp_val.replace(val_out)
+    except Exception:
+        if temp_train.exists():
+            temp_train.unlink()
+        if temp_val.exists():
+            temp_val.unlink()
+        raise
 
     print(f"Wrote train set to {train_out} ({train_out.stat().st_size} bytes)")
     print(f"Wrote val set to {val_out} ({val_out.stat().st_size} bytes)")
@@ -351,10 +386,19 @@ Zero copyrighted game ROMs, proprietary studio assets, or private repos were scr
 - **Separation of Train/Val Sets:** Seeded pseudorandom shuffle (seed 42) ensures deterministic separation without cross-set leakage.
 """
 
-    manifest_path = REPORTS_DIR / "GAMEFORGE_TRAINING_DATA_MANIFEST.md"
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        f.write(manifest_md)
+    manifest_path = target_reports_dir / "GAMEFORGE_TRAINING_DATA_MANIFEST.md"
+    temp_manifest = manifest_path.with_suffix(".tmp")
+    try:
+        temp_manifest.write_text(manifest_md, encoding="utf-8")
+        temp_manifest.replace(manifest_path)
+    except Exception:
+        if temp_manifest.exists():
+            temp_manifest.unlink()
+        raise
+
     print(f"Generated data manifest at {manifest_path}")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

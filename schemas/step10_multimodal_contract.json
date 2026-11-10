@@ -25,6 +25,25 @@
       "type": "string",
       "minLength": 1
     },
+    "total_frames_inspected": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "artifacts_detected_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inter_rater_agreement": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "visual_review_pass": {
+      "type": "boolean"
+    },
+    "deterministic_metrics_consistent": {
+      "type": "boolean"
+    },
     "visual_rubrics": {
       "type": "array",
       "items": {
@@ -62,6 +81,11 @@
           "visual_verdict": {
             "type": "string",
             "enum": ["PASS", "ARTIFACT_DETECTED", "CLIPPING_DETECTED", "MISSING_TEXTURE", "OCCLUSION_FAIL"]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
           }
         }
       }
@@ -83,6 +107,9 @@
         "telemetry_source_independent_from_vision": { "type": "boolean" },
         "exact_numeric_values_grounded_in_engine": { "type": "boolean" }
       }
+    },
+    "frame_observations": {
+      "type": "array"
     }
   }
 }

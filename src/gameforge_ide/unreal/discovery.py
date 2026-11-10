@@ -23,7 +23,8 @@ import os
 from pathlib import Path
 import sys
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from typing import Any, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -68,21 +69,26 @@ def parse_engine_version(root: Path) -> Optional[Tuple[str, int, str]]:
         return None
     try:
         data = json.loads(build_version_file.read_text(encoding="utf-8", errors="replace"))
+        if not isinstance(data, dict):
+            return None
         major = data.get("MajorVersion")
         minor = data.get("MinorVersion")
         patch = data.get("PatchVersion", 0)
-        cl = int(data.get("Changelist", 0))
+        cl = int(data.get("Changelist") or 0)
         branch = str(data.get("BranchName", ""))
         if major is not None and minor is not None:
             return f"{major}.{minor}.{patch}", cl, branch
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
         pass
     return None
 
 
 def validate_engine_root(root: Path, source: str, pinned_minor: str = DEFAULT_PINNED_VERSION) -> Optional[DiscoveredEngine]:
     """Validate a candidate Unreal Engine root directory and return a DiscoveredEngine if valid."""
-    root = Path(root).resolve()
+    try:
+        root = Path(root).resolve()
+    except (OSError, ValueError):
+        return None
     if not root.is_dir():
         return None
 
@@ -152,7 +158,6 @@ def _safe_read_json(path: Path, retries: int = 3, delay: float = 0.05) -> Option
             return json.loads(raw)
         except (PermissionError, OSError):
             if attempt < retries - 1:
-                import time
                 time.sleep(delay * (attempt + 1))
             else:
                 pass
@@ -198,10 +203,13 @@ def scan_manifest_items() -> List[Path]:
             if isinstance(data, dict):
                 app_name = str(data.get("AppName", ""))
                 location = data.get("InstallLocation")
-                if app_name.startswith("UE_") and location:
-                    p = Path(location)
-                    if p.is_dir() and p not in roots:
-                        roots.append(p)
+                if app_name.startswith("UE_") and isinstance(location, str) and location.strip():
+                    try:
+                        p = Path(location.strip())
+                        if p.is_dir() and p not in roots:
+                            roots.append(p)
+                    except (OSError, ValueError):
+                        continue
     except OSError:
         pass
     return roots
@@ -219,14 +227,20 @@ def scan_launcher_installed_dat() -> List[Path]:
         return roots
 
     data = _safe_read_json(dat_file)
-    if isinstance(data, dict):
-        for item in data.get("InstallationList", []):
+    install_list = data.get("InstallationList", []) if isinstance(data, dict) else []
+    if isinstance(install_list, list):
+        for item in install_list:
+            if not isinstance(item, dict):
+                continue
             app_name = str(item.get("AppName", ""))
             location = item.get("InstallLocation")
-            if app_name.startswith("UE_") and location:
-                p = Path(location)
-                if p.is_dir() and p not in roots:
-                    roots.append(p)
+            if app_name.startswith("UE_") and isinstance(location, str) and location.strip():
+                try:
+                    p = Path(location.strip())
+                    if p.is_dir() and p not in roots:
+                        roots.append(p)
+                except (OSError, ValueError):
+                    continue
     return roots
 
 
@@ -266,10 +280,11 @@ def scan_windows_registry() -> List[Path]:
                                 with winreg.OpenKey(base, subkey_name, 0, access) as subkey:
                                     try:
                                         dir_val, _ = winreg.QueryValueEx(subkey, "InstalledDirectory")
-                                        p = Path(dir_val)
-                                        if p.is_dir() and p not in roots:
-                                            roots.append(p)
-                                    except OSError:
+                                        if isinstance(dir_val, str) and dir_val.strip():
+                                            p = Path(dir_val.strip())
+                                            if p.is_dir() and p not in roots:
+                                                roots.append(p)
+                                    except (OSError, ValueError):
                                         pass
                             except OSError:
                                 continue
@@ -277,11 +292,11 @@ def scan_windows_registry() -> List[Path]:
                         for j in range(num_values):
                             try:
                                 val_name, val_data, _ = winreg.EnumValue(base, j)
-                                if isinstance(val_data, str):
-                                    p = Path(val_data)
+                                if isinstance(val_data, str) and val_data.strip():
+                                    p = Path(val_data.strip())
                                     if p.is_dir() and (p / "Engine" / "Binaries").is_dir() and p not in roots:
                                         roots.append(p)
-                            except OSError:
+                            except (OSError, ValueError):
                                 continue
                 except OSError:
                     continue
@@ -308,18 +323,26 @@ def _scan_filesystem_drives_impl() -> List[Path]:
         try:
             import ctypes
             k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            prev_mode = None
             try:
-                k32.SetErrorMode(0x0001 | 0x8000)
+                prev_mode = k32.SetErrorMode(0x0001 | 0x8000)
             except Exception:
                 pass
-            mask = k32.GetLogicalDrives()
-            for i in range(26):
-                if (mask >> i) & 1:
-                    drive_letter = chr(ord('A') + i)
-                    drive_root = f"{drive_letter}:\\"
-                    dtype = k32.GetDriveTypeW(drive_root)
-                    if dtype in (3, 6):  # Fixed and RAMDisk only (NOT network)
-                        drives.append(drive_root)
+            try:
+                mask = k32.GetLogicalDrives()
+                for i in range(26):
+                    if (mask >> i) & 1:
+                        drive_letter = chr(ord('A') + i)
+                        drive_root = f"{drive_letter}:\\"
+                        dtype = k32.GetDriveTypeW(drive_root)
+                        if dtype in (3, 6):  # Fixed and RAMDisk only (NOT network)
+                            drives.append(drive_root)
+            finally:
+                if prev_mode is not None:
+                    try:
+                        k32.SetErrorMode(prev_mode)
+                    except Exception:
+                        pass
         except Exception:
             import string
             drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
@@ -392,7 +415,10 @@ def _do_discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION) -> List
     def add_candidate(path: Optional[Path], source: str) -> None:
         if path is None:
             return
-        resolved = Path(path).resolve()
+        try:
+            resolved = Path(path).resolve()
+        except (OSError, ValueError):
+            return
         if resolved in seen_roots:
             return
         eng = validate_engine_root(resolved, source=source, pinned_minor=pinned_minor)
@@ -403,8 +429,8 @@ def _do_discover_all_engines(pinned_minor: str = DEFAULT_PINNED_VERSION) -> List
     # 1. Environment overrides
     for env_key in ("GAMEFORGE_ENGINE_ROOT", "UE_ENGINE_PATH", "UNREAL_ENGINE_PATH"):
         val = os.environ.get(env_key)
-        if val:
-            add_candidate(Path(val), source=f"env:{env_key}")
+        if isinstance(val, str) and val.strip():
+            add_candidate(Path(val.strip().strip('"')), source=f"env:{env_key}")
 
     # 2. User settings (%APPDATA%\GameForge\settings.json)
     for p in scan_user_settings():

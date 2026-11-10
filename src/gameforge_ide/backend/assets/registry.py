@@ -136,8 +136,9 @@ class AssetRegistry:
             db.execute("INSERT INTO asset_events (asset_id, stage, ok, detail, evidence, at) VALUES (?,?,?,?,?,?)",
                             (asset_id, stage, int(ok), detail, json.dumps(evidence or []), now))
             if artifact_path:
+                art_sha = sha256_file(artifact_path) if Path(artifact_path).is_file() else None
                 db.execute("UPDATE assets SET artifact_path=?, artifact_sha256=? WHERE asset_id=?",
-                                (artifact_path, sha256_file(artifact_path), asset_id))
+                                (artifact_path, art_sha, asset_id))
             if unreal_path:
                 db.execute("UPDATE assets SET unreal_path=? WHERE asset_id=?", (unreal_path, asset_id))
             if ok:
@@ -152,7 +153,10 @@ class AssetRegistry:
         row = self.get(asset_id)
         if not row or not row["artifact_path"] or not Path(row["artifact_path"]).exists():
             return False
-        return sha256_file(row["artifact_path"]) == row["artifact_sha256"]
+        try:
+            return sha256_file(row["artifact_path"]) == row["artifact_sha256"]
+        except OSError:
+            return False
 
     def get(self, asset_id: str) -> sqlite3.Row | None:
         with self._connect() as db:

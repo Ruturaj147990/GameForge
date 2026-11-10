@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .model import CodegenTask
 
 DENYLIST_PATTERN = re.compile(
-    r"#include|FPlatformProcess|FFileHelper|IFileManager|Exec\(|ConsoleCommand|asm|reinterpret_cast|system\(|ShellExecute|socket\(|fork\(",
+    r"#include|FPlatformProcess|FFileHelper|IFileManager|Exec\(|ConsoleCommand|\basm\b|reinterpret_cast|\bsystem\(|\bShellExecute|\bsocket\(|\bfork\(|\bCreateProcess|\bpopen\(|\bTerminateProcess",
     re.IGNORECASE,
 )
 
@@ -55,9 +55,17 @@ def synthesize_cpp_bodies_for_architecture(
     safe_summary = re.sub(r'["\\\r\n]+', " ", rules_text)[:160]
 
     # 1. Discrete Grid / Constraint / Board State Machines
-    if "sudoku" in plan_kind or "sudoku" in target_classes or (
-        "scratch_puzzle" in plan_kind and mechanics.get("subgrid_size") == 3
-    ):
+    is_constraint_grid = (
+        "constraint" in plan_kind
+        or "sudoku" in plan_kind
+        or "sudoku" in target_classes
+        or "constraint_grid" in custom_caps
+        or (
+            "scratch_puzzle" in plan_kind
+            and (mechanics.get("subgrid_size") == 3 or "constraint" in rules_low or "digit" in rules_low or "grid" in rules_low)
+        )
+    )
+    if is_constraint_grid:
         on_event = (
             "\tUWorld* CurrentWorld = GetWorld();\n"
             "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
@@ -70,14 +78,14 @@ def synthesize_cpp_bodies_for_architecture(
             "\t\tbool bConflict = false;\n"
             "\t\tfor (int32 i = 0; i < 9; ++i)\n"
             "\t\t{\n"
-            "\t\t\tif (SudokuGrid[Row][i] == CandidateDigit || SudokuGrid[i][Col] == CandidateDigit)\n"
+            "\t\t\tif (BoardGrid[Row][i] == CandidateDigit || BoardGrid[i][Col] == CandidateDigit)\n"
             "\t\t\t{\n"
             "\t\t\t\tbConflict = true;\n"
             "\t\t\t}\n"
             "\t\t}\n"
             "\t\tif (!bConflict && Row >= 0 && Row < 9 && Col >= 0 && Col < 9)\n"
             "\t\t{\n"
-            "\t\t\tSudokuGrid[Row][Col] = CandidateDigit;\n"
+            "\t\t\tBoardGrid[Row][Col] = CandidateDigit;\n"
             "\t\t\tValidPlacements += 1;\n"
             "\t\t\tif (GS) { GS->AddStat(FName(TEXT(\"game.score\")), 10.0f); }\n"
             "\t\t}\n"
@@ -92,7 +100,16 @@ def synthesize_cpp_bodies_for_architecture(
         )
         return on_event, tick
 
-    if "scratch_board" in plan_kind or "chess" in target_classes or "checkers" in target_classes:
+    is_turn_board = (
+        "scratch_board" in plan_kind
+        or "board_strategy" in plan_kind
+        or "turn_based_board" in custom_caps
+        or "piece_movement" in custom_caps
+        or "chess" in target_classes
+        or "checkers" in target_classes
+        or "turn.ended" in rules_low
+    )
+    if is_turn_board:
         on_event = (
             "\tUWorld* CurrentWorld = GetWorld();\n"
             "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
@@ -116,7 +133,15 @@ def synthesize_cpp_bodies_for_architecture(
         )
         return on_event, tick
 
-    if "falling_blocks" in plan_kind or "tetris" in plan_kind or "tetris" in target_classes:
+    is_falling_matrix = (
+        "falling_blocks" in plan_kind
+        or "falling_matrix" in custom_caps
+        or "matrix_drop" in custom_caps
+        or "tetris" in plan_kind
+        or "tetris" in target_classes
+        or "line.cleared" in rules_low
+    )
+    if is_falling_matrix:
         on_event = (
             "\tUWorld* CurrentWorld = GetWorld();\n"
             "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
@@ -141,7 +166,13 @@ def synthesize_cpp_bodies_for_architecture(
         )
         return on_event, tick
 
-    if "scratch_snake" in plan_kind:
+    is_grid_crawler = (
+        "scratch_snake" in plan_kind
+        or "grid_crawler" in custom_caps
+        or "trail_growth" in custom_caps
+        or ("crawler" in plan_kind and "dungeon" not in plan_kind)
+    )
+    if is_grid_crawler:
         on_event = (
             "\tUWorld* CurrentWorld = GetWorld();\n"
             "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
@@ -316,6 +347,273 @@ def synthesize_cpp_bodies_for_architecture(
             "\t}"
         )
 
+    # Capability G: Player Ability & Stealth Smoke Bomb
+    has_ability_req = (
+        "stealth" in custom_caps
+        or "stealth_smoke_bomb" in custom_caps
+        or "smoke_bomb" in custom_caps
+        or "ability" in rules_low
+        or "stealth" in rules_low
+        or "smoke" in rules_low
+        or bool(arch.get("player_abilities"))
+    )
+    if has_ability_req:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"player.ability_used\") || Event.EventName == TEXT(\"player.stealth_started\"))\n"
+            "\t{\n"
+            "\t\tbAbilityActive = true;\n"
+            "\t\tAbilityDurationTimer = 5.0f;\n"
+            "\t\tAbilityCooldownTimer = 8.0f;\n"
+            "\t\tif (GS)\n"
+            "\t\t{\n"
+            "\t\t\tGS->SetStat(FName(TEXT(\"player.stealth\")), 1.0f);\n"
+            "\t\t\tGS->SetStat(FName(TEXT(\"player.ability_cooldown\")), AbilityCooldownTimer);\n"
+            "\t\t\tGS->AddStat(FName(TEXT(\"game.score\")), 15.0f);\n"
+            "\t\t}\n"
+            "\t}\n"
+            "\telse if (Event.EventName == TEXT(\"player.stealth_ended\"))\n"
+            "\t{\n"
+            "\t\tbAbilityActive = false;\n"
+            "\t\tAbilityDurationTimer = 0.0f;\n"
+            "\t\tif (GS) { GS->SetStat(FName(TEXT(\"player.stealth\")), 0.0f); }\n"
+            "\t}"
+        )
+        tick_blocks.append(
+            "\tif (bRuleEnabled)\n"
+            "\t{\n"
+            "\t\tif (AbilityCooldownTimer > 0.0f)\n"
+            "\t\t{\n"
+            "\t\t\tAbilityCooldownTimer = FMath::Max(0.0f, AbilityCooldownTimer - DeltaSeconds);\n"
+            "\t\t\tif (GS) { GS->SetStat(FName(TEXT(\"player.ability_cooldown\")), AbilityCooldownTimer); }\n"
+            "\t\t}\n"
+            "\t\tif (bAbilityActive)\n"
+            "\t\t{\n"
+            "\t\t\tAbilityDurationTimer = FMath::Max(0.0f, AbilityDurationTimer - DeltaSeconds);\n"
+            "\t\t\tif (AbilityDurationTimer <= 0.0f)\n"
+            "\t\t\t{\n"
+            "\t\t\t\tbAbilityActive = false;\n"
+            "\t\t\t\tif (GS) { GS->SetStat(FName(TEXT(\"player.stealth\")), 0.0f); }\n"
+            "\t\t\t\tif (Bus) { Bus->EmitSimple(FName(TEXT(\"player.stealth_ended\")), this, FName(TEXT(\"ability\")), 0.0f); }\n"
+            "\t\t\t}\n"
+            "\t\t}\n"
+            "\t}"
+        )
+
+    # Capability H: Boss Fight & Multi-Phase State Machine
+    has_boss_req = (
+        "boss_fight" in custom_caps
+        or "multi_phase_boss" in custom_caps
+        or "boss" in rules_low
+        or "phase 2" in rules_low
+        or "enrage" in rules_low
+        or bool(mechanics.get("boss_name"))
+    )
+    if has_boss_req:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"boss.phase_changed\"))\n"
+            "\t{\n"
+            "\t\tBossPhase = 2;\n"
+            "\t\tbBossEnraged = true;\n"
+            "\t\tif (GS)\n"
+            "\t\t{\n"
+            "\t\t\tGS->SetStat(FName(TEXT(\"boss.phase\")), 2.0f);\n"
+            "\t\t\tGS->AddStat(FName(TEXT(\"game.score\")), 100.0f);\n"
+            "\t\t}\n"
+            "\t}\n"
+            "\telse if (Event.EventName == TEXT(\"boss.defeated\"))\n"
+            "\t{\n"
+            "\t\tbCompleted = true;\n"
+            "\t\tif (GS)\n"
+            "\t\t{\n"
+            "\t\t\tGS->SetStat(FName(TEXT(\"boss.health\")), 0.0f);\n"
+            "\t\t\tGS->AddStat(FName(TEXT(\"game.score\")), 500.0f);\n"
+            "\t\t}\n"
+            "\t\tif (Bus) { Bus->EmitSimple(FName(TEXT(\"game.won\")), this, FName(TEXT(\"boss\")), 1.0f); }\n"
+            "\t}"
+        )
+
+    # Capability I: Keys & Locked Gates Progression
+    has_key_req = (
+        "key_lock_gate" in custom_caps
+        or "ancient_key" in rules_low
+        or "vault gate" in rules_low
+        or "keys" in rules_low
+        or bool(mechanics.get("key_count"))
+    )
+    if has_key_req:
+        req_keys = int(mechanics.get("key_count", 3) or 3)
+        event_blocks.append(
+            f"\tRequiredKeys = {req_keys};\n"
+            "\tif (Event.EventName == TEXT(\"pickup.collected\"))\n"
+            "\t{\n"
+            "\t\tKeysCollected += 1;\n"
+            "\t\tif (GS) { GS->SetStat(FName(TEXT(\"game.counter.keys_collected\")), static_cast<float>(KeysCollected)); }\n"
+            f"\t\tif (KeysCollected >= {req_keys} && !bGateUnlocked)\n"
+            "\t\t{\n"
+            "\t\t\tbGateUnlocked = true;\n"
+            "\t\t\tif (GS) { GS->SetStat(FName(TEXT(\"game.counter.gates_unlocked\")), 1.0f); }\n"
+            "\t\t\tif (Bus) { Bus->EmitSimple(FName(TEXT(\"door.opened\")), this, FName(TEXT(\"vault_gate\")), 1.0f); }\n"
+            "\t\t}\n"
+            "\t}"
+        )
+
+    # Capability J: Jump Pads & Launch Impulse
+    has_jump_pad = (
+        "jump_pad" in custom_caps
+        or "jump_pads" in custom_caps
+        or "launcher" in custom_caps
+        or "jump pad" in rules_low
+        or "launch impulse" in rules_low
+    )
+    if has_jump_pad:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"player.jump_pad_used\"))\n"
+            "\t{\n"
+            "\t\tMovesPlayed += 1;\n"
+            "\t\tif (GS) { GS->AddStat(FName(TEXT(\"game.score\")), 15.0f); }\n"
+            "\t}"
+        )
+
+    # Capability K: Stamina & Dash / Dodge Invulnerability
+    has_dash_req = (
+        "dash" in custom_caps
+        or "dodge" in custom_caps
+        or "invulnerability" in custom_caps
+        or "evasion" in custom_caps
+        or "dash" in rules_low
+        or "dodge" in rules_low
+    )
+    if has_dash_req:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"player.dashed\") || Event.EventName == TEXT(\"player.dodge\"))\n"
+            "\t{\n"
+            "\t\tbIsInvulnerable = true;\n"
+            "\t\tDashInvulnerabilityTimer = 0.5f;\n"
+            "\t\tif (GS) { GS->AddStat(FName(TEXT(\"game.score\")), 5.0f); }\n"
+            "\t}"
+        )
+        tick_blocks.append(
+            "\tif (bRuleEnabled && DashInvulnerabilityTimer > 0.0f)\n"
+            "\t{\n"
+            "\t\tDashInvulnerabilityTimer = FMath::Max(0.0f, DashInvulnerabilityTimer - DeltaSeconds);\n"
+            "\t\tif (DashInvulnerabilityTimer <= 0.0f)\n"
+            "\t\t{\n"
+            "\t\t\tbIsInvulnerable = false;\n"
+            "\t\t}\n"
+            "\t}"
+        )
+
+    # Capability L: Dynamic Ammo & Multi-Weapon Loadout
+    has_weapon_req = (
+        "multi_weapon" in custom_caps
+        or "multi_weapon_loadout" in custom_caps
+        or "weapon_switching" in custom_caps
+        or "ammo" in rules_low
+        or "weapon" in rules_low
+        or len(mechanics.get("weapons", [])) > 1
+    )
+    if has_weapon_req:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"player.weapon_switched\"))\n"
+            "\t{\n"
+            "\t\tActiveWeaponIndex = (ActiveWeaponIndex + 1) % 3;\n"
+            "\t\tif (GS) { GS->SetStat(FName(TEXT(\"player.active_weapon\")), static_cast<float>(ActiveWeaponIndex)); }\n"
+            "\t}\n"
+            "\telse if (Event.EventName == TEXT(\"weapon.fired\"))\n"
+            "\t{\n"
+            "\t\tAmmoCount = FMath::Max(0, AmmoCount - 1);\n"
+            "\t\tif (GS) { GS->SetStat(FName(TEXT(\"player.ammo\")), static_cast<float>(AmmoCount)); }\n"
+            "\t}\n"
+            "\telse if (Event.EventName == TEXT(\"pickup.collected\"))\n"
+            "\t{\n"
+            "\t\tAmmoCount = FMath::Min(200, AmmoCount + 25);\n"
+            "\t\tif (GS) { GS->SetStat(FName(TEXT(\"player.ammo\")), static_cast<float>(AmmoCount)); }\n"
+            "\t}"
+        )
+
+    # Capability M: Teleporters & Portals
+    has_teleporter = (
+        "teleporter" in custom_caps
+        or "portal" in custom_caps
+        or "teleport" in rules_low
+        or "portal" in rules_low
+    )
+    if has_teleporter:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"teleporter.used\") || Event.EventName == TEXT(\"portal.entered\"))\n"
+            "\t{\n"
+            "\t\tMovesPlayed += 1;\n"
+            "\t\tif (GS) { GS->AddStat(FName(TEXT(\"game.score\")), 25.0f); }\n"
+            "\t}"
+        )
+
+    # Capability N: Destructible Props & Loot Drops
+    has_destructibles = (
+        "destructible" in custom_caps
+        or "destructible_props" in custom_caps
+        or "loot" in custom_caps
+        or "destructible" in rules_low
+        or "break" in rules_low
+    )
+    if has_destructibles:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"prop.destroyed\") || Event.EventName == TEXT(\"destructible.broken\"))\n"
+            "\t{\n"
+            "\t\tValidPlacements += 1;\n"
+            "\t\tif (GS)\n"
+            "\t\t{\n"
+            "\t\t\tGS->AddStat(FName(TEXT(\"game.score\")), 20.0f);\n"
+            "\t\t\tGS->AddStat(FName(TEXT(\"player.health\")), 5.0f);\n"
+            "\t\t}\n"
+            "\t}"
+        )
+
+    # Capability O: Day-Night & Environmental Hazard Cycle
+    has_cycle = (
+        "day_night_cycle" in custom_caps
+        or "hazard_cycle" in custom_caps
+        or "day_night" in rules_low
+        or "cycle" in rules_low
+    )
+    if has_cycle:
+        tick_blocks.append(
+            "\tif (bRuleEnabled)\n"
+            "\t{\n"
+            "\t\tEnvironmentalCycleTimer += DeltaSeconds;\n"
+            "\t\tif (EnvironmentalCycleTimer >= 30.0f)\n"
+            "\t\t{\n"
+            "\t\t\tEnvironmentalCycleTimer = 0.0f;\n"
+            "\t\t\tbDaytime = !bDaytime;\n"
+            "\t\t\tif (GS) { GS->SetStat(FName(TEXT(\"world.is_daytime\")), bDaytime ? 1.0f : 0.0f); }\n"
+            "\t\t}\n"
+            "\t}"
+        )
+
+    # Capability P: Multi-Stage Quest Progression
+    has_quest = (
+        "quest" in custom_caps
+        or "multi_stage_quest" in custom_caps
+        or "quest" in rules_low
+        or "objective" in rules_low
+    )
+    if has_quest:
+        event_blocks.append(
+            "\tif (Event.EventName == TEXT(\"quest.stage_advanced\") || Event.EventName == TEXT(\"objective.completed\"))\n"
+            "\t{\n"
+            "\t\tCurrentQuestStage += 1;\n"
+            "\t\tif (GS)\n"
+            "\t\t{\n"
+            "\t\t\tGS->SetStat(FName(TEXT(\"quest.stage\")), static_cast<float>(CurrentQuestStage));\n"
+            "\t\t\tGS->AddStat(FName(TEXT(\"game.score\")), 50.0f);\n"
+            "\t\t}\n"
+            "\t\tif (CurrentQuestStage >= MaxQuestStages && !bCompleted)\n"
+            "\t\t{\n"
+            "\t\t\tbCompleted = true;\n"
+            "\t\t\tif (Bus) { Bus->EmitSimple(FName(TEXT(\"quest.completed\")), this, FName(TEXT(\"quest\")), static_cast<float>(CurrentQuestStage)); }\n"
+            "\t\t}\n"
+            "\t}"
+        )
+
     # Ensure there is always at least one event reaction and tick update
     if len(event_blocks) == 1:
         event_blocks.append(
@@ -396,11 +694,36 @@ def generate_header(
         '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tbool bCompleted = false;',
         '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat ElapsedRuleTime = 0.0f;',
         '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat StepAccumulator = 0.0f;',
-        '\tint32 SudokuGrid[9][9] = {{0}};',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat AbilityCooldownTimer = 0.0f;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat AbilityDurationTimer = 0.0f;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tbool bAbilityActive = false;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat BossHealth = 1000.0f;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat BossMaxHealth = 1000.0f;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 BossPhase = 1;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tbool bBossEnraged = false;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 KeysCollected = 0;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 RequiredKeys = 3;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tbool bGateUnlocked = false;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat DashInvulnerabilityTimer = 0.0f;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tbool bIsInvulnerable = false;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 ActiveWeaponIndex = 0;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 AmmoCount = 100;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 CurrentQuestStage = 1;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tint32 MaxQuestStages = 3;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tfloat EnvironmentalCycleTimer = 0.0f;',
+        '\tUPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge")\n\tbool bDaytime = true;',
+        '\tint32 BoardGrid[9][9] = {{0}};',
     ]
     if properties:
         for p_type, p_name, u_macro in properties:
-            if p_name in ("bRuleEnabled", "MovesPlayed", "ValidPlacements", "ResourcePool", "bWhiteTurn", "bCompleted", "ElapsedRuleTime", "StepAccumulator"):
+            if p_name in (
+                "bRuleEnabled", "MovesPlayed", "ValidPlacements", "ResourcePool", "bWhiteTurn", "bCompleted",
+                "ElapsedRuleTime", "StepAccumulator", "AbilityCooldownTimer", "AbilityDurationTimer",
+                "bAbilityActive", "BossHealth", "BossMaxHealth", "BossPhase", "bBossEnraged",
+                "KeysCollected", "RequiredKeys", "bGateUnlocked", "DashInvulnerabilityTimer",
+                "bIsInvulnerable", "ActiveWeaponIndex", "AmmoCount", "CurrentQuestStage",
+                "MaxQuestStages", "EnvironmentalCycleTimer", "bDaytime"
+            ):
                 continue
             macro = u_macro or 'UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")'
             props_lines.append(f"\t{macro}\n\t{p_type} {p_name};")
@@ -482,14 +805,33 @@ void U{clean_handler}::ExecuteRule()
 \tbRuleEnabled = true;
 \tMovesPlayed = 0;
 \tValidPlacements = 0;
+\tResourcePool = 250;
+\tbWhiteTurn = true;
 \tbCompleted = false;
 \tElapsedRuleTime = 0.0f;
 \tStepAccumulator = 0.0f;
+\tAbilityCooldownTimer = 0.0f;
+\tAbilityDurationTimer = 0.0f;
+\tbAbilityActive = false;
+\tBossHealth = BossMaxHealth;
+\tBossPhase = 1;
+\tbBossEnraged = false;
+\tKeysCollected = 0;
+\tRequiredKeys = 3;
+\tbGateUnlocked = false;
+\tDashInvulnerabilityTimer = 0.0f;
+\tbIsInvulnerable = false;
+\tActiveWeaponIndex = 0;
+\tAmmoCount = 100;
+\tCurrentQuestStage = 1;
+\tMaxQuestStages = 3;
+\tEnvironmentalCycleTimer = 0.0f;
+\tbDaytime = true;
 \tfor (int32 r = 0; r < 9; ++r)
 \t{{
 \t\tfor (int32 c = 0; c < 9; ++c)
 \t\t{{
-\t\t\tSudokuGrid[r][c] = 0;
+\t\t\tBoardGrid[r][c] = 0;
 \t\t}}
 \t}}
 }}

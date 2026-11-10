@@ -6,9 +6,11 @@ Each view will be fleshed out in WI-4.4 through WI-4.12.
 from __future__ import annotations
 
 from typing import Optional
+from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 
 
 class BaseStudioView(QWidget):
@@ -21,11 +23,22 @@ class BaseStudioView(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
-        lbl = QLabel(f"Studio View: {title}", self)
-        lbl.setObjectName(f"lbl_{view_id}_title")
-        lbl.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 18px; font-weight: bold;")
-        layout.addWidget(lbl)
+        self._title_label = QLabel(f"Studio View: {title}", self)
+        self._title_label.setObjectName(f"lbl_{view_id}_title")
+        self._title_label.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 18px; font-weight: bold;"))
+        layout.addWidget(self._title_label)
         layout.addStretch(1)
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update view theme stylesheets."""
+        if hasattr(self, "_title_label"):
+            self._title_label.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 18px; font-weight: bold;"))
+
+    @Slot()
+    def refresh_icons(self) -> None:
+        """Refresh vector icons for active theme."""
+        pass
 
 
 from .home_view import HomeView

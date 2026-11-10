@@ -5,9 +5,6 @@ process management ensuring zero orphaned subprocesses under cancellation or cra
 """
 from __future__ import annotations
 
-import subprocess
-from typing import List, Optional, Sequence
-
 from ..core.jobs import (
     ENGINE_LOCK,
     JobHandle,
@@ -15,6 +12,7 @@ from ..core.jobs import (
     adopt,
     default_job_manager,
     get_active_children,
+    kill_process_tree,
     spawn,
     terminate_all_children,
 )
@@ -26,6 +24,7 @@ __all__ = [
     "adopt",
     "default_job_manager",
     "get_active_children",
+    "kill_process_tree",
     "spawn",
     "terminate_all_children",
 ]

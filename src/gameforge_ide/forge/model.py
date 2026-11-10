@@ -60,7 +60,9 @@ TERMINAL = {
 
 
 def canonical_hash(obj: Any) -> str:
-    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    ).hexdigest()
 
 
 class StepSpec(BaseModel):
@@ -112,7 +114,9 @@ class StepRecord(BaseModel):
 
     @property
     def duration_s(self) -> Optional[float]:
-        return round(self.finished_at - self.started_at, 1) if self.started_at and self.finished_at else None
+        if self.started_at is not None and self.finished_at is not None:
+            return round(max(0.0, self.finished_at - self.started_at), 1)
+        return None
 
 
 class RunSpec(BaseModel):

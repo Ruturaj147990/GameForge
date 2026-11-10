@@ -80,11 +80,17 @@ def _avoid_from_plan(plan: LevelPlan, extra: Iterable[Tuple[float, float, float]
 
 def decorate(plan: LevelPlan, layout: str, theme: Theme, rng: random.Random, density: float = 1.0) -> List[OpCall]:
     """Return decoration OpCalls for ``plan`` (does not modify the plan)."""
+    if density <= 0.0:
+        return []
     names = [n for n in theme.decor if n in DECOR] or ["rock"]
     center, extent = plan.nav_bounds
     cx, cy = center[0], center[1]
     hx, hy = max(500.0, extent[0]), max(500.0, extent[1])
     avoid = _avoid_from_plan(plan)
+    # Extra clearance around bomb sites and key objective actors
+    for a in plan.actors:
+        if "bomb_site" in str(a.runtime_class).lower() or any("bomb" in t.lower() for t in a.tags):
+            avoid.append((a.location[0], a.location[1], 550.0))
     spots: List[Tuple[float, float, float, bool]] = []   # x, y, z, snap
     extra_ops: List[OpCall] = []
 
@@ -162,6 +168,26 @@ def decorate(plan: LevelPlan, layout: str, theme: Theme, rng: random.Random, den
                 side = rng.choice((-1.0, 1.0))
                 spots.append((float(loc.get("x", 0.0)) + rng.uniform(-60, 60),
                               float(loc.get("y", 0.0)) + side * rng.uniform(700.0, 1100.0), -450.0, False))
+    else:
+        # Fallback perimeter ring for arbitrary or custom synthesized layouts
+        half_x, half_y = hx - 200.0, hy - 200.0
+        n = int(16 * density)
+        for _ in range(n * 3):
+            if len(spots) >= n:
+                break
+            side = rng.randrange(4)
+            t = rng.uniform(-0.85, 0.85)
+            inset = rng.uniform(150.0, 350.0)
+            if side == 0:
+                x, y = cx + half_x - inset, cy + t * half_y
+            elif side == 1:
+                x, y = cx - half_x + inset, cy + t * half_y
+            elif side == 2:
+                x, y = cx + t * half_x, cy + half_y - inset
+            else:
+                x, y = cx + t * half_x, cy - half_y + inset
+            if _clear(x, y, 150.0, avoid + [(sx, sy, 200.0) for sx, sy, _z, _s in spots]):
+                spots.append((x, y, 0.0, False))
 
     ops: List[OpCall] = list(extra_ops)
     for idx, (x, y, z, snap) in enumerate(spots[:MAX_DECOR_PIECES]):

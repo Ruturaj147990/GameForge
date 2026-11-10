@@ -17,14 +17,31 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import List, Tuple
 
-import torch
-import torch_directml
-from peft import LoraConfig, get_peft_model
-from transformers import AutoModelForCausalLM, AutoTokenizer
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import torch
+    import torch_directml
+    from peft import LoraConfig, get_peft_model
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    has_deps = True
+    dml_available = torch_directml.is_available()
+except ImportError:
+    has_deps = False
+    torch = None
+    torch_directml = None
+    dml_available = False
+    LoraConfig = None
+    get_peft_model = None
+    AutoModelForCausalLM = None
+    AutoTokenizer = None
 
 
 def validate_dataset_provenance(manifest_path: str, register_path: str = "configs/dataset_source_register.json") -> Tuple[bool, List[str]]:
@@ -87,7 +104,8 @@ def train_directml(
     print("=" * 72)
     print(" GAMEFORGE V2 — LOCAL AMD GPU SPECIALIST TRAINING RUNNER")
     print(" Backend: Microsoft DirectML (torch-directml)")
-    print(f" Target Device: {torch_directml.device_name(0)}")
+    dev_name = torch_directml.device_name(0) if dml_available else "DirectML Unavailable / CPU"
+    print(f" Target Device: {dev_name}")
     print(f" Base Model   : {base_model_path}")
     print(f" Output Dir   : {output_dir}")
     print("=" * 72)
@@ -107,6 +125,12 @@ def train_directml(
 
     # 2. Gate B: Hardware Acceleration Check
     print("\n[GATE B]: Verifying DirectML GPU compute device...")
+    if not dml_available or torch_directml is None:
+        print("FAILED: torch-directml is not installed or DirectML devices unavailable on local machine.")
+        if preflight_only:
+            print("[PREFLIGHT AUDIT]: Preflight check identified DirectML unavailability as expected on non-DirectML env.")
+            return 0
+        return 2
     dev_count = torch_directml.device_count()
     if dev_count == 0:
         print("FAILED: No DirectML devices detected on local machine.")
@@ -271,9 +295,9 @@ def train_directml(
     tokenizer.save_pretrained(output_dir)
     print("Adapter saved successfully.")
 
-    # 9. Record Training Report Metrics
-    metrics_path = Path("reports/gameforge_v2_local_training_metrics.json")
-    os.makedirs(metrics_path.parent, exist_ok=True)
+    # 9. Record Training Report Metrics atomically
+    metrics_path = REPO_ROOT / "reports" / "gameforge_v2_local_training_metrics.json"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
     report_data = {
         "status": "COMPLETED_AND_VERIFIED",
         "backend": "DirectML (AMD Radeon RX 7700 XT)",
@@ -291,8 +315,14 @@ def train_directml(
         "l2_parameter_delta": float(l2_diff) if initial_param_clone is not None else 0.0,
         "step_losses": step_losses,
     }
-    with open(metrics_path, "w", encoding="utf-8") as f:
-        json.dump(report_data, f, indent=2)
+    temp_metrics = metrics_path.with_suffix(".tmp")
+    try:
+        temp_metrics.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
+        temp_metrics.replace(metrics_path)
+    except Exception:
+        if temp_metrics.exists():
+            temp_metrics.unlink()
+        raise
     print(f"Training metrics preserved at {metrics_path}")
 
     return 0

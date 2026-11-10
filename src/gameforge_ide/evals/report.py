@@ -25,8 +25,9 @@ def save_eval_report(
     timestamp = time.strftime("%Y%m%dT%H%M%SZ")
     report_path = r_dir / f"eval_{model_clean}_{timestamp}.json"
 
+    default_status = "PASS" if eval_result.get("overall", {}).get("pass_rate", 100.0) > 0.0 else "FAIL"
     data = {
-        "status": "PASS",
+        "status": eval_result.get("status", default_status),
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "git_sha": git_sha or "HEAD",
         **eval_result,
@@ -61,3 +62,10 @@ def format_markdown_summary(reports: List[Dict[str, Any]]) -> str:
 
     lines.append("")
     return "\n".join(lines)
+
+
+__all__ = [
+    "sanitize_model_name",
+    "save_eval_report",
+    "format_markdown_summary",
+]

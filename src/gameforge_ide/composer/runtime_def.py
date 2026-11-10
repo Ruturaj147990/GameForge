@@ -18,6 +18,7 @@ def build(gds: Any, comp: Optional[Any] = None) -> Dict[str, Any]:
 
     # Attach codegen custom rules if present
     if comp and hasattr(comp, "codegen") and comp.codegen:
+        proj_name = getattr(comp, "project_name", getattr(getattr(gds, "meta", None), "project_name", "GameForgeGame"))
         custom_rules = []
         for task in comp.codegen:
             custom_rules.append(
@@ -25,7 +26,7 @@ def build(gds: Any, comp: Optional[Any] = None) -> Dict[str, Any]:
                     "rule_id": task.rule_id,
                     "handler_name": task.handler_name,
                     "description": task.description,
-                    "class": f"/Script/{comp.project_name}.{task.handler_name}",
+                    "class": f"/Script/{proj_name}.{task.handler_name}",
                 }
             )
         gfdef["custom_rules"] = custom_rules

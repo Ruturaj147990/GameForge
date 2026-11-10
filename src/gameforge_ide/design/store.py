@@ -15,6 +15,9 @@ from ..storage.design_store import (
     save,
 )
 
+load_gds = load
+save_gds = save
+
 __all__ = [
     "DESIGN_DIR",
     "DesignStore",
@@ -22,6 +25,8 @@ __all__ = [
     "diff",
     "history",
     "load",
+    "load_gds",
     "load_revision",
     "save",
+    "save_gds",
 ]

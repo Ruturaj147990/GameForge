@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
 from ...backend.agent.plan_executor import PlanEvent
 from ...backend.agent.task_plan import TaskNode, TaskPlan
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
+
 
 STATUS_COLORS = {
     "PLANNED": tokens.TEXT_MUTED,
@@ -356,3 +358,21 @@ class PlanPanel(QWidget):
         plans = TaskPlan.list_plans(self._workspace)
         if plans:
             self.set_plan(plans[0])
+        else:
+            self._active_plan = None
+            self._lbl_plan_id.setText("No active plan")
+            self._lbl_status.setText("IDLE")
+            self._lbl_goal.setText("Enter a task or slash command (/plan) to generate an execution plan.")
+            self._tree.clear()
+            self._detail_browser.clear()
+            self._progress.setValue(0)
+            self._progress.setFormat("No tasks")
+
+    def deleteLater(self) -> None:
+        if self._runner is not None:
+            try:
+                self._runner.cancel()
+            except Exception:
+                pass
+        super().deleteLater()
+

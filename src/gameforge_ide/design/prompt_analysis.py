@@ -46,6 +46,9 @@ ENEMY_NOUNS: Dict[str, Tuple[str, bool, str]] = {
     "sentinel": ("Sentinel", True, "#2E86C1"), "specter": ("Specter", False, "#85C1E9"), "wraith": ("Wraith", False, "#4A235A"),
     "gargoyle": ("Gargoyle", False, "#616A6B"), "hound": ("Hound", False, "#784212"), "automaton": ("Automaton", True, "#909497"),
     "stalker": ("Stalker", False, "#2C3E50"), "wyvern": ("Wyvern", True, "#922B21"), "anglerfish": ("Anglerfish", False, "#1B4F72"),
+    "necromancer": ("Necromancer", True, "#6A1B9A"), "assassin": ("Assassin", False, "#212121"),
+    "lich": ("Lich", True, "#4A148C"), "beholder": ("Beholder", True, "#D81B60"),
+    "spectre": ("Spectre", False, "#85C1E9"), "archon": ("Archon", True, "#7B1FA2"),
 }
 COLLECTIBLE_NOUNS: Dict[str, Tuple[str, str]] = {
     "coin": ("Coin", "#F2C230"), "gem": ("Gem", "#2EE6D6"), "jewel": ("Jewel", "#E0115F"), "diamond": ("Diamond", "#B9F2FF"),
@@ -63,6 +66,8 @@ COLLECTIBLE_NOUNS: Dict[str, Tuple[str, str]] = {
     "collectible": ("Collectible", "#F2C230"), "item": ("Item", "#F2C230"), "loot": ("Loot", "#E1AD21"),
     "canister": ("Canister", "#00E5FF"), "black box": ("Black Box", "#FF9F1C"), "black-box": ("Black Box", "#FF9F1C"),
     "chip": ("Data Chip", "#00F5D4"), "sigil": ("Sigil", "#9B5DE5"), "blueprint": ("Blueprint", "#4CC9F0"),
+    "bloodstone": ("Bloodstone", "#C62828"), "tome": ("Tome", "#5D4037"), "chalice": ("Chalice", "#FFD700"),
+    "urn": ("Urn", "#B0BEC5"), "soul": ("Soul", "#00E5FF"),
 }
 HAZARD_NOUNS: Dict[str, str] = {
     "lava": "Lava", "spike": "Spikes", "trap": "Trap", "acid": "Acid", "fire": "Fire", "flame": "Flames",
@@ -130,12 +135,14 @@ THEMES: Dict[str, Dict[str, Any]] = {
                     "biome": Biome.INDOOR, "lighting": Lighting.INDOOR, "palette": ["#33373D", "#6C7A89", "#00D2FF", "#FF8C00"],
                     "music": "tense", "ambience": "city"},
     "dungeon": {"kw": ("dungeon", "crypt", "catacomb", "tomb", "cave", "cavern", "mine", "underground", "sewer",
-                       "labyrinth", "maze"),
+                       "labyrinth", "maze", "vault", "keep", "stronghold"),
                 "biome": Biome.DUNGEON, "lighting": Lighting.INDOOR, "palette": ["#2E2A27", "#6D5D4B", "#C8A165", "#4A3B2C"],
                 "music": "tense", "ambience": "dungeon"},
-    "haunted": {"kw": ("haunted", "spooky", "horror", "creepy", "graveyard", "cemetery", "halloween", "ghost", "zombie",
-                       "undead", "vampire", "gothic"),
-                "biome": Biome.FOREST, "lighting": Lighting.NIGHT, "palette": ["#1B1B2F", "#5B5F97", "#B8B8D1", "#7D3C98"],
+    "gothic_crypt": {"kw": ("gothic", "crypt", "catacomb", "dark fantasy", "necromancer", "undead", "bloodstone"),
+                     "biome": Biome.DUNGEON, "lighting": Lighting.NIGHT, "palette": ["#1A162B", "#4A3E5C", "#8E44AD", "#C39BD3"],
+                     "music": "tense", "ambience": "dungeon"},
+    "haunted": {"kw": ("haunted", "spooky", "horror", "creepy", "graveyard", "cemetery", "halloween", "ghost", "vampire"),
+                "biome": Biome.DUNGEON, "lighting": Lighting.NIGHT, "palette": ["#1B1B2F", "#5B5F97", "#B8B8D1", "#7D3C98"],
                 "music": "tense", "ambience": "forest"},
     "castle": {"kw": ("castle", "medieval", "kingdom", "knight", "fortress", "keep", "citadel", "royal", "monastery"),
                "biome": Biome.MOUNTAIN, "lighting": Lighting.DAY, "palette": ["#8D8D8D", "#4F5D75", "#BFC0C0", "#A4161A"],
@@ -249,6 +256,11 @@ class PromptBrief:
     double_jump: bool = False
     sprint: bool = False
     players: int = 1
+    player_abilities: List[str] = field(default_factory=list)
+    ability_key_binds: Dict[str, str] = field(default_factory=dict)
+    boss_name: Optional[str] = None
+    key_pickups: int = 0
+    interactive_doors: int = 0
     custom_rules: List[str] = field(default_factory=list)
     unsupported: List[str] = field(default_factory=list)
     mechanics_notes: List[str] = field(default_factory=list)
@@ -312,6 +324,11 @@ class PromptBrief:
         out.extend(f"rule: {r}" for r in self.custom_rules)
         out.extend(f"note: {n}" for n in self.mechanics_notes)
         return out
+
+
+def _pascal(text: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9]+", " ", text or "").strip()
+    return "".join(part.capitalize() for part in cleaned.split()) or "GameForgeProject"
 
 
 def _to_int(tok: str) -> Optional[int]:
@@ -495,10 +512,12 @@ def _extract_custom_rules(prompt: str, brief: Optional[PromptBrief] = None) -> L
     sentences = re.split(r"[.;!\n]+", prompt)
     rule_pat = re.compile(
         r"\b(when(?:ever)?\s+[^,.;]{4,90}|every\s+\d+\s*(?:seconds?|secs?|s|waves?|kills?)\s+[^,.;]{3,90}"
-        r"|on\s+(?:pickup|kill|death|low\s+health|wave\s+clear|damage|switch|hack)\s+[^,.;]{3,90}"
-        r"|if\s+(?:player|health|score|time|oxygen|shield)\s+[^,.;]{4,90}"
-        r"|collecting\s+[^,.;]{3,60}\s+(?:restores?|grants?|heals?|gives?|boosts?)\s+[^,.;]{3,60}"
-        r"|killing\s+[^,.;]{3,60}\s+(?:restores?|grants?|heals?|gives?|spawns?)\s+[^,.;]{3,60})",
+        r"|on\s+(?:pickup|kill|death|low\s+health|wave\s+clear|damage|switch|hack|ability)\s+[^,.;]{3,90}"
+        r"|if\s+(?:player|health|score|time|oxygen|shield|boss)\s+[^,.;]{4,90}"
+        r"|collecting\s+[^,.;]{3,60}\s+(?:restores?|grants?|heals?|gives?|boosts?|unlocks?)\s+[^,.;]{3,60}"
+        r"|killing\s+[^,.;]{3,60}\s+(?:restores?|grants?|heals?|gives?|spawns?)\s+[^,.;]{3,60}"
+        r"|(?:use|activate|trigger|press)\s+(?:the\s+|a\s+)?[a-z\s]+?(?:ability|smoke bomb|spell)[^,.;]{0,60}"
+        r"|in\s+phase\s*2\s+[^,.;]{3,80})",
         re.I,
     )
     for sent in sentences:
@@ -514,6 +533,14 @@ def _extract_custom_rules(prompt: str, brief: Optional[PromptBrief] = None) -> L
     # Synthesize rules for stated dynamic mechanics/resources if not already captured
     low = prompt.lower()
     if brief is not None:
+        if "smoke bomb" in low or "invisibility" in low or "(q)" in low or "ability" in low:
+            if not any("ability" in r.lower() or "stealth" in r.lower() or "smoke" in r.lower() for r in rules):
+                rules.append("When player activates smoke bomb ability (Q), activate stealth for 5 seconds and emit player.ability_used")
+        if ("boss" in low or "phase 2" in low or "necromancer" in low or "lord" in low) and not any("boss" in r.lower() for r in rules):
+            rules.append("When boss health drops below 50%, transition to boss phase 2, enrage boss, and summon minion wave")
+        if (brief.key_pickups or "keys" in low) and (brief.has_doors or "gate" in low or "vault" in low or "door" in low):
+            if not any("unlock" in r.lower() or "key" in r.lower() for r in rules):
+                rules.append(f"When player collects {brief.key_pickups or 3} ancient keys, unlock the vault gate")
         if "oxygen" in low or "air supply" in low:
             if not any("oxygen" in r.lower() for r in rules):
                 rules.append("Every 5 seconds drain 10 oxygen; on pickup restore 25 oxygen and 15 score")
@@ -525,7 +552,7 @@ def _extract_custom_rules(prompt: str, brief: Optional[PromptBrief] = None) -> L
             sw_lbl = brief.switches[0].label
             rules.append(f"When player activates {sw_lbl}, award 50 score and unlock security doors")
 
-    return rules[:6]
+    return rules[:8]
 
 
 def _extract_open_vocab_entities(text: str, brief: PromptBrief) -> None:
@@ -541,7 +568,7 @@ def _extract_open_vocab_entities(text: str, brief: PromptBrief) -> None:
 
     # 2. Open-vocabulary Collectibles following collection verbs
     coll_verb_matches = re.finditer(
-        rf"\b(?:collects?|gathers?|recovers?|salvages?|retrieves?|steals?|harvests?|mines?|grabs?|picks?\s+up|finds?|loots?)\s+(?:all\s+(?:the\s+)?)?(?:{_NUM}\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){{0,1}})\b",
+        rf"\b(?:collects?|gathers?|recovers?|salvages?|retrieves?|steals?|harvests?|mines?|grabs?|picks?\s+up|finds?|loots?)\s+(?:all\s+(?:the\s+)?)?(?:{_NUM}\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){{0,2}})\b",
         text,
     )
     ignore_nouns = _STOP_TITLE | {
@@ -571,7 +598,7 @@ def _extract_open_vocab_entities(text: str, brief: PromptBrief) -> None:
 
     # 3. Open-vocabulary Hostiles following combat/evasion phrases ("waves of frost golems", "dodging plasma drones")
     enemy_verb_matches = re.finditer(
-        rf"\b(?:waves?\s+of|hordes?\s+of|swarms?\s+of|fighting|fights?|battles?|battling|against|defeat(?:s|ing)?|slay(?:s|ing)?|dodg(?:es?|ing)|evad(?:es?|ing)|avoid(?:s|ing)?)\s+(?:{_NUM}\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){{0,1}})\b",
+        rf"\b(?:waves?\s+of|hordes?\s+of|swarms?\s+of|fighting|fights?|battles?|battling|against|defeat(?:s|ing)?|slay(?:s|ing)?|dodg(?:es?|ing)|evad(?:es?|ing)|avoid(?:s|ing)?)\s+(?:{_NUM}\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){{0,2}})\b",
         text,
     )
     for m in enemy_verb_matches:
@@ -588,7 +615,7 @@ def _extract_open_vocab_entities(text: str, brief: PromptBrief) -> None:
         full_label = " ".join([w.capitalize() for w in words[:-1]] + [head.capitalize()])[:40]
         if full_label.lower() not in existing_enemy_nouns and head not in existing_enemy_nouns and len(brief.enemies) < 3:
             is_ranged = any(k in raw_phrase for k in ("ranged", "plasma", "laser", "blaster", "artillery", "drone", "turret", "sniper", "mage"))
-            is_boss = any(k in raw_phrase for k in ("boss", "giant", "colossus", "titan", "overlord", "ancient", "queen", "king"))
+            is_boss = any(k in raw_phrase for k in ("boss", "giant", "colossus", "titan", "overlord", "ancient", "queen", "king", "lord"))
             brief.enemies.append(
                 NamedThing(
                     noun=head,
@@ -599,7 +626,63 @@ def _extract_open_vocab_entities(text: str, brief: PromptBrief) -> None:
                     boss=is_boss,
                 )
             )
+            if is_boss and not brief.boss_name:
+                brief.boss_name = full_label
             existing_enemy_nouns.add(full_label.lower())
+
+    # 4. Boss entity extraction ("defeat the Necromancer Lord", "Dragon Overlord", "Lich King", "ancient Shadow Archon")
+    boss_matches = re.finditer(
+        rf"\b(?:defeat|slay|destroy|face|kill|against|vanquish|fight|fights|battle|battles|confront|confronts)\s+(?:the\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){{0,2}})\b",
+        text,
+    )
+    for m in boss_matches:
+        raw_phrase = m.group(1).strip()
+        words = [w for w in raw_phrase.split() if w not in ignore_nouns and len(w) > 2]
+        if not words:
+            continue
+        if any(b_kw in raw_phrase for b_kw in ("lord", "overlord", "boss", "king", "queen", "titan", "archon", "colossus", "dragon", "lich", "necromancer")):
+            head = _singularize(words[-1])
+            full_label = " ".join([w.capitalize() for w in words[:-1]] + [head.capitalize()])[:40]
+            if full_label.lower() not in existing_enemy_nouns and (not any(e.boss for e in brief.enemies) or all(e.label == "Boss" for e in brief.enemies if e.boss)):
+                is_ranged = any(k in raw_phrase for k in ("necromancer", "lich", "mage", "wizard", "archon", "dragon"))
+                boss_thing = NamedThing(
+                    noun=head,
+                    label=full_label,
+                    count=1,
+                    color="#8E1616",
+                    ranged=is_ranged,
+                    boss=True,
+                )
+                brief.enemies = [e for e in brief.enemies if e.label != "Boss"]
+                brief.enemies.insert(0, boss_thing)
+                brief.boss_name = full_label
+                existing_enemy_nouns.add(full_label.lower())
+                break
+
+    if not brief.boss_name and any(e.boss for e in brief.enemies):
+        brief.boss_name = next(e.label for e in brief.enemies if e.boss)
+
+    # 5. Key and Lock Gate Extraction ("find 3 ancient keys to unlock the vault gate")
+    key_gate_m = re.search(
+        rf"\b(?:find|collect|gather|recover)\s+({_NUM}\s+)?([a-z\s]+?keys?)\s+to\s+(?:unlock|open)\s+(?:the\s+)?([a-z\s]+?(?:gate|door|vault))\b",
+        text,
+    )
+    if key_gate_m:
+        k_cnt = _to_int(key_gate_m.group(1)) if key_gate_m.group(1) else 3
+        k_raw = key_gate_m.group(2).strip()
+        d_raw = key_gate_m.group(3).strip()
+        k_label = " ".join(w.capitalize() for w in k_raw.split() if w not in ignore_nouns)
+        d_label = " ".join(w.capitalize() for w in d_raw.split() if w not in ignore_nouns)
+        k_label = _singularize(k_label) or "Ancient Key"
+        d_label = d_label or "Vault Gate"
+        brief.key_pickups = k_cnt or 3
+        brief.interactive_doors = 1
+        brief.has_doors = True
+        if not any("key" in c.noun.lower() for c in brief.collectibles):
+            brief.collectibles.append(
+                NamedThing(noun="key", label=k_label, count=brief.key_pickups, color="#FFD700")
+            )
+            existing_coll_nouns.add(k_label.lower())
 
 
 def analyze_prompt(prompt: str) -> PromptBrief:
@@ -658,9 +741,13 @@ def analyze_prompt(prompt: str) -> PromptBrief:
             continue
         if noun == "crawler" and re.search(r"\bdungeon\s+crawlers?\b", text) and not re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|waves?\s+of|enemy|enemies|giant|mutant|shadow)\s+crawlers?\b", text):
             continue
+        if noun == "boss" and re.search(r"\bboss\s+(arena|fight|battle|encounter|room|chamber|level|zone)\b", text):
+            continue
         seen_labels.add(label)
         boss = noun in ("boss", "dragon", "leviathan") or bool(re.search(rf"\b(boss|giant|huge|ancient)\s+{_plural_re(noun)}\b", text))
         brief.enemies.append(NamedThing(noun=noun, label=label, count=count, color=color, ranged=ranged, boss=boss))
+        if boss and not brief.boss_name and label != "Boss":
+            brief.boss_name = label
     if brief.enemies and re.search(r"\b(enemies|they|that|which)\s+(?:can\s+)?(shoot|fire|throw|cast)\b|\b(shooting|ranged|armed)\s+(enemies|foes)\b", text):
         brief.enemies[0].ranged = True
 
@@ -818,6 +905,32 @@ def analyze_prompt(prompt: str) -> PromptBrief:
     if brief.has_npc or re.search(r"\b(quest|dialogue|mission)\b", text):
         brief.mechanics.append("quest")
 
+    if re.search(r"\b(smoke bomb|invisibility|smoke screen|cloaking|cloak)\b", text) or (brief.has_guards and re.search(r"\b(ability|skill|\(q\))\b", text)):
+        if "stealth" not in brief.mechanics:
+            brief.mechanics.append("stealth")
+        if "stealth_smoke_bomb" not in brief.mechanics:
+            brief.mechanics.append("stealth_smoke_bomb")
+        if "smoke_bomb" not in brief.player_abilities:
+            brief.player_abilities.append("smoke_bomb")
+            brief.ability_key_binds["smoke_bomb"] = "Q"
+    elif re.search(r"\b(ability|skill|spell)\s*(?:\(([a-z0-9]+)\))?\b", text):
+        m_ab = re.search(r"\b([a-z_]+)\s+ability\s*(?:\(([a-z0-9]+)\))?\b", text)
+        ab_name = m_ab.group(1) if m_ab else "special_ability"
+        ab_key = (m_ab.group(2) if m_ab and m_ab.group(2) else "Q").upper()
+        if ab_name not in brief.player_abilities:
+            brief.player_abilities.append(ab_name)
+            brief.ability_key_binds[ab_name] = ab_key
+        if ab_name not in brief.mechanics:
+            brief.mechanics.append(ab_name)
+    if any(e.boss for e in brief.enemies) or re.search(r"\b(boss|overlord|lord|phase\s*2)\b", text):
+        if "boss_fight" not in brief.mechanics:
+            brief.mechanics.append("boss_fight")
+        if "multi_phase_boss" not in brief.mechanics:
+            brief.mechanics.append("multi_phase_boss")
+    if brief.key_pickups or (brief.has_doors and any("key" in c.noun.lower() for c in brief.collectibles)):
+        if "key_lock_gate" not in brief.mechanics:
+            brief.mechanics.append("key_lock_gate")
+
     brief.game_subtype = _detect_subtype(text, brief)
 
     if brief.game_subtype == "racing" or re.search(r"\b(racing|race|racer|kart|cars?|vehicles?|driving|drive|hoverbike|speedway)\b", text):
@@ -942,7 +1055,11 @@ def _enemy_entity(e: NamedThing, diff: str, default_count: int) -> DraftEntity:
         "move_speed": round((280.0 if e.ranged else 330.0) * (0.9 + 0.1 * scale), 1),
     }
     if e.boss:
-        count = min(count, 3) if e.count else 1
+        count = 1
+        props["bIsBoss"] = True
+        props["BossName"] = e.label
+        props["BossPhase"] = 1
+        props["max_health"] = round(150.0 * scale, 1)
         props["attack_damage"] = round(props["attack_damage"] * 1.8, 1)
     return DraftEntity(
         kind=kind,
@@ -1095,6 +1212,17 @@ def brief_to_draft(brief: PromptBrief) -> DesignDraft:
             )
         )
 
+    if brief.game_subtype == "tactical_fps":
+        entities.append(
+            DraftEntity(
+                kind=EntityKind.BOMB_SITE,
+                count=2,
+                note="Bomb Site A",
+                props={"site_id": "A", "plant_seconds": 3.0, "defuse_seconds": 5.0, "fuse_seconds": 35.0},
+                tags=["label:Bomb Site A", "bombsite"],
+            )
+        )
+
     for c in brief.collectibles[:3]:
         default = {Genre.PLATFORMER: 8, Genre.EXPLORATION: 10, Genre.DUNGEON_CRAWLER: 5}.get(genre, 6)
         entities.append(
@@ -1129,13 +1257,18 @@ def brief_to_draft(brief: PromptBrief) -> DesignDraft:
             )
         )
     if brief.has_doors or brief.switches:
+        d_label = "Vault Gate" if (brief.theme in ("dungeon", "gothic_crypt") or brief.key_pickups) else "Security Gate"
+        door_props: Dict[str, Any] = {"required_value": 1.0, "open_seconds": 1.0}
+        if brief.key_pickups > 0:
+            door_props["required_value"] = float(brief.key_pickups)
+            door_props["required_stat"] = "game.counter.keys_collected"
         entities.append(
             DraftEntity(
                 kind=EntityKind.DOOR,
                 count=1,
-                note="Security Gate",
-                props={"required_value": 1.0, "open_seconds": 1.0},
-                tags=["label:Security Gate", "color:#E67E22"],
+                note=d_label,
+                props=door_props,
+                tags=[f"label:{d_label}", "color:#E67E22"],
             )
         )
 
@@ -1296,6 +1429,22 @@ def brief_to_draft(brief: PromptBrief) -> DesignDraft:
         else ("medium" if genre in (Genre.EXPLORATION, Genre.ACTION_ADVENTURE) else "small")
     )
     pitch = re.sub(r"\s+", " ", brief.prompt).strip()[:280] or f"A {genre.value.replace('_', ' ')} game"
+    arch_payload: Dict[str, Any] = {
+        "method": "hybrid_custom",
+        "plan_kind": brief.game_subtype or genre.value,
+        "custom_capabilities": list(brief.mechanics),
+        "target_classes": [f"U{_pascal(brief.title or 'Dynamic')}GameplayRule"],
+        "player_abilities": list(brief.player_abilities),
+        "mechanics": {
+            "active_mechanics": list(brief.mechanics),
+            "boss_name": brief.boss_name,
+            "boss_phases": brief.boss_phases or (2 if brief.boss_name else 1),
+            "key_count": brief.key_pickups,
+            "door_count": brief.interactive_doors,
+            "weapons": list(brief.weapons),
+        },
+    }
+    valid_music = {"none", "calm", "tense", "heroic", "playful", "boss", "action", "mysterious"}
     return DesignDraft(
         title=(brief.title or _synth_title(brief))[:60],
         genre=genre,
@@ -1309,9 +1458,10 @@ def brief_to_draft(brief: PromptBrief) -> DesignDraft:
         lose=lose,
         difficulty=diff,  # type: ignore[arg-type]
         art_style=(brief.art_style or "stylized"),  # type: ignore[arg-type]
-        music_mood=brief.music_mood if brief.music_mood in ("none", "calm", "tense", "heroic", "playful") else "none",  # type: ignore[arg-type]
+        music_mood=brief.music_mood if brief.music_mood in valid_music else "none",  # type: ignore[arg-type]
         custom_rules=list(brief.custom_rules[:8]),
         questions=[],
+        architecture=arch_payload,
     )
 
 

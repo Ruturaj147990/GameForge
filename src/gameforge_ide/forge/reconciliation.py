@@ -1,7 +1,6 @@
 """Living project level reconciliation and user-edit protection (WI-8.3) plus interrupted run reconciliation."""
 from __future__ import annotations
 
-import copy
 import json
 import time
 from pathlib import Path
@@ -70,8 +69,12 @@ def plan_reconciliation(
     # 1. Categorise current actors
     owned_current: Dict[str, Dict[str, Any]] = {}
     for a in current_actors:
-        label = a.get("label", "")
-        tags = a.get("tags", [])
+        if not isinstance(a, dict):
+            continue
+        label = str(a.get("label") or "")
+        if not label:
+            continue
+        tags = a.get("tags") or []
         if TAG_GF_OWNED in tags:
             owned_current[label] = a
         else:
@@ -223,10 +226,12 @@ def reconcile_interrupted_runs(
     Also updates `.gameforge/runs/index.json` and `.gameforge/runs_index.json` so
     summary listings never report stale RUNNING status.
     """
-    ws = Path(workspace_dir)
-    search_roots: List[Path] = [ws / ".gameforge" / "runs"]
+    ws = Path(workspace_dir).resolve()
+    search_roots: List[Path] = [(ws / ".gameforge" / "runs").resolve()]
     if project_dir is not None:
-        search_roots.append(Path(project_dir) / "Saved" / "GameForge" / "runs")
+        proj_runs = (Path(project_dir).resolve() / "Saved" / "GameForge" / "runs").resolve()
+        if proj_runs not in search_roots:
+            search_roots.append(proj_runs)
 
     reconciled: Dict[str, float] = {}
     now = time.time()
@@ -273,5 +278,9 @@ def reconcile_interrupted_runs(
             if reconciled:
                 _update_index_file(runs_root / "index.json", reconciled)
                 _update_index_file(runs_root.parent / "runs_index.json", reconciled)
+
+        if reconciled:
+            _update_index_file(ws / ".gameforge" / "runs" / "index.json", reconciled)
+            _update_index_file(ws / ".gameforge" / "runs_index.json", reconciled)
 
     return sorted(reconciled.keys())

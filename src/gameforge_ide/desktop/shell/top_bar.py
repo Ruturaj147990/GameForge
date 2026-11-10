@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Union
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
     QCompleter,
@@ -76,7 +76,7 @@ class TopBar(QWidget):
                 background: {tokens.BG_HOVER};
             }}
         """))
-        self.logo_btn.clicked.connect(self.homeRequested.emit)
+        self.logo_btn.clicked.connect(self._safe_emit_home)
         layout.addWidget(self.logo_btn)
 
         # 2. Project switcher combo
@@ -304,6 +304,13 @@ class TopBar(QWidget):
             self.project_path_label.setText("📁 No Project")
             self.project_path_label.setToolTip("No active project selected")
 
+    def _safe_emit_home(self) -> None:
+        try:
+            self.homeRequested.emit()
+        except RuntimeError:
+            pass
+
+    @Slot(int)
     def _on_combo_index_changed(self, index: int) -> None:
         data = self.project_combo.itemData(index)
         if data == "__new_project__":
@@ -311,21 +318,33 @@ class TopBar(QWidget):
             self.project_combo.blockSignals(True)
             self.project_combo.setCurrentIndex(max(0, prev_idx))
             self.project_combo.blockSignals(False)
-            self.newProjectRequested.emit()
+            try:
+                self.newProjectRequested.emit()
+            except RuntimeError:
+                pass
         elif data == "__open_folder__":
             prev_idx = self.project_combo.findText(self._current_project) if getattr(self, "_current_project", None) else 0
             self.project_combo.blockSignals(True)
             self.project_combo.setCurrentIndex(max(0, prev_idx))
             self.project_combo.blockSignals(False)
-            self.openFolderRequested.emit()
+            try:
+                self.openFolderRequested.emit()
+            except RuntimeError:
+                pass
         elif data:
             self._current_project = str(data)
-            self.projectSelected.emit(str(data))
+            try:
+                self.projectSelected.emit(str(data))
+            except RuntimeError:
+                pass
         elif index >= 0:
             text = self.project_combo.currentText().strip()
             if text and "Open project folder" not in text and "New project" not in text:
                 self._current_project = text
-                self.projectSelected.emit(text)
+                try:
+                    self.projectSelected.emit(text)
+                except RuntimeError:
+                    pass
 
     def update_run_chip(self, active: bool, game_name: str = "", done: int = 0, total: int = 0,
                         elapsed_s: float = 0.0, waiting_approval: bool = False) -> None:
@@ -397,6 +416,7 @@ class TopBar(QWidget):
             }}
         """))
 
+    @Slot()
     def refresh_icons(self) -> None:
         """Refresh toolbar icons to match active theme."""
         self.assistant_btn.setIcon(icon("assistant", role="secondary", size=18))
@@ -410,8 +430,14 @@ class TopBar(QWidget):
             fix_title = f"   ↳ Action: {row.fix_action.replace('_', ' ').capitalize()}"
             fix_act = self.systems_menu.addAction(fix_title)
             action_key = str(row.fix_action)
-            fix_act.triggered.connect(lambda checked=False, k=action_key: self.fixActionRequested.emit(k))
+            def _safe_emit_fix(k: str = action_key) -> None:
+                try:
+                    self.fixActionRequested.emit(k)
+                except RuntimeError:
+                    pass
+            fix_act.triggered.connect(_safe_emit_fix)
 
+    @Slot()
     def update_theme(self) -> None:
         """Repaint top bar background and tool button icons with active theme tokens."""
         self.setStyleSheet(theme_stylesheet(f"""
@@ -505,9 +531,14 @@ class TopBar(QWidget):
             """))
             self.palette_btn.setIcon(icon("search", role="secondary", size=18))
 
+    @Slot(str)
     def _on_task_mode_changed(self, text: str) -> None:
-        self.taskModeChanged.emit(text)
+        try:
+            self.taskModeChanged.emit(text)
+        except RuntimeError:
+            pass
 
+    @Slot(str)
     def _on_permissions_mode_changed(self, text: str) -> None:
         # Map to canonical enum values
         val_map = {"request all": "request_all", "auto": "auto", "unrestricted": "unrestricted"}
@@ -519,9 +550,16 @@ class TopBar(QWidget):
         self.autonomy_combo.setCurrentText(legacy_val)
         self.autonomy_combo.blockSignals(False)
 
-        self.permissionsModeChanged.emit(canon)
-        self.autonomyProfileChanged.emit(legacy_val)
+        try:
+            self.permissionsModeChanged.emit(canon)
+        except RuntimeError:
+            pass
+        try:
+            self.autonomyProfileChanged.emit(legacy_val)
+        except RuntimeError:
+            pass
 
+    @Slot(str)
     def _on_autonomy_profile_changed(self, text: str) -> None:
         # Keep permissions combo in sync
         perm_text = "Request All" if text.lower() == "manual" else ("Auto" if "auto" in text.lower() else "Unrestricted")
@@ -529,8 +567,18 @@ class TopBar(QWidget):
         self.permissions_mode_combo.setCurrentText(perm_text)
         self.permissions_mode_combo.blockSignals(False)
 
-        self.autonomyProfileChanged.emit(text)
-        self.permissionsModeChanged.emit("request_all" if perm_text == "Request All" else ("unrestricted" if perm_text == "Unrestricted" else "auto"))
+        try:
+            self.autonomyProfileChanged.emit(text)
+        except RuntimeError:
+            pass
+        try:
+            self.permissionsModeChanged.emit("request_all" if perm_text == "Request All" else ("unrestricted" if perm_text == "Unrestricted" else "auto"))
+        except RuntimeError:
+            pass
+
+    def deleteLater(self) -> None:
+        """Safely clean up resources on disposal."""
+        super().deleteLater()
 
     def set_task_mode(self, mode: str) -> None:
         """Update the Task Mode combo box without re-emitting signals."""

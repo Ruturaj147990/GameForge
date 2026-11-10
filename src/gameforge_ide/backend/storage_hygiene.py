@@ -44,9 +44,28 @@ class HygienePlan:
 
 
 def _size(p: Path) -> int:
-    if p.is_file():
-        return p.stat().st_size
-    return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+    try:
+        if p.is_file():
+            return p.stat().st_size
+        if p.is_dir():
+            total = 0
+            for f in p.rglob("*"):
+                try:
+                    if f.is_file():
+                        total += f.stat().st_size
+                except (OSError, ValueError):
+                    continue
+            return total
+    except (OSError, ValueError):
+        return 0
+    return 0
+
+
+def _mtime(p: Path) -> float:
+    try:
+        return p.stat().st_mtime
+    except (OSError, ValueError):
+        return 0.0
 
 
 def plan(workspace_root: Path, cap_bytes: int = DEFAULT_CAP_BYTES, now: float = None) -> HygienePlan:
@@ -76,11 +95,11 @@ def plan(workspace_root: Path, cap_bytes: int = DEFAULT_CAP_BYTES, now: float = 
         if d.is_dir():
             candidates.extend(d.glob(pattern))
     candidates = [c for c in candidates if c.name not in PROTECTED_NAMES]
-    candidates.sort(key=lambda p: p.stat().st_mtime)  # oldest first
+    candidates.sort(key=_mtime)  # oldest first
     cutoff = now - RETENTION_DAYS * 86400
     projected = total
     for c in candidates:
-        old = c.stat().st_mtime < cutoff
+        old = _mtime(c) < cutoff
         if old or projected > cap_bytes:
             size = _size(c)
             pl.delete.append(str(c))
@@ -94,24 +113,42 @@ def plan(workspace_root: Path, cap_bytes: int = DEFAULT_CAP_BYTES, now: float = 
 def apply(workspace_root: Path, pl: HygienePlan) -> HygienePlan:
     root = (Path(workspace_root) / ".gameforge").resolve()
     for p in pl.rotate:
-        path = Path(p)
-        if root not in path.resolve().parents:
+        try:
+            path = Path(p)
+            if root not in path.resolve().parents:
+                continue
+            for i in range(LOG_KEEP - 1, 0, -1):
+                src = path.with_name(f"{path.name}.{i}")
+                if src.exists():
+                    try:
+                        os.replace(src, path.with_name(f"{path.name}.{i + 1}"))
+                    except OSError:
+                        pass
+            try:
+                os.replace(path, path.with_name(f"{path.name}.1"))
+            except OSError:
+                pass
+            overflow = path.with_name(f"{path.name}.{LOG_KEEP + 1}")
+            if overflow.exists():
+                try:
+                    overflow.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        except Exception:
             continue
-        for i in range(LOG_KEEP - 1, 0, -1):
-            src = path.with_name(f"{path.name}.{i}")
-            if src.exists():
-                os.replace(src, path.with_name(f"{path.name}.{i + 1}"))
-        os.replace(path, path.with_name(f"{path.name}.1"))
-        overflow = path.with_name(f"{path.name}.{LOG_KEEP + 1}")
-        if overflow.exists():
-            overflow.unlink()
     for p in pl.delete:
-        path = Path(p)
-        if root not in path.resolve().parents or path.name in PROTECTED_NAMES:
+        try:
+            path = Path(p)
+            if root not in path.resolve().parents or path.name in PROTECTED_NAMES:
+                continue
+            if path.is_dir():
+                import shutil
+                shutil.rmtree(path, ignore_errors=True)
+            elif path.exists():
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        except Exception:
             continue
-        if path.is_dir():
-            import shutil
-            shutil.rmtree(path, ignore_errors=True)
-        elif path.exists():
-            path.unlink()
     return pl

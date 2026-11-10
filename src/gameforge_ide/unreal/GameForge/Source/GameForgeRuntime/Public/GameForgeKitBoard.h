@@ -78,6 +78,9 @@ public:
 	float CellSizeCm = 120.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Board")
+	bool bHasDice = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Board")
 	int32 DiceSides = 6;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Board")
@@ -94,6 +97,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Board")
 	TMap<int32, int32> Ladders;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Board")
+	TMap<int32, int32> ForwardWarps;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Board")
+	TMap<int32, int32> BackwardWarps;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Board")
 	TArray<int32> PlayerPositions;
@@ -122,11 +131,15 @@ private:
 	void UpdateCellVisual(int32 Row, int32 Col, int32 Val);
 	void InitializeRaceBoard();
 	void InitializeSudokuBoard();
+	void InitializeConstraintGrid() { InitializeSudokuBoard(); }
 	void InitializeChessOrCheckersBoard();
 	bool HasSudokuConflict(int32 Row, int32 Col, int32 Val) const;
+	bool HasConstraintConflict(int32 Row, int32 Col, int32 Val) const { return HasSudokuConflict(Row, Col, Val); }
 	bool IsSudokuComplete() const;
+	bool IsConstraintGridComplete() const { return IsSudokuComplete(); }
 	bool MakeRaceMove(int32 DiceRoll, int32 Player);
 	bool MakeSudokuMove(int32 Row, int32 Col);
+	bool MakeConstraintMove(int32 Row, int32 Col) { return MakeSudokuMove(Row, Col); }
 	bool MakeChessOrCheckersMove(int32 Row, int32 Col, int32 Player);
 	int32 EvaluateMinimaxBoard() const;
 	int32 MinimaxSearch(int32 Depth, bool bMaximizing, int32 Alpha, int32 Beta);

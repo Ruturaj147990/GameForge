@@ -40,6 +40,9 @@ EVENT_PHRASES: dict[str, str] = {
     "player.jumped": "player jumps",
     "player.dashed": "player dashes",
     "player.sprinted": "player sprints",
+    "player.ability_used": "player uses ability",
+    "player.stealth_started": "player enters stealth",
+    "player.stealth_ended": "player exits stealth",
     "weapon.switched": "player switches weapon",
     # Pickups & Objectives
     "pickup.collected": "pickup is collected",
@@ -52,6 +55,8 @@ EVENT_PHRASES: dict[str, str] = {
     "enemy.spawned": "enemy spawns",
     "enemy.attacked": "enemy attacks",
     "enemy.killed": "enemy is killed",
+    "boss.phase_changed": "boss phase changes",
+    "boss.defeated": "boss is defeated",
     "wave.started": "wave starts",
     "wave.cleared": "wave is cleared",
     "tower.built": "defense tower is built",
@@ -68,6 +73,20 @@ EVENT_PHRASES: dict[str, str] = {
     # Bomb site
     "bombsite.planted": "bomb is planted",
     "bombsite.defused": "bomb is defused",
+    "bomb.planted": "bomb is planted",
+    "bomb.defused": "bomb is defused",
+    "bomb.exploded": "bomb explodes",
+    # Combat & Weapons
+    "weapon.fired": "weapon is fired",
+    "weapon.reloaded": "weapon is reloaded",
+    "item.crafted": "item is crafted",
+    # Dialogue & Quests
+    "dialogue.line": "dialogue line spoken",
+    "quest.accepted": "quest is accepted",
+    "quest.completed": "quest is completed",
+    "objective.started": "objective starts",
+    "objective.updated": "objective is updated",
+    "objective.completed": "objective is completed",
     # Persistence
     "save.loaded": "save game is loaded",
     "save.written": "game is saved",
@@ -108,7 +127,9 @@ _STAT_NAMES = {
     "game.score": "the score", "game.time_s": "elapsed time", "player.health": "player health",
     "player.lives": "lives", "player.shield": "player shield", "player.mana": "player mana",
     "player.stamina": "player stamina", "player.ammo": "player ammo", "player.oxygen": "player oxygen",
-    "game.gold": "gold", "game.laps": "laps", "game.counter.collected": "collected items",
+    "game.gold": "gold", "game.laps": "laps", "game.resources": "resources", "game.combo": "combo streak",
+    "boss.health": "boss health", "boss.phase": "boss phase",
+    "game.counter.collected": "collected items", "game.counter.keys_collected": "keys collected",
     "game.counter.waves_cleared": "cleared waves", "game.counter.enemies_killed": "enemies killed",
 }
 

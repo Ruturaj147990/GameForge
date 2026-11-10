@@ -8,11 +8,9 @@ analyzes failure taxonomy, and outputs structured evaluation summaries.
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .grading import RunStatus
 from .model_adapter import ModelRequest, ModelResponse, extract_code_blocks, invoke_candidate, run_attempt
@@ -21,7 +19,7 @@ from .runner import BenchmarkRunner
 from .task_loader import TaskSpec, load_task
 
 
-def evaluate_engine_neutral_task(task_spec: TaskSpec, response_text: str) -> Dict[str, Any]:
+def evaluate_engine_neutral_task(task_spec: TaskSpec, response_text: str) -> dict[str, Any]:
     """Evaluates an engine-neutral reasoning task against rubric postconditions."""
     text_lower = response_text.lower()
     
@@ -88,16 +86,20 @@ class BaselineEvaluator:
         category = task_info.get("category", "gameplay")
         cand_id = candidate_config["candidate_id"]
 
-        # Resolve task yaml
+        # Resolve task yaml - check exact filename first across candidate directories
         task_yaml = self.workspace_root / "pilot_tasks" / f"{task_id}.yaml"
         if not task_yaml.is_file():
-            candidates = list((self.workspace_root / "pilot_tasks").glob(f"*{task_id}*.yaml"))
-            if not candidates:
-                candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{task_id}*.yaml"))
-            if candidates:
-                task_yaml = candidates[0]
+            exact_bench = list((self.workspace_root / "benchmark_tasks").glob(f"**/{task_id}.yaml"))
+            if exact_bench:
+                task_yaml = exact_bench[0]
             else:
-                raise FileNotFoundError(f"Task spec missing for: {task_id}")
+                candidates = list((self.workspace_root / "pilot_tasks").glob(f"*{task_id}*.yaml"))
+                if not candidates:
+                    candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{task_id}*.yaml"))
+                if candidates:
+                    task_yaml = candidates[0]
+                else:
+                    raise FileNotFoundError(f"Task spec missing for: {task_id}")
 
         task_spec = load_task(task_yaml)
         attempt_id = f"baseline_{cand_id}_{task_id}_run{run_index}_{int(time.time())}"
@@ -293,9 +295,29 @@ class BaselineEvaluator:
                 else:
                     layer_stats["behavior_probes"]["fail"] += 1
 
+                sa_st = layers.get("saved_assets", {}).get("status")
+                if sa_st == "PASS":
+                    layer_stats["saved_assets"]["pass"] += 1
+                elif sa_st == "NOT_APPLICABLE":
+                    layer_stats["saved_assets"]["na"] += 1
+                elif sa_st:
+                    layer_stats["saved_assets"]["fail"] += 1
+
+                rr_st = layers.get("reasoning_rubric", {}).get("status")
+                if rr_st == "PASS":
+                    layer_stats["reasoning_rubric"]["pass"] += 1
+                elif rr_st == "PARTIAL_REASONING":
+                    layer_stats["reasoning_rubric"]["partial"] += 1
+                elif rr_st == "NOT_APPLICABLE":
+                    layer_stats["reasoning_rubric"]["na"] += 1
+
                 # Failure taxonomy classification
                 if status != "PASS":
-                    if status == "PARTIAL_REASONING":
+                    if inv.get("error") and "timeout" in str(inv.get("error")).lower():
+                        cat = "INVOCATION_TIMEOUT"
+                    elif not inv.get("success", True):
+                        cat = "MODEL_INVOCATION_ERROR"
+                    elif status == "PARTIAL_REASONING":
                         cat = "PARTIAL_ENGINE_NEUTRAL_RUBRIC"
                     elif "build_import" in layers and layers["build_import"].get("status") != "PASS":
                         cat = "C++_COMPILATION_ERROR"

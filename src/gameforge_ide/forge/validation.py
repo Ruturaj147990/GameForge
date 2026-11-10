@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..design.gds import EntityKind, GameDesignSpec, Genre
 from ..design.semantic_validate import semantic_validate_gds
-from ..qa.game_spec_tests import generate_acceptance_tests
 
 GENERIC_KIT_TESTS = {
     "smoke",
@@ -30,7 +29,7 @@ GENERIC_KIT_TESTS = {
 
 def _is_generic_test(name: str) -> bool:
     """Determine if a test name represents a generic engine kit smoke test."""
-    n = name.strip().lower()
+    n = str(name or "").strip().lower()
     if n in GENERIC_KIT_TESTS or n == "smoke":
         return True
     if n.startswith("gameforge.kit") and not any(
@@ -62,13 +61,13 @@ def validate_stage_output(
     issues: List[str] = []
     s_norm = (stage_name or "").lower().strip()
     result = stage_result or {}
-    pdir = Path(project_dir).resolve() if project_dir else (Path(result.get("project_dir")).resolve() if result.get("project_dir") else None)
+    raw_pdir = project_dir if project_dir is not None else result.get("project_dir")
+    pdir = Path(str(raw_pdir)).resolve() if raw_pdir else None
 
     if gds is None and pdir:
         gds_file = pdir / "GameForge" / "design" / "game.gds.json"
         if gds_file.is_file():
             try:
-                import json
                 gds_raw = json.loads(gds_file.read_text(encoding="utf-8"))
                 gds = GameDesignSpec.model_validate(gds_raw)
             except Exception:
@@ -147,9 +146,11 @@ def validate_stage_output(
                         EntityKind.ENEMY,
                         EntityKind.RANGED_ENEMY,
                         EntityKind.SPAWNER,
+                        EntityKind.GUARD,
                         "enemy",
                         "ranged_enemy",
                         "spawner",
+                        "guard",
                     )
                     for e in entities
                 ):
@@ -396,7 +397,7 @@ def validate_stage_output(
         if isinstance(test_results, list):
             for t in test_results:
                 if isinstance(t, dict):
-                    name = (
+                    name = str(
                         t.get("scenario_id")
                         or t.get("test_id")
                         or t.get("id")
@@ -589,11 +590,14 @@ def validate_stage_output(
         mesh_audit = result.get("mesh_audit") or {}
         if not mesh_audit:
             issues.append("Review stage missing mesh audit outcome")
-        elif not mesh_audit.get("passed", False) and mesh_audit.get("placeholder_components", 0) > 0:
-            issues.append(
-                f"Review mesh audit failed: {mesh_audit.get('placeholder_components')} "
-                f"placeholder component(s) remain in level"
-            )
+        elif mesh_audit.get("passed") is False:
+            if mesh_audit.get("placeholder_components", 0) > 0:
+                issues.append(
+                    f"Review mesh audit failed: {mesh_audit.get('placeholder_components')} "
+                    f"placeholder component(s) remain in level"
+                )
+            else:
+                issues.append("Review mesh audit failed")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 10. REPORT STAGE

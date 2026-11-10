@@ -51,3 +51,35 @@ ACCENT_ACTIVE = "#6d28d9"  # Pressed purple
 ACCENT_SUCCESS = "#00d9a3" # Emerald teal (assistant, verified, connected)
 ACCENT_WARNING = "#f59e0b" # Amber (busy, tool invocation)
 ACCENT_ERROR = "#ef4444"   # Coral red (failure, error)
+
+__all__ = [
+    "SPACE_XS",
+    "SPACE_SM",
+    "SPACE_MD",
+    "SPACE_LG",
+    "RADIUS_SM",
+    "RADIUS",
+    "RADIUS_MD",
+    "RADIUS_LG",
+    "RADIUS_XL",
+    "FONT_BODY_SM",
+    "FONT_BODY",
+    "FONT_HEADING_SM",
+    "FONT_HEADING",
+    "BG_ROOT",
+    "BG_PANEL",
+    "BG_SURFACE",
+    "BG_HOVER",
+    "BG_ACTIVE",
+    "BORDER",
+    "BORDER_FOCUS",
+    "TEXT_PRIMARY",
+    "TEXT_SECONDARY",
+    "TEXT_MUTED",
+    "ACCENT_PRIMARY",
+    "ACCENT_HOVER",
+    "ACCENT_ACTIVE",
+    "ACCENT_SUCCESS",
+    "ACCENT_WARNING",
+    "ACCENT_ERROR",
+]

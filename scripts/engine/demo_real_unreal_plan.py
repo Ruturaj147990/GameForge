@@ -15,14 +15,18 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, List
 
 # Add project root to path
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.gameforge_ide.backend.agent.plan_executor import PlanEvent, TaskPlanExecutor
 from src.gameforge_ide.backend.agent.plan_generator import PlanGenerator
@@ -30,13 +34,25 @@ from src.gameforge_ide.backend.tools.gateway import ToolGateway
 from src.gameforge_ide.core.settings import get_settings
 
 
+def _default_probe_project() -> str:
+    try:
+        return str(get_settings().require_dev("probe_project"))
+    except Exception:
+        try:
+            val_root = get_settings().require_dev("validation_root")
+        except Exception:
+            val_root = ROOT / "scratch" / "validation"
+        return str(val_root / "live_ops_probe" / "GFProbe.uproject")
+
+
 def main() -> int:
-    import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("uproject", nargs="?", default=str(get_settings().require_dev("probe_project")))
+    ap.add_argument("uproject", nargs="?", default=None)
     ap.add_argument("--forge", action="store_true", help="Run with Forge executor")
     args = ap.parse_args()
-    uproject = Path(args.uproject)
+
+    uproject_str = args.uproject or _default_probe_project()
+    uproject = Path(uproject_str)
 
     if not uproject.is_file():
         print(f"[DEMO A] BLOCKED: Unreal project not found at {uproject}")
@@ -44,8 +60,9 @@ def main() -> int:
 
     print(f"[DEMO A] Target Unreal Project: {uproject}")
 
-    events_log = []
-    def log_event(ev: PlanEvent):
+    events_log: List[Dict[str, Any]] = []
+
+    def log_event(ev: PlanEvent) -> None:
         msg = f"[{ev.timestamp:.2f}] {ev.event_type} | task={ev.task_id} | status={ev.status} | {ev.message}"
         print(f"  -> {msg}")
         events_log.append(ev.model_dump())
@@ -75,7 +92,8 @@ def main() -> int:
 
     print(f"[DEMO A] Topological Order: {plan.get_topological_order()}")
 
-    t0 = time.time()
+    t0 = time.monotonic()
+    result_plan = plan
     try:
         # Run plan with approval granted for this demo run
         if args.forge:
@@ -87,7 +105,7 @@ def main() -> int:
         # Cleanly stop editors to avoid lingering background processes
         gateway.game_tools.close_editors()
 
-    elapsed = time.time() - t0
+    elapsed = time.monotonic() - t0
     print(f"[DEMO A] Execution completed in {elapsed:.2f}s with status: {result_plan.status}")
 
     # Inspect results
@@ -114,7 +132,9 @@ def main() -> int:
 
     out_file = ROOT / "reports" / "milestone1_unreal_demo.json"
     out_file.parent.mkdir(parents=True, exist_ok=True)
-    out_file.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    tmp_out = out_file.with_suffix(".tmp")
+    tmp_out.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp_out, out_file)
     print(f"[DEMO A] Report saved to {out_file}")
 
     for tid, tinfo in report["tasks"].items():

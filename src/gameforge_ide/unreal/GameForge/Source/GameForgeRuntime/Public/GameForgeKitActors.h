@@ -364,6 +364,18 @@ public:
 	bool bRanged = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	bool bIsBoss = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	FString BossName = TEXT("Boss");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	int32 BossPhase = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
+	bool bEnraged = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")
 	float ProjectileSpeed = 1500.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge")

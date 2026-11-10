@@ -6,9 +6,11 @@
     X(PlayerSpawned, "player.spawned") X(PlayerDamaged, "player.damaged") X(PlayerDied, "player.died") \
     X(PlayerRespawned, "player.respawned") X(PlayerJumped, "player.jumped") \
     X(PlayerDashed, "player.dashed") X(PlayerSprinted, "player.sprinted") X(WeaponSwitched, "weapon.switched") \
+    X(PlayerAbilityUsed, "player.ability_used") X(PlayerStealthStarted, "player.stealth_started") X(PlayerStealthEnded, "player.stealth_ended") \
     X(PickupCollected, "pickup.collected") X(CheckpointReached, "checkpoint.reached") X(GoalReached, "goal.reached") \
     X(HazardTouched, "hazard.touched") X(EnemySpawned, "enemy.spawned") X(EnemyAttacked, "enemy.attacked") \
     X(EnemyKilled, "enemy.killed") X(WaveStarted, "wave.started") X(WaveCleared, "wave.cleared") \
+    X(BossPhaseChanged, "boss.phase_changed") X(BossDefeated, "boss.defeated") \
     X(GuardState, "guard.state") X(GuardSpottedPlayer, "guard.spotted_player") X(GuardLostPlayer, "guard.lost_player") \
     X(DialogueLine, "dialogue.line") X(ObjectiveStarted, "objective.started") X(ObjectiveUpdated, "objective.updated") \
     X(ObjectiveCompleted, "objective.completed") X(SaveLoaded, "save.loaded") X(SaveWritten, "save.written") \

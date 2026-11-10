@@ -62,6 +62,8 @@ def build_kit(grid: float = GRID_CM) -> dict[str, KitPiece]:
 
 def validate_parts(piece: KitPiece) -> list[str]:
     """Cheap offline checks: positive sizes, openings fully inside the wall, nothing outside the bounds."""
+    if not piece.parts:
+        return ["piece has no parts"]
     errors = []
     bx, by, bz = piece.bounds_cm
     body = piece.parts[0]
@@ -81,6 +83,8 @@ def validate_parts(piece: KitPiece) -> list[str]:
 def room_layout(cells_x: int, cells_y: int, door_side: str = "south", door_cell: int = 0,
                 grid: float = GRID_CM) -> list[dict]:
     """Placements {piece, location, yaw} for a closed rectangular room with one door."""
+    if grid <= 0:
+        raise ValueError(f"grid must be strictly positive, got {grid}")
     if cells_x < 1 or cells_y < 1:
         raise ValueError("room needs at least one cell per side")
     sides = {"south": cells_x, "north": cells_x, "west": cells_y, "east": cells_y}

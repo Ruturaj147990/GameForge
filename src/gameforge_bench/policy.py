@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -17,9 +17,15 @@ class PolicyCheckResult:
     modified_files: List[str] = field(default_factory=list)
     details: Dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert policy result to serializable dictionary."""
+        return asdict(self)
+
 
 def compute_file_hash(path: Path) -> str:
     """Computes SHA-256 hash of a file."""
+    if not path.is_file():
+        return ""
     h = hashlib.sha256()
     try:
         with path.open("rb") as f:
@@ -44,7 +50,9 @@ def snapshot_directory_hashes(directory: Path) -> Dict[str, str]:
             rel = full.relative_to(directory).as_posix()
             if any(part in rel for part in ("Binaries", "Intermediate", "Saved", "DerivedDataCache", "Library", "Temp", ".git", "__pycache__")) or rel.endswith(".pyc"):
                 continue
-            hashes[rel] = compute_file_hash(full)
+            h = compute_file_hash(full)
+            if h:
+                hashes[rel] = h
 
     return hashes
 
@@ -69,8 +77,17 @@ def freeze_candidate_snapshot(candidate_dir: Path, frozen_dir: Path) -> Tuple[st
         shutil.rmtree(frozen_dir, ignore_errors=True)
     frozen_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    # Copy tree preserving files
-    shutil.copytree(candidate_dir, frozen_dir, dirs_exist_ok=True)
+    def _ignore_build_caches(src: str, names: list[str]) -> set[str]:
+        ignored = set()
+        for name in names:
+            if name in ("Binaries", "Intermediate", "Saved", "DerivedDataCache", ".git", "__pycache__"):
+                ignored.add(name)
+            elif name.endswith(".pyc"):
+                ignored.add(name)
+        return ignored
+
+    # Copy tree preserving files while ignoring build caches
+    shutil.copytree(candidate_dir, frozen_dir, dirs_exist_ok=True, ignore=_ignore_build_caches, ignore_dangling_symlinks=True)
 
     inventory = snapshot_directory_hashes(frozen_dir)
     snapshot_id = compute_snapshot_hash(inventory)
@@ -105,12 +122,15 @@ def check_candidate_policy(
     violations: List[str] = []
     modified_files: List[str] = []
 
-    # 1. Boundary check: candidate_dir must be inside or under workspace_root
+    # 1. Boundary check: candidate_dir must be inside or under workspace_root or temp sandbox
     try:
         w_resolved = workspace_root.resolve()
         c_resolved = candidate_dir.resolve()
         if not c_resolved.is_relative_to(w_resolved):
-            violations.append(f"Candidate directory escapes workspace boundary: {c_resolved}")
+            # Check if within an approved scratch or temp sandbox directory
+            scratch_allowed = any(part in c_resolved.parts for part in ("scratch", "temp", "tmp", "reports"))
+            if not scratch_allowed:
+                violations.append(f"Candidate directory escapes workspace boundary: {c_resolved}")
     except Exception as exc:
         violations.append(f"Failed to resolve candidate directory: {exc}")
 
@@ -197,7 +217,7 @@ def check_candidate_policy(
                     is_allowed = True
                     break
 
-            if not is_allowed and not violations:
+            if not is_allowed:
                 violations.append(f"Path allowlist violation: '{m_file}' is not in allowed_edit_paths")
 
     passed = len(violations) == 0

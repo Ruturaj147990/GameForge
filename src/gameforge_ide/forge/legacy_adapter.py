@@ -1,7 +1,7 @@
 """Legacy pipeline adapter on top of Forge (AD-11)."""
 from __future__ import annotations
 
-import json
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from ..design.gds import GameDesignSpec
 from ..design.legacy import to_legacy_params
 from ..pipeline.game_pipeline import PipelineResult, StageRecord, render_markdown
+from ..storage.atomic import atomic_write_json, atomic_write_text
 from .handlers.legacy_stages import (
     ARENA_RECIPE_ID,
     ARENA_RECIPE_VERSION,
@@ -34,14 +35,22 @@ RECIPE_VERSIONS = {
 }
 
 _PROJECT_READY_HOOKS: Dict[str, Callable[[Path], None]] = {}
+_HOOKS_LOCK = threading.Lock()
 
 
 def register_project_ready_hook(run_id: str, hook: Callable[[Path], None]) -> None:
-    _PROJECT_READY_HOOKS[run_id] = hook
+    with _HOOKS_LOCK:
+        _PROJECT_READY_HOOKS[run_id] = hook
 
 
 def get_project_ready_hook(run_id: str) -> Optional[Callable[[Path], None]]:
-    return _PROJECT_READY_HOOKS.get(run_id)
+    with _HOOKS_LOCK:
+        return _PROJECT_READY_HOOKS.get(run_id)
+
+
+def clear_project_ready_hook(run_id: str) -> None:
+    with _HOOKS_LOCK:
+        _PROJECT_READY_HOOKS.pop(run_id, None)
 
 
 def plan_legacy(
@@ -59,7 +68,8 @@ def plan_legacy(
         params = to_legacy_params(params)
 
     recipe_id = get_recipe_id(params)
-    project_dir = str(Path(projects_root) / params.project_name)
+    p_name = params["project_name"] if isinstance(params, dict) else params.project_name
+    project_dir = str(Path(projects_root) / p_name)
 
     common_inputs: Dict[str, Any] = {
         "params": params.to_dict() if hasattr(params, "to_dict") else params,
@@ -159,13 +169,16 @@ def plan_legacy(
             ]
         )
 
-    return RunSpec(
-        title=f"GamePipeline: {params.project_name}",
+    spec = RunSpec(
+        title=f"GamePipeline: {p_name}",
         origin="prompt",
         project_dir=project_dir,
         workspace_dir=str(projects_root),
         steps=steps,
     )
+    if on_project_dir_ready is not None:
+        register_project_ready_hook(spec.run_id, on_project_dir_ready)
+    return spec
 
 
 def run_state_to_pipeline_result(
@@ -177,7 +190,8 @@ def run_state_to_pipeline_result(
     if isinstance(params, GameDesignSpec):
         params = to_legacy_params(params)
 
-    project_dir = Path(state.run.project_dir or (Path(state.run.workspace_dir) / params.project_name))
+    p_name = params["project_name"] if isinstance(params, dict) else params.project_name
+    project_dir = Path(state.run.project_dir or (Path(state.run.workspace_dir) / p_name))
     evidence_dir = project_dir / "Saved" / "GameForge"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     report_file = evidence_dir / "pipeline_report.json"
@@ -225,6 +239,8 @@ def run_state_to_pipeline_result(
         }
     )
 
-    report_file.write_text(json.dumps(payload, indent=1, default=str), encoding="utf-8")
-    (evidence_dir / "pipeline_report.md").write_text(render_markdown(payload), encoding="utf-8")
+    atomic_write_json(report_file, payload, indent=1, sync=True, backup=False)
+    atomic_write_text(evidence_dir / "pipeline_report.md", render_markdown(payload), sync=True, backup=False)
+    if state.status in ("DONE", "CANCELLED"):
+        clear_project_ready_hook(state.run.run_id)
     return res

@@ -15,18 +15,23 @@ Usage: python scripts/engine/demo_gameplay_feedback.py
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
-from src.gameforge_ide.core.settings import get_settings  # noqa: E402
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+ENGINE_SCRIPTS = str(REPO / "scripts" / "engine")
+if ENGINE_SCRIPTS not in sys.path:
+    sys.path.insert(0, ENGINE_SCRIPTS)
 
-import demo_m11_landscape as land  # noqa: E402
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 from src.gameforge_ide.backend.tools.sfx_synth import SFXSpec, generate_sfx  # noqa: E402
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
@@ -39,10 +44,13 @@ PICKUP_AT = {"x": 300, "y": 0, "z": 100}
 STATE_PROPS = ["collected", "collected_by", "spawned_vfx", "spawned_sound", "collect_attenuation"]
 
 
-def run(rep: dict) -> None:
+def run(rep: Dict[str, Any]) -> None:
+    import demo_m11_landscape as land
+
     checks, steps = rep["checks"], rep["steps"]
-    land.PLUGIN_BUILD = (get_settings().require_dev("validation_root") / r"GameForgePlugin_m14v2")
-    land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "gameplay_feedback_"))
+    val_root = get_settings().require_dev("validation_root")
+    land.PLUGIN_BUILD = val_root / "GameForgePlugin_m14v2"
+    land.PROJECT_DIR = val_root / f"gameplay_feedback_{time.strftime('%Y%m%d')}"
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()
     chime = generate_sfx(SFXSpec(name="Pickup", kind="pickup", seed=4), land.PROJECT_DIR / "SourceAudio")
@@ -64,63 +72,73 @@ def run(rep: dict) -> None:
                                   "location": {"x": -600, "y": 0, "z": 120}})
         link.call("spawn_actor", {"actor_class": "NavMeshBoundsVolume", "label": "GF_NavBounds",
                                   "location": {"x": 0, "y": 0, "z": 100}, "scale": {"x": 15, "y": 15, "z": 4}})
-        sysr = link.call("vfx_create_system", {"asset_path": SYSTEM, "template_system": "SimpleExplosion"}, timeout_s=120)
-        att = link.call("audio_create_attenuation", {"asset_path": ATT, "inner_radius": 300, "falloff_distance": 2500})
+        sysr = link.call("vfx_create_system", {"asset_path": SYSTEM, "template_system": "SimpleExplosion"}, timeout_s=120) or {}
+        att = link.call("audio_create_attenuation", {"asset_path": ATT, "inner_radius": 300, "falloff_distance": 2500}) or {}
         imp = link.call("audio_import", {"source_file": chime["path"], "destination_path": SOUND.rsplit("/", 1)[0],
-                                         "destination_name": SOUND.rsplit("/", 1)[1], "looping": False}, timeout_s=120)
+                                         "destination_name": SOUND.rsplit("/", 1)[1], "looping": False}, timeout_s=120) or {}
         checks["assets_created"] = all(bool(r.get("ok")) for r in (sysr, att, imp))
         steps["assets"] = {"vfx": sysr.get("errors"), "attenuation": att.get("errors"), "sound": imp.get("errors")}
-        pick = link.call("spawn_actor", {"actor_class": PICKUP_CLASS, "label": "GF_Pickup", "location": PICKUP_AT})
-        sets = {prop: link.call("set_actor_property", {"label": "GF_Pickup", "property": prop, "value": value, "asset": True})
+        pick = link.call("spawn_actor", {"actor_class": PICKUP_CLASS, "label": "GF_Pickup", "location": PICKUP_AT}) or {}
+        sets = {prop: (link.call("set_actor_property", {"label": "GF_Pickup", "property": prop, "value": value, "asset": True}) or {})
                 for prop, value in (("collect_vfx", SYSTEM), ("collect_sound", SOUND), ("collect_attenuation", ATT))}
         steps["pickup"] = {"spawn": pick.get("ok"), "errors": pick.get("errors"),
                            "set": {k: (v.get("data") or {}).get("value") for k, v in sets.items()}}
         checks["pickup_configured"] = bool(pick.get("ok")) and all(v.get("ok") for v in sets.values())
-        steps["nav_rebuild"] = link.call("nav_rebuild", {}, timeout_s=120).get("data")
+        steps["nav_rebuild"] = (link.call("nav_rebuild", {}, timeout_s=120) or {}).get("data")
         link.call("save_all", {})
 
         link.call("pie_start", {})
-        time.sleep(6.0)
-        before = link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}).get("data") or {}
-        steps["state_before"] = before
-        b = (before.get("actors") or [{}])[0]
-        checks["nothing_before_event"] = b.get("collected") is False and b.get("spawned_sound") is None \
-            and b.get("spawned_vfx") is None
+        after: Dict[str, Any] = {}
+        peak = 0
+        series = []
+        shot = None
+        try:
+            time.sleep(6.0)
+            before = (link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}) or {}).get("data") or {}
+            steps["state_before"] = before
+            b = (before.get("actors") or [{}])[0]
+            checks["nothing_before_event"] = (
+                b.get("collected") is False
+                and b.get("spawned_sound") is None
+                and b.get("spawned_vfx") is None
+            )
 
-        move = link.call("pie_move_player_to", {"location": PICKUP_AT})
-        steps["move"] = {"ok": move.get("ok"), "data": move.get("data"), "errors": move.get("errors")}
-        after, peak, series, shot = {}, 0, [], None
-        # Run 1 missed the 0.35 s chime: a slow screenshot sat between polls. Poll the actor tightly until the
-        # event happens, so the sound's playing state is read while it is still playing.
-        t0 = time.time()
-        while time.time() - t0 < 10.0 and not after:
-            s = link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}).get("data") or {}
-            a = (s.get("actors") or [{}])[0]
-            if a.get("collected"):
-                after = a
-                series.append({"t": round(time.time() - t0, 2), "sound_playing": (a.get("spawned_sound") or {}).get("playing")})
-        t0 = time.time()
-        while time.time() - t0 < 10.0:
-            s = link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}).get("data") or {}
-            a = (s.get("actors") or [{}])[0]
-            c = link.call("vfx_particle_counts", {"world": "pie", "label": "Pickup"})
-            n = int((c.get("data") or {}).get("total_particles", 0) or 0)
-            peak = max(peak, n)
-            series.append({"t": round(time.time() - t0, 2), "particles": n,
-                           "sound_playing": (a.get("spawned_sound") or {}).get("playing")})
-            if n > 0 and shot is None:
-                link.call("pie_view_from", {"location": {"x": -300, "y": 0, "z": 300},
-                                            "rotation": {"pitch": -20, "yaw": 0, "roll": 0}})
-                shot = link.capture_screenshot(land.PROJECT_DIR / "Saved" / "Screenshots" / "gameplay_feedback.png",
-                                               wait_s=20.0, show_ui=True)
-            if after and time.time() - t0 > 4.0:
-                break
-            time.sleep(0.2)
-        time.sleep(1.5)
-        final = link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}).get("data") or {}
-        steps.update(state_first_collected=after, state_final=final, series=series, particle_peak=peak,
-                     screenshot=(shot or {}).get("data"))
-        link.call("pie_stop", {})
+            move = link.call("pie_move_player_to", {"location": PICKUP_AT}) or {}
+            steps["move"] = {"ok": move.get("ok"), "data": move.get("data"), "errors": move.get("errors")}
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 10.0 and not after:
+                s = (link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}) or {}).get("data") or {}
+                a = (s.get("actors") or [{}])[0]
+                if a.get("collected"):
+                    after = a
+                    series.append({"t": round(time.monotonic() - t0, 2), "sound_playing": (a.get("spawned_sound") or {}).get("playing")})
+                    break
+                time.sleep(0.05)
+
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 10.0:
+                s = (link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}) or {}).get("data") or {}
+                a = (s.get("actors") or [{}])[0]
+                c = link.call("vfx_particle_counts", {"world": "pie", "label": "Pickup"}) or {}
+                n = int((c.get("data") or {}).get("total_particles", 0) or 0)
+                peak = max(peak, n)
+                series.append({"t": round(time.monotonic() - t0, 2), "particles": n,
+                               "sound_playing": (a.get("spawned_sound") or {}).get("playing")})
+                if n > 0 and shot is None:
+                    link.call("pie_view_from", {"location": {"x": -300, "y": 0, "z": 300},
+                                                "rotation": {"pitch": -20, "yaw": 0, "roll": 0}})
+                    shot = link.capture_screenshot(land.PROJECT_DIR / "Saved" / "Screenshots" / "gameplay_feedback.png",
+                                                   wait_s=20.0, show_ui=True)
+                if after and time.monotonic() - t0 > 4.0:
+                    break
+                time.sleep(0.2)
+            time.sleep(1.5)
+            final = (link.call("pie_actor_state", {"actor_class": PICKUP_CLASS, "properties": STATE_PROPS}) or {}).get("data") or {}
+            steps.update(state_first_collected=after, state_final=final, series=series, particle_peak=peak,
+                         screenshot=(shot or {}).get("data"))
+        finally:
+            with contextlib.suppress(Exception):
+                link.call("pie_stop", {})
     finally:
         rep["editor_exit_code"] = link.stop()
 
@@ -140,15 +158,27 @@ def run(rep: dict) -> None:
 
 
 def main() -> int:
-    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "checks": {}, "steps": {},
-           "not_covered": ["packaged build", "stat Niagara cost", "audible output measurement (no loopback capture)"]}
+    rep: Dict[str, Any] = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "checks": {},
+        "steps": {},
+        "not_covered": ["packaged build", "stat Niagara cost", "audible output measurement (no loopback capture)"],
+    }
     try:
         run(rep)
     except Exception as exc:
         rep["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
         rep["ok"] = bool(rep["checks"]) and all(rep["checks"].values()) and "exception" not in rep
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        tmp = REPORT.with_name(f".{REPORT.name}.tmp.{os.getpid()}")
+        try:
+            tmp.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, REPORT)
+        finally:
+            if tmp.exists():
+                with contextlib.suppress(OSError):
+                    tmp.unlink()
     print(json.dumps(rep["checks"], indent=2), rep.get("exception", ""))
     return 0 if rep["ok"] else 1
 

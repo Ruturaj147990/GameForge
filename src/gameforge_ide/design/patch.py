@@ -232,6 +232,10 @@ def apply_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> GameDesignSpe
                         "game_time_s": "game.time_s",
                         "game_gold": "game.gold",
                         "game_laps": "game.laps",
+                        "game_resources": "game.resources",
+                        "game_combo": "game.combo",
+                        "boss_health": "boss.health",
+                        "boss_phase": "boss.phase",
                     }
                     res[k] = stat_map.get(v, v)
                 else:
@@ -287,6 +291,11 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
             sentences.append(f"Health set to {val}")
             continue
 
+        m_dmg = re.search(r"/entities/(\d+|[a-z0-9_]+)/props/(player_attack_damage|enemy_attack_damage|attack_damage|damage)", path)
+        if m_dmg:
+            sentences.append(f"Attack damage set to {val}")
+            continue
+
         m_cnt = re.search(r"/entities/(\d+|[a-z0-9_]+)/count", path)
         if m_cnt:
             idx_or_id = m_cnt.group(1)
@@ -324,6 +333,18 @@ def summarize_patch(gds: GameDesignSpec, ops: List[Dict[str, Any]]) -> List[str]
 
         if path == "/overview/camera":
             sentences.append(f"Camera mode set to '{val}'")
+            continue
+
+        if path.startswith("/audio/music_mood"):
+            sentences.append(f"Music mood set to '{val}'")
+            continue
+
+        if path.startswith("/audio/ambience"):
+            sentences.append(f"Ambience set to '{val}'")
+            continue
+
+        if path.startswith("/architecture"):
+            sentences.append(f"Architecture: updated {path.split('/')[-1]}")
             continue
 
         if "/goals/lose" in path and "seconds" in path:
@@ -434,7 +455,7 @@ def propose_patch(
         trimmed_gds = _select_relevant_sections(gds, request)
         guidelines = (
             "GDS RFC 6902 Patch Rules:\n"
-            "- Valid lighting values: 'day', 'dusk', 'night', 'indoor' at path '/scene/levels/0/lighting'.\n"
+            "- Valid lighting values: 'day', 'dusk', 'night', 'indoor', 'dawn', 'sunset', 'overcast' at path '/scene/levels/0/lighting'.\n"
             "- Existing entity props: '/entities/<idx>/props/<prop_name>' (e.g. move_speed, player_max_health, attack_mode, enemies_per_wave).\n"
             "- New entity schema at '/entities/-': {'entity_id': str, 'kind': 'hazard'|'pickup'|'enemy'|'guard'|'spawner'|'door'|'checkpoint'|'goal', 'module': 'kit.<kind>', 'count': int, 'level_id': 'level_1', 'placement': {'strategy': 'scatter'}, 'tags': ['GF_Owned'], 'props': {}}.\n"
             "- Goals: '/goals/win' or '/goals/lose'. Valid condition objects: {'kind': 'timer', 'seconds': float}, {'kind': 'event', 'event': 'goal.reached'}, {'kind': 'count_at_least', 'event': 'pickup.collected', 'n': int}. Multiple alternative conditions can use {'kind': 'any', 'items': [...]}.\n"

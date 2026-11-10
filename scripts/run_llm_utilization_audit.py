@@ -9,11 +9,14 @@ Investigates:
 """
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 from pathlib import Path
 import sys
+import tempfile
 import time
+from typing import Any, Dict, List, Optional
 
 # Ensure repo root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,10 +32,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("LLMAudit")
 
 
-def test_initial_generation_diversity(provider: OllamaProvider, model_name: str, output_dir: Path) -> list[dict]:
+def _write_json_atomic(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    tmp.replace(path)
+
+
+def test_initial_generation_diversity(provider: OllamaProvider, model_name: str, output_dir: Path) -> List[Dict[str, Any]]:
     """Test 3 materially distinct game creation prompts using live local LLM."""
     logger.info("=== TEST 1: Initial Game Generation Diversity (Live Ollama 9B) ===")
-    
+
     test_prompts = [
         {
             "id": "game_1_stealth",
@@ -51,23 +61,23 @@ def test_initial_generation_diversity(provider: OllamaProvider, model_name: str,
         },
     ]
 
-    results = []
+    results: List[Dict[str, Any]] = []
 
     def complete_json(system: str, user: str, schema: dict):
-        return provider.complete_json(model_name, system, user, schema)
+        return provider.complete_json(model_name, system, user, schema, think=False)
 
     for item in test_prompts:
         prompt_text = item["prompt"]
-        t0 = time.time()
+        t0 = time.monotonic()
         logger.info("Prompting LLM for '%s'...", item["name"])
         res = prompt_to_gds(prompt_text, complete_json=complete_json, model=model_name)
-        elapsed = time.time() - t0
+        elapsed = time.monotonic() - t0
 
         assert res.status == "OK" or res.gds is not None, f"Failed to generate GDS for {item['name']}: {res.errors}"
         gds = res.gds
 
         gds_file = output_dir / f"{item['name']}.gds.json"
-        gds_file.write_text(json.dumps(gds.model_dump(), indent=2), encoding="utf-8")
+        _write_json_atomic(gds_file, gds.model_dump())
 
         summary = {
             "id": item["id"],
@@ -92,12 +102,12 @@ def test_initial_generation_diversity(provider: OllamaProvider, model_name: str,
     return results
 
 
-def test_progressive_modifications(provider: OllamaProvider, model_name: str, base_gds_path: Path, output_dir: Path) -> list[dict]:
+def test_progressive_modifications(provider: OllamaProvider, model_name: str, base_gds_path: Path, output_dir: Path) -> List[Dict[str, Any]]:
     """Progressively apply 4 substantially different modifications to a game."""
     logger.info("=== TEST 2: Progressive Prompt-Driven Modifications via LLM ===")
 
     current_gds = GameDesignSpec.model_validate_json(base_gds_path.read_text(encoding="utf-8"))
-    mod_history = []
+    mod_history: List[Dict[str, Any]] = []
 
     def model_caller(task: str, prompt: str) -> str:
         sys_prompt = (
@@ -129,6 +139,7 @@ def test_progressive_modifications(provider: OllamaProvider, model_name: str, ba
                 },
                 "required": ["ops", "summary"],
             },
+            think=False,
         )
         return raw or "{}"
 
@@ -175,10 +186,10 @@ def test_progressive_modifications(provider: OllamaProvider, model_name: str, ba
         step_num = m["step"]
         req_text = m["request"]
         logger.info("Running Modification Step %d: '%s'...", step_num, req_text)
-        t0 = time.time()
+        t0 = time.monotonic()
 
         prop = propose_patch(current_gds, req_text, model_caller=model_caller)
-        elapsed = time.time() - t0
+        elapsed = time.monotonic() - t0
 
         logger.info("Step %d proposed in %.2fs: status=%s, summary=%s", step_num, elapsed, prop.status, prop.summary)
         assert prop.status == "OK" and prop.ops, f"Step {step_num} failed: {prop.summary} questions={prop.questions}"
@@ -194,7 +205,7 @@ def test_progressive_modifications(provider: OllamaProvider, model_name: str, ba
 
         # Save snapshot
         snap_file = output_dir / f"step_{step_num}_patched.gds.json"
-        snap_file.write_text(json.dumps(patched_gds.model_dump(), indent=2), encoding="utf-8")
+        _write_json_atomic(snap_file, patched_gds.model_dump())
 
         # Run composition to verify whole-game integration
         comp = compose(patched_gds)
@@ -220,36 +231,61 @@ def test_progressive_modifications(provider: OllamaProvider, model_name: str, ba
     return mod_history
 
 
-def main():
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Real LLM Utilization & Game Modification Audit")
+    parser.add_argument("--model", default=None, help="Model override")
+    parser.add_argument("--out-dir", type=Path, default=Path("reports/acceptance_audit/llm_utilization"))
+    args = parser.parse_args(argv)
+
     settings = get_settings()
     host = settings.ollama_url.replace("http://", "").replace("https://", "")
     provider = OllamaProvider(host=host)
-    model_name = settings.model_for("design")
+    model_name = args.model or settings.model_for("design")
 
-    output_dir = Path("reports/acceptance_audit/llm_utilization")
+    if not provider.is_available():
+        logger.error("Ollama daemon is offline at %s. Aborting audit.", host)
+        return 2
+
+    output_dir = args.out_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Ollama Host: %s, Model: %s", host, model_name)
 
-    # 1. Test Initial Generation Diversity
-    diversity_results = test_initial_generation_diversity(provider, model_name, output_dir)
+    try:
+        # 1. Test Initial Generation Diversity
+        diversity_results = test_initial_generation_diversity(provider, model_name, output_dir)
 
-    # 2. Test Progressive Modifications
-    base_file = output_dir / "CyberOrbit.gds.json"
-    mod_results = test_progressive_modifications(provider, model_name, base_file, output_dir)
+        # 2. Test Progressive Modifications
+        base_file = output_dir / "CyberOrbit.gds.json"
+        mod_results = test_progressive_modifications(provider, model_name, base_file, output_dir)
 
-    # 3. Save Summary JSON
-    summary_data = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "model": model_name,
-        "initial_generation": diversity_results,
-        "progressive_modifications": mod_results,
-    }
-    summary_file = output_dir / "audit_summary.json"
-    summary_file.write_text(json.dumps(summary_data, indent=2), encoding="utf-8")
+        # 3. Save Summary JSON
+        summary_data = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "model": model_name,
+            "initial_generation": diversity_results,
+            "progressive_modifications": mod_results,
+        }
+        summary_file = output_dir / "audit_summary.json"
+        _write_json_atomic(summary_file, summary_data)
 
-    logger.info("Audit complete! Results written to %s", summary_file)
+        logger.info("Audit complete! Results written to %s", summary_file)
+        return 0
+    finally:
+        # Unload model to preserve 12GB VRAM budget
+        try:
+            provider.chat_with_tools(
+                model_name,
+                [{"role": "user", "content": "ok"}],
+                [],
+                num_ctx=512,
+                max_tokens=1,
+                keep_alive="0",
+                think=False,
+            )
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

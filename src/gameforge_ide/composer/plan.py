@@ -143,6 +143,9 @@ def composition_to_run_spec(
     )
 
     # 8. Automation tests step
+    test_suite = ["GameForge.Kit", "GameForge.Rules"]
+    if comp.codegen:
+        test_suite.append(f"{comp.project_name}.Rules")
     steps.append(
         StepSpec(
             step_id="automation",
@@ -150,7 +153,7 @@ def composition_to_run_spec(
             title="Run C++ automation tests",
             depends_on=assemble_step_ids,
             engine_lock=True,
-            inputs={"tests": ["GameForge.Kit"]},
+            inputs={"tests": test_suite},
         )
     )
 
@@ -167,6 +170,7 @@ def composition_to_run_spec(
     )
 
     # 10. Scenario runs step
+    effective_scenarios = list(comp.scenarios) if comp.scenarios else ["scenario_smoke"]
     steps.append(
         StepSpec(
             step_id="scenarios",
@@ -174,7 +178,7 @@ def composition_to_run_spec(
             title="Execute packaged QA scenarios",
             depends_on=["package", "scenario_gen"],
             engine_lock=True,
-            inputs={"scenarios": comp.scenarios, "map_path": primary_map},
+            inputs={"scenarios": effective_scenarios, "map_path": primary_map},
         )
     )
 

@@ -103,6 +103,18 @@ def generate_ambience_loop(
             env = np.sin(np.pi * np.linspace(0.0, 1.0, p_dur)) * 0.18
             pulses[start:start + p_dur] += env * (np.sin(2.0 * np.pi * f0 * pt) + 0.5 * np.sin(2.0 * np.pi * (f0 * 1.25) * pt))
         audio = traffic + hum + pulses
+    elif kind in ("ocean", "water"):
+        # Rolling rhythmic ocean swell: 0.08 Hz wave period with dynamic surf white noise
+        swell = 0.5 + 0.45 * np.sin(2.0 * np.pi * 0.08 * t)
+        surf = _filtered_noise(duration_s, lfo_hz=0.08, sample_rate=sample_rate) * swell
+        deep_rumble = 0.25 * np.sin(2.0 * np.pi * 38.0 * t) * (0.6 + 0.4 * np.sin(2.0 * np.pi * 0.04 * t))
+        audio = surf * 0.75 + deep_rumble
+    elif kind in ("space", "scifi"):
+        # Sci-fi reactor drone: 40 Hz sub-bass, 120 Hz electrical hum, and slow resonant shimmer
+        sub = 0.45 * np.sin(2.0 * np.pi * 42.0 * t)
+        hum = 0.25 * np.sin(2.0 * np.pi * 126.0 * t)
+        shimmer = 0.08 * np.sin(2.0 * np.pi * 840.0 * t) * (0.5 + 0.5 * np.sin(2.0 * np.pi * 0.3 * t))
+        audio = sub + hum + shimmer + _filtered_noise(duration_s, lfo_hz=0.05, sample_rate=sample_rate) * 0.2
     else:
         audio = _filtered_noise(duration_s, sample_rate=sample_rate)
 

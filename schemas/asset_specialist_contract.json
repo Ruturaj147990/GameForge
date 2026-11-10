@@ -43,7 +43,9 @@
             "max_texture_dimension": { "type": "integer" },
             "target_engine": { "type": "string" },
             "skeleton_preset": { "type": "string" },
-            "animation_framerate": { "type": "number" }
+            "animation_framerate": { "type": "number" },
+            "max_duration_seconds": { "type": "number" },
+            "sample_rate": { "type": "integer" }
           }
         },
         "provenance": {
@@ -78,7 +80,9 @@
             "triangle_count": { "type": "integer" },
             "max_dimension": { "type": "integer" },
             "bone_count": { "type": "integer" },
-            "resolution": { "type": "string" }
+            "resolution": { "type": "string" },
+            "duration_seconds": { "type": "number" },
+            "sample_rate": { "type": "integer" }
           }
         },
         "error_message": { "type": ["string", "null"] }

@@ -100,5 +100,6 @@
     }
   },
   "failures": [],
+  "threshold": 4.5,
   "passed": true
 }

@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import os
 import re
 import shutil
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -23,6 +25,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from .grading import RunStatus
 from .runner import BenchmarkRunner
 from .task_loader import TaskSpec, load_task
+
+logger = logging.getLogger("gameforge_bench.model_adapter")
 
 
 @dataclass
@@ -37,6 +41,10 @@ class ModelRequest:
     temperature: float = 0.0
     timeout_seconds: int = 120
     run_id: str = field(default_factory=lambda: f"req_{int(time.time())}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert request to serializable dictionary."""
+        return asdict(self)
 
 
 @dataclass
@@ -53,6 +61,10 @@ class ModelResponse:
     error: Optional[str] = None
     success: bool = True
     raw_telemetry: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert response to serializable dictionary."""
+        return asdict(self)
 
 
 def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, Optional[str]]:
@@ -130,16 +142,10 @@ def apply_unified_diff(original_text: str, diff_text: str) -> Tuple[bool, str, O
 
 
 def extract_code_blocks(text: str, allowed_paths: Optional[List[str]] = None) -> Dict[str, str]:
-    """Extracts code blocks and unified diffs from model response mapped to target file paths."""
+    """Extracts code blocks, XML file elements, and unified diffs from model response mapped to target file paths."""
     patches: Dict[str, str] = {}
     
     # Pattern 1: Explicit file path annotation
-    # Matches:
-    # "### File: Source/GameForgePilot/..."
-    # "**File:** `path`"
-    # "// File: path"
-    # "### `path`"
-    # "File: `path`"
     file_header_pattern = re.compile(
         r"(?:###|//|#|\*)+\s*(?:File|Path|Target)?[:\*]*\s*`?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9_]+)`?[:\*]*"
         r"(?:[^\n`]*\n){1,4}\s*```(?:[a-zA-Z0-9_+\-]+)?\r?\n(.*?)```",
@@ -172,6 +178,21 @@ def extract_code_blocks(text: str, allowed_paths: Optional[List[str]] = None) ->
             content = match.group(0)[len("```diff\n"):-len("```")] if match.group(0).startswith("```") else match.group(3)
             patches[path_str] = content
 
+    # Pattern 1d: XML file tags e.g. <file path="Source/...">code</file>
+    if not patches:
+        xml_file_pattern = re.compile(
+            r"<(?:file|target|patch)\s+(?:path|target|file)=[\"']([^\"']+)[\"']\s*>\s*(.*?)\s*</(?:file|target|patch)>",
+            re.DOTALL | re.IGNORECASE,
+        )
+        for match in xml_file_pattern.finditer(text):
+            path_str = match.group(1).strip().replace("\\", "/").lstrip("/")
+            inner_content = match.group(2)
+            # Strip enclosing code fences if present
+            code_fence_match = re.search(r"^```(?:[a-zA-Z0-9_+\-]+)?\r?\n(.*?)\r?\n```$", inner_content, re.DOTALL)
+            if code_fence_match:
+                inner_content = code_fence_match.group(1)
+            patches[path_str] = inner_content
+
     # Pattern 2: Generic code blocks if no explicit file annotations matched
     if not patches:
         generic_pattern = re.compile(r"```(?:cpp|c\+\+|csharp|cs|yaml|json)?\r?\n(.*?)```", re.DOTALL | re.IGNORECASE)
@@ -180,7 +201,7 @@ def extract_code_blocks(text: str, allowed_paths: Optional[List[str]] = None) ->
             # Map primary code block to first allowed edit path that has a file extension
             for ap in allowed_paths:
                 clean_ap = ap.strip().replace("\\", "/").lstrip("/")
-                if clean_ap.endswith((".cpp", ".h", ".cs", ".yaml", ".json")):
+                if clean_ap.endswith((".cpp", ".h", ".hpp", ".cs", ".yaml", ".json", ".ini")):
                     patches[clean_ap] = matches[0]
                     break
 
@@ -240,15 +261,16 @@ def validate_patch_target(
     # 5. Check task allowed_edit_paths
     rel_to_base = resolved_target.relative_to(base_dir).as_posix()
     is_allowed = False
+    valid_extensions = (".cpp", ".h", ".hpp", ".cs", ".uasset", ".json", ".yaml", ".ini", ".uproject", ".md")
     for ap in allowed_paths:
         norm_ap = ap.replace("\\", "/").rstrip("/")
         if norm_rel.startswith(norm_ap) or rel_to_base.startswith(norm_ap) or norm_rel.endswith(norm_ap) or rel_to_base.endswith(norm_ap):
             is_allowed = True
             break
         # Semantic keyword allowlists (only if norm_ap is a general category, not a specific source file)
-        is_concrete_file = any(norm_ap.endswith(ext) for ext in [".cpp", ".h", ".cs", ".uasset", ".json", ".yaml"])
+        is_concrete_file = any(norm_ap.endswith(ext) for ext in valid_extensions)
         if not is_concrete_file:
-            if "source" in norm_ap.lower() and ("source/" in rel_to_base.lower() or rel_to_base.lower().endswith((".cpp", ".h", ".cs"))):
+            if "source" in norm_ap.lower() and ("source/" in rel_to_base.lower() or rel_to_base.lower().endswith((".cpp", ".h", ".hpp", ".cs"))):
                 is_allowed = True
                 break
             if "content" in norm_ap.lower() and ("content/" in rel_to_base.lower() or rel_to_base.lower().endswith((".uasset", ".json"))):
@@ -339,7 +361,36 @@ def invoke_candidate(
                     "done_reason": resp_data.get("done_reason", "stop"),
                 },
             )
+        except (TimeoutError, socket.timeout) as e:
+            return ModelResponse(
+                candidate_id=cand_id,
+                raw_output="",
+                total_duration_seconds=time.time() - start_time,
+                error=f"INVOCATION_TIMEOUT: Request timed out after {request.timeout_seconds}s: {str(e)}",
+                success=False,
+            )
+        except urllib.error.HTTPError as e:
+            error_details = ""
+            try:
+                error_details = f" - {e.read().decode('utf-8')}"
+            except Exception:
+                pass
+            return ModelResponse(
+                candidate_id=cand_id,
+                raw_output="",
+                total_duration_seconds=time.time() - start_time,
+                error=f"Ollama HTTP {e.code} error: {str(e)}{error_details}",
+                success=False,
+            )
         except urllib.error.URLError as e:
+            if isinstance(e.reason, (socket.timeout, TimeoutError)):
+                return ModelResponse(
+                    candidate_id=cand_id,
+                    raw_output="",
+                    total_duration_seconds=time.time() - start_time,
+                    error=f"INVOCATION_TIMEOUT: Ollama connection timed out after {request.timeout_seconds}s",
+                    success=False,
+                )
             return ModelResponse(
                 candidate_id=cand_id,
                 raw_output="",
@@ -353,6 +404,68 @@ def invoke_candidate(
                 raw_output="",
                 total_duration_seconds=time.time() - start_time,
                 error=f"Invocation exception: {str(e)}",
+                success=False,
+            )
+
+    if provider in ("openai", "openai_compatible"):
+        host = candidate_config.get("deployment", {}).get("host", "127.0.0.1:11434")
+        api_base = candidate_config.get("deployment", {}).get("api_base", f"http://{host}/v1")
+        url = f"{api_base.rstrip('/')}/chat/completions"
+        api_key = candidate_config.get("api_key") or os.environ.get("OPENAI_API_KEY", "EMPTY")
+
+        messages = []
+        if request.system_prompt:
+            messages.append({"role": "system", "content": request.system_prompt})
+        messages.append({"role": "user", "content": request.prompt})
+
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "stream": False,
+        }
+
+        body_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=request.timeout_seconds) as resp:
+                resp_data = json.loads(resp.read().decode("utf-8"))
+
+            choice = (resp_data.get("choices") or [{}])[0]
+            raw_output = choice.get("message", {}).get("content", "")
+            usage = resp_data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            duration_s = time.time() - start_time
+            patches = extract_code_blocks(raw_output)
+
+            return ModelResponse(
+                candidate_id=cand_id,
+                raw_output=raw_output,
+                code_patches=patches,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_duration_seconds=duration_s,
+                cost_usd=0.0,
+                success=True,
+                raw_telemetry={"id": resp_data.get("id"), "model": resp_data.get("model")},
+            )
+        except Exception as e:
+            return ModelResponse(
+                candidate_id=cand_id,
+                raw_output="",
+                total_duration_seconds=time.time() - start_time,
+                error=f"OpenAI-compatible invocation error: {str(e)}",
                 success=False,
             )
 
@@ -420,7 +533,6 @@ def run_attempt(
     raw_output_path.write_text(model_response.raw_output, encoding="utf-8")
 
     diffs: Dict[str, str] = {}
-    patch_success = False
     
     # 3. Create clean workspace for attempt
     attempt_candidate_dir = output_dir / "candidate_files"
@@ -435,7 +547,6 @@ def run_attempt(
             if alt_f.is_dir():
                 fixture_dir = alt_f
             else:
-                # Try finding any fixture directory starting with parts[0]_parts[1]
                 matches = list((workspace_root / "fixtures" / "unreal").glob(f"{parts[0]}_{parts[1]}*"))
                 if matches and matches[0].is_dir():
                     fixture_dir = matches[0]
@@ -498,7 +609,6 @@ def run_attempt(
                 diffs[rel_path] = diff_text
                 effective_files_modified += 1
             else:
-                # Candidate output was identical to baseline file
                 rejection_reasons[rel_path] = "Candidate content was bitwise identical to starter fixture (no effective change)"
 
     # Save diffs
@@ -526,8 +636,6 @@ def run_attempt(
     )
 
     # STRICT GROUNDING ENFORCEMENT:
-    # If this is a native code task (T2/T3) requiring implementation:
-    # A task with zero applied patches or zero effective changes must NEVER be awarded a passing score!
     raw_grading_status = run_result.get("status", "UNVERIFIED")
     final_status = raw_grading_status
     failure_cause = None

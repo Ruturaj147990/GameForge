@@ -2547,7 +2547,7 @@ class AgentRuntime:
                         continue
 
                 if not all_satisfied and (task_state.intent == "mutate" or _task_needs_edit or task_actionable):
-                    _max_unmet_nudges = 3
+                    _max_unmet_nudges = 3 if _tool_history else 1
                     if _unmet_predicates_nudges < _max_unmet_nudges and iteration < self.max_iterations:
                         _unmet_predicates_nudges += 1
                         conversation_history.append({"role": "assistant", "content": full_response})

@@ -63,6 +63,7 @@ class LayoutKind(str, Enum):
     ROOMS = "rooms"
     OPEN_WORLD = "open_world"
     LANES = "lanes"
+    TACTICAL_FPS = "tactical_fps"
 
 
 class Biome(str, Enum):
@@ -80,6 +81,9 @@ class Lighting(str, Enum):
     DUSK = "dusk"
     NIGHT = "night"
     INDOOR = "indoor"
+    DAWN = "dawn"
+    SUNSET = "sunset"
+    OVERCAST = "overcast"
 
 
 class EntityKind(str, Enum):
@@ -504,9 +508,25 @@ class ArtDirection(_M):
 
 
 class AudioSpec(_M):
-    music_mood: Literal["none", "calm", "tense", "heroic", "playful"] = "none"
-    ambience: Literal["none", "wind", "forest", "dungeon", "city"] = "none"
+    music_mood: Literal["none", "calm", "tense", "heroic", "playful", "boss", "action", "mysterious"] = "none"
+    ambience: Literal["none", "wind", "forest", "dungeon", "city", "ocean", "space"] = "none"
     sfx_set: Literal["default", "retro", "soft"] = "default"
+
+    @field_validator("music_mood", mode="before")
+    @classmethod
+    def _coerce_music_mood(cls, v: Any) -> Any:
+        valid = {"none", "calm", "tense", "heroic", "playful", "boss", "action", "mysterious"}
+        if isinstance(v, str) and v.lower() in valid:
+            return v.lower()
+        return "none"
+
+    @field_validator("ambience", mode="before")
+    @classmethod
+    def _coerce_ambience(cls, v: Any) -> Any:
+        valid = {"none", "wind", "forest", "dungeon", "city", "ocean", "space"}
+        if isinstance(v, str) and v.lower() in valid:
+            return v.lower()
+        return "none"
 
 
 class TechSpec(_M):
@@ -530,6 +550,8 @@ class Acceptance(_M):
 
 
 class ArchitectureSpec(_M):
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
+
     method: str = "scratch_generation"
     plan_kind: Optional[str] = None
     target_classes: List[str] = Field(default_factory=list)
@@ -539,6 +561,8 @@ class ArchitectureSpec(_M):
     base_template_id: Optional[str] = None
     custom_capabilities: List[str] = Field(default_factory=list)
     mechanics: Dict[str, Any] = Field(default_factory=dict)
+    player_abilities: List[str] = Field(default_factory=list)
+    subsystems: List[str] = Field(default_factory=list)
 
 
 class GameDesignSpec(_M):

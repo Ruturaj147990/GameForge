@@ -215,6 +215,7 @@ class CharacterRigValidator:
                 deformed_coords.append((def_x, def_y, def_z))
 
             # Bounding box of deformed mesh
+            def_diag = 0.0
             if deformed_coords and not has_nan:
                 d_min_x = min(c[0] for c in deformed_coords)
                 d_max_x = max(c[0] for c in deformed_coords)
@@ -223,11 +224,12 @@ class CharacterRigValidator:
                 d_min_z = min(c[2] for c in deformed_coords)
                 d_max_z = max(c[2] for c in deformed_coords)
                 def_diag = math.sqrt((d_max_x - d_min_x)**2 + (d_max_y - d_min_y)**2 + (d_max_z - d_min_z)**2)
-                bbox_valid = def_diag <= orig_diag * 1.35 and max_disp > 0.05
+                bbox_valid = (orig_diag > 1e-6 and def_diag <= orig_diag * 1.35 and max_disp > 0.05)
             else:
                 bbox_valid = False
 
             passed = (not has_nan) and bbox_valid and (max_disp > 0.0)
+            scale_str = f"{def_diag/orig_diag:.3f}x" if orig_diag > 1e-6 else "N/A"
 
             results.append(DeformationTestResult(
                 joint_name=j_name,
@@ -237,7 +239,7 @@ class CharacterRigValidator:
                 max_displacement=round(max_disp, 3),
                 has_nan_or_inf=has_nan,
                 bounding_box_valid=bbox_valid,
-                notes=f"{desc}: max displacement = {max_disp:.2f} cm, bbox scale = {def_diag/orig_diag:.3f}x",
+                notes=f"{desc}: max displacement = {max_disp:.2f} cm, bbox scale = {scale_str}",
             ))
 
         return results

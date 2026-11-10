@@ -19,6 +19,7 @@ from .styles.dark_theme import (
     theme_color,
     theme_stylesheet,
 )
+from .styles import tokens
 from .icons import clear_icon_cache
 
 
@@ -81,4 +82,5 @@ __all__ = [
     "theme_color",
     "theme_stylesheet",
     "toggle_theme",
+    "tokens",
 ]

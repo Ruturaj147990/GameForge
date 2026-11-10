@@ -24,10 +24,21 @@ class LiveOperations:
 
     async def _call(self, op: str, args: Dict[str, Any], reversibility: str) -> OperationResult:
         res = await asyncio.to_thread(self.link.call, op, args)
-        return OperationResult(ok=bool(res.get("ok")), operation=op, data=res.get("data") or {},
-                               warnings=res.get("warnings") or [], errors=res.get("errors") or [],
-                               affected_paths=res.get("affected_paths") or [],
-                               reversibility=res.get("reversibility", reversibility))
+        if not isinstance(res, dict):
+            res = {"ok": False, "errors": ["invalid response from live editor"]}
+        data = res.get("data")
+        warnings = res.get("warnings")
+        errors = res.get("errors")
+        affected = res.get("affected_paths")
+        return OperationResult(
+            ok=bool(res.get("ok")),
+            operation=op,
+            data=data if isinstance(data, dict) else {},
+            warnings=warnings if isinstance(warnings, list) else [],
+            errors=errors if isinstance(errors, list) else [],
+            affected_paths=affected if isinstance(affected, list) else [],
+            reversibility=res.get("reversibility") or reversibility,
+        )
 
     async def spawn_actor(self, actor_class: str, location: Dict[str, float], rotation: Optional[Dict] = None,
                           label: Optional[str] = None, level_path: str = "", token: Optional[str] = None,
@@ -43,14 +54,16 @@ class LiveOperations:
             # An import yields the requested asset plus companions (materials, textures); at least one
             # imported asset must read back as the requested class.
             primary = None
-            for path in res.data.get("verified", []):
-                check = await self._call("asset_exists", {"asset_path": path.split(".")[0],
+            verified = [p for p in (res.data.get("verified") or []) if isinstance(p, str) and p.strip()]
+            for path in verified:
+                asset_path = path.split(".")[0]
+                check = await self._call("asset_exists", {"asset_path": asset_path,
                                                           "asset_class": asset_class}, "read-only")
                 if check.data.get("class_match"):
-                    primary = path.split(".")[0]
+                    primary = asset_path
                     break
             res.data["primary"] = primary
-            res.data["companions"] = [p.split(".")[0] for p in res.data.get("verified", []) if p.split(".")[0] != primary]
+            res.data["companions"] = [p.split(".")[0] for p in verified if p.split(".")[0] != primary]
             if primary is None:
                 res.ok = False
                 res.errors.append(f"read-back: no imported asset is a {asset_class}")
@@ -63,7 +76,11 @@ class LiveOperations:
 
     def actors_in_level(self, level_path: str = "") -> List[Dict[str, Any]]:
         res = self.link.call("actors_in_level", {"limit": 5000})
-        return (res.get("data") or {}).get("actors", []) if res.get("ok") else []
+        if not isinstance(res, dict) or not res.get("ok"):
+            return []
+        data = res.get("data")
+        actors = data.get("actors") if isinstance(data, dict) else []
+        return actors if isinstance(actors, list) else []
 
     # ── Blueprint Graph Operations ─────────────────────────────────────────
     async def blueprint_inspect(self, blueprint_path: str) -> OperationResult:
@@ -113,8 +130,8 @@ class LiveOperations:
     async def blueprint_save(self, blueprint_path: str) -> OperationResult:
         return await self._call("blueprint_save", {"blueprint_path": blueprint_path}, "snapshot-only")
 
-    async def pie_start(self, wait_s: float = 1.0) -> OperationResult:
-        return await self._call("pie_start", {"wait_s": wait_s}, "transient")
+    async def pie_start(self, wait_s: float = 1.0, simulate: bool = False) -> OperationResult:
+        return await self._call("pie_start", {"simulate": simulate}, "transient")
 
     async def pie_stop(self) -> OperationResult:
         return await self._call("pie_stop", {}, "transient")
@@ -209,7 +226,6 @@ class LiveOperations:
             "road_width": road_width,
             "points": points or [],
             "material_path": resolved_mat,
-            "road_material": resolved_mat,
         }
         return await self._call("spline_create_road", args, "transactional")
 
@@ -229,7 +245,6 @@ class LiveOperations:
             "max_slope_degrees": max_slope_degrees,
             "road_clearance": road_clearance,
             "mesh_path": resolved_mesh,
-            "static_mesh": resolved_mesh,
         }
         return await self._call("foliage_scatter", args, "transactional")
 

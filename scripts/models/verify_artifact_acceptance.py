@@ -6,10 +6,15 @@ import hashlib
 import json
 import os
 import struct
+import sys
+import tempfile
 import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 DEFAULT_DATA_ROOT = Path(os.environ.get("GAMEFORGE_DATA_ROOT", str(REPO_ROOT)))
 DEFAULT_GGUF_PATH = DEFAULT_DATA_ROOT / "artifacts" / "gameforge-27b" / "gameforge-27b-q4_k_m.gguf"
 
@@ -53,7 +58,7 @@ def verify_gguf(path: Path) -> dict:
     }
 
 
-if __name__ == "__main__":
+def main() -> int:
     ap = argparse.ArgumentParser(description="Verify GGUF binary header and SHA-256")
     ap.add_argument("--gguf", type=Path, default=DEFAULT_GGUF_PATH, help="Path to GGUF file")
     ap.add_argument(
@@ -62,8 +67,30 @@ if __name__ == "__main__":
         default=REPO_ROOT / "reports" / "gameforge-27b" / "acceptance" / "artifact_verification_raw.json",
         help="Output JSON report path",
     )
+    ap.add_argument("--dry-run", action="store_true", help="Check arguments without processing large file")
     args = ap.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Target GGUF={args.gguf}, Out={args.out}")
+        return 0
+
+    if not args.gguf.exists():
+        print(f"Error: Target GGUF file does not exist: {args.gguf}", file=sys.stderr)
+        return 1
+
     res = verify_gguf(args.gguf)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(res, indent=2), encoding="utf-8")
+    temp_out = args.out.with_suffix(".tmp")
+    try:
+        temp_out.write_text(json.dumps(res, indent=2), encoding="utf-8")
+        temp_out.replace(args.out)
+    except Exception:
+        if temp_out.exists():
+            temp_out.unlink()
+        raise
     print(f"Saved raw verification to {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

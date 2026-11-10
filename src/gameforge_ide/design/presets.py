@@ -17,6 +17,8 @@ from .gds import (
     EntitySpec,
     GameDesignSpec,
     Genre,
+    LayoutKind,
+    Lighting,
     Placement,
 )
 from .spec_from_prompt import (
@@ -272,8 +274,8 @@ def preset_relic_hunt(title: Optional[str] = None, **overrides) -> GameDesignSpe
     )
     gds = expand_draft(draft)
     lvl = gds.scene.levels[0]
-    lvl.layout = "open_world"
-    lvl.lighting = "day"
+    lvl.layout = LayoutKind.OPEN_WORLD
+    lvl.lighting = Lighting.DAY
     gds.entities = [
         EntitySpec(
             entity_id="player",
@@ -333,7 +335,7 @@ def preset_top_down_shooter(title: Optional[str] = None, **overrides) -> GameDes
     )
     gds = expand_draft(draft)
     lvl = gds.scene.levels[0]
-    lvl.layout = "arena"
+    lvl.layout = LayoutKind.ARENA
 
     player = _find_entity(gds, EntityKind.PLAYER)
     if player:
@@ -410,6 +412,9 @@ PRESET_KEYWORDS: Dict[str, List[str]] = {
     "procedural_world": ["procedural world", "procedural landscape", "procedural terrain", "procedural environment"],
     "top_down_shooter": ["top-down shooter", "top down shooter", "twin stick shooter"],
     "relic_hunt": ["relic hunt", "relic quest"],
+    "grid_board": ["grid board", "board game", "dice board"],
+    "board_game": ["board game"],
+    "dice_board": ["dice board"],
 }
 
 
@@ -472,6 +477,10 @@ def extract_preset_overrides(preset_id: str, prompt: str) -> Dict[str, Any]:
             overrides["terrain_type"] = "Hills"
         elif re.search(r"\b(valley|canyon)\b", text):
             overrides["terrain_type"] = "Valley"
+        elif re.search(r"\b(desert|dunes)\b", text):
+            overrides["terrain_type"] = "Desert"
+        elif re.search(r"\b(canyon|gorge)\b", text):
+            overrides["terrain_type"] = "Canyon"
         m = _SEED.search(prompt)
         if m:
             overrides["seed"] = int(m.group(1))

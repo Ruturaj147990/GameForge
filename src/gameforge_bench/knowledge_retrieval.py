@@ -11,9 +11,13 @@ Implements Section 3 of GameForge LLM V1 requirements:
 from __future__ import annotations
 
 import json
+import logging
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Set, Tuple
+
+logger = logging.getLogger("gameforge_bench.knowledge_retrieval")
 
 
 @dataclass
@@ -26,6 +30,10 @@ class KnowledgeSnippet:
     category: str
     excerpt: str
     relevance_score: float = 1.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert snippet to serializable dictionary."""
+        return asdict(self)
 
 
 class GameForgeKnowledgeBase:
@@ -69,8 +77,8 @@ class GameForgeKnowledgeBase:
                                 excerpt=excerpt,
                             )
                         )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to load engine knowledge registry from %s: %s", self.registry_file, exc)
 
         # 2. Mathematical and Engine-Independent Architecture Invariants
         self.snippets.extend([
@@ -148,9 +156,22 @@ class GameForgeKnowledgeBase:
             )
         ])
 
-    def query_knowledge(self, query: str, engine_filter: Optional[str] = None, max_results: int = 2) -> List[KnowledgeSnippet]:
+    def get_available_engines(self) -> List[str]:
+        """Returns sorted list of distinct engines represented in the knowledge base."""
+        return sorted({s.engine for s in self.snippets if s.engine != "neutral"})
+
+    def query_knowledge(
+        self,
+        query: str,
+        engine_filter: Optional[str] = None,
+        max_results: int = 2
+    ) -> List[KnowledgeSnippet]:
         """Performs lexical and semantic relevance scoring on query against knowledge snippets."""
-        q_tokens = set(query.lower().replace(",", " ").replace(".", " ").split())
+        cleaned_query = query.lower()
+        q_tokens = set(re.findall(r"[a-z0-9_]+", cleaned_query))
+        if not q_tokens:
+            return self.snippets[:max_results]
+
         scored: List[Tuple[float, KnowledgeSnippet]] = []
 
         for snip in self.snippets:
@@ -160,33 +181,52 @@ class GameForgeKnowledgeBase:
 
             text_pool = f"{snip.source_title} {snip.category} {snip.excerpt}".lower()
             overlap = sum(1 for t in q_tokens if t in text_pool)
-            
+
             # Boost matches on engine name or exact API tokens
             boost = 1.0
-            if snip.engine in query.lower():
+            if snip.engine in cleaned_query:
                 boost += 2.0
-            if snip.category in query.lower():
+            if snip.category in cleaned_query:
                 boost += 1.5
 
             score = (overlap * boost) / (len(q_tokens) + 1.0)
             if score > 0.05 or snip.engine == "neutral":
-                scored.append((score, snip))
+                # Create a result copy with the updated relevance score
+                result_snip = KnowledgeSnippet(
+                    source_title=snip.source_title,
+                    engine=snip.engine,
+                    version_scope=snip.version_scope,
+                    provenance_reference=snip.provenance_reference,
+                    license=snip.license,
+                    category=snip.category,
+                    excerpt=snip.excerpt,
+                    relevance_score=round(score, 4),
+                )
+                scored.append((score, result_snip))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [item[1] for item in scored[:max_results]]
 
-    def format_retrieval_context(self, snippets: List[KnowledgeSnippet]) -> str:
+    def format_retrieval_context(
+        self,
+        snippets: List[KnowledgeSnippet],
+        max_chars: Optional[int] = None
+    ) -> str:
         """Formats bounded excerpts with full provenance into a model prompt context."""
         if not snippets:
             return ""
 
         lines = ["\n[GAMEFORGE LOCAL KNOWLEDGE LAYER — RETRIEVED PROJECT EXCERPTS]"]
         for idx, snip in enumerate(snippets, 1):
+            excerpt_text = snip.excerpt
+            if max_chars and len(excerpt_text) > max_chars:
+                excerpt_text = excerpt_text[:max_chars] + "... [truncated]"
             lines.append(f"--- Document {idx}: {snip.source_title} ({snip.version_scope}) ---")
             lines.append(f"Provenance / Reference: {snip.provenance_reference}")
             lines.append(f"License: {snip.license}")
+            lines.append(f"Relevance Score: {snip.relevance_score:.4f}")
             lines.append("Content:")
-            lines.append(snip.excerpt)
+            lines.append(excerpt_text)
             lines.append("-----------------------------------------------------------------")
         lines.append("[END RETRIEVED CONTEXT — USE VERIFIED FACTS TO ANCHOR RESPONSE]\n")
         return "\n".join(lines)

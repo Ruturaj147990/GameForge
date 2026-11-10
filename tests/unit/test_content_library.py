@@ -36,7 +36,7 @@ def test_infer_role_from_name():
     assert infer_role_from_name("SM_Stone_Pillar_High") == "architecture"
     assert infer_role_from_name("SM_Fern_Bush") == "vegetation"
     assert infer_role_from_name("SKM_Hero_Knight") == "character"
-    assert infer_role_from_name("Unknown_Item") == "other"
+    assert infer_role_from_name("Unknown_Thing_99") == "other"
 
 
 def test_library_registration_and_project_import(tmp_path):

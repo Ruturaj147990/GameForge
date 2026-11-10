@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Callable, List, Optional
 
-from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -41,6 +42,7 @@ class ToastCard(QFrame):
         self._is_dismissed = False
         self._dismiss_timer: Optional[QTimer] = None
         self.setObjectName(f"toastCard_{kind}")
+        self.setAccessibleName(f"Notification: {title}")
         self.setFixedWidth(320)
 
         border_color = (
@@ -60,11 +62,13 @@ class ToastCard(QFrame):
         col.setSpacing(2)
 
         lbl_title = QLabel(title, self)
+        lbl_title.setTextFormat(Qt.PlainText)
         lbl_title.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: bold; font-size: 13px;"))
         col.addWidget(lbl_title)
 
         if message:
             lbl_msg = QLabel(message, self)
+            lbl_msg.setTextFormat(Qt.PlainText)
             lbl_msg.setWordWrap(True)
             lbl_msg.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: 12px;"))
             col.addWidget(lbl_msg)
@@ -73,6 +77,7 @@ class ToastCard(QFrame):
             btn_details = QPushButton("Details →", self)
             btn_details.setObjectName("toastDetailsBtn")
             btn_details.setCursor(Qt.PointingHandCursor)
+            btn_details.setAccessibleName("View details for notification")
             btn_details.setStyleSheet(theme_stylesheet(f"""
                 QPushButton {{
                     background: transparent;
@@ -101,6 +106,7 @@ class ToastCard(QFrame):
         btn_close.setText("✕")
         btn_close.setFixedSize(20, 20)
         btn_close.setCursor(Qt.PointingHandCursor)
+        btn_close.setAccessibleName("Dismiss notification")
         btn_close.setStyleSheet(theme_stylesheet(f"""
             QToolButton {{
                 background: transparent;
@@ -131,6 +137,7 @@ class ToastCard(QFrame):
             self._dismiss_timer.timeout.connect(self._dismiss)
             self._dismiss_timer.start(6000)
 
+    @Slot()
     def _dismiss(self) -> None:
         if self._is_dismissed:
             return
@@ -138,7 +145,17 @@ class ToastCard(QFrame):
         if self._dismiss_timer is not None:
             self._dismiss_timer.stop()
             self._dismiss_timer = None
-        self.dismissed.emit(self)
+        try:
+            self.dismissed.emit(self)
+        except RuntimeError:
+            pass
+
+    def deleteLater(self) -> None:
+        """Clean up timer before destruction."""
+        if self._dismiss_timer is not None:
+            self._dismiss_timer.stop()
+            self._dismiss_timer = None
+        super().deleteLater()
 
 
 class ToastOverlay(QWidget):
@@ -147,6 +164,7 @@ class ToastOverlay(QWidget):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("studioToastOverlay")
+        self.setAccessibleName("Notifications overlay")
         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
 
         self._layout = QVBoxLayout(self)
@@ -160,8 +178,8 @@ class ToastOverlay(QWidget):
         self.hide()
         self._reposition()
 
-    def eventFilter(self, watched, event) -> bool:
-        if watched == self.parentWidget() and event.type() in (QEvent.Resize, QEvent.Show):
+    def eventFilter(self, watched: Optional[QObject], event: Optional[QEvent]) -> bool:
+        if event is not None and watched == self.parentWidget() and event.type() in (QEvent.Resize, QEvent.Show):
             self._reposition()
         return super().eventFilter(watched, event)
 
@@ -199,6 +217,7 @@ class ToastOverlay(QWidget):
     def error(self, title: str, message: str = "", details_cb: Optional[Callable[[], None]] = None) -> ToastCard:
         return self.show_toast("error", title, message, details_cb)
 
+    @Slot(object)
     def _on_toast_dismissed(self, toast: ToastCard) -> None:
         if toast in self._toasts:
             self._toasts.remove(toast)
@@ -221,6 +240,22 @@ class ToastOverlay(QWidget):
         h = max(60, self._layout.sizeHint().height(), len(self._toasts) * 90)
         self.setGeometry(pw - w - 20, ph - h - 30, w, h)
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: Optional[QResizeEvent]) -> None:
         super().resizeEvent(event)
         self._reposition()
+
+    def deleteLater(self) -> None:
+        """Clean up parent event filter and child toasts on destruction."""
+        parent = self.parentWidget()
+        if parent:
+            try:
+                parent.removeEventFilter(self)
+            except (RuntimeError, TypeError):
+                pass
+        for toast in list(self._toasts):
+            try:
+                toast.deleteLater()
+            except (RuntimeError, TypeError):
+                pass
+        self._toasts.clear()
+        super().deleteLater()

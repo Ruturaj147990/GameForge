@@ -11,8 +11,10 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, Slot
+
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -37,8 +39,9 @@ logger = logging.getLogger(__name__)
 class _InfoRow(QWidget):
     """Key-value row widget for the engine info section."""
 
-    def __init__(self, key: str, value: str = "—", parent=None) -> None:
+    def __init__(self, key: str, value: str = "—", parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
         lbl_key = QLabel(f"{key}:")
@@ -59,8 +62,9 @@ class UnrealPanel(QWidget):
     build_requested = Signal(str)   # uproject relative path
     create_game_requested = Signal()
 
-    def __init__(self, tool_service: ToolService, workspace_root: Path, parent=None) -> None:
+    def __init__(self, tool_service: ToolService, workspace_root: Path, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+
         self.setObjectName("unrealPanel")
         self.setAccessibleName("Unreal Engine Status Panel")
         self._tools = tool_service
@@ -335,6 +339,7 @@ class UnrealPanel(QWidget):
                 self._btn_build.setEnabled(False)
                 self._projects_stack.setCurrentWidget(self._empty_projects_card)
 
+    @Slot()
     def _on_open_folder(self) -> None:
         item = self._project_list.currentItem()
         if not item:
@@ -347,6 +352,14 @@ class UnrealPanel(QWidget):
             p = self._workspace / rel_path
         if "PYTEST_CURRENT_TEST" not in os.environ:
             open_folder_in_file_manager(p)
+
+    def deleteLater(self) -> None:
+        try:
+            self._tools.tool_result.disconnect(self._on_tool_result)
+        except Exception:
+            pass
+        super().deleteLater()
+
 
     @Slot()
     def _on_build(self) -> None:

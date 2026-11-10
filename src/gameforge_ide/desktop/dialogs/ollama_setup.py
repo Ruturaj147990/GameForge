@@ -18,8 +18,9 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 from PySide6.QtCore import QTimer, QUrl, Qt, Signal, Slot
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
+
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -153,6 +154,13 @@ class OllamaSetupDialog(QDialog):
         self.setWindowTitle("Ollama Setup — GameForge")
         self.setMinimumWidth(540)
         self.resize(560, 440)
+        self.setStyleSheet(theme_stylesheet(
+            f"QDialog#{self.objectName()} {{"
+            f"  background-color: {tokens.BG_ROOT};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"}}"
+        ))
+
 
         self._workspace = workspace_root
         self._systems_service = systems_service
@@ -472,7 +480,8 @@ class OllamaSetupDialog(QDialog):
             self._poll_timer.stop()
         super().accept()
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         if hasattr(self, "_poll_timer") and self._poll_timer.isActive():
             self._poll_timer.stop()
         super().closeEvent(event)
+

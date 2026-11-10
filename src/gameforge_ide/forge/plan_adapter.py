@@ -65,7 +65,10 @@ def plan_to_run(plan: TaskPlan, workspace: Union[Path, str]) -> RunSpec:
         )
         steps.append(step)
 
-    project_dir = ws if (ws / f"{ws.name}.uproject").exists() else None
+    has_uproject = (ws / f"{ws.name}.uproject").is_file() or any(
+        p.is_file() for p in ws.glob("*.uproject")
+    )
+    project_dir = ws if has_uproject else None
     return RunSpec(
         run_id=plan.plan_id,
         title=plan.goal,
@@ -99,6 +102,8 @@ def run_state_to_task_plan(state: RunState, plan: TaskPlan) -> TaskPlan:
 
         if rec.errors:
             task.error_message = "; ".join(rec.errors)
+        elif rec.status == StepStatus.DONE:
+            task.error_message = ""
 
         if rec.data:
             if "acceptance" in rec.data and rec.data["acceptance"]:
@@ -113,7 +118,9 @@ def run_state_to_task_plan(state: RunState, plan: TaskPlan) -> TaskPlan:
             }
             task.evidence.append(ev)
 
-    if all(t.status == "COMPLETED" for t in plan.tasks.values()):
+    if plan.tasks and all(t.status == "COMPLETED" for t in plan.tasks.values()):
+        plan.status = "COMPLETED"
+    elif not plan.tasks and state.status == "DONE":
         plan.status = "COMPLETED"
     elif any(t.status == "CANCELLED" for t in plan.tasks.values()) or state.status == "CANCELLED":
         plan.status = "CANCELLED"
@@ -184,7 +191,14 @@ def run_plan_on_forge(
         elif kind == "step_finished":
             ok = ev.get("ok", False)
             st = "COMPLETED" if ok else ev.get("status", "FAILED")
-            ev_type = "task_completed" if ok else ("task_blocked" if st == "BLOCKED" else "task_failed")
+            if ok:
+                ev_type = "task_completed"
+            elif st == "BLOCKED":
+                ev_type = "task_blocked"
+            elif st == "CANCELLED":
+                ev_type = "task_cancelled"
+            else:
+                ev_type = "task_failed"
             on_event(
                 PlanEvent(
                     event_type=ev_type,

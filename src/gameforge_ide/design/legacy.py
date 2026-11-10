@@ -20,11 +20,18 @@ class LegacyUnsupported(RuntimeError):
 
 
 def _hex_to_rgb(hex_code: str) -> tuple[float, float, float]:
-    hex_code = hex_code.lstrip("#")
-    r = int(hex_code[0:2], 16) / 255.0
-    g = int(hex_code[2:4], 16) / 255.0
-    b = int(hex_code[4:6], 16) / 255.0
-    return (round(r, 2), round(g, 2), round(b, 2))
+    hex_code = (hex_code or "").lstrip("#")
+    if len(hex_code) == 3:
+        hex_code = "".join(c * 2 for c in hex_code)
+    if len(hex_code) < 6:
+        hex_code = hex_code.ljust(6, "0")
+    try:
+        r = int(hex_code[0:2], 16) / 255.0
+        g = int(hex_code[2:4], 16) / 255.0
+        b = int(hex_code[4:6], 16) / 255.0
+        return (round(r, 2), round(g, 2), round(b, 2))
+    except ValueError:
+        return (0.5, 0.5, 0.5)
 
 
 def to_legacy_params(
@@ -112,7 +119,8 @@ def to_legacy_params(
     elif genre == Genre.ARENA_COMBAT:
         spawner = next((e for e in gds.entities if e.kind == EntityKind.SPAWNER), None)
         player = next((e for e in gds.entities if e.kind == EntityKind.PLAYER), None)
-        s_props = dict(spawner.props) if spawner else {}
+        enemy = next((e for e in gds.entities if e.kind in (EntityKind.ENEMY, EntityKind.RANGED_ENEMY)), None)
+        s_props = dict(spawner.props) if spawner else (dict(enemy.props) if enemy else {})
         p_props = dict(player.props) if player else {}
 
         params = ArenaCombatParams(
@@ -126,11 +134,11 @@ def to_legacy_params(
             player_attack_damage=float(p_props.get("player_attack_damage", p_props.get("attack_damage", 35.0))),
             player_attack_range=float(p_props.get("player_attack_range", p_props.get("attack_range", 250.0))),
             player_attack_cooldown=float(p_props.get("player_attack_cooldown", p_props.get("attack_cooldown", 0.4))),
-            enemy_max_health=float(s_props.get("enemy_max_health", 50.0)),
-            enemy_attack_damage=float(s_props.get("enemy_attack_damage", 15.0)),
-            enemy_attack_range=float(s_props.get("enemy_attack_range", 120.0)),
-            enemy_attack_cooldown=float(s_props.get("enemy_attack_cooldown", 1.0)),
-            enemy_speed=float(s_props.get("enemy_speed", 350.0)),
+            enemy_max_health=float(s_props.get("enemy_max_health", s_props.get("max_health", 50.0))),
+            enemy_attack_damage=float(s_props.get("enemy_attack_damage", s_props.get("attack_damage", 15.0))),
+            enemy_attack_range=float(s_props.get("enemy_attack_range", s_props.get("attack_range", 120.0))),
+            enemy_attack_cooldown=float(s_props.get("enemy_attack_cooldown", s_props.get("attack_cooldown", 1.0))),
+            enemy_speed=float(s_props.get("enemy_speed", s_props.get("move_speed", 350.0))),
         )
 
     elif genre == Genre.CARD_BATTLER:
@@ -142,11 +150,11 @@ def to_legacy_params(
             display_title=gds.meta.title,
             difficulty=gds.progression.difficulty,
             starting_level="Level1",
-            player_base_health=int(t_props.get("player_base_health", 30)),
-            opponent_base_health=int(t_props.get("opponent_base_health", 30)),
-            starting_hand_size=int(t_props.get("starting_hand_size", 4)),
+            player_base_health=int(t_props.get("player_base_health", t_props.get("health", 30))),
+            opponent_base_health=int(t_props.get("opponent_base_health", t_props.get("health", 30))),
+            starting_hand_size=int(t_props.get("starting_hand_size", t_props.get("hand_size", 4))),
             max_hand_size=int(t_props.get("max_hand_size", 7)),
-            base_energy_per_turn=int(t_props.get("base_energy_per_turn", 3)),
+            base_energy_per_turn=int(t_props.get("base_energy_per_turn", t_props.get("energy_per_turn", 3))),
             lane_count=int(t_props.get("lane_count", 3)),
         )
 

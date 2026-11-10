@@ -48,6 +48,10 @@ def _infer_asset_type(rel_path: str) -> str:
     stem_lower = p.stem.lower()
     path_lower = rel_path.lower()
 
+    if stem_lower.startswith("wbp_"):
+        return "widget"
+    if stem_lower.startswith("bp_"):
+        return "blueprint"
     if stem_lower.startswith("skm_") or stem_lower.startswith("sk_"):
         return "skeletal_mesh"
     if stem_lower.startswith("sm_"):
@@ -66,7 +70,7 @@ def _infer_asset_type(rel_path: str) -> str:
         return "material"
     if "textures" in path_lower or stem_lower.startswith("t_"):
         return "texture"
-    if "sounds" in path_lower or "audio" in path_lower or stem_lower.startswith(("s_", "sfx_")):
+    if "sounds" in path_lower or "audio" in path_lower or stem_lower.startswith(("s_", "sfx_", "cue_")):
         return "sound"
     if "niagara" in path_lower or "vfx" in path_lower or stem_lower.startswith(("ns_", "ne_")):
         return "vfx"
@@ -175,7 +179,7 @@ def update_default_game_ini_cook_dirs(project_dir: Path, cook_dirs: List[str]) -
         content = raw_bytes.decode("utf-8")
 
     section_header = "[/Script/UnrealEd.ProjectPackagingSettings]"
-    existing_dirs = set(re.findall(r'DirectoriesToAlwaysCook=\(Path="([^"]+)"\)', content))
+    existing_dirs = set(re.findall(r'[+]?DirectoriesToAlwaysCook=\(Path=["\']?([^"\'\)]+)["\']?\)', content))
 
     needed = [d for d in cook_dirs if d not in existing_dirs]
     if not needed:

@@ -154,10 +154,25 @@ _BIOME_THEME = {"forest": "forest", "desert": "desert", "island": "island", "mou
                 "dungeon": "dungeon", "indoor": "cyber"}
 
 
+_THEME_SYNONYMS: Dict[str, str] = {
+    "scifi": "scifi_metal",
+    "sci_fi": "scifi_metal",
+    "snow": "snow_ice",
+    "cyberpunk": "cyber",
+    "volcanic": "volcano",
+    "haunted_house": "haunted",
+    "spooky": "haunted",
+    "tropical": "island",
+    "pirate": "island",
+    "retro": "toon_flat",
+}
+
+
 def resolve_theme(gds: Any) -> Theme:
     """Theme from art.material_theme, then the level biome, then the prompt text, then style."""
     art = getattr(gds, "art", None)
-    tid = str(getattr(art, "material_theme", "default") or "default")
+    tid = str(getattr(art, "material_theme", "default") or "default").strip().lower()
+    tid = _THEME_SYNONYMS.get(tid, tid)
     if tid in THEMES and tid != "default":
         return THEMES[tid]
     try:
@@ -188,6 +203,7 @@ _ROLE_RULES: Tuple[Tuple[str, str], ...] = (
     ("wall", "wall"), ("floor", "floor"), ("ground", "floor"), ("board", "floor_alt"), ("table", "prop"),
     ("tile", "floor_alt"), ("cell", "floor_alt"), ("guardrail", "accent2"),
     ("console", "accent"), ("terminal", "accent"), ("switch", "accent"), ("door", "prop"), ("turret", "accent2"),
+    ("bombsite", "goal_pad"), ("sitea", "goal_pad"), ("siteb", "accent"), ("divider", "wall_dark"), ("barrier", "wall_dark"),
 )
 
 

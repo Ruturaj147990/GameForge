@@ -113,29 +113,40 @@ def adopt(proc: subprocess.Popen) -> bool:
         try:
             handle = wintypes.HANDLE(int(raw_handle))
             ok = bool(_k32.AssignProcessToJobObject(job, handle))
-            if not ok:
-                err = ctypes.get_last_error()
-                logger.warning(
-                    "AssignProcessToJobObject failed for PID %s (error %s); tracked in fallback registry",
-                    getattr(proc, "pid", "?"),
-                    err,
-                )
-            return ok
+            if ok:
+                return True
+            err = ctypes.get_last_error()
+            logger.debug(
+                "AssignProcessToJobObject with proc._handle failed for PID %s (error %s); trying OpenProcess fallback",
+                getattr(proc, "pid", "?"),
+                err,
+            )
         except Exception as exc:
-            logger.warning(
-                "AssignProcessToJobObject exception for PID %s: %s; tracked in fallback registry",
+            logger.debug(
+                "AssignProcessToJobObject exception for PID %s: %s; trying OpenProcess fallback",
                 getattr(proc, "pid", "?"),
                 exc,
             )
-            return False
 
     pid = getattr(proc, "pid", None)
     if pid is not None and sys.platform == "win32":
         proc_handle = _k32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, int(pid))
         if not proc_handle:
+            logger.warning(
+                "OpenProcess failed for PID %s (error %s); tracked in fallback registry",
+                pid,
+                ctypes.get_last_error(),
+            )
             return False
         try:
-            return bool(_k32.AssignProcessToJobObject(job, proc_handle))
+            ok = bool(_k32.AssignProcessToJobObject(job, proc_handle))
+            if not ok:
+                logger.warning(
+                    "AssignProcessToJobObject failed for PID %s (error %s); tracked in fallback registry",
+                    pid,
+                    ctypes.get_last_error(),
+                )
+            return ok
         finally:
             _k32.CloseHandle(proc_handle)
     return False
@@ -146,7 +157,7 @@ def kill_process_tree(proc: subprocess.Popen) -> None:
     if proc is None:
         return
     pid = getattr(proc, "pid", None)
-    if pid is not None:
+    if pid is not None and pid > 4:
         try:
             import psutil
             parent = psutil.Process(pid)
@@ -309,8 +320,11 @@ class JobHandle:
             return "CANCELLED"
         if not self._future.done():
             return "RUNNING"
-        if self._future.exception() is not None:
-            return "FAILED"
+        try:
+            if self._future.exception() is not None:
+                return "FAILED"
+        except (concurrent.futures.CancelledError, Exception):
+            return "CANCELLED"
         return "DONE"
 
     @property
@@ -384,8 +398,11 @@ class JobManager:
         cancel_event: Optional[threading.Event] = None,
         **kwargs: Any,
     ) -> JobHandle:
-        future = self._executor.submit(fn, *args, **kwargs)
         job_name = name or f"job_{time.time_ns()}"
+        with self._jobs_lock:
+            if job_name in self._jobs and not self._jobs[job_name].done():
+                job_name = f"{job_name}_{time.time_ns()}"
+        future = self._executor.submit(fn, *args, **kwargs)
         handle = JobHandle(future, name=job_name, cancel_event=cancel_event)
 
         with self._jobs_lock:

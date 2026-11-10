@@ -124,6 +124,21 @@ public:
 	int32 ActiveWeaponIndex = 0;
 
 	/** Falling below this Z counts as a death (fall-out-of-world used to destroy the pawn and soft-lock the game). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Player")
+	bool bStealthActive = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Player")
+	float StealthRemainingDuration = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameForge|Player")
+	float AbilityCooldownRemaining = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float AbilityCooldownTime = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
+	float AbilityDuration = 5.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GameForge|Player")
 	float KillZ = -2000.f;
 
@@ -168,6 +183,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void PerformDash();
+
+	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
+	void PerformAbility();
 
 	UFUNCTION(BlueprintCallable, Category = "GameForge|Player")
 	void SwitchWeapon(int32 NewWeaponIndex = -1);
@@ -227,6 +245,7 @@ protected:
 	void HandleSprintStarted(const FInputActionValue& Value);
 	void HandleSprintCompleted(const FInputActionValue& Value);
 	void HandleDash(const FInputActionValue& Value);
+	void HandleAbility(const FInputActionValue& Value);
 	void HandleSwitchWeapon(const FInputActionValue& Value);
 	void HandlePause(const FInputActionValue& Value);
 	void HandleRestart(const FInputActionValue& Value);

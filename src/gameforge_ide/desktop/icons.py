@@ -68,11 +68,13 @@ def _fallback_icon(name: str, colour: str, size: int, dpr: float) -> QIcon:
     pixmap = QPixmap(px, px)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing, True)
-    painter.setPen(QColor(colour))
-    painter.setFont(QFont("Segoe UI Symbol", max(8, int(px * 0.65))))
-    painter.drawText(pixmap.rect(), Qt.AlignCenter, FALLBACK_GLYPHS.get(name, "•"))
-    painter.end()
+    try:
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(QColor(colour))
+        painter.setFont(QFont("Segoe UI Symbol", max(8, int(px * 0.65))))
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, FALLBACK_GLYPHS.get(name, "•"))
+    finally:
+        painter.end()
     pixmap.setDevicePixelRatio(safe_dpr)
     return QIcon(pixmap)
 
@@ -89,10 +91,13 @@ def _pixmap(name: str, colour: str, size: int, dpr: float) -> QPixmap:
     pm = QPixmap(px, px)
     pm.fill(Qt.transparent)
     painter = QPainter(pm)
-    renderer.render(painter)
-    painter.end()
+    try:
+        renderer.render(painter)
+    finally:
+        painter.end()
     pm.setDevicePixelRatio(safe_dpr)
     return pm
+
 
 
 def clear_icon_cache() -> None:

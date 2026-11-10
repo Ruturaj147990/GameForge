@@ -5,7 +5,7 @@ import collections
 from typing import Any, Optional
 
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtGui import QCloseEvent, QFont, QResizeEvent, QTextCursor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -128,10 +128,11 @@ class LogView(QWidget):
         self._flush_timer.timeout.connect(self._flush_queue)
         self._flush_timer.start()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._reposition_floating_btn()
 
+    @Slot()
     def _reposition_floating_btn(self) -> None:
         if hasattr(self, "_floating_resume_btn") and hasattr(self, "_edit"):
             btn_w = 160
@@ -143,11 +144,14 @@ class LogView(QWidget):
             y = max(10, edit_rect.height() - btn_h - margin_bottom)
             self._floating_resume_btn.setGeometry(x, y, btn_w, btn_h)
 
+    @Slot(str)
     def append_log(self, text: str) -> None:
         """Enqueue text for batched UI update."""
         if text:
             self._queue.append(text)
 
+    @Slot(str)
+    @Slot(object)
     def set_text(self, text: Any) -> None:
         """Replace log text immediately."""
         self._queue.clear()
@@ -161,6 +165,7 @@ class LogView(QWidget):
         if self._auto_scroll:
             self._scroll_to_bottom()
 
+    @Slot()
     def clear(self) -> None:
         self._queue.clear()
         self._edit.clear()
@@ -177,7 +182,26 @@ class LogView(QWidget):
         if hasattr(self, "_floating_resume_btn"):
             self._floating_resume_btn.hide()
 
-    def closeEvent(self, event) -> None:
+    @Slot()
+    def update_theme(self) -> None:
+        """Update editor and button styling on theme change."""
+        if hasattr(self, "_edit"):
+            self._edit.setStyleSheet(
+                f"QPlainTextEdit#{self._edit.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_SM}px;"
+                f"  font-family: monospace;"
+                f"  font-size: 11px;"
+                f"}}"
+                f"QPlainTextEdit#{self._edit.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"}}"
+            )
+
+    def closeEvent(self, event: QCloseEvent) -> None:
         if hasattr(self, "_flush_timer") and self._flush_timer.isActive():
             self._flush_timer.stop()
         super().closeEvent(event)

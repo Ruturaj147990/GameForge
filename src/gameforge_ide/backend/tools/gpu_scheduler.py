@@ -11,6 +11,7 @@ from __future__ import annotations
 import enum
 import hashlib
 import json
+import secrets
 import threading
 import time
 import uuid
@@ -133,9 +134,10 @@ class GPUServiceContract:
         self.scheduler = scheduler or GPUScheduler()
         self.jobs: Dict[str, Dict[str, Any]] = {}
         self.idempotency_cache: Dict[str, str] = {}  # input_hash -> job_id
+        self._contract_lock = threading.Lock()
 
     def _verify_token(self, token: Optional[str]) -> bool:
-        return bool(token and token == self.auth_token)
+        return bool(token and secrets.compare_digest(str(token), self.auth_token))
 
     def health(self) -> Dict[str, Any]:
         """GET /health - Query GPU service health and status."""
@@ -166,15 +168,16 @@ class GPUServiceContract:
         input_hash = hashlib.sha256(input_data.encode("utf-8")).hexdigest()
 
         # Check idempotency cache
-        if input_hash in self.idempotency_cache:
-            prev_job_id = self.idempotency_cache[input_hash]
-            return {
-                "ok": True,
-                "job_id": prev_job_id,
-                "input_hash": input_hash,
-                "cached": True,
-                **self.jobs[prev_job_id],
-            }
+        with self._contract_lock:
+            if input_hash in self.idempotency_cache:
+                prev_job_id = self.idempotency_cache[input_hash]
+                return {
+                    "ok": True,
+                    "job_id": prev_job_id,
+                    "input_hash": input_hash,
+                    "cached": True,
+                    **self.jobs[prev_job_id],
+                }
 
         job_id = f"job-{uuid.uuid4().hex[:8]}"
 
@@ -199,9 +202,78 @@ class GPUServiceContract:
                 },
                 "completed_at": time.time(),
             }
-            self.jobs[job_id] = job_record
-            self.idempotency_cache[input_hash] = job_id
+            with self._contract_lock:
+                self.jobs[job_id] = job_record
+                self.idempotency_cache[input_hash] = job_id
             return {"ok": True, "job_id": job_id, "input_hash": input_hash, "cached": False, **job_record}
+        finally:
+            self.scheduler.release(job_id)
+
+    def remesh(
+        self,
+        mesh_id: str,
+        token: str,
+        target_triangles: int = 5000,
+        timeout_seconds: float = 30.0,
+    ) -> Dict[str, Any]:
+        """POST /remesh - Simplifies/retopologizes an existing 3D mesh."""
+        if not self._verify_token(token):
+            return {"ok": False, "error": "UNAUTHORIZED: Invalid or missing GPU service token"}
+        job_id = f"remesh-{uuid.uuid4().hex[:8]}"
+        acquired = self.scheduler.acquire(
+            GPUWorkloadType.ASSET_GENERATION, owner_id=job_id, timeout_seconds=timeout_seconds
+        )
+        if not acquired:
+            return {"ok": False, "error": "GPU_BUSY: Timeout waiting for GPU scheduler lock"}
+        try:
+            artifact_sha = hashlib.sha256(f"remesh:{mesh_id}:{target_triangles}".encode("utf-8")).hexdigest()
+            job_record = {
+                "status": "COMPLETED",
+                "mesh_id": mesh_id,
+                "target_triangles": target_triangles,
+                "artifact_hashes": {"mesh_obj": artifact_sha},
+                "completed_at": time.time(),
+            }
+            with self._contract_lock:
+                self.jobs[job_id] = job_record
+            return {"ok": True, "job_id": job_id, **job_record}
+        finally:
+            self.scheduler.release(job_id)
+
+    def texture(
+        self,
+        mesh_id: str,
+        prompt: str,
+        token: str,
+        resolution: int = 2048,
+        timeout_seconds: float = 30.0,
+    ) -> Dict[str, Any]:
+        """POST /texture - Generates PBR texture set for a 3D mesh."""
+        if not self._verify_token(token):
+            return {"ok": False, "error": "UNAUTHORIZED: Invalid or missing GPU service token"}
+        job_id = f"tex-{uuid.uuid4().hex[:8]}"
+        acquired = self.scheduler.acquire(
+            GPUWorkloadType.ASSET_GENERATION, owner_id=job_id, timeout_seconds=timeout_seconds
+        )
+        if not acquired:
+            return {"ok": False, "error": "GPU_BUSY: Timeout waiting for GPU scheduler lock"}
+        try:
+            tex_sha = hashlib.sha256(f"texture:{mesh_id}:{prompt}:{resolution}".encode("utf-8")).hexdigest()
+            job_record = {
+                "status": "COMPLETED",
+                "mesh_id": mesh_id,
+                "prompt": prompt,
+                "resolution": resolution,
+                "artifact_hashes": {
+                    "base_color": tex_sha,
+                    "normal": hashlib.sha256(b"normal").hexdigest(),
+                    "roughness": hashlib.sha256(b"roughness").hexdigest(),
+                },
+                "completed_at": time.time(),
+            }
+            with self._contract_lock:
+                self.jobs[job_id] = job_record
+            return {"ok": True, "job_id": job_id, **job_record}
         finally:
             self.scheduler.release(job_id)
 
@@ -210,9 +282,10 @@ class GPUServiceContract:
         if not self._verify_token(token):
             return {"ok": False, "error": "UNAUTHORIZED: Invalid or missing GPU service token"}
 
-        if job_id not in self.jobs:
-            return {"ok": False, "error": f"Job {job_id} not found"}
+        with self._contract_lock:
+            if job_id not in self.jobs:
+                return {"ok": False, "error": f"Job {job_id} not found"}
+            self.jobs[job_id]["status"] = "CANCELLED"
 
-        self.jobs[job_id]["status"] = "CANCELLED"
         self.scheduler.release(job_id)
         return {"ok": True, "job_id": job_id, "status": "CANCELLED"}

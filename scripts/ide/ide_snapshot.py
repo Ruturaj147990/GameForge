@@ -11,13 +11,14 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import List, Optional
 
 # Add repo to sys.path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-VIEWS = ["home", "games", "design", "build", "play", "evidence", "assets", "code", "settings"]
+VIEWS: List[str] = ["home", "games", "design", "build", "play", "evidence", "assets", "code", "settings"]
 
 
 def snapshot_view(scale: float, view_id: str, out_dir: Path) -> Path:
@@ -34,41 +35,47 @@ def snapshot_view(scale: float, view_id: str, out_dir: Path) -> Path:
     if app is None:
         app = QApplication([])
 
-    bench_ws = Path(r"E:\GameForge\ide_bench_ws")
-    if not bench_ws.is_dir():
-        bench_ws = REPO_ROOT / "scratch" / "bench_ws"
-        bench_ws.mkdir(parents=True, exist_ok=True)
+    bench_ws = REPO_ROOT / "scratch" / "bench_ws"
+    bench_ws.mkdir(parents=True, exist_ok=True)
 
     win = MainWindow(bench_ws)
-    win.resize(1440, 900)
-    win.show()
+    try:
+        win.resize(1440, 900)
+        win.show()
 
-    # Switch to view
-    if hasattr(win, "_switch_studio_view"):
-        win._switch_studio_view(view_id)
+        # Switch to view
+        if hasattr(win, "_switch_studio_view"):
+            win._switch_studio_view(view_id)
 
-    # Allow layout passes
-    end = time.time() + 0.3
-    while time.time() < end:
+        # Allow layout passes
+        deadline = time.monotonic() + 0.3
+        while time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.02)
+
+        pix = win.grab()
+        saved = pix.save(str(out_file))
+        if saved:
+            print(f"Captured {out_file} (scale={scale}, view={view_id})")
+        else:
+            print(f"Failed to save screenshot to {out_file}")
+    finally:
+        win.confirm_on_close = False
+        win.close()
         app.processEvents()
-        time.sleep(0.02)
 
-    win.grab().save(str(out_file))
-    print(f"Captured {out_file} (scale={scale}, view={view_id})")
-
-    win.confirm_on_close = False
-    win.close()
     return out_file
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Capture DPI snapshots of Studio views")
     parser.add_argument("--scale", type=float, default=1.0, help="DPI scale factor (e.g. 1.0, 1.25, 1.5)")
     parser.add_argument("--view", type=str, default="home", help="View ID to capture (or 'all')")
-    parser.add_argument("--all", action="store_true", help="Capture all 9 views at 1.0, 1.25, and 1.5 scale")
-    args = parser.parse_args()
+    parser.add_argument("--all", action="store_true", help="Capture all views at 1.0, 1.25, and 1.5 scale")
+    parser.add_argument("--out-dir", type=Path, default=None, help="Output directory for snapshots")
+    args = parser.parse_args(argv)
 
-    out_dir = REPO_ROOT / "reports" / "P4"
+    out_dir = args.out_dir or (REPO_ROOT / "reports" / "P4")
 
     if args.all:
         scales = [1.0, 1.25, 1.5]
@@ -82,6 +89,8 @@ def main() -> int:
         for v in VIEWS:
             snapshot_view(args.scale, v, out_dir)
     else:
+        if args.view not in VIEWS:
+            print(f"Warning: view '{args.view}' not in recognized views {VIEWS}, proceeding anyway.")
         snapshot_view(args.scale, args.view, out_dir)
 
     return 0

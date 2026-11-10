@@ -42,7 +42,7 @@ class LevelPlan(BaseModel):
     nav_bounds: Tuple[Tuple[float, float, float], Tuple[float, float, float]]
     geometry_ops: List[OpCall] = Field(default_factory=list)
     actors: List[PlacedActor] = Field(default_factory=list)
-    lighting: Literal["day", "dusk", "night", "indoor"] = "day"
+    lighting: str = "day"
     nav_checks: List[Tuple[str, str]] = Field(default_factory=list)
     sun_color: Optional[List[float]] = None
     theme_id: str = "default"

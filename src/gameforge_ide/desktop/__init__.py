@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .main_window import MainWindow
@@ -10,8 +10,13 @@ if TYPE_CHECKING:
 __all__ = ["MainWindow"]
 
 
-def __getattr__(name: str):
+def __dir__() -> list[str]:
+    return sorted(list(globals().keys()) + __all__)
+
+
+def __getattr__(name: str) -> Any:
     if name == "MainWindow":
         from .main_window import MainWindow
         return MainWindow
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

@@ -12,15 +12,20 @@ Evidence: reports/m8v2_datalayers_demo.json. Usage: python scripts/engine/demo_m
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+ENGINE_SCRIPTS = str(REPO / "scripts" / "engine")
+if ENGINE_SCRIPTS not in sys.path:
+    sys.path.insert(0, ENGINE_SCRIPTS)
 
-import demo_m11_landscape as land  # noqa: E402
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 REPORT = REPO / "reports" / "m8v2_datalayers_demo.json"
 LEVEL = "/Game/WP/Maps/WPVillage"
@@ -41,30 +46,37 @@ USER = [
 ]
 
 
-def run(rep: dict) -> None:
+def run(rep: Dict[str, Any]) -> None:
+    import demo_m11_landscape as land
+
     checks, steps = rep["checks"], rep["steps"]
-    land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "m8v2_datalayers_"))
+    try:
+        val_root = get_settings().require_dev("validation_root")
+    except Exception:
+        val_root = REPO / "scratch" / "validation"
+
+    land.PROJECT_DIR = val_root / f"m8v2_datalayers_{time.strftime('%Y%m%d')}"
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()
     link = land.start(uproject, "dl_a")
     generated_labels = [a["label"] for a in GENERATED] + ["GF_PCGScatter"]
     try:
-        nl = link.call("new_level", {"level_path": LEVEL, "partitioned": True})
+        nl = link.call("new_level", {"level_path": LEVEL, "partitioned": True}) or {}
         steps["new_level"] = nl.get("data")
         checks["level_is_partitioned"] = bool(nl.get("ok")) and (nl.get("data") or {}).get("partitioned") is True
-        dl = link.call("datalayer_ensure", {"asset_path": LAYER})
+        dl = link.call("datalayer_ensure", {"asset_path": LAYER}) or {}
         steps["datalayer"] = {"ok": dl.get("ok"), "data": dl.get("data"), "errors": dl.get("errors")}
         checks["data_layer_created"] = bool(dl.get("ok"))
         for a in GENERATED + USER:
             link.call("spawn_actor", a)
-        pcg = link.call("pcg_scatter", {"center": {"x": 0, "y": 0, "z": 0}, "extent": {"x": 1500, "y": 1500, "z": 1000}})
+        pcg = link.call("pcg_scatter", {"center": {"x": 0, "y": 0, "z": 0}, "extent": {"x": 1500, "y": 1500, "z": 1000}}) or {}
         steps["pcg"] = {"ok": pcg.get("ok"), "errors": pcg.get("errors")}
-        add = link.call("datalayer_add_actors", {"asset_path": LAYER, "labels": generated_labels})
+        add = link.call("datalayer_add_actors", {"asset_path": LAYER, "labels": generated_labels}) or {}
         steps["add"] = {"ok": add.get("ok"), "data": add.get("data"), "errors": add.get("errors")}
-        members = (link.call("datalayer_list_actors", {"asset_path": LAYER}).get("data") or {}).get("actors", [])
+        members = ((link.call("datalayer_list_actors", {"asset_path": LAYER}) or {}).get("data") or {}).get("actors", [])
         steps["members_before_restart"] = members
         checks["generated_actors_in_layer"] = sorted(members) == sorted(generated_labels)
-        save = link.call("save_all", {})
+        save = link.call("save_all", {}) or {}
         steps["save"] = save.get("data")
     finally:
         rep["editor_exit_code_a"] = link.stop()
@@ -77,10 +89,10 @@ def run(rep: dict) -> None:
     link = land.start(uproject, "dl_b")
     try:
         link.call("load_level", {"level_path": LEVEL})
-        members = (link.call("datalayer_list_actors", {"asset_path": LAYER}).get("data") or {}).get("actors", [])
+        members = ((link.call("datalayer_list_actors", {"asset_path": LAYER}) or {}).get("data") or {}).get("actors", [])
         steps["members_after_restart"] = members
         checks["layer_membership_persists_after_restart"] = sorted(members) == sorted(generated_labels)
-        cleared = link.call("world_clear_generated", {"data_layer_asset": LAYER})
+        cleared = link.call("world_clear_generated", {"data_layer_asset": LAYER}) or {}
         data = cleared.get("data") or {}
         steps["clear"] = {"ok": cleared.get("ok"), "rule": data.get("rule"), "deleted": data.get("deleted"),
                           "kept": data.get("kept"), "errors": cleared.get("errors")}
@@ -90,7 +102,7 @@ def run(rep: dict) -> None:
         # What the interim label-prefix rule would have done to the same level:
         steps["label_prefix_rule_would_delete_user_actor"] = "GF_UserShrine".startswith("GF_")
         link.call("save_all", {})
-        after = link.call("datalayer_list_actors", {"asset_path": LAYER}).get("data") or {}
+        after = (link.call("datalayer_list_actors", {"asset_path": LAYER}) or {}).get("data") or {}
         steps["members_after_clear_and_save"] = after
         checks["layer_empty_after_clear_and_save"] = after.get("actors") == []
     finally:
@@ -109,7 +121,10 @@ def main() -> int:
         rep["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
         rep["ok"] = bool(rep["checks"]) and all(rep["checks"].values()) and "exception" not in rep
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        tmp_report = REPORT.with_suffix(".tmp")
+        tmp_report.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        os.replace(tmp_report, REPORT)
     print(json.dumps(rep["checks"], indent=2), rep.get("exception", ""))
     return 0 if rep["ok"] else 1
 

@@ -16,10 +16,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import List, Tuple
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def verify_merge_prerequisites(
@@ -108,7 +115,15 @@ def run_weight_merge(
                 "status": "BLOCKED_PENDING_TRAINED_ADAPTER",
             }
             output_dir.mkdir(parents=True, exist_ok=True)
-            (output_dir / "merge_audit_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            report_file = output_dir / "merge_audit_report.json"
+            temp_report = report_file.with_suffix(".tmp")
+            try:
+                temp_report.write_text(json.dumps(report, indent=2), encoding="utf-8")
+                temp_report.replace(report_file)
+            except Exception:
+                if temp_report.exists():
+                    temp_report.unlink()
+                raise
             return 0
         return 1
 

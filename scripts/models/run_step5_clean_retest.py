@@ -15,8 +15,10 @@ Enforces strict grounding:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -25,6 +27,8 @@ from typing import Any, Dict, List
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 if str(WORKSPACE_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(WORKSPACE_ROOT / "src"))
+if str(WORKSPACE_ROOT) not in sys.path:
+    sys.path.insert(0, str(WORKSPACE_ROOT))
 
 from gameforge_bench.baseline_eval import evaluate_engine_neutral_task
 from gameforge_bench.model_adapter import ModelRequest, invoke_candidate, run_attempt
@@ -369,14 +373,28 @@ def run_clean_retest(workspace_root: Path = WORKSPACE_ROOT) -> Dict[str, Any]:
             "attempts": attempts,
         }
 
-    # Save structured JSON evidence
+    # Save structured JSON evidence atomically
     json_path = workspace_root / "reports" / "step5_clean_retest_results.json"
-    json_path.write_text(json.dumps(summary_results, indent=2), encoding="utf-8")
+    temp_json = json_path.with_suffix(".tmp")
+    try:
+        temp_json.write_text(json.dumps(summary_results, indent=2), encoding="utf-8")
+        temp_json.replace(json_path)
+    except Exception:
+        if temp_json.exists():
+            temp_json.unlink()
+        raise
     print(f"\n[EVIDENCE SAVED]: {json_path}")
 
-    # Generate Markdown Report
+    # Generate Markdown Report atomically
     md_path = workspace_root / "reports" / "step5_clean_retest_report.md"
-    generate_retest_markdown_report(summary_results, md_path)
+    temp_md = md_path.with_suffix(".tmp")
+    try:
+        generate_retest_markdown_report(summary_results, temp_md)
+        temp_md.replace(md_path)
+    except Exception:
+        if temp_md.exists():
+            temp_md.unlink()
+        raise
     print(f"[REPORT SAVED]:   {md_path}")
 
     return summary_results
@@ -494,5 +512,22 @@ def generate_retest_markdown_report(results: Dict[str, Any], report_path: Path) 
     report_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-if __name__ == "__main__":
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge Step 5 Clean Baseline Retest Runner")
+    parser.add_argument("--dry-run", action="store_true", help="Validate configuration without executing benchmark runs")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        manifest_path = WORKSPACE_ROOT / "configs" / "baseline_release_manifest.json"
+        register_path = WORKSPACE_ROOT / "configs" / "model_register.json"
+        assert manifest_path.is_file(), f"Manifest missing: {manifest_path}"
+        assert register_path.is_file(), f"Register missing: {register_path}"
+        print("Dry run passed: Step 5 manifest and model register validated.")
+        return 0
+
     run_clean_retest()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

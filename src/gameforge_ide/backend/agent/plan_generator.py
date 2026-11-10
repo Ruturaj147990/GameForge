@@ -396,9 +396,12 @@ class PlanGenerator:
         ctx = context or {}
 
         # 1. Check if Unreal Editor prompt
-        uproject = ctx.get("uproject") or next(
-            (p for p in self.workspace_root.glob("*.uproject")), None
-        )
+        uproject = ctx.get("uproject")
+        if not uproject:
+            try:
+                uproject = next((p for p in self.workspace_root.glob("*.uproject")), None)
+            except (OSError, ValueError):
+                uproject = None
 
         if any(w in prompt_lower for w in ("unreal", "actor", "mesh", "level", "spawn", "ue5", "uproject")) and uproject:
             # Extract desired actor label if mentioned

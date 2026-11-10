@@ -56,13 +56,17 @@ class CapabilityRegistry:
 
         # 1. Inspect Ollama library manifests
         if self.ollama_manifests.exists():
-            for model_dir in self.ollama_manifests.iterdir():
-                if not model_dir.is_dir():
-                    continue
+            try:
+                model_dirs = [d for d in self.ollama_manifests.iterdir() if d.is_dir()]
+            except OSError:
+                model_dirs = []
+            for model_dir in model_dirs:
                 model_name = model_dir.name
-                for tag_file in model_dir.iterdir():
-                    if not tag_file.is_file():
-                        continue
+                try:
+                    tag_files = [f for f in model_dir.iterdir() if f.is_file()]
+                except OSError:
+                    tag_files = []
+                for tag_file in tag_files:
                     tag_name = tag_file.name
                     full_id = f"{model_name}:{tag_name}"
 
@@ -73,7 +77,10 @@ class CapabilityRegistry:
                         config_desc = manifest_data.get("config", {})
                         digest_str = config_desc.get("digest", "")
                     except Exception:
-                        digest_str = f"sha256:{hashlib.sha256(tag_file.read_bytes()).hexdigest()}"
+                        try:
+                            digest_str = f"sha256:{hashlib.sha256(tag_file.read_bytes()).hexdigest()}"
+                        except Exception:
+                            digest_str = "sha256:unknown"
 
                     is_27b = "27b" in model_name.lower() or "27b" in tag_name.lower()
                     records[full_id] = CapabilityRecord(
@@ -92,9 +99,11 @@ class CapabilityRegistry:
 
         # 2. Inspect HuggingFace models on disk
         if self.hf_root.exists():
-            for hf_dir in self.hf_root.iterdir():
-                if not hf_dir.is_dir():
-                    continue
+            try:
+                hf_dirs = [d for d in self.hf_root.iterdir() if d.is_dir()]
+            except OSError:
+                hf_dirs = []
+            for hf_dir in hf_dirs:
                 name = hf_dir.name
                 full_id = f"hf/{name}"
                 is_27b = "27b" in name.lower()

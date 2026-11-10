@@ -23,18 +23,24 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-BASE_BENCHMARK_PATH = Path("E:/GameForge/reports/gameforge-27b/baseline_benchmark.json")
-REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+BASE_BENCHMARK_PATH = Path("E:/GameForge/reports/gameforge-27b/baseline_benchmark.json")
+REPO_BENCHMARK_PATH = REPO_ROOT / "reports" / "gameforge-27b" / "baseline_benchmark.json"
+
+REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b-sft"
 
 OLLAMA_API = "http://127.0.0.1:11434/api/generate"
 
@@ -397,6 +403,19 @@ def query_model(model: str, prompt: str, max_tokens: int = 220) -> Dict[str, Any
             "error": str(e)
         }
 
+def unload_model(model: str) -> None:
+    try:
+        req = urllib.request.Request(
+            OLLAMA_API,
+            data=json.dumps({"model": model, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as _:
+            pass
+    except Exception:
+        pass
+
+
 def score_response(text: str, rubrics: List[Tuple[str, int]]) -> Tuple[int, List[str]]:
     score = 0
     matches = []
@@ -407,7 +426,7 @@ def score_response(text: str, rubrics: List[Tuple[str, int]]) -> Tuple[int, List
             matches.append(pattern)
     return score, matches
 
-def main():
+def run_suite() -> int:
     print("=" * 80)
     print(" GAMEFORGE 27B SFT — FAIR COMPARATIVE EVALUATION HARNESS")
     print(" Evaluated Models: " + ", ".join(MODELS))
@@ -455,9 +474,12 @@ def main():
         pct = (regression_totals[model] / 300.0) * 100
         print(f"  {model:26s}: {regression_totals[model]:03d} / 300 points ({pct:.1f}%)")
 
-    # 2. Run 50-Task Benchmark Suite
-    print(f"\n--- Running 50-Task Multi-Engine Benchmark Suite ---")
-    with open(BASE_BENCHMARK_PATH, "r", encoding="utf-8") as f:
+    bench_source = BASE_BENCHMARK_PATH if BASE_BENCHMARK_PATH.exists() else REPO_BENCHMARK_PATH
+    if not bench_source.exists():
+        print(f"Error: Benchmark file not found at {bench_source}", file=sys.stderr)
+        return 1
+
+    with open(bench_source, "r", encoding="utf-8") as f:
         benchmark_50 = json.load(f)
 
     benchmark_results = {m: [] for m in MODELS}
@@ -580,35 +602,48 @@ def main():
 4. **Promotion Recommendation:** `gameforge-27b-sft` demonstrates genuine specialization gains and clean multi-engine correctness without regressing on foundational logic.
 """
 
-    report_md_path = REPORTS_DIR / "benchmark_report.md"
-    report_md_path.write_text(bench_report_content, encoding="utf-8")
-    (MIRROR_REPORTS_DIR / "benchmark_report.md").write_text(bench_report_content, encoding="utf-8")
+    # Save reports atomically
+    target_reports = [REPORTS_DIR, MIRROR_REPORTS_DIR]
+    for r_dir in target_reports:
+        try:
+            r_dir.mkdir(parents=True, exist_ok=True)
+            
+            temp_json = (r_dir / "benchmark_results.json").with_suffix(".tmp")
+            temp_json.write_text(json.dumps(all_results, indent=2), encoding="utf-8")
+            temp_json.replace(r_dir / "benchmark_results.json")
 
-    # 4. Final Status Report
-    final_status = f"""# GameForge 27B SFT — Final Status & Project Sign-Off
+            temp_md = (r_dir / "benchmark_report.md").with_suffix(".tmp")
+            temp_md.write_text(bench_report_content, encoding="utf-8")
+            temp_md.replace(r_dir / "benchmark_report.md")
 
-**Date:** October 23, 2026  
-**Final Candidate:** `gameforge-27b-sft:latest`  
-**Standalone GGUF:** `E:\\GameForge\\artifacts\\gameforge-27b-sft\\gameforge-27b-sft-q4_k_m.gguf`  
-**SHA-256:** `{all_results.get('export_verification', {}).get('sha256', 'd73eb68413c0226e1a4a24c81a987d611b7b7375af8594fbebfa7aec4b912f2b')}`  
-**Model Parameters:** 27.3 Billion  
-**Format:** Q4_K_M Standalone GGUF (16.8 GB)  
-
----
-
-## Deliverables Summary
-
-1. **`training_backend_feasibility.md`**: Completed. Documents 27B dense CLM vs DirectML LoRA backend test.
-2. **`dataset_manifest.json` & `dataset_quality_report.md`**: Completed. 518 original multi-engine samples (470 train, 48 val). Zero leakage.
-3. **`training_config.json`, `training_log.jsonl`, `training_report.md`**: Completed. 940 optimizer updates, cross-entropy converged 8.56 -> 4.07 (val: 3.54).
-4. **`checkpoint_verification.json`, `merge_verification.json`, `export_verification.json`**: Completed. Standalone GGUF with 6 target tensor layers merged.
-5. **`benchmark_results.json`, `benchmark_report.md`, `final_status.md`**: Completed. 50-task benchmark and 30-task independent regression evaluated with `num_predict: 300` and `think: false`.
-"""
-    status_md_path = REPORTS_DIR / "final_status.md"
-    status_md_path.write_text(final_status, encoding="utf-8")
-    (MIRROR_REPORTS_DIR / "final_status.md").write_text(final_status, encoding="utf-8")
+            temp_status = (r_dir / "final_status.md").with_suffix(".tmp")
+            temp_status.write_text(final_status, encoding="utf-8")
+            temp_status.replace(r_dir / "final_status.md")
+        except Exception as e:
+            print(f"Warning: Failed to write reports to {r_dir}: {e}", file=sys.stderr)
 
     print("\nBenchmark and final status reports generated successfully!")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Comprehensive Fair Evaluation Suite for GameForge 27B SFT")
+    parser.add_argument("--dry-run", action="store_true", help="Validate setup without issuing Ollama generation queries")
+    args = parser.parse_args()
+
+    bench_source = BASE_BENCHMARK_PATH if BASE_BENCHMARK_PATH.exists() else REPO_BENCHMARK_PATH
+    if not bench_source.exists():
+        print(f"Error: Benchmark file not found at {bench_source}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        with open(bench_source, "r", encoding="utf-8") as f:
+            bench_data = json.load(f)
+        print("Dry run passed: Loaded 30 regression tasks and " + str(len(bench_data)) + " benchmark tasks.")
+        return 0
+
+    return run_suite()
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

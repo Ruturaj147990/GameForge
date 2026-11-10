@@ -14,13 +14,17 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, List
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.gameforge_ide.backend.agent.plan_executor import PlanEvent, TaskPlanExecutor
 from src.gameforge_ide.backend.agent.task_plan import TaskNode, TaskPlan
@@ -29,7 +33,6 @@ from src.gameforge_ide.backend.tools.gateway import ToolGateway
 
 
 def main() -> int:
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--forge", action="store_true", help="Run with Forge executor")
     args = ap.parse_args()
@@ -48,8 +51,9 @@ def main() -> int:
     target_header = first_line
     replacement_header = f"{first_line}{marker_comment}"
 
-    events_log = []
-    def log_event(ev: PlanEvent):
+    events_log: List[Dict[str, Any]] = []
+
+    def log_event(ev: PlanEvent) -> None:
         msg = f"[{ev.timestamp:.2f}] {ev.event_type} | task={ev.task_id} | status={ev.status} | {ev.message}"
         print(f"  -> {msg}")
         events_log.append(ev.model_dump())
@@ -105,7 +109,7 @@ def main() -> int:
     )
 
     # Task 3: Execute real unit tests
-    test_cmd = f"python -m pytest tests/unit/test_task_plan.py -q"
+    test_cmd = "python -m pytest tests/unit/test_task_plan.py -q"
     t3 = TaskNode(
         task_id="t3_run_tests",
         title="Execute test suite on modified codebase",
@@ -135,7 +139,8 @@ def main() -> int:
         print(f"[DEMO B] FAILED: Invalid DAG: {errs}")
         return 1
 
-    t0 = time.time()
+    t0 = time.monotonic()
+    result_plan = plan
     try:
         # Run plan
         if args.forge:
@@ -148,7 +153,7 @@ def main() -> int:
         target_abs.write_text(original_text, encoding="utf-8")
         print("[DEMO B] Working tree restored to original state.")
 
-    elapsed = time.time() - t0
+    elapsed = time.monotonic() - t0
     print(f"[DEMO B] Execution completed in {elapsed:.2f}s with status: {result_plan.status}")
 
     all_ok = result_plan.status == "COMPLETED"
@@ -173,7 +178,9 @@ def main() -> int:
 
     out_file = ROOT / "reports" / "milestone1_repo_demo.json"
     out_file.parent.mkdir(parents=True, exist_ok=True)
-    out_file.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    tmp_out = out_file.with_suffix(".tmp")
+    tmp_out.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp_out, out_file)
     print(f"[DEMO B] Report saved to {out_file}")
 
     for tid, tinfo in report["tasks"].items():

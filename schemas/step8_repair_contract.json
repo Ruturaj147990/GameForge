@@ -30,7 +30,7 @@
     },
     "engine": {
       "type": "string",
-      "enum": ["unreal", "unity", "neutral"]
+      "enum": ["unreal", "unity", "godot", "neutral"]
     },
     "clean_snapshot_hash": {
       "type": "string",
@@ -59,7 +59,16 @@
           "step_index": { "type": "integer", "minimum": 0 },
           "tool_name": {
             "type": "string",
-            "enum": ["read_file", "write_file", "list_dir", "compile_project", "run_probes", "rollback_snapshot"]
+            "enum": [
+              "read_file",
+              "write_file",
+              "list_dir",
+              "compile_project",
+              "run_probes",
+              "rollback",
+              "rollback_snapshot",
+              "create_checkpoint"
+            ]
           },
           "action_payload": { "type": "object" },
           "observation_result": { "type": "object" },
@@ -73,14 +82,18 @@
                   "COMPILER_SYNTAX_ERROR",
                   "REFLECTION_MACRO_MISSING",
                   "DELEGATE_SIGNATURE_MISMATCH",
+                  "CONST_QUALIFIER_MISMATCH",
+                  "MEMBER_VARIABLE_SHADOWED",
+                  "UNRESOLVED_EXTERNAL_SYMBOL",
                   "RUNTIME_PROBE_FAILED",
                   "POLICY_ALLOWLIST_VIOLATION",
                   "TIMEOUT_EXCEEDED"
                 ]
               },
-              "targeted_file": { "type": "string" },
+              "targeted_file": { "type": ["string", "null"] },
               "line_number": { "type": ["integer", "null"] },
-              "recommended_fix": { "type": "string" }
+              "error_snippet": { "type": ["string", "null"] },
+              "recommended_fix": { "type": ["string", "null"] }
             }
           }
         }

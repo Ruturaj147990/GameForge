@@ -3,8 +3,10 @@
 A reproducible, cross-engine benchmark orchestration and evaluation framework.
 """
 
+from __future__ import annotations
+
 __version__ = "1.0.0"
-__benchmark_version__ = "v0.1"
+__benchmark_version__ = "1.0.0"
 
 from .grading import GradingLayer, RunStatus
 from .task_loader import LogicalTask, TaskSpec, load_task, load_task_inventory
@@ -21,3 +23,4 @@ __all__ = [
     "__version__",
     "__benchmark_version__",
 ]
+

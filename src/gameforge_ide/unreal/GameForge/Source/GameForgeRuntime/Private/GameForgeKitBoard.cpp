@@ -183,11 +183,19 @@ void AGameForgeGridBoard::BeginPlay()
 	if (BoardMode.Equals(TEXT("race_board"), ESearchCase::IgnoreCase) ||
 		BoardMode.Equals(TEXT("grid_race"), ESearchCase::IgnoreCase) ||
 		BoardMode.Equals(TEXT("snakes_and_ladders"), ESearchCase::IgnoreCase) ||
-		BoardMode.Equals(TEXT("ludo"), ESearchCase::IgnoreCase))
+		BoardMode.Equals(TEXT("ludo"), ESearchCase::IgnoreCase) ||
+		BoardMode.Contains(TEXT("roll")) ||
+		BoardMode.Contains(TEXT("dice")) ||
+		BoardMode.Contains(TEXT("path")) ||
+		BoardMode.Contains(TEXT("track")) ||
+		bHasDice)
 	{
 		InitializeRaceBoard();
 	}
-	else if ((BoardMode.Equals(TEXT("sudoku"), ESearchCase::IgnoreCase) || BoardMode.Equals(TEXT("number_grid"), ESearchCase::IgnoreCase)))
+	else if (BoardMode.Equals(TEXT("sudoku"), ESearchCase::IgnoreCase) ||
+			 BoardMode.Equals(TEXT("number_grid"), ESearchCase::IgnoreCase) ||
+			 BoardMode.Contains(TEXT("constraint")) ||
+			 BoardMode.Contains(TEXT("deduction")))
 	{
 		InitializeSudokuBoard();
 	}
@@ -310,6 +318,21 @@ void AGameForgeGridBoard::InitializeRaceBoard()
 {
 	const int32 NumPlayers = FMath::Max(2, Players);
 	PlayerPositions.Init(1, NumPlayers);
+
+	for (const auto& Kvp : ForwardWarps)
+	{
+		if (Kvp.Value <= TotalRaceTiles)
+		{
+			Ladders.Add(Kvp.Key, Kvp.Value);
+		}
+	}
+	for (const auto& Kvp : BackwardWarps)
+	{
+		if (Kvp.Key <= TotalRaceTiles)
+		{
+			Snakes.Add(Kvp.Key, Kvp.Value);
+		}
+	}
 
 	if (Ladders.Num() == 0 && LaddersCount > 0)
 	{

@@ -32,6 +32,12 @@ def sfx_unreal_asset_path(preset_name: str) -> str:
         "hit": "impact",
         "win": "fanfare",
         "lose": "defeat",
+        "ability_ready": "chime_low",
+        "stealth_enter": "footstep_soft",
+        "boss_roar": "defeat",
+        "dash": "footstep_soft",
+        "gate_unlock": "fanfare",
+        "weapon_shoot": "impact",
     }.get(clean, clean)
     return f"/Game/GameForge/SFX/S_{alias.title().replace('_', '')}"
 

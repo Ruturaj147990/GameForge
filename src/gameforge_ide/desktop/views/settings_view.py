@@ -13,7 +13,8 @@ from pathlib import Path
 import shutil
 from typing import Any, Dict, Optional
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import QSettings, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import apply_theme, theme_stylesheet
 from ...core.settings import (
     PINNED_ENGINE,
     discover_engines,
@@ -345,32 +347,40 @@ class SettingsView(QWidget):
 
     # ── Browse Slots ─────────────────────────────────────────────────────────
 
+    @Slot()
     def _open_hosted_settings_dialog(self) -> None:
         from ..dialogs.hosted_settings import HostedSettingsDialog
         dlg = HostedSettingsDialog(self._workspace, self)
         dlg.exec()
 
+    @Slot()
     def _browse_engine(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Unreal Engine Root")
         if folder:
             self._engine_path_input.setText(folder)
 
+    @Slot()
     def _browse_projects(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Projects Root")
         if folder:
             self._projects_root_input.setText(folder)
 
+    @Slot()
     def _browse_artifacts(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Artifacts Root")
         if folder:
             self._artifacts_root_input.setText(folder)
 
-    def _on_engine_combo_changed(self) -> None:
+    @Slot()
+    @Slot(int)
+    def _on_engine_combo_changed(self, index: int = -1) -> None:
         data = self._combo_detected_engine.currentData()
         if data:
             self._engine_path_input.setText(data)
 
-    def _validate_engine_path(self) -> None:
+    @Slot()
+    @Slot(str)
+    def _validate_engine_path(self, text: str = "") -> None:
         txt = self._engine_path_input.text().strip()
         if not txt:
             self._lbl_engine_status.setText(f"<span style='color: {tokens.TEXT_MUTED};'>No engine path configured.</span>")
@@ -389,7 +399,9 @@ class SettingsView(QWidget):
                 f"<span style='color: {tokens.ACCENT_WARNING};'>UnrealEditor.exe missing or invalid build.</span>"
             )
 
-    def _validate_storage_paths(self) -> None:
+    @Slot()
+    @Slot(str)
+    def _validate_storage_paths(self, text: str = "") -> None:
         if not hasattr(self, "_lbl_projects_status") or not hasattr(self, "_lbl_artifacts_status"):
             return
         p_txt = self._projects_root_input.text().strip()
@@ -465,10 +477,24 @@ class SettingsView(QWidget):
 
     # ── Data Load & Save ─────────────────────────────────────────────────────
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         self.load_settings()
 
+    @Slot()
+    def update_theme(self) -> None:
+        """Update group box and child widget stylesheets on theme change."""
+        for box in self.findChildren(QGroupBox):
+            try:
+                box.setStyleSheet(self._group_box_style())
+            except (RuntimeError, Exception):
+                pass
+
+    def deleteLater(self) -> None:
+        """Defensive cleanup before scheduled deletion."""
+        super().deleteLater()
+
+    @Slot()
     def load_settings(self) -> None:
         s = get_settings()
 
@@ -570,6 +596,7 @@ class SettingsView(QWidget):
         self._validate_engine_path()
         self._validate_storage_paths()
 
+    @Slot()
     def _safe_reset_save_text(self) -> None:
         try:
             self._btn_save.setText("Save Settings")
@@ -673,4 +700,7 @@ class SettingsView(QWidget):
         self._btn_save.setText("Saved ✓")
         QTimer.singleShot(2000, self._safe_reset_save_text)
         print(f"[GameForge Settings] Saved: Theme='{new_theme}', FontScale={self._font_scale_spin.value()}%, Engine='{eng or 'None'}', Projects='{proj}'", flush=True)
-        self.settingsChanged.emit()
+        try:
+            self.settingsChanged.emit()
+        except RuntimeError:
+            pass

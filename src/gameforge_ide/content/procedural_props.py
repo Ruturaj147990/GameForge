@@ -442,6 +442,34 @@ PROP_RECIPES: Dict[str, PropRecipe] = {
         material_role="prop",
         tags=["prop", "turret", "hazard", "defense"],
     ),
+
+    # 15. Jump Pad
+    "jump_pad": PropRecipe(
+        name="jump_pad",
+        parts=[
+            _cylinder(70.0, 15.0, {"x": 0.0, "y": 0.0, "z": 7.5}),
+            _cylinder(55.0, 22.0, {"x": 0.0, "y": 0.0, "z": 15.0}),
+            _sphere(35.0, {"x": 0.0, "y": 0.0, "z": 18.0}),
+        ],
+        triangle_budget=1000,
+        collision="box",
+        material_role="accent",
+        tags=["prop", "interactive", "jump_pad", "launcher"],
+    ),
+
+    # 16. Teleporter Pad
+    "teleporter_pad": PropRecipe(
+        name="teleporter_pad",
+        parts=[
+            _cylinder(90.0, 12.0, {"x": 0.0, "y": 0.0, "z": 6.0}),
+            _cylinder(70.0, 18.0, {"x": 0.0, "y": 0.0, "z": 12.0}),
+            _cone(25.0, 80.0, top_radius=4.0, loc={"x": 0.0, "y": 0.0, "z": 55.0}),
+        ],
+        triangle_budget=1200,
+        collision="box",
+        material_role="accent2",
+        tags=["prop", "interactive", "teleporter", "portal"],
+    ),
 }
 
 _SHAPE_TO_BASIC_MESH = {
@@ -461,7 +489,20 @@ def expand_prop_to_ops(
     color: Optional[List[float]] = None,
 ) -> List[Dict[str, Any]]:
     """Expand a PropRecipe into multi-primitive StaticMeshActor spawn_actor op args dicts."""
-    recipe_key = "stylized_tree" if recipe_name == "tree" else recipe_name
+    norm = str(recipe_name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "tree": "stylized_tree",
+        "turret": "turret_base",
+        "turretbase": "turret_base",
+        "loot_chest": "chest",
+        "chest_loot": "chest",
+        "magic_crystal": "crystal",
+        "jumppad": "jump_pad",
+        "launch_pad": "jump_pad",
+        "portal": "teleporter_pad",
+        "teleporter": "teleporter_pad",
+    }
+    recipe_key = aliases.get(norm, norm)
     recipe = PROP_RECIPES.get(recipe_key)
     if recipe is None:
         return []

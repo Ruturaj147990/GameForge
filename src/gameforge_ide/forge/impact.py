@@ -6,6 +6,7 @@ estimates rebuild duration from historical medians, and prepares incremental sta
 """
 from __future__ import annotations
 
+import copy
 import statistics
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -63,7 +64,7 @@ def compute_dirty_steps(
     for op in (ops or []):
         if not isinstance(op, dict):
             continue
-        path = str(op.get("path", "")).strip()
+        path = str(op.get("path") or "").strip()
         if not path:
             continue
         matched = False
@@ -149,7 +150,7 @@ def impact(
             skip=[],
             new=[s.step_id for s in new_spec.steps],
             removed=[],
-            estimated_minutes=round(total_s / 60.0, 1),
+            estimated_minutes=max(0.1, round(total_s / 60.0, 1)) if new_spec.steps else 0.0,
             descriptions=descs,
         )
 
@@ -228,7 +229,7 @@ def prepare_incremental_state(
             old_rec = previous_state.records.get(sid)
             if old_rec is None:
                 continue
-            # Keep as DONE with effective input_hash and preserved data/artifacts
+            # Keep as DONE with effective input_hash and deep-copied data/artifacts
             state.records[sid] = StepRecord(
                 step_id=sid,
                 status=StepStatus.DONE,
@@ -237,9 +238,9 @@ def prepare_incremental_state(
                 started_at=old_rec.started_at,
                 finished_at=old_rec.finished_at,
                 ok=True,
-                data=dict(old_rec.data),
+                data=copy.deepcopy(old_rec.data),
                 errors=[],
-                artifacts=list(old_rec.artifacts),
+                artifacts=[a.model_copy() for a in old_rec.artifacts],
                 checkpoint=old_rec.checkpoint,
             )
 

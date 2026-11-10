@@ -1,3 +1,7 @@
+"""GameForge IDE — Desktop Dialogs Package."""
+
+from __future__ import annotations
+
 from .about_dialog import AboutDialog
 from .delete_game_dialog import DeleteGameDialog
 from .hosted_settings import HostedSettingsDialog
@@ -13,3 +17,4 @@ __all__ = [
     "OllamaSetupDialog",
     "SettingsDialog",
 ]
+

@@ -22,9 +22,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Optional
 
 
 @dataclass
@@ -58,6 +58,21 @@ class SFTSampleRecord:
             sort_keys=True,
         )
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sample_id": self.sample_id,
+            "category": self.category,
+            "target_engine": self.target_engine,
+            "group_id": self.group_id,
+            "split": self.split,
+            "source_id": self.source_id,
+            "license_assertion": self.license_assertion,
+            "review_status": self.review_status,
+            "conversations": self.conversations,
+            "content_sha256": self.content_sha256,
+            "is_contaminated": self.is_contaminated,
+        }
 
 
 class GameForgeV2DatasetBuilder:
@@ -106,9 +121,9 @@ class GameForgeV2DatasetBuilder:
         if self.protected_dir.is_dir():
             for p_file in self.protected_dir.glob("**/*.py"):
                 text = p_file.read_text(encoding="utf-8", errors="ignore").lower()
-                lines = [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("#")]
-                for l in lines:
-                    words = re.findall(r"\w+", l)
+                clean_lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+                for line in clean_lines:
+                    words = re.findall(r"\w+", line)
                     if len(words) >= 6:
                         self.quarantine_phrases.add(" ".join(words[:6]))
 

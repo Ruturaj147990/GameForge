@@ -44,57 +44,69 @@ def capture_window_bmp(hwnd: int, output_png: Path) -> bool:
             return False
 
         hdc_screen = user32.GetDC(hwnd)
-        hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
-        hbm = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
-        gdi32.SelectObject(hdc_mem, hbm)
-
-        # PrintWindow with PW_RENDERFULLCONTENT (2) for D3D12/DirectComposition content
-        user32.PrintWindow(hwnd, hdc_mem, 2)
-
-        # Save bitmap via PIL if available, or write raw BMP header
-        try:
-            from PIL import Image
-            import numpy as np
-
-            # BITMAPINFO
-            class BITMAPINFOHEADER(ctypes.Structure):
-                _fields_ = [
-                    ("biSize", wintypes.DWORD),
-                    ("biWidth", wintypes.LONG),
-                    ("biHeight", wintypes.LONG),
-                    ("biPlanes", wintypes.WORD),
-                    ("biBitCount", wintypes.WORD),
-                    ("biCompression", wintypes.DWORD),
-                    ("biSizeImage", wintypes.DWORD),
-                    ("biXPelsPerMeter", wintypes.LONG),
-                    ("biYPelsPerMeter", wintypes.LONG),
-                    ("biClrUsed", wintypes.DWORD),
-                    ("biClrImportant", wintypes.DWORD),
-                ]
-
-            bi = BITMAPINFOHEADER()
-            bi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
-            bi.biWidth = w
-            bi.biHeight = -h  # Top-down
-            bi.biPlanes = 1
-            bi.biBitCount = 32
-            bi.biCompression = 0
-
-            buf = ctypes.create_string_buffer(w * h * 4)
-            gdi32.GetDIBits(hdc_mem, hbm, 0, h, buf, ctypes.byref(bi), 0)
-
-            arr = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 4))
-            img = Image.fromarray(arr[:, :, [2, 1, 0, 3]])  # BGRA -> RGBA
-            output_png.parent.mkdir(parents=True, exist_ok=True)
-            img.save(str(output_png))
-            logger.info("Captured screenshot to %s (%dx%d)", output_png, w, h)
-            return True
-        except ImportError:
-            logger.warning("PIL or numpy not available for screenshot writing")
+        if not hdc_screen:
             return False
+
+        try:
+            hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+            if not hdc_mem:
+                return False
+
+            try:
+                hbm = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
+                if not hbm:
+                    return False
+
+                try:
+                    gdi32.SelectObject(hdc_mem, hbm)
+
+                    # PrintWindow with PW_RENDERFULLCONTENT (2) for D3D12/DirectComposition content
+                    user32.PrintWindow(hwnd, hdc_mem, 2)
+
+                    try:
+                        from PIL import Image
+                        import numpy as np
+
+                        class BITMAPINFOHEADER(ctypes.Structure):
+                            _fields_ = [
+                                ("biSize", wintypes.DWORD),
+                                ("biWidth", wintypes.LONG),
+                                ("biHeight", wintypes.LONG),
+                                ("biPlanes", wintypes.WORD),
+                                ("biBitCount", wintypes.WORD),
+                                ("biCompression", wintypes.DWORD),
+                                ("biSizeImage", wintypes.DWORD),
+                                ("biXPelsPerMeter", wintypes.LONG),
+                                ("biYPelsPerMeter", wintypes.LONG),
+                                ("biClrUsed", wintypes.DWORD),
+                                ("biClrImportant", wintypes.DWORD),
+                            ]
+
+                        bi = BITMAPINFOHEADER()
+                        bi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+                        bi.biWidth = w
+                        bi.biHeight = -h  # Top-down
+                        bi.biPlanes = 1
+                        bi.biBitCount = 32
+                        bi.biCompression = 0
+
+                        buf = ctypes.create_string_buffer(w * h * 4)
+                        gdi32.GetDIBits(hdc_mem, hbm, 0, h, buf, ctypes.byref(bi), 0)
+
+                        arr = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 4))
+                        img = Image.fromarray(arr[:, :, [2, 1, 0, 3]])  # BGRA -> RGBA
+                        output_png.parent.mkdir(parents=True, exist_ok=True)
+                        img.save(str(output_png))
+                        logger.info("Captured screenshot to %s (%dx%d)", output_png, w, h)
+                        return True
+                    except ImportError:
+                        logger.warning("PIL or numpy not available for screenshot writing")
+                        return False
+                finally:
+                    gdi32.DeleteObject(hbm)
+            finally:
+                gdi32.DeleteDC(hdc_mem)
         finally:
-            gdi32.DeleteObject(hbm)
-            gdi32.DeleteDC(hdc_mem)
             user32.ReleaseDC(hwnd, hdc_screen)
     except Exception as exc:
         logger.error("Failed to capture screenshot: %s", exc)
@@ -147,8 +159,8 @@ def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]
                               "log_path": str(log_path), "steps": [], "ok": False}
     try:
         hwnd = None
-        deadline = time.time() + 40.0
-        while time.time() < deadline and not hwnd:
+        deadline = time.monotonic() + 40.0
+        while time.monotonic() < deadline and not hwnd:
             if proc.poll() is not None:
                 raise RuntimeError(f"Process exited prematurely with code {proc.returncode}")
             hwnd = find_game_window_for_pid(proc.pid)  # the UnrealWindow viewport, not a console
@@ -182,8 +194,8 @@ def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]
                 time.sleep(act["duration_s"])
             expect = act.get("expect", [])
             observed: List[str] = []
-            settle = time.time() + act.get("settle_s", 2.5)
-            while time.time() < settle:
+            settle = time.monotonic() + act.get("settle_s", 2.5)
+            while time.monotonic() < settle:
                 time.sleep(0.25)
                 observed += game_log.new_events()
                 if all(_expectation_met(e, observed) for e in expect):
@@ -206,7 +218,8 @@ def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]
 
     finally:
         # Kill the whole tree so no game instance outlives the test.
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, creationflags=flags)
         try:
             proc.wait(timeout=10.0)
         except subprocess.TimeoutExpired:
@@ -217,8 +230,25 @@ def test_game(exe_path: Path, game_name: str, test_actions: List[Dict[str, Any]]
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LOG_DIR = get_settings().require_dev("validation_root") / "real_input_logs"
-PROJECTS = get_settings().projects_root
+
+
+def _get_log_dir() -> Path:
+    try:
+        val_root = getattr(get_settings(), "validation_root", None) or (get_settings().projects_root / "validation")
+        return Path(val_root) / "real_input_logs"
+    except Exception:
+        return ROOT / "scratch" / "validation" / "real_input_logs"
+
+
+def _get_projects_dir() -> Path:
+    try:
+        return get_settings().projects_root
+    except Exception:
+        return ROOT / "scratch" / "projects"
+
+
+LOG_DIR = _get_log_dir()
+PROJECTS = _get_projects_dir()
 
 # Click targets are the HUD's own hitbox rectangles at 1280x720 (card_battler AGFCardHUD::DrawHUD):
 # 4-card hand -> card 0 centre (392, 600); player half of lane index 1 -> centre (640, 280).
@@ -258,6 +288,9 @@ def main(argv=None) -> int:
     games = [a for a in argv if not a.startswith("--")] or list(GAME_TESTS)
     reports = []
     for g in games:
+        if g not in GAME_TESTS:
+            logger.warning("Unknown game test '%s', skipping (available: %s)", g, list(GAME_TESTS.keys()))
+            continue
         name = "Audit" + g
         packaged = PROJECTS / name / "Packaged" / "Windows"
         exe = packaged / f"{name}.exe"
@@ -266,10 +299,13 @@ def main(argv=None) -> int:
         reports.append(test_game(exe, name, GAME_TESTS[g]))
 
     summary_path = ROOT / "reports" / "packaged_real_input_summary.json"
-    summary_path.write_text(json.dumps(reports, indent=2), encoding="utf-8")
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = summary_path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reports, indent=2), encoding="utf-8")
+    tmp.replace(summary_path)
     logger.info("Summary saved to %s", summary_path)
 
-    all_ok = all(r.get("ok") for r in reports)
+    all_ok = bool(reports) and all(r.get("ok") for r in reports)
     print("\n" + "=" * 60)
     print(f"PACKAGED REAL-INPUT ACCEPTANCE: {'ALL PASSED' if all_ok else 'SOME FAILED'}")
     for r in reports:

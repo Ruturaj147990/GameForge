@@ -9,6 +9,7 @@ from .cinematics import generate_intro_cinematic
 from .codegen import plan_architecture_codegen, synthesize_cpp_bodies_for_architecture
 from .compose import compose
 from .content import plan_content_ops, resolve_sfx_path, resolve_vfx_path
+from .decor import decorate
 from .level_ops import plan_to_op_calls, verify_placed_actor_transforms
 from .model import (
     CodegenTask,
@@ -18,6 +19,7 @@ from .model import (
     OpCall,
     PlacedActor,
 )
+from .placement import distribute_along_path, is_point_in_polygon, scatter
 from .plan import composition_to_run_spec
 from .runtime_def import build as build_gfdef
 from .theme import THEMES, resolve_theme
@@ -33,13 +35,17 @@ __all__ = [
     "build_gfdef",
     "compose",
     "composition_to_run_spec",
+    "decorate",
+    "distribute_along_path",
     "generate_intro_cinematic",
+    "is_point_in_polygon",
     "plan_architecture_codegen",
     "plan_content_ops",
     "plan_to_op_calls",
     "resolve_sfx_path",
     "resolve_theme",
     "resolve_vfx_path",
+    "scatter",
     "synthesize_cpp_bodies_for_architecture",
     "verify_placed_actor_transforms",
 ]

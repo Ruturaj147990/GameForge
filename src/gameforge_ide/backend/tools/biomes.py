@@ -121,6 +121,8 @@ def _check(biome: Biome) -> None:
 
 
 def landscape_args(biome: str, seed: int, layer_info_path: str, material_path: str) -> dict:
+    if biome not in BIOMES:
+        raise KeyError(f"Unknown biome '{biome}'. Available biomes: {list(BIOMES.keys())}")
     b = BIOMES[biome]
     _check(b)
     return {"terrain_type": b.terrain_type, "elevation_scale": b.elevation_scale, "seed": int(seed),
@@ -131,6 +133,8 @@ def landscape_args(biome: str, seed: int, layer_info_path: str, material_path: s
 
 def layer_material_graph(biome: str, asset_path: str) -> dict:
     """LandscapeLayerBlend material for the biome's paint layers (input pins are named "Layer <Name>")."""
+    if biome not in BIOMES:
+        raise KeyError(f"Unknown biome '{biome}'. Available biomes: {list(BIOMES.keys())}")
     b = BIOMES[biome]
     nodes = [{"id": "blend", "class": "MaterialExpressionLandscapeLayerBlend", "x": -400, "y": 0,
               "props": {"layers": [{"name": n} for n, _, _ in b.layers]}},
@@ -164,6 +168,8 @@ def scatter_graphs(biome: str, seed: int, graph_folder: str, extent_cm: float,
     """One surface-sampled PCG graph per scatter set (Get Landscape → Surface Sampler → Density Filter → Spawner).
     With `exclusion_tag`, a binary Difference against the tagged actors' bounds sits before the density filter, so
     excluded points (density 0) are culled there."""
+    if biome not in BIOMES:
+        raise KeyError(f"Unknown biome '{biome}'. Available biomes: {list(BIOMES.keys())}")
     out = []
     for i, sc in enumerate(BIOMES[biome].scatter):
         nodes = [{"id": "land", "settings": "PCGGetLandscapeSettings"},
@@ -191,6 +197,8 @@ def scatter_graphs(biome: str, seed: int, graph_folder: str, extent_cm: float,
 
 
 def lighting_rig(preset: str, height_cm: float = 10000.0) -> list[dict]:
+    if preset not in LIGHTING:
+        raise KeyError(f"Unknown lighting preset '{preset}'. Available presets: {list(LIGHTING.keys())}")
     rig = []
     for actor in LIGHTING[preset]:
         # Lights that declare their own location (indoor fill PointLight) keep it; previously every light was

@@ -12,29 +12,60 @@ Evidence: reports/m11_landscape_demo.json. Usage: python scripts/engine/demo_m11
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shutil
+import stat
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
-
 from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
-# Defaults come from the host profile (P0 WI-0.11); individual demos may still pin a historical build.
-PROBE = get_settings().require_dev("probe_project").parent
-PLUGIN_BUILD = get_settings().require_dev("plugin_build")
-DATE = time.strftime("%Y%m%d")
-PROJECT_DIR = get_settings().require_dev("validation_root") / f"m11_landscape_{DATE}"
 REPORT = REPO / "reports" / "m11_landscape_demo.json"
 MAT = "/Game/M11/Landscape/M_GFLandscapeLayers"
 LAYERS = [("Grass", "low", [0.10, 0.32, 0.06]), ("Rock", "steep", [0.22, 0.21, 0.20]), ("Snow", "high", [0.85, 0.87, 0.9])]
+
+
+def _get_dev_paths() -> Tuple[Path, Path, Path, Path]:
+    s = get_settings()
+    try:
+        probe_uproject = s.require_dev("probe_project")
+        probe = probe_uproject.parent
+        plugin_build = s.require_dev("plugin_build")
+        val_root = s.require_dev("validation_root")
+    except Exception:
+        probe = REPO / "probe"
+        probe_uproject = probe / "GFProbe.uproject"
+        plugin_build = REPO / "Plugins" / "GameForge"
+        val_root = REPO / "scratch" / "validation"
+    date_str = time.strftime("%Y%m%d")
+    project_dir = val_root / f"m11_landscape_{date_str}"
+    return probe, probe_uproject, plugin_build, project_dir
+
+
+# Module attributes populated lazily for backwards compatibility
+PROBE: Optional[Path] = None
+PLUGIN_BUILD: Optional[Path] = None
+DATE = time.strftime("%Y%m%d")
+PROJECT_DIR: Optional[Path] = None
+
+
+def _remove_readonly(func: Any, path: str, exc_info: Any) -> None:
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except OSError:
+        pass
 
 
 def landscape_material(input_style: str) -> dict:
@@ -52,7 +83,8 @@ def landscape_material(input_style: str) -> dict:
 
 def classify(path: Path) -> dict:
     from PIL import Image
-    img = np.asarray(Image.open(path).convert("RGB")).astype(np.float64)
+    with Image.open(path) as raw_img:
+        img = np.asarray(raw_img.convert("RGB")).astype(np.float64)
     r, g, b = img[..., 0], img[..., 1], img[..., 2]
     lum = img.mean(axis=2)
     lit = lum > 25
@@ -66,20 +98,30 @@ def classify(path: Path) -> dict:
 
 
 def make_disposable() -> Path:
-    if PROJECT_DIR.exists():
-        shutil.rmtree(PROJECT_DIR)
-    shutil.copytree(PROBE, PROJECT_DIR, ignore=shutil.ignore_patterns(
+    global PROBE, PLUGIN_BUILD, PROJECT_DIR
+    def_probe, def_uproject, def_plugin, def_proj_dir = _get_dev_paths()
+    probe_dir = PROBE or def_probe
+    plugin_dir = PLUGIN_BUILD or def_plugin
+    project_dir = PROJECT_DIR or def_proj_dir
+
+    if project_dir.exists():
+        shutil.rmtree(project_dir, onexc=lambda f, p, e: _remove_readonly(f, p, e))
+    shutil.copytree(probe_dir, project_dir, ignore=shutil.ignore_patterns(
         "DerivedDataCache", "Intermediate", "Saved", "__pycache__", ".gameforge"))
-    dest = PROJECT_DIR / "Plugins" / "GameForge" / "Binaries"
-    shutil.rmtree(dest)
-    shutil.copytree(PLUGIN_BUILD / "Binaries", dest)
-    return PROJECT_DIR / "GFProbe.uproject"
+    dest = project_dir / "Plugins" / "GameForge" / "Binaries"
+    if dest.exists():
+        shutil.rmtree(dest, onexc=lambda f, p, e: _remove_readonly(f, p, e))
+    bins_src = plugin_dir / "Binaries"
+    if bins_src.is_dir():
+        shutil.copytree(bins_src, dest)
+    return project_dir / def_uproject.name
 
 
 def start(uproject: Path, tag: str) -> LiveEditorLink:
+    log_dir = PROJECT_DIR or uproject.parent
     link = LiveEditorLink(uproject)
     link.prepare_project()
-    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=PROJECT_DIR / f"landscape_editor_{tag}.log")
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=log_dir / f"landscape_editor_{tag}.log")
     link.connect(discovery_timeout_s=900)
     return link
 
@@ -164,14 +206,24 @@ def run(rep: dict) -> None:
 
 
 def main() -> int:
-    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "project": str(PROJECT_DIR), "checks": {}, "steps": {}}
+    _, _, _, def_proj_dir = _get_dev_paths()
+    proj_dir = PROJECT_DIR or def_proj_dir
+    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "project": str(proj_dir), "checks": {}, "steps": {}}
     try:
         run(rep)
     except Exception as exc:
         rep["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
         rep["ok"] = bool(rep["checks"]) and all(rep["checks"].values()) and "exception" not in rep
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        tmp = REPORT.with_name(f".{REPORT.name}.tmp.{os.getpid()}")
+        try:
+            tmp.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, REPORT)
+        finally:
+            if tmp.exists():
+                with contextlib.suppress(OSError):
+                    tmp.unlink()
     print(json.dumps(rep["checks"], indent=2), rep.get("exception", ""))
     return 0 if rep["ok"] else 1
 

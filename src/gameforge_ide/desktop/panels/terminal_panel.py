@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QProcess, Qt, Slot
-from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QCloseEvent, QColor, QFont, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
+
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -29,8 +30,9 @@ from ..styles.dark_theme import theme_color
 class TerminalPanel(QWidget):
     """Embedded PowerShell terminal panel using QProcess."""
 
-    def __init__(self, workspace_root: Path, parent=None) -> None:
+    def __init__(self, workspace_root: Path, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+
         self.setObjectName("terminalPanel")
         self.setAccessibleName("Embedded PowerShell Terminal")
         self._workspace = Path(workspace_root).resolve()
@@ -261,9 +263,10 @@ class TerminalPanel(QWidget):
         cursor.insertText(f"PS❯ {cmd}\n", fmt)
         self._output.setTextCursor(cursor)
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         self.shutdown()
         super().closeEvent(event)
+
 
     def deleteLater(self) -> None:
         self.shutdown()

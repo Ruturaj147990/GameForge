@@ -379,9 +379,9 @@ class ToolActivityItem(QFrame):
         details_layout.addWidget(self._result_edit)
 
         # Copy button in details
-        btn_copy = QPushButton("Copy Arguments & Output")
-        btn_copy.setObjectName("btnCopyDetails")
-        btn_copy.setStyleSheet(theme_stylesheet(f"""
+        self._btn_copy = QPushButton("Copy Arguments & Output")
+        self._btn_copy.setObjectName("btnCopyDetails")
+        self._btn_copy.setStyleSheet(theme_stylesheet(f"""
             QPushButton#btnCopyDetails {{
                 background: {tokens.BG_SURFACE};
                 border: 1px solid {tokens.BORDER};
@@ -396,8 +396,9 @@ class ToolActivityItem(QFrame):
                 color: {tokens.TEXT_PRIMARY};
             }}
         """))
-        btn_copy.clicked.connect(self._copy_details)
-        details_layout.addWidget(btn_copy, 0, Qt.AlignRight)
+        self._btn_copy.clicked.connect(self._copy_details)
+        details_layout.addWidget(self._btn_copy, 0, Qt.AlignRight)
+
 
         self._main_layout.addWidget(self._details_frame)
 
@@ -518,10 +519,13 @@ class ToolActivityItem(QFrame):
             text = json.dumps(payload, indent=2)
         except Exception:
             text = str(payload)
-        QApplication.clipboard().setText(text)
-        if hasattr(self, "_btn_copy") and self._btn_copy:
+        cb = QApplication.clipboard()
+        if cb is not None:
+            cb.setText(text)
+        if hasattr(self, "_btn_copy") and self._btn_copy is not None:
             self._btn_copy.setText("Copied! ✓")
-            QTimer.singleShot(1500, lambda: self._btn_copy.setText("Copy") if hasattr(self, "_btn_copy") and self._btn_copy else None)
+            QTimer.singleShot(1500, lambda: self._btn_copy.setText("Copy Arguments & Output") if hasattr(self, "_btn_copy") and self._btn_copy and not self._btn_copy.isHidden() else None)
+
 
     def finalise(self) -> None:
         """Finalize activity item cleanly."""

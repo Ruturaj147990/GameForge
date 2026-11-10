@@ -35,7 +35,8 @@ _GAME_WORD = re.compile(
 _NOUN_GAME = re.compile(
     r"\b(platformer|3d platformer|arena combat|card battler|procedural world|"
     r"tic[- ]?tac[- ]?toe|connect four|four in a row|gomoku|five in a row|"
-    r"board game|grid board|sudoku|chess|checkers|draughts|minesweeper|tetris|roguelike|tower defense)\b",
+    r"board game|grid board|sudoku|chess|checkers|draughts|minesweeper|tetris|roguelike|tower defense|"
+    r"tactical fps|fps|brawler|moba)\b",
     re.I,
 )
 _CREATE_GAME = re.compile(
@@ -191,6 +192,7 @@ RECIPES: List[RecipeEntry] = [
 
 _SEED = re.compile(r"\bseed\s*[:=]?\s*(\d{1,8})\b", re.I)
 _DENSITY = re.compile(r"\b(\d{1,4})\s*(?:foliage|trees?|plants?|instances?|bushes?)\b", re.I)
+_ELEVATION = re.compile(r"\belevation(?:\s*scale)?\s*[:=]?\s*(\d{2,6})\b", re.I)
 _SIZE = re.compile(r"\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\b", re.I)
 _WIN = re.compile(r"\b(\d{1,2})\s*(?:in a row|in-a-row|to win)\b", re.I)
 _TARGET = re.compile(r"\b(\d{1,2})\s*(?:collectibles?|coins?|gems?|items?|stars?|relics?|crystals?|orbs?)\b", re.I)
@@ -469,6 +471,11 @@ def match_prompt(prompt: str) -> GameSpec:
             d["foliage_density"] = int(m.group(1))
             reasons.append(f"foliage density {d['foliage_density']} from prompt")
 
+        m = _ELEVATION.search(prompt)
+        if m:
+            d["elevation_scale"] = float(m.group(1))
+            reasons.append(f"elevation scale {d['elevation_scale']} from prompt")
+
         m = _NAME.search(prompt)
         if m:
             title = m.group(1).strip()
@@ -643,7 +650,7 @@ def refine_with_model(spec: GameSpec, prompt: str, complete_json: Callable[[str,
 
 
 _FLAG = re.compile(
-    r"--(hotseat|gravity|size|win|ai|title|target|coins|difficulty)(?:[=\s]+(\"[^\"]*\"|'[^']*'|[^\s-][^\s]*))?",
+    r"--(hotseat|gravity|size|win|ai|title|target|coins|difficulty|waves|enemies|hp|seed|density|terrain|landmark)(?:[=\s]+(\"[^\"]*\"|'[^']*'|[^\s-][^\s]*))?",
     re.I,
 )
 
@@ -666,6 +673,20 @@ def expand_game_flags(text: str) -> str:
             phrases.append(f"{val} collectibles")
         elif flag == "difficulty" and val:
             phrases.append(f"{val}")
+        elif flag == "waves" and val.isdigit():
+            phrases.append(f"{val} waves")
+        elif flag == "enemies" and val.isdigit():
+            phrases.append(f"{val} enemies")
+        elif flag == "hp" and val.isdigit():
+            phrases.append(f"{val} hp")
+        elif flag == "seed" and val.isdigit():
+            phrases.append(f"seed {val}")
+        elif flag == "density" and val.isdigit():
+            phrases.append(f"{val} foliage")
+        elif flag == "terrain" and val:
+            phrases.append(f"{val} terrain")
+        elif flag == "landmark" and val:
+            phrases.append(f"{val} landmark")
         elif flag == "ai" and val:
             phrases.append(
                 {"easy": "easy", "random": "easy", "medium": "medium", "greedy": "medium"}.get(val.lower(), "")

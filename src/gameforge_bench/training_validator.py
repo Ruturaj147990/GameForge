@@ -41,6 +41,10 @@ class ValidationRejection:
     source_id: Optional[str] = None
     field_name: Optional[str] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert rejection to serializable dictionary."""
+        return asdict(self)
+
 
 @dataclass
 class EligibilityReport:
@@ -68,6 +72,23 @@ class EligibilityReport:
             "is_training_ready": self.is_training_ready,
             "blocker_summary": self.blocker_summary,
         }
+
+    def format_summary(self) -> str:
+        """Formats eligibility report into human-readable text."""
+        lines = [
+            f"Training Readiness: {'READY' if self.is_training_ready else 'NOT READY / BLOCKED'}",
+            f"Examined: {self.total_examined} | Eligible: {self.total_eligible} | Rejected: {self.total_rejected}",
+            f"Pending Removals / Tombstones: {self.pending_removals_detected}",
+        ]
+        if self.blocker_summary:
+            lines.append("Blockers:")
+            for b in self.blocker_summary:
+                lines.append(f"  * {b}")
+        if self.rejections_by_reason:
+            lines.append("Rejections by Reason:")
+            for r, count in sorted(self.rejections_by_reason.items(), key=lambda x: -x[1]):
+                lines.append(f"  - {r}: {count}")
+        return "\n".join(lines)
 
 
 class TrainingReadinessValidator:
@@ -368,3 +389,12 @@ class TrainingReadinessValidator:
             report.is_training_ready = True
 
         return eligible_records, report
+
+    @staticmethod
+    def export_report(report: EligibilityReport, output_path: Path | str) -> Path:
+        """Exports eligibility report to JSON file."""
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as f:
+            json.dump(report.to_dict(), f, indent=2)
+        return out

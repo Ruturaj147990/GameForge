@@ -47,14 +47,15 @@ def is_junction_or_reparse(path: Path) -> bool:
     try:
         if path.is_symlink():
             return True
-        if not path.exists():
-            return False
-        if hasattr(os.path, "isjunction") and os.path.isjunction(str(path)):
+        path_str = str(path)
+        if hasattr(os.path, "isjunction") and os.path.isjunction(path_str):
             return True
-        st = os.lstat(str(path))
+        st = os.lstat(path_str)
         if getattr(st, "st_file_attributes", 0) & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT
             return True
-        return path.is_symlink()
+        if not path.exists():
+            return False
+        return False
     except (OSError, ValueError):
         return True  # Fail closed on inspection error
 
@@ -205,14 +206,16 @@ class BoundaryManager:
             for part in walk_parts:
                 curr = curr / part
                 if is_junction_or_reparse(curr):
+                    symlink_target = None
                     try:
                         symlink_target = curr.resolve()
                         norm_target = os.path.normcase(str(symlink_target))
                         if not (norm_target == norm_ws or norm_target.startswith(norm_ws + os.sep)):
                             raise ValueError()
                     except ValueError:
+                        target_disp = symlink_target if symlink_target is not None else curr
                         raise SecurityViolationError(
-                            f"Symlink/junction traversal violation: '{curr}' points outside workspace to '{symlink_target}'."
+                            f"Symlink/junction traversal violation: '{curr}' points outside workspace to '{target_disp}'."
                         )
                     except OSError as exc:
                         raise SecurityViolationError(f"Failed resolving link '{curr}': {exc}")

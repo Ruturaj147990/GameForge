@@ -91,7 +91,12 @@ class UnrealEngineTools:
         seen_paths = set()
         IGNORE_PARTS = {"Intermediate", "Saved", "Binaries", ".git", "scratch", "reports", "node_modules", ".venv"}
 
-        for p in self.workspace_root.glob("**/*.uproject"):
+        try:
+            candidates = list(self.workspace_root.glob("**/*.uproject"))
+        except OSError:
+            candidates = []
+
+        for p in candidates:
             try:
                 rel_parts = p.relative_to(self.workspace_root).parts
             except ValueError:
@@ -133,8 +138,8 @@ class UnrealEngineTools:
         """Parses MSVC and Clang compiler errors from a build log."""
         errors = []
         # Pattern matches: filepath(line,col): error Cxxxx: message
-        msvc_pattern = re.compile(r"([A-Za-z]:\\[^:\n]+)\((\d+)(?:,\d+)?\):\s+(fatal\s+)?error\s+([A-Z0-9]+):\s+(.+)")
-        clang_pattern = re.compile(r"([A-Za-z]:\\[^:\n]+):(\d+):\d+:\s+error:\s+(.+)")
+        msvc_pattern = re.compile(r"((?:[A-Za-z]:\\[^:\n]+)|(?:[^:\n()]+\.(?:cpp|h|cs)))\((\d+)(?:,\d+)?\):\s+(fatal\s+)?error\s+([A-Z0-9]+):\s+(.+)")
+        clang_pattern = re.compile(r"((?:[A-Za-z]:\\[^:\n]+)|(?:[^:\n()]+\.(?:cpp|h|cs))):(\d+)(?::\d+)?:\s+error:\s+(.+)")
 
         for line in build_log.splitlines():
             m_msvc = msvc_pattern.search(line)

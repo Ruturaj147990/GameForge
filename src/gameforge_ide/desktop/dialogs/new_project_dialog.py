@@ -23,7 +23,8 @@ from PySide6.QtWidgets import (
 from ..styles import tokens
 from ..styles.dark_theme import theme_stylesheet
 from ...core.settings import get_settings
-from ...core.projects import is_gameforge_project, find_uproject
+from ...core.projects import is_gameforge_project
+
 
 
 class NewProjectDialog(QDialog):
@@ -44,12 +45,13 @@ class NewProjectDialog(QDialog):
         self.setWindowTitle("Create or Open Project — GameForge")
         self.setMinimumWidth(560)
         self.setModal(True)
-        self.setStyleSheet(
+        self.setStyleSheet(theme_stylesheet(
             f"QDialog#{self.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  border: 1px solid {tokens.BORDER};"
             f"}}"
-        )
+        ))
+
 
         parent_dir = projects_root or initial_parent_dir
         self._default_parent = Path(
@@ -293,6 +295,7 @@ class NewProjectDialog(QDialog):
         if not name:
             QMessageBox.warning(self, "Invalid Name", "Please enter a valid project name.")
             return
+
 
         try:
             pdir.mkdir(parents=True, exist_ok=True)

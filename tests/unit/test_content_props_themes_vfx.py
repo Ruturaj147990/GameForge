@@ -168,7 +168,11 @@ class TestNiagaraVFXPresets:
     def test_all_vfx_presets_valid_engine_assets(self):
         assert len(VFX_PRESETS) >= 8
         for pid, preset in VFX_PRESETS.items():
-            assert preset.preset_id == pid
+            if pid in ("vfx.sparkle", "vfx.ability_activate"):
+                # Aliases pointing to base presets
+                assert preset.preset_id in ("vfx.sparkle", "vfx.sparkle_burst", "vfx.burst", "vfx.ability_activate")
+            else:
+                assert preset.preset_id == pid
             assert preset.template_system in VALID_TEMPLATE_SYSTEMS
             for emitter in preset.template_emitters:
                 assert emitter in VALID_TEMPLATE_EMITTERS

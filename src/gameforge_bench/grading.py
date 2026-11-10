@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .engines.base import AssetValidationResult, BuildResult, ProbeMeasurement, TestResult
 from .policy import PolicyCheckResult
@@ -36,17 +36,35 @@ class LayerOutcome:
     status: str  # "PASS", "FAIL", "SKIPPED", "NOT_APPLICABLE", "ERROR"
     duration_seconds: float = 0.0
     message: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "duration_seconds": self.duration_seconds,
+            "message": self.message,
+            "details": self.details,
+        }
 
 
 @dataclass
 class GradingPipelineResult:
     overall_status: RunStatus
     first_mandatory_failure_layer: Optional[str]
-    layers: Dict[str, LayerOutcome]
-    probes: Dict[str, Any] = field(default_factory=dict)
+    layers: dict[str, LayerOutcome]
+    probes: dict[str, Any] = field(default_factory=dict)
     duration_seconds: float = 0.0
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall_status": self.overall_status.value,
+            "first_mandatory_failure_layer": self.first_mandatory_failure_layer,
+            "layers": {k: v.to_dict() for k, v in self.layers.items()},
+            "probes": self.probes,
+            "duration_seconds": self.duration_seconds,
+            "warnings": self.warnings,
+        }
 
 
 def evaluate_grading_pipeline(
@@ -128,14 +146,14 @@ def evaluate_grading_pipeline(
         layers[GradingLayer.AUTOMATED_TESTS.value] = LayerOutcome(
             "PASS",
             message=f"All {len(tests)} automated tests passed",
-            details={"tests": [t.__dict__ for t in tests]},
+            details={"tests": [asdict(t) for t in tests]},
         )
     else:
         failed_names = [t.name for t in tests if not t.passed]
         layers[GradingLayer.AUTOMATED_TESTS.value] = LayerOutcome(
             "FAIL",
             message=f"Failed tests: {', '.join(failed_names)}",
-            details={"tests": [t.__dict__ for t in tests]},
+            details={"tests": [asdict(t) for t in tests]},
         )
         first_failure = first_failure or GradingLayer.AUTOMATED_TESTS.value
 

@@ -194,7 +194,11 @@ void UGameForgeHUDWidget::BuildRows(UCanvasPanel* Root)
 				Row.BarWidget->SetPercent(1.0f);
 				FLinearColor BarColor(0.3f, 0.6f, 1.f);
 				const FString StatLower = StatStr.ToLower();
-				if (StatLower.Contains(TEXT("health")))
+				if (StatLower.Contains(TEXT("boss")))
+				{
+					BarColor = FLinearColor(0.88f, 0.08f, 0.08f);
+				}
+				else if (StatLower.Contains(TEXT("health")))
 				{
 					BarColor = FLinearColor(0.2f, 0.85f, 0.3f);
 				}

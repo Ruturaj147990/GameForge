@@ -57,15 +57,20 @@
     "evidence_files": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["path", "evidence_type", "expected_digest_sha256"],
-        "properties": {
-          "path": { "type": "string", "minLength": 1 },
-          "evidence_type": { "type": "string", "minLength": 1 },
-          "expected_digest_sha256": { "type": "string", "minLength": 64 },
-          "model_id": { "type": "string" },
-          "run_id": { "type": "string" }
-        }
+        "anyOf": [
+          { "type": "string", "minLength": 1 },
+          {
+            "type": "object",
+            "required": ["path", "evidence_type", "expected_digest_sha256"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "evidence_type": { "type": "string", "minLength": 1 },
+              "expected_digest_sha256": { "type": "string", "minLength": 64 },
+              "model_id": { "type": "string" },
+              "run_id": { "type": "string" }
+            }
+          }
+        ]
       },
       "minItems": 1
     },

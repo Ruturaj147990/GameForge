@@ -107,12 +107,17 @@ class CollapsibleSection(QFrame):
     def add_widget(self, w: QWidget) -> None:
         self._body_layout.addWidget(w)
 
+    @Slot()
     def _toggle(self) -> None:
         vis = not self._body.isVisible()
         self._body.setVisible(vis)
         arrow = "▼" if vis else "▶"
         self._toggle_btn.setText(f"{arrow}  {self._title}")
         self.setAccessibleDescription("Expanded" if vis else "Collapsed")
+
+    def deleteLater(self) -> None:
+        """Defensive cleanup before scheduled deletion."""
+        super().deleteLater()
 
 
 class GdsForm(QWidget):
@@ -694,28 +699,65 @@ class GdsForm(QWidget):
         else:
             self._spec.goals.lose = []
 
+    def deleteLater(self) -> None:
+        """Defensive cleanup stopping timers before scheduled deletion."""
+        try:
+            if hasattr(self, "_debounce_timer") and self._debounce_timer is not None:
+                self._debounce_timer.stop()
+        except (RuntimeError, Exception):
+            pass
+        super().deleteLater()
+
     @Slot()
-    def _on_field_changed(self) -> None:
+    def update_theme(self) -> None:
+        """Update form card and widget stylesheets on theme change."""
+        for card_id in ("cardOverview", "cardWorld", "cardThings", "cardRules"):
+            card = self.findChild(QFrame, card_id)
+            if card:
+                card.setStyleSheet(
+                    f"QFrame#{card_id} {{"
+                    f"  background-color: {tokens.BG_PANEL};"
+                    f"  border: 1px solid {tokens.BORDER};"
+                    f"  border-radius: {tokens.RADIUS}px;"
+                    f"}}"
+                )
+
+    @Slot()
+    @Slot(str)
+    @Slot(int)
+    def _on_field_changed(self, *args: Any) -> None:
         if self._is_populating:
             return
-        self.changed.emit()
+        try:
+            self.changed.emit()
+        except RuntimeError:
+            pass
         self._debounce_timer.start()
 
     @Slot()
     def _validate_form(self) -> None:
         if not self._spec:
-            self.validationChanged.emit(True, [])
+            try:
+                self.validationChanged.emit(True, [])
+            except RuntimeError:
+                pass
             return
         try:
             self._apply_inputs_to_spec()
             # Fast pydantic validation
             data = self._spec.model_dump()
             GameDesignSpec.model_validate(data)
-            self.validationChanged.emit(True, [])
+            try:
+                self.validationChanged.emit(True, [])
+            except RuntimeError:
+                pass
         except Exception as exc:
             err_msg = str(exc)
             lines = [l.strip() for l in err_msg.split("\n") if l.strip()]
-            self.validationChanged.emit(False, lines[:3])
+            try:
+                self.validationChanged.emit(False, lines[:3])
+            except RuntimeError:
+                pass
 
     @Slot()
     def _on_add_rule_clicked(self) -> None:
@@ -733,8 +775,12 @@ class GdsForm(QWidget):
             if self._spec:
                 self._spec.rules.append(new_rule)
                 self.set_spec(self._spec)
-                self.changed.emit()
+                try:
+                    self.changed.emit()
+                except RuntimeError:
+                    pass
 
+    @Slot(int)
     def _on_edit_rule_clicked(self, row: int) -> None:
         if not self._spec or not (0 <= row < len(self._spec.rules)):
             return
@@ -746,4 +792,7 @@ class GdsForm(QWidget):
             updated_rule = dlg.get_rule_spec()
             self._spec.rules[row] = updated_rule
             self.set_spec(self._spec)
-            self.changed.emit()
+            try:
+                self.changed.emit()
+            except RuntimeError:
+                pass

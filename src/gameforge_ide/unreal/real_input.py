@@ -38,26 +38,24 @@ SW_SHOW = 5
 
 # Common Virtual Key Codes
 VK_CODES = {
-    "W": 0x57,
-    "A": 0x41,
-    "S": 0x53,
-    "D": 0x44,
-    "R": 0x52,
-    "E": 0x45,
+    **{chr(c): c for c in range(ord("A"), ord("Z") + 1)},
+    **{str(d): 0x30 + d for d in range(10)},
     "TAB": 0x09,
-    "SPACE": 0x20,
     "RETURN": 0x0D,
     "ENTER": 0x0D,
+    "SHIFT": 0x10,
+    "CTRL": 0x11,
+    "CONTROL": 0x11,
+    "ALT": 0x12,
     "ESCAPE": 0x1B,
-    "UP": 0x26,
-    "DOWN": 0x28,
+    "ESC": 0x1B,
+    "SPACE": 0x20,
+    "BACKSPACE": 0x08,
     "LEFT": 0x25,
+    "UP": 0x26,
     "RIGHT": 0x27,
-    "1": 0x31,
-    "2": 0x32,
-    "3": 0x33,
-    "4": 0x34,
-    "5": 0x35,
+    "DOWN": 0x28,
+    **{f"F{n}": 0x6F + n for n in range(1, 13)},
 }
 
 # Structures for SendInput
@@ -105,8 +103,14 @@ user32 = getattr(ctypes, 'windll', None).user32 if hasattr(ctypes, 'windll') els
 kernel32 = getattr(ctypes, 'windll', None).kernel32 if hasattr(ctypes, 'windll') else None
 
 
+def _require_win32() -> None:
+    if user32 is None or kernel32 is None:
+        raise RuntimeError("real_input requires Windows user32/kernel32")
+
+
 def find_windows_for_pid(pid: int) -> List[int]:
     """Finds all visible top-level HWNDs belonging to a process ID."""
+    _require_win32()
     hwnds = []
 
     def enum_proc(hwnd, lparam):
@@ -125,6 +129,7 @@ def find_windows_for_pid(pid: int) -> List[int]:
 
 
 def get_window_class(hwnd: int) -> str:
+    _require_win32()
     buf = ctypes.create_unicode_buffer(256)
     user32.GetClassNameW(hwnd, buf, 256)
     return buf.value
@@ -140,6 +145,7 @@ def find_game_window_for_pid(pid: int) -> Optional[int]:
 
 def find_window_by_title_contains(substring: str) -> Optional[int]:
     """Finds the first visible window whose title contains the substring."""
+    _require_win32()
     result = None
 
     def enum_proc(hwnd, lparam):
@@ -160,6 +166,7 @@ def find_window_by_title_contains(substring: str) -> Optional[int]:
 
 
 def get_window_title(hwnd: int) -> str:
+    _require_win32()
     length = user32.GetWindowTextLengthW(hwnd)
     if length == 0:
         return ""
@@ -170,6 +177,7 @@ def get_window_title(hwnd: int) -> str:
 
 def get_window_rect(hwnd: int) -> Tuple[int, int, int, int]:
     """Returns (left, top, right, bottom) of window."""
+    _require_win32()
     rect = wintypes.RECT()
     user32.GetWindowRect(hwnd, ctypes.byref(rect))
     return rect.left, rect.top, rect.right, rect.bottom
@@ -177,6 +185,7 @@ def get_window_rect(hwnd: int) -> Tuple[int, int, int, int]:
 
 def get_client_rect(hwnd: int) -> Tuple[int, int, int, int]:
     """Returns (left, top, right, bottom) in screen coordinates of the client area."""
+    _require_win32()
     pt_topleft = wintypes.POINT(0, 0)
     user32.ClientToScreen(hwnd, ctypes.byref(pt_topleft))
     client_rect = wintypes.RECT()
@@ -188,7 +197,8 @@ def get_client_rect(hwnd: int) -> Tuple[int, int, int, int]:
 
 def focus_window(hwnd: int) -> bool:
     """Brings window to foreground, unminimizes if necessary, and activates keyboard focus."""
-    if not user32.IsWindow(hwnd):
+    _require_win32()
+    if not hwnd or not user32.IsWindow(hwnd):
         return False
 
     if user32.IsIconic(hwnd):
@@ -197,17 +207,18 @@ def focus_window(hwnd: int) -> bool:
         user32.ShowWindow(hwnd, SW_SHOW)
 
     fore_hwnd = user32.GetForegroundWindow()
-    fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None)
+    fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None) if fore_hwnd else 0
     cur_thread = kernel32.GetCurrentThreadId()
 
-    if fore_thread != cur_thread:
-        user32.AttachThreadInput(cur_thread, fore_thread, True)
+    attached = False
+    try:
+        if fore_thread and fore_thread != cur_thread:
+            attached = bool(user32.AttachThreadInput(cur_thread, fore_thread, True))
         user32.BringWindowToTop(hwnd)
         user32.SetForegroundWindow(hwnd)
-        user32.AttachThreadInput(cur_thread, fore_thread, False)
-    else:
-        user32.BringWindowToTop(hwnd)
-        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(cur_thread, fore_thread, False)
 
     user32.SetActiveWindow(hwnd)
     user32.SetFocus(hwnd)
@@ -222,6 +233,7 @@ def is_foreground(hwnd: int) -> bool:
     A same-process match is not enough: a Development game started with -log owns a console
     window too, and input sent while that console is foreground never reaches the game.
     """
+    _require_win32()
     return bool(hwnd) and user32.GetForegroundWindow() == hwnd
 
 
@@ -229,10 +241,18 @@ class NotForegroundError(RuntimeError):
     """Raised instead of sending input: SendInput goes to the foreground window, which is not the target."""
 
 
-def send_mouse_move(screen_x: int, screen_y: int):
-    """Moves mouse cursor to absolute screen coordinates using Windows SendInput."""
+def _screen_dimensions() -> Tuple[int, int]:
+    _require_win32()
     screen_w = user32.GetSystemMetrics(0)
     screen_h = user32.GetSystemMetrics(1)
+    if screen_w <= 0 or screen_h <= 0:
+        raise RuntimeError(f"Invalid desktop screen metrics: {screen_w}x{screen_h}")
+    return screen_w, screen_h
+
+
+def send_mouse_move(screen_x: int, screen_y: int) -> None:
+    """Moves mouse cursor to absolute screen coordinates using Windows SendInput."""
+    screen_w, screen_h = _screen_dimensions()
     # Absolute coordinates in SendInput range 0..65535
     norm_x = int(screen_x * 65536.0 / screen_w)
     norm_y = int(screen_y * 65536.0 / screen_h)
@@ -245,16 +265,24 @@ def send_mouse_move(screen_x: int, screen_y: int):
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
-def send_mouse_click(screen_x: int, screen_y: int, button: str = "left", hold_duration_s: float = 0.05):
+_MOUSE_BUTTON_FLAGS = {
+    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
+    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
+    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
+}
+
+
+def send_mouse_click(screen_x: int, screen_y: int, button: str = "left", hold_duration_s: float = 0.05) -> None:
     """Moves mouse to absolute coordinates and sends genuine button down and up events."""
+    btn = button.lower().strip()
+    if btn not in _MOUSE_BUTTON_FLAGS:
+        raise ValueError(f"Unsupported mouse button {button!r}; expected one of {sorted(_MOUSE_BUTTON_FLAGS)}")
+    down_flag, up_flag = _MOUSE_BUTTON_FLAGS[btn]
+
     send_mouse_move(screen_x, screen_y)
     time.sleep(0.05)
 
-    down_flag = MOUSEEVENTF_LEFTDOWN if button == "left" else MOUSEEVENTF_RIGHTDOWN
-    up_flag = MOUSEEVENTF_LEFTUP if button == "left" else MOUSEEVENTF_RIGHTUP
-
-    screen_w = user32.GetSystemMetrics(0)
-    screen_h = user32.GetSystemMetrics(1)
+    screen_w, screen_h = _screen_dimensions()
     norm_x = int(screen_x * 65536.0 / screen_w)
     norm_y = int(screen_y * 65536.0 / screen_h)
 
@@ -265,18 +293,20 @@ def send_mouse_click(screen_x: int, screen_y: int, button: str = "left", hold_du
     inp_down.union.mi.dwFlags = down_flag | MOUSEEVENTF_ABSOLUTE
     user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(INPUT))
 
-    time.sleep(hold_duration_s)
+    try:
+        time.sleep(max(0.0, hold_duration_s))
+    finally:
+        inp_up = INPUT()
+        inp_up.type = INPUT_MOUSE
+        inp_up.union.mi.dx = norm_x
+        inp_up.union.mi.dy = norm_y
+        inp_up.union.mi.dwFlags = up_flag | MOUSEEVENTF_ABSOLUTE
+        user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(INPUT))
 
-    inp_up = INPUT()
-    inp_up.type = INPUT_MOUSE
-    inp_up.union.mi.dx = norm_x
-    inp_up.union.mi.dy = norm_y
-    inp_up.union.mi.dwFlags = up_flag | MOUSEEVENTF_ABSOLUTE
-    user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(INPUT))
 
-
-def send_key_down(key: str):
+def send_key_down(key: str) -> None:
     """Sends a genuine key-down event."""
+    _require_win32()
     vk = VK_CODES.get(key.upper())
     if vk is None:
         raise ValueError(f"Unsupported key: {key}")
@@ -289,8 +319,9 @@ def send_key_down(key: str):
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
-def send_key_up(key: str):
+def send_key_up(key: str) -> None:
     """Sends a genuine key-up event."""
+    _require_win32()
     vk = VK_CODES.get(key.upper())
     if vk is None:
         raise ValueError(f"Unsupported key: {key}")
@@ -303,11 +334,13 @@ def send_key_up(key: str):
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
-def send_key_tap(key: str, hold_duration_s: float = 0.08):
+def send_key_tap(key: str, hold_duration_s: float = 0.08) -> None:
     """Sends a key-down followed by a key-up after hold_duration_s."""
     send_key_down(key)
-    time.sleep(hold_duration_s)
-    send_key_up(key)
+    try:
+        time.sleep(max(0.0, hold_duration_s))
+    finally:
+        send_key_up(key)
 
 
 class RealInputSession:
@@ -351,13 +384,15 @@ class RealInputSession:
         send_mouse_move(sx, sy)
         self._record("mouse_move", {"screen_x": sx, "screen_y": sy, "rel_x": rel_x_fraction, "rel_y": rel_y_fraction})
 
-    def hold_key(self, key: str, duration_s: float):
+    def hold_key(self, key: str, duration_s: float) -> None:
         self._require_foreground()
         send_key_down(key)
         self._record("key_down", {"key": key})
-        time.sleep(duration_s)
-        send_key_up(key)
-        self._record("key_up", {"key": key, "held_duration_s": duration_s})
+        try:
+            time.sleep(max(0.0, duration_s))
+        finally:
+            send_key_up(key)
+            self._record("key_up", {"key": key, "held_duration_s": duration_s})
 
     def tap_key(self, key: str, hold_s: float = 0.08):
         self._require_foreground()

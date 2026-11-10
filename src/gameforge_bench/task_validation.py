@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import ValidationError
@@ -17,6 +17,10 @@ class ValidationIssue:
     source: str
     field_name: str
     message: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert issue to serializable dictionary."""
+        return asdict(self)
 
 
 @dataclass
@@ -38,6 +42,35 @@ class SpecValidationResult:
     def discrepancies(self) -> List[ValidationIssue]:
         return [i for i in self.issues if i.severity == "DISCREPANCY"]
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert validation result to serializable dictionary."""
+        return {
+            "is_valid": self.is_valid,
+            "total_specs_checked": self.total_specs_checked,
+            "total_inventory_tasks": self.total_inventory_tasks,
+            "error_count": len(self.errors),
+            "warning_count": len(self.warnings),
+            "discrepancy_count": len(self.discrepancies),
+            "issues": [i.to_dict() for i in self.issues],
+        }
+
+    def format_summary(self) -> str:
+        """Returns formatted textual summary of validation results."""
+        lines = [
+            f"GameForge Spec Validation: {'PASSED' if self.is_valid else 'FAILED'}",
+            f"Inventory Tasks: {self.total_inventory_tasks} | Specs Checked: {self.total_specs_checked}",
+            f"Errors: {len(self.errors)} | Warnings: {len(self.warnings)} | Discrepancies: {len(self.discrepancies)}",
+        ]
+        if self.errors:
+            lines.append("\nErrors:")
+            for err in self.errors:
+                lines.append(f"  [{err.source}] {err.field_name}: {err.message}")
+        if self.discrepancies:
+            lines.append("\nDiscrepancies:")
+            for d in self.discrepancies:
+                lines.append(f"  [{d.source}] {d.field_name}: {d.message}")
+        return "\n".join(lines)
+
 
 VALID_TIERS = {"T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"}
 VALID_CATEGORIES = {
@@ -51,7 +84,7 @@ VALID_CATEGORIES = {
 }
 
 
-def validate_inventory_file(inventory_path: Path | str) -> List[ValidationIssue]:
+def validate_inventory_file(inventory_path: Path | str, expected_count: Optional[int] = 30) -> List[ValidationIssue]:
     """Validates TASK_INVENTORY.csv against logical inventory specifications."""
     issues: List[ValidationIssue] = []
     path = Path(inventory_path)
@@ -69,13 +102,13 @@ def validate_inventory_file(inventory_path: Path | str) -> List[ValidationIssue]
         )
         return issues
 
-    if len(tasks) != 30:
+    if expected_count is not None and len(tasks) != expected_count:
         issues.append(
             ValidationIssue(
                 "ERROR",
                 str(path),
                 "count",
-                f"Expected exactly 30 logical tasks in TASK_INVENTORY.csv, found {len(tasks)}",
+                f"Expected exactly {expected_count} logical tasks in TASK_INVENTORY.csv, found {len(tasks)}",
             )
         )
 
@@ -147,8 +180,9 @@ def validate_single_task_spec(yaml_path: Path | str) -> tuple[Optional[TaskSpec]
         )
         return None, issues
 
-    # Validate logical ID format
-    if not task.logical_task_id.startswith(("T2-", "T3-", "T1-", "T4-")):
+    # Validate logical ID format across all valid tiers
+    valid_prefixes = tuple(f"{tier}-" for tier in VALID_TIERS)
+    if not task.logical_task_id.startswith(valid_prefixes):
         issues.append(
             ValidationIssue(
                 "ERROR",
@@ -211,7 +245,7 @@ def validate_all_specs(workspace_root: Path | str | None = None) -> SpecValidati
     all_issues: List[ValidationIssue] = []
 
     # 1. Validate inventory CSV
-    inv_issues = validate_inventory_file(inventory_path)
+    inv_issues = validate_inventory_file(inventory_path, expected_count=30)
     all_issues.extend(inv_issues)
 
     tasks_by_id = {}

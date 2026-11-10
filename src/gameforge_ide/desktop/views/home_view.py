@@ -15,7 +15,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QIcon, QKeyEvent, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QKeyEvent, QPainter, QPainterPath, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from ..services.projects_service import GameSummary, list_games
 from ..services.systems_service import SystemsService
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...core.jobs import JobHandle, default_job_manager
 from ...core.systems import SystemRow, SystemsSnapshot, probe_all
 from ...design.presets import PRESETS
@@ -816,20 +817,20 @@ class HomeView(QWidget):
                 return probe_all()
 
         def done(handle: JobHandle):
-            self._readiness_probing = False
             try:
                 import shiboken6
                 if not shiboken6.isValid(self):
                     return
             except Exception:
-                pass
-            from PySide6.QtCore import QMetaObject, Qt
-            if handle.status == "DONE":
-                self._latest_snapshot = handle.result()
-            else:
-                logger.error("Readiness probe failed: %s", handle.error)
-                self._latest_snapshot = None
+                return
             try:
+                self._readiness_probing = False
+                from PySide6.QtCore import QMetaObject, Qt
+                if handle.status == "DONE":
+                    self._latest_snapshot = handle.result()
+                else:
+                    logger.error("Readiness probe failed: %s", handle.error)
+                    self._latest_snapshot = None
                 QMetaObject.invokeMethod(self, "_render_readiness", Qt.QueuedConnection)
             except Exception:
                 pass
@@ -842,6 +843,12 @@ class HomeView(QWidget):
 
     @Slot()
     def _render_readiness(self) -> None:
+        try:
+            import shiboken6
+            if not shiboken6.isValid(self):
+                return
+        except Exception:
+            return
         while self._readiness_rows_layout.count() > 0:
             item = self._readiness_rows_layout.takeAt(0)
             w = item.widget()
@@ -862,10 +869,64 @@ class HomeView(QWidget):
             self._readiness_rows_layout.addWidget(rw)
         self._readiness_rows_layout.addStretch(1)
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: Optional[QShowEvent] = None) -> None:
         super().showEvent(event)
         self.refresh_recent_games()
         self.refresh_readiness()
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update dashboard theme styling for active theme."""
+        if hasattr(self, "_recent_section"):
+            self._recent_section.setStyleSheet(theme_stylesheet(
+                f"QFrame#{self._recent_section.objectName()} {{"
+                f"  background-color: {tokens.BG_PANEL};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_MD}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_readiness_section"):
+            self._readiness_section.setStyleSheet(theme_stylesheet(
+                f"QFrame#{self._readiness_section.objectName()} {{"
+                f"  background-color: {tokens.BG_PANEL};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_MD}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_prompt_input"):
+            self._prompt_input.setStyleSheet(theme_stylesheet(
+                f"QPlainTextEdit#{self._prompt_input.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_MD}px;"
+                f"  font-size: {tokens.FONT_BODY}px;"
+                f"  line-height: 1.4;"
+                f"}}"
+                f"QPlainTextEdit#{self._prompt_input.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"  outline: none;"
+                f"}}"
+            ))
+
+    def deleteLater(self) -> None:
+        """Clean up background jobs and service connections on disposal."""
+        if self._active_job:
+            try:
+                self._active_job.cancel()
+            except Exception:
+                pass
+            self._active_job = None
+        if hasattr(self, "_systems_service") and self._systems_service is not None:
+            if hasattr(self, "_systems_snapshot_slot"):
+                try:
+                    self._systems_service.snapshotChanged.disconnect(self._systems_snapshot_slot)
+                except Exception:
+                    pass
+        super().deleteLater()
 
     def attach_systems_service(self, service: SystemsService) -> None:
         """Connect to SystemsService to receive live snapshot updates."""

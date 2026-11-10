@@ -187,6 +187,11 @@ class CodeHighlighter(QSyntaxHighlighter):
                 self.setFormat(start_idx, comment_len, self._comment_format)
                 start_idx = text.find("/*", start_idx + comment_len)
 
+    def update_theme(self) -> None:
+        """Re-setup rules and rehighlight document for updated theme colors."""
+        self._setup_rules(getattr(self, "_language", "cpp"))
+        self.rehighlight()
+
 
 class LineNumberArea(QWidget):
     """Line number gutter area beside CodePlainTextEdit."""
@@ -418,7 +423,30 @@ class CodeEditor(QWidget):
 
     def _copy_path(self) -> None:
         if self._current_file:
-            QApplication.clipboard().setText(str(self._current_file))
+            try:
+                QApplication.clipboard().setText(str(self._current_file))
+            except Exception as exc:
+                logger.warning("Failed to copy path to clipboard: %s", exc)
+
+    def update_theme(self) -> None:
+        """Update header, editor background, and syntax highlighter theme."""
+        if hasattr(self, "_lbl_filename"):
+            self._lbl_filename.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_PRIMARY}; font-weight: 600; font-size: {tokens.FONT_BODY}px;"))
+        if hasattr(self, "_lbl_status"):
+            self._lbl_status.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;"))
+        if hasattr(self, "_edit"):
+            self._edit.setStyleSheet(theme_stylesheet(
+                f"QPlainTextEdit#{self._edit.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: none;"
+                f"  font-family: 'Cascadia Code', 'Consolas', monospace;"
+                f"  font-size: 12px;"
+                f"  selection-background-color: {tokens.ACCENT_PRIMARY};"
+                f"}}"
+            ))
+        if self._highlighter:
+            self._highlighter.update_theme()
 
 
 class CodeView(QMainWindow):
@@ -527,3 +555,40 @@ class CodeView(QMainWindow):
             dock.show()
         if hasattr(self, "_default_dock_layout"):
             self.restoreState(self._default_dock_layout)
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Cascade theme update to editor, child docks, and panels."""
+        if hasattr(self, "_editor") and hasattr(self._editor, "update_theme"):
+            self._editor.update_theme()
+        for dock in (getattr(self, "_dock_explorer", None), getattr(self, "_dock_unreal", None),
+                     getattr(self, "_dock_diff", None), getattr(self, "_dock_terminal", None)):
+            if dock:
+                dock.setStyleSheet(theme_stylesheet(
+                    f"QDockWidget {{"
+                    f"  color: {tokens.TEXT_PRIMARY};"
+                    f"  font-size: {tokens.FONT_BODY_SM}px;"
+                    f"  font-weight: 600;"
+                    f"}}"
+                    f"QDockWidget::title {{"
+                    f"  background-color: {tokens.BG_PANEL};"
+                    f"  border-bottom: 1px solid {tokens.BORDER};"
+                    f"  padding: 4px 8px;"
+                    f"}}"
+                ))
+        for panel in (getattr(self, "_explorer", None), getattr(self, "_unreal_panel", None),
+                     getattr(self, "_diff_panel", None), getattr(self, "_terminal", None)):
+            if panel and hasattr(panel, "update_theme"):
+                try:
+                    panel.update_theme()
+                except Exception:
+                    pass
+
+    def deleteLater(self) -> None:
+        """Safely clean up explorer connection on disposal."""
+        if hasattr(self, "_explorer"):
+            try:
+                self._explorer.file_selected.disconnect(self.open_file)
+            except (RuntimeError, TypeError):
+                pass
+        super().deleteLater()

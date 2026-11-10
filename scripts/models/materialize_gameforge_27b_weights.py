@@ -13,14 +13,25 @@ verifies parameter deltas, checks architectural integrity, and produces:
   E:\\GameForge\\reports\\gameforge-27b\\export_verification.json
 """
 
+import argparse
 import json
 import os
 import shutil
+import sys
+import tempfile
 import time
 from pathlib import Path
 
-import numpy as np
-from safetensors import safe_open
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import numpy as np
+    from safetensors import safe_open
+except ImportError:
+    np = None
+    safe_open = None
 
 BASE_GGUF_BLOB = Path("E:/GameForge/models/ollama/blobs/sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d")
 ADAPTER_PATH = Path("E:/GameForge/training/gameforge-27b/adapter/adapter_model.safetensors")
@@ -28,7 +39,7 @@ HF_BASE_DIR = Path("E:/GameForge/models/hf/Qwen3.8-27B")
 HF_MERGED_DIR = Path("E:/GameForge/artifacts/gameforge-27b/hf-merged")
 FINAL_GGUF_PATH = Path("E:/GameForge/artifacts/gameforge-27b/gameforge-27b-q4_k_m.gguf")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b")
-MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b")
+MIRROR_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b"
 
 
 def main():

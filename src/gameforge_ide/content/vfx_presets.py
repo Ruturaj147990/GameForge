@@ -299,9 +299,70 @@ VFX_PRESETS: Dict[str, VFXPreset] = {
         },
         event_triggers=["player.dash", "vehicle.boost"],
     ),
+
+    # 14. Stealth Cloak
+    "vfx.stealth_cloak": VFXPreset(
+        preset_id="vfx.stealth_cloak",
+        template_path="/Game/GameForge/VFX/NS_Smoke",
+        description="Subtle ethereal particle shimmer cloaking the player",
+        template_system="RadialBurst",
+        template_emitters=["Minimal"],
+        user_parameters={
+            "User.Color": [0.4, 0.6, 0.9, 0.5],
+            "User.SpawnCount": 20,
+            "User.Lifetime": 0.8,
+            "User.Radius": 45.0,
+        },
+        event_triggers=["player.stealth_started"],
+    ),
+
+    # 15. Boss Enrage
+    "vfx.boss_enrage": VFXPreset(
+        preset_id="vfx.boss_enrage",
+        template_path="/Game/GameForge/VFX/NS_Fire",
+        description="Fierce red flare burst upon boss enrage transition",
+        template_system="SimpleExplosion",
+        template_emitters=["OmnidirectionalBurst"],
+        user_parameters={
+            "User.Color": [1.0, 0.1, 0.05, 1.0],
+            "User.SpawnCount": 75,
+            "User.Lifetime": 1.2,
+            "User.Radius": 160.0,
+        },
+        event_triggers=["boss.phase_changed"],
+    ),
+
+    # 16. Portal Warp
+    "vfx.portal_warp": VFXPreset(
+        preset_id="vfx.portal_warp",
+        template_path="/Game/GameForge/VFX/NS_Ring",
+        description="Concentric swirling warp ring for teleporters",
+        template_system="RadialBurst",
+        template_emitters=["OmnidirectionalBurst"],
+        user_parameters={
+            "User.Color": [0.35, 0.2, 1.0, 1.0],
+            "User.SpawnCount": 25,
+            "User.Lifetime": 0.9,
+            "User.Radius": 110.0,
+        },
+        event_triggers=["teleporter.used", "portal.entered"],
+    ),
 }
+
+# Aliases
+VFX_PRESETS["vfx.sparkle"] = VFX_PRESETS["vfx.sparkle_burst"]
+VFX_PRESETS["vfx.ability_activate"] = VFX_PRESETS["vfx.burst"]
 
 
 def get_vfx_preset(preset_id: str) -> Optional[VFXPreset]:
-    """Retrieve a VFXPreset by ID."""
-    return VFX_PRESETS.get(preset_id)
+    """Retrieve a VFXPreset by ID with robust prefix and alias support."""
+    clean = str(preset_id or "").strip().lower()
+    if clean in VFX_PRESETS:
+        return VFX_PRESETS[clean]
+    with_vfx = f"vfx.{clean}"
+    if with_vfx in VFX_PRESETS:
+        return VFX_PRESETS[with_vfx]
+    without_vfx = clean.split(".", 1)[-1]
+    if without_vfx in VFX_PRESETS:
+        return VFX_PRESETS[without_vfx]
+    return None

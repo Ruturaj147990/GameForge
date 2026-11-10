@@ -15,14 +15,17 @@ from typing import Any, List, Optional, Union
 
 from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QSize, Signal, Slot
 from PySide6.QtGui import (
-    QShortcut,
     QAction,
     QCloseEvent,
     QFont,
+    QHideEvent,
     QIcon,
     QKeySequence,
     QPixmap,
+    QShortcut,
+    QShowEvent,
 )
+
 from PySide6.QtWidgets import (
     QTabBar,
     QApplication,
@@ -1968,15 +1971,16 @@ class MainWindow(QMainWindow):
             if hasattr(self, "_rail"):
                 self._rail.set_running("build", False)
 
-    def showEvent(self, event) -> None:  # noqa: N802
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
         super().showEvent(event)
         if hasattr(self, "_systems_service") and self._systems_service:
             self._systems_service.set_window_state(True, self.isMinimized())
 
-    def hideEvent(self, event) -> None:  # noqa: N802
+    def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802
         super().hideEvent(event)
         if hasattr(self, "_systems_service") and self._systems_service:
             self._systems_service.set_window_state(False, self.isMinimized())
+
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802
         super().changeEvent(event)

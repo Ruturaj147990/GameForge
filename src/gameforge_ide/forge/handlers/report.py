@@ -4,17 +4,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import time
-from typing import Dict, Any
 
+from ...storage.atomic import atomic_write_text
 from ..executor import StepContext, StepOutcome
 from ..validation import validate_stage_output
+
+__all__ = ["report_handler"]
 
 
 def report_handler(ctx: StepContext) -> StepOutcome:
     """Compile final build and test evidence report (pipeline_report.json and .md)."""
     pdir = Path(ctx.project_dir) if ctx.project_dir else Path(ctx.workspace_dir)
     evidence_dir = pdir / "Saved" / "GameForge"
-    evidence_dir.mkdir(parents=True, exist_ok=True)
     report_file = evidence_dir / "pipeline_report.json"
     md_file = evidence_dir / "pipeline_report.md"
 
@@ -26,7 +27,6 @@ def report_handler(ctx: StepContext) -> StepOutcome:
         "stages": [{"stage": sid, "data": data} for sid, data in ctx.shared.items()],
         "finished": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
-    report_file.write_text(json.dumps(report_payload, indent=2, default=str), encoding="utf-8")
 
     md_lines = [
         f"# Build & Test Report: {ctx.run.title}",
@@ -37,7 +37,13 @@ def report_handler(ctx: StepContext) -> StepOutcome:
     ]
     for sid in ctx.shared.keys():
         md_lines.append(f"- **{sid}**: OK")
-    md_file.write_text("\n".join(md_lines), encoding="utf-8")
+
+    try:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(report_file, json.dumps(report_payload, indent=2, default=str))
+        atomic_write_text(md_file, "\n".join(md_lines))
+    except OSError as exc:
+        return StepOutcome(False, errors=[f"Failed to write pipeline report: {exc}"])
 
     ctx.log(f"Final pipeline report written to {report_file}")
     artifacts = [

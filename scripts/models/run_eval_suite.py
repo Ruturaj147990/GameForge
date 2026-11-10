@@ -91,7 +91,15 @@ def main() -> None:
 
     summary_md = format_markdown_summary(all_reports)
     summary_path = reports_dir / "eval_summary.md"
-    summary_path.write_text(summary_md, encoding="utf-8")
+    temp_summary = summary_path.with_suffix(".tmp")
+    try:
+        temp_summary.write_text(summary_md, encoding="utf-8")
+        temp_summary.replace(summary_path)
+    except Exception:
+        if temp_summary.exists():
+            temp_summary.unlink()
+        raise
+
     print("============================================================")
     print("EVALUATION SUMMARY")
     print("============================================================")

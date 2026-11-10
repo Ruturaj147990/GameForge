@@ -24,6 +24,12 @@ VFX_PRESET_MAP: Dict[str, str] = {
     "vfx.slash": "/Game/GameForge/VFX/NS_Slash",
     "vfx.shield_hit": "/Game/GameForge/VFX/NS_HitFlash",
     "vfx.boost": "/Game/GameForge/VFX/NS_Ring",
+    "vfx.ability_activate": "/Game/GameForge/VFX/NS_Burst",
+    "vfx.stealth_cloak": "/Game/GameForge/VFX/NS_Smoke",
+    "vfx.boss_enrage": "/Game/GameForge/VFX/NS_Fire",
+    "vfx.portal_warp": "/Game/GameForge/VFX/NS_Ring",
+    "vfx.dash": "/Game/GameForge/VFX/NS_MagicTrail",
+    "vfx.loot_drop": "/Game/GameForge/VFX/NS_Sparkle",
 }
 
 SFX_PRESET_MAP: Dict[str, str] = {
@@ -41,6 +47,12 @@ SFX_PRESET_MAP: Dict[str, str] = {
     "sfx.laser": "/Game/GameForge/SFX/S_Impact",
     "sfx.explosion": "/Game/GameForge/SFX/S_Defeat",
     "sfx.switch": "/Game/GameForge/SFX/S_ChimeLow",
+    "sfx.ability_ready": "/Game/GameForge/SFX/S_ChimeLow",
+    "sfx.stealth_enter": "/Game/GameForge/SFX/S_FootstepSoft",
+    "sfx.boss_roar": "/Game/GameForge/SFX/S_Defeat",
+    "sfx.weapon_shoot": "/Game/GameForge/SFX/S_Impact",
+    "sfx.dash": "/Game/GameForge/SFX/S_FootstepSoft",
+    "sfx.gate_unlock": "/Game/GameForge/SFX/S_Fanfare",
 }
 
 

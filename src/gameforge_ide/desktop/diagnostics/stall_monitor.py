@@ -45,11 +45,13 @@ class _StallWatchdog(threading.Thread):
             if now - mon._startup_time < mon._startup_grace_s:
                 continue
             elapsed_s = now - mon._last_tick
-            if elapsed_s > threshold_s and mon._captured_mid_stall_stack is None:
-                frames = sys._current_frames()
-                frame = frames.get(mon._main_thread_id)
-                if frame is not None:
-                    mon._captured_mid_stall_stack = traceback.format_stack(frame)
+            if elapsed_s > threshold_s:
+                with mon._lock:
+                    if mon._captured_mid_stall_stack is None:
+                        frames = sys._current_frames()
+                        frame = frames.get(mon._main_thread_id)
+                        if frame is not None:
+                            mon._captured_mid_stall_stack = traceback.format_stack(frame)
 
 
 class StallMonitor(QObject):
@@ -60,19 +62,22 @@ class StallMonitor(QObject):
         self._output_dir = Path(output_dir or Path("reports/P4")).resolve()
         self._timer: Optional[QTimer] = None
         self._watchdog: Optional[_StallWatchdog] = None
+        self._lock = threading.Lock()
         self._last_tick: float = 0.0
         self._startup_time: float = time.time()
         self._startup_grace_s: float = 2.0  # Exclude startup from stall records
         self._stalls: List[Dict[str, Any]] = []
         self._captured_mid_stall_stack: Optional[List[str]] = None
-        self._main_thread_id = threading.main_thread().ident
+        main_thread = threading.main_thread()
+        self._main_thread_id = main_thread.ident or 0
         self._atexit_registered = False
 
     def start(self) -> None:
         if self._timer is not None:
             return
         self._last_tick = time.time()
-        self._captured_mid_stall_stack = None
+        with self._lock:
+            self._captured_mid_stall_stack = None
         self._timer = QTimer(self)
         self._timer.setInterval(INTERVAL_MS)
         self._timer.timeout.connect(self._on_tick)
@@ -86,9 +91,13 @@ class StallMonitor(QObject):
     def stop(self) -> None:
         if self._watchdog is not None:
             self._watchdog.stop()
+            self._watchdog.join(timeout=0.2)
             self._watchdog = None
         if self._timer:
-            self._timer.stop()
+            try:
+                self._timer.stop()
+            except RuntimeError:
+                pass
             self._timer = None
         self.save_report()
 
@@ -97,8 +106,9 @@ class StallMonitor(QObject):
         now = time.time()
         dt_ms = (now - self._last_tick) * 1000.0
         self._last_tick = now
-        mid_stack = self._captured_mid_stall_stack
-        self._captured_mid_stall_stack = None
+        with self._lock:
+            mid_stack = self._captured_mid_stall_stack
+            self._captured_mid_stall_stack = None
 
         # Skip ticks within startup grace period
         if now - self._startup_time < self._startup_grace_s:
@@ -125,15 +135,19 @@ class StallMonitor(QObject):
             logger.warning("UI STALL detected: %.1f ms lateness", lateness_ms)
 
     def save_report(self) -> Path:
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        out_file = self._output_dir / "stalls.json"
-        report = {
-            "stalls_detected": len(self._stalls),
-            "threshold_ms": STALL_THRESHOLD_MS,
-            "stalls": self._stalls,
-        }
-        out_file.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        return out_file
+        try:
+            self._output_dir.mkdir(parents=True, exist_ok=True)
+            out_file = self._output_dir / "stalls.json"
+            report = {
+                "stalls_detected": len(self._stalls),
+                "threshold_ms": STALL_THRESHOLD_MS,
+                "stalls": self._stalls,
+            }
+            out_file.write_text(json.dumps(report, indent=2), encoding="utf-8")
+            return out_file
+        except Exception as exc:
+            logger.error("Failed to save stall report: %s", exc)
+            return self._output_dir / "stalls.json"
 
 
 _MONITOR: Optional[StallMonitor] = None
@@ -145,3 +159,15 @@ def setup_stall_monitor() -> Optional[StallMonitor]:
         _MONITOR = StallMonitor()
         _MONITOR.start()
     return _MONITOR
+
+
+def teardown_stall_monitor() -> None:
+    """Tear down and clear the active global stall monitor."""
+    global _MONITOR
+    if _MONITOR is not None:
+        try:
+            _MONITOR.stop()
+        except Exception:
+            pass
+        _MONITOR = None
+

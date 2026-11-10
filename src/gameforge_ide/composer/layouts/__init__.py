@@ -20,4 +20,38 @@ LAYOUTS: Dict[str, Callable[[Any, Any, random.Random], LevelPlan]] = {
     "tactical_fps": tactical_fps.plan_level,
 }
 
-__all__ = ["LAYOUTS", "arena", "board", "course", "lanes", "open_world", "rooms", "tactical_fps"]
+LAYOUT_ALIASES: Dict[str, str] = {
+    "platformer": "course",
+    "dungeon": "rooms",
+    "dungeon_crawler": "rooms",
+    "fps": "tactical_fps",
+    "tactical": "tactical_fps",
+    "grid_board": "board",
+    "card_battler": "lanes",
+    "card": "lanes",
+    "moba": "lanes",
+    "open": "open_world",
+}
+
+
+def get_layout_generator(name: str) -> Callable[[Any, Any, random.Random], LevelPlan]:
+    """Retrieve layout generator function with robust alias resolution."""
+    normalized = str(name).strip().lower()
+    target = LAYOUT_ALIASES.get(normalized, normalized)
+    if target in LAYOUTS:
+        return LAYOUTS[target]
+    raise KeyError(f"Unknown layout: {name!r}. Supported layouts: {sorted(LAYOUTS.keys())}")
+
+
+__all__ = [
+    "LAYOUTS",
+    "LAYOUT_ALIASES",
+    "arena",
+    "board",
+    "course",
+    "get_layout_generator",
+    "lanes",
+    "open_world",
+    "rooms",
+    "tactical_fps",
+]

@@ -13,10 +13,9 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
-import os
 from pathlib import Path
 import shutil
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +138,8 @@ def load_plugin_manifest(plugin_dir: Path) -> Optional[Dict[str, Any]]:
     if not manifest_file.is_file():
         return None
     try:
-        return json.loads(manifest_file.read_text(encoding="utf-8", errors="replace"))
+        data = json.loads(manifest_file.read_text(encoding="utf-8", errors="replace"))
+        return data if isinstance(data, dict) else None
     except Exception:
         return None
 
@@ -159,7 +159,8 @@ def detect_plugin_drift(
     6. Key interface drift (critical headers or ops changed)
     """
     auth_root = Path(authoritative_root or get_authoritative_plugin_root()).resolve()
-    target_path = Path(target_dir).resolve() if target_dir else None
+    has_target = target_dir is not None and str(target_dir).strip() != ""
+    target_path = Path(target_dir).resolve() if has_target else None
 
     auth_version, _ = extract_plugin_version(auth_root)
 
@@ -269,7 +270,7 @@ def synchronize_plugin(
     if not auth_root.is_dir():
         raise FileNotFoundError(f"Authoritative plugin source not found at {auth_root}")
 
-    if not target_dir:
+    if target_dir is None or str(target_dir).strip() == "":
         raise ValueError("target_dir must be provided for plugin synchronization")
 
     target_path = Path(target_dir).resolve()

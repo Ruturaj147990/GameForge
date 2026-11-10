@@ -13,7 +13,7 @@ from pathlib import Path
 import shutil
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...core.settings import (
     PINNED_ENGINE,
     discover_engines,
@@ -130,16 +131,19 @@ class EnginePage(QWizardPage):
 
         layout.addStretch(1)
 
+    @Slot()
     def _browse_engine(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Unreal Engine Root Directory")
         if folder:
             self._custom_path.setText(folder)
 
+    @Slot()
     def _on_combo_changed(self) -> None:
         data = self._combo_engines.currentData()
         if data:
             self._custom_path.setText(data)
 
+    @Slot()
     def _validate_path(self) -> None:
         txt = self._custom_path.text().strip()
         if not txt:
@@ -232,11 +236,13 @@ class PathsPage(QWizardPage):
 
         layout.addStretch(1)
 
+    @Slot()
     def _browse_projects(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select Projects Root Directory")
         if folder:
             self._projects_path.setText(folder)
 
+    @Slot()
     def _check_disk(self) -> None:
         p = Path(self._projects_path.text().strip())
         # Walk up to existing ancestor for disk usage
@@ -351,6 +357,41 @@ class OnboardingWizard(QWizard):
         if btn_cancel:
             btn_cancel.setAccessibleName("Cancel onboarding setup")
 
+    @Slot()
+    def update_theme(self) -> None:
+        """Update wizard and child pages theme stylesheet."""
+        self.setStyleSheet(
+            f"QWizard#{self.objectName()} {{"
+            f"  background-color: {tokens.BG_ROOT};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QWizard QWidget {{"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"}}"
+            f"QWizard QPushButton {{"
+            f"  background-color: {tokens.BG_SURFACE};"
+            f"  color: {tokens.TEXT_PRIMARY};"
+            f"  border: 1px solid {tokens.BORDER};"
+            f"  border-radius: {tokens.RADIUS}px;"
+            f"  padding: 6px {tokens.SPACE_LG}px;"
+            f"  font-size: {tokens.FONT_BODY}px;"
+            f"}}"
+            f"QWizard QPushButton:hover {{"
+            f"  background-color: {tokens.BG_HOVER};"
+            f"  border-color: {tokens.BORDER_FOCUS};"
+            f"}}"
+            f"QWizard QPushButton:disabled {{"
+            f"  background-color: {tokens.BG_PANEL};"
+            f"  color: {tokens.TEXT_MUTED};"
+            f"  border-color: {tokens.BORDER};"
+            f"}}"
+        )
+
+    def deleteLater(self) -> None:
+        """Defensive cleanup before scheduled deletion."""
+        super().deleteLater()
+
+    @Slot()
     def accept(self) -> None:
         """Save settings to user_settings_path()."""
         cfg_path = user_settings_path()

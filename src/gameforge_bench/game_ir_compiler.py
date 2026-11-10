@@ -14,14 +14,14 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 
 @dataclass
 class CompilationResult:
     success: bool
-    generated_files: Dict[str, str] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
+    generated_files: dict[str, str] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
     contracts_emitted_count: int = 0
     escape_hatches_used_count: int = 0
 
@@ -29,8 +29,14 @@ class CompilationResult:
 class GameIRCompiler:
     """Compiles Game IR v0.1 definitions into native engine source files."""
 
-    def __init__(self, target_engine: str = "unreal", schema_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        target_engine: str = "unreal",
+        schema_path: Optional[Path] = None,
+        target_module: str = "GameForgePilot",
+    ) -> None:
         self.target_engine = target_engine.lower()
+        self.target_module = target_module
         self.schema_path = schema_path or (Path(__file__).resolve().parents[2] / "schemas" / "game_ir_schema.json")
 
     def validate_ir(self, ir_data: Dict[str, Any]) -> List[str]:
@@ -67,15 +73,16 @@ class GameIRCompiler:
 
         return errors
 
-    def compile_ir(self, ir_data: Dict[str, Any]) -> CompilationResult:
+    def compile_ir(self, ir_data: dict[str, Any]) -> CompilationResult:
         errors = self.validate_ir(ir_data)
-        files: Dict[str, str] = {}
+        files: dict[str, str] = {}
         contracts_count = 0
         escape_hatches_count = 0
 
         if errors:
             return CompilationResult(success=False, errors=errors)
 
+        module_name = self.target_module
         entities = ir_data.get("entities", [])
         contracts = {c["target_component"]: c for c in ir_data.get("contracts", []) if isinstance(c, dict) and "target_component" in c}
         contracts_count = len(contracts)
@@ -89,9 +96,9 @@ class GameIRCompiler:
                 props = comp.get("properties", {})
 
                 if self.target_engine == "unreal":
-                    h_code, cpp_code = self._lower_to_unreal(comp_id, comp_type, props, contracts.get(comp_id))
-                    files[f"Source/GameForgePilot/Public/{comp_id}.h"] = h_code
-                    files[f"Source/GameForgePilot/Private/{comp_id}.cpp"] = cpp_code
+                    h_code, cpp_code = self._lower_to_unreal(comp_id, comp_type, props, contracts.get(comp_id), module_name=module_name)
+                    files[f"Source/{module_name}/Public/{comp_id}.h"] = h_code
+                    files[f"Source/{module_name}/Private/{comp_id}.cpp"] = cpp_code
                 elif self.target_engine == "unity":
                     cs_code = self._lower_to_unity(comp_id, props, contracts.get(comp_id))
                     files[f"Assets/Scripts/{comp_id}.cs"] = cs_code
@@ -102,7 +109,7 @@ class GameIRCompiler:
         hatches = ir_data.get("native_escape_hatches", [])
         for h in hatches:
             if h.get("target_engine") == self.target_engine:
-                dest = h.get("file_target", f"Source/GameForgePilot/Private/{h.get('hatch_id')}.cpp")
+                dest = h.get("file_target", f"Source/{module_name}/Private/{h.get('hatch_id')}.cpp")
                 files[dest] = h.get("code_block", "")
                 escape_hatches_count += 1
 
@@ -118,11 +125,13 @@ class GameIRCompiler:
         self,
         comp_id: str,
         comp_type: str,
-        props: Dict[str, Any],
-        contract: Optional[Dict[str, Any]],
-    ) -> Tuple[str, str]:
+        props: dict[str, Any],
+        contract: Optional[dict[str, Any]],
+        module_name: str = "GameForgePilot",
+    ) -> tuple[str, str]:
         """Lowers component properties and contracts into native Unreal C++."""
         class_name = f"U{comp_id}"
+        api_macro = f"{module_name.upper()}_API"
         header = f"""// GameForge Game IR Lowered Component: {class_name}
 #pragma once
 
@@ -133,7 +142,7 @@ class GameIRCompiler:
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOn{comp_id}StateChanged, float, NewValue);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class GAMEFORGEPILOT_API {class_name} : public UActorComponent
+class {api_macro} {class_name} : public UActorComponent
 {{
 \tGENERATED_BODY()
 

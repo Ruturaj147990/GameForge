@@ -1,24 +1,23 @@
 {
   "status": "PASS",
-  "timestamp": "2026-11-01T11:33:09Z",
+  "timestamp": "2026-11-10T17:24:37Z",
+  "preset_name": "relic_hunt",
   "game_title": "Relic Hunt",
   "sequence": {
     "sequence_name": "LS_RelicHunt_Intro",
     "duration_seconds": 12.0,
     "fps": 30,
-    "total_frames": 358,
+    "total_frames": 360,
     "shots": [
-      "Shot_01_Establishing",
-      "Shot_02_FocusPOI",
-      "Shot_03_RevealGoal"
+      "Shot_01_Landmark",
+      "Shot_02_Goal"
     ],
     "cuts": [
       0,
-      125,
-      250
+      180
     ],
-    "cut_count": 3,
-    "keyframes_count": 358,
+    "cut_count": 2,
+    "keyframes_count": 360,
     "audio_track": {
       "sound_cue": "/Game/GameForge/Audio/A_Music_Intro",
       "fade_in_seconds": 1.0,
@@ -34,9 +33,10 @@
   "verification": {
     "schema_version": "gds/1.1",
     "duration_seconds": 12.0,
-    "shots_detected": 3,
-    "cuts_detected": 3,
+    "shots_detected": 2,
+    "cuts_detected": 2,
     "audio_track_bound": true,
-    "skippable_in_scenario": true
+    "skippable_in_scenario": true,
+    "contract_verified": true
   }
 }

@@ -307,15 +307,17 @@ class ProceduralKinematicMotionSynthesizer:
         # Enforce exact loop continuity for looping animations
         if spec.is_looping and num_frames > 1:
             for b, trk in tracks.items():
-                first_k = trk.keyframes[0]
-                last_k = trk.keyframes[-1]
-                trk.keyframes[-1] = KeyframeTransform(
-                    time_seconds=last_k.time_seconds,
-                    location=first_k.location,
-                    rotation_quat=first_k.rotation_quat,
-                    scale=first_k.scale,
-                )
+                if trk.keyframes:
+                    first_k = trk.keyframes[0]
+                    last_k = trk.keyframes[-1]
+                    trk.keyframes[-1] = KeyframeTransform(
+                        time_seconds=last_k.time_seconds,
+                        location=first_k.location,
+                        rotation_quat=first_k.rotation_quat,
+                        scale=first_k.scale,
+                    )
 
+        act_name = spec.action.value if hasattr(spec.action, "value") else str(spec.action)
         bundle = MotionClipBundle(
             spec=spec,
             duration=duration,
@@ -324,7 +326,7 @@ class ProceduralKinematicMotionSynthesizer:
             tracks=tracks,
             provenance_metadata={
                 "synthesizer": "ProceduralKinematicMotionSynthesizer_V1",
-                "action": spec.action.value,
+                "action": act_name,
                 "duration_seconds": duration,
                 "total_frames": num_frames,
                 "sample_rate_hz": fps,
@@ -339,9 +341,11 @@ class ProceduralKinematicMotionSynthesizer:
     def export_motion_json(self, bundle: MotionClipBundle, output_path: Optional[Path] = None) -> Path:
         """Exports motion track data to structured JSON asset."""
         out_file = output_path or (self.output_dir / f"{bundle.spec.name}.motion.json")
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        act_name = bundle.spec.action.value if hasattr(bundle.spec.action, "value") else str(bundle.spec.action)
         data = {
             "name": bundle.spec.name,
-            "action": bundle.spec.action.value,
+            "action": act_name,
             "duration": bundle.duration,
             "sample_rate_hz": bundle.sample_rate_hz,
             "total_frames": bundle.total_frames,

@@ -697,7 +697,10 @@ class MultiFileChangeManifest(BaseModel):
                     raise ValueError("Rollback refuses to follow symbolic links.")
                 if original_text is None:
                     if fp.exists():
-                        fp.unlink()
+                        try:
+                            fp.unlink(missing_ok=True)
+                        except OSError as exc:
+                            errors.append(f"Failed to unlink created file {subpath}: {exc}")
                 else:
                     fp.parent.mkdir(parents=True, exist_ok=True)
                     fd, temp_name = tempfile.mkstemp(
@@ -711,7 +714,10 @@ class MultiFileChangeManifest(BaseModel):
                         os.replace(temp_name, fp)
                     finally:
                         if os.path.exists(temp_name):
-                            os.unlink(temp_name)
+                            try:
+                                os.unlink(temp_name)
+                            except OSError:
+                                pass
             except Exception as exc:
                 errors.append(f"Failed to rollback {subpath}: {exc}")
                 logger.exception("Failed to rollback snapshot for %s", subpath)

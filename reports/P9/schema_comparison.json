@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-11-01T11:08:33Z",
-  "total_ops": 129,
+  "timestamp": "2026-11-10T17:50:34Z",
+  "total_ops": 130,
   "compact_schema": {
-    "bytes": 4599,
-    "estimated_tokens": 1149,
+    "bytes": 4637,
+    "estimated_tokens": 1159,
     "recommended_for": "Local LLMs (4B, 8B, 9B) with <= 8k context window",
     "validation_location": "Host-side gateway (strict=True)"
   },
   "expanded_oneof_schema": {
-    "bytes": 99621,
-    "estimated_tokens": 24905,
+    "bytes": 107987,
+    "estimated_tokens": 26996,
     "recommended_for": "Hosted models (Claude 3.5/3.7, GPT-4o) with >= 128k context window",
     "validation_location": "Model-side structured schema + host-side gateway"
   },
-  "ratio_oneof_to_compact": 21.7,
+  "ratio_oneof_to_compact": 23.3,
   "recommendation": "Use compact schema for local Ollama models to conserve ~93% of the context budget. Use expanded oneOf schema for hosted models opting in with large context limits."
 }

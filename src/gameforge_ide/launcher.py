@@ -168,10 +168,15 @@ def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose:
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
 
-    app = QApplication(sys.argv)
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
     app.setApplicationName("GameForge IDE")
-    from .desktop.diagnostics.stall_monitor import setup_stall_monitor
-    setup_stall_monitor()
+    try:
+        from .desktop.diagnostics.stall_monitor import setup_stall_monitor
+        setup_stall_monitor()
+    except Exception as exc:
+        logging.getLogger(__name__).debug("Stall monitor setup skipped: %s", exc)
     app.setApplicationDisplayName("GameForge IDE")
     app.setOrganizationName("GameForge")
     app.setApplicationVersion("1.0.0")
@@ -214,8 +219,14 @@ def _is_loopback_host(host: str) -> bool:
 
 
 def main() -> None:
+    from . import __version__
     parser = argparse.ArgumentParser(
         description="GameForge IDE - Agentic Game Development Environment"
+    )
+    parser.add_argument(
+        "-V", "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "workspace",

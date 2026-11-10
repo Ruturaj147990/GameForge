@@ -9,10 +9,12 @@ from .prompt_to_gds import PromptToGdsResult, prompt_to_gds
 from .render import render_markdown, sentence
 from .schema import validate_draft, validate_gds
 from .semantic_validate import semantic_validate_gds
+from .store import DesignStore, load as load_gds, save as save_gds
 from .template_registry import GenerationStrategy, SemanticTemplateRegistry, StrategyDecision, default_registry
 
 __all__ = [
     "DesignDraft",
+    "DesignStore",
     "DraftEntity",
     "DraftLose",
     "DraftWin",
@@ -36,11 +38,13 @@ __all__ = [
     "default_registry",
     "expand_draft",
     "is_game_creation_request",
+    "load_gds",
     "prompt_to_gds",
     "propose_patch",
     "reconcile_draft",
     "render_markdown",
     "sanitize_props",
+    "save_gds",
     "semantic_validate_gds",
     "sentence",
     "summarize_patch",

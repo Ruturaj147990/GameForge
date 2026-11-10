@@ -98,6 +98,7 @@ Data Layers, project/plugin settings, Enhanced Input assets, redirector fix-up, 
 | `set_actor_property` | level | project | actors_in_level | PASS |  |
 | `spawn_actor` | level | project | actors_in_level | PASS |  |
 | `actor_get_materials` | materials | read |  | PASS |  |
+| `material_assign_to_actor` | materials | project | actor_get_materials | PASS | Assigns a MaterialInterface to all mesh components on an actor inside a ScopedEditorTransaction. |
 | `material_build_graph` | materials | project | material_readback_graph | PASS | M11 demo: reports/m11_material_demo.json |
 | `material_function_build` | materials | project | material_function_inspect | PASS | M11 demo: reports/m11_material_demo.json |
 | `material_function_inspect` | materials | read |  | PASS |  |

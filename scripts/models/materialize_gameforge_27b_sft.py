@@ -15,18 +15,29 @@ DEMO_ONLY = True
 6. Registers in Ollama as 'gameforge-27b-sft'.
 """
 
-
+import argparse
 import hashlib
 import json
 import os
 import shutil
 import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
-import gguf
-import numpy as np
-from safetensors import safe_open
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import gguf
+    import numpy as np
+    from safetensors import safe_open
+except ImportError:
+    gguf = None
+    np = None
+    safe_open = None
 
 BASE_GGUF_BLOB = Path("E:/GameForge/models/ollama/blobs/sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d")
 ADAPTER_PATH = Path("E:/GameForge/training/gameforge-27b-sft/adapter/adapter_model.safetensors")
@@ -35,7 +46,7 @@ HF_MERGED_DIR = Path("E:/GameForge/artifacts/gameforge-27b-sft/hf-merged")
 FINAL_GGUF_PATH = Path("E:/GameForge/artifacts/gameforge-27b-sft/gameforge-27b-sft-q4_k_m.gguf")
 MODELFILE_PATH = Path("E:/GameForge/artifacts/gameforge-27b-sft/Modelfile")
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
+MIRROR_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b-sft"
 
 # HF_MERGED_DIR.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)
 # FINAL_GGUF_PATH.parent.mkdir(parents=True, exist_ok=True) (deferred until after DEMO_ONLY guard)

@@ -4,33 +4,50 @@ Autonomous Codebase & File Inventory Analyzer for GameForge 1.0.
 Analyzes every source file, parses AST/C++/configs, maps dependencies,
 and generates reports/acceptance_audit/FILE_INVENTORY.md and ARCHITECTURE_AUDIT.md.
 """
+from __future__ import annotations
 
-import os
-import sys
+import argparse
 import ast
-from pathlib import Path
-from typing import Dict, Any
 from datetime import datetime
+import os
+from pathlib import Path
+import sys
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 IGNORE_DIRS = {
     ".git", ".pytest_cache", ".ruff_cache", "__pycache__", "venv", ".venv",
-    "scratch", ".system_generated"
+    "scratch", ".system_generated", ".gameforge", "DerivedDataCache",
+    "Intermediate", "Saved", "build", "dist",
 }
 
 
 def analyze_python_file(path: Path) -> Dict[str, Any]:
+    content = ""
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
         tree = ast.parse(content, filename=str(path))
     except Exception as e:
-        return {"error": str(e), "lines": len(content.splitlines()) if 'content' in locals() else 0}
+        return {
+            "error": str(e),
+            "lines": len(content.splitlines()) if content else 0,
+            "docstring": "",
+            "imports": [],
+            "classes": [],
+            "functions": [],
+        }
 
-    imports = []
-    classes = []
-    functions = []
+    imports: List[str] = []
+    classes: List[str] = []
+    functions: List[str] = []
     docstring = ast.get_docstring(tree) or ""
 
     for node in ast.walk(tree):
@@ -60,14 +77,18 @@ def analyze_cpp_file(path: Path) -> Dict[str, Any]:
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
-        return {"error": str(e), "lines": 0}
+        return {"error": str(e), "lines": 0, "includes": []}
 
     lines = len(content.splitlines())
-    includes = []
+    includes: List[str] = []
     for line in content.splitlines():
-        line = line.strip()
-        if line.startswith("#include"):
-            includes.append(line.replace("#include", "").strip(' "<>'))
+        trimmed = line.strip()
+        if trimmed.startswith("//") or trimmed.startswith("/*"):
+            continue
+        if trimmed.startswith("#include") or trimmed.startswith("# include"):
+            inc = trimmed.split("include", 1)[1].strip().strip(' "<>')
+            if inc:
+                includes.append(inc)
 
     return {
         "lines": lines,
@@ -75,9 +96,9 @@ def analyze_cpp_file(path: Path) -> Dict[str, Any]:
     }
 
 
-def scan_all_files():
-    file_records = []
-    categories = {
+def scan_all_files() -> Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    file_records: List[Dict[str, Any]] = []
+    categories: Dict[str, List[Dict[str, Any]]] = {
         "core_ide": [],
         "desktop_ui": [],
         "agent_runtime": [],
@@ -91,7 +112,7 @@ def scan_all_files():
         "docs_specs": [],
         "reports_audits": [],
         "scripts_tools": [],
-        "other": []
+        "other": [],
     }
 
     total_lines = 0
@@ -103,8 +124,11 @@ def scan_all_files():
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
         for f in sorted(files):
             p = Path(root) / f
-            rel = p.relative_to(ROOT).as_posix()
-            size = p.stat().st_size
+            try:
+                rel = p.relative_to(ROOT).as_posix()
+                size = p.stat().st_size
+            except OSError:
+                continue
 
             cat = "other"
             if rel.startswith("src/gameforge_ide/desktop/"):
@@ -134,11 +158,11 @@ def scan_all_files():
             elif p.name in ["pyproject.toml", "requirements.txt", "GameForge.spec", "entrypoint.py", ".gitignore"]:
                 cat = "config_build"
 
-            info = {
+            info: Dict[str, Any] = {
                 "rel_path": rel,
                 "size_bytes": size,
                 "category": cat,
-                "ext": p.suffix.lower()
+                "ext": p.suffix.lower(),
             }
 
             if p.suffix.lower() == ".py":
@@ -167,7 +191,7 @@ def scan_all_files():
     return file_records, categories
 
 
-def generate_inventory_markdown(records, categories):
+def generate_inventory_markdown(records: List[Dict[str, Any]], categories: Dict[str, List[Dict[str, Any]]]) -> str:
     lines = []
     lines.append("# GameForge 1.0 — Complete Repository File Inventory")
     lines.append(f"Generated: {datetime.now().isoformat()}\n")
@@ -200,7 +224,7 @@ def generate_inventory_markdown(records, categories):
         "docs_specs": "Canonical architecture docs (00_STATUS.md to 08_TESTING_AND_EVIDENCE.md), roadmaps, handovers",
         "reports_audits": "Evaluation logs, benchmark reports, acceptance audit ledger",
         "scripts_tools": "Automation scripts, engine demos, model evaluation harnesses, op schema generators",
-        "other": "Benchmark foundation modules, schemas, configs"
+        "other": "Benchmark foundation modules, schemas, configs",
     }
 
     for cat, recs in categories.items():
@@ -229,7 +253,7 @@ def generate_inventory_markdown(records, categories):
     return "\n".join(lines)
 
 
-def generate_architecture_audit_markdown(records, categories):
+def generate_architecture_audit_markdown(records: List[Dict[str, Any]], categories: Dict[str, List[Dict[str, Any]]]) -> str:
     lines = []
     lines.append("# GameForge 1.0 — Architecture Audit & Subsystem Verification")
     lines.append(f"Generated: {datetime.now().isoformat()}\n")
@@ -259,12 +283,16 @@ def generate_architecture_audit_markdown(records, categories):
     return "\n".join(lines)
 
 
-def main():
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Codebase & File Inventory Analyzer for GameForge 1.0")
+    parser.add_argument("--out-dir", default=None, help="Directory to write output markdown files")
+    args = parser.parse_args()
+
     print(f"Scanning repository: {ROOT}...")
     records, categories = scan_all_files()
     print(f"Scanned {len(records)} total files across {len(categories)} categories.")
 
-    out_dir = ROOT / "reports" / "acceptance_audit"
+    out_dir = Path(args.out_dir).resolve() if args.out_dir else (ROOT / "reports" / "acceptance_audit")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     inv_path = out_dir / "FILE_INVENTORY.md"
@@ -272,13 +300,22 @@ def main():
 
     print(f"Writing {inv_path}...")
     inv_md = generate_inventory_markdown(records, categories)
-    inv_path.write_text(inv_md, encoding="utf-8")
+    tmp_inv = inv_path.with_suffix(".tmp")
+    tmp_inv.write_text(inv_md, encoding="utf-8")
+    tmp_inv.replace(inv_path)
 
     print(f"Writing {arch_path}...")
     arch_md = generate_architecture_audit_markdown(records, categories)
-    arch_path.write_text(arch_md, encoding="utf-8")
+    tmp_arch = arch_path.with_suffix(".tmp")
+    tmp_arch.write_text(arch_md, encoding="utf-8")
+    tmp_arch.replace(arch_path)
 
     print("File inventory and architecture audit successfully generated!")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
 
 
 if __name__ == "__main__":

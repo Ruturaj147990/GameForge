@@ -4,7 +4,8 @@ import re
 
 EVENT_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 STAT_RE = re.compile(
-    r"^(player\.(health|max_health|stamina|mana|gold|lives|speed|ammo|shield|energy|fuel|oxygen|heat|sanity|stealth|hydration|hunger|combo)"
+    r"^(player\.(health|max_health|stamina|mana|gold|lives|speed|ammo|shield|energy|fuel|oxygen|heat|sanity|stealth|hydration|hunger|combo|ability_cooldown)"
+    r"|boss\.(health|max_health|phase)"
     r"|game\.(score|time_s|wave|laps|laps_completed|base_health|counter\.[a-z][a-z0-9_]*)"
     r"|entity\.[a-z][a-z0-9_]*\.(remaining|collected|killed))$"
 )
@@ -22,13 +23,16 @@ MODULE_EVENTS: dict[str, tuple[str, ...]] = {
         "player.dashed",
         "player.sprinted",
         "weapon.switched",
+        "player.ability_used",
+        "player.stealth_started",
+        "player.stealth_ended",
     ),
     "kit.pickup": ("pickup.collected",),
     "kit.checkpoint": ("checkpoint.reached", "lap.completed", "race.finished"),
     "kit.goal": ("goal.reached", "race.finished"),
     "kit.hazard": ("hazard.touched",),
-    "kit.enemy_melee": ("enemy.spawned", "enemy.attacked", "enemy.killed"),
-    "kit.enemy_ranged": ("enemy.spawned", "enemy.attacked", "enemy.killed", "tower.attacked"),
+    "kit.enemy_melee": ("enemy.spawned", "enemy.attacked", "enemy.killed", "boss.phase_changed", "boss.defeated"),
+    "kit.enemy_ranged": ("enemy.spawned", "enemy.attacked", "enemy.killed", "tower.attacked", "boss.phase_changed", "boss.defeated"),
     "kit.spawner": ("wave.started", "wave.cleared", "tower.built"),
     "kit.guard": ("guard.state", "guard.spotted_player", "guard.lost_player"),
     "kit.quest_giver": ("dialogue.line", "objective.started", "objective.completed"),

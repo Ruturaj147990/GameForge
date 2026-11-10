@@ -8,8 +8,6 @@ from __future__ import annotations
 import os
 import re
 import shlex
-import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -194,6 +192,6 @@ class TerminalTools:
             "command": res.command,
             "argv": args if "args" in locals() else [command],
             "requires_approval": res.requires_approval,
-            "risk_category": res.risk_category.value,
+            "risk_category": res.risk_category.value if res.risk_category else "UNCERTAIN_SCRIPT",
             "execution_id": res.execution_id,
         }

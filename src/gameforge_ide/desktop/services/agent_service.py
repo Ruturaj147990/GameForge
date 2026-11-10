@@ -148,10 +148,16 @@ class _AgentWorker(QObject):
             self.error_occurred.emit(str(exc))
 
     async def _stream(self) -> None:
+        def _emit_safe(sig: Any, *args: Any) -> None:
+            try:
+                sig.emit(*args)
+            except (RuntimeError, Exception):
+                pass
+
         full_text = ""
         if self._stop_flag.is_set():
             print("[GameForge Agent] Task cancelled before stream start.", flush=True)
-            self.task_done.emit("[Cancelled by user]")
+            _emit_safe(self.task_done, "[Cancelled by user]")
             return
         if self._resume_diff_id is not None:
             stream_gen = self._runtime.resume_task_after_diff(
@@ -178,74 +184,75 @@ class _AgentWorker(QObject):
             async for event in stream_gen:
                 if self._stop_flag.is_set():
                     print("[GameForge Agent] Task cancelled by user.", flush=True)
-                    self.task_done.emit(full_text or "[Cancelled by user]")
+                    _emit_safe(self.task_done, full_text or "[Cancelled by user]")
                     return
                 etype = event.event_type
                 if etype == "token":
                     full_text += event.content
-                    self.token_received.emit(event.content)
+                    _emit_safe(self.token_received, event.content)
                 elif etype == "status":
                     print(f"[GameForge Agent Status] {event.content}", flush=True)
-                    self.status_changed.emit(event.content, event.metadata)
+                    _emit_safe(self.status_changed, event.content, event.metadata)
                 elif etype == "plan":
                     print(f"[GameForge Agent Plan] Plan event received", flush=True)
                     plan_data = event.metadata.get("plan") or event.metadata
-                    self.plan_received.emit(plan_data if isinstance(plan_data, dict) else {"content": event.content})
+                    _emit_safe(self.plan_received, plan_data if isinstance(plan_data, dict) else {"content": event.content})
                 elif etype == "context_usage":
                     report = event.metadata.get("report") if isinstance(event.metadata, dict) else None
                     if report is not None:
-                        self.context_usage_updated.emit(report)
+                        _emit_safe(self.context_usage_updated, report)
                 elif etype == "tool_call":
                     tool = event.metadata.get("tool", "")
                     args = event.metadata.get("args", {})
                     print(f"[GameForge Agent Tool] >>> Calling `{tool}` with args: {args}", flush=True)
-                    self.tool_called.emit(tool, args)
+                    _emit_safe(self.tool_called, tool, args)
                 elif etype == "tool_result":
                     tool = event.metadata.get("tool", "")
                     res = event.metadata.get("result", {})
                     status = res.get("status", "SUCCESS") if isinstance(res, dict) else "OK"
                     print(f"[GameForge Agent Tool] <<< `{tool}` returned status: {status}", flush=True)
-                    self.tool_result.emit(tool, res)
+                    _emit_safe(self.tool_result, tool, res)
                 elif etype == "file_changed":
                     print(f"[GameForge Agent FileChanged] {event.content}", flush=True)
-                    self.file_changed.emit(event.content, event.metadata)
+                    _emit_safe(self.file_changed, event.content, event.metadata)
                 elif etype == "diff_pending":
                     print(f"[GameForge Agent Diff] Diff pending: {event.metadata.get('diff_id', '')}", flush=True)
-                    self.diff_pending.emit(
+                    _emit_safe(
+                        self.diff_pending,
                         event.metadata.get("diff_id", ""), event.metadata
                     )
                 elif etype == "error":
                     print(f"[GameForge Agent Error] {event.content}", flush=True)
-                    self.error_occurred.emit(event.content)
+                    _emit_safe(self.error_occurred, event.content)
                     return
                 elif etype == "done":
                     print(f"[GameForge Agent Done] Task turn complete. ({len(full_text)} chars generated)", flush=True)
-                    self.task_done.emit(full_text or event.content)
+                    _emit_safe(self.task_done, full_text or event.content)
                     if self._session_id:
                         try:
                             usage = self.get_context_usage(self._session_id)
                             if usage:
-                                self.context_usage_updated.emit(usage)
+                                _emit_safe(self.context_usage_updated, usage)
                         except Exception:
                             pass
                     return
             if not self._stop_flag.is_set():
                 print(f"[GameForge Agent Done] Stream finished. ({len(full_text)} chars)", flush=True)
-                self.task_done.emit(full_text)
+                _emit_safe(self.task_done, full_text)
                 if self._session_id:
                     try:
                         usage = self.get_context_usage(self._session_id)
                         if usage:
-                            self.context_usage_updated.emit(usage)
+                            _emit_safe(self.context_usage_updated, usage)
                     except Exception:
                         pass
         except asyncio.CancelledError:
             print("[GameForge Agent] Task cancelled.", flush=True)
-            self.task_done.emit(full_text or "[Cancelled by user]")
+            _emit_safe(self.task_done, full_text or "[Cancelled by user]")
             return
         except Exception as exc:
             print(f"[GameForge Agent Error] Stream exception: {exc}", flush=True)
-            self.error_occurred.emit(str(exc))
+            _emit_safe(self.error_occurred, str(exc))
             return
         finally:
             if hasattr(stream_gen, "aclose"):
@@ -253,6 +260,7 @@ class _AgentWorker(QObject):
                     await stream_gen.aclose()
                 except Exception:
                     pass
+
 
     def stop(self) -> None:
         self._stop_flag.set()

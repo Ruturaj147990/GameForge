@@ -1,7 +1,9 @@
 {
   "status": "PASS",
-  "timestamp": "2026-11-01T11:28:38Z",
+  "timestamp": "2026-11-10T12:03:02Z",
   "game_title": "Relic Hunt",
+  "preset_name": "relic_hunt",
+  "project_dir": "E:/GameForge_IDE/scratch/validation/P10_perf_demo",
   "budgets": {
     "target_fps": 60.0,
     "max_frame_ms": 16.67

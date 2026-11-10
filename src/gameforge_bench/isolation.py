@@ -11,13 +11,16 @@ import os
 import platform
 import shutil
 import subprocess
-import sys
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
+
+
+def _creationflags() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) if os.name == "nt" else 0
 
 
 class IsolationLevel(str, Enum):
@@ -79,7 +82,13 @@ def audit_os_isolation_capabilities() -> IsolationAuditResult:
     if shutil.which("wsl") is not None:
         try:
             # Non-interactive quick check
-            res = subprocess.run(["wsl", "-l", "-q"], capture_output=True, text=True, timeout=2)
+            res = subprocess.run(
+                ["wsl", "-l", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                creationflags=_creationflags(),
+            )
             if res.returncode == 0 and res.stdout.strip():
                 wsl_available = True
         except Exception:
@@ -91,7 +100,13 @@ def audit_os_isolation_capabilities() -> IsolationAuditResult:
         try:
             # Query vmcompute service without modifying state
             cmd = ["sc", "query", "vmcompute"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3,
+                creationflags=_creationflags(),
+            )
             if "RUNNING" in res.stdout:
                 hyper_v_active = True
         except Exception:
@@ -200,6 +215,7 @@ class RestrictedProcessIsolationProvider(IsolationProvider):
                 text=True,
                 timeout=timeout_seconds,
                 env=clean_env,
+                creationflags=_creationflags(),
             )
             duration = time.time() - start
             return res.returncode, res.stdout, res.stderr, duration

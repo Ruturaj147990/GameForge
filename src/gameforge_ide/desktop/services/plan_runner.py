@@ -28,21 +28,31 @@ class _Worker(QObject):
         self._cancelled = threading.Event()
 
     def run(self) -> None:
+        def _safe_emit_event(ev) -> None:
+            try:
+                self.event.emit(ev)
+            except RuntimeError:
+                pass
+
         try:
             result = run_plan_on_forge(
                 self._plan,
                 self.workspace_root,
                 auto_approve_all=False,
-                on_event=self.event.emit,
+                on_event=_safe_emit_event,
             )
         except Exception as exc:  # report, never crash the UI
             self._plan.status = "FAILED"
             self._plan.metadata["runner_error"] = f"{type(exc).__name__}: {exc}"
             result = self._plan
-        self.finished.emit(result)
+        try:
+            self.finished.emit(result)
+        except RuntimeError:
+            pass
 
     def cancel(self) -> None:
         self._cancelled.set()
+
 
 
 class PlanRunner(QObject):
@@ -97,6 +107,11 @@ class PlanRunner(QObject):
         if self._thread is not None:
             self._thread.quit()
             self._thread.wait(2000)
+
+    def deleteLater(self) -> None:
+        self.shutdown()
+        super().deleteLater()
+
 
 
 __all__ = ["PlanRunner", "PlanEvent"]

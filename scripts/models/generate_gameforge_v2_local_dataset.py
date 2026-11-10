@@ -12,14 +12,21 @@ Attributes:
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 SOURCE_ID = "gameforge-v2-local-specialist-corpus"
-MANIFEST_PATH = Path("configs/gameforge_v2_local_training_manifest.json")
+MANIFEST_PATH = REPO_ROOT / "configs" / "gameforge_v2_local_training_manifest.json"
 
 EXAMPLES = [
     # 1. Unreal Gameplay Systems
@@ -1064,10 +1071,28 @@ def build_manifest() -> Dict[str, Any]:
     return manifest_json
 
 
-if __name__ == "__main__":
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge V2 Local Training Dataset Builder")
+    parser.add_argument("--output", type=Path, default=None, help="Target manifest path")
+    args = parser.parse_args()
+
     manifest = build_manifest()
-    os.makedirs(MANIFEST_PATH.parent, exist_ok=True)
-    with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-    print(f"Generated {MANIFEST_PATH}: {manifest['sample_count']} samples (Train: {manifest['train_count']}, Dev: {manifest['dev_count']})")
+    target_path = args.output or MANIFEST_PATH
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    temp_file = target_path.with_suffix(".tmp")
+    try:
+        temp_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        temp_file.replace(target_path)
+    except Exception:
+        if temp_file.exists():
+            temp_file.unlink()
+        raise
+
+    print(f"Generated {target_path}: {manifest['sample_count']} samples (Train: {manifest['train_count']}, Dev: {manifest['dev_count']})")
     print(f"Manifest SHA-256: {manifest['manifest_sha256']}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

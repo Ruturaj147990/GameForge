@@ -64,12 +64,25 @@ TYPO_REPLACEMENTS: Dict[str, str] = {
     "gme": "game",
     "gmes": "games",
     "shtr": "shooter",
+    "multipalyer": "multiplayer",
+    "multplayer": "multiplayer",
+    "multiplayr": "multiplayer",
+    "dungeun": "dungeon",
+    "dunjun": "dungeon",
+    "invantory": "inventory",
+    "inventry": "inventory",
+    "mechancis": "mechanics",
+    "machanics": "mechanics",
+    "stratagy": "strategy",
+    "stratgy": "strategy",
+    "puzle": "puzzle",
+    "puzzel": "puzzle",
 }
 
 CREATE_VERB_PAT = re.compile(
     r"\b(create|make|build|generate|develop|design|give me|gimme|i want|wanna|want|need|"
     r"write|complete|finish|expand|build out|author|code|implement|deploy|construct|produce|"
-    r"craft|scaffold|spin up|whip up|put together|start|program|setup|set up)\b",
+    r"craft|scaffold|spin up|whip up|put together|start|program|setup|set up|forge|assemble|prototype|synthesize|compose)\b",
     re.I,
 )
 
@@ -171,6 +184,7 @@ MECHANIC_KEYWORDS: Set[str] = {
     "traps", "hazard", "puzzle", "riddle", "checkpoint", "timer", "countdown", "permadeath",
     "turret", "tower", "wave", "waves", "lap", "laps", "drift", "boost", "nitro", "vehicle", "driving",
     "quest", "dialogue", "defuse", "plant", "portal", "teleporter", "synergy", "relic", "hack", "switch", "door",
+    "bombsite", "jump pad", "teleporter pad", "smoke bomb", "air control", "cooldown", "keycard", "door lock",
 }
 
 

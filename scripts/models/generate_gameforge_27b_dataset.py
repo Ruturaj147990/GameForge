@@ -12,13 +12,21 @@ Outputs to:
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 DATASET_DIR = Path("E:/GameForge/datasets/gameforge-27b")
-REGISTER_PATH = (Path(__file__).resolve().parents[1] / r"configs/dataset_source_register.json")
+REPO_DATASET_DIR = REPO_ROOT / "datasets" / "gameforge-27b"
+REGISTER_PATH = REPO_ROOT / "configs" / "dataset_source_register.json"
 
 SYSTEM_PROMPT = (
     "You are GameForge, a master game systems architect and principal engine programmer. "
@@ -763,23 +771,41 @@ def format_chatml(sample: Dict[str, Any]) -> str:
     return json.dumps(entry, ensure_ascii=False)
 
 
-def main() -> None:
-    DATASET_DIR.mkdir(parents=True, exist_ok=True)
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge 27B Specialized Multi-Engine Dataset Generator")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Target dataset directory")
+    args = parser.parse_args()
 
-    train_file = DATASET_DIR / "gameforge_27b_train.jsonl"
-    val_file = DATASET_DIR / "gameforge_27b_val.jsonl"
+    target_dir = args.output_dir or (DATASET_DIR if DATASET_DIR.parent.exists() else REPO_DATASET_DIR)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    train_file = target_dir / "gameforge_27b_train.jsonl"
+    val_file = target_dir / "gameforge_27b_val.jsonl"
 
     # Split 80/20 train/val
-    train_samples = SAMPLES[:8]
-    val_samples = SAMPLES[8:]
+    train_count = int(len(SAMPLES) * 0.8)
+    train_samples = SAMPLES[:train_count]
+    val_samples = SAMPLES[train_count:]
 
-    with open(train_file, "w", encoding="utf-8") as f:
-        for s in train_samples:
-            f.write(format_chatml(s) + "\n")
+    temp_train = train_file.with_suffix(".tmp")
+    temp_val = val_file.with_suffix(".tmp")
 
-    with open(val_file, "w", encoding="utf-8") as f:
-        for s in val_samples:
-            f.write(format_chatml(s) + "\n")
+    try:
+        with open(temp_train, "w", encoding="utf-8") as f:
+            for s in train_samples:
+                f.write(format_chatml(s) + "\n")
+        temp_train.replace(train_file)
+
+        with open(temp_val, "w", encoding="utf-8") as f:
+            for s in val_samples:
+                f.write(format_chatml(s) + "\n")
+        temp_val.replace(val_file)
+    except Exception:
+        if temp_train.exists():
+            temp_train.unlink()
+        if temp_val.exists():
+            temp_val.unlink()
+        raise
 
     train_bytes = train_file.read_bytes()
     val_bytes = val_file.read_bytes()
@@ -810,12 +836,21 @@ def main() -> None:
         }
     }
 
-    manifest_file = DATASET_DIR / "manifest.json"
-    manifest_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(f"Generated {len(SAMPLES)} samples in {DATASET_DIR}")
+    manifest_file = target_dir / "manifest.json"
+    temp_manifest = manifest_file.with_suffix(".tmp")
+    try:
+        temp_manifest.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        temp_manifest.replace(manifest_file)
+    except Exception:
+        if temp_manifest.exists():
+            temp_manifest.unlink()
+        raise
+
+    print(f"Generated {len(SAMPLES)} samples in {target_dir}")
     print(f"Train SHA-256: {train_sha256}")
     print(f"Val SHA-256:   {val_sha256}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

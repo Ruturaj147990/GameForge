@@ -40,6 +40,10 @@ class DryRunResult:
     blockers: List[str] = field(default_factory=list)
     resource_measurements: Dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert dry run result to serializable dictionary."""
+        return asdict(self)
+
 
 @dataclass
 class ValueDecisionRule:
@@ -47,6 +51,10 @@ class ValueDecisionRule:
     max_general_regression_threshold: float = 0.03
     max_acceptable_vram_gb: float = 12.0
     max_acceptable_latency_increase_ratio: float = 1.30
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert decision rule parameters to serializable dictionary."""
+        return asdict(self)
 
     def evaluate_decision(
         self,
@@ -816,3 +824,34 @@ class TrainingRunner:
             "status": "TRAINING_EXECUTOR_UNAVAILABLE",
             "message": "Prerequisites satisfied but genuine training executor is not configured or authorized.",
         }
+
+
+def format_dry_run_markdown(result: DryRunResult) -> str:
+    """Formats DryRunResult into a clean markdown diagnostic table."""
+    status_icon = "PASS" if result.can_execute_training else "BLOCKED"
+    lines = [
+        f"# GameForge Step 7 Training Gate Audit: [{status_icon}]",
+        "",
+        "| Gate / Precondition | Status |",
+        "|---------------------|--------|",
+        f"| Configuration Syntax & Schema | {'PASS' if result.config_valid else 'FAIL'} |",
+        f"| Package Availability (PyTorch/PEFT) | {'PASS' if result.packages_available else 'FAIL'} |",
+        f"| Hardware Compatibility (VRAM/Disk) | {'PASS' if result.hardware_compatible else 'FAIL'} |",
+        f"| Base Model Accessibility | {'PASS' if result.model_accessible else 'FAIL'} |",
+        f"| Dataset Manifest Integrity | {'PASS' if result.dataset_manifest_valid else 'FAIL'} |",
+        f"| Step 5 Milestone Gate (Baseline Ready) | {'PASS' if result.step5_gate_passed else 'BLOCKED'} |",
+        f"| Step 6 Milestone Gate (Rights Cleared) | {'PASS' if result.step6_gate_passed else 'BLOCKED'} |",
+        f"| **Overall Training Authorization** | **{'AUTHORIZED' if result.can_execute_training else 'REFUSED_FAIL_CLOSED'}** |",
+        "",
+    ]
+    if result.blockers:
+        lines.append("## Blockers Identified")
+        for b in result.blockers:
+            lines.append(f"- {b}")
+        lines.append("")
+    if result.resource_measurements:
+        lines.append("## Resource Measurements")
+        for k, v in result.resource_measurements.items():
+            lines.append(f"- **{k}**: {v}")
+        lines.append("")
+    return "\n".join(lines)

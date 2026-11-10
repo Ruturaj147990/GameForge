@@ -1,4 +1,6 @@
-"""GameForge IDE — panels package init."""
+"""GameForge IDE — Desktop UI Panels Package."""
+
+from __future__ import annotations
 
 from .activity_card import StatusActivityItem, ToolActivityItem
 from .approval_card import ApprovalCard
@@ -31,3 +33,4 @@ __all__ = [
     "ToolActivityItem",
     "UnrealPanel",
 ]
+

@@ -279,7 +279,7 @@ def tool_search_code(
         ]
 
         for f in files:
-            if f.endswith(BINARY_EXTENSIONS):
+            if f.lower().endswith(BINARY_EXTENSIONS):
                 continue
             file_path = Path(root) / f
             encoding = _detect_file_encoding(file_path)

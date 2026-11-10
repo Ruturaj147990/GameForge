@@ -62,6 +62,8 @@ def assemble_benchmark_report(
     env_rec = capture_environment(workspace_root)
     isolation_audit = audit_os_isolation_capabilities()
 
+    project_version = engine_discovery.version or ("5.7" if engine_discovery.engine_name == "unreal" else "2022.3")
+
     report = {
         "report_schema_version": "0.1.0",
         "benchmark_version": "v0.1",
@@ -76,7 +78,7 @@ def assemble_benchmark_report(
             "name": engine_discovery.engine_name,
             "version": engine_discovery.version or "unverified",
             "executable_path": engine_discovery.executable_path or "none",
-            "project_version": "5.7" if engine_discovery.engine_name == "unreal" else "2022.3",
+            "project_version": project_version,
         },
         "environment": {
             "os": f"{env_rec['os']} {env_rec['os_release']}",
@@ -86,6 +88,7 @@ def assemble_benchmark_report(
                 "python_executable": env_rec["python_executable"],
             },
             "git_commit": env_rec.get("git_commit"),
+            "hardware": env_rec.get("hardware_notes", {}),
         },
         "candidate": {
             "candidate_id": candidate_id,
@@ -101,14 +104,14 @@ def assemble_benchmark_report(
             "fixed_timestep": task_spec.reproducibility.fixed_timestep_seconds,
             "seed": task_spec.reproducibility.random_seed,
         },
-        "status": grading_result.overall_status.value,
+        "status": grading_result.overall_status.value if hasattr(grading_result.overall_status, "value") else str(grading_result.overall_status),
         "first_mandatory_failure_layer": grading_result.first_mandatory_failure_layer,
         "layers": {
             layer_name: {
-                "status": outcome.status,
-                "duration_seconds": outcome.duration_seconds,
-                "message": outcome.message,
-                "details": outcome.details,
+                "status": outcome.status if hasattr(outcome, "status") else outcome.get("status"),
+                "duration_seconds": outcome.duration_seconds if hasattr(outcome, "duration_seconds") else outcome.get("duration_seconds", 0.0),
+                "message": outcome.message if hasattr(outcome, "message") else outcome.get("message", ""),
+                "details": outcome.details if hasattr(outcome, "details") else outcome.get("details", {}),
             }
             for layer_name, outcome in grading_result.layers.items()
         },
@@ -140,7 +143,8 @@ def save_report(report: Dict[str, Any], output_dir: Path | str) -> Path:
     """Saves report JSON to disk."""
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    report_file = out_dir / f"{report['run_id']}.json"
+    run_id = report.get("run_id", f"run_{int(time.time())}")
+    report_file = out_dir / f"{run_id}.json"
     with report_file.open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     return report_file
@@ -150,24 +154,26 @@ def format_report_summary(report: Dict[str, Any]) -> str:
     """Generates a human-readable diagnostic text summary of a run report."""
     lines: List[str] = []
     lines.append("=" * 80)
-    lines.append(f" GAMEFORGE EVALUATION REPORT: {report['run_id']}")
+    lines.append(f" GAMEFORGE EVALUATION REPORT: {report.get('run_id', 'UNKNOWN')}")
     lines.append("=" * 80)
-    lines.append(f"Task:            {report['task_id']} ({report['logical_task_id']})")
-    lines.append(f"Engine:          {report['engine']['name']} (v{report['engine']['version']})")
-    lines.append(f"Candidate:       {report['candidate']['candidate_id']} ({report['candidate']['candidate_type']})")
-    lines.append(f"Status:          {report['status']}")
+    lines.append(f"Task:            {report.get('task_id', 'N/A')} ({report.get('logical_task_id', 'N/A')})")
+    eng = report.get("engine", {})
+    lines.append(f"Engine:          {eng.get('name', 'N/A')} (v{eng.get('version', 'N/A')})")
+    cand = report.get("candidate", {})
+    lines.append(f"Candidate:       {cand.get('candidate_id', 'N/A')} ({cand.get('candidate_type', 'N/A')})")
+    lines.append(f"Status:          {report.get('status', 'UNKNOWN')}")
     if "isolation" in report:
         iso = report["isolation"]
         lines.append(f"Isolation:       {iso.get('classification', 'UNVERIFIED')} ({iso.get('provider', 'none')})")
     if report.get("first_mandatory_failure_layer"):
         lines.append(f"First Failure:   {report['first_mandatory_failure_layer']}")
-    lines.append(f"Total Duration:  {report['duration_seconds']}s")
+    lines.append(f"Total Duration:  {report.get('duration_seconds', 0.0)}s")
     lines.append("-" * 80)
     lines.append("GRADING LAYERS:")
     for layer, data in report.get("layers", {}).items():
-        st = data.get("status", "UNKNOWN")
-        msg = data.get("message", "")
-        dur = data.get("duration_seconds", 0.0)
+        st = data.get("status", "UNKNOWN") if isinstance(data, dict) else getattr(data, "status", "UNKNOWN")
+        msg = data.get("message", "") if isinstance(data, dict) else getattr(data, "message", "")
+        dur = data.get("duration_seconds", 0.0) if isinstance(data, dict) else getattr(data, "duration_seconds", 0.0)
         lines.append(f"  [{st:^7}] {layer:<22} ({dur:.2f}s) - {msg}")
 
     probes = report.get("probes", {})
@@ -196,7 +202,7 @@ def format_report_summary(report: Dict[str, Any]) -> str:
 def aggregate_reports(report_dir: Path | str) -> Dict[str, Any]:
     """Summarizes all reports in a directory."""
     r_dir = Path(report_dir)
-    summary = {
+    summary: Dict[str, Any] = {
         "total_runs": 0,
         "counts_by_status": {
             "PASS": 0,
@@ -206,29 +212,41 @@ def aggregate_reports(report_dir: Path | str) -> Dict[str, Any]:
             "HARNESS_INVALID": 0,
             "FLAKY_QUARANTINED": 0,
         },
+        "pass_rate_pct": 0.0,
+        "average_duration_seconds": 0.0,
         "runs": [],
     }
 
     if not r_dir.is_dir():
         return summary
 
+    total_dur = 0.0
     for r_file in sorted(r_dir.glob("*.json")):
         try:
             with r_file.open("r", encoding="utf-8") as f:
                 data = json.load(f)
             st = data.get("status", "UNKNOWN")
             summary["total_runs"] += 1
-            if st in summary["counts_by_status"]:
-                summary["counts_by_status"][st] += 1
+            if st not in summary["counts_by_status"]:
+                summary["counts_by_status"][st] = 0
+            summary["counts_by_status"][st] += 1
+
+            dur = float(data.get("duration_seconds", 0.0))
+            total_dur += dur
+
             summary["runs"].append({
                 "run_id": data.get("run_id"),
                 "task_id": data.get("task_id"),
                 "engine": data.get("engine", {}).get("name"),
                 "status": st,
                 "first_failure": data.get("first_mandatory_failure_layer"),
-                "duration": data.get("duration_seconds"),
+                "duration": dur,
             })
         except Exception:
             pass
+
+    if summary["total_runs"] > 0:
+        summary["pass_rate_pct"] = round((summary["counts_by_status"].get("PASS", 0) / summary["total_runs"]) * 100, 2)
+        summary["average_duration_seconds"] = round(total_dur / summary["total_runs"], 3)
 
     return summary

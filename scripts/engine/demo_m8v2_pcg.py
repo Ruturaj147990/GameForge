@@ -10,15 +10,20 @@ Evidence: reports/m8v2_pcg_demo.json. Usage: python scripts/engine/demo_m8v2_pcg
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+ENGINE_SCRIPTS = str(REPO / "scripts" / "engine")
+if ENGINE_SCRIPTS not in sys.path:
+    sys.path.insert(0, ENGINE_SCRIPTS)
 
-import demo_m11_landscape as land  # noqa: E402
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 REPORT = REPO / "reports" / "m8v2_pcg_demo.json"
 GRAPH = {
@@ -39,25 +44,32 @@ GRAPH = {
 }
 
 
-def run(rep: dict) -> None:
+def run(rep: Dict[str, Any]) -> None:
+    import demo_m11_landscape as land
+
     checks, steps = rep["checks"], rep["steps"]
-    land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "m8v2_pcg_"))
+    try:
+        val_root = get_settings().require_dev("validation_root")
+    except Exception:
+        val_root = REPO / "scratch" / "validation"
+
+    land.PROJECT_DIR = val_root / f"m8v2_pcg_{time.strftime('%Y%m%d')}"
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()
     link = land.start(uproject, "pcg")
     try:
         link.call("new_level", {"level_path": "/Game/M8v2/Maps/SurfacePCG"})
         terrain = link.call("landscape_create", {"terrain_type": "Valley", "elevation_scale": 2500, "seed": 11},
-                            timeout_s=600)
+                            timeout_s=600) or {}
         td = terrain.get("data") or {}
         steps["landscape"] = {k: td.get(k) for k in ("min_elevation_cm", "max_elevation_cm", "size_x", "size_y")} | \
             {"ok": terrain.get("ok"), "errors": terrain.get("errors")}
-        built = link.call("pcg_build_graph", GRAPH, timeout_s=300)
+        built = link.call("pcg_build_graph", GRAPH, timeout_s=300) or {}
         steps["pcg_build"] = (built.get("data") or {}) | {"ok": built.get("ok"), "errors": built.get("errors")}
         checks["graph_built_all_edges"] = bool(built.get("ok"))
-        ver = {}
+        ver: Dict[str, Any] = {}
         for _ in range(45):
-            ver = link.call("pcg_verify_authenticity", {"label": GRAPH["label"]})
+            ver = link.call("pcg_verify_authenticity", {"label": GRAPH["label"]}) or {}
             if ver.get("ok"):
                 break
             time.sleep(2.0)
@@ -71,14 +83,14 @@ def run(rep: dict) -> None:
         h = vd.get("instance_heights") or {}
         lo, hi = td.get("min_elevation_cm"), td.get("max_elevation_cm")
         checks["instances_follow_terrain"] = bool(h.get("sampled")) and h.get("std_z", 0) > 50 and \
-            lo is not None and h["min_z"] >= lo - 100 and h["max_z"] <= hi + 100
+            lo is not None and h.get("min_z", lo) >= lo - 100 and h.get("max_z", hi) <= hi + 100
         link.call("set_viewport_camera", {"location": {"x": -9000, "y": -3000, "z": 5000},
                                           "rotation": {"pitch": -25, "yaw": 15, "roll": 0}})
         link.call("spawn_actor", {"actor_class": "DirectionalLight", "label": "GF_Sun", "light_intensity": 4.0,
                                   "rotation": {"pitch": -40, "yaw": 30, "roll": 0}, "location": {"x": 0, "y": 0, "z": 9000}})
         link.call("scene_set_manual_exposure", {"exposure_bias": 10.0})
         time.sleep(8.0)
-        shot = link.capture_screenshot(land.PROJECT_DIR / "Saved" / "Screenshots" / "m8v2_surface_pcg.png", wait_s=90.0)
+        shot = link.capture_screenshot(land.PROJECT_DIR / "Saved" / "Screenshots" / "m8v2_surface_pcg.png", wait_s=90.0) or {}
         steps["screenshot"] = {"path": (shot.get("data") or {}).get("path"), "errors": shot.get("errors")}
         link.call("save_all", {})
     finally:
@@ -93,7 +105,10 @@ def main() -> int:
         rep["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
         rep["ok"] = bool(rep["checks"]) and all(rep["checks"].values()) and "exception" not in rep
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        tmp_report = REPORT.with_suffix(".tmp")
+        tmp_report.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        os.replace(tmp_report, REPORT)
     print(json.dumps(rep["checks"], indent=2), rep.get("exception", ""))
     return 0 if rep["ok"] else 1
 

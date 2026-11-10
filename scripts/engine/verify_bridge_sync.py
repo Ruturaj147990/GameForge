@@ -15,13 +15,21 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, Optional
 import urllib.request
 import urllib.error
 
 REPO = Path(__file__).resolve().parents[2]
-os.environ.setdefault("GAMEFORGE_HOST_PROFILE", str(REPO / "configs" / "host_profiles" / "dev-rx7700xt.json"))
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+if "GAMEFORGE_HOST_PROFILE" not in os.environ:
+    dev_prof = REPO / "configs" / "host_profiles" / "dev-rx7700xt.json"
+    if dev_prof.exists():
+        os.environ["GAMEFORGE_HOST_PROFILE"] = str(dev_prof)
+
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+engine_scripts = REPO / "scripts" / "engine"
+if str(engine_scripts) not in sys.path:
+    sys.path.insert(0, str(engine_scripts))
 
 from _harness import disposable_probe, start_editor, write_report  # noqa: E402
 
@@ -37,23 +45,39 @@ def wait_for_bridge(timeout_s: float = 30.0) -> bool:
             with urllib.request.urlopen(url, timeout=5.0) as resp:
                 if resp.status == 200:
                     return True
-        except Exception as exc:
+        except Exception:
             time.sleep(0.5)
     return False
 
 
-def get_synced_context() -> dict:
+def get_synced_context(timeout_s: float = 10.0) -> Dict[str, Any]:
     url = f"http://127.0.0.1:{BRIDGE_PORT}/api/unreal/context"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {TOKEN}"})
-    with urllib.request.urlopen(req, timeout=5.0) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    deadline = time.monotonic() + timeout_s
+    last_err: Optional[Exception] = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data and isinstance(data, dict) and data.get("project_name"):
+                    return data
+        except Exception as exc:
+            last_err = exc
+        time.sleep(0.5)
+    if last_err:
+        raise last_err
+    return {}
 
 
-def main():
+def main() -> int:
     print(f"Starting bridge on port {BRIDGE_PORT} with token...")
     bridge_env = dict(os.environ)
     bridge_env["GAMEFORGE_BRIDGE_TOKEN"] = TOKEN
     os.environ["GAMEFORGE_BRIDGE_TOKEN"] = TOKEN
+
+    creation_flags = 0
+    if sys.platform == "win32":
+        creation_flags = subprocess.CREATE_NO_WINDOW
 
     bridge_proc = subprocess.Popen(
         [sys.executable, "-m", "src.gameforge_ide.launcher", "--serve"],
@@ -61,9 +85,10 @@ def main():
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        creationflags=creation_flags,
     )
 
-    evidence = {
+    evidence: Dict[str, Any] = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "bridge_port": BRIDGE_PORT,
         "token_configured": bool(TOKEN),
@@ -88,7 +113,8 @@ def main():
         hs = link.call("handshake", {})
         print(f"Handshake: {hs.get('ok')}")
         assert hs.get("ok"), "Editor handshake failed"
-        evidence["steps"].append({"step": "editor_connected", "engine_version": hs.get("data", {}).get("engine_version")})
+        engine_ver = (hs.get("data") or {}).get("engine_version")
+        evidence["steps"].append({"step": "editor_connected", "engine_version": engine_ver})
 
         # Step 3: Trigger console command GameForge.SyncContext
         sync_cmd = """
@@ -96,26 +122,31 @@ import unreal
 unreal.SystemLibrary.execute_console_command(None, "GameForge.SyncContext")
 print("@@SYNC_SENT@@DONE")
 """
-        res = link._rx.run_command(sync_cmd, unattended=True, exec_mode=link._rx_module.MODE_EXEC_FILE)
-        evidence["steps"].append({"step": "execute_sync_command", "output": res.get("output")})
+        rx = getattr(link, "_rx", None)
+        rx_mod = getattr(link, "_rx_module", None)
+        if rx and rx_mod:
+            res = rx.run_command(sync_cmd, unattended=True, exec_mode=rx_mod.MODE_EXEC_FILE)
+            evidence["steps"].append({"step": "execute_sync_command", "output": res.get("output")})
+        else:
+            evidence["steps"].append({"step": "execute_sync_command", "output": "rx unavailable"})
         print("GameForge.SyncContext console command executed in editor")
 
         # Step 4: Wait and read back context from the bridge
-        time.sleep(2.0)
-        ctx = get_synced_context()
+        ctx = get_synced_context(timeout_s=10.0)
         print(f"Context received by bridge: {ctx}")
         assert ctx.get("project_name") == "GFProbe", f"Unexpected project_name in context: {ctx}"
-        assert ctx.get("engine_version", "").startswith("5.7"), f"Unexpected engine_version in context: {ctx}"
+        assert str(ctx.get("engine_version", "")).startswith("5.7"), f"Unexpected engine_version in context: {ctx}"
         evidence["steps"].append({"step": "received_context", "context": ctx})
 
         evidence["verdict"] = "PASS"
         print("Verification PASS: Editor successfully synced context with bridge on 47815")
+        return 0
 
     except Exception as exc:
         evidence["verdict"] = "FAIL"
         evidence["error"] = f"{type(exc).__name__}: {exc}"
         print(f"Verification FAIL: {exc}")
-        raise
+        return 1
     finally:
         if link:
             link.stop()
@@ -133,4 +164,4 @@ print("@@SYNC_SENT@@DONE")
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

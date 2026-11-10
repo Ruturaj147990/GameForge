@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gameforge_bench"
+name = "gameforge"
 version = "1.0.0"
-description = "GameForge 1.0 Platform, Dynamic Prompt-to-Game Synthesizer, and Cross-Engine Evaluation Framework"
+description = "GameForge 1.0 Platform, Native IDE, Dynamic Prompt-to-Game Synthesizer, and Evaluation Framework"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
@@ -24,6 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.21.0",
 ]
 ide = [
     "PySide6>=6.6.0",
@@ -35,9 +36,11 @@ ide = [
 ]
 
 [project.scripts]
-gameforge-bench = "gameforge_bench.cli:main"
-gameforge = "gameforge_bench.gameforge_cli:run_interactive_chat"
+gameforge = "src.gameforge_ide.launcher:main"
 gameforge-ide = "src.gameforge_ide.launcher:main"
+gameforge-studio = "src.gameforge_ide.launcher:main"
+gameforge-bench = "gameforge_bench.cli:main"
+gameforge-chat = "gameforge_bench.gameforge_cli:run_interactive_chat"
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
@@ -49,3 +52,8 @@ pythonpath = ["src", "."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.*",
+    "ignore::DeprecationWarning:fastapi.*",
+    "ignore::DeprecationWarning:anyio.*",
+]

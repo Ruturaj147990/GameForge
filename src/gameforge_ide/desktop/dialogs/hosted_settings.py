@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
@@ -38,19 +38,20 @@ def save_user_profiles(profiles: Dict[str, HostedProfile]) -> Path:
 
 
 class HostedSettingsDialog(QDialog):
-    def __init__(self, workspace_root: Path, parent=None) -> None:
+    def __init__(self, workspace_root: Optional[Path] = None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setObjectName("hostedSettingsDialog")
         self.setAccessibleName("Hosted Models Settings")
         self.setWindowTitle("Hosted Models — GameForge")
         self.resize(820, 560)
-        self.setStyleSheet(
+        self.setStyleSheet(theme_stylesheet(
             f"QDialog#{self.objectName()} {{"
             f"  background-color: {tokens.BG_ROOT};"
             f"  border: 1px solid {tokens.BORDER};"
             f"}}"
-        )
-        self._workspace = Path(workspace_root)
+        ))
+        self._workspace = Path(workspace_root) if workspace_root is not None else Path.cwd()
+
         self._profiles = load_profiles()
         self._creds = CredentialStore()
         self._egress = EgressPolicy(self._workspace)

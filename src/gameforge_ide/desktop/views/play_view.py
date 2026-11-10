@@ -12,12 +12,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
+from PySide6.QtGui import QColor, QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSplitter,
     QTableWidget,
@@ -28,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...core.settings import get_settings
 from ...core.projects import (
     find_packaged_executable,
@@ -37,7 +40,6 @@ from ...core.projects import (
 from ...forge.model import RunState
 from ...forge.store import RunStore
 from ...qa.scenario import ScenarioResult
-from PySide6.QtWidgets import QMessageBox
 
 logger = logging.getLogger(__name__)
 
@@ -220,10 +222,12 @@ class PlayView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         self.refresh_results()
 
+    @Slot(str)
+    @Slot(str, object)
     def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         self._current_project = project_name
         p_dir = project_dir or resolve_project_dir(project_name, self._workspace)
@@ -233,6 +237,7 @@ class PlayView(QWidget):
             self._store = RunStore(project_dir=self._current_project_dir, workspace_dir=self._workspace)
         self.refresh_results()
 
+    @Slot()
     def clear_project(self) -> None:
         """Reset play view when no project is active."""
         self._current_project = None
@@ -247,6 +252,54 @@ class PlayView(QWidget):
             self._lbl_summary.setText("No project selected.")
         if hasattr(self, "_lbl_detail_header"):
             self._lbl_detail_header.setText("Select a scenario to view details")
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update play view theme styles across child controls."""
+        if hasattr(self, "_results_table"):
+            self._results_table.setStyleSheet(
+                f"QTableWidget#{self._results_table.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  gridline-color: {tokens.BORDER};"
+                f"  selection-background-color: {tokens.BG_ACTIVE};"
+                f"  selection-color: {tokens.TEXT_PRIMARY};"
+                f"}}"
+                f"QTableWidget#{self._results_table.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"}}"
+                f"QHeaderView::section {{"
+                f"  background-color: {tokens.BG_PANEL};"
+                f"  color: {tokens.TEXT_SECONDARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  padding: 4px {tokens.SPACE_SM}px;"
+                f"  font-size: {tokens.FONT_BODY_SM}px;"
+                f"  font-weight: 600;"
+                f"}}"
+            )
+        if hasattr(self, "_detail_text"):
+            self._detail_text.setStyleSheet(
+                f"QTextEdit#{self._detail_text.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_SM}px;"
+                f"  font-family: monospace; font-size: 11px;"
+                f"}}"
+            )
+
+    def deleteLater(self) -> None:
+        """Defensive cleanup removing event filters and clearing cached models."""
+        try:
+            if hasattr(self, "_results_table") and self._results_table is not None:
+                self._results_table.removeEventFilter(self)
+        except (RuntimeError, TypeError):
+            pass
+        self._results.clear()
+        super().deleteLater()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._results_table and event.type() == QEvent.KeyPress:
@@ -385,7 +438,6 @@ class PlayView(QWidget):
                 status_text = "✕ FAIL"
                 status_col = tokens.ACCENT_ERROR
 
-            from PySide6.QtGui import QColor
             item_status = QTableWidgetItem(status_text)
             item_status.setFlags(item_status.flags() & ~Qt.ItemIsEditable)
             item_status.setForeground(QColor(status_col))
@@ -483,7 +535,13 @@ class PlayView(QWidget):
                 QMessageBox.Yes,
             )
             if reply == QMessageBox.Yes:
-                self.buildRequested.emit(self._current_project)
+                try:
+                    self.buildRequested.emit(self._current_project)
+                except RuntimeError:
+                    pass
             return
 
-        self.launchRequested.emit(self._current_project)
+        try:
+            self.launchRequested.emit(self._current_project)
+        except RuntimeError:
+            pass

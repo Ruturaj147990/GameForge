@@ -12,10 +12,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from . import discovery
 from . import mcp_bridge
@@ -55,11 +54,14 @@ class Ue58LaneReport:
 
 def detect_ue58_engine(custom_root: Optional[Path] = None) -> Optional[discovery.DiscoveredEngine]:
     """Search for a valid UE 5.8 engine installation."""
-    if custom_root:
-        c_path = Path(custom_root).resolve()
-        eng = discovery.validate_engine_root(c_path, source="custom", pinned_minor="5.8")
-        if eng and eng.is_valid and eng.major_minor == "5.8":
-            return eng
+    if custom_root is not None and str(custom_root).strip():
+        try:
+            c_path = Path(custom_root).resolve()
+            eng = discovery.validate_engine_root(c_path, source="custom", pinned_minor="5.8")
+            if eng and eng.is_valid and eng.major_minor == "5.8":
+                return eng
+        except (OSError, ValueError):
+            pass
 
     engines = discovery.discover_all_engines(pinned_minor="5.8")
     for eng in engines:

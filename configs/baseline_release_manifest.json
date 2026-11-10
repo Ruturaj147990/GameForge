@@ -1,9 +1,9 @@
 {
   "benchmark_release_id": "gameforge-bench-v0.2.0-baseline",
-  "version": "0.2.0",
-  "created_at": "2026-10-19T17:00:00Z",
+  "version": "1.0.0",
+  "created_at": "2026-11-10T12:00:00Z",
   "status": "FROZEN",
-  "governing_strategy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v3.1.0",
+  "governing_strategy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md v4.0.0",
   "engine_pins": {
     "unreal": {
       "version": "5.7.4",

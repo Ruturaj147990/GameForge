@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import os
 import shutil
 import time
@@ -25,6 +26,8 @@ from .policy import compute_snapshot_hash, snapshot_directory_hashes
 from .runner import BenchmarkRunner
 from .task_loader import TaskSpec, load_task
 
+logger = logging.getLogger("gameforge_bench.repair_loop")
+
 
 @dataclass
 class DiagnosticResult:
@@ -33,6 +36,10 @@ class DiagnosticResult:
     line_number: Optional[int] = None
     error_snippet: Optional[str] = None
     recommended_fix: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert diagnostic result to serializable dictionary."""
+        return asdict(self)
 
 
 @dataclass
@@ -43,6 +50,10 @@ class ToolExecutionStep:
     observation_result: Dict[str, Any]
     diagnostics: DiagnosticResult
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert execution step to serializable dictionary."""
+        return asdict(self)
+
 
 class AgentToolbox:
     """Bounded, typed tool implementation for agentic game code repair."""
@@ -52,19 +63,26 @@ class AgentToolbox:
         "acceptance_criteria",
         "schemas",
         "reference_solutions",
+        "hidden_tests",
     ]
 
     def __init__(self, workspace_root: Path, active_dir: Path, allowed_paths: List[str]) -> None:
         self.workspace_root = workspace_root.resolve()
         self.active_dir = active_dir.resolve()
         self.allowed_paths = [p.replace("\\", "/").rstrip("/") for p in allowed_paths]
+        self._checkpoints: Dict[str, Dict[str, str]] = {}
 
     def _is_path_allowed(self, rel_path: str) -> bool:
         norm = rel_path.replace("\\", "/").lstrip("/")
+        # Path traversal guard
+        if ".." in Path(norm).parts or norm.startswith("../"):
+            return False
+
         # Check forbidden
         for fp in self.FORBIDDEN_PATHS:
             if fp in norm:
                 return False
+
         # Check allowed
         for ap in self.allowed_paths:
             if norm.startswith(ap) or norm.endswith(ap.split("/")[-1]):
@@ -75,9 +93,43 @@ class AgentToolbox:
                 return True
         return False
 
+    def create_checkpoint(self, checkpoint_id: Optional[str] = None) -> str:
+        """Saves current state of modified files in active directory for rollback safety."""
+        cid = checkpoint_id or f"cp_{uuid.uuid4().hex[:8]}"
+        saved_files: Dict[str, str] = {}
+        for root, _, files in os.walk(self.active_dir):
+            for f in files:
+                full = Path(root) / f
+                rel = full.relative_to(self.active_dir).as_posix()
+                if self._is_path_allowed(rel) and full.is_file():
+                    try:
+                        saved_files[rel] = full.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        pass
+        self._checkpoints[cid] = saved_files
+        return cid
+
+    def rollback(self, checkpoint_id: str) -> Dict[str, Any]:
+        """Rolls back files to a previously saved checkpoint."""
+        if checkpoint_id not in self._checkpoints:
+            return {"success": False, "error": f"Checkpoint not found: {checkpoint_id}"}
+
+        restored_count = 0
+        saved_files = self._checkpoints[checkpoint_id]
+        for rel_path, content in saved_files.items():
+            target = self.active_dir / rel_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+            restored_count += 1
+
+        return {"success": True, "restored_files_count": restored_count, "checkpoint_id": checkpoint_id}
+
     def read_file(self, rel_path: str) -> Dict[str, Any]:
         """Reads content of a file within allowed paths or fixture context."""
         norm = rel_path.replace("\\", "/").lstrip("/")
+        if ".." in Path(norm).parts:
+            return {"success": False, "error": f"SECURITY_FAIL: Path traversal attempt: {norm}", "content": None}
+
         target = self.active_dir / norm
         if not target.is_file():
             return {"success": False, "error": f"File not found: {norm}", "content": None}
@@ -105,7 +157,11 @@ class AgentToolbox:
 
     def list_dir(self, rel_path: str = "") -> Dict[str, Any]:
         """Lists directory entries under candidate workspace."""
-        target = self.active_dir / rel_path.replace("\\", "/").lstrip("/")
+        norm = rel_path.replace("\\", "/").lstrip("/")
+        if ".." in Path(norm).parts:
+            return {"success": False, "error": f"SECURITY_FAIL: Path traversal attempt: {norm}"}
+
+        target = self.active_dir / norm
         if not target.is_dir():
             return {"success": False, "error": f"Directory not found: {rel_path}"}
         try:
@@ -142,7 +198,29 @@ class CompilerDiagnosticEngine:
                 recommended_fix="Include '<HeaderName>.generated.h' as the last include in the header.",
             )
 
-        # 2. Syntax / Compilation error
+        # 2. MSVC Specific Classifications (C2662, C4458, C2065, LNK2019)
+        if "C2662" in log_text:
+            return DiagnosticResult(
+                failure_class="CONST_QUALIFIER_MISMATCH",
+                error_snippet="C2662: cannot convert 'this' pointer from 'const' to 'non-const'",
+                recommended_fix="Mark called member helper function as const or remove const requirement.",
+            )
+
+        if "C4458" in log_text:
+            return DiagnosticResult(
+                failure_class="MEMBER_VARIABLE_SHADOWED",
+                error_snippet="C4458: declaration of identifier hides class member",
+                recommended_fix="Rename local variable or parameter to avoid shadowing base member.",
+            )
+
+        if "LNK2019" in log_text or "LNK2001" in log_text:
+            return DiagnosticResult(
+                failure_class="UNRESOLVED_EXTERNAL_SYMBOL",
+                error_snippet="LNK2019/LNK2001: unresolved external symbol",
+                recommended_fix="Implement missing function definitions or link required modules in Build.cs.",
+            )
+
+        # 3. Generic Syntax / Compilation error
         if "error C" in log_text or "error CS" in log_text or "syntax error" in log_text.lower():
             return DiagnosticResult(
                 failure_class="COMPILER_SYNTAX_ERROR",
@@ -150,7 +228,7 @@ class CompilerDiagnosticEngine:
                 recommended_fix="Review compilation errors, fix types, and ensure semicolon terminations.",
             )
 
-        # 3. Delegate signature mismatch
+        # 4. Delegate signature mismatch
         if "AddDynamic" in log_text or "delegate" in log_text.lower():
             return DiagnosticResult(
                 failure_class="DELEGATE_SIGNATURE_MISMATCH",
@@ -158,7 +236,7 @@ class CompilerDiagnosticEngine:
                 recommended_fix="Declare dynamic multicast delegate with matching parameter signature and UFUNCTION().",
             )
 
-        # 4. Probes failed
+        # 5. Probes failed
         if probe_results:
             failed_probes = [k for k, v in probe_results.items() if not v.get("passed", False)]
             if failed_probes:
@@ -189,10 +267,18 @@ class RepairLoopOrchestrator:
         self.max_iterations = max_iterations
         self.session_id = f"repair_session_{task_id}_{uuid.uuid4().hex[:8]}"
 
-        # Load task
-        task_yaml = self.workspace_root / "pilot_tasks" / f"{task_id}.yaml"
+        # Load task with hyphen/underscore normalization
+        normalized_task = task_id.replace("_", "-")
+        alt_task = task_id.replace("-", "_")
+
+        task_yaml = self.workspace_root / "pilot_tasks" / f"{normalized_task}.yaml"
         if not task_yaml.is_file():
-            candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{task_id}*.yaml"))
+            task_yaml = self.workspace_root / "pilot_tasks" / f"{alt_task}.yaml"
+
+        if not task_yaml.is_file():
+            candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{normalized_task}*.yaml"))
+            if not candidates:
+                candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{alt_task}*.yaml"))
             if candidates:
                 task_yaml = candidates[0]
             else:
@@ -209,7 +295,7 @@ class RepairLoopOrchestrator:
         session_dir.mkdir(parents=True, exist_ok=True)
 
         candidate_workspace = session_dir / "candidate_files"
-        shutil.copytree(initial_candidate_dir, candidate_workspace)
+        shutil.copytree(initial_candidate_dir, candidate_workspace, dirs_exist_ok=True)
 
         snapshot_hash = compute_snapshot_hash(snapshot_directory_hashes(candidate_workspace))
 

@@ -19,7 +19,7 @@ All Codex agents, subagents, and sessions operating on the GameForge project mus
 5. **Link to detailed reports and logs** instead of pasting lengthy raw outputs or source trees into `context.md`.
 6. **Keep critical non-negotiable constraints visible and actionable**:
    - Hardware: Ryzen 5 7600X, 32GB DDR5, RX 7700 XT 12GB VRAM.
-   - Storage: All large artifacts, models, GGUFs, and datasets must stay on `E:\GameForge`.
+   - Storage & No Duplicate Files Rule: Never create duplicate files or duplicate mirror folders across the filesystem. Do not mirror `context.md` or create redundant copies across drives/directories. Agents must navigate/travel directly to the required target directory and modify files in place, without creating duplicate copies elsewhere.
    - Inference: Always pass `"think": False` when querying Ollama API programmatically.
    - Dynamic Prompt-to-Game Generation: Never hardcode specific test/demo games (e.g., Snake and Ladders, Zombie Survival, Sudoku) or secretly select predefined games by prompt keywords. Every prompt must dynamically synthesize custom mechanics, entities, rules, layouts, UI, and C++ logic tailored to the user's requirements.
 
@@ -30,7 +30,7 @@ All Codex agents, subagents, and sessions operating on the GameForge project mus
 4. **Include ISO timestamps** for significant state changes.
 5. **Ensure a future session can seamlessly resume** without needing access to the previous chat conversation.
 6. **Save `context.md` and verify** that the file exists and is intact on disk.
-7. If operating across multiple locations, mirror `context.md` to `E:\GameForge\context.md`.
+7. **Single Source of Truth**: Do NOT duplicate or mirror `context.md` across multiple directories. Maintain only the canonical repository root file (`context.md`).
 
 ### 4. When Context is Compacted or a New Session Begins
 - When context compaction occurs or a conversation nears token limits, immediately write an updated checkpoint to `context.md`.

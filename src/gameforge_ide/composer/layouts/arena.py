@@ -107,10 +107,12 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         )
     )
 
-    # 3. Cover: a mix of crates, pillars and low walls (all identical 2 m cubes before), more of it in bigger arenas.
+    # 3. Cover: a mix of crates, pillars and low walls, scaling with arena dimensions.
     area_scale = max(1.0, (half_x_cm * half_y_cm) / (3000.0 * 3000.0))
     num_cover = int(rng.randint(6, 9) * min(3.0, area_scale))
     cover_locs: List[Tuple[float, float]] = []
+    clear_r = min(800.0, min(half_x_cm, half_y_cm) * 0.35)
+    min_cover_dist = min(650.0, min(half_x_cm, half_y_cm) * 0.25)
     kinds = (
         ("Cube", (2.0, 2.0, 1.6), 0.0),        # crate stack
         ("Cylinder", (1.6, 1.6, 3.0), 0.0),    # pillar
@@ -121,9 +123,9 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         for _ in range(40):
             cx = rng.uniform(-half_x_cm * 0.75, half_x_cm * 0.75)
             cy = rng.uniform(-half_y_cm * 0.75, half_y_cm * 0.75)
-            if math.hypot(cx, cy) < 800.0:
+            if math.hypot(cx, cy) < clear_r:
                 continue
-            if any(math.hypot(cx - ox, cy - oy) < 650.0 for ox, oy in cover_locs):
+            if any(math.hypot(cx - ox, cy - oy) < min_cover_dist for ox, oy in cover_locs):
                 continue
             cover_locs.append((cx, cy))
             shape, (sx, sy, sz), yaw = kinds[rng.randrange(len(kinds))]
@@ -145,7 +147,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             break
 
     # 4. Elevated vantage platforms at corners for 3D verticality
-    for v_idx, (vx, vy) in enumerate([(-half_x_cm * 0.6, -half_y_cm * 0.6), (half_x_cm * 0.6, half_y_cm * 0.6)]):
+    v_scale = min(4.0, max(2.0, half_x_cm / 750.0))
+    for v_idx, (vx, vy) in enumerate([(-half_x_cm * 0.65, -half_y_cm * 0.65), (half_x_cm * 0.65, half_y_cm * 0.65)]):
         geometry_ops.append(
             OpCall(
                 op="spawn_actor",
@@ -154,7 +157,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                     "label": f"GF_Platform_Vantage_{v_idx}",
                     "static_mesh": "/Engine/BasicShapes/Cube.Cube",
                     "location": {"x": round(vx, 1), "y": round(vy, 1), "z": 60.0},
-                    "scale": {"x": 4.0, "y": 4.0, "z": 1.2},
+                    "scale": {"x": round(v_scale, 2), "y": round(v_scale, 2), "z": 1.2},
                 },
                 purpose=f"Spawn arena vantage platform {v_idx}",
             )

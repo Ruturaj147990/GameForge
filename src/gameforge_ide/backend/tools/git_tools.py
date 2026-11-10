@@ -47,6 +47,10 @@ class GitTools:
                 timeout=10,
                 **extra_kw,
             )
+            if stat_proc.returncode != 0:
+                err = stat_proc.stderr.strip() or f"git status failed with exit code {stat_proc.returncode}"
+                return {"status": "ERROR", "error": err}
+
             lines = stat_proc.stdout.splitlines()
             modified = []
             untracked = []
@@ -90,6 +94,10 @@ class GitTools:
                 timeout=15,
                 **extra_kw,
             )
+            if diff_proc.returncode != 0:
+                err = diff_proc.stderr.strip() or f"git diff failed with exit code {diff_proc.returncode}"
+                return {"status": "ERROR", "error": err}
+
             return {
                 "status": "SUCCESS",
                 "diff": diff_proc.stdout,

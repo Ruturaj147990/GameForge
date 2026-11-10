@@ -82,6 +82,8 @@ def is_connected(cells: list[tuple[int, int]] | set[tuple[int, int]]) -> bool:
 
 
 def kit_placements(cells: list[tuple[int, int]], grid: float = GRID_CM) -> list[dict]:
+    if grid <= 0:
+        raise ValueError(f"grid must be strictly positive, got {grid}")
     occupied = set(cells)
     out = [{"piece": "Floor", "location": [x * grid, y * grid, 0.0], "yaw": 0.0} for x, y in sorted(occupied)]
     for x, y in sorted(occupied):

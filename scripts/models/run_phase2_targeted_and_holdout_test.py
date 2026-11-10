@@ -15,19 +15,24 @@ Outputs:
   reports/gameforge-27b-sft/phase2_holdout_results.csv
 """
 
+from __future__ import annotations
+
+import argparse
 import csv
 import json
 import re
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
-REPORTS_DIR = WORKSPACE_ROOT / "reports" / "gameforge-27b-sft"
-MIRROR_REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-for d in [REPORTS_DIR, MIRROR_REPORTS_DIR]:
-    d.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b-sft"
+MIRROR_REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
 
 OLLAMA_API = "http://127.0.0.1:11434/api/generate"
 
@@ -147,6 +152,19 @@ def match_rubric_normalized(text: str, rubric_item: str) -> bool:
     pattern = r"\s*".join(re.escape(token) for token in tokens)
     return bool(re.search(pattern, text.lower()))
 
+def unload_model(model: str) -> None:
+    try:
+        req = urllib.request.Request(
+            OLLAMA_API,
+            data=json.dumps({"model": model, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as _:
+            pass
+    except Exception:
+        pass
+
+
 def score_response(text: str, rubrics: list) -> tuple:
     score = 0
     matched = []
@@ -156,7 +174,7 @@ def score_response(text: str, rubrics: list) -> tuple:
             matched.append(kw)
     return score, matched
 
-def main():
+def run_suite() -> int:
     print("=" * 80)
     print(" PHASE 2 TARGETED RETEST & HOLDOUT VALIDATION")
     print(f" Models under test: {', '.join(MODELS)}")
@@ -202,6 +220,7 @@ def main():
                 "matched_rubrics": "; ".join(matched),
                 "preview": res["text"][:120].replace("\n", " ") + "..."
             })
+        unload_model(model)
 
     print("\n" + "=" * 80)
     print(" SUMMARY COMPARISON")
@@ -212,22 +231,46 @@ def main():
         tot = summary_by_model[model]["total"]
         print(f"  {model:36s} -> Targeted: {t_score:02d}/30 | Holdout: {h_score:02d}/40 | Overall: {tot:02d}/70 ({(tot/70)*100:.1f}%)")
 
-    # Save to CSV
+    # Save to CSV atomically
     csv_fields = [
         "model", "task_id", "category", "title", "score", "max_score",
         "percentage", "tokens", "tps", "latency_sec", "is_truncated",
         "matched_rubrics", "preview"
     ]
-    csv_path_w = REPORTS_DIR / "phase2_holdout_results.csv"
-    csv_path_m = MIRROR_REPORTS_DIR / "phase2_holdout_results.csv"
+    target_reports = [REPORTS_DIR, MIRROR_REPORTS_DIR]
 
-    for cp in [csv_path_w, csv_path_m]:
-        with open(cp, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=csv_fields)
-            writer.writeheader()
-            writer.writerows(all_rows)
+    for cp_dir in target_reports:
+        try:
+            cp_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = cp_dir / "phase2_holdout_results.csv"
+            temp_csv = csv_path.with_suffix(".tmp")
+            with open(temp_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=csv_fields)
+                writer.writeheader()
+                writer.writerows(all_rows)
+            temp_csv.replace(csv_path)
+            print(f"Results successfully saved to {csv_path}")
+        except Exception as e:
+            print(f"Warning: Failed to write to {cp_dir}: {e}", file=sys.stderr)
 
-    print(f"\nResults successfully saved to {csv_path_w} and {csv_path_m}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Phase 2 Targeted Retest and Holdout Evaluation Harness")
+    parser.add_argument("--dry-run", action="store_true", help="Validate tasks without querying models")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Loaded {len(TEST_TASKS)} targeted & holdout tasks.")
+        return 0
+
+    try:
+        return run_suite()
+    finally:
+        for m in MODELS:
+            unload_model(m)
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -8,13 +8,16 @@ Records token sizes, memory footprint, and validation benchmarks to reports/P9/s
 """
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+import tempfile
 import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-import sys
-sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 REPORTS_DIR = REPO_ROOT / "reports" / "P9"
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -48,7 +51,6 @@ def build_compact_schema(ops: list[str]) -> dict:
 def build_oneof_schema(catalog_dict: dict) -> dict:
     oneof_variants = []
     for op_name, op_spec in catalog_dict.items():
-        # Get schema from reviewed models or generic
         if op_name in REVIEWED:
             arg_schema = REVIEWED[op_name].model_json_schema()
         else:
@@ -73,7 +75,7 @@ def build_oneof_schema(catalog_dict: dict) -> dict:
     }
 
 
-def run_comparison() -> dict:
+def run_comparison(output_path: Path | None = None) -> dict:
     all_ops = list(CATALOG.keys())
 
     # 1. Compact schema
@@ -87,6 +89,8 @@ def run_comparison() -> dict:
     oneof_json = json.dumps(oneof, indent=2)
     oneof_bytes = len(oneof_json.encode("utf-8"))
     oneof_tokens = oneof_bytes // 4
+
+    ratio = round(oneof_bytes / compact_bytes, 1) if compact_bytes > 0 else 0.0
 
     result = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -103,19 +107,38 @@ def run_comparison() -> dict:
             "recommended_for": "Hosted models (Claude 3.5/3.7, GPT-4o) with >= 128k context window",
             "validation_location": "Model-side structured schema + host-side gateway",
         },
-        "ratio_oneof_to_compact": round(oneof_bytes / compact_bytes, 1),
+        "ratio_oneof_to_compact": ratio,
         "recommendation": (
             "Use compact schema for local Ollama models to conserve ~93% of the context budget. "
             "Use expanded oneOf schema for hosted models opting in with large context limits."
         ),
     }
 
-    report_path = REPORTS_DIR / "schema_comparison.json"
-    report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print(f"Schema comparison saved to {report_path}")
+    target_path = output_path or (REPORTS_DIR / "schema_comparison.json")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = tempfile.NamedTemporaryFile("w", delete=False, dir=str(target_path.parent), encoding="utf-8")
+    try:
+        temp_file.write(json.dumps(result, indent=2))
+        temp_file.close()
+        Path(temp_file.name).replace(target_path)
+    except Exception:
+        if Path(temp_file.name).exists():
+            Path(temp_file.name).unlink()
+        raise
+
+    print(f"Schema comparison saved to {target_path}")
     print(f"Compact tokens: ~{compact_tokens} | Expanded oneOf tokens: ~{oneof_tokens} ({result['ratio_oneof_to_compact']}x larger)")
     return result
 
 
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Compare unreal_editor native tool schemas")
+    parser.add_argument("--output", type=Path, default=None, help="Custom output path for schema_comparison.json")
+    args = parser.parse_args()
+
+    run_comparison(output_path=args.output)
+    return 0
+
+
 if __name__ == "__main__":
-    run_comparison()
+    sys.exit(main())

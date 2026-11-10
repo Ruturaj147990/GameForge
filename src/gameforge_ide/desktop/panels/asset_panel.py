@@ -29,6 +29,8 @@ from PySide6.QtWidgets import (
 
 from ...backend.assets.registry import ASSET_TYPES, AssetRegistry
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
+
 
 
 class AssetPanel(QWidget):
@@ -223,15 +225,15 @@ class AssetPanel(QWidget):
         deps = reg.dependencies(asset_id)
 
         lines = [
-            f"=== {row['name']} ({row['asset_type']}) ===",
-            f"ID:         {row['asset_id']}",
-            f"Stage:      {row['stage']}",
-            f"Purpose:    {row['purpose']}",
-            f"Provenance: {row['provenance']} (backend: {row['backend']} {row['backend_version']})",
-            f"License:    {row['license']}",
-            f"Artifact:   {row['artifact_path'] or 'None'}",
-            f"Unreal:     {row['unreal_path'] or 'None'}",
-            f"Tags:       {row['tags'] or 'None'}",
+            f"=== {row.get('name', 'Asset')} ({row.get('asset_type', 'unknown')}) ===",
+            f"ID:         {row.get('asset_id', '')}",
+            f"Stage:      {row.get('stage', 'SPEC')}",
+            f"Purpose:    {row.get('purpose', '')}",
+            f"Provenance: {row.get('provenance', 'unknown')} (backend: {row.get('backend', '')} {row.get('backend_version', '')})",
+            f"License:    {row.get('license', 'unknown')}",
+            f"Artifact:   {row.get('artifact_path') or 'None'}",
+            f"Unreal:     {row.get('unreal_path') or 'None'}",
+            f"Tags:       {row.get('tags') or 'None'}",
             "",
             "--- Dependencies ---",
             ", ".join(deps) if deps else "None",
@@ -239,7 +241,8 @@ class AssetPanel(QWidget):
             "--- Lifecycle History ---",
         ]
         for ev in history:
-            ok_mark = "✔" if ev["ok"] else "✘"
-            lines.append(f"{ok_mark} {ev['stage']}: {ev['detail'] or 'done'}")
+            ok_mark = "✔" if ev.get("ok") else "✘"
+            lines.append(f"{ok_mark} {ev.get('stage', 'step')}: {ev.get('detail') or 'done'}")
 
         self._detail.setPlainText("\n".join(lines))
+

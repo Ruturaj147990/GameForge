@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import time
 import uuid
@@ -23,6 +24,8 @@ from .policy import (
 )
 from .reporting import assemble_benchmark_report, format_report_summary, save_report
 from .task_loader import TaskSpec, load_task
+
+logger = logging.getLogger("gameforge_bench.runner")
 
 
 class BenchmarkRunner:
@@ -46,6 +49,38 @@ class BenchmarkRunner:
         else:
             raise ValueError(f"Unsupported engine requested: {engine_name}")
 
+    def _resolve_task_yaml(self, task_id: str) -> Path:
+        """Resolves task specification YAML path with hyphen/underscore tolerance."""
+        normalized_task = task_id.replace("_", "-")
+        alt_task = task_id.replace("-", "_")
+
+        for name in (normalized_task, alt_task, task_id):
+            direct = self.workspace_root / "pilot_tasks" / f"{name}.yaml"
+            if direct.is_file():
+                return direct
+
+        # Search by glob
+        for name in (normalized_task, alt_task):
+            candidates = list((self.workspace_root / "pilot_tasks").glob(f"*{name}*.yaml"))
+            if not candidates:
+                candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{name}*.yaml"))
+            if candidates:
+                return candidates[0]
+
+        # General search if parts are present
+        parts = normalized_task.split("-")
+        if len(parts) >= 2:
+            prefix = f"{parts[0]}-{parts[1]}"
+            alt_prefix = f"{parts[0]}_{parts[1]}"
+            for p in (prefix, alt_prefix):
+                cands = list((self.workspace_root / "pilot_tasks").glob(f"*{p}*.yaml"))
+                if not cands:
+                    cands = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{p}*.yaml"))
+                if cands:
+                    return cands[0]
+
+        raise FileNotFoundError(f"Task specification not found for ID: {task_id}")
+
     def run_task(
         self,
         task_id: str,
@@ -61,17 +96,7 @@ class BenchmarkRunner:
         run_id = f"run_{task_id}_{int(run_start)}"
 
         # Step 1: Validate the task specification
-        task_yaml = self.workspace_root / "pilot_tasks" / f"{task_id}.yaml"
-        if not task_yaml.is_file():
-            # Try searching in pilot_tasks and benchmark_tasks
-            candidates = list((self.workspace_root / "pilot_tasks").glob(f"*{task_id}*.yaml"))
-            if not candidates:
-                candidates = list((self.workspace_root / "benchmark_tasks").glob(f"**/*{task_id}*.yaml"))
-            if candidates:
-                task_yaml = candidates[0]
-            else:
-                raise FileNotFoundError(f"Task specification not found for ID: {task_id}")
-
+        task_yaml = self._resolve_task_yaml(task_id)
         task_spec = load_task(task_yaml)
 
         # Step 2: Select and verify engine adapter
@@ -93,12 +118,10 @@ class BenchmarkRunner:
                 if cand_fixture.is_dir():
                     fixture_dir = cand_fixture
         if not fixture_dir.is_dir():
-            # Fallback to general pilot fixture
             fixture_dir = self.workspace_root / "fixtures" / adapter.engine_name / "t2_001_controller"
 
         # Resolve candidate directory
         if not candidate_dir:
-            # Check task-specific reference solution first
             task_dir_name = task_spec.id.replace("-", "_")
             cand_candidate = self.workspace_root / "graders" / "reference_solutions" / adapter.engine_name / task_dir_name
             if not cand_candidate.is_dir():
@@ -123,7 +146,8 @@ class BenchmarkRunner:
         try:
             snapshot_hash, candidate_hashes = freeze_candidate_snapshot(candidate_path, frozen_candidate_dir)
             adapter.prepare_clean_workspace(frozen_candidate_dir, eval_workspace)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to prepare clean workspace for %s: %s", run_id, exc)
             clean_start_ok = False
             snapshot_hash = "unknown"
             candidate_hashes = {}
@@ -145,7 +169,6 @@ class BenchmarkRunner:
         )
 
         # Step 7.5: Hidden Grader Isolation
-        # Inject protected test oracles ONLY into the isolated grading workspace (eval_workspace)
         task_protected_dir = self.workspace_root / "graders" / "protected" / task_spec.id.replace("-", "_")
         if not task_protected_dir.is_dir():
             parts = task_spec.id.split("-")
@@ -215,7 +238,8 @@ class BenchmarkRunner:
             is_engine_available=engine_discovery.is_installed,
             is_quarantined=quarantined,
         )
-        grading_result.duration_seconds = time.time() - run_start
+        grading_duration = time.time() - run_start
+        grading_result.duration_seconds = grading_duration
 
         # Step 15: Assemble JSON report and write summary
         log_files = {
@@ -239,6 +263,7 @@ class BenchmarkRunner:
         return {
             "run_id": run_id,
             "status": grading_result.overall_status.value,
+            "duration_seconds": round(grading_duration, 3),
             "report_file": str(report_file),
             "summary_text": summary_text,
             "report": report,

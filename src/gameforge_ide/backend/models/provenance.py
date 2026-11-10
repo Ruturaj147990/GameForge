@@ -57,12 +57,11 @@ class AssetProvenanceRecord(BaseModel):
         return self.provenance_hash
 
     def save_to_file(self, target_path: Path | str) -> Path:
-        """Saves formatted provenance record to disk next to the asset."""
+        """Saves formatted provenance record to disk next to the asset atomically."""
+        from ...storage.atomic import atomic_write_json
         p = Path(target_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
         self.seal()
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(self.model_dump(), f, indent=2)
+        atomic_write_json(p, self.model_dump(), indent=2, sync=True)
         return p
 
 

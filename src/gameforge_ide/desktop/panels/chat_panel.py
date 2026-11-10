@@ -17,8 +17,9 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QTextCursor
+from PySide6.QtGui import QColor, QFont, QResizeEvent, QTextCursor
 from PySide6.QtWidgets import (
+
     QApplication,
     QComboBox,
     QFrame,
@@ -405,9 +406,10 @@ class _MessageBubble(QFrame):
         h = int(doc.size().height()) + 16
         self._content.setFixedHeight(max(h, 36))
 
-    def resizeEvent(self, event) -> None:  # noqa: N802
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._adjust_height()
+
 
     # Streaming render throttle. Re-rendering the whole message (markdown -> HTML -> layout) on
     # every token is O(n^2) over a reply and stalled the UI thread on long answers. Tokens are
@@ -452,7 +454,9 @@ class _MessageBubble(QFrame):
 
     @Slot()
     def _copy_to_clipboard(self) -> None:
-        QApplication.clipboard().setText(self._raw_text)
+        cb = QApplication.clipboard()
+        if cb is not None:
+            cb.setText(self._raw_text)
         if hasattr(self, "_btn_copy"):
             self._btn_copy.setText("Copied! ✓")
             def _reset_btn():
@@ -462,6 +466,7 @@ class _MessageBubble(QFrame):
                 except (RuntimeError, Exception):
                     pass
             QTimer.singleShot(1500, _reset_btn)
+
 
 
 # ── Status indicator widget ────────────────────────────────────────────────────

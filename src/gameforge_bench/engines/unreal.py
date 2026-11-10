@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
+import re
 import shutil
-import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from .base import (
     AssetValidationResult,
@@ -100,10 +99,18 @@ class UnrealEngineAdapter(EngineAdapter):
         source_dir = project_path / "Source"
         if source_dir.is_dir() and any(source_dir.glob("**/*.cpp")):
             # Build using RunUAT or Build.bat if available
-            build_bat = Path(self._discovery.executable_path).parents[2] / "Build" / "BatchFiles" / "Build.bat"
-            if not build_bat.is_file():
-                build_bat = Path(self._discovery.executable_path).parents[3] / "Build" / "BatchFiles" / "Build.bat"
-            if build_bat.is_file():
+            exe_p = Path(self._discovery.executable_path)
+            candidate_build_bats = [
+                exe_p.parents[2] / "Build" / "BatchFiles" / "Build.bat",
+                exe_p.parents[3] / "Build" / "BatchFiles" / "Build.bat",
+                exe_p.parents[3] / "Engine" / "Build" / "BatchFiles" / "Build.bat",
+            ]
+            if self._discovery.build_toolchain_path:
+                uat_bat = Path(self._discovery.build_toolchain_path)
+                candidate_build_bats.insert(0, uat_bat.parent / "Build.bat")
+
+            build_bat = next((b for b in candidate_build_bats if b.is_file()), None)
+            if build_bat:
                 target_name = uproject.stem + "Editor"
                 cmd = [
                     str(build_bat),
@@ -116,12 +123,20 @@ class UnrealEngineAdapter(EngineAdapter):
                 ]
                 res = safe_subprocess_run(cmd, cwd=project_path, timeout_seconds=600, log_dir=log_dir, log_prefix="ue_build")
                 if res.return_code != 0:
+                    combined_output = res.stdout + "\n" + res.stderr
+                    # Extract diagnostic errors (error C... or fatal error)
+                    error_lines = [
+                        line.strip()
+                        for line in combined_output.splitlines()
+                        if any(k in line.lower() for k in ("error c", "fatal error", "lnk2019", "lnk2001", "error:"))
+                    ]
+                    error_summary = "; ".join(error_lines[:3]) if error_lines else "C++ compilation failed"
                     return BuildResult(
                         success=False,
                         duration_seconds=res.duration_seconds,
                         return_code=res.return_code,
-                        log_output=res.stdout + "\n" + res.stderr,
-                        error_summary="C++ compilation failed",
+                        log_output=combined_output,
+                        error_summary=error_summary,
                         is_infrastructure_failure=False,
                     )
 

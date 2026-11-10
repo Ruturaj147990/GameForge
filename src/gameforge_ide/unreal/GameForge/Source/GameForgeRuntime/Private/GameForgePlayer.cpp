@@ -539,6 +539,22 @@ void AGameForgeCharacter::Tick(float DeltaSeconds)
 			{
 				GS->SetStat(FName(TEXT("player.stamina")), CurStam);
 			}
+
+			if (AbilityCooldownRemaining > 0.0f)
+			{
+				AbilityCooldownRemaining = FMath::Max(0.0f, AbilityCooldownRemaining - DeltaSeconds);
+				GS->SetStat(FName(TEXT("player.ability_cooldown")), AbilityCooldownRemaining);
+			}
+			if (bStealthActive)
+			{
+				StealthRemainingDuration = FMath::Max(0.0f, StealthRemainingDuration - DeltaSeconds);
+				if (StealthRemainingDuration <= 0.0f)
+				{
+					bStealthActive = false;
+					GS->SetStat(FName(TEXT("player.stealth")), 0.0f);
+					UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PlayerStealthEnded, GetName(), TEXT("{\"stealth\":false}"));
+				}
+			}
 		}
 	}
 }
@@ -609,6 +625,39 @@ void AGameForgeCharacter::PerformDash()
 
 	LaunchCharacter(DashDir * DashImpulse + FVector(0.f, 0.f, 120.f), true, false);
 	UGameForgeEventLibrary::EmitGameForgeEvent(this, FName(TEXT("player.dashed")), GetName(), TEXT("{}"));
+}
+
+void AGameForgeCharacter::PerformAbility()
+{
+	if (bDead || CameraMode == EGameForgeCameraMode::FixedBoard)
+	{
+		return;
+	}
+	if (AbilityCooldownRemaining > 0.0f)
+	{
+		return;
+	}
+	AbilityCooldownRemaining = AbilityCooldownTime;
+	bStealthActive = true;
+	StealthRemainingDuration = AbilityDuration;
+
+	if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+	{
+		GS->SetStat(FName(TEXT("player.stealth")), 1.0f);
+		GS->SetStat(FName(TEXT("player.ability_cooldown")), AbilityCooldownRemaining);
+	}
+	UGameForgeEventLibrary::EmitGameForgeEvent(
+		this,
+		GFEvent::PlayerAbilityUsed,
+		GetName(),
+		FString::Printf(TEXT("{\"ability\":\"stealth_smoke_bomb\",\"duration\":%.1f,\"cooldown\":%.1f}"), AbilityDuration, AbilityCooldownTime)
+	);
+	UGameForgeEventLibrary::EmitGameForgeEvent(
+		this,
+		GFEvent::PlayerStealthStarted,
+		GetName(),
+		TEXT("{\"stealth\":true}")
+	);
 }
 
 void AGameForgeCharacter::SwitchWeapon(int32 NewWeaponIndex)
@@ -721,6 +770,16 @@ void AGameForgeCharacter::PerformAttack()
 	if (bDead || CameraMode == EGameForgeCameraMode::FixedBoard)
 	{
 		return;
+	}
+	if (bStealthActive)
+	{
+		bStealthActive = false;
+		StealthRemainingDuration = 0.0f;
+		if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+		{
+			GS->SetStat(FName(TEXT("player.stealth")), 0.0f);
+		}
+		UGameForgeEventLibrary::EmitGameForgeEvent(this, GFEvent::PlayerStealthEnded, GetName(), TEXT("{\"stealth\":false,\"reason\":\"attack\"}"));
 	}
 	if (bProjectileAttack || bRangedAttack || CameraMode == EGameForgeCameraMode::FirstPerson)
 	{
@@ -933,6 +992,7 @@ void AGameForgePlayerController::BuildDefaultInput()
 	UInputAction* Interact = Make(TEXT("IA_Interact"), EInputActionValueType::Boolean);
 	UInputAction* Sprint = Make(TEXT("IA_Sprint"), EInputActionValueType::Boolean);
 	UInputAction* Dash = Make(TEXT("IA_Dash"), EInputActionValueType::Boolean);
+	UInputAction* Ability = Make(TEXT("IA_Ability"), EInputActionValueType::Boolean);
 	UInputAction* SwitchWep = Make(TEXT("IA_SwitchWeapon"), EInputActionValueType::Boolean);
 	UInputAction* Pause = Make(TEXT("IA_Pause"), EInputActionValueType::Boolean);
 	UInputAction* Restart = Make(TEXT("IA_Restart"), EInputActionValueType::Boolean);
@@ -973,7 +1033,9 @@ void AGameForgePlayerController::BuildDefaultInput()
 	MappingContext->MapKey(Dash, EKeys::LeftControl);
 	MappingContext->MapKey(Dash, EKeys::C);
 	MappingContext->MapKey(Dash, EKeys::Gamepad_FaceButton_Right);
-	MappingContext->MapKey(SwitchWep, EKeys::Q);
+	MappingContext->MapKey(Ability, EKeys::Q);
+	MappingContext->MapKey(Ability, EKeys::F);
+	MappingContext->MapKey(Ability, EKeys::Gamepad_LeftTrigger);
 	MappingContext->MapKey(SwitchWep, EKeys::Tab);
 	MappingContext->MapKey(SwitchWep, EKeys::Gamepad_FaceButton_Top);
 	MappingContext->MapKey(Pause, EKeys::P);
@@ -1001,6 +1063,7 @@ void AGameForgePlayerController::SetupInputComponent()
 		EIC->BindAction(FindAction(TEXT("IA_Sprint")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSprintStarted);
 		EIC->BindAction(FindAction(TEXT("IA_Sprint")), ETriggerEvent::Completed, this, &AGameForgePlayerController::HandleSprintCompleted);
 		EIC->BindAction(FindAction(TEXT("IA_Dash")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleDash);
+		EIC->BindAction(FindAction(TEXT("IA_Ability")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleAbility);
 		EIC->BindAction(FindAction(TEXT("IA_SwitchWeapon")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleSwitchWeapon);
 		EIC->BindAction(FindAction(TEXT("IA_Pause")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandlePause);
 		EIC->BindAction(FindAction(TEXT("IA_Restart")), ETriggerEvent::Started, this, &AGameForgePlayerController::HandleRestart);
@@ -1189,7 +1252,13 @@ void AGameForgePlayerController::HandleRollDice(const FInputActionValue& Value)
 	{
 		if (AGameForgeGridBoard* Board = *It)
 		{
-			if (Board->BoardMode.Equals(TEXT("snakes_and_ladders"), ESearchCase::IgnoreCase) ||
+			if (Board->bHasDice ||
+				Board->DiceSides > 1 ||
+				Board->BoardMode.Contains(TEXT("roll")) ||
+				Board->BoardMode.Contains(TEXT("dice")) ||
+				Board->BoardMode.Contains(TEXT("path")) ||
+				Board->BoardMode.Contains(TEXT("track")) ||
+				Board->BoardMode.Equals(TEXT("snakes_and_ladders"), ESearchCase::IgnoreCase) ||
 				Board->BoardMode.Equals(TEXT("ludo"), ESearchCase::IgnoreCase))
 			{
 				const int32 Sides = FMath::Max(2, Board->DiceSides);
@@ -1260,6 +1329,18 @@ void AGameForgePlayerController::HandleDash(const FInputActionValue& Value)
 	if (AGameForgeCharacter* C = Cast<AGameForgeCharacter>(GetPawn()))
 	{
 		C->PerformDash();
+	}
+}
+
+void AGameForgePlayerController::HandleAbility(const FInputActionValue& Value)
+{
+	if (IsGameplayBlocked())
+	{
+		return;
+	}
+	if (AGameForgeCharacter* C = Cast<AGameForgeCharacter>(GetPawn()))
+	{
+		C->PerformAbility();
 	}
 }
 

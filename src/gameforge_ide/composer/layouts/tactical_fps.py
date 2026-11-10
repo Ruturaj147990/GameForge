@@ -213,7 +213,21 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         )
     )
 
-    # 8. Five Opposing Terrorist Combat Bots (GameForgeEnemy)
+    # 8. Five Opposing Combat Bots (GameForgeEnemy) with GDS enemy properties
+    enemy_ent = next((e for e in getattr(gds, "entities", []) if str(getattr(e, "kind", "")) in ("enemy", "bot", "soldier", "terrorist") or getattr(e, "module", "") in ("kit.enemy_melee", "kit.enemy_ranged")), None)
+    bot_props: dict = {}
+    if enemy_ent is not None and getattr(enemy_ent, "props", None):
+        raw_p = enemy_ent.props if isinstance(enemy_ent.props, dict) else enemy_ent.props.model_dump()
+        for k, v in raw_p.items():
+            if k[:1].isupper() and v is not None:
+                bot_props[k] = v
+        if "health" in raw_p:
+            bot_props["MaxHealth"] = float(raw_p["health"])
+        if "attack_damage" in raw_p:
+            bot_props["AttackDamage"] = float(raw_p["attack_damage"])
+        if "move_speed" in raw_p:
+            bot_props["MoveSpeed"] = float(raw_p["move_speed"])
+
     bot_configs = [
         ("bot_site_a", (1500.0, 1600.0, 50.0), 180.0, "Site A Defender"),
         ("bot_site_b", (-1500.0, 1600.0, 50.0), 180.0, "Site B Defender"),
@@ -228,7 +242,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                 runtime_class="/Script/GameForgeRuntime.GameForgeEnemy",
                 location=loc,
                 yaw=yaw,
-                entity_id="enemy",
+                entity_id=enemy_ent.entity_id if enemy_ent else "enemy",
                 tags=[
                     "enemy",
                     "Enemy",
@@ -241,18 +255,28 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
                     "combat",
                     "GF_Owned",
                 ],
+                properties=dict(bot_props),
             )
         )
 
     # 9. Spawner for backup waves if wave rules apply
+    spawner_ent = next((e for e in getattr(gds, "entities", []) if str(getattr(e, "kind", "")) == "spawner" or getattr(e, "module", "") == "kit.spawner"), None)
+    spawner_props: dict = {}
+    if spawner_ent is not None and getattr(spawner_ent, "props", None):
+        raw_sp = spawner_ent.props if isinstance(spawner_ent.props, dict) else spawner_ent.props.model_dump()
+        for k, v in raw_sp.items():
+            if k[:1].isupper() and v is not None:
+                spawner_props[k] = v
+
     actors.append(
         PlacedActor(
             actor_id="spawner_tactical_reinforcements",
             runtime_class="/Script/GameForgeRuntime.GameForgeSpawner",
             location=(0.0, 2200.0, 50.0),
             yaw=180.0,
-            entity_id="spawner",
+            entity_id=spawner_ent.entity_id if spawner_ent else "spawner",
             tags=["spawner", "enemy", "GF_Owned"],
+            properties=spawner_props,
         )
     )
 
@@ -269,4 +293,5 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         nav_bounds=((0.0, 0.0, 0.0), nav_extent),
         geometry_ops=geometry_ops,
         actors=actors,
+        nav_checks=[("player_start", "bombsite_a"), ("player_start", "bombsite_b")],
     )

@@ -30,7 +30,7 @@
     },
     "target_engine": {
       "type": "string",
-      "enum": ["unreal", "unity"]
+      "enum": ["unreal", "unity", "godot"]
     },
     "provenance": {
       "type": "object",

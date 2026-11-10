@@ -351,6 +351,7 @@ class ProceduralSkinnedCharacterGenerator:
         """Exports skinned character bundle to standard glTF 2.0 format."""
         out_file = output_path or (self.output_dir / f"{bundle.spec.name}.gltf")
         bin_file = out_file.with_suffix(".bin")
+        out_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Binary buffer layout:
         # 1. POSITION: len(verts) * 3 * 4 bytes (vec3 float32)
@@ -423,6 +424,8 @@ class ProceduralSkinnedCharacterGenerator:
                 node["children"] = children
             joint_nodes.append(node)
         root_joints = [i for i, b in enumerate(bundle.bones) if by_id.get(b.parent_id) is None]
+        root_skeleton_id = root_joints[0] if root_joints else 0
+        scene_nodes = (root_joints if root_joints else [0]) + [len(bundle.bones)]
 
         with open(bin_file, "wb") as f:
             f.write(bin_data)
@@ -473,10 +476,10 @@ class ProceduralSkinnedCharacterGenerator:
                     "name": f"{bundle.spec.name}_Skin",
                     "joints": list(range(len(bundle.bones))),
                     "inverseBindMatrices": 6,
-                    "skeleton": root_joints[0],
+                    "skeleton": root_skeleton_id,
                 }
             ],
-            "scenes": [{"nodes": root_joints + [len(bundle.bones)]}],
+            "scenes": [{"nodes": scene_nodes}],
             "scene": 0,
         }
 

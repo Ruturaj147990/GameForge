@@ -1,12 +1,14 @@
 """Game Design Spec panel for the desktop IDE (P1 WI-1.10)."""
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
+
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
@@ -173,6 +175,7 @@ class DesignPanel(QWidget):
         self._json_edit.setPlainText(gds.to_json())
         self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>Spec loaded (valid)</span>")
 
+    @Slot()
     def reload_from_disk(self) -> None:
         gds = load_gds(self.workspace_root)
         if gds is not None:
@@ -182,8 +185,10 @@ class DesignPanel(QWidget):
             self._md_browser.setMarkdown(
                 "*No `GameForge/design/game.gds.json` found in current workspace root.*"
             )
+            self._json_edit.setPlainText("")
             self._status_lbl.setText(f"<span style='color: {tokens.TEXT_MUTED};'>No spec loaded</span>")
 
+    @Slot()
     def _validate_json(self) -> None:
         text = self._json_edit.toPlainText().strip()
         if not text:
@@ -194,8 +199,9 @@ class DesignPanel(QWidget):
             self.set_gds(gds)
             self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ Valid GDS (gds/1)</span>")
         except Exception as exc:
-            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Invalid: {exc}</span>")
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Invalid: {html.escape(str(exc))}</span>")
 
+    @Slot()
     def _save_json(self) -> None:
         text = self._json_edit.toPlainText().strip()
         if not text:
@@ -207,4 +213,5 @@ class DesignPanel(QWidget):
             self.set_gds(gds)
             self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_SUCCESS};'>✔ Saved GDS to disk</span>")
         except Exception as exc:
-            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Save failed: {exc}</span>")
+            self._status_lbl.setText(f"<span style='color: {tokens.ACCENT_ERROR};'>✖ Save failed: {html.escape(str(exc))}</span>")
+

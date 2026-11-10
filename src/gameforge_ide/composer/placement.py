@@ -11,10 +11,18 @@ from typing import List, Optional, Tuple
 
 
 def is_point_in_polygon(point: Tuple[float, float], polygon: List[Tuple[float, float]]) -> bool:
-    """Ray-casting algorithm for point-in-polygon check."""
+    """Ray-casting algorithm with bounding box early exit for point-in-polygon check."""
     if not polygon or len(polygon) < 3:
         return False
     x, y = point
+    # Fast bounding box rejection
+    min_x = min(p[0] for p in polygon)
+    max_x = max(p[0] for p in polygon)
+    min_y = min(p[1] for p in polygon)
+    max_y = max(p[1] for p in polygon)
+    if x < min_x or x > max_x or y < min_y or y > max_y:
+        return False
+
     n = len(polygon)
     inside = False
     p1x, p1y = polygon[0]
@@ -58,6 +66,16 @@ def scatter(
     min_y, max_y = min(ys), max(ys)
 
     points: List[Tuple[float, float]] = []
+    cell_size = max(10.0, min_spacing_cm / 1.41421356)
+    grid: Dict[Tuple[int, int], List[Tuple[float, float]]] = {}
+
+    def get_cell(x_pos: float, y_pos: float) -> Tuple[int, int]:
+        return int(x_pos // cell_size), int(y_pos // cell_size)
+
+    def add_point(pt: Tuple[float, float]) -> None:
+        points.append(pt)
+        c = get_cell(pt[0], pt[1])
+        grid.setdefault(c, []).append(pt)
 
     def is_valid(pt: Tuple[float, float]) -> bool:
         if not is_point_in_polygon(pt, area_polygon):
@@ -67,11 +85,16 @@ def scatter(
             dist_sq = (pt[0] - ax) ** 2 + (pt[1] - ay) ** 2
             if dist_sq < ar ** 2:
                 return False
-        # Inter-point spacing
-        for px, py in points:
-            dist_sq = (pt[0] - px) ** 2 + (pt[1] - py) ** 2
-            if dist_sq < min_spacing_cm ** 2:
-                return False
+        # Spatial acceleration neighbor query
+        cx, cy = get_cell(pt[0], pt[1])
+        min_spacing_sq = min_spacing_cm ** 2
+        for dcx in range(-2, 3):
+            for dcy in range(-2, 3):
+                cell_pts = grid.get((cx + dcx, cy + dcy))
+                if cell_pts:
+                    for px, py in cell_pts:
+                        if (pt[0] - px) ** 2 + (pt[1] - py) ** 2 < min_spacing_sq:
+                            return False
         return True
 
     # Initial seed point
@@ -83,7 +106,7 @@ def scatter(
         ry = rng.uniform(min_y, max_y)
         cand = (rx, ry)
         if is_valid(cand):
-            points.append(cand)
+            add_point(cand)
             active.append(cand)
             break
 
@@ -100,7 +123,7 @@ def scatter(
             rad = rng.uniform(min_spacing_cm, 2 * min_spacing_cm)
             cand = (base[0] + rad * math.cos(angle), base[1] + rad * math.sin(angle))
             if is_valid(cand):
-                points.append(cand)
+                add_point(cand)
                 active.append(cand)
                 found = True
                 if len(points) >= n:
@@ -115,7 +138,7 @@ def scatter(
             ry = rng.uniform(min_y, max_y)
             cand = (rx, ry)
             if is_valid(cand):
-                points.append(cand)
+                add_point(cand)
                 if len(points) >= n:
                     break
 
@@ -136,7 +159,7 @@ def scatter(
                     continue
                 if any((cand[0] - px) ** 2 + (cand[1] - py) ** 2 < relaxed_spacing_sq for px, py in points):
                     continue
-                points.append(cand)
+                add_point(cand)
 
     warning = None
     if len(points) < n:
@@ -190,3 +213,8 @@ def along_path(points: List[Tuple[float, float, float]], n: int) -> List[Tuple[f
             res.append((px, py, pz))
 
     return res
+
+
+# Backward-compatible alias
+distribute_along_path = along_path
+

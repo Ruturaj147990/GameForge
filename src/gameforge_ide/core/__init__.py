@@ -37,7 +37,7 @@ from .settings import (
     DEFAULT_OLLAMA_URL,
     MISSING_ENGINE,
     NEXT_ENGINE,
-     PACKAGE_ROOT,
+    PACKAGE_ROOT,
     PINNED_ENGINE,
     REPO_ROOT,
     EngineInstall,

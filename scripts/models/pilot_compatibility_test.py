@@ -10,13 +10,22 @@ Validates end-to-end execution on AMD Radeon RX 7700 XT:
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
-import torch
-import torch.nn as nn
-from safetensors.torch import load_file, save_file
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import numpy as np
+    import torch
+    import torch.nn as nn
+    from safetensors.torch import load_file, save_file
+    has_torch = True
+except ImportError:
+    has_torch = False
 
 try:
     import torch_directml
@@ -24,16 +33,27 @@ try:
 except ImportError:
     dml_available = False
 
-def run_pilot_gate() -> bool:
+
+def run_pilot_gate(allow_cpu_fallback: bool = False) -> bool:
     print("=" * 80)
     print(" GAMEFORGE PHASE 1 — PILOT COMPATIBILITY GATE")
     print("=" * 80)
 
+    if not has_torch:
+        print("[FAIL] PyTorch or Safetensors not installed in environment.", file=sys.stderr)
+        return False
+
     # 1. Device detection
-    assert dml_available, "DirectML is not available!"
-    dev_name = torch_directml.device_name(0)
-    gpu_device = torch_directml.device(0)
-    print(f"[PASS] DirectML GPU Detected: {dev_name} (device={gpu_device})")
+    if dml_available:
+        dev_name = torch_directml.device_name(0)
+        gpu_device = torch_directml.device(0)
+        print(f"[PASS] DirectML GPU Detected: {dev_name} (device={gpu_device})")
+    elif allow_cpu_fallback:
+        gpu_device = torch.device("cpu")
+        print("[WARN] DirectML unavailable; falling back to CPU verification per --allow-cpu-fallback.")
+    else:
+        print("[FAIL] DirectML is not available!", file=sys.stderr)
+        return False
 
     # 2. Forward & Backward Pass Verification
     print("Testing forward pass, cross-entropy, autograd backward on GPU...")
@@ -69,7 +89,7 @@ def run_pilot_gate() -> bool:
     print("[PASS] AdamW optimizer step completed on DirectML GPU.")
 
     # 4. Safetensors serialization test
-    scratch_dir = Path("scratch/pilot_test")
+    scratch_dir = REPO_ROOT / "scratch" / "pilot_test"
     scratch_dir.mkdir(parents=True, exist_ok=True)
     chk_file = scratch_dir / "pilot_adapter.safetensors"
 
@@ -101,5 +121,9 @@ def run_pilot_gate() -> bool:
     return True
 
 if __name__ == "__main__":
-    success = run_pilot_gate()
+    parser = argparse.ArgumentParser(description="GameForge Phase 1 Compatibility Gate & Pilot Verification")
+    parser.add_argument("--allow-cpu-fallback", action="store_true", help="Allow CPU fallback if DirectML device is absent")
+    args = parser.parse_args()
+
+    success = run_pilot_gate(allow_cpu_fallback=args.allow_cpu_fallback)
     sys.exit(0 if success else 1)

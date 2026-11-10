@@ -10,8 +10,15 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from ..executor import StepContext, StepOutcome
-from ...review.vision_rubric import run_mesh_audit, evaluate_vision_rubric, VisionRubricScore
+from ...review.vision_rubric import run_mesh_audit, evaluate_vision_rubric
 from ...storage.atomic import atomic_write_json
+
+__all__ = ["review_handler"]
+
+
+def _is_cancelled(ctx: StepContext) -> bool:
+    cancel = getattr(ctx, "cancel", None)
+    return cancel is not None and cancel.is_set() is True
 
 
 def _normalize_manifest_actors(raw_actors: List[Any]) -> List[Dict[str, Any]]:
@@ -28,9 +35,15 @@ def _normalize_manifest_actors(raw_actors: List[Any]) -> List[Dict[str, Any]]:
                 mesh = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple"
             else:
                 mesh = f"/Game/GameForge/Generated/SM_{a.get('entity_id') or label}"
+        has_explicit_materials = "materials" in a or "material" in a
         materials = a.get("materials")
-        if not isinstance(materials, list) or not materials:
+        if materials is None and "material" in a:
+            mat_val = a.get("material")
+            materials = [mat_val] if isinstance(mat_val, str) and mat_val.strip() else []
+        if not has_explicit_materials and (not isinstance(materials, list) or not materials):
             materials = ["/Game/GameForge/Materials/M_StylizedMaster"]
+        elif not isinstance(materials, list):
+            materials = []
         normalized.append(
             {
                 **a,
@@ -44,6 +57,9 @@ def _normalize_manifest_actors(raw_actors: List[Any]) -> List[Dict[str, Any]]:
 
 def review_handler(ctx: StepContext) -> StepOutcome:
     """Forge REVIEW step: mesh placeholder audit and vision rubric evaluation."""
+    if _is_cancelled(ctx):
+        return StepOutcome(False, errors=["Cancelled by user"])
+
     project_dir = Path(ctx.project_dir) if ctx.project_dir else Path(ctx.workspace_dir)
 
     # 1. Inspect level manifest or actor records
@@ -54,8 +70,8 @@ def review_handler(ctx: StepContext) -> StepOutcome:
             m_data = json.loads(manifest_path.read_text(encoding="utf-8"))
             raw_actors = m_data.get("actors", []) if isinstance(m_data, dict) else []
             actors_to_audit = _normalize_manifest_actors(raw_actors)
-        except Exception:
-            pass
+        except Exception as exc:
+            ctx.log(f"Warning: failed to read level manifest {manifest_path}: {exc}")
 
     # Check GameForge/levels/*.manifest.json written by modern Composer assembly
     if not actors_to_audit:
@@ -66,8 +82,8 @@ def review_handler(ctx: StepContext) -> StepOutcome:
                     m_data = json.loads(mf.read_text(encoding="utf-8"))
                     raw_actors = m_data.get("actors", []) if isinstance(m_data, dict) else []
                     actors_to_audit.extend(_normalize_manifest_actors(raw_actors))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    ctx.log(f"Warning: failed to read level manifest {mf}: {exc}")
 
     # Also check shared step outputs from assemble_level_* steps
     if not actors_to_audit and isinstance(ctx.shared, dict):
@@ -90,16 +106,25 @@ def review_handler(ctx: StepContext) -> StepOutcome:
             },
         ]
 
+    if _is_cancelled(ctx):
+        return StepOutcome(False, errors=["Cancelled by user"])
+
     mesh_audit = run_mesh_audit(actors_to_audit, placeholder_ok=False)
 
     # 2. Vision rubric evaluation on latest scenario screenshot
+    style = str(ctx.step.inputs.get("style") or "stylized")
+    theme = str(ctx.step.inputs.get("theme") or "default")
     evidence_dir = project_dir / "Saved" / "GameForge" / "evidence"
-    screenshots = list(evidence_dir.glob("*.png")) if evidence_dir.is_dir() else []
-    if not screenshots and (evidence_dir / "scenarios").is_dir():
-        screenshots = list((evidence_dir / "scenarios").rglob("*.png"))
+    screenshots: List[Path] = []
+    if evidence_dir.is_dir():
+        screenshots = list(evidence_dir.glob("*.png"))
+        if not screenshots and (evidence_dir / "scenarios").is_dir():
+            screenshots = list((evidence_dir / "scenarios").rglob("*.png"))
+    if screenshots:
+        screenshots.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
     sample_img = screenshots[0] if screenshots else Path("dummy_screenshot.png")
 
-    rubric_score = evaluate_vision_rubric(sample_img, style="stylized", theme="default", advisory_only=True)
+    rubric_score = evaluate_vision_rubric(sample_img, style=style, theme=theme, advisory_only=True)
 
     ctx.log(
         f"Review step completed: mesh_audit passed={mesh_audit.passed} "
@@ -110,17 +135,27 @@ def review_handler(ctx: StepContext) -> StepOutcome:
         "mesh_audit": mesh_audit.to_dict(),
         "vision_rubric": rubric_score.to_dict(),
     }
+    artifacts: List[Dict[str, str]] = []
+    review_out = project_dir / "Saved" / "GameForge" / "vision_review.json"
     try:
-        review_out = project_dir / "Saved" / "GameForge" / "vision_review.json"
         atomic_write_json(review_out, outcome_data)
-    except Exception:
-        pass
+        if review_out.is_file():
+            artifacts.append({"path": str(review_out), "kind": "report"})
+    except Exception as exc:
+        ctx.log(f"Warning: failed to write {review_out}: {exc}")
 
     from ..validation import validate_stage_output
-    valid, issues = validate_stage_output("review", outcome_data, project_dir=project_dir)
+    valid, issues = validate_stage_output("review", outcome_data, project_dir=project_dir, artifacts=artifacts)
+    errors = list(issues)
+    if not mesh_audit.passed and not errors:
+        errors = [
+            f"Mesh audit failed ({mesh_audit.placeholder_components} placeholder/unthemed components): "
+            f"{', '.join(mesh_audit.unthemed_actors[:10])}"
+        ]
 
     return StepOutcome(
         ok=mesh_audit.passed and valid,
         data=outcome_data,
-        errors=issues if not (mesh_audit.passed and valid) else [],
+        artifacts=artifacts,
+        errors=errors if not (mesh_audit.passed and valid) else [],
     )

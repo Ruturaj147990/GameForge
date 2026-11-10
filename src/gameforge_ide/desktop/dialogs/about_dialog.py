@@ -138,22 +138,29 @@ class AboutDialog(QDialog):
             f"  outline: none;"
             f"}}"
         )
+        self._btn_close.setDefault(True)
         self._btn_close.clicked.connect(self.accept)
         btn_layout.addWidget(self._btn_close)
 
         layout.addLayout(btn_layout)
 
     def _copy_system_info(self) -> None:
-        settings = get_settings()
-        info = (
-            f"GameForge IDE v1.0.0\n"
-            f"Python: {sys.version}\n"
-            f"Platform: {sys.platform}\n"
-            f"Engine: Unreal Engine 5.7.4\n"
-            f"Projects Root: {getattr(settings, 'projects_root', 'default')}\n"
-            f"Ollama URL: {getattr(settings, 'ollama_url', 'http://127.0.0.1:11434')}\n"
-        )
-        clipboard = QGuiApplication.clipboard()
-        if clipboard:
-            clipboard.setText(info)
-            self._btn_copy.setText("Copied! ✓")
+        try:
+            settings = get_settings()
+            info = (
+                f"GameForge IDE v1.0.0\n"
+                f"Python: {sys.version}\n"
+                f"Platform: {sys.platform}\n"
+                f"Engine: Unreal Engine 5.7.4\n"
+                f"Projects Root: {getattr(settings, 'projects_root', 'default')}\n"
+                f"Ollama URL: {getattr(settings, 'ollama_url', 'http://127.0.0.1:11434')}\n"
+            )
+            clipboard = QGuiApplication.clipboard()
+            if clipboard:
+                clipboard.setText(info)
+                self._btn_copy.setText("Copied! ✓")
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(2000, lambda: self._btn_copy.setText("Copy System Info") if not self.isHidden() else None)
+        except Exception:
+            self._btn_copy.setText("Copy Failed")
+

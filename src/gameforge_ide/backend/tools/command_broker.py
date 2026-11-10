@@ -281,7 +281,10 @@ class CommandExecutionBroker:
                 )
 
         # 4. Check for outside-workspace directory access
-        wd = Path(working_directory).resolve() if working_directory else self.workspace_root
+        try:
+            wd = Path(working_directory).resolve() if working_directory else self.workspace_root
+        except Exception:
+            wd = self.workspace_root
         try:
             self.boundary.validate_path(wd, allow_write=False)
         except (SecurityViolationError, ValueError):
@@ -633,13 +636,20 @@ class CommandExecutionBroker:
             ]
 
         # Execute windowless child process with Job Object tracking
-        exit_code, stdout_str, stderr_str, duration = self.process_manager.run(
-            exec_args,
-            cwd=wd,
-            env=request.env_overrides if request.env_overrides else None,
-            shell=False,
-            timeout=float(request.timeout_seconds),
-        )
+        try:
+            exit_code, stdout_str, stderr_str, duration = self.process_manager.run(
+                exec_args,
+                cwd=wd,
+                env=request.env_overrides if request.env_overrides else None,
+                shell=False,
+                timeout=float(request.timeout_seconds),
+            )
+        except Exception as exc:
+            result.status = CommandStatus.FAILED
+            result.error_message = f"Process execution failure: {exc}"
+            result.finished_at = time.time()
+            result.duration_s = round(result.finished_at - t0, 3)
+            return result
 
         # 5. State: VERIFYING
         result.status = CommandStatus.VERIFYING
@@ -667,8 +677,12 @@ class CommandExecutionBroker:
         for candidate in (
             r"C:\Program Files\Git\bin\bash.exe",
             r"C:\Program Files (x86)\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
         ):
-            if Path(candidate).is_file():
-                return candidate
+            try:
+                if Path(candidate).is_file():
+                    return candidate
+            except OSError:
+                continue
         found = shutil.which("bash")
         return found if found else "bash.exe"

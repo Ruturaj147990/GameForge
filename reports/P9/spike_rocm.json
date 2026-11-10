@@ -1,7 +1,7 @@
 {
   "spike": "rocm_windows",
   "status": "BLOCKED (needs approval: AMD HIP SDK 7.2 and PyTorch ROCm installation)",
-  "timestamp": "2026-11-01T11:06:16Z",
+  "timestamp": "2026-11-10T18:00:30Z",
   "target_hardware": {
     "gpu": "AMD Radeon RX 7700 XT",
     "vram_gb": 12,

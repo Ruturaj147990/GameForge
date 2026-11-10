@@ -816,18 +816,26 @@ class GameTools:
         with self._lock:
             for key in list(self._links):
                 if now - self._last_used.get(key, now) >= self.editor_idle_timeout_s:
-                    self._links.pop(key).stop()
+                    link = self._links.pop(key, None)
                     self._last_used.pop(key, None)
-                    closed.append(key)
+                    if link is not None:
+                        try:
+                            link.stop()
+                        except Exception as exc:
+                            logger.debug("Error stopping idle editor %s: %s", key, exc)
+                        closed.append(key)
         return closed
 
     def _reap_loop(self) -> None:
         while True:
-            time.sleep(60)
-            self.close_idle_editors()
-            with self._lock:
-                if not self._links:
-                    return
+            try:
+                time.sleep(60)
+                self.close_idle_editors()
+                with self._lock:
+                    if not self._links:
+                        return
+            except Exception as exc:
+                logger.debug("Error in editor reaper loop: %s", exc)
 
     def unreal_editor(self, uproject: str, op: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         up_path = self._resolve_uproject(uproject)
@@ -845,8 +853,14 @@ class GameTools:
 
     def close_editors(self) -> List[Optional[int]]:
         with self._lock:
-            codes = [link.stop() for link in self._links.values()]
+            codes = []
+            for link in self._links.values():
+                try:
+                    codes.append(link.stop())
+                except Exception:
+                    codes.append(-1)
             self._links.clear()
+            self._last_used.clear()
         return codes
 
     def unreal_run_tests(self, uproject: str, test_filter: str = "GameForge") -> Dict[str, Any]:

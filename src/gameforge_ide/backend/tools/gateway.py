@@ -39,6 +39,9 @@ TOOL_ALIASES: Dict[str, str] = {
     "rm": "delete_file",
     "unlink": "delete_file",
     "remove_file": "delete_file",
+    "ls": "list_dir",
+    "dir": "list_dir",
+    "cat": "read_file",
 }
 
 
@@ -775,7 +778,14 @@ class ToolGateway:
             else:
                 return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
 
-            res["execution_time_seconds"] = round(time.time() - t0, 3)
+            if isinstance(res, dict):
+                res["execution_time_seconds"] = round(time.time() - t0, 3)
+            else:
+                res = {
+                    "status": "SUCCESS",
+                    "result": res,
+                    "execution_time_seconds": round(time.time() - t0, 3),
+                }
             return res
         except SecurityViolationError as e:
             return {

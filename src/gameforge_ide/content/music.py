@@ -92,6 +92,33 @@ MOOD_CONFIGS: Dict[str, Dict[str, Any]] = {
             ("F3", "A3", "C4"),  # IV
         ],
     },
+    "boss": {
+        "bpm": 135.0,
+        "progression": [
+            ("D3", "F3", "A3"),   # i
+            ("BB2", "D3", "F3"),  # VI
+            ("C3", "E3", "G3"),   # VII
+            ("A2", "C#3", "E3"),  # V major
+        ],
+    },
+    "action": {
+        "bpm": 140.0,
+        "progression": [
+            ("E3", "G3", "B3"),   # i
+            ("C3", "E3", "G3"),   # VI
+            ("D3", "F#3", "A3"),  # VII
+            ("B2", "D#3", "F#3"), # V major
+        ],
+    },
+    "mysterious": {
+        "bpm": 75.0,
+        "progression": [
+            ("D3", "F3", "A3"),  # i
+            ("G3", "B3", "D4"),  # IV Dorian
+            ("C3", "E3", "G3"),  # VII
+            ("BB2", "D3", "F3"), # VI
+        ],
+    },
 }
 
 

@@ -98,8 +98,10 @@ def synthesize(spec: SFXSpec) -> np.ndarray:
 
 
 def write_wav(path: Path, samples: np.ndarray) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
     pcm = np.clip(np.rint(samples * 32767.0), -32768, 32767).astype("<i2")
-    with wave.open(str(path), "wb") as w:
+    with wave.open(str(p), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SAMPLE_RATE)
@@ -125,9 +127,13 @@ def generate_sfx(spec: SFXSpec, output_dir: str | Path, asset_registry=None) -> 
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"SFX_{spec.name}.wav"
     write_wav(path, synthesize(spec))
+    try:
+        sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        sha = ""
     info = {"name": spec.name, "kind": spec.kind, "generator": GENERATOR, "provenance": "procedural",
             "license": "CC0-1.0", "spec": asdict(spec), "path": str(path),
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "sha256": sha,
             "analysis": analyze_wav(path, loop=spec.kind == "wind_loop"), "looping": spec.kind == "wind_loop"}
     if asset_registry is not None:
         from ...backend.assets.registry import AssetRecord

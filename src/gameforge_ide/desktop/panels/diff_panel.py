@@ -25,28 +25,31 @@ from PySide6.QtWidgets import (
 
 from ..services.tool_service import ToolService
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
+
 
 
 class DiffView(QPlainTextEdit):
     """Read-only diff display with syntax colouring for +/- lines using design tokens."""
 
-    def __init__(self, parent=None, is_left: bool = False, is_right: bool = False) -> None:
+    def __init__(self, parent: Optional[QWidget] = None, is_left: bool = False, is_right: bool = False) -> None:
         super().__init__(parent)
         self.setReadOnly(True)
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.setFont_mono()
         self._is_left = is_left
         self._is_right = is_right
-        self.setStyleSheet(
+        self.setStyleSheet(theme_stylesheet(
             f"background-color: {tokens.BG_ROOT};"
             f"border: 1px solid {tokens.BORDER};"
             f"border-radius: {tokens.RADIUS}px;"
             f"font-family: 'Cascadia Code', 'Consolas', monospace;"
             f"font-size: 12px;"
             f"color: {tokens.TEXT_PRIMARY};"
-        )
+        ))
 
-    def setFont_mono(self):
+    def setFont_mono(self) -> None:
+
         f = QFont("Cascadia Code")
         if not f.exactMatch():
             f = QFont("Consolas")

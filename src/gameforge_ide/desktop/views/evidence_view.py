@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QEvent, QModelIndex, QObject, QSize, Qt, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPixmap, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ...core.settings import get_settings
 from ...core.projects import resolve_project_dir, open_folder_in_file_manager
 from ...forge.model import ArtifactRef, RunState
@@ -236,9 +237,80 @@ class EvidenceView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: Optional[QShowEvent] = None) -> None:
         super().showEvent(event)
         self.refresh_artifacts()
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update view styles for active theme."""
+        if hasattr(self, "_filter_combo"):
+            self._filter_combo.setStyleSheet(theme_stylesheet(
+                f"QComboBox#{self._filter_combo.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_gallery"):
+            self._gallery.setStyleSheet(theme_stylesheet(
+                f"QListWidget#{self._gallery.objectName()} {{"
+                f"  background-color: {tokens.BG_PANEL};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"}}"
+                f"QListWidget#{self._gallery.objectName()}::item {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: 4px;"
+                f"  padding: 4px;"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"}}"
+                f"QListWidget#{self._gallery.objectName()}::item:selected {{"
+                f"  border-color: {tokens.ACCENT_PRIMARY};"
+                f"  background-color: {tokens.BG_ACTIVE};"
+                f"}}"
+            ))
+        if hasattr(self, "_text_viewer"):
+            self._text_viewer.setStyleSheet(theme_stylesheet(
+                f"QTextEdit#{self._text_viewer.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_SM}px;"
+                f"  font-family: monospace; font-size: 11px;"
+                f"}}"
+            ))
+        if hasattr(self, "_md_viewer"):
+            self._md_viewer.setStyleSheet(theme_stylesheet(
+                f"QTextEdit#{self._md_viewer.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_MD}px;"
+                f"  font-size: {tokens.FONT_BODY}px;"
+                f"}}"
+            ))
+
+    def deleteLater(self) -> None:
+        """Safely remove event filters on disposal."""
+        try:
+            self._gallery.removeEventFilter(self)
+        except (RuntimeError, TypeError):
+            pass
+        if hasattr(self, "_image_scroll"):
+            try:
+                self._image_scroll.removeEventFilter(self)
+            except (RuntimeError, TypeError):
+                pass
+            if self._image_scroll.viewport():
+                try:
+                    self._image_scroll.viewport().removeEventFilter(self)
+                except (RuntimeError, TypeError):
+                    pass
+        super().deleteLater()
 
     def set_project(self, project_name: str, project_dir: Optional[Path] = None) -> None:
         self._current_project = project_name
@@ -378,7 +450,10 @@ class EvidenceView(QWidget):
             return
         path_str = item.data(Qt.UserRole)
         if path_str:
-            self.openFileRequested.emit(str(path_str))
+            try:
+                self.openFileRequested.emit(str(path_str))
+            except RuntimeError:
+                pass
             import os
             if "PYTEST_CURRENT_TEST" not in os.environ:
                 try:
@@ -420,7 +495,7 @@ class EvidenceView(QWidget):
         else:
             self._show_text(path)
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: Optional[QResizeEvent] = None) -> None:
         super().resizeEvent(event)
         if hasattr(self, "_viewer_stack") and self._viewer_stack.currentIndex() == 0:
             self._rescale_image()

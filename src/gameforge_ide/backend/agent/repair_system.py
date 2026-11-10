@@ -169,7 +169,7 @@ class RepairEngine:
             for d in diags:
                 d.stage_id = stage_id
 
-        text = raw_output if isinstance(raw_output, str) else json.dumps(raw_output)
+        text = raw_output if isinstance(raw_output, str) else json.dumps(raw_output, default=str)
 
         # 1. Check for scenario execution failures (e.g. stage 9 Scenarios)
         if stage_id in ("scenarios", "qa", "playtest") or "Step " in text and "failed:" in text or "SCENARIO" in text:

@@ -1,16 +1,22 @@
 """Generate neural content spike records (WI-9.5, Exit Gate 3)."""
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+import tempfile
 import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 REPORTS_DIR = REPO_ROOT / "reports" / "P9"
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def record_spikes() -> None:
+def record_spikes(output_dir: Path | None = None) -> None:
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # 1. ROCm Windows Spike
@@ -92,12 +98,37 @@ def record_spikes() -> None:
         },
     }
 
-    (REPORTS_DIR / "spike_rocm.json").write_text(json.dumps(spike_rocm, indent=2), encoding="utf-8")
-    (REPORTS_DIR / "spike_hunyuan3d.json").write_text(json.dumps(spike_hunyuan, indent=2), encoding="utf-8")
-    (REPORTS_DIR / "spike_piper.json").write_text(json.dumps(spike_piper, indent=2), encoding="utf-8")
+    spikes = {
+        "spike_rocm.json": spike_rocm,
+        "spike_hunyuan3d.json": spike_hunyuan,
+        "spike_piper.json": spike_piper,
+    }
 
-    print(f"Recorded 3 neural content spikes to {REPORTS_DIR}")
+    out_dir = output_dir or REPORTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for fname, data in spikes.items():
+        target = out_dir / fname
+        temp_file = target.with_suffix(".tmp")
+        try:
+            temp_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            temp_file.replace(target)
+        except Exception:
+            if temp_file.exists():
+                temp_file.unlink()
+            raise
+
+    print(f"Recorded 3 neural content spikes to {out_dir}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate neural content spike records")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Target reports directory")
+    args = parser.parse_args()
+
+    record_spikes(output_dir=args.output_dir)
+    return 0
 
 
 if __name__ == "__main__":
-    record_spikes()
+    sys.exit(main())

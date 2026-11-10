@@ -65,3 +65,7 @@ def all_modules() -> List[KitModule]:
 def _ensure_modules_loaded() -> None:
     if not KIT:
         from . import modules  # noqa: F401
+
+
+# Ensure standard kit modules are loaded at import time
+_ensure_modules_loaded()

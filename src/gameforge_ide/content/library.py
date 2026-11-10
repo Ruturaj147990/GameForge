@@ -79,6 +79,13 @@ def infer_asset_type_from_path(p: Path) -> str:
     """Infer asset registry asset_type from filename and path markers."""
     stem = p.stem.lower()
     posix = p.as_posix().lower()
+    suffix = p.suffix.lower()
+    if suffix == ".umap" or "maps" in posix:
+        return "map"
+    if stem.startswith("wbp_"):
+        return "widget"
+    if stem.startswith("bp_"):
+        return "blueprint"
     if stem.startswith("skm_") or stem.startswith("sk_") or "skeletal" in posix:
         return "skeletal_mesh"
     if stem.startswith("sm_") or "staticmesh" in posix:
@@ -89,7 +96,7 @@ def infer_asset_type_from_path(p: Path) -> str:
         return "texture"
     if stem.startswith("a_") or stem.startswith("abp_") or stem.startswith("bs_") or "anim" in posix:
         return "animation"
-    if stem.startswith("s_") or stem.startswith("sfx_") or "sound" in posix or "audio" in posix:
+    if stem.startswith("s_") or stem.startswith("sfx_") or suffix in (".wav", ".ogg") or "sound" in posix or "audio" in posix:
         return "sound"
     if stem.startswith("ns_") or stem.startswith("vfx_") or "niagara" in posix or "vfx" in posix:
         return "vfx"
@@ -103,6 +110,9 @@ _ROLE_PATTERNS = [
     (re.compile(r"(?:^|_)(rock|boulder|stone|cliff|slate)(?:_|$|\d)", re.I), "rock"),
     (re.compile(r"(?:^|_)(grass|bush|flower|fern|shrub|weed)(?:_|$|\d)", re.I), "vegetation"),
     (re.compile(r"(?:^|_)(character|hero|npc|enemy|mannequin|knight)(?:_|$|\d)", re.I), "character"),
+    (re.compile(r"(?:^|_)(sword|gun|rifle|bow|axe|shield|weapon)(?:_|$|\d)", re.I), "weapon"),
+    (re.compile(r"(?:^|_)(potion|coin|key|gem|relic|item)(?:_|$|\d)", re.I), "item"),
+    (re.compile(r"(?:^|_)(car|kart|vehicle|ship|boat)(?:_|$|\d)", re.I), "vehicle"),
 ]
 
 
@@ -241,31 +251,28 @@ class ContentLibrary:
             dst_dir.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source_path, dst_dir, dirs_exist_ok=True)
 
-            imported_count = 0
+            all_uassets = [Path(root) / f for root, _, files in os.walk(dst_dir) for f in files if f.endswith(".uasset")]
+            imported_count = len(all_uassets)
             if registry:
-                for root, _, files in os.walk(dst_dir):
-                    for f in files:
-                        if f.endswith(".uasset"):
-                            p = Path(root) / f
-                            rel = p.relative_to(dst_dir).as_posix()
-                            mount_path = f"/Game/Library/{pack_name}/{rel[:-7]}"
-                            asset_type = infer_asset_type_from_path(p)
-                            rec = AssetRecord(
-                                name=p.stem,
-                                asset_type=asset_type,
-                                purpose=f"Imported library pack ({pack_name})",
-                                provenance="LIBRARY",
-                                backend="user-library",
-                                backend_version="1.0.0",
-                                license=f"{licence_class}: {attribution}".strip(": "),
-                                spec={"pack": pack_name, "rel_path": rel, "uasset_sha256": sha256_file(p)},
-                                tags=["library", pack_name, asset_type],
-                            )
-                            aid = registry.register(rec)
-                            registry.advance(aid, "GENERATE", True, artifact_path=str(p))
-                            registry.advance(aid, "ENGINE_VERIFY", True, detail="Validated imported asset")
-                            registry.advance(aid, "PROMOTE", True, unreal_path=mount_path)
-                            imported_count += 1
+                for p in all_uassets:
+                    rel = p.relative_to(dst_dir).as_posix()
+                    mount_path = f"/Game/Library/{pack_name}/{rel[:-7]}"
+                    asset_type = infer_asset_type_from_path(p)
+                    rec = AssetRecord(
+                        name=p.stem,
+                        asset_type=asset_type,
+                        purpose=f"Imported library pack ({pack_name})",
+                        provenance="LIBRARY",
+                        backend="user-library",
+                        backend_version="1.0.0",
+                        license=f"{licence_class}: {attribution}".strip(": "),
+                        spec={"pack": pack_name, "rel_path": rel, "uasset_sha256": sha256_file(p)},
+                        tags=["library", pack_name, asset_type],
+                    )
+                    aid = registry.register(rec)
+                    registry.advance(aid, "GENERATE", True, artifact_path=str(p))
+                    registry.advance(aid, "ENGINE_VERIFY", True, detail="Validated imported asset")
+                    registry.advance(aid, "PROMOTE", True, unreal_path=mount_path)
 
             return {
                 "pack_name": pack_name,

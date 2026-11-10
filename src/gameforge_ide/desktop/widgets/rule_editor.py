@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import List, Optional, Sequence
 
+from pydantic import ValidationError
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QComboBox,
@@ -19,10 +20,14 @@ from PySide6.QtWidgets import (
 )
 
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
+from ...design.events_catalog import EVENT_RE, all_events
 from ...design.gds import (
+    IDENT,
     AddStat,
     Condition,
     CountAtLeast,
+    Effect,
     EndGame,
     EventRef,
     RuleSpec,
@@ -30,6 +35,61 @@ from ...design.gds import (
     StatCompare,
 )
 from ...design.render import EVENT_PHRASES, sentence
+
+_IDENT_RE = re.compile(IDENT)
+_PLAYER_STATS = frozenset(
+    {
+        "health",
+        "lives",
+        "stamina",
+        "max_health",
+        "mana",
+        "oxygen",
+        "energy",
+        "shield",
+        "fuel",
+        "heat",
+        "sanity",
+        "rage",
+        "stealth",
+        "hydration",
+        "hunger",
+        "gold",
+        "speed",
+        "ammo",
+        "combo",
+        "ability_cooldown",
+        "active_weapon",
+    }
+)
+_GAME_STATS = frozenset({"score", "time_s", "wave", "laps", "laps_completed", "base_health", "gold", "resources"})
+_PREFERRED_EVENTS = (
+    "pickup.collected",
+    "guard.spotted_player",
+    "enemy.killed",
+    "enemy.attacked",
+    "player.damaged",
+    "player.died",
+    "player.spawned",
+    "switch.activated",
+    "hazard.touched",
+    "checkpoint.reached",
+    "wave.cleared",
+    "door.opened",
+    "goal.reached",
+    "game.started",
+)
+
+
+def _normalize_stat_name(raw_stat: str, default_prefix: str = "game", fallback: str = "game.score") -> str:
+    stat_name = (raw_stat or "").strip() or fallback
+    if not stat_name.startswith(("player.", "game.", "entity.", "boss.", "quest.", "world.")):
+        if stat_name in _PLAYER_STATS:
+            return f"player.{stat_name}"
+        if stat_name in _GAME_STATS:
+            return f"game.{stat_name}"
+        return f"{default_prefix}.{stat_name}"
+    return stat_name
 
 
 def format_rule_sentence(rule: RuleSpec) -> str:
@@ -48,7 +108,7 @@ class RuleEditorDialog(QDialog):
     def __init__(
         self,
         rule: Optional[RuleSpec] = None,
-        entity_ids: Optional[List[str]] = None,
+        entity_ids: Optional[Sequence[str]] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -58,14 +118,16 @@ class RuleEditorDialog(QDialog):
         self.setModal(True)
         self.resize(600, 560)
         self.setStyleSheet(
-            f"QDialog#{self.objectName()} {{"
-            f"  background-color: {tokens.BG_ROOT};"
-            f"  border: 1px solid {tokens.BORDER};"
-            f"}}"
+            theme_stylesheet(
+                f"QDialog#{self.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"}}"
+            )
         )
 
         self._rule = rule
-        self._entity_ids = entity_ids or []
+        self._entity_ids: List[str] = list(dict.fromkeys(str(eid) for eid in (entity_ids or ()) if eid))
         self._target_stat = "game.score"
 
         layout = QVBoxLayout(self)
@@ -75,9 +137,11 @@ class RuleEditorDialog(QDialog):
         # Title
         title_lbl = QLabel("Rule Definition & Logic Builder", self)
         title_lbl.setStyleSheet(
-            f"color: {tokens.TEXT_PRIMARY};"
-            f"font-size: {tokens.FONT_HEADING_SM}px;"
-            f"font-weight: 700;"
+            theme_stylesheet(
+                f"color: {tokens.TEXT_PRIMARY};"
+                f"font-size: {tokens.FONT_HEADING_SM}px;"
+                f"font-weight: 700;"
+            )
         )
         layout.addWidget(title_lbl)
 
@@ -85,10 +149,11 @@ class RuleEditorDialog(QDialog):
         id_layout = QHBoxLayout()
         lbl_id = QLabel("Rule ID:", self)
         lbl_id.setFixedWidth(80)
-        lbl_id.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        lbl_id.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;"))
         self._id_input = QLineEdit(self)
         self._id_input.setObjectName("ruleIdInput")
         self._id_input.setAccessibleName("Rule identifier")
+        self._id_input.setMaxLength(40)
         self._id_input.setText(rule.rule_id if rule else "rule_1")
         self._id_input.setStyleSheet(self._input_style())
         self._id_input.textChanged.connect(self._on_input_changed)
@@ -100,26 +165,13 @@ class RuleEditorDialog(QDialog):
         when_layout = QHBoxLayout()
         lbl_when = QLabel("When:", self)
         lbl_when.setFixedWidth(80)
-        lbl_when.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        lbl_when.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;"))
         self._event_combo = QComboBox(self)
         self._event_combo.setObjectName("ruleEventCombo")
         self._event_combo.setAccessibleName("Trigger event")
         self._event_combo.setEditable(True)
-        events = [
-            "pickup.collected",
-            "guard.spotted",
-            "combat.hit",
-            "combat.death",
-            "switch.activated",
-            "hazard.triggered",
-            "checkpoint.reached",
-            "wave.cleared",
-            "door.unlocked",
-            "player.spawned",
-            "timer.elapsed",
-            "goal.reached",
-            "level.loaded",
-        ]
+        catalog_events = all_events()
+        events = list(_PREFERRED_EVENTS) + sorted(e for e in catalog_events if e not in _PREFERRED_EVENTS)
         self._event_combo.addItems(events)
         if rule and rule.when and rule.when.event:
             if rule.when.event not in events:
@@ -132,7 +184,7 @@ class RuleEditorDialog(QDialog):
 
         # Optional source entity
         lbl_source = QLabel("From Entity:", self)
-        lbl_source.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        lbl_source.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;"))
         self._source_combo = QComboBox(self)
         self._source_combo.setObjectName("ruleSourceCombo")
         self._source_combo.setAccessibleName("Source entity target")
@@ -153,7 +205,7 @@ class RuleEditorDialog(QDialog):
         cond_layout = QHBoxLayout()
         lbl_if = QLabel("If (Cond):", self)
         lbl_if.setFixedWidth(80)
-        lbl_if.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        lbl_if.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;"))
         cond_layout.addWidget(lbl_if)
 
         self._cond_type_combo = QComboBox(self)
@@ -174,7 +226,7 @@ class RuleEditorDialog(QDialog):
 
         self._cond_op_combo = QComboBox(self)
         self._cond_op_combo.setObjectName("ruleCondOpCombo")
-        self._cond_op_combo.addItems([">=", ">", "==", "<=", "<"])
+        self._cond_op_combo.addItems([">=", ">", "==", "!=", "<=", "<"])
         self._cond_op_combo.setFixedWidth(60)
         self._cond_op_combo.setStyleSheet(self._input_style())
         self._cond_op_combo.currentIndexChanged.connect(self._on_input_changed)
@@ -223,19 +275,19 @@ class RuleEditorDialog(QDialog):
                 self._cond_type_combo.setCurrentText("Event Count At Least")
                 self._cond_event_input.setText(str(getattr(c0, "event", "pickup.collected")))
                 self._cond_count_spin.setValue(int(getattr(c0, "n", 1)))
+            else:
+                self._cond_type_combo.addItem("Preserve Existing Condition")
+                self._cond_type_combo.setCurrentText("Preserve Existing Condition")
+                self._sync_cond_controls_visibility("Preserve Existing Condition")
         else:
             self._cond_type_combo.setCurrentText("No Condition")
-            self._cond_stat_input.setVisible(False)
-            self._cond_op_combo.setVisible(False)
-            self._cond_val_spin.setVisible(False)
-            self._cond_event_input.setVisible(False)
-            self._cond_count_spin.setVisible(False)
+            self._sync_cond_controls_visibility("No Condition")
 
         # ── 3. Then Effect ────────────────────────────────────────────────────
         effect_layout = QHBoxLayout()
         lbl_then = QLabel("Then:", self)
         lbl_then.setFixedWidth(80)
-        lbl_then.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        lbl_then.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;"))
 
         self._effect_type_combo = QComboBox(self)
         self._effect_type_combo.setObjectName("ruleEffectTypeCombo")
@@ -246,7 +298,7 @@ class RuleEditorDialog(QDialog):
         effect_layout.addWidget(self._effect_type_combo, 1)
 
         self._lbl_stat = QLabel("Stat:", self)
-        self._lbl_stat.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;")
+        self._lbl_stat.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px;"))
         effect_layout.addWidget(self._lbl_stat)
 
         self._stat_input = QLineEdit(self)
@@ -294,6 +346,12 @@ class RuleEditorDialog(QDialog):
                 self._delta_spin.setVisible(True)
                 self._lbl_stat.setVisible(True)
                 self._stat_input.setVisible(True)
+            else:
+                self._effect_type_combo.addItem("Preserve Existing Effect")
+                self._effect_type_combo.setCurrentText("Preserve Existing Effect")
+                self._delta_spin.setVisible(False)
+                self._lbl_stat.setVisible(False)
+                self._stat_input.setVisible(False)
         else:
             self._delta_spin.setVisible(True)
             self._lbl_stat.setVisible(True)
@@ -305,10 +363,11 @@ class RuleEditorDialog(QDialog):
         desc_layout = QHBoxLayout()
         lbl_desc = QLabel("Description:", self)
         lbl_desc.setFixedWidth(80)
-        lbl_desc.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;")
+        lbl_desc.setStyleSheet(theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY}px;"))
         self._desc_input = QLineEdit(self)
         self._desc_input.setObjectName("ruleDescInput")
         self._desc_input.setAccessibleName("Rule description")
+        self._desc_input.setMaxLength(200)
         self._desc_input.setPlaceholderText("e.g. Award points on pickup")
         self._desc_input.setText(rule.description if rule else "")
         self._desc_input.setStyleSheet(self._input_style())
@@ -321,26 +380,30 @@ class RuleEditorDialog(QDialog):
         preview_box = QFrame(self)
         preview_box.setObjectName("rulePreviewBox")
         preview_box.setStyleSheet(
-            f"QFrame#{preview_box.objectName()} {{"
-            f"  background-color: {tokens.BG_PANEL};"
-            f"  border: 1px solid {tokens.BORDER};"
-            f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: {tokens.SPACE_SM}px;"
-            f"}}"
+            theme_stylesheet(
+                f"QFrame#{preview_box.objectName()} {{"
+                f"  background-color: {tokens.BG_PANEL};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_SM}px;"
+                f"}}"
+            )
         )
         preview_layout = QVBoxLayout(preview_box)
         preview_layout.setContentsMargins(tokens.SPACE_MD, tokens.SPACE_SM, tokens.SPACE_MD, tokens.SPACE_SM)
         preview_layout.setSpacing(tokens.SPACE_XS)
 
         lbl_prev_title = QLabel("Live Rule Sentence Preview:", preview_box)
-        lbl_prev_title.setStyleSheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;")
+        lbl_prev_title.setStyleSheet(
+            theme_stylesheet(f"color: {tokens.TEXT_SECONDARY}; font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;")
+        )
         preview_layout.addWidget(lbl_prev_title)
 
         self._lbl_sentence_preview = QLabel("", preview_box)
         self._lbl_sentence_preview.setObjectName("ruleSentencePreview")
         self._lbl_sentence_preview.setWordWrap(True)
         self._lbl_sentence_preview.setStyleSheet(
-            f"color: {tokens.ACCENT_PRIMARY}; font-size: {tokens.FONT_BODY}px; font-weight: 600;"
+            theme_stylesheet(f"color: {tokens.ACCENT_PRIMARY}; font-size: {tokens.FONT_BODY}px; font-weight: 600;")
         )
         preview_layout.addWidget(self._lbl_sentence_preview)
         layout.addWidget(preview_box)
@@ -349,7 +412,7 @@ class RuleEditorDialog(QDialog):
         self._lbl_val_error = QLabel("", self)
         self._lbl_val_error.setObjectName("ruleValError")
         self._lbl_val_error.setWordWrap(True)
-        self._lbl_val_error.setStyleSheet(f"color: {tokens.ACCENT_ERROR}; font-size: {tokens.FONT_BODY_SM}px;")
+        self._lbl_val_error.setStyleSheet(theme_stylesheet(f"color: {tokens.ACCENT_ERROR}; font-size: {tokens.FONT_BODY_SM}px;"))
         self._lbl_val_error.setVisible(False)
         layout.addWidget(self._lbl_val_error)
 
@@ -363,14 +426,16 @@ class RuleEditorDialog(QDialog):
         self._btn_cancel.setObjectName("btnCancelRule")
         self._btn_cancel.setAccessibleName("Cancel rule editing")
         self._btn_cancel.setStyleSheet(
-            f"QPushButton {{"
-            f"  background-color: {tokens.BG_SURFACE};"
-            f"  color: {tokens.TEXT_PRIMARY};"
-            f"  border: 1px solid {tokens.BORDER};"
-            f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: 6px {tokens.SPACE_LG}px;"
-            f"}}"
-            f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            theme_stylesheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.BG_SURFACE};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER};"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: 6px {tokens.SPACE_LG}px;"
+                f"}}"
+                f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            )
         )
         self._btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(self._btn_cancel)
@@ -378,16 +443,19 @@ class RuleEditorDialog(QDialog):
         self._btn_save = QPushButton("Save Rule", self)
         self._btn_save.setObjectName("btnSaveRule")
         self._btn_save.setAccessibleName("Save validated rule")
+        self._btn_save.setDefault(True)
         self._btn_save.setStyleSheet(
-            f"QPushButton {{"
-            f"  background-color: {tokens.ACCENT_PRIMARY};"
-            f"  color: {tokens.TEXT_PRIMARY};"
-            f"  border: none;"
-            f"  border-radius: {tokens.RADIUS}px;"
-            f"  padding: 6px {tokens.SPACE_LG}px;"
-            f"  font-weight: 600;"
-            f"}}"
-            f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+            theme_stylesheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.ACCENT_PRIMARY};"
+                f"  color: {tokens.TEXT_PRIMARY};"
+                f"  border: none;"
+                f"  border-radius: {tokens.RADIUS}px;"
+                f"  padding: 6px {tokens.SPACE_LG}px;"
+                f"  font-weight: 600;"
+                f"}}"
+                f"QPushButton:hover {{ background-color: {tokens.ACCENT_HOVER}; }}"
+            )
         )
         self._btn_save.clicked.connect(self._on_save_clicked)
         btn_layout.addWidget(self._btn_save)
@@ -399,7 +467,7 @@ class RuleEditorDialog(QDialog):
 
     @staticmethod
     def _input_style() -> str:
-        return (
+        return theme_stylesheet(
             f"background-color: {tokens.BG_SURFACE};"
             f"color: {tokens.TEXT_PRIMARY};"
             f"border: 1px solid {tokens.BORDER};"
@@ -408,8 +476,7 @@ class RuleEditorDialog(QDialog):
             f"font-size: {tokens.FONT_BODY}px;"
         )
 
-    @Slot(str)
-    def _on_cond_type_changed(self, t: str) -> None:
+    def _sync_cond_controls_visibility(self, t: str) -> None:
         is_stat = (t == "Stat Comparison")
         is_count = (t == "Event Count At Least")
         self._cond_stat_input.setVisible(is_stat)
@@ -417,6 +484,10 @@ class RuleEditorDialog(QDialog):
         self._cond_val_spin.setVisible(is_stat)
         self._cond_event_input.setVisible(is_count)
         self._cond_count_spin.setVisible(is_count)
+
+    @Slot(str)
+    def _on_cond_type_changed(self, t: str) -> None:
+        self._sync_cond_controls_visibility(t)
         self._update_sentence_preview()
 
     @Slot(str)
@@ -432,26 +503,30 @@ class RuleEditorDialog(QDialog):
         self._update_sentence_preview()
 
     def _update_sentence_preview(self) -> None:
+        if not hasattr(self, "_lbl_sentence_preview") or not hasattr(self, "_effect_type_combo"):
+            return
         try:
             temp_rule = self.get_rule_spec()
             s_text = format_rule_sentence(temp_rule)
             self._lbl_sentence_preview.setText(f'"{s_text}"')
             self._lbl_val_error.setVisible(False)
-        except Exception as exc:
+        except Exception:
             ev = self._event_combo.currentText().strip() or "event"
-            self._lbl_sentence_preview.setText(f'Draft: When {ev} ...')
+            self._lbl_sentence_preview.setText(f"Draft: When {ev} ...")
 
     def _validate(self) -> Optional[str]:
         """Validate dialog inputs before saving."""
         rid = self._id_input.text().strip()
         if not rid:
             return "Rule ID cannot be empty."
-        if not re.match(r"^[A-Za-z0-9_]+$", rid):
-            return "Rule ID must contain only alphanumeric characters and underscores."
+        if not _IDENT_RE.fullmatch(rid):
+            return "Rule ID must start with a lowercase letter and contain only lowercase letters, digits, and underscores (max 40 chars)."
 
         ev = self._event_combo.currentText().strip()
         if not ev:
             return "When event cannot be empty."
+        if not EVENT_RE.fullmatch(ev):
+            return "When event must be a dotted lowercase event name (e.g. pickup.collected)."
 
         cond_type = self._cond_type_combo.currentText()
         if cond_type == "Stat Comparison":
@@ -462,12 +537,19 @@ class RuleEditorDialog(QDialog):
             cev = self._cond_event_input.text().strip()
             if not cev:
                 return "Condition event name cannot be empty."
+            if not EVENT_RE.fullmatch(cev):
+                return "Condition event must be a dotted lowercase event name (e.g. pickup.collected)."
 
         eff_type = self._effect_type_combo.currentText()
         if eff_type in ("Add Score / Stat", "Set Stat"):
             stat = self._stat_input.text().strip()
             if not stat:
                 return "Effect stat name cannot be empty."
+
+        try:
+            self.get_rule_spec()
+        except (ValidationError, ValueError) as exc:
+            return f"Invalid rule specification: {exc}"
 
         return None
 
@@ -488,48 +570,31 @@ class RuleEditorDialog(QDialog):
         src = self._source_combo.currentData()
 
         eff_type = self._effect_type_combo.currentText()
-        if eff_type == "End Game (Win)":
-            effect = EndGame(kind="end_game", outcome="win")
+        trailing_effects = list(self._rule.effects[1:]) if self._rule and len(self._rule.effects) > 1 else []
+        effects: List[Effect]
+        if eff_type == "Preserve Existing Effect" and self._rule and self._rule.effects:
+            effects = list(self._rule.effects)
+        elif eff_type == "End Game (Win)":
+            effects = [EndGame(kind="end_game", outcome="win")] + trailing_effects
         elif eff_type == "End Game (Lose)":
-            effect = EndGame(kind="end_game", outcome="lose")
+            effects = [EndGame(kind="end_game", outcome="lose")] + trailing_effects
         elif eff_type == "Set Stat":
-            stat_name = self._stat_input.text().strip() or self._target_stat or "player.health"
-            if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
-                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
-                    stat_name = f"player.{stat_name}"
-                elif stat_name in ("score", "time_s"):
-                    stat_name = f"game.{stat_name}"
-                else:
-                    stat_name = f"game.{stat_name}"
-            effect = SetStat(kind="set_stat", stat=stat_name, value=float(self._delta_spin.value()))
+            stat_name = _normalize_stat_name(self._stat_input.text(), default_prefix="game", fallback=self._target_stat or "player.health")
+            effects = [SetStat(kind="set_stat", stat=stat_name, value=float(self._delta_spin.value()))] + trailing_effects
         else:
-            stat_name = self._stat_input.text().strip() or self._target_stat or "game.score"
-            if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
-                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
-                    stat_name = f"player.{stat_name}"
-                elif stat_name in ("score", "time_s"):
-                    stat_name = f"game.{stat_name}"
-                else:
-                    stat_name = f"game.{stat_name}"
-            effect = AddStat(kind="add_stat", stat=stat_name, delta=float(self._delta_spin.value()))
+            stat_name = _normalize_stat_name(self._stat_input.text(), default_prefix="game", fallback=self._target_stat or "game.score")
+            effects = [AddStat(kind="add_stat", stat=stat_name, delta=float(self._delta_spin.value()))] + trailing_effects
 
         # Build conditions
         conds: List[Condition] = []
         cond_type = self._cond_type_combo.currentText()
         trailing_conditions = (
             list(self._rule.conditions[1:])
-            if (self._rule and hasattr(self._rule, "conditions") and len(self._rule.conditions) > 1 and cond_type != "No Condition")
+            if (self._rule and getattr(self._rule, "conditions", None) and len(self._rule.conditions) > 1 and cond_type != "No Condition")
             else []
         )
         if cond_type == "Stat Comparison":
-            stat_name = self._cond_stat_input.text().strip() or "player.health"
-            if not (stat_name.startswith("player.") or stat_name.startswith("game.") or stat_name.startswith("entity.")):
-                if stat_name in ("health", "lives", "stamina", "max_health", "mana", "oxygen", "energy", "shield", "fuel", "heat", "sanity", "rage", "stealth", "hydration", "hunger"):
-                    stat_name = f"player.{stat_name}"
-                elif stat_name in ("score", "time_s"):
-                    stat_name = f"game.{stat_name}"
-                else:
-                    stat_name = f"player.{stat_name}"
+            stat_name = _normalize_stat_name(self._cond_stat_input.text(), default_prefix="player", fallback="player.health")
             op = self._cond_op_combo.currentText()
             val = float(self._cond_val_spin.value())
             conds = [StatCompare(stat=stat_name, op=op, value=val)] + trailing_conditions
@@ -537,16 +602,15 @@ class RuleEditorDialog(QDialog):
             cev = self._cond_event_input.text().strip() or "pickup.collected"
             cnt = int(self._cond_count_spin.value())
             conds = [CountAtLeast(kind="count_at_least", event=cev, n=cnt)] + trailing_conditions
-        elif cond_type != "No Condition" and self._rule and hasattr(self._rule, "conditions") and self._rule.conditions:
+        elif cond_type != "No Condition" and self._rule and getattr(self._rule, "conditions", None):
             # Preserve any complex non-standard conditions
             conds = list(self._rule.conditions)
 
         desc = self._desc_input.text().strip()
-        trailing_effects = self._rule.effects[1:] if self._rule and len(self._rule.effects) > 1 else []
         return RuleSpec(
             rule_id=rid,
             when=EventRef(event=ev, source=src),
             conditions=conds,
-            effects=[effect] + trailing_effects,
+            effects=effects,
             description=desc,
         )

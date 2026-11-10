@@ -311,10 +311,11 @@ def delete_project(
         from ...backend.tools.game_tools import GameTools
         for link in GameTools.all_links():
             link_name = getattr(link, "project_name", "")
-            if link_name and (link_name == project_name or link_name == pdir.name):
+            if link_name and (link_name.strip().lower() == project_name.strip().lower() or link_name.strip().lower() == pdir.name.strip().lower()):
                 raise RuntimeError(
                     f"Cannot delete project '{project_name}': an active Unreal Editor link is connected."
                 )
+
     except ImportError:
         pass
 
@@ -499,10 +500,12 @@ class ProjectsService(QObject):
         """Alias for list_games_sync conforming to unified service interface."""
         return self.list_games_sync()
 
+    @Slot()
     def refresh(self) -> None:
         """Fetch games asynchronously and emit gamesLoaded."""
         def work() -> List[GameSummary]:
             return list_games(self._projects_root, self._workspace_dir)
+
 
         def done(handle):
             try:

@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
+
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -235,7 +237,7 @@ class DeleteGameDialog(QDialog):
             self._status_lbl.setText("Type the project name above or click 'Fill name' to confirm.")
             self._status_lbl.setStyleSheet(f"color: {tokens.TEXT_MUTED}; font-size: {tokens.FONT_BODY_SM}px;")
 
-    def showEvent(self, event) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         self._confirm_input.setFocus()
 

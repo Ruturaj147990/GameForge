@@ -13,13 +13,17 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, List
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.gameforge_ide.backend.agent.plan_executor import PlanEvent, TaskPlanExecutor
 from src.gameforge_ide.backend.agent.task_plan import TaskNode, TaskPlan
@@ -28,14 +32,14 @@ from src.gameforge_ide.backend.tools.gateway import ToolGateway
 
 
 def main() -> int:
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--forge", action="store_true", help="Run with Forge executor")
     args = ap.parse_args()
     print("[DEMO C] Starting Real Failure Handling Demonstration...")
 
-    events_log = []
-    def log_event(ev: PlanEvent):
+    events_log: List[Dict[str, Any]] = []
+
+    def log_event(ev: PlanEvent) -> None:
         msg = f"[{ev.timestamp:.2f}] {ev.event_type} | task={ev.task_id} | status={ev.status} | {ev.message}"
         print(f"  -> {msg}")
         events_log.append(ev.model_dump())
@@ -130,13 +134,13 @@ def main() -> int:
         print(f"[DEMO C] FAILED: Invalid DAG: {errs}")
         return 1
 
-    t0 = time.time()
+    t0 = time.monotonic()
     if args.forge:
         from src.gameforge_ide.forge.plan_adapter import run_plan_on_forge
         result_plan = run_plan_on_forge(plan, ROOT, auto_approve_all=True, on_event=log_event)
     else:
         result_plan = executor.run_plan(plan, auto_approve_all=True)
-    elapsed = time.time() - t0
+    elapsed = time.monotonic() - t0
 
     print(f"[DEMO C] Execution completed in {elapsed:.2f}s with status: {result_plan.status}")
 
@@ -175,7 +179,9 @@ def main() -> int:
 
     out_file = ROOT / "reports" / "milestone1_failure_demo.json"
     out_file.parent.mkdir(parents=True, exist_ok=True)
-    out_file.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    tmp_out = out_file.with_suffix(".tmp")
+    tmp_out.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp_out, out_file)
     print(f"[DEMO C] Report saved to {out_file}")
 
     return 0 if verdict_ok else 1

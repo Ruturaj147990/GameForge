@@ -32,6 +32,12 @@ _WIN_ALIASES: Dict[str, str] = {
     "board": "board_win",
     "puzzle_solved": "board_win",
     "match": "match_win",
+    "defuse_bomb": "reach_goal",
+    "bomb_defused": "reach_goal",
+    "quest_completed": "reach_goal",
+    "quest_complete": "reach_goal",
+    "laps_completed": "reach_goal",
+    "lap_completed": "reach_goal",
 }
 
 _LOSE_ALIASES: Dict[str, str] = {
@@ -42,6 +48,7 @@ _LOSE_ALIASES: Dict[str, str] = {
     "timeout": "timer_runs_out",
     "time_limit": "timer_runs_out",
     "time_expired": "timer_runs_out",
+    "out_of_time": "timer_runs_out",
     "fall": "fall_off",
     "pit": "fall_off",
     "board": "board_loss",
@@ -49,6 +56,8 @@ _LOSE_ALIASES: Dict[str, str] = {
     "caught": "caught_by_guard",
     "spotted": "caught_by_guard",
     "detected": "caught_by_guard",
+    "bomb_detonated": "health_zero",
+    "base_destroyed": "health_zero",
 }
 
 
@@ -124,7 +133,7 @@ class DesignDraft(_D):
     lose: List[DraftLose] = Field(default_factory=list, max_length=3)
     difficulty: Literal["easy", "normal", "hard"] = "normal"
     art_style: Literal["stylized", "realistic", "low_poly", "toon"] = "stylized"
-    music_mood: Literal["none", "calm", "tense", "heroic", "playful"] = "none"
+    music_mood: Literal["none", "calm", "tense", "heroic", "playful", "boss", "action", "mysterious"] = "none"
     custom_rules: List[str] = Field(default_factory=list, max_length=10)
     questions: List[str] = Field(default_factory=list, max_length=3)
     architecture: Optional[Dict[str, Any]] = Field(default=None)

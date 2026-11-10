@@ -59,6 +59,8 @@ def load_engine_remote_execution(engine_root: Path):
     if not path.is_file():
         raise LiveEditorError(f"engine remote_execution.py not found at {path}")
     spec = importlib.util.spec_from_file_location("ue_remote_execution", path)
+    if spec is None or spec.loader is None:
+        raise LiveEditorError(f"cannot create module loader for {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -101,7 +103,7 @@ class LiveEditorLink:
         self._rx = None
         self._process: Optional[subprocess.Popen] = None
         self._token: Optional[str] = None
-        self._lock = threading.Lock()  # one call in flight (Blueprint rule 6)
+        self._lock = threading.RLock()  # one call in flight + safe disconnect synchronization (Blueprint rule 6)
         self.node: Optional[Dict[str, Any]] = None
         self.last_stop_graceful = False
 
@@ -113,14 +115,15 @@ class LiveEditorLink:
     def prepare_project(self) -> Dict[str, Any]:
         cfg = self.project_dir / "Config" / "DefaultEngine.ini"
         cfg.parent.mkdir(parents=True, exist_ok=True)
-        text = cfg.read_text(encoding="utf-8") if cfg.exists() else ""
+        text = cfg.read_text(encoding="utf-8", errors="replace") if cfg.exists() else ""
         needs_settings = (
             "bRemoteExecution=True" not in text
             or "RemoteExecutionMulticastBindAddress=127.0.0.1" not in text
             or "RemoteExecutionMulticastTtl=0" not in text
         )
         if needs_settings:
-            cfg.write_text(text.rstrip() + "\n\n" + _REMOTE_EXEC_SETTINGS, encoding="utf-8")
+            new_text = (text.rstrip() + "\n\n" + _REMOTE_EXEC_SETTINGS) if text.strip() else _REMOTE_EXEC_SETTINGS
+            cfg.write_text(new_text, encoding="utf-8", newline="\n")
         self._ensure_python_plugin_enabled()
         py_dir = self.project_dir / "Content" / "Python"
         py_dir.mkdir(parents=True, exist_ok=True)
@@ -165,16 +168,23 @@ class LiveEditorLink:
         return {"config": str(cfg), "ops_library": str(dest), "token_file": str(self.token_file)}
 
     def _ensure_python_plugin_enabled(self) -> None:
-        data = json.loads(self.uproject.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(self.uproject.read_text(encoding="utf-8-sig", errors="replace"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise LiveEditorError(f"failed to parse {self.uproject}: {exc}") from exc
+        if not isinstance(data, dict):
+            raise LiveEditorError(f"invalid .uproject JSON object in {self.uproject}")
         plugins = data.setdefault("Plugins", [])
-        names = {p.get("Name") for p in plugins}
+        if not isinstance(plugins, list):
+            raise LiveEditorError(f"invalid Plugins list in {self.uproject}")
+        names = {p.get("Name") for p in plugins if isinstance(p, dict)}
         changed = False
         for name in ("PythonScriptPlugin", "EditorScriptingUtilities", "GameForge"):
             if name not in names:
                 plugins.append({"Name": name, "Enabled": True})
                 changed = True
         if changed:
-            self.uproject.write_text(json.dumps(data, indent="\t"), encoding="utf-8")
+            self.uproject.write_text(json.dumps(data, indent="\t"), encoding="utf-8", newline="\n")
 
     # ── process lifetime ───────────────────────────────────────────────────
     def launch(self, extra_args: Optional[List[str]] = None, log_path: Optional[Path] = None,
@@ -186,6 +196,7 @@ class LiveEditorLink:
         if no_sound:  # audio checks (M14) need the real audio device
             argv.append("-NoSound")
         if log_path:
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
             argv.append(f"-abslog={log_path}")
         argv += list(extra_args or [])
         from .toolchain import format_unreal_cmd
@@ -239,34 +250,41 @@ class LiveEditorLink:
         deadline = time.monotonic() + discovery_timeout_s
         expected = self.project_dir.resolve()
         rejected: List[str] = []
-        while time.monotonic() < deadline:
+        while True:
             if self._process is not None and self._process.poll() is not None:
                 self.disconnect()
                 raise LiveEditorError(f"editor exited during discovery (code {self._process.returncode})")
             for node in self._rx.remote_nodes:
-                root = node.get("project_root") or ""
+                if not isinstance(node, dict):
+                    continue
+                root = node.get("project_root")
+                if not isinstance(root, str) or not root.strip():
+                    continue
                 try:
                     same = Path(root).resolve() == expected
-                except OSError:
+                except (OSError, ValueError):
                     same = False
-                if same:
+                if same and node.get("node_id"):
                     self._rx.open_command_connection(node["node_id"])
                     self.node = node
                     return node
-                if root and root not in rejected:
+                if root not in rejected:
                     rejected.append(root)
+            if time.monotonic() >= deadline:
+                break
             time.sleep(1.0)
         self.disconnect()
         raise LiveEditorError(f"no editor for {expected} answered discovery within {discovery_timeout_s}s; "
                               f"rejected nodes: {rejected}")
 
     def disconnect(self) -> None:
-        if self._rx is not None:
-            try:
-                self._rx.stop()
-            except Exception:
-                pass
-        self._rx = None
+        with self._lock:
+            if self._rx is not None:
+                try:
+                    self._rx.stop()
+                except Exception:
+                    pass
+            self._rx = None
 
     def capture_screenshot(self, output_path: Path, resolution=(1280, 720), wait_s: float = 30.0,
                            show_ui: bool = False) -> Dict[str, Any]:
@@ -278,9 +296,12 @@ class LiveEditorLink:
         capture never shows widgets, so UI evidence must pass ``show_ui=True``.
         """
         output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         if output_path.exists():
             output_path.unlink()
-        args = {"output_path": output_path.as_posix(), "resolution": list(resolution)}
+        if len(resolution) != 2 or int(resolution[0]) <= 0 or int(resolution[1]) <= 0:
+            raise ValueError(f"resolution must be a positive (width, height) pair, got {resolution!r}")
+        args = {"output_path": output_path.as_posix(), "resolution": [int(resolution[0]), int(resolution[1])]}
         if show_ui:
             args["show_ui"] = True
         res = self.call("viewport_screenshot", args)
@@ -292,7 +313,9 @@ class LiveEditorLink:
             if output_path.exists():
                 size = output_path.stat().st_size
                 if size > 0 and size == last_size:  # stable size => write finished
-                    res["data"].update({"path": str(output_path), "bytes": size, "async": False})
+                    data = res.setdefault("data", {})
+                    if isinstance(data, dict):
+                        data.update({"path": str(output_path), "bytes": size, "async": False})
                     return res
                 last_size = size
             time.sleep(0.5)
@@ -302,42 +325,45 @@ class LiveEditorLink:
     # ── operations ─────────────────────────────────────────────────────────
     def call(self, op_name: str, args: Optional[Dict[str, Any]] = None,
              timeout_s: Optional[float] = None) -> Dict[str, Any]:
-        if self._rx is None or not self._rx.has_command_connection():
-            return {"ok": False, "op": op_name, "errors": ["EDITOR_NOT_CONNECTED"]}
         command = build_command(op_name, args or {}, self._token or "")
-        box: Dict[str, Any] = {}
-
-        def _run():
-            try:
-                box["result"] = self._rx.run_command(command, unattended=True,
-                                                     exec_mode=self._rx_module.MODE_EXEC_FILE)
-            except Exception as exc:  # socket errors, editor crash
-                box["error"] = f"{type(exc).__name__}: {exc}"
+        wait_timeout = self.call_timeout_s if timeout_s is None else timeout_s
 
         with self._lock:
+            if self._rx is None or not self._rx.has_command_connection():
+                return {"ok": False, "op": op_name, "errors": ["EDITOR_NOT_CONNECTED"]}
+            box: Dict[str, Any] = {}
+
+            def _run():
+                try:
+                    box["result"] = self._rx.run_command(command, unattended=True,
+                                                         exec_mode=self._rx_module.MODE_EXEC_FILE)
+                except Exception as exc:  # socket errors, editor crash
+                    box["error"] = f"{type(exc).__name__}: {exc}"
+
             started = time.monotonic()
             worker = threading.Thread(target=_run, daemon=True)
             worker.start()
-            worker.join(timeout_s or self.call_timeout_s)
+            worker.join(wait_timeout)
             elapsed = round(time.monotonic() - started, 3)
-        if worker.is_alive():
-            # A hung call leaves the command connection in a poisoned/blocked state; disconnect cleanly.
-            self.disconnect()
-            return {"ok": False, "op": op_name, "errors": ["EDITOR_CALL_TIMEOUT"], "elapsed_s": elapsed}
-        if "error" in box:
-            # A dropped socket is either a crash or a lost link; either way the channel is dead.
-            self.disconnect()
-            crashed = False
-            if self._process is not None:
-                try:
-                    self._process.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    pass
-                crashed = self._process.poll() is not None
-            return {"ok": False, "op": op_name,
-                    "errors": ["EDITOR_CRASHED" if crashed else "EDITOR_LINK_LOST", box["error"]],
-                    "elapsed_s": elapsed}
-        envelope = parse_result(box["result"])
+            if worker.is_alive():
+                # A hung call leaves the command connection in a poisoned/blocked state; disconnect cleanly.
+                self.disconnect()
+                return {"ok": False, "op": op_name, "errors": ["EDITOR_CALL_TIMEOUT"], "elapsed_s": elapsed}
+            if "error" in box:
+                # A dropped socket is either a crash or a lost link; either way the channel is dead.
+                self.disconnect()
+                crashed = False
+                if self._process is not None:
+                    try:
+                        self._process.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    crashed = self._process.poll() is not None
+                return {"ok": False, "op": op_name,
+                        "errors": ["EDITOR_CRASHED" if crashed else "EDITOR_LINK_LOST", box["error"]],
+                        "elapsed_s": elapsed}
+            raw_res = box.get("result")
+            envelope = parse_result(raw_res if isinstance(raw_res, dict) else {})
         truth = op_catalog.true_reversibility(op_name)
         if truth is not None and isinstance(envelope, dict) and envelope.get("reversibility") != truth:
             # Several editor envelopes over-claim (e.g. landscape ops say "transactional" but have no undo):

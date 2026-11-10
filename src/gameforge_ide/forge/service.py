@@ -7,7 +7,7 @@ from __future__ import annotations
 
 try:
     from ..desktop.services.forge_service import ForgeService
-except ImportError:
+except (ImportError, OSError):
     ForgeService = None  # type: ignore[assignment,misc]
 
 __all__ = ["ForgeService"]

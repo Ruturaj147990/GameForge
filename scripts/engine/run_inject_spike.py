@@ -15,7 +15,8 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 from src.gameforge_ide.core import jobs  # noqa: E402
@@ -23,9 +24,18 @@ from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 from src.gameforge_ide.unreal.toolchain import UnrealToolchain  # noqa: E402
 
 NAME = "GFInjectSpike"
-VALIDATION_ROOT = (get_settings().require_dev("validation_root") / r"GFInjectSpike")
 REPORT_PATH = REPO_ROOT / "reports" / "P3" / "spike_inject.json"
 MAP_PATH = "/Game/Maps/SpikeMap"
+
+
+def _get_validation_root() -> Path:
+    try:
+        val_root = get_settings().require_dev("validation_root")
+        p = Path(val_root) / "GFInjectSpike"
+        return p
+    except Exception:
+        pass
+    return REPO_ROOT / "scratch" / "validation" / "GFInjectSpike"
 
 SPIKE_CHARACTER_H = """#pragma once
 
@@ -336,13 +346,15 @@ void ASpikeGameMode::FinishSpike()
 """
 
 
-def build_spike_level(uproject: Path) -> bool:
+def build_spike_level(uproject: Path, validation_root: Path) -> bool:
     link = LiveEditorLink(uproject)
     link.prepare_project()
-    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=VALIDATION_ROOT / "level_editor.log")
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=validation_root / "level_editor.log")
     try:
         link.connect(discovery_timeout_s=300)
-        link.call("new_level", {"level_path": MAP_PATH})
+        res_lvl = link.call("new_level", {"level_path": MAP_PATH})
+        if not res_lvl.get("ok"):
+            return False
         link.call("spawn_actor", {
             "actor_class": "StaticMeshActor", "label": "Spike_Floor",
             "static_mesh": "/Engine/BasicShapes/Cube.Cube",
@@ -357,13 +369,13 @@ def build_spike_level(uproject: Path) -> bool:
             "actor_class": "PlayerStart", "label": "Spike_PlayerStart",
             "location": {"x": 0, "y": 0, "z": 100}
         })
-        link.call("save_all", {})
-        return True
+        res_save = link.call("save_all", {})
+        return bool(res_save.get("ok"))
     finally:
         link.stop()
 
 
-def run_binary(exe: Path, out_json: Path, timeout_s: float = 60.0) -> dict:
+def run_binary(exe: Path, out_json: Path, timeout_s: float = 60.0) -> Dict[str, Any]:
     if out_json.exists():
         out_json.unlink()
     argv = [
@@ -382,20 +394,24 @@ def run_binary(exe: Path, out_json: Path, timeout_s: float = 60.0) -> dict:
         raise RuntimeError(f"Binary run timed out or failed: {exc}")
     if not out_json.exists():
         raise RuntimeError(f"Binary exited with code {code} but no result JSON written at {out_json}")
-    return json.loads(out_json.read_text(encoding="utf-8"))
+    try:
+        return json.loads(out_json.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"Failed to parse binary result JSON {out_json}: {exc}")
 
 
 def main() -> int:
     print(f"=== Starting WI-3.0 Enhanced Input Injection Spike ===")
     tc = UnrealToolchain()
+    validation_root = _get_validation_root()
 
-    if VALIDATION_ROOT.exists():
+    if validation_root.exists():
         try:
-            shutil.rmtree(VALIDATION_ROOT)
+            shutil.rmtree(validation_root)
         except Exception as exc:
             print(f"Warning cleaning validation root: {exc}")
 
-    VALIDATION_ROOT.mkdir(parents=True, exist_ok=True)
+    validation_root.mkdir(parents=True, exist_ok=True)
     extra_files = {
         f"Source/{NAME}/SpikeCharacter.h": SPIKE_CHARACTER_H,
         f"Source/{NAME}/SpikeCharacter.cpp": SPIKE_CHARACTER_CPP,
@@ -409,7 +425,7 @@ def main() -> int:
 
     print(f"Scaffolding {NAME}...")
     scaffold = tc.scaffold_cpp_project(
-        VALIDATION_ROOT,
+        validation_root,
         NAME,
         extra_files=extra_files,
         module_deps=["EnhancedInput"],
@@ -419,20 +435,20 @@ def main() -> int:
     uproject = Path(scaffold["uproject"])
 
     print(f"Building {NAME}Editor...")
-    b_editor = tc.build(uproject, f"{NAME}Editor", log_dir=VALIDATION_ROOT / "logs")
+    b_editor = tc.build(uproject, f"{NAME}Editor", log_dir=validation_root / "logs")
     if not b_editor.ok:
         print(f"Editor build FAILED: {b_editor.errors} {b_editor.diagnostics}")
         return 1
     print(f"Editor build OK ({b_editor.duration_s}s)")
 
     print(f"Creating level {MAP_PATH} via LiveEditorLink...")
-    if not build_spike_level(uproject):
+    if not build_spike_level(uproject, validation_root):
         print("Level creation FAILED")
         return 1
     print(f"Level {MAP_PATH} created.")
 
     # 1. Package Development
-    dev_archive = VALIDATION_ROOT / "package_dev"
+    dev_archive = validation_root / "package_dev"
     print(f"Packaging Development to {dev_archive}...")
     b_pkg_dev = tc.package(uproject, dev_archive, configuration="Development")
     if not b_pkg_dev.ok:
@@ -442,7 +458,7 @@ def main() -> int:
     print(f"Development package OK ({b_pkg_dev.duration_s}s), exe={dev_exe}")
 
     # Run Development
-    dev_out = VALIDATION_ROOT / "spike_dev_result.json"
+    dev_out = validation_root / "spike_dev_result.json"
     print(f"Running Development binary...")
     t0 = time.monotonic()
     dev_res = run_binary(dev_exe, dev_out)
@@ -450,7 +466,7 @@ def main() -> int:
     print(f"Development result: {dev_res} (took {dev_duration}s)")
 
     # 2. Package Shipping
-    ship_archive = VALIDATION_ROOT / "package_ship"
+    ship_archive = validation_root / "package_ship"
     print(f"Packaging Shipping to {ship_archive}...")
     b_pkg_ship = tc.package(uproject, ship_archive, configuration="Shipping")
     if not b_pkg_ship.ok:
@@ -460,7 +476,7 @@ def main() -> int:
     print(f"Shipping package OK ({b_pkg_ship.duration_s}s), exe={ship_exe}")
 
     # Run Shipping
-    ship_out = VALIDATION_ROOT / "spike_ship_result.json"
+    ship_out = validation_root / "spike_ship_result.json"
     print(f"Running Shipping binary...")
     t0 = time.monotonic()
     ship_res = run_binary(ship_exe, ship_out)
@@ -493,7 +509,9 @@ def main() -> int:
     }
 
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
+    tmp = REPORT_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
+    tmp.replace(REPORT_PATH)
     print(f"Wrote spike evidence to {REPORT_PATH}")
     print(f"SPIKE VERDICT: {'PASS' if passed else 'FAIL'}")
 

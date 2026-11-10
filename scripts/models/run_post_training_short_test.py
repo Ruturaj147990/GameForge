@@ -9,19 +9,31 @@ Outputs:
   e:\\gameforge_step1\\reports\\gameforge-27b-sft\\before_after_results.csv
 """
 
+from __future__ import annotations
+
+import argparse
 import base64
 import csv
 import io
 import json
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
-from PIL import Image, ImageDraw
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 REPORTS_DIR = Path("E:/GameForge/reports/gameforge-27b-sft")
-MIRROR_REPORTS_DIR = (Path(__file__).resolve().parents[1] / r"reports/gameforge-27b-sft")
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-MIRROR_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+MIRROR_REPORTS_DIR = REPO_ROOT / "reports" / "gameforge-27b-sft"
+
+try:
+    from PIL import Image, ImageDraw
+    has_pil = True
+except ImportError:
+    has_pil = False
 
 OLLAMA_API = "http://127.0.0.1:11434/api/generate"
 
@@ -32,6 +44,8 @@ MODELS = [
 
 def generate_compiler_error_image() -> str:
     """Generates a high-contrast compiler error image and returns base64 PNG."""
+    if not has_pil:
+        return ""
     img = Image.new("RGB", (640, 140), color=(30, 30, 30))
     draw = ImageDraw.Draw(img)
     # Header banner
@@ -173,7 +187,7 @@ def score_response(text: str, rubrics: list) -> tuple:
             matched.append(kw)
     return score, matched
 
-def main():
+def run_suite() -> int:
     print("=" * 80)
     print(" GAMEFORGE 27B SFT — SHORT BEFORE-AND-AFTER TEST HARNESS")
     print(" Baseline : gameforge-27b-sft:latest")
@@ -216,6 +230,7 @@ def main():
             rows.append(row)
             status_flag = "TRUNC" if res["is_truncated"] else "OK"
             print(f"  [{idx:02d}/08] [{tid}] {title:32s} -> Score: {score:02d}/{max_s:02d} | Tok: {res['eval_count']:03d} [{status_flag}] | Speed: {res['tps']:4.1f} tps")
+        unload_model(model)
 
     print("\n" + "=" * 80)
     print(" FINAL SHORT-TEST COMPARATIVE RESULTS")
@@ -224,22 +239,59 @@ def main():
         pct = (totals[model] / 80.0) * 100
         print(f"  {model:30s}: {totals[model]:02d} / 80 points ({pct:.1f}%)")
 
-    # Write CSV
+    # Write CSV atomically
     csv_fields = [
         "model", "task_id", "title", "domain", "score", "max_score",
         "percentage", "tokens", "tps", "latency_sec", "is_truncated",
         "matched_keywords", "error", "preview"
     ]
-    csv_path_e = REPORTS_DIR / "before_after_results.csv"
-    csv_path_m = MIRROR_REPORTS_DIR / "before_after_results.csv"
+    target_reports = [REPORTS_DIR, MIRROR_REPORTS_DIR]
 
-    for cp in [csv_path_e, csv_path_m]:
-        with open(cp, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=csv_fields)
-            writer.writeheader()
-            writer.writerows(rows)
+    for cp_dir in target_reports:
+        try:
+            cp_dir.mkdir(parents=True, exist_ok=True)
+            csv_path = cp_dir / "before_after_results.csv"
+            temp_csv = csv_path.with_suffix(".tmp")
+            with open(temp_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=csv_fields)
+                writer.writeheader()
+                writer.writerows(rows)
+            temp_csv.replace(csv_path)
+            print(f"Results successfully saved to {csv_path}")
+        except Exception as e:
+            print(f"Warning: Failed to write to {cp_dir}: {e}", file=sys.stderr)
 
-    print(f"\nResults successfully saved to {csv_path_e} and {csv_path_m}")
+    return 0
+
+
+def unload_model(model: str) -> None:
+    try:
+        req = urllib.request.Request(
+            OLLAMA_API,
+            data=json.dumps({"model": model, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as _:
+            pass
+    except Exception:
+        pass
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Deterministic Short Before-and-After Evaluation Suite for GameForge 27B SFT")
+    parser.add_argument("--dry-run", action="store_true", help="Validate tasks without querying models")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Loaded {len(TASKS)} evaluation tasks.")
+        return 0
+
+    try:
+        return run_suite()
+    finally:
+        for m in MODELS:
+            unload_model(m)
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

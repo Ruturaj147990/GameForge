@@ -8,10 +8,11 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..storage.atomic import atomic_write_text
 from .model import canonical_hash
 
 
@@ -56,11 +57,12 @@ class ProjectGraph(BaseModel):
         return len(self.nodes) < before
 
     @classmethod
-    def load(cls, project_dir: Path) -> "ProjectGraph":
+    def load(cls, project_dir: Union[Path, str]) -> "ProjectGraph":
         """Load project_graph.json from <project>/GameForge/ or <project>/.gameforge/."""
+        pdir = Path(project_dir)
         paths = [
-            project_dir / "GameForge" / "project_graph.json",
-            project_dir / ".gameforge" / "project_graph.json",
+            pdir / "GameForge" / "project_graph.json",
+            pdir / ".gameforge" / "project_graph.json",
         ]
         for p in paths:
             if p.is_file():
@@ -71,13 +73,15 @@ class ProjectGraph(BaseModel):
                     pass
         return cls()
 
-    def save(self, project_dir: Path) -> None:
-        """Save project_graph.json to both standard locations."""
+    def save(self, project_dir: Union[Path, str]) -> None:
+        """Save project_graph.json atomically to both standard locations."""
+        pdir = Path(project_dir)
+        payload = self.model_dump_json(indent=2, by_alias=True)
         for rel in ["GameForge", ".gameforge"]:
-            d = project_dir / rel
+            d = pdir / rel
             d.mkdir(parents=True, exist_ok=True)
             p = d / "project_graph.json"
-            p.write_text(self.model_dump_json(indent=2), encoding="utf-8")
+            atomic_write_text(p, payload, sync=True, backup=False)
 
 
 def compute_actor_state_hash(actor: Dict[str, Any]) -> str:
@@ -93,12 +97,16 @@ def compute_actor_state_hash(actor: Dict[str, Any]) -> str:
     return canonical_hash(payload)
 
 
-def compute_file_sha256(file_path: Path) -> str:
+def compute_file_sha256(file_path: Union[Path, str]) -> str:
     """Compute SHA-256 of an asset file on disk."""
-    if not file_path.is_file():
+    fp = Path(file_path)
+    if not fp.is_file():
         return ""
     h = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        while chunk := f.read(65536):
-            h.update(chunk)
+    try:
+        with open(fp, "rb") as f:
+            while chunk := f.read(65536):
+                h.update(chunk)
+    except OSError:
+        return ""
     return h.hexdigest()

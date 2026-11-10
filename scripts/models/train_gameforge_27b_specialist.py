@@ -18,17 +18,32 @@ from __future__ import annotations
 # They MUST NOT be executed against production base models, GGUF blobs, or release pipelines.
 DEMO_ONLY = True
 
+import argparse
 import json
 import math
 import os
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List
 
-import torch
-import torch.nn as nn
-from safetensors.torch import save_file
-from transformers import AutoTokenizer
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    import torch
+    import torch.nn as nn
+    from safetensors.torch import save_file
+    from transformers import AutoTokenizer
+    has_deps = True
+except ImportError:
+    has_deps = False
+    torch = None
+    nn = type("nn", (), {"Module": object})
+    save_file = None
+    AutoTokenizer = None
 
 try:
     import torch_directml
@@ -334,12 +349,33 @@ def main() -> None:
 """
 
     for target_dir in [REPORTS_DIR, MIRROR_REPORTS_DIR]:
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "training_report.json").write_text(json.dumps(report_data, indent=2), encoding="utf-8")
-        (target_dir / "training_report.md").write_text(report_md, encoding="utf-8")
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            temp_json = (target_dir / "training_report.json").with_suffix(".tmp")
+            temp_json.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
+            temp_json.replace(target_dir / "training_report.json")
+
+            temp_md = (target_dir / "training_report.md").with_suffix(".tmp")
+            temp_md.write_text(report_md, encoding="utf-8")
+            temp_md.replace(target_dir / "training_report.md")
+        except Exception as e:
+            print(f"Warning: Failed to write to {target_dir}: {e}", file=sys.stderr)
 
     print(f"Reports saved to {REPORTS_DIR} and {MIRROR_REPORTS_DIR}")
+    return 0
+
+
+def main_cli() -> int:
+    parser = argparse.ArgumentParser(description="GameForge 27B Specialist Training Engine")
+    parser.add_argument("--dry-run", action="store_true", help="Validate setup without executing training")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Refusal guard active (DEMO_ONLY={DEMO_ONLY}). DirectML available: {dml_available}.")
+        return 0
+
+    return main()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main_cli())

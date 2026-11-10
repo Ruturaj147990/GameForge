@@ -118,6 +118,17 @@
             "FColor"
           ],
           "notes": "FKey is a C++ struct (never switch(Key), use if/else with EKeys). FVector has no ToFloat() method; use Direction.Rotation() or Direction.GetSafeNormal(). FLinearColor uses American spelling FLinearColor::Gray (never Grey). FLinearColor has no Orange constant; construct it using FLinearColor(FColor::Orange)."
+        },
+        "msvc_compilation_invariants": {
+          "status": "VERIFIED",
+          "doc_url": "https://dev.epicgames.com/documentation/en-us/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine",
+          "components": [
+            "GetWorld()",
+            "CachedWorld",
+            "const overrides",
+            "Forward declarations"
+          ],
+          "notes": "To avoid MSVC C4458 (declaration hides class member), never name member fields World; use CachedWorld and override GetWorld() const. Any query helper function invoked from a const override (such as GetStatusText) must also be declared const to prevent MSVC C2662."
         }
       }
     },

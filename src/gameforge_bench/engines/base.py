@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 try:
     import psutil
@@ -19,7 +18,7 @@ except ImportError:
 
 @dataclass
 class SubprocessResult:
-    command: List[str]
+    command: list[str]
     return_code: int
     duration_seconds: float
     stdout: str
@@ -27,6 +26,10 @@ class SubprocessResult:
     timed_out: bool = False
     stdout_log_path: Optional[str] = None
     stderr_log_path: Optional[str] = None
+
+    @property
+    def success(self) -> bool:
+        return self.return_code == 0 and not self.timed_out
 
 
 @dataclass
@@ -108,6 +111,10 @@ def safe_subprocess_run(
     if env:
         sub_env.update(env)
 
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
     try:
         proc = subprocess.Popen(
             cmd,
@@ -118,6 +125,7 @@ def safe_subprocess_run(
             encoding="utf-8",
             errors="replace",
             env=sub_env,
+            creationflags=creationflags,
         )
 
         try:
@@ -127,7 +135,8 @@ def safe_subprocess_run(
             return_code = proc.returncode
         except subprocess.TimeoutExpired:
             timed_out = True
-            # Safely terminate child processes using psutil if available
+            # Safely terminate child processes using psutil or taskkill
+            killed_tree = False
             try:
                 if psutil is not None:
                     parent = psutil.Process(proc.pid)
@@ -137,10 +146,27 @@ def safe_subprocess_run(
                         except Exception:
                             pass
                     parent.kill()
-                else:
-                    proc.kill()
+                    killed_tree = True
             except Exception:
-                proc.kill()
+                pass
+
+            if not killed_tree and os.name == "nt":
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                        capture_output=True,
+                        creationflags=creationflags,
+                    )
+                    killed_tree = True
+                except Exception:
+                    pass
+
+            if not killed_tree:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
             out, err = proc.communicate()
             stdout_str = out or ""
             stderr_str = (err or "") + f"\n[Process killed: exceeded timeout of {timeout_seconds}s]"

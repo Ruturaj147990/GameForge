@@ -28,13 +28,15 @@ READ_ONLY_PREFIXES = (
     "status_",
 )
 _MUTATING_WORD_RE = re.compile(
-    r"(?:^|_)(delete|remove|modify|set|create|spawn|write|update|exec|destroy|drop|clear|kill|alter|insert|reset|rename|truncate)(?:_|$)",
+    r"(?:^|_)(delete|remove|modify|set|create|spawn|write|update|exec|execute|destroy|drop|clear|kill|alter|insert|reset|rename|truncate|mutate|trigger)(?:_|$)",
     re.IGNORECASE,
 )
 
 
 def _validate_read_only(tool_name: str) -> Optional[str]:
     """Return error message if tool violates read-only safety, or None if valid."""
+    if not isinstance(tool_name, str) or not tool_name.strip():
+        return "Tool name must be a non-empty string"
     lower = tool_name.lower().strip()
     if not lower.startswith(READ_ONLY_PREFIXES):
         return f"Tool '{tool_name}' rejected: GameForge MCP Bridge is strictly read-only"
@@ -53,13 +55,21 @@ class UnrealMcpClient:
     """Read-only client for the Unreal Engine 5.8 MCP Toolset Registry."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 8000):
-        if host.lower() not in ALLOWED_LOOPBACK_HOSTS:
+        if not isinstance(host, str):
+            raise ValueError(f"Invalid host '{host}': expected loopback hostname or IP")
+        norm_host = host.strip().lower()
+        if norm_host == "[::1]":
+            norm_host = "::1"
+        if norm_host not in ALLOWED_LOOPBACK_HOSTS:
             raise ValueError(
                 f"Invalid host '{host}': GameForge MCP Bridge is strictly loopback only ({', '.join(sorted(ALLOWED_LOOPBACK_HOSTS))})"
             )
-        self.host = host
+        if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
+            raise ValueError(f"Invalid port {port!r}: expected integer in range 1..65535")
+        self.host = host.strip()
         self.port = port
-        self.endpoint = f"http://{host}:{port}/mcp"
+        url_host = f"[{norm_host}]" if ":" in norm_host else self.host
+        self.endpoint = f"http://{url_host}:{port}/mcp"
 
     def list_tools(self, timeout_s: float = 3.0) -> List[Dict[str, Any]]:
         """Query Toolset Registry for registered MCP tools."""
@@ -78,7 +88,13 @@ class UnrealMcpClient:
             )
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 data = json.loads(resp.read().decode("utf-8", errors="replace"))
-                return data.get("result", {}).get("tools", [])
+                if not isinstance(data, dict):
+                    return []
+                result = data.get("result")
+                if not isinstance(result, dict):
+                    return []
+                tools = result.get("tools")
+                return tools if isinstance(tools, list) else []
         except Exception:
             return []
 
@@ -112,7 +128,8 @@ class UnrealMcpClient:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                return json.loads(resp.read().decode("utf-8", errors="replace"))
+                data = json.loads(resp.read().decode("utf-8", errors="replace"))
+                return data if isinstance(data, dict) else {"result": data}
         except Exception as e:
             return {"error": str(e)}
 

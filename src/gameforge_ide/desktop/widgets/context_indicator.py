@@ -21,8 +21,8 @@ from __future__ import annotations
 import html
 from typing import Any, Dict, Optional, Union
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QCursor, QFont
+from PySide6.QtCore import QPoint, Qt, Signal, Slot
+from PySide6.QtGui import QColor, QCursor, QFont, QMouseEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -64,6 +64,10 @@ class ContextBreakdownDialog(QDialog):
         self._report = report
         self._init_ui()
 
+    def deleteLater(self) -> None:
+        """Defensive cleanup before scheduled deletion."""
+        super().deleteLater()
+
     def _init_ui(self) -> None:
         bg = theme_color(tokens.BG_PANEL)
         border_col = theme_color(tokens.BORDER_FOCUS)
@@ -97,7 +101,7 @@ class ContextBreakdownDialog(QDialog):
 
         badge_text = "EXACT" if not self._report.is_estimated else f"EST ({self._report.estimation_method})"
         badge_bg = tokens.ACCENT_SUCCESS if not self._report.is_estimated else tokens.ACCENT_WARNING
-        badge_lbl = QLabel(f"<span style='background-color:{badge_bg}; color:#000; border-radius:3px; padding:2px 6px; font-weight:bold; font-size:10px;'>{badge_text}</span>")
+        badge_lbl = QLabel(f"<span style='background-color:{badge_bg}; color:{tokens.BG_ROOT}; border-radius:3px; padding:2px 6px; font-weight:bold; font-size:10px;'>{badge_text}</span>")
         badge_lbl.setTextFormat(Qt.RichText)
         hdr.addWidget(badge_lbl)
         layout.addLayout(hdr)
@@ -239,6 +243,7 @@ class ContextUsageIndicator(QFrame):
         self.update_theme()
         self._update_tooltip()
 
+    @Slot()
     def update_theme(self) -> None:
         """Apply active theme tokens to indicator frame and progress bar."""
         bg = theme_color(tokens.BG_SURFACE)
@@ -276,6 +281,7 @@ class ContextUsageIndicator(QFrame):
         self._lbl_tokens.setStyleSheet(f"font-size: {tokens.FONT_BODY_SM}px; font-weight: 600; color: {text_pri};")
         self._update_tooltip()
 
+    @Slot(object)
     def update_report(self, report: Union[ContextUsageReport, Dict[str, Any]]) -> None:
         """Update indicator with newly calculated ContextUsageReport or dict."""
         if isinstance(report, dict):
@@ -386,10 +392,23 @@ class ContextUsageIndicator(QFrame):
         """
         self.setToolTip(html_tip)
 
-    def mousePressEvent(self, event) -> None:
+    def deleteLater(self) -> None:
+        """Defensive cleanup closing any active popup dialog."""
+        if hasattr(self, "_active_dialog") and self._active_dialog:
+            try:
+                self._active_dialog.close()
+                self._active_dialog = None
+            except (RuntimeError, Exception):
+                pass
+        super().deleteLater()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         """Show the detailed popup breakdown dialog on mouse click."""
         if event.button() == Qt.LeftButton:
-            self.clicked.emit()
+            try:
+                self.clicked.emit()
+            except RuntimeError:
+                pass
             if self._report:
                 if hasattr(self, "_active_dialog") and self._active_dialog and self._active_dialog.isVisible():
                     self._active_dialog.close()

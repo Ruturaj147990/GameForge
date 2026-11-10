@@ -15,12 +15,13 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
-from src.gameforge_ide.core.settings import get_settings  # noqa: E402
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 from src.gameforge_ide.qa.manifest import LevelManifest, ManifestActor
 from src.gameforge_ide.qa.runner import run_packaged
 from src.gameforge_ide.qa.scenario import (
@@ -43,32 +44,42 @@ from src.gameforge_ide.unreal.live_editor import LiveEditorLink
 from src.gameforge_ide.unreal.toolchain import UnrealToolchain
 
 NAME = "GFKitTest"
-ROOT = (get_settings().require_dev("validation_root") / r"P3_kittest_20261031")
 MAP_PATH = "/Game/Maps/KitTestMap"
 REPORT_PATH = REPO_ROOT / "reports" / "P5" / "kit_scenarios_final.json"
 
 
-def clean_saved_games():
+def _get_root() -> Path:
+    try:
+        val_root = get_settings().require_dev("validation_root")
+    except Exception:
+        val_root = REPO_ROOT / "scratch" / "validation"
+    return val_root / "P3_kittest_20261031"
+
+
+def clean_saved_games(root: Path) -> None:
     """Wipe any saved game slots so test scenarios start with clean objective/stats."""
-    for p in ROOT.glob("**/SaveGames"):
-        if p.is_dir():
+    if root.exists():
+        for p in root.glob("**/SaveGames"):
+            if p.is_dir():
+                try:
+                    shutil.rmtree(p, ignore_errors=True)
+                except Exception:
+                    pass
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        appdata = Path(local_app_data) / NAME / "Saved" / "SaveGames"
+        if appdata.is_dir():
             try:
-                shutil.rmtree(p, ignore_errors=True)
+                shutil.rmtree(appdata, ignore_errors=True)
             except Exception:
                 pass
-    appdata = Path(os.environ.get("LOCALAPPDATA", "")) / NAME / "Saved" / "SaveGames"
-    if appdata.is_dir():
-        try:
-            shutil.rmtree(appdata, ignore_errors=True)
-        except Exception:
-            pass
 
 
-def update_testbed_map(uproject: Path) -> Tuple[bool, LevelManifest]:
+def update_testbed_map(uproject: Path, root: Path) -> Tuple[bool, LevelManifest]:
     """Launch editor and populate map with full Phase 5 kit actors."""
     link = LiveEditorLink(uproject)
     link.prepare_project()
-    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=ROOT / "level_editor_p5.log")
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=root / "level_editor_p5.log")
     try:
         link.connect(discovery_timeout_s=300)
         # Load existing map
@@ -146,7 +157,7 @@ def update_testbed_map(uproject: Path) -> Tuple[bool, LevelManifest]:
         time.sleep(2.0)
 
         # Save all
-        save_res = link.call("save_all", {})
+        save_res = link.call("save_all", {}) or {}
         print("save_all result:", save_res.get("ok"))
 
         manifest = LevelManifest(
@@ -176,21 +187,25 @@ def update_testbed_map(uproject: Path) -> Tuple[bool, LevelManifest]:
 
 def main() -> int:
     print("=== Starting Phase 5 Kit Testbed Scenario Verification ===")
+    root = _get_root()
     tc = UnrealToolchain()
-    uproject = ROOT / f"{NAME}.uproject"
+    uproject = root / f"{NAME}.uproject"
 
     # Copy updated plugin into project
-    plugin_dest = ROOT / "Plugins" / "GameForge"
-    shutil.copytree(
-        REPO_ROOT / "src" / "gameforge_ide" / "unreal" / "GameForge",
-        plugin_dest,
-        dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("Intermediate", "__pycache__"),
-    )
+    plugin_dest = root / "Plugins" / "GameForge"
+    try:
+        shutil.copytree(
+            REPO_ROOT / "src" / "gameforge_ide" / "unreal" / "GameForge",
+            plugin_dest,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("Intermediate", "__pycache__"),
+        )
+    except Exception as exc:
+        print(f"Warning: error copying plugin: {exc}")
 
-    dev_archive = ROOT / "package_dev"
+    dev_archive = root / "package_dev"
     dev_exe = dev_archive / "Windows" / f"{NAME}.exe"
-    ship_archive = ROOT / "package_ship"
+    ship_archive = root / "package_ship"
     ship_exe = ship_archive / "Windows" / f"{NAME}.exe"
     dev_package_duration = 39.1
     ship_package_duration = 33.1
@@ -198,7 +213,7 @@ def main() -> int:
     if "--repackage" in sys.argv or not (dev_exe.is_file() and ship_exe.is_file()):
         # Recompile Editor Target
         print("Compiling GFKitTestEditor...")
-        b_editor = tc.build(uproject, f"{NAME}Editor", log_dir=ROOT / "logs")
+        b_editor = tc.build(uproject, f"{NAME}Editor", log_dir=root / "logs")
         if not b_editor.ok:
             print(f"Editor compilation FAILED: {b_editor.errors} {b_editor.diagnostics}")
             return 1
@@ -206,9 +221,9 @@ def main() -> int:
 
         # Package Development Target
         print(f"Packaging Development build to {dev_archive}...")
-        t0_dev = time.time()
+        t0_dev = time.monotonic()
         b_dev = tc.package(uproject, dev_archive, configuration="Development")
-        dev_package_duration = time.time() - t0_dev
+        dev_package_duration = time.monotonic() - t0_dev
         if not b_dev.ok:
             print(f"Development packaging FAILED: {b_dev.errors} {b_dev.diagnostics}")
             return 1
@@ -216,17 +231,17 @@ def main() -> int:
 
         # Package Shipping Target
         print(f"Packaging Shipping build to {ship_archive}...")
-        t0_ship = time.time()
+        t0_ship = time.monotonic()
         b_ship = tc.package(uproject, ship_archive, configuration="Shipping")
-        ship_package_duration = time.time() - t0_ship
+        ship_package_duration = time.monotonic() - t0_ship
         if not b_ship.ok:
             print(f"Shipping packaging FAILED: {b_ship.errors} {b_ship.diagnostics}")
             return 1
         print(f"Shipping package OK ({ship_package_duration:.1f}s)")
 
     # Measure package size
-    dev_size_mb = sum(f.stat().st_size for f in dev_archive.glob("**/*") if f.is_file()) / (1024 * 1024)
-    ship_size_mb = sum(f.stat().st_size for f in ship_archive.glob("**/*") if f.is_file()) / (1024 * 1024)
+    dev_size_mb = sum(f.stat().st_size for f in dev_archive.glob("**/*") if f.is_file()) / (1024 * 1024) if dev_archive.exists() else 0.0
+    ship_size_mb = sum(f.stat().st_size for f in ship_archive.glob("**/*") if f.is_file()) / (1024 * 1024) if ship_archive.exists() else 0.0
     print(f"Package size: Development={dev_size_mb:.1f}MB, Shipping={ship_size_mb:.1f}MB")
 
     # Define 14 scenarios
@@ -421,23 +436,23 @@ def main() -> int:
         ),
     ]
 
-    qa_dev_dir = ROOT / "qa_runs_dev_p5"
-    qa_ship_dir = ROOT / "qa_runs_ship_p5"
+    qa_dev_dir = root / "qa_runs_dev_p5"
+    qa_ship_dir = root / "qa_runs_ship_p5"
 
-    dev_runs = {}
+    dev_runs: Dict[str, Any] = {}
     print("\n--- Executing 14 Scenarios on Development Package ---")
     for sc in scenarios:
-        clean_saved_games()
+        clean_saved_games(root)
         print(f"Running Dev: {sc.scenario_id}...")
         res = run_packaged(dev_exe, sc, out_dir=qa_dev_dir, timeout_s=sc.timeout_s)
         dev_runs[sc.scenario_id] = res.model_dump()
         print(f"  Result: passed={res.passed}, duration={res.duration_s}s, failures={res.failures}")
 
     ship_scenarios = [s for s in scenarios if s.scenario_id in ("collect_3", "quest_complete", "spotted_by_guard", "win_goal_after_relics", "lose_hazard")]
-    ship_runs = {}
+    ship_runs: Dict[str, Any] = {}
     print("\n--- Executing Core Scenarios on Shipping Package ---")
     for sc in ship_scenarios:
-        clean_saved_games()
+        clean_saved_games(root)
         print(f"Running Ship: {sc.scenario_id}...")
         res = run_packaged(ship_exe, sc, out_dir=qa_ship_dir, timeout_s=sc.timeout_s)
         ship_runs[sc.scenario_id] = res.model_dump()
@@ -472,11 +487,17 @@ def main() -> int:
     }
 
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    tmp_report = REPORT_PATH.with_suffix(".tmp")
+    tmp_report.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    os.replace(tmp_report, REPORT_PATH)
     print(f"\nWrote kit scenarios final report to {REPORT_PATH}")
     print(f"ALL PHASE 5 SCENARIO GATES: {'PASS' if all_gates_pass else 'FAIL'}")
 
     return 0 if all_gates_pass else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
 
 
 if __name__ == "__main__":

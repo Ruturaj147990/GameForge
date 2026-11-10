@@ -1,11 +1,13 @@
 """Legacy recipe pipeline stages adapted as Forge handlers (AD-11)."""
 from __future__ import annotations
 
+import json
 import re
+import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Type, Union
+from typing import Any, Dict, Optional
 
-from ...core.settings import engine_root_or_missing, get_settings
+from ...core.settings import engine_root_or_missing
 from ...pipeline import stages as engine_stages
 from ...legacy_recipes.arena_combat.recipe import (
     RECIPE_ID as ARENA_RECIPE_ID,
@@ -42,10 +44,49 @@ from ...legacy_recipes.procedural_world.recipe import (
     ProceduralWorldParams,
     generate as procedural_generate,
 )
+from ...storage.atomic import atomic_write_text
 from ...unreal.toolchain import UnrealToolchain
 from ...composer.model import map_package_path
 from ..checkpoints import ProjectRepo
 from ..executor import StepContext, StepOutcome
+
+__all__ = [
+    "PARAMS_BY_RECIPE",
+    "RECIPE_IMPL",
+    "get_recipe_id",
+    "get_params",
+    "legacy_spec",
+    "legacy_scaffold",
+    "legacy_sources",
+    "legacy_build",
+    "legacy_assemble",
+    "legacy_tests",
+    "legacy_package",
+    "legacy_smoke",
+]
+
+
+def _is_cancelled(ctx: StepContext) -> bool:
+    cancel = getattr(ctx, "cancel", None)
+    return cancel is not None and cancel.is_set() is True
+
+
+def _resolve_project_dir_and_name(ctx: StepContext, params: Optional[Any] = None) -> tuple[Path, str]:
+    project_name = (
+        ctx.step.inputs.get("project_name")
+        or (ctx.project_dir.name if ctx.project_dir else getattr(params, "project_name", "GameForgeProject"))
+    )
+    pdir = Path(ctx.project_dir) if ctx.project_dir else (Path(ctx.workspace_dir) / str(project_name))
+    return pdir, str(project_name)
+
+
+def _find_uproject(pdir: Path, project_name: str) -> Path:
+    uproject = pdir / f"{project_name}.uproject"
+    if not uproject.is_file() and pdir.is_dir():
+        uprojects = list(pdir.glob("*.uproject"))
+        if uprojects:
+            uproject = uprojects[0]
+    return uproject
 
 PARAMS_BY_RECIPE: Dict[str, Any] = {
     GRID_RECIPE_ID: GridBoardParams,

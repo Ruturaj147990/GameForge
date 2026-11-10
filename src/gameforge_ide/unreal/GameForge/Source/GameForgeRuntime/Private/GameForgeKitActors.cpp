@@ -592,6 +592,17 @@ void AGameForgeEnemy::BeginPlay()
 		Move->MaxWalkSpeed = FMath::Max(0.f, MoveSpeed);
 	}
 
+	if (bIsBoss)
+	{
+		SetActorScale3D(FVector(1.4f, 1.4f, 1.4f));
+		if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+		{
+			GS->SetStat(FName(TEXT("boss.health")), MaxHealth);
+			GS->SetStat(FName(TEXT("boss.max_health")), MaxHealth);
+			GS->SetStat(FName(TEXT("boss.phase")), static_cast<float>(BossPhase));
+		}
+	}
+
 	ApplyVisuals();
 
 	if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
@@ -729,6 +740,36 @@ void AGameForgeEnemy::OnDamaged(AActor* DamageInstigator)
 	{
 		AggroRange = FMath::Max(AggroRange, FVector::Dist(GetActorLocation(), DamageInstigator->GetActorLocation()) + 200.f);
 	}
+
+	if (bIsBoss)
+	{
+		const float CurHealth = AttributeSet ? AttributeSet->GetHealth() : 0.0f;
+		if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+		{
+			GS->SetStat(FName(TEXT("boss.health")), FMath::Max(0.0f, CurHealth));
+			GS->SetStat(FName(TEXT("boss.max_health")), MaxHealth);
+		}
+		if (BossPhase == 1 && CurHealth > 0.0f && CurHealth <= (MaxHealth * 0.5f))
+		{
+			BossPhase = 2;
+			bEnraged = true;
+			MoveSpeed *= 1.35f;
+			AttackDamage *= 1.4f;
+			if (UCharacterMovementComponent* Move = GetCharacterMovement())
+			{
+				Move->MaxWalkSpeed = MoveSpeed;
+			}
+			FlashColor(FLinearColor(0.9f, 0.1f, 0.8f, 1.0f), 0.5f);
+			if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+			{
+				GS->SetStat(FName(TEXT("boss.phase")), 2.0f);
+			}
+			if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+			{
+				Bus->Emit(GFEvent::BossPhaseChanged, GetName(), TEXT("{\"phase\":2,\"enraged\":true}"), EntityId);
+			}
+		}
+	}
 }
 
 void AGameForgeEnemy::HandleDeath()
@@ -738,6 +779,19 @@ void AGameForgeEnemy::HandleDeath()
 		return;
 	}
 	bDead = true;
+
+	if (bIsBoss)
+	{
+		if (AGameForgeGameState* GS = GetWorld() ? GetWorld()->GetGameState<AGameForgeGameState>() : nullptr)
+		{
+			GS->SetStat(FName(TEXT("boss.health")), 0.0f);
+			GS->AddStat(FName(TEXT("game.score")), 500.0f);
+		}
+		if (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))
+		{
+			Bus->Emit(GFEvent::BossDefeated, GetName(), TEXT("{\"defeated\":true}"), EntityId);
+		}
+	}
 
 	if (AController* C = GetController())
 	{
@@ -879,7 +933,18 @@ AActor* AGameForgeEnemyAIController::ResolveHostileOrGoalTarget(AGameForgeEnemy*
 	}
 
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	return PC ? PC->GetPawn() : nullptr;
+	if (PC && PC->GetPawn())
+	{
+		if (const AGameForgeCharacter* GFChar = Cast<AGameForgeCharacter>(PC->GetPawn()))
+		{
+			if (GFChar->bStealthActive)
+			{
+				return nullptr; // Player is concealed by stealth / invisibility
+			}
+		}
+		return PC->GetPawn();
+	}
+	return nullptr;
 }
 
 void AGameForgeEnemyAIController::Tick(float DeltaSeconds)

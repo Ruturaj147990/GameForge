@@ -26,23 +26,37 @@ Outputs:
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Tuple
 
+import argparse
 import base64
 import csv
 import io
 import json
 import re
+import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
-from PIL import Image, ImageDraw
+from typing import Any, Dict, List, Tuple
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
-REPORTS_DIR = WORKSPACE_ROOT / "reports"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+REPORTS_DIR = REPO_ROOT / "reports"
 OLLAMA_API = "http://127.0.0.1:11434/api/generate"
 
+try:
+    from PIL import Image, ImageDraw
+    has_pil = True
+except ImportError:
+    has_pil = False
+
+
 def generate_compiler_error_image() -> str:
+    if not has_pil:
+        return ""
     img = Image.new("RGB", (640, 140), color=(30, 30, 30))
     draw = ImageDraw.Draw(img)
     draw.rectangle([0, 0, 640, 28], fill=(60, 20, 20))
@@ -246,6 +260,19 @@ def query_model(model: str, prompt: str, image_b64: str = None) -> Dict[str, Any
             "error": str(e)
         }
 
+def unload_model(model_name: str) -> None:
+    try:
+        req = urllib.request.Request(
+            OLLAMA_API,
+            data=json.dumps({"model": model_name, "keep_alive": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as _:
+            pass
+    except Exception:
+        pass
+
+
 def evaluate_model(model_name: str) -> Tuple[int, int, List[Dict[str, Any]]]:
     print("=" * 80)
     print(f" EVALUATING GAMEFORGE BENCHMARK — {model_name}")
@@ -305,18 +332,42 @@ def evaluate_model(model_name: str) -> Tuple[int, int, List[Dict[str, Any]]]:
     print(f"\nFinal Score for {model_name}: {total_score} / {max_total} ({pct}%)")
 
     csv_path = model_dir / "phase2_evaluation_results.csv"
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
+    temp_csv = csv_path.with_suffix(".tmp")
+    try:
+        with open(temp_csv, "w", newline="", encoding="utf-8") as f:
+            if rows:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(rows)
+        temp_csv.replace(csv_path)
+    except Exception:
+        if temp_csv.exists():
+            temp_csv.unlink()
+        raise
 
     return total_score, max_total, rows
 
-def main():
-    # Evaluate 4B
-    s_4b, m_4b, rows_4b = evaluate_model("gameforge-qwen3.5-4b:latest")
-    # Evaluate 9B
-    s_9b, m_9b, rows_9b = evaluate_model("gameforge-qwen3.5-9b:latest")
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="GameForge Multi-Model Game Development Evaluation Suite")
+    parser.add_argument("--dry-run", action="store_true", help="Validate setup without querying models")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print(f"Dry run passed: Loaded {len(TASKS)} evaluation tasks across multiple engine domains.")
+        return 0
+
+    try:
+        # Evaluate 4B
+        s_4b, m_4b, rows_4b = evaluate_model("gameforge-qwen3.5-4b:latest")
+        unload_model("gameforge-qwen3.5-4b:latest")
+
+        # Evaluate 9B
+        s_9b, m_9b, rows_9b = evaluate_model("gameforge-qwen3.5-9b:latest")
+        unload_model("gameforge-qwen3.5-9b:latest")
+    finally:
+        unload_model("gameforge-qwen3.5-4b:latest")
+        unload_model("gameforge-qwen3.5-9b:latest")
 
     # Load 27B SFT results from baseline
     s_27b = 153
@@ -377,9 +428,18 @@ def main():
 """
 
     report_path = REPORTS_DIR / "GAMEFORGE_GAMING_BENCHMARK.md"
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report_md)
+    temp_report = report_path.with_suffix(".tmp")
+    try:
+        temp_report.write_text(report_md, encoding="utf-8")
+        temp_report.replace(report_path)
+    except Exception:
+        if temp_report.exists():
+            temp_report.unlink()
+        raise
+
     print(f"\nComparative Gaming Benchmark written to {report_path}")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

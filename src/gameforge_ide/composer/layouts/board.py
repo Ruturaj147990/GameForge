@@ -1,7 +1,6 @@
 """Composer board layout (WI-6.3).
 
-Grid board level plan for turn-based and discrete grid games (Tic-Tac-Toe, Connect Four,
-Sudoku, Chess, Checkers, Minesweeper, Snakes and Ladders, Ludo, Tetris, Snake).
+Generic grid board level plan for turn-based, discrete grid, and path movement games.
 The board actor dynamically builds its grid cells and enforces board_mode rules.
 """
 from __future__ import annotations
@@ -18,10 +17,13 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
     board_ent = None
     if hasattr(gds, "entities") and gds.entities:
         for ent in gds.entities:
-            k = getattr(ent, "kind", "")
-            m = getattr(ent, "module", "")
+            k = str(getattr(getattr(ent, "kind", ""), "value", getattr(ent, "kind", ""))).lower()
+            m = str(getattr(ent, "module", "")).lower()
             if (
-                str(getattr(k, "value", k)) in ("board", "grid", "grid_board", "tictactoe", "connect_four", "gomoku")
+                "board" in k
+                or "grid" in k
+                or "table" in k
+                or "puzzle" in k
                 or m in ("kit.grid_board", "kit.board")
             ):
                 board_ent = ent
@@ -65,6 +67,16 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
             props["LaddersCount"] = int(eprops["ladders"])
         if "dice_sides" in eprops and eprops["dice_sides"] is not None:
             props["DiceSides"] = int(eprops["dice_sides"])
+        if "has_dice" in eprops or "bHasDice" in eprops:
+            props["bHasDice"] = bool(eprops.get("has_dice", eprops.get("bHasDice", True)))
+        if "forward_warps" in eprops and isinstance(eprops["forward_warps"], dict):
+            props["ForwardWarps"] = {int(k): int(v) for k, v in eprops["forward_warps"].items()}
+        if "backward_warps" in eprops and isinstance(eprops["backward_warps"], dict):
+            props["BackwardWarps"] = {int(k): int(v) for k, v in eprops["backward_warps"].items()}
+        if "rows" in eprops and eprops["rows"] is not None:
+            props["GridRows"] = int(eprops["rows"])
+        if "cols" in eprops and eprops["cols"] is not None:
+            props["GridCols"] = int(eprops["cols"])
         if "players" in eprops and eprops["players"] is not None:
             props["Players"] = int(eprops["players"])
         if "location" in eprops:

@@ -10,16 +10,22 @@ Evidence: reports/m10v2_blendspace_demo.json. Usage: python scripts/engine/demo_
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(REPO / "scripts" / "engine"))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+ENGINE_SCRIPTS = str(REPO / "scripts" / "engine")
+if ENGINE_SCRIPTS not in sys.path:
+    sys.path.insert(0, ENGINE_SCRIPTS)
 
-import demo_m11_landscape as land  # noqa: E402
+from src.gameforge_ide.core.settings import get_settings  # noqa: E402
 
 REPORT = REPO / "reports" / "m10v2_blendspace_demo.json"
 ANIMS = "/Game/Characters/GFAdventurerHero/Animations"
@@ -29,28 +35,34 @@ SAMPLES = [{"animation": f"{ANIMS}/Anim_Idle", "value": 0.0}, {"animation": f"{A
            {"animation": f"{ANIMS}/Anim_Run", "value": 450.0}]
 
 
-def run(rep: dict) -> None:
+def run(rep: Dict[str, Any]) -> None:
+    import demo_m11_landscape as land
+
     checks, steps = rep["checks"], rep["steps"]
-    land.PROJECT_DIR = Path(str(land.PROJECT_DIR).replace("m11_landscape_", "m10v2_blendspace_"))
+    val_root = get_settings().require_dev("validation_root")
+    land.PROJECT_DIR = val_root / f"m10v2_blendspace_{time.strftime('%Y%m%d')}"
     rep["project"] = str(land.PROJECT_DIR)
     uproject = land.make_disposable()
     link = land.start(uproject, "bs_a")
     try:
         r = link.call("anim_create_blendspace_1d", {"asset_path": BS, "skeleton_path": SKELETON, "axis_name": "Speed",
-                                                    "min": 0, "max": 600, "grid": 4, "samples": SAMPLES}, timeout_s=120)
-        steps["create"] = (r.get("data") or {}) | {"ok": r.get("ok"), "errors": r.get("errors")}
-        before = link.call("anim_inspect_blendspace", {"blendspace_path": BS}).get("data") or {}
+                                                    "min": 0, "max": 600, "grid": 4, "samples": SAMPLES}, timeout_s=120) or {}
+        r_data = r.get("data") if isinstance(r.get("data"), dict) else {}
+        steps["create"] = r_data | {"ok": r.get("ok"), "errors": r.get("errors")}
+        before_resp = link.call("anim_inspect_blendspace", {"blendspace_path": BS}) or {}
+        before = before_resp.get("data") if isinstance(before_resp.get("data"), dict) else {}
         steps["before_restart"] = before
         checks["blendspace_created"] = bool(r.get("ok"))
         checks["axis_read_back"] = (before.get("axes") or [{}])[0] == {"name": "Speed", "min": 0.0, "max": 600.0, "grid": 4}
-        checks["samples_read_back"] = [(s["animation"].split(".")[0], s["value"]) for s in before.get("samples", [])] == \
+        checks["samples_read_back"] = [(str(s.get("animation", "")).split(".")[0], s.get("value")) for s in before.get("samples", [])] == \
             [(s["animation"], s["value"]) for s in SAMPLES]
         link.call("save_all", {})
     finally:
         rep["editor_exit_code_a"] = link.stop()
     link = land.start(uproject, "bs_b")
     try:
-        after = link.call("anim_inspect_blendspace", {"blendspace_path": BS}).get("data") or {}
+        after_resp = link.call("anim_inspect_blendspace", {"blendspace_path": BS}) or {}
+        after = after_resp.get("data") if isinstance(after_resp.get("data"), dict) else {}
         steps["after_restart"] = after
         checks["identical_after_restart"] = bool(after) and after == before
     finally:
@@ -58,15 +70,27 @@ def run(rep: dict) -> None:
 
 
 def main() -> int:
-    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "checks": {}, "steps": {},
-           "not_covered": ["AnimInstance driving the BlendSpace", "start/stop + turn-in-place clips"]}
+    rep: Dict[str, Any] = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "checks": {},
+        "steps": {},
+        "not_covered": ["AnimInstance driving the BlendSpace", "start/stop + turn-in-place clips"],
+    }
     try:
         run(rep)
     except Exception as exc:
         rep["exception"] = f"{type(exc).__name__}: {exc}"
     finally:
         rep["ok"] = bool(rep["checks"]) and all(rep["checks"].values()) and "exception" not in rep
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        tmp = REPORT.with_name(f".{REPORT.name}.tmp.{os.getpid()}")
+        try:
+            tmp.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, REPORT)
+        finally:
+            if tmp.exists():
+                with contextlib.suppress(OSError):
+                    tmp.unlink()
     print(json.dumps(rep["checks"], indent=2), rep.get("exception", ""))
     return 0 if rep["ok"] else 1
 

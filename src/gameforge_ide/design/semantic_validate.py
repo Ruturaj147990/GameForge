@@ -125,7 +125,7 @@ def semantic_validate_gds(
             )
 
     # Check 6: Board game prompt
-    if any(k in p_lower for k in ("tic tac toe", "tic-tac-toe", "connect four", "connect 4", "gomoku", "five in a row")):
+    if any(k in p_lower for k in ("tic tac toe", "tic-tac-toe", "connect four", "connect 4", "gomoku", "five in a row", "chess", "checkers", "draughts")):
         if genre_val != Genre.GRID_BOARD.value and genre_val != "grid_board":
             issues.append(
                 f"Prompt specifies grid board game, but genre is '{genre_val}' "
@@ -281,7 +281,11 @@ def semantic_validate_gds(
         if isinstance(props, dict):
             if "jump_velocity" in props and float(props["jump_velocity"]) < 0:
                 issues.append(f"Entity '{e.entity_id}' has negative jump_velocity ({props['jump_velocity']})")
-            if "speed" in props and float(props["speed"]) <= 0:
-                issues.append(f"Entity '{e.entity_id}' has non-positive speed ({props['speed']})")
+            for spd_key in ("speed", "move_speed", "player_speed"):
+                if spd_key in props and float(props[spd_key]) <= 0:
+                    issues.append(f"Entity '{e.entity_id}' has non-positive {spd_key} ({props[spd_key]})")
+            for hp_key in ("health", "max_health", "player_max_health", "enemy_max_health"):
+                if hp_key in props and float(props[hp_key]) <= 0:
+                    issues.append(f"Entity '{e.entity_id}' has non-positive {hp_key} ({props[hp_key]})")
 
     return (len(issues) == 0, issues)

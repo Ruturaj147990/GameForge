@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import time
 from typing import Any, Awaitable, Callable, Dict, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class EditorReadinessState(BaseModel):
@@ -26,6 +26,8 @@ class SerializedMutationQueue:
     """Ensures serialized execution of mutations on Unreal's game/editor thread."""
 
     def __init__(self, default_timeout_seconds: float = 30.0):
+        if default_timeout_seconds <= 0:
+            raise ValueError(f"default_timeout_seconds must be > 0 (got {default_timeout_seconds})")
         self._lock = asyncio.Lock()
         self.default_timeout = default_timeout_seconds
         self._readiness = EditorReadinessState()
@@ -65,7 +67,14 @@ class SerializedMutationQueue:
         timeout_seconds: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Acquires the exclusive serial mutation lock, validates readiness, and executes within timeout."""
-        timeout = timeout_seconds or self.default_timeout
+        timeout = self.default_timeout if timeout_seconds is None else timeout_seconds
+        if timeout <= 0:
+            return {
+                "ok": False,
+                "status": "ERROR",
+                "error": f"Invalid timeout {timeout} for operation '{operation_name}'; must be > 0.",
+                "operation": operation_name,
+            }
 
         # 1. Acquire serial lock
         async with self._lock:
@@ -79,10 +88,10 @@ class SerializedMutationQueue:
                 }
 
             # 3. Bounded execution
-            t0 = time.time()
+            t0 = time.monotonic()
             try:
                 result = await asyncio.wait_for(coro_func(), timeout=timeout)
-                self._last_execution_time = time.time() - t0
+                self._last_execution_time = time.monotonic() - t0
                 return result
             except asyncio.TimeoutError:
                 return {

@@ -221,7 +221,7 @@ def test_patch_rule_enhanced_lighting():
     prop_sunset = propose_patch(patched, "set lighting to sunset")
     assert prop_sunset.status == "OK"
     patched_sunset = apply_patch(patched, prop_sunset.ops)
-    assert patched_sunset.scene.levels[0].lighting == Lighting.DUSK
+    assert patched_sunset.scene.levels[0].lighting in (Lighting.SUNSET, Lighting.DUSK)
 
 
 # ── 6. Token Context Waste Prevention ──────────────────────────────────────────

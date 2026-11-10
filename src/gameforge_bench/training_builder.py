@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -41,6 +42,17 @@ class FormattedTrainingSample:
             "target_completion": self.target_completion,
             "metadata": self.metadata,
             "sample_fingerprint": self.sample_fingerprint,
+        }
+
+    def to_chat_messages(self) -> Dict[str, Any]:
+        """Convert sample into standard OpenAI/HuggingFace chat messages format."""
+        return {
+            "messages": [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": self.user_prompt},
+                {"role": "assistant", "content": self.target_completion},
+            ],
+            "metadata": self.metadata,
         }
 
 
@@ -84,13 +96,13 @@ class TrainingDatasetBuilder:
         if not engine_info:
             raise ValueError(f"Mandatory engine info missing in sample {sample_id}")
 
-        engine_name = engine_info.get("name")
-        engine_ver = engine_info.get("version")
+        engine_name = str(engine_info.get("name", ""))
+        engine_ver = str(engine_info.get("version", ""))
         if not engine_name or not engine_ver:
             raise ValueError(f"Mandatory engine name or version missing in sample {sample_id}")
 
         system_prompt = self.SYSTEM_PROMPT_TEMPLATE.format(
-            engine=str(engine_name).capitalize(),
+            engine=engine_name.capitalize(),
             engine_version=engine_ver
         )
 
@@ -215,3 +227,38 @@ class TrainingDatasetBuilder:
         dataset_digest = hashlib.sha256(combined_hashes.encode("utf-8")).hexdigest()
 
         return formatted_samples, dataset_digest, report
+
+    @staticmethod
+    def split_dataset(
+        samples: List[FormattedTrainingSample],
+        train_ratio: float = 0.9,
+        seed: int = 42,
+    ) -> Tuple[List[FormattedTrainingSample], List[FormattedTrainingSample]]:
+        """Deterministically splits formatted samples into train and validation sets."""
+        if not samples:
+            return [], []
+        # Sort by sample_id first to guarantee reproducibility regardless of input order
+        sorted_samples = sorted(samples, key=lambda s: s.sample_id)
+        rng = random.Random(seed)
+        shuffled = list(sorted_samples)
+        rng.shuffle(shuffled)
+        split_idx = int(len(shuffled) * train_ratio)
+        return shuffled[:split_idx], shuffled[split_idx:]
+
+    @staticmethod
+    def export_jsonl(
+        samples: List[FormattedTrainingSample],
+        output_path: Path | str,
+        format_mode: str = "messages",
+    ) -> Path:
+        """Exports formatted samples to JSON Lines format for model fine-tuning."""
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8") as f:
+            for s in samples:
+                if format_mode == "messages":
+                    line_data = s.to_chat_messages()
+                else:
+                    line_data = s.to_dict()
+                f.write(json.dumps(line_data, ensure_ascii=False) + "\n")
+        return out

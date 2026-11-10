@@ -94,15 +94,16 @@ class TaskPlanExecutor:
         """Formulates a repetition key including canonical args and project-state version."""
         file_target = tool_args.get("subpath") or tool_args.get("file_path") or tool_args.get("path")
         file_sig = ""
-        if file_target:
-            fp = (self.workspace_root / file_target).resolve()
-            if fp.is_file():
-                try:
+        if file_target and isinstance(file_target, (str, Path)):
+            try:
+                fp = (self.workspace_root / str(file_target)).resolve()
+                if fp.is_file():
                     st = fp.stat()
                     file_sig = f":{st.st_mtime_ns}:{st.st_size}"
-                except Exception:
-                    pass
-        return f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}:v{self._state_version}{file_sig}"
+            except Exception:
+                pass
+        canonical_args = json.dumps(tool_args, sort_keys=True) if isinstance(tool_args, dict) else str(tool_args)
+        return f"{tool_name}:{canonical_args}:v{self._state_version}{file_sig}"
 
     def _emit(self, event_type: str, plan_id: str, task_id: Optional[str] = None,
               status: Optional[TaskNodeStatus] = None, message: str = "", data: Optional[Dict[str, Any]] = None) -> PlanEvent:
@@ -285,14 +286,14 @@ class TaskPlanExecutor:
             try:
                 if is_unreal:
                     with self._unreal_lock:
-                        step_output = self._dispatch_tool_call(task)
+                        step_output = self._dispatch_tool_call(task, auto_approve=auto_approve_all)
                         self._state_version += 1
                 elif is_write:
                     with self._write_lock:
-                        step_output = self._dispatch_tool_call(task)
+                        step_output = self._dispatch_tool_call(task, auto_approve=auto_approve_all)
                         self._state_version += 1
                 else:
-                    step_output = self._dispatch_tool_call(task)
+                    step_output = self._dispatch_tool_call(task, auto_approve=auto_approve_all)
             except Exception as exc:
                 step_error = str(exc)
 
@@ -399,7 +400,7 @@ class TaskPlanExecutor:
         plan.block_descendants(task.task_id, task.error_message or "Max retries exceeded")
         return "FAILED"
 
-    def _dispatch_tool_call(self, task: TaskNode) -> Dict[str, Any]:
+    def _dispatch_tool_call(self, task: TaskNode, auto_approve: bool = False) -> Dict[str, Any]:
         """Dispatches the tool call attached to task node."""
         if not task.tool_call:
             if not task.acceptance and not task.requires_approval:  # an approved gate is its own evidence
@@ -408,8 +409,9 @@ class TaskPlanExecutor:
             # Evaluation-only task: its predicates are evaluated against observed state next.
             return {"status": "SUCCESS", "message": "No direct tool call, evaluation only"}
 
-        tool_name = task.tool_call.get("name", "")
-        tool_args = task.tool_call.get("arguments", {})
+        tool_name = str(task.tool_call.get("name", "")).strip()
+        raw_args = task.tool_call.get("arguments", {})
+        tool_args = raw_args if isinstance(raw_args, dict) else {}
 
         # Security & permission boundary: tool must be permitted for this task
         if task.permitted_tools and tool_name not in task.permitted_tools:
@@ -418,7 +420,7 @@ class TaskPlanExecutor:
                 "error": f"Tool '{tool_name}' not in permitted tools for task '{task.task_id}' ({task.permitted_tools})",
             }
 
-        is_approved = getattr(task, "approved", False) or not task.requires_approval
+        is_approved = auto_approve or getattr(task, "approved", False) or not task.requires_approval
         res = self.tool_gateway.execute_tool(
             tool_name,
             tool_args,

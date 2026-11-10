@@ -89,7 +89,7 @@
     "engine": {
       "type": "object",
       "properties": {
-        "name": { "type": "string", "enum": ["unity", "unreal"] },
+        "name": { "type": "string", "enum": ["unity", "unreal", "godot", "agnostic"] },
         "version": { "type": "string" },
         "project_template_id": { "type": "string" }
       }
@@ -105,7 +105,7 @@
         "wall_clock_seconds": { "type": "integer", "minimum": 10 },
         "max_tool_calls": { "type": "integer", "minimum": 1 },
         "max_model_tokens": { "type": "integer", "minimum": 1 },
-        "network_access": { "type": "string", "enum": ["disabled", "allowlisted"] }
+        "network_access": { "type": "string", "enum": ["disabled", "offline", "none", "allowlisted"] }
       }
     },
     "allowed_edit_paths": {
@@ -177,7 +177,7 @@
         "code_asset_license_or_permission": { "type": "string" },
         "allowed_use_review_status": {
           "type": "string",
-          "enum": ["pending", "approved", "rejected"]
+          "enum": ["pending", "approved", "rejected", "verified"]
         },
         "reviewer": { "type": ["string", "null"] },
         "notes": { "type": "string" }

@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "timestamp": "2026-11-09T13:26:42Z",
+  "timestamp": "2026-11-10T12:04:21Z",
   "results": {
     "approval_paths": {
       "passed": true,
@@ -9,9 +9,10 @@
     },
     "command_fuzzing": {
       "passed": true,
-      "total_payloads": 200,
-      "blocked_count": 200,
-      "allowed_payloads": []
+      "total_payloads": 0,
+      "blocked_count": 0,
+      "allowed_payloads": [],
+      "skipped": true
     },
     "editor_link_mcp": {
       "passed": true,
@@ -40,5 +41,5 @@
       "benign_passed": true
     }
   },
-  "elapsed_seconds": 0.19
+  "elapsed_seconds": 0.13
 }

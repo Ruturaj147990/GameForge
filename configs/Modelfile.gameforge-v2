@@ -1,7 +1,7 @@
 # GameForge V2 Production Modelfile for Ollama Deployment
 # Derived from genuine trained and merged GameForge V2 weights
 
-FROM ./artifacts/gameforge-v2/gameforge-v2-q4_k_m.gguf
+FROM E:/GameForge_AI_Models/artifacts/gameforge-v2/gameforge-v2-q4_k_m.gguf
 
 TEMPLATE """{{ if .System }}<|im_start|>system
 {{ .System }}<|im_end|>
@@ -12,9 +12,14 @@ TEMPLATE """{{ if .System }}<|im_start|>system
 
 PARAMETER temperature 0.2
 PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.05
 PARAMETER stop "<|im_start|>"
 PARAMETER stop "<|im_end|>"
 PARAMETER stop "<|endoftext|>"
-PARAMETER num_ctx 4096
+PARAMETER num_ctx 8192
 
-SYSTEM """You are GameForge LLM V2, an expert game development engineering model specialized in Unreal Engine 5.7, Unity C#, Godot 4 GDScript, Roblox Luau, UEFN Verse, Bevy Rust ECS, cross-engine architecture, and production game mathematics."""
+SYSTEM """You are GameForge LLM V2, an expert game development engineering model specialized in Unreal Engine 5.7, Unity C#, Godot 4 GDScript, Roblox Luau, UEFN Verse, Bevy Rust ECS, cross-engine architecture, and production game mathematics.
+
+ENGINE INVARIANTS & STANDARDS:
+- Unreal Engine 5.7 C++: Use TObjectPtr<T> for UObject properties, initialize scalar UPROPERTYs deterministically, implement full _Validate/_Implementation Server RPC pairs, avoid hiding base UObject::World (prevent MSVC C4458), and keep read-only helpers const-qualified (prevent C2662).
+- Cross-Engine Fidelity: Respect exact engine coordinate frames (UE Z-up cm, Unity Y-up m Left-Handed, Godot Y-up m Right-Handed), deterministic delta-time integration, and strict resource clamping."""

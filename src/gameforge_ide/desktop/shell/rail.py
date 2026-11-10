@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QFrame,
     QToolButton,
@@ -87,6 +87,7 @@ class RailButton(QToolButton):
             }}
         """))
 
+    @Slot()
     def update_theme(self) -> None:
         self.setIcon(icon(self.view_id, role="secondary", size=22))
         self._apply_style()
@@ -130,7 +131,7 @@ class Rail(QWidget):
                 continue
 
             btn = RailButton(view_id, label, shortcut, self)
-            btn.clicked.connect(lambda checked=False, vid=view_id: self.viewRequested.emit(vid))
+            btn.clicked.connect(lambda checked=False, vid=view_id: self._on_button_clicked(vid))
             layout.addWidget(btn)
             self._buttons[view_id] = btn
 
@@ -143,6 +144,14 @@ class Rail(QWidget):
             }}
         """))
 
+    def _on_button_clicked(self, vid: str) -> None:
+        """Safely emit viewRequested for the selected rail button."""
+        try:
+            self.viewRequested.emit(vid)
+        except RuntimeError:
+            pass
+
+    @Slot(str)
     def set_active_view(self, view_id: str) -> None:
         """Mark the corresponding rail button checked without triggering signals."""
         btn = self._buttons.get(view_id)
@@ -163,6 +172,7 @@ class Rail(QWidget):
                 btn.setToolTip(base_tip)
 
     def button(self, view_id: str, include_retired: bool = False) -> Optional[RailButton]:
+        """Return button for view_id, including retired buttons if requested or in legacy test harness."""
         if include_retired:
             return self._buttons.get(view_id) or self._retired_buttons.get(view_id)
         btn = self._buttons.get(view_id)
@@ -181,6 +191,7 @@ class Rail(QWidget):
             del frame
         return None
 
+    @Slot()
     def refresh_icons(self) -> None:
         """Refresh all rail button icons to match the active theme."""
         for vid, btn in self._buttons.items():
@@ -188,6 +199,7 @@ class Rail(QWidget):
         for vid, btn in self._retired_buttons.items():
             btn.setIcon(icon(vid, role="secondary", size=22))
 
+    @Slot(str, bool)
     def set_running(self, view_id: str, is_running: bool) -> None:
         """Show active running status on a rail button."""
         btn = self._buttons.get(view_id) or self._retired_buttons.get(view_id)
@@ -200,6 +212,7 @@ class Rail(QWidget):
                 base_tip = f"{btn.label} ({btn.shortcut_text})" if btn.shortcut_text else btn.label
                 btn.setToolTip(base_tip)
 
+    @Slot()
     def update_theme(self) -> None:
         """Repaint rail background and all rail button icons/styles with active theme tokens."""
         self.setStyleSheet(theme_stylesheet(f"""
@@ -214,3 +227,11 @@ class Rail(QWidget):
             btn.update_theme()
         for sep in getattr(self, "_separators", []):
             sep.setStyleSheet(theme_stylesheet(f"background-color: {tokens.BORDER}; border: none; max-height: 1px;"))
+
+    def deleteLater(self) -> None:
+        """Safely clean up signal connections on disposal."""
+        try:
+            self.viewRequested.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        super().deleteLater()

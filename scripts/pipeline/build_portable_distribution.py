@@ -1,15 +1,17 @@
 """Build and verify GameForge 1.0 portable distribution and smoke test on fresh profile (WI-11.2)."""
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -18,7 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.gameforge_ide.core.settings import PACKAGE_ROOT, get_settings
 
 
-def build_distribution(output_root: Optional[Path] = None) -> dict:
+def build_distribution(output_root: Optional[Path] = None) -> Dict[str, Any]:
     s = get_settings()
     base_release_dir = output_root or (s.data_root / "release")
     dest_dir = base_release_dir / "GameForge-1.0.0-win64"
@@ -26,7 +28,7 @@ def build_distribution(output_root: Optional[Path] = None) -> dict:
 
     dest_dir.parent.mkdir(parents=True, exist_ok=True)
     if dest_dir.exists():
-        shutil.rmtree(dest_dir)
+        shutil.rmtree(dest_dir, ignore_errors=True)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Copy gameforge_ide package into src/gameforge_ide so `from src.gameforge_ide...` and `-m src.gameforge_ide.launcher` work
@@ -40,10 +42,12 @@ def build_distribution(output_root: Optional[Path] = None) -> dict:
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pdb", "scratch*"),
     )
 
-    # 2. Copy canonical launcher, installer, icon from release/
-    shutil.copy2(REPO_ROOT / "release" / "GameForge.bat", dest_dir / "GameForge.bat")
-    shutil.copy2(REPO_ROOT / "release" / "Install-GameForge.ps1", dest_dir / "Install-GameForge.ps1")
-    shutil.copy2(REPO_ROOT / "release" / "gameforge.ico", dest_dir / "gameforge.ico")
+    # 2. Copy canonical launcher, installer, icon from release/ if available
+    release_dir = REPO_ROOT / "release"
+    for item_name in ["GameForge.bat", "Install-GameForge.ps1", "gameforge.ico"]:
+        src_item = release_dir / item_name
+        if src_item.is_file():
+            shutil.copy2(src_item, dest_dir / item_name)
 
     # 3. Calculate directory footprint
     total_bytes = 0
@@ -51,8 +55,11 @@ def build_distribution(output_root: Optional[Path] = None) -> dict:
     for root, _, files in os.walk(dest_dir):
         for f in files:
             fp = Path(root) / f
-            total_bytes += fp.stat().st_size
-            file_count += 1
+            try:
+                total_bytes += fp.stat().st_size
+                file_count += 1
+            except OSError:
+                pass
 
     footprint_mb = round(total_bytes / (1024 * 1024), 2)
     assert footprint_mb <= 250.0, f"Footprint {footprint_mb} MB exceeds 250 MB budget!"
@@ -64,8 +71,11 @@ def build_distribution(output_root: Optional[Path] = None) -> dict:
         for root, _, files in os.walk(dest_dir):
             for f in files:
                 abs_p = Path(root) / f
-                rel_p = abs_p.relative_to(dest_dir)
-                zf.write(abs_p, arcname=str(rel_p))
+                try:
+                    rel_p = abs_p.relative_to(dest_dir)
+                    zf.write(abs_p, arcname=str(rel_p))
+                except OSError:
+                    pass
 
     zip_size_mb = round(zip_path.stat().st_size / (1024 * 1024), 2)
 
@@ -111,9 +121,16 @@ print("SMOKE_PASS")
     env["GAMEFORGE_USER_SETTINGS"] = str(smoke_settings_file)
     env.pop("GAMEFORGE_HOST_PROFILE", None)
 
-    t0 = time.time()
-    res = subprocess.run([sys.executable, "-c", smoke_script], env=env, capture_output=True, text=True)
-    smoke_duration = round(time.time() - t0, 2)
+    flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    t0 = time.monotonic()
+    res = subprocess.run(
+        [sys.executable, "-c", smoke_script],
+        env=env,
+        capture_output=True,
+        text=True,
+        creationflags=flags,
+    )
+    smoke_duration = round(time.monotonic() - t0, 2)
     assert res.returncode == 0 and "SMOKE_PASS" in res.stdout, f"Smoke test failed: {res.stderr}\n{res.stdout}"
 
     # Remove temporary smoke settings file after smoke test
@@ -121,7 +138,7 @@ print("SMOKE_PASS")
         smoke_settings_file.unlink()
 
     # 6. Record reports
-    smoke_report = {
+    smoke_report: Dict[str, Any] = {
         "status": "PASS",
         "package_dir": str(dest_dir),
         "zip_path": str(zip_path),
@@ -139,14 +156,26 @@ print("SMOKE_PASS")
 
     out_dir = REPO_ROOT / "reports" / "P11"
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "packaged_ide_smoke.json").write_text(json.dumps(smoke_report, indent=2), encoding="utf-8")
+    report_file = out_dir / "packaged_ide_smoke.json"
+    tmp_rep = report_file.with_suffix(".tmp")
+    tmp_rep.write_text(json.dumps(smoke_report, indent=2), encoding="utf-8")
+    tmp_rep.replace(report_file)
 
     return smoke_report
 
 
-if __name__ == "__main__":
-    rep = build_distribution()
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build and verify GameForge 1.0 portable distribution")
+    parser.add_argument("--out", type=Path, default=None, help="Base output directory for distribution")
+    args = parser.parse_args()
+
+    rep = build_distribution(output_root=args.out)
     print(f"Distribution build: {rep['status']}")
     print(f"Footprint: {rep['install_footprint_mb']} MB (budget: {rep['budget_mb']} MB)")
     print(f"ZIP Archive: {rep['zip_archive_mb']} MB")
     print(f"Fresh Profile Smoke: {'PASS' if rep['fresh_profile_smoke']['onboarding_ready'] else 'FAIL'}")
+    return 0 if rep["status"] == "PASS" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

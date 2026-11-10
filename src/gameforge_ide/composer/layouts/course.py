@@ -21,11 +21,13 @@ def validate_jump_reachability(
     move_speed: float = 600.0,
     jump_velocity: float = 650.0,
     gravity_scale: float = 1.2,
+    jumps: int = 1,
 ) -> Tuple[bool, float, float]:
     """Validate jump reachability using the ballistic flight formula (WI-6.3)."""
     g_acc = max(100.0, gravity_scale * 980.0)
-    t_apex = jump_velocity / g_acc
-    max_h = (jump_velocity ** 2) / (2.0 * g_acc)
+    jump_mult = 1.65 if jumps > 1 else 1.0
+    t_apex = (jump_velocity * (1.3 if jumps > 1 else 1.0)) / g_acc
+    max_h = ((jump_velocity ** 2) / (2.0 * g_acc)) * jump_mult
 
     max_allowable_h = 0.92 * max_h
     if height_delta_cm > max_allowable_h:
@@ -34,7 +36,7 @@ def validate_jump_reachability(
 
     fall_dist = max(0.0, max_h - height_delta_cm)
     t_fall = math.sqrt((2.0 * fall_dist) / g_acc)
-    t_air = t_apex + t_fall
+    t_air = (t_apex + t_fall) * (1.4 if jumps > 1 else 1.0)
     max_allowable_gap = 0.85 * move_speed * t_air
 
     is_reachable = gap_cm <= max_allowable_gap
@@ -89,7 +91,7 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
         or any(k in f"{meta_title} {meta_prompt} {pitch}".lower() for k in ("racing", "race track", "kart", "grand prix", "time trial"))
     )
 
-    difficulty = str(getattr(getattr(gds, "progression", None), "difficulty", "normal") or "normal")
+    difficulty = str(getattr(getattr(gds, "progression", None), "difficulty", "normal") or "normal").lower()
     gap_frac, (size_min, size_max), rise_frac, bridge_every = _DIFFICULTY.get(difficulty, _DIFFICULTY["normal"])
     if is_racing:
         # Continuous wide road segments bridged together for high-speed driving
@@ -226,7 +228,8 @@ def plan_level(level: Any, gds: Any, rng: random.Random) -> LevelPlan:
 
     # 4. Checkpoints spread along the course
     cp_id = checkpoint_ents[0].entity_id if checkpoint_ents else "checkpoint"
-    cp_count = max(1, min(6, (checkpoint_ents[0].count if checkpoint_ents else 1), num_platforms // 3))
+    raw_cp_cnt = int(getattr(checkpoint_ents[0], "count", 1) or 1) if checkpoint_ents else 1
+    cp_count = max(1, min(6, raw_cp_cnt, num_platforms // 3))
     cp_indices = sorted({max(1, int(round((k + 1) * (num_platforms - 1) / (cp_count + 1)))) for k in range(cp_count)})
     for k, idx in enumerate(cp_indices):
         x, y, z, _h = platforms[idx]

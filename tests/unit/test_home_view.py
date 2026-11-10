@@ -98,6 +98,7 @@ def test_home_view_preset_chip_fills_prompt(qapp):
 
 def test_home_view_unsupported_prompt_notice(qapp, monkeypatch):
     """Verify unsupported prompt shows inline message directing to assistant."""
+    monkeypatch.setattr("src.gameforge_ide.desktop.views.home_view.probe_all", lambda *a, **kw: SystemsSnapshot(rows=()))
     view = HomeView()
     try:
         view._prompt_input.setPlainText("fix the build error in UnrealBuildTool.cs")

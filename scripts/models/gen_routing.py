@@ -1,14 +1,20 @@
 """Generate model_routing.json from empirical P9 evaluation reports (WI-9.3, Exit Gate 2)."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 REPORTS_DIR = REPO_ROOT / "reports" / "P9"
 CONFIG_FILE = REPO_ROOT / "src" / "gameforge_ide" / "config" / "model_routing.json"
 
@@ -100,7 +106,7 @@ def select_best_model_for_role(
     return "gameforge-qwen3.5-9b:latest"
 
 
-def generate_routing_table(write: bool = False) -> Dict[str, Any]:
+def generate_routing_table(write: bool = False, output_file: Optional[Path] = None) -> Dict[str, Any]:
     """Build the routing table. Pass write=True (the CLI does) to overwrite the packaged config;
     the default is side-effect free so tests do not rewrite a shipped product file.
 
@@ -140,12 +146,30 @@ def generate_routing_table(write: bool = False) -> Dict[str, Any]:
     }
 
     if write:
-        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        CONFIG_FILE.write_text(json.dumps(routing, indent=2), encoding="utf-8")
-        print(f"Generated routing table saved to {CONFIG_FILE}")
+        target_file = output_file or CONFIG_FILE
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        temp_file = target_file.with_suffix(".tmp")
+        try:
+            temp_file.write_text(json.dumps(routing, indent=2), encoding="utf-8")
+            temp_file.replace(target_file)
+        except Exception:
+            if temp_file.exists():
+                temp_file.unlink()
+            raise
+        print(f"Generated routing table saved to {target_file}")
         print(f"Role assignments: {json.dumps(routing['roles'], indent=2)}")
     return routing
 
 
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate model_routing.json from empirical evaluation reports")
+    parser.add_argument("--output", type=Path, default=None, help="Custom output path for model_routing.json")
+    parser.add_argument("--dry-run", action="store_true", help="Print table without writing to disk")
+    args = parser.parse_args()
+
+    generate_routing_table(write=not args.dry_run, output_file=args.output)
+    return 0
+
+
 if __name__ == "__main__":
-    generate_routing_table(write=True)
+    sys.exit(main())

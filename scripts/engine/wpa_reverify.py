@@ -17,19 +17,34 @@ import json
 import math
 import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 from src.gameforge_ide.core.settings import get_settings  # noqa: E402
-
 from src.gameforge_ide.unreal.live_editor import LiveEditorLink  # noqa: E402
 
-PROBE = (get_settings().require_dev("validation_root") / r"live_ops_probe")
 DATE = time.strftime("%Y%m%d")
-DISPOSABLE = (get_settings().require_dev("validation_root") / f"wpa_reverify_{DATE}")
-REPORT = REPO / "reports" / f"wpa_reverify_{DATE}.json"
+
+
+def _get_val_root() -> Path:
+    try:
+        return Path(get_settings().require_dev("validation_root"))
+    except Exception:
+        return REPO / "scratch" / "validation"
+
+
+def _get_paths() -> Tuple[Path, Path, Path]:
+    val = _get_val_root()
+    probe = val / "live_ops_probe"
+    disposable = val / f"wpa_reverify_{DATE}"
+    report = REPO / "reports" / f"wpa_reverify_{DATE}.json"
+    return probe, disposable, report
+
 
 SOURCE_MESH = "/Game/Characters/GFAdventurerHero/GFAdventurerHero/SkeletalMeshes/GFAdventurerHero"
 WALK = "/Game/Characters/GFAdventurerHero/Animations/Anim_Walk"
@@ -49,15 +64,15 @@ LENGTH_TOL = 0.15         # target limb length must stay within 15% of the targe
 MIN_SWING_DEG = 5.0       # the source chain must actually move for the comparison to mean anything
 
 
-def _sub(a, b):
+def _sub(a: Sequence[float], b: Sequence[float]) -> List[float]:
     return [a[i] - b[i] for i in range(3)]
 
 
-def _norm(v):
+def _norm(v: Sequence[float]) -> float:
     return math.sqrt(sum(x * x for x in v))
 
 
-def _angle(a, b):
+def _angle(a: Sequence[float], b: Sequence[float]) -> float:
     na, nb = _norm(a), _norm(b)
     if na < 1e-6 or nb < 1e-6:
         return 0.0
@@ -66,25 +81,38 @@ def _angle(a, b):
 
 def compare_chains(src: dict, tgt: dict) -> dict:
     """Per-chain swing angles (vs reference pose) and limb lengths for source and retargeted sequences."""
-    out = {}
+    out: Dict[str, Any] = {}
+    src_ref = src.get("reference") or {}
+    tgt_ref = tgt.get("reference") or {}
     for chain in COMPARED_CHAINS:
         s0, s1 = SOURCE_RIG["chains"][chain]
         t0, t1 = TARGET_RIG["chains"][chain]
-        s_ref = _sub(src["reference"][s1], src["reference"][s0])
-        t_ref = _sub(tgt["reference"][t1], tgt["reference"][t0])
-        rows = []
-        for fs, ft in zip(src["frames"], tgt["frames"]):
-            sv = _sub(fs["positions"][s1], fs["positions"][s0])
-            tv = _sub(ft["positions"][t1], ft["positions"][t0])
-            rows.append({"time": fs["time"], "source_swing_deg": round(_angle(sv, s_ref), 2),
+        if s0 not in src_ref or s1 not in src_ref or t0 not in tgt_ref or t1 not in tgt_ref:
+            out[chain] = {"pass": False, "error": f"Missing bone in reference pose for chain {chain}"}
+            continue
+        s_ref = _sub(src_ref[s1], src_ref[s0])
+        t_ref = _sub(tgt_ref[t1], tgt_ref[t0])
+        rows: List[Dict[str, Any]] = []
+        src_frames = src.get("frames") or []
+        tgt_frames = tgt.get("frames") or []
+        for fs, ft in zip(src_frames, tgt_frames):
+            fs_pos = fs.get("positions") or {}
+            ft_pos = ft.get("positions") or {}
+            if s0 not in fs_pos or s1 not in fs_pos or t0 not in ft_pos or t1 not in ft_pos:
+                continue
+            sv = _sub(fs_pos[s1], fs_pos[s0])
+            tv = _sub(ft_pos[t1], ft_pos[t0])
+            rows.append({"time": fs.get("time", 0.0), "source_swing_deg": round(_angle(sv, s_ref), 2),
                          "target_swing_deg": round(_angle(tv, t_ref), 2),
                          "source_len_cm": round(_norm(sv), 2), "target_len_cm": round(_norm(tv), 2)})
+        if not rows:
+            out[chain] = {"pass": False, "error": f"No sampled frame data for chain {chain}"}
+            continue
         swing_err = sum(abs(r["source_swing_deg"] - r["target_swing_deg"]) for r in rows) / len(rows)
         src_range = max(r["source_swing_deg"] for r in rows) - min(r["source_swing_deg"] for r in rows)
         t_ref_len, s_ref_len = _norm(t_ref), _norm(s_ref)
         len_dev = max(abs(r["target_len_cm"] / t_ref_len - 1.0) for r in rows) if t_ref_len else 1.0
         # Lengths only tell a retarget from a skeleton swap where the two skeletons' limbs differ (> 5%):
-        # a swap keeps the source's bone translations, a retarget keeps the target's own.
         discriminating = abs(t_ref_len - s_ref_len) > 0.05 * s_ref_len
         swap_like = discriminating and max(abs(r["target_len_cm"] - r["source_len_cm"]) for r in rows) < 0.02 * s_ref_len
         out[chain] = {
@@ -97,21 +125,30 @@ def compare_chains(src: dict, tgt: dict) -> dict:
     return out
 
 
-def make_disposable() -> Path:
-    if DISPOSABLE.exists():
-        shutil.rmtree(DISPOSABLE)
-    shutil.copytree(PROBE, DISPOSABLE, ignore=shutil.ignore_patterns(
-        "DerivedDataCache", "Intermediate", "Saved", "__pycache__", ".gameforge"))
-    return DISPOSABLE / "GFProbe.uproject"
+def make_disposable(probe_dir: Path, disposable_dir: Path) -> Path:
+    if disposable_dir.exists():
+        shutil.rmtree(disposable_dir)
+    if probe_dir.exists():
+        shutil.copytree(probe_dir, disposable_dir, ignore=shutil.ignore_patterns(
+            "DerivedDataCache", "Intermediate", "Saved", "__pycache__", ".gameforge"))
+    else:
+        disposable_dir.mkdir(parents=True, exist_ok=True)
+    return disposable_dir / "GFProbe.uproject"
 
 
 def main() -> int:
-    rep = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "project": str(DISPOSABLE), "checks": {}, "steps": {},
-           "tolerances": {"angle_deg": ANGLE_TOL_DEG, "length_frac": LENGTH_TOL, "min_swing_deg": MIN_SWING_DEG}}
+    probe_dir, disposable_dir, report_path = _get_paths()
+    rep: Dict[str, Any] = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "project": str(disposable_dir),
+        "checks": {},
+        "steps": {},
+        "tolerances": {"angle_deg": ANGLE_TOL_DEG, "length_frac": LENGTH_TOL, "min_swing_deg": MIN_SWING_DEG},
+    }
     checks, steps = rep["checks"], rep["steps"]
-    link = LiveEditorLink(make_disposable())
+    link = LiveEditorLink(make_disposable(probe_dir, disposable_dir))
     link.prepare_project()
-    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=DISPOSABLE / "wpa_editor.log")
+    link.launch(["-RenderOffscreen", "-ResX=1280", "-ResY=720"], log_path=disposable_dir / "wpa_editor.log")
     try:
         link.connect(discovery_timeout_s=900)
 
@@ -139,18 +176,20 @@ def main() -> int:
             steps["target_sample"] = {"ok": tgt.get("ok"), "errors": tgt.get("errors"),
                                       "skeleton": (tgt.get("data") or {}).get("skeleton")}
             if src.get("ok") and tgt.get("ok"):
-                chains = compare_chains(src["data"], tgt["data"])
+                chains = compare_chains(src.get("data") or {}, tgt.get("data") or {})
                 steps["chain_comparison"] = chains
-                checks["target_is_a_different_skeleton"] = src["data"]["skeleton"] != tgt["data"]["skeleton"]
-                checks["source_motion_present"] = all(c["source_swing_range_deg"] >= MIN_SWING_DEG
-                                                      for k, c in chains.items() if "Leg" in k)
+                src_skel = (src.get("data") or {}).get("skeleton")
+                tgt_skel = (tgt.get("data") or {}).get("skeleton")
+                checks["target_is_a_different_skeleton"] = bool(src_skel and tgt_skel and src_skel != tgt_skel)
+                checks["source_motion_present"] = all((c.get("source_swing_range_deg") or 0) >= MIN_SWING_DEG
+                                                      for k, c in chains.items() if "Leg" in k and isinstance(c, dict))
                 checks["leg_tracks_match_source_motion_in_world_space"] = all(
-                    chains[k]["pass"] for k in ("LeftLeg", "RightLeg"))
+                    bool(chains.get(k, {}).get("pass")) for k in ("LeftLeg", "RightLeg"))
                 checks["arm_tracks_match_source_motion_in_world_space"] = all(
-                    chains[k]["pass"] for k in ("LeftArm", "RightArm"))
-                disc = [c for c in chains.values() if c["length_discriminates_swap"]]
+                    bool(chains.get(k, {}).get("pass")) for k in ("LeftArm", "RightArm"))
+                disc = [c for c in chains.values() if isinstance(c, dict) and c.get("length_discriminates_swap")]
                 checks["swap_test_has_discriminating_chain"] = bool(disc)
-                checks["not_a_skeleton_swap"] = bool(disc) and not any(c["lengths_identical_to_source"] for c in disc)
+                checks["not_a_skeleton_swap"] = bool(disc) and not any(c.get("lengths_identical_to_source") for c in disc)
             else:
                 checks["world_space_sampling_ran"] = False
 
@@ -158,8 +197,9 @@ def main() -> int:
         steps["new_level"] = link.call("new_level", {"level_path": "/Game/WPA/Maps/PCGReverify"}).get("ok")
         sc = link.call("pcg_scatter", {"graph_folder": "/Game/WPA/PCG", "label": "GF_WPA_PCG"}, timeout_s=180)
         steps["pcg_scatter"] = (sc.get("data") or {}) | {"errors": sc.get("errors")}
-        ver = {}
-        for _ in range(30):
+        ver: Dict[str, Any] = {}
+        deadline = time.monotonic() + 60.0
+        while time.monotonic() < deadline:
             ver = link.call("pcg_verify_authenticity", {"label": "GF_WPA_PCG"})
             if ver.get("ok"):
                 break
@@ -175,9 +215,16 @@ def main() -> int:
     finally:
         rep["editor_exit_code"] = link.stop()
         rep["ok"] = bool(checks) and all(checks.values())
-        REPORT.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = report_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        tmp.replace(report_path)
     print(json.dumps(checks, indent=2))
     return 0 if rep["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 if __name__ == "__main__":

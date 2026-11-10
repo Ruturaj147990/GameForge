@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from .engines.discovery import discover_environment
 from .reporting import aggregate_reports
@@ -73,14 +73,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     # run-tests
     p_tests = subparsers.add_parser("run-tests", help="Execute canonical test workflow across unit, protected oracles, and integration")
-    p_tests.add_argument("--suite", default="all", choices=["all", "unit", "protected", "integration"], help="Test suite subset to run")
+    p_tests.add_argument("--suite", default="all", choices=["all", "unit", "protected", "integration", "gameforge_1_0"], help="Test suite subset to run")
     p_tests.add_argument("--collect-only", action="store_true", help="Collect and report unique test IDs without execution")
     p_tests.add_argument("--json", action="store_true", help="Output machine-readable execution summary JSON")
     p_tests.add_argument("--workspace", type=Path, default=Path.cwd(), help="Workspace root directory")
 
     # chat
     p_chat = subparsers.add_parser("chat", help="Interactive GameForge assistant chat session or single query")
-    p_chat.add_argument("--model", default="gameforge-27b-sft", help="Target Ollama model name (default: gameforge-27b-sft)")
+    p_chat.add_argument("--model", default="gameforge-qwen3.5-9b:latest", help="Target Ollama model name (default: gameforge-qwen3.5-9b:latest)")
     p_chat.add_argument("--engine", default=None, help="Target game engine context (e.g. unreal, unity, godot)")
     p_chat.add_argument("--version-context", default=None, help="Target engine version context (e.g. 5.4, 2022.3, 4.3)")
     p_chat.add_argument("--no-retrieval", action="store_true", help="Disable local knowledge retrieval layer")
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # eval-model
     p_evalm = subparsers.add_parser("eval-model", help="Run GameForge evaluation suite against a local model")
-    p_evalm.add_argument("--model", default="gameforge-27b-sft", help="Model name to evaluate (default: gameforge-27b-sft)")
+    p_evalm.add_argument("--model", default="gameforge-qwen3.5-9b:latest", help="Model name to evaluate (default: gameforge-qwen3.5-9b:latest)")
     p_evalm.add_argument("--limit", type=int, default=5, help="Number of questions to evaluate (default: 5, 0 for all)")
     p_evalm.add_argument("--representative", action="store_true", help="Evaluate one representative prompt per domain across all 8 domains")
     p_evalm.add_argument("--output", type=Path, default=Path("reports/gameforge_v1_evaluation_report.json"), help="Output report path")
@@ -344,13 +344,21 @@ def cmd_run_tests(args: argparse.Namespace) -> int:
 
     suite_configs = {
         "unit": {"label": "Unit Tests", "path": "tests/unit"},
+        "gameforge_1_0": {"label": "GameForge 1.0 Acceptance Suite", "path": "tests/gameforge_1_0"},
         "protected": {"label": "Protected Oracles (grdr)", "path": "graders/protected"},
         "integration": {"label": "Integration Tests (UE 5.7.4)", "path": "tests/integration"},
     }
 
-    targets = [suite] if suite != "all" else ["unit", "protected", "integration"]
+    targets = [suite] if suite != "all" else ["unit", "gameforge_1_0", "protected", "integration"]
     summary_results = {}
     overall_exit_code = 0
+
+    # Ensure isolated pytest scratch directory per AGENTS.md
+    temp_dir = workspace / "scratch" / "pytest_os_temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    run_env = os.environ.copy()
+    run_env["TEMP"] = str(temp_dir)
+    run_env["TMP"] = str(temp_dir)
 
     print("=" * 75)
     print(" GAMEFORGE CANONICAL TEST RUNNER — SUITE ORCHESTRATION")
@@ -364,7 +372,7 @@ def cmd_run_tests(args: argparse.Namespace) -> int:
         else:
             cmd.extend(["-q"])
 
-        res = subprocess.run(cmd, cwd=str(workspace), capture_output=True, text=True)
+        res = subprocess.run(cmd, cwd=str(workspace), env=run_env, capture_output=True, text=True)
         stdout = res.stdout.strip()
 
         status = "PASSED" if res.returncode == 0 else "FAILED"
@@ -468,7 +476,7 @@ def cmd_model_info(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 

@@ -14,30 +14,8 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
-from pydantic import BaseModel, Field as _PydanticField
-try:
-    from pydantic import model_validator
-    _PYDANTIC_V2 = True
-except ImportError:
-    from pydantic import root_validator
-    _PYDANTIC_V2 = False
-    def model_validator(*, mode: str = "after"):
-        def _dec(fn):
-            @root_validator(skip_on_failure=True)
-            def _wrapped(cls, values):
-                if values.get("sample_type") == "process_trajectory" and values.get("process_details") is None:
-                    raise ValueError("process_details must be provided when sample_type is 'process_trajectory'")
-                return values
-            return _wrapped
-        return _dec
 
-def Field(*args: Any, pattern: Optional[str] = None, **kwargs: Any) -> Any:
-    if pattern is not None:
-        if _PYDANTIC_V2:
-            kwargs["pattern"] = pattern
-        else:
-            kwargs["regex"] = pattern
-    return _PydanticField(*args, **kwargs)
+from pydantic import BaseModel, Field, model_validator
 
 
 # -----------------------------------------------------------------------------
@@ -72,21 +50,24 @@ def compute_sha256(content: Any) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def compute_canonical_fingerprint(sample: Dict[str, Any]) -> str:
+def compute_canonical_fingerprint(sample: dict[str, Any]) -> str:
     """Generates a deterministic canonicalized content digest.
     Combines normalized code diffs, prompts, and primary payload components.
     """
     sample_type = sample.get("sample_type", "unknown")
-    parts: List[str] = [f"sample_type:{sample_type}"]
+    parts: list[str] = [f"sample_type:{sample_type}"]
 
     if sample_type == "process_trajectory":
         proc = sample.get("process_details", {})
-        parts.append(f"req:{normalize_text_content(proc.get('interpreted_requirements', ''))}")
+        parts.append(f"req:{normalize_text_content(str(proc.get('interpreted_requirements', '')))}")
         for p in proc.get("plan", []):
-            parts.append(f"plan:{normalize_text_content(p)}")
+            parts.append(f"plan:{normalize_text_content(str(p))}")
         for step in proc.get("actions_trace", []):
-            parts.append(f"act:{step.get('action_type', '')}:{normalize_text_content(step.get('applied_patch', ''))}")
-        parts.append(f"final_patch:{normalize_text_content(proc.get('applied_patch', ''))}")
+            if isinstance(step, dict):
+                parts.append(f"act:{step.get('action_type', '')}:{normalize_text_content(str(step.get('applied_patch', '')))}")
+            else:
+                parts.append(f"act:{normalize_text_content(str(step))}")
+        parts.append(f"final_patch:{normalize_text_content(str(proc.get('applied_patch', '')))}")
     else:
         # Generic payload
         raw_payload = sample.get("payload") or sample.get("code") or sample.get("steps") or ""
@@ -227,6 +208,10 @@ class SampleRecord(BaseModel):
         return self
 
 
+SampleRecord.model_rebuild()
+
+
+
 
 def coerce_sft_record_to_sample_record(record: Dict[str, Any]) -> Dict[str, Any]:
     """Converts an SFTSampleRecord dictionary (conversations format) into a canonical SampleRecord dictionary
@@ -325,8 +310,8 @@ def coerce_sft_record_to_sample_record(record: Dict[str, Any]) -> Dict[str, Any]
 class SourceRegister:
     """Loads and validates dataset sources from configs/dataset_source_register.json."""
 
-    def __init__(self, register_path: Path) -> None:
-        self.register_path = register_path
+    def __init__(self, register_path: Path | str) -> None:
+        self.register_path = Path(register_path)
         self.sources: Dict[str, Dict[str, Any]] = {}
         self.load()
 
@@ -334,8 +319,13 @@ class SourceRegister:
         if not self.register_path.is_file():
             raise FileNotFoundError(f"Source register missing: {self.register_path}")
         data = json.loads(self.register_path.read_text(encoding="utf-8"))
-        for s in data.get("registered_sources", []):
-            self.sources[s["source_id"]] = s
+        raw_sources = data.get("registered_sources", [])
+        if isinstance(raw_sources, dict):
+            self.sources = dict(raw_sources)
+        elif isinstance(raw_sources, list):
+            for s in raw_sources:
+                if isinstance(s, dict) and "source_id" in s:
+                    self.sources[s["source_id"]] = s
 
     def get_source(self, source_id: str) -> Optional[Dict[str, Any]]:
         return self.sources.get(source_id)

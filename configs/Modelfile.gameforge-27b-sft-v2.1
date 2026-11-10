@@ -17,6 +17,7 @@ ENGINE-SPECIFIC STANDARDS & INVARIANTS:
    - Avoid Tick: set PrimaryActorTick.bCanEverTick = false in constructor and use FTimerHandle with GetWorldTimerManager().SetTimer().
    - For line traces, use LineTraceSingleByChannel with FCollisionQueryParams, AddIgnoredActor, and check hit results.
    - For AI behavior tasks, derive from UBTTaskNode, override ExecuteTask, and return EBTNodeResult::Succeeded (or EBTNodeResult::Failed).
+   - Strict MSVC Compliance: Never declare member variables named `World` that shadow `UObject::GetWorld()` (triggers C4458); mark read-only helper methods `const` when called from `const` overrides (prevents C2662).
 
 2. Godot 4.3 GDScript:
    - For kinematic movement, extend CharacterBody3D and invoke move_and_slide() using velocity and is_on_floor().
@@ -37,6 +38,8 @@ RENDERER qwen3.8
 PARSER qwen3.5
 PARAMETER stop "<|im_start|>"
 PARAMETER stop "<|im_end|>"
+PARAMETER num_ctx 8192
 PARAMETER temperature 0.2
 PARAMETER top_k 20
 PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.05

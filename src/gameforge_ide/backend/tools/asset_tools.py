@@ -75,11 +75,14 @@ class ProceduralMeshGenerator:
         self.output_root.mkdir(parents=True, exist_ok=True)
 
     def _compute_sha256(self, file_path: Path) -> str:
-        h = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            while chunk := f.read(65536):
-                h.update(chunk)
-        return h.hexdigest()
+        try:
+            h = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                while chunk := f.read(65536):
+                    h.update(chunk)
+            return h.hexdigest()
+        except OSError:
+            return ""
 
     def generate_from_spec(
         self,
@@ -256,8 +259,16 @@ class ProceduralMeshGenerator:
                     # Parse face indices (v/vt/vn)
                     face_v_indices: List[int] = []
                     for vert_tok in parts[1:]:
-                        v_idx = int(vert_tok.split("/")[0])
-                        face_v_indices.append(v_idx)
+                        raw_idx = vert_tok.split("/")[0]
+                        if not raw_idx:
+                            continue
+                        try:
+                            v_idx = int(raw_idx)
+                            if v_idx < 0:
+                                v_idx = len(vertices) + v_idx + 1
+                            face_v_indices.append(v_idx)
+                        except ValueError:
+                            continue
 
                     # Triangulate polygon if face has > 3 vertices
                     for i in range(1, len(face_v_indices) - 1):
@@ -333,11 +344,18 @@ class ProceduralMeshGenerator:
     def validate_mesh(self, obj_path: Path | str) -> Dict[str, Any]:
         """Backward-compatible validation returning dictionary summary."""
         res = self.validate_geometry_and_uvs(obj_path)
+        file_sz = 0
+        try:
+            p = Path(obj_path)
+            if p.exists():
+                file_sz = p.stat().st_size
+        except OSError:
+            file_sz = 0
         return {
             "valid": res.valid,
             "vertex_count": res.vertex_count,
             "face_count": res.triangle_count,
-            "file_size": Path(obj_path).stat().st_size if Path(obj_path).exists() else 0,
+            "file_size": file_sz,
             "sha256": res.sha256,
             "errors": res.errors,
         }

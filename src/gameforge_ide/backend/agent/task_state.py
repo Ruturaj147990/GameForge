@@ -303,7 +303,11 @@ class TaskState(BaseModel):
                 else:
                     t_name = Path(pred.target).name
                     if t_name and workspace_root.is_dir():
-                        for p in workspace_root.rglob(t_name):
+                        try:
+                            rglob_candidates = list(workspace_root.rglob(t_name))
+                        except (OSError, ValueError):
+                            rglob_candidates = []
+                        for p in rglob_candidates:
                             p_parts = p.parts
                             if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
                                 continue
@@ -338,7 +342,11 @@ class TaskState(BaseModel):
                     if not target_path.exists():
                         t_name = Path(pred.target).name
                         if t_name and workspace_root.is_dir():
-                            for p in workspace_root.rglob(t_name):
+                            try:
+                                rglob_matches = list(workspace_root.rglob(t_name))
+                            except (OSError, ValueError):
+                                rglob_matches = []
+                            for p in rglob_matches:
                                 p_parts = p.parts
                                 if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
                                     continue
@@ -364,7 +372,12 @@ class TaskState(BaseModel):
                             if not actual_target.exists():
                                 f_name = Path(str(fpath)).name
                                 if f_name and workspace_root.is_dir():
-                                    for p in workspace_root.rglob(f_name):
+                                    try:
+                                        f_matches = list(workspace_root.rglob(f_name))
+                                    except (OSError, ValueError):
+                                        f_matches = []
+                                    for p in f_matches:
+                                        p_parts = p.parts
                                         if any(part in ("Binaries", "Intermediate", "Saved", ".git", "__pycache__") for part in p_parts):
                                             continue
                                         if p.is_file():

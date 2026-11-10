@@ -14,11 +14,20 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
+
+
+def _safe_int(val: Any, default: int = 0) -> int:
+    """Safely converts an arbitrary value to int without raising exceptions."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        return int(float(val))
+    except (ValueError, TypeError, OverflowError):
+        return default
 
 
 class AssetModality(str, Enum):
@@ -67,6 +76,8 @@ class AssetConstraints:
     target_engine_version: str = "5.7.4"
     skeleton_preset: Optional[str] = None
     animation_framerate: Optional[float] = 30.0
+    max_duration_seconds: Optional[float] = None
+    sample_rate: Optional[int] = None
 
 
 @dataclass
@@ -109,14 +120,14 @@ class AssetSpecialistJob:
 
     def to_dict(self) -> Dict[str, Any]:
         """Serializes the job in strict compliance with schemas/asset_specialist_contract.json."""
-        result_dict: Optional[Dict[str, Any]] = None
+        result_dict: Optional[dict[str, Any]] = None
         if self.result is not None:
             raw_metrics = dict(self.result.metrics or {})
             normalized_metrics = {
-                "triangle_count": int(raw_metrics.get("triangle_count", raw_metrics.get("vertex_count", 0))),
-                "max_dimension": int(raw_metrics.get("max_dimension", raw_metrics.get("bounds_width", 0))),
-                "bone_count": int(raw_metrics.get("bone_count", raw_metrics.get("max_bone_influences", 0))),
-                "resolution": str(raw_metrics.get("resolution", f"{raw_metrics.get('max_dimension', 0)}x{raw_metrics.get('max_dimension', 0)}")),
+                "triangle_count": _safe_int(raw_metrics.get("triangle_count", raw_metrics.get("vertex_count", 0))),
+                "max_dimension": _safe_int(raw_metrics.get("max_dimension", raw_metrics.get("bounds_width", 0))),
+                "bone_count": _safe_int(raw_metrics.get("bone_count", raw_metrics.get("max_bone_influences", 0))),
+                "resolution": str(raw_metrics.get("resolution", f"{_safe_int(raw_metrics.get('max_dimension', 0))}x{_safe_int(raw_metrics.get('max_dimension', 0))}")),
             }
             normalized_metrics.update(raw_metrics)
             result_dict = {
@@ -269,8 +280,11 @@ class AssetSpecialistRouter:
 
         # 6. Mandatory real file SHA-256 computation and declared mismatch rejection
         try:
-            content_bytes = resolved_file.read_bytes()
-            computed_sha = hashlib.sha256(content_bytes).hexdigest()
+            hasher = hashlib.sha256()
+            with open(resolved_file, "rb") as af:
+                while chunk := af.read(65536):
+                    hasher.update(chunk)
+            computed_sha = hasher.hexdigest()
         except Exception as e:
             job.status = SpecialistStatus.FAILED
             job.validation_errors.append(f"Failed to read and hash artifact file: {e}")

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, QObject, QRect, QSize, Qt, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -389,9 +389,77 @@ class AssetsView(QWidget):
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def showEvent(self, event: Any) -> None:
+    def showEvent(self, event: Optional[QShowEvent] = None) -> None:
         super().showEvent(event)
         self.refresh_assets()
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update all component styles for active theme."""
+        if hasattr(self, "_search_input"):
+            self._search_input.setStyleSheet(theme_stylesheet(
+                f"QLineEdit#{self._search_input.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"  min-width: 180px;"
+                f"}}"
+                f"QLineEdit#{self._search_input.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"}}"
+            ))
+        if hasattr(self, "_type_combo"):
+            self._type_combo.setStyleSheet(theme_stylesheet(
+                f"QComboBox#{self._type_combo.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_stage_combo"):
+            self._stage_combo.setStyleSheet(theme_stylesheet(
+                f"QComboBox#{self._stage_combo.objectName()} {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_SM}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+            ))
+        if hasattr(self, "_table"):
+            self._table.setStyleSheet(theme_stylesheet(
+                f"QTableView#{self._table.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  gridline-color: {tokens.BORDER};"
+                f"  selection-background-color: {tokens.BG_ACTIVE}; selection-color: {tokens.TEXT_PRIMARY};"
+                f"}}"
+                f"QTableView#{self._table.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"}}"
+                f"QHeaderView::section {{"
+                f"  background-color: {tokens.BG_PANEL}; color: {tokens.TEXT_SECONDARY};"
+                f"  border: 1px solid {tokens.BORDER}; padding: 4px {tokens.SPACE_SM}px;"
+                f"  font-size: {tokens.FONT_BODY_SM}px; font-weight: 600;"
+                f"}}"
+            ))
+        if hasattr(self, "_detail_text"):
+            self._detail_text.setStyleSheet(theme_stylesheet(
+                f"QTextEdit#{self._detail_text.objectName()} {{"
+                f"  background-color: {tokens.BG_ROOT}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: {tokens.SPACE_SM}px; font-family: monospace; font-size: 11px;"
+                f"}}"
+                f"QTextEdit#{self._detail_text.objectName()}:focus {{"
+                f"  border: 1px solid {tokens.BORDER_FOCUS};"
+                f"}}"
+            ))
+
+    def deleteLater(self) -> None:
+        """Safely clean up event filters and model on deletion."""
+        try:
+            self._table.removeEventFilter(self)
+        except (RuntimeError, TypeError):
+            pass
+        super().deleteLater()
 
     def set_workspace(self, workspace_root: Path | str) -> None:
         """Switch workspace and re-initialize registry."""

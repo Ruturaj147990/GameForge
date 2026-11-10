@@ -81,7 +81,15 @@ def export_and_register_v2(
                 "blockers": blockers,
                 "status": "BLOCKED_PENDING_MERGED_CHECKPOINT",
             }
-            (export_dir / "export_audit_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            report_file = export_dir / "export_audit_report.json"
+            temp_report = report_file.with_suffix(".tmp")
+            try:
+                temp_report.write_text(json.dumps(report, indent=2), encoding="utf-8")
+                temp_report.replace(report_file)
+            except Exception:
+                if temp_report.exists():
+                    temp_report.unlink()
+                raise
             return 0
         return 1
 
@@ -90,7 +98,7 @@ def export_and_register_v2(
     modelfile_content = f"""# GameForge V2 Ollama Deployment Modelfile
 # Derived from genuine trained and merged Qwen3.8-27B GameForge V2 weights
 
-FROM {gguf_path}
+FROM {gguf_path.as_posix()}
 
 PARAMETER temperature 0.2
 PARAMETER top_p 0.9
@@ -99,10 +107,17 @@ PARAMETER stop "<|im_end|>"
 PARAMETER stop "<|endoftext|>"
 PARAMETER num_ctx 4096
 
-SYSTEM \"\"\"You are GameForge LLM V2, a world-class game development AI specialist with fine-tuned weights for game engineering across Unreal Engine, Unity, Godot, and universal game architecture.\"\"\"
+SYSTEM \"\"\"You are GameForge LLM V2, a world-class game development AI specialist with fine-tuned weights for game engineering across Unreal Engine, Godot, Bevy, and universal game architecture.\"\"\"
 """
     export_dir.mkdir(parents=True, exist_ok=True)
-    modelfile_path.write_text(modelfile_content, encoding="utf-8")
+    temp_modelfile = modelfile_path.with_suffix(".tmp")
+    try:
+        temp_modelfile.write_text(modelfile_content, encoding="utf-8")
+        temp_modelfile.replace(modelfile_path)
+    except Exception:
+        if temp_modelfile.exists():
+            temp_modelfile.unlink()
+        raise
     print(f"Generated Modelfile at {modelfile_path}")
 
     # Register in Ollama

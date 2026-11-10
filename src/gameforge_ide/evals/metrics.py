@@ -58,3 +58,41 @@ def compute_task_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "total_tokens_out": tok_out,
         "estimated_cost_usd": round(cost_usd, 4),
     }
+
+
+def calculate_task_deltas(
+    baseline_scores: Dict[str, float],
+    candidate_scores: Dict[str, float],
+) -> Dict[str, Any]:
+    """Calculates per-task deltas, total points delta, and counts improved/regressed/unchanged tasks."""
+    improved = 0
+    regressed = 0
+    unchanged = 0
+    deltas: Dict[str, float] = {}
+    total_delta = 0.0
+
+    for task_id, b_score in baseline_scores.items():
+        c_score = candidate_scores.get(task_id, 0.0)
+        delta = c_score - b_score
+        deltas[task_id] = round(delta, 3)
+        total_delta += delta
+        if delta > 0.001:
+            improved += 1
+        elif delta < -0.001:
+            regressed += 1
+        else:
+            unchanged += 1
+
+    return {
+        "improved_count": improved,
+        "regressed_count": regressed,
+        "unchanged_count": unchanged,
+        "total_delta": round(total_delta, 2),
+        "per_task_deltas": deltas,
+    }
+
+
+__all__ = [
+    "compute_task_metrics",
+    "calculate_task_deltas",
+]

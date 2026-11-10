@@ -17,7 +17,7 @@ import re
 from typing import Any, Dict, List, Optional, Union
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
-from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QShortcut, QShowEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 
 from ..services.projects_service import GameSummary
 from ..styles import tokens
+from ..styles.dark_theme import theme_stylesheet
 from ..widgets.gds_form import GdsForm
 from ...core.jobs import JobHandle, default_job_manager
 from ...core.settings import get_settings
@@ -532,6 +533,48 @@ class DesignView(QWidget):
         self._shortcut_save.activated.connect(self.save_spec)
 
     # ── Public API ───────────────────────────────────────────────────────────
+
+    @Slot()
+    def update_theme(self) -> None:
+        """Update view styles for active theme."""
+        if hasattr(self, "_btn_save"):
+            self._btn_save.setStyleSheet(theme_stylesheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+                f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            ))
+        if hasattr(self, "_btn_history"):
+            self._btn_history.setStyleSheet(theme_stylesheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+                f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            ))
+        if hasattr(self, "_btn_raw_json"):
+            self._btn_raw_json.setStyleSheet(theme_stylesheet(
+                f"QPushButton {{"
+                f"  background-color: {tokens.BG_SURFACE}; color: {tokens.TEXT_PRIMARY};"
+                f"  border: 1px solid {tokens.BORDER}; border-radius: {tokens.RADIUS}px;"
+                f"  padding: 4px {tokens.SPACE_MD}px; font-size: {tokens.FONT_BODY_SM}px;"
+                f"}}"
+                f"QPushButton:hover {{ background-color: {tokens.BG_HOVER}; }}"
+            ))
+        if hasattr(self, "_form") and hasattr(self._form, "update_theme"):
+            self._form.update_theme()
+
+    def deleteLater(self) -> None:
+        """Safely clean up shortcuts and signals on disposal."""
+        if hasattr(self, "_shortcut_save"):
+            try:
+                self._shortcut_save.setEnabled(False)
+            except Exception:
+                pass
+        super().deleteLater()
 
     def set_project_dir(self, project_dir: Optional[Union[str, Path]]) -> None:
         """Explicitly set the authoritative project directory."""

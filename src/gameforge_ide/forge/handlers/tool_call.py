@@ -6,21 +6,34 @@ import concurrent.futures
 import inspect
 import json
 from pathlib import Path
+import threading
 from typing import Any, Callable, Dict, List, Optional
 
-from ...backend.agent.plan_executor import FAILURE_STATUSES, _step_failure
+from ...backend.agent.plan_executor import _step_failure
 from ...backend.agent.task_state import TaskAcceptancePredicate, TaskState
 from ...backend.tools.gateway import ToolGateway
 from ..executor import StepContext, StepOutcome
 
+__all__ = ["get_gateway", "make_tool_call_handler", "tool_call_handler"]
+
+_GATEWAY_LOCK = threading.Lock()
 _GATEWAY_CACHE: Dict[Path, ToolGateway] = {}
+_SHARED_LOCK = threading.Lock()
+
+
+def _is_cancelled(ctx: StepContext) -> bool:
+    cancel = getattr(ctx, "cancel", None)
+    return cancel is not None and cancel.is_set() is True
 
 
 def get_gateway(workspace_dir: Path) -> ToolGateway:
     ws = Path(workspace_dir).resolve()
-    if ws not in _GATEWAY_CACHE:
-        _GATEWAY_CACHE[ws] = ToolGateway(ws)
-    return _GATEWAY_CACHE[ws]
+    with _GATEWAY_LOCK:
+        gw = _GATEWAY_CACHE.get(ws)
+        if gw is None:
+            gw = ToolGateway(ws)
+            _GATEWAY_CACHE[ws] = gw
+        return gw
 
 
 def _resolve_maybe_awaitable(value: Any) -> Any:
@@ -48,19 +61,36 @@ def make_tool_call_handler(gateway: Optional[Any] = None) -> Callable[[StepConte
 
 def tool_call_handler(ctx: StepContext, gateway: Optional[Any] = None) -> StepOutcome:
     """Executes a single tool call or evaluation step, verifies acceptance predicates, and records evidence."""
+    if _is_cancelled(ctx):
+        return StepOutcome(False, errors=["Cancelled by user"])
+
     inputs = ctx.step.inputs
     tool = inputs.get("tool") or ""
-    arguments = inputs.get("arguments") or {}
+    raw_arguments = inputs.get("arguments")
+    if raw_arguments is None:
+        arguments: Dict[str, Any] = {}
+    elif isinstance(raw_arguments, dict):
+        arguments = raw_arguments
+    else:
+        return StepOutcome(
+            False,
+            errors=[f"tool_call 'arguments' must be a dict, got {type(raw_arguments).__name__}"],
+            repairable=True,
+        )
     acceptance_raw = inputs.get("acceptance") or []
     permitted_tools = inputs.get("permitted_tools") or []
-    repetition_limit = int(inputs.get("repetition_limit", 3))
+    try:
+        repetition_limit = max(1, int(inputs.get("repetition_limit", 3)))
+    except (TypeError, ValueError):
+        return StepOutcome(False, errors=["Invalid repetition_limit value"], repairable=True)
 
     # Repetition budget control
     if tool:
-        repetition = ctx.shared.setdefault("_repetition", {})
-        canonical_key = f"{tool}:{json.dumps(arguments, sort_keys=True)}"
-        count = repetition.get(canonical_key, 0) + 1
-        repetition[canonical_key] = count
+        canonical_key = f"{tool}:{json.dumps(arguments, sort_keys=True, default=str)}"
+        with _SHARED_LOCK:
+            repetition = ctx.shared.setdefault("_repetition", {})
+            count = repetition.get(canonical_key, 0) + 1
+            repetition[canonical_key] = count
         if count >= repetition_limit:
             return StepOutcome(
                 False,
@@ -155,14 +185,17 @@ def tool_call_handler(ctx: StepContext, gateway: Optional[Any] = None) -> StepOu
             else 0
         ),
     }
-    tool_history = ctx.shared.setdefault("_tool_history", [])
-    tool_history.append(hist_entry)
+    with _SHARED_LOCK:
+        tool_history: List[Dict[str, Any]] = ctx.shared.setdefault("_tool_history", [])
+        tool_history.append(hist_entry)
 
-    modified_files: set[str] = ctx.shared.setdefault("_modified_files", set())
-    if isinstance(step_output, dict):
-        fp = step_output.get("file_path") or step_output.get("path")
-        if fp:
-            modified_files.add(str(fp))
+        modified_files: set[str] = ctx.shared.setdefault("_modified_files", set())
+        if isinstance(step_output, dict):
+            fp = step_output.get("file_path") or step_output.get("path")
+            if fp:
+                modified_files.add(str(fp))
+        modified_snapshot = set(modified_files)
+        history_snapshot = list(tool_history)
 
     # Check for immediate tool failure
     err_detail = _step_failure(step_error, step_output)
@@ -177,9 +210,17 @@ def tool_call_handler(ctx: StepContext, gateway: Optional[Any] = None) -> StepOu
     # Evaluate machine-checkable acceptance predicates
     evaluated_acceptance: List[Dict[str, Any]] = []
     if acceptance_raw:
-        predicates = [TaskAcceptancePredicate.model_validate(p) for p in acceptance_raw]
+        try:
+            predicates = [TaskAcceptancePredicate.model_validate(p) for p in acceptance_raw]
+        except Exception as exc:
+            return StepOutcome(
+                False,
+                data={"output": step_output},
+                errors=[f"Invalid acceptance predicate: {exc}"],
+                repairable=True,
+            )
         dummy_state = TaskState(session_id=ctx.run.run_id, goal=ctx.run.title, acceptance=predicates)
-        satisfied, unmet = dummy_state.evaluate_acceptance(ctx.workspace_dir, modified_files, tool_history)
+        satisfied, unmet = dummy_state.evaluate_acceptance(ctx.workspace_dir, modified_snapshot, history_snapshot)
         evaluated_acceptance = [p.model_dump() for p in predicates]
         if not satisfied:
             return StepOutcome(

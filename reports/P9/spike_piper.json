@@ -1,7 +1,7 @@
 {
   "spike": "piper_tts",
   "status": "BLOCKED (needs approval: binary and voice weights download)",
-  "timestamp": "2026-11-01T11:06:16Z",
+  "timestamp": "2026-11-10T18:00:30Z",
   "engine_spec": {
     "name": "Piper TTS",
     "target_dir": "E:/GameForge/models/piper",

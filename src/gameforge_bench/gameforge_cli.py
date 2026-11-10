@@ -16,13 +16,13 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from .eval_dataset import get_evaluation_dataset
 from .knowledge_retrieval import GameForgeKnowledgeBase
 
 
-def check_ollama_status(host: str = "127.0.0.1:11434") -> Tuple[bool, List[str]]:
+def check_ollama_status(host: str = "127.0.0.1:11434") -> tuple[bool, list[str]]:
     """Checks if Ollama service is reachable and returns available model tags."""
     try:
         url = f"http://{host}/api/tags"
@@ -36,7 +36,7 @@ def check_ollama_status(host: str = "127.0.0.1:11434") -> Tuple[bool, List[str]]
 
 def query_ollama(
     prompt: str,
-    model_name: str = "gameforge-27b-sft",
+    model_name: str = "gameforge-qwen3.5-9b:latest",
     system_prompt: Optional[str] = None,
     host: str = "127.0.0.1:11434",
     temperature: float = 0.2,
@@ -44,7 +44,7 @@ def query_ollama(
     num_predict: int = 512,
     timeout: int = 360,
     think: Optional[bool] = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Sends a completion request to local Ollama instance."""
     url = f"http://{host}/api/generate"
     options = {
@@ -103,7 +103,7 @@ def query_ollama(
         }
 
 
-def run_interactive_chat(model: str = "gameforge-27b-sft", engine: Optional[str] = None, host: str = "127.0.0.1:11434") -> None:
+def run_interactive_chat(model: str = "gameforge-qwen3.5-9b:latest", engine: Optional[str] = None, host: str = "127.0.0.1:11434") -> None:
     """Runs interactive terminal chat loop with knowledge retrieval."""
     ollama_models_dir = os.environ.get("OLLAMA_MODELS")
     if not ollama_models_dir:
@@ -114,7 +114,7 @@ def run_interactive_chat(model: str = "gameforge-27b-sft", engine: Optional[str]
             ollama_models_dir = str(Path.home() / ".ollama" / "models")
 
     print("=" * 72)
-    print(" GAMEFORGE 27B SFT — INTERACTIVE ASSISTANT CONSOLE")
+    print(f" GAMEFORGE — INTERACTIVE ASSISTANT CONSOLE")
     print(f" Target Model : {model}")
     print(f" Engine Filter: {engine or 'Universal (Cross-Engine)'}")
     print(f" Local Storage: {ollama_models_dir}")

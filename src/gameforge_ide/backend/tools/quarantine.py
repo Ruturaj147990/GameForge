@@ -50,7 +50,8 @@ class QuarantinePipeline:
         self.license_reg = license_registry or LicenseRegistry()
         self.asset_registry = asset_registry or AssetRegistry(self.workspace_root)
         self.mesh_generator = ProceduralMeshGenerator(self.workspace_root / "Saved" / "GeneratedAssets")
-        self.session_token = self.operations.security.get_session_token()
+        sec = getattr(self.operations, "security", None)
+        self.session_token = sec.get_session_token() if sec and hasattr(sec, "get_session_token") else "quarantine-token"
 
     def _run_sync(self, coro_or_val: Any) -> Any:
         """Executes a coroutine safely in synchronous callers."""

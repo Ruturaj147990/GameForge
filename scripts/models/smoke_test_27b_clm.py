@@ -7,22 +7,35 @@ causal LM forward and backward passes on the 27.3B architecture.
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import psutil
-import torch
-import torch.nn as nn
-from transformers import AutoTokenizer
+try:
+    import torch
+    import torch.nn as nn
+    from transformers import AutoTokenizer
+    has_torch = True
+except ImportError:
+    has_torch = False
+    torch = None
+    nn = None
+    AutoTokenizer = None
 
 LOG_FILE = Path("E:/GameForge/training/gameforge-27b-sft/smoke_test/smoke_test.log")
 RESULT_FILE = Path("E:/GameForge/training/gameforge-27b-sft/smoke_test/clm_smoke_test_result.json")
 OUTPUT_DIR = RESULT_FILE.parent
 TOKENIZER_DIR = Path("E:/GameForge/models/hf/Qwen3.8-27B")
-
-LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+REPO_TOKENIZER_DIR = REPO_ROOT / "models" / "hf" / "Qwen3.8-27B"
 
 def log(msg: str):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -268,12 +281,40 @@ def main():
     result["failure_reason"] = failure_reason
     result["final_memory"] = get_mem()
 
-    with open(RESULT_FILE, "w", encoding="utf-8") as f:
-        json.dump(result, f, indent=2)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    temp_result = RESULT_FILE.with_suffix(".tmp")
+    try:
+        temp_result.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        temp_result.replace(RESULT_FILE)
+    except Exception:
+        if temp_result.exists():
+            temp_result.unlink()
+        raise
     log(f"\nFinal smoke test results written to {RESULT_FILE}")
+    return 0
+
+
+def main_cli() -> int:
+    parser = argparse.ArgumentParser(description="Real Causal Language Model Training Smoke Test for GameForge 27B")
+    parser.add_argument("--dry-run", action="store_true", help="Validate setup without allocating full 27B layers")
+    args = parser.parse_args()
+
+    if args.dry_run:
+        mem = get_mem()
+        print(f"Dry run passed: PyTorch/Transformers installed={has_torch}. Host memory: {mem['available_gb']} GB available.")
+        return 0
+
+    if not has_torch:
+        print("Error: PyTorch and Transformers must be installed to run CLM smoke test.", file=sys.stderr)
+        return 1
+
+    main()
+    return 0
+
 
 if __name__ == "__main__":
     try:
-        main()
+        sys.exit(main_cli())
     except Exception as e:
         log(f"Unhandled top-level exception: {e}\n{traceback.format_exc()}")
+        sys.exit(1)

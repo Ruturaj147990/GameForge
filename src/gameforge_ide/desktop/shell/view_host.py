@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Callable, Dict, Optional, Tuple
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import QStackedWidget, QWidget
+
+logger = logging.getLogger(__name__)
 
 
 class ViewHost(QStackedWidget):
@@ -40,6 +43,7 @@ class ViewHost(QStackedWidget):
             return guard()
         return True, ""
 
+    @Slot(str)
     def show_view(self, view_id: str) -> bool:
         """Switch to view_id, instantiating it lazily if not yet created.
 
@@ -50,7 +54,10 @@ class ViewHost(QStackedWidget):
 
         enabled, reason = self.is_enabled(view_id)
         if not enabled:
-            self.viewBlocked.emit(view_id, reason)
+            try:
+                self.viewBlocked.emit(view_id, reason)
+            except RuntimeError:
+                pass
             return False
 
         if view_id not in self._widgets:
@@ -62,14 +69,16 @@ class ViewHost(QStackedWidget):
                 self.addWidget(widget)
                 self._widgets[view_id] = widget
             except Exception as exc:
-                import logging
-                logging.getLogger(__name__).exception("Failed to instantiate view '%s': %s", view_id, exc)
+                logger.exception("Failed to instantiate view '%s': %s", view_id, exc)
                 return False
 
         widget = self._widgets[view_id]
         self.setCurrentWidget(widget)
         self._current_view_id = view_id
-        self.viewChanged.emit(view_id)
+        try:
+            self.viewChanged.emit(view_id)
+        except RuntimeError:
+            pass
         return True
 
     @property
@@ -82,3 +91,17 @@ class ViewHost(QStackedWidget):
 
     def instantiated_views(self) -> Tuple[str, ...]:
         return tuple(self._widgets.keys())
+
+    def deleteLater(self) -> None:
+        """Safely clean up signals and view references on disposal."""
+        try:
+            self.viewChanged.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            self.viewBlocked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self._factories.clear()
+        self._enabled_guards.clear()
+        super().deleteLater()

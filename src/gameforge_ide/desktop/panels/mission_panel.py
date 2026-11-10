@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Qt, Signal, Slot
+from PySide6.QtGui import QHideEvent, QShowEvent
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QProgressBar, QPushButton,
                                QTabWidget, QVBoxLayout, QWidget)
+
 
 
 class _ProbeSignals(QObject):
@@ -145,15 +147,16 @@ class MissionPanel(QWidget):
         self._timer.timeout.connect(self._sample)
 
     # ── visibility-gated sampling ───────────────────────────────────────────
-    def showEvent(self, event) -> None:  # noqa: N802
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802
         super().showEvent(event)
         self.refresh_lists()
         self._sample()
         self._timer.start()
 
-    def hideEvent(self, event) -> None:  # noqa: N802
+    def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802
         super().hideEvent(event)
         self._timer.stop()
+
 
     def set_workspace(self, workspace_root: Path) -> None:
         self._workspace = Path(workspace_root)
@@ -319,3 +322,12 @@ class MissionPanel(QWidget):
         if Path(path).exists():
             from ...core.projects import open_folder_in_file_manager
             open_folder_in_file_manager(Path(path))
+
+    def deleteLater(self) -> None:
+        try:
+            if hasattr(self, "_timer") and self._timer.isActive():
+                self._timer.stop()
+        except Exception:
+            pass
+        super().deleteLater()
+

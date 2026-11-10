@@ -1,4 +1,6 @@
 {
+  "status": "CLEAN_NO_LEAKAGE",
+  "timestamp": "2026-11-10T12:10:10Z",
   "train_samples_count": 8,
   "val_samples_count": 2,
   "benchmark_tasks_count": 50,
@@ -11,6 +13,5 @@
     "gameforge-cleanroom-unreal-pilots",
     "gameforge-engine-neutral-specs",
     "gameforge-private-heldout-eval"
-  ],
-  "status": "CLEAN_NO_LEAKAGE"
+  ]
 }

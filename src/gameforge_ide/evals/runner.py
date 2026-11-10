@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,37 @@ from ..design.draft import CameraKind, DesignDraft, DraftWin, Genre
 from ..design.gds import GameDesignSpec
 from ..design.patch import apply_patch
 from ..design.presets import get_preset_spec
+
+
+def _extract_json(text: str) -> Optional[Dict[str, Any]]:
+    """Extract and parse a JSON dictionary, tolerating markdown code fences and enclosing text."""
+    if not text:
+        return None
+    s = text.strip()
+    try:
+        val = json.loads(s)
+        if isinstance(val, dict):
+            return val
+    except Exception:
+        pass
+    m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", s, re.DOTALL | re.IGNORECASE)
+    if m:
+        try:
+            val = json.loads(m.group(1).strip())
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+    start = s.find("{")
+    end = s.rfind("}")
+    if start != -1 and end > start:
+        try:
+            val = json.loads(s[start : end + 1])
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+    return None
 
 
 def _resolve_json_pointer(doc: Dict[str, Any], path: str) -> List[Any]:
@@ -66,6 +98,10 @@ def _check_gds_expectations(
                         return False
                 else:
                     return False
+        elif op == "!=":
+            target = exp.get("value")
+            if any(v == target for v in after_vals):
+                return False
         elif op == "contains_kind":
             target_kind = str(exp.get("value", "")).lower()
             entities = after_vals[0] if after_vals and isinstance(after_vals[0], list) else []
@@ -167,19 +203,16 @@ class EvalRunner:
             parsed_data = None
 
             if not res.get("error"):
-                try:
-                    parsed_data = json.loads(res["text"])
+                parsed_data = _extract_json(res.get("text", ""))
+                if parsed_data is not None:
                     valid_json = True
                     first_try = True
-                except Exception:
+                else:
                     # One repair round
-                    repair_prompt = f"Fix this output into strict valid JSON matching the schema:\n{res['text']}"
+                    repair_prompt = f"Fix this output into strict valid JSON matching the schema:\n{res.get('text', '')}"
                     rep_res = adapter.complete(repair_prompt, schema_json=schema, num_ctx=4096)
-                    try:
-                        parsed_data = json.loads(rep_res["text"])
-                        valid_json = True
-                    except Exception:
-                        valid_json = False
+                    parsed_data = _extract_json(rep_res.get("text", ""))
+                    valid_json = parsed_data is not None
 
             if valid_json and isinstance(parsed_data, dict):
                 must = task.get("must_include", {})
@@ -236,8 +269,8 @@ class EvalRunner:
             passed = False
 
             if not res.get("error"):
-                try:
-                    data = json.loads(res["text"])
+                data = _extract_json(res.get("text", ""))
+                if data is not None:
                     valid_json = True
                     first_try = True
                     ops = data.get("ops", [])
@@ -250,8 +283,6 @@ class EvalRunner:
                             )
                         except Exception:
                             passed = False
-                except Exception:
-                    valid_json = False
 
             results.append({
                 "task_id": task["id"],
@@ -289,8 +320,8 @@ class EvalRunner:
             passed = False
 
             if not res.get("error"):
-                try:
-                    data = json.loads(res["text"])
+                data = _extract_json(res.get("text", ""))
+                if data is not None:
                     valid_json = True
                     first_try = True
                     fixed_code = data.get("fixed_code", "")
@@ -300,8 +331,6 @@ class EvalRunner:
                     else:
                         orig_sources = "\n".join(task.get("files", {}).values())
                         passed = bool(fixed_code.strip() and fixed_code.strip() != orig_sources.strip())
-                except Exception:
-                    valid_json = False
 
             results.append({
                 "task_id": task["id"],
@@ -338,15 +367,13 @@ class EvalRunner:
             passed = False
 
             if not res.get("error"):
-                try:
-                    data = json.loads(res["text"])
+                data = _extract_json(res.get("text", ""))
+                if data is not None:
                     valid_json = True
                     first_try = True
                     code = data.get("code", "")
                     if "UCLASS" in code or "#include" in code:
                         passed = True
-                except Exception:
-                    valid_json = False
 
             results.append({
                 "task_id": task["id"],
@@ -396,8 +423,8 @@ class EvalRunner:
             passed = False
 
             if not res.get("error"):
-                try:
-                    data = json.loads(res["text"])
+                data = _extract_json(res.get("text", ""))
+                if data is not None:
                     valid_json = True
                     first_try = True
                     criteria = data.get("criteria") if isinstance(data, dict) else None
@@ -406,8 +433,6 @@ class EvalRunner:
                         overall = sum(float(v) for v in criteria.values()) / len(criteria)
                     threshold = float(task.get("acceptable_threshold", 3.5))
                     passed = isinstance(criteria, dict) and len(criteria) >= 6 and overall >= threshold
-                except Exception:
-                    valid_json = False
 
             results.append({
                 "task_id": task["id"],
@@ -454,3 +479,6 @@ class EvalRunner:
             "overall": overall,
             "families": family_metrics,
         }
+
+
+__all__ = ["EvalRunner"]

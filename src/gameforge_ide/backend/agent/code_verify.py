@@ -187,6 +187,14 @@ def verify_file_syntax(file_path: Union[str, Path], content: Optional[str] = Non
             return True, []
         except json.JSONDecodeError as exc:
             return False, [f"JSON syntax error: {exc}"]
+    if ext in (".ini", ".cfg"):
+        import configparser
+        cp = configparser.ConfigParser()
+        try:
+            cp.read_string(text)
+            return True, []
+        except configparser.Error as exc:
+            return False, [f"INI syntax error: {exc}"]
     return True, []
 
 
@@ -559,7 +567,11 @@ def propose_assistant_fix(
     # Fallback search in project_dir if index returned no symbol matches
     if not sym_context and searched_symbols and project_dir.is_dir():
         for s in list(searched_symbols)[:3]:
-            for p in list(project_dir.glob(f"**/*{s}*"))[:2]:
+            try:
+                candidate_matches = list(project_dir.glob(f"**/*{s}*"))[:2]
+            except (OSError, ValueError):
+                continue
+            for p in candidate_matches:
                 if p.is_file() and p.suffix in (".h", ".hpp", ".cpp", ".py", ".cs"):
                     try:
                         rel = str(p.relative_to(project_dir)).replace("\\", "/")

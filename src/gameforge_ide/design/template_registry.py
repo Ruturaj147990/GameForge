@@ -691,12 +691,24 @@ class SemanticTemplateRegistry:
             f"U{title_pascal}GameplayRule",
             f"A{title_pascal}PlayerController",
         ]
-        if profile.detected_genre == Genre.PUZZLE or subtype in ("sudoku", "tetris", "minesweeper", "puzzle"):
+        if profile.detected_genre == Genre.PUZZLE or subtype in ("sudoku", "tetris", "minesweeper", "puzzle", "scratch_puzzle"):
             target_classes.append("UGridPuzzleSubsystem")
-        elif profile.detected_genre == Genre.GRID_BOARD or brief.is_board_like or subtype in ("chess", "checkers", "board", "roll_and_move"):
+        elif profile.detected_genre == Genre.GRID_BOARD or brief.is_board_like or subtype in ("chess", "checkers", "board", "roll_and_move", "scratch_board"):
             target_classes.append("UBoardGameSubsystem")
+        elif brief.laps or subtype == "racing":
+            target_classes.append("URacingCircuitSubsystem")
+        elif brief.has_guards or "stealth" in custom_caps or "stealth_detection" in custom_caps:
+            target_classes.append("UStealthInfiltrationSubsystem")
+        elif brief.weapons or "multi_weapon_loadout" in custom_caps:
+            target_classes.append("UWeaponInventorySubsystem")
+        elif "bomb_site" in custom_caps or "defuse_bomb" in custom_caps or subtype == "tactical_fps":
+            target_classes.append("UTacticalBombObjectiveSubsystem")
         elif brief.enemies:
             target_classes.append("UArenaCombatSubsystem")
+        elif brief.switches:
+            target_classes.append("UObjectiveInteractionSubsystem")
+        elif "quest" in custom_caps or brief.has_npc:
+            target_classes.append("UQuestProgressionSubsystem")
 
         target_widgets = [
             f"W{title_pascal}HUD",
@@ -858,6 +870,9 @@ class SemanticTemplateRegistry:
         elif "wave_survival" in profile.keywords_matched or "survival" in title.lower() or "horde" in title.lower():
             arch["plan_kind"] = "scratch_wave_survival"
             arch["target_classes"] = ["AWaveSurvivalGameMode", "UWaveSurvivalGameplayRule", "AWaveSurvivalPlayerController", "AWaveSpawner"]
+        elif "stealth" in profile.keywords_matched or "stealth" in title.lower() or "heist" in title.lower():
+            arch["plan_kind"] = "scratch_stealth"
+            arch["target_classes"] = ["AStealthGameMode", "UStealthGameplayRule", "AStealthPlayerController", "UStealthInfiltrationSubsystem"]
         return arch
 
     def evaluate_strategy_with_model(
@@ -972,3 +987,15 @@ class SemanticTemplateRegistry:
 
 
 default_registry = SemanticTemplateRegistry()
+
+__all__ = [
+    "CANONICAL_TEMPLATES",
+    "CandidateEvaluation",
+    "Capability",
+    "CapabilityProfile",
+    "GenerationStrategy",
+    "SemanticTemplateRegistry",
+    "StrategyDecision",
+    "TemplateDefinition",
+    "default_registry",
+]

@@ -8,17 +8,39 @@ and recomputing effective eligible counts.
 
 from __future__ import annotations
 
+import argparse
 import json
-import time
+import os
 from pathlib import Path
-from typing import Any, Dict, List
+import sys
+import tempfile
+import time
+from typing import Any, Dict, List, Optional, Set
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
-def audit_provenance(workspace_root: Path = WORKSPACE_ROOT) -> Dict[str, Any]:
-    manifest_path = workspace_root / "configs" / "gameforge_v2_training_manifest.json"
-    register_path = workspace_root / "configs" / "dataset_source_register.json"
+def _write_atomic(target_path: Path, content: str) -> None:
+    """Atomically write text data to file using a temporary file and replace."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target_path.parent, delete=False, suffix=".tmp") as tf:
+        tf.write(content)
+        tf_name = tf.name
+    os.replace(tf_name, target_path)
+
+
+def audit_provenance(
+    workspace_root: Path = REPO_ROOT,
+    manifest_override: Optional[Path] = None,
+    register_override: Optional[Path] = None,
+    output_json_override: Optional[Path] = None,
+    output_md_override: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Audit dataset provenance, verify quarantine isolation, and write audit reports."""
+    manifest_path = manifest_override or (workspace_root / "configs" / "gameforge_v2_training_manifest.json")
+    register_path = register_override or (workspace_root / "configs" / "dataset_source_register.json")
 
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest missing: {manifest_path}")
@@ -44,15 +66,14 @@ def audit_provenance(workspace_root: Path = WORKSPACE_ROOT) -> Dict[str, Any]:
     eligible_train_samples: List[str] = []
     eligible_dev_samples: List[str] = []
 
-    group_to_splits: Dict[str, set] = {}
+    group_to_splits: Dict[str, Set[str]] = {}
 
     for sample in samples:
-        s_id = sample.get("sample_id")
+        s_id = sample.get("sample_id", "unknown")
         cat = sample.get("category", "unknown")
         src_id = sample.get("source_id", "unknown")
         split = sample.get("split", "unknown")
         grp = sample.get("group_id", "ungrouped")
-        rev_st = sample.get("review_status", "UNKNOWN")
 
         category_counts[cat] = category_counts.get(cat, 0) + 1
         source_counts[src_id] = source_counts.get(src_id, 0) + 1
@@ -125,11 +146,11 @@ def audit_provenance(workspace_root: Path = WORKSPACE_ROOT) -> Dict[str, Any]:
     leaked_groups = {grp: list(splits) for grp, splits in group_to_splits.items() if len(splits) > 1}
 
     # Summary
-    audit_report = {
+    audit_report: Dict[str, Any] = {
         "audit_title": "GameForge V2 500-Sample Dataset Forensic Provenance Audit",
         "audit_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "manifest_path": str(manifest_path.relative_to(workspace_root)),
-        "source_register_path": str(register_path.relative_to(workspace_root)),
+        "manifest_path": str(manifest_path.relative_to(workspace_root)).replace("\\", "/") if manifest_path.is_relative_to(workspace_root) else str(manifest_path),
+        "source_register_path": str(register_path.relative_to(workspace_root)).replace("\\", "/") if register_path.is_relative_to(workspace_root) else str(register_path),
         "governing_policy": "GAMEFORGE_FINAL_MASTER_STRATEGY.md Section 5.5, 6.0, 28.3",
         "total_manifest_samples": total_samples,
         "category_distribution": category_counts,
@@ -157,11 +178,11 @@ def audit_provenance(workspace_root: Path = WORKSPACE_ROOT) -> Dict[str, Any]:
     }
 
     # Save JSON report
-    out_json = workspace_root / "reports" / "gameforge_v2_data_provenance_audit.json"
-    out_json.write_text(json.dumps(audit_report, indent=2), encoding="utf-8")
+    out_json = output_json_override or (workspace_root / "reports" / "gameforge_v2_data_provenance_audit.json")
+    _write_atomic(out_json, json.dumps(audit_report, indent=2))
 
     # Generate Markdown Report
-    out_md = workspace_root / "reports" / "gameforge_v2_data_provenance_audit.md"
+    out_md = output_md_override or (workspace_root / "reports" / "gameforge_v2_data_provenance_audit.md")
     generate_provenance_markdown(audit_report, out_md)
 
     print(f"Audit completed: {total_samples} samples audited.")
@@ -174,6 +195,7 @@ def audit_provenance(workspace_root: Path = WORKSPACE_ROOT) -> Dict[str, Any]:
 
 
 def generate_provenance_markdown(audit: Dict[str, Any], out_path: Path) -> None:
+    tot = max(1, audit.get("total_manifest_samples", 1))
     lines = [
         "# GAMEFORGE V2 — DATA PROVENANCE & RIGHTS FORENSIC AUDIT",
         "## Complete Sample-Level Rights Audit of All 500 V2 SFT Pilot Examples",
@@ -216,8 +238,9 @@ def generate_provenance_markdown(audit: Dict[str, Any], out_path: Path) -> None:
     ]
 
     for cat, count in audit.get("category_distribution", {}).items():
+        pct = (count / tot) * 100
         lines.append(
-            f"| `{cat}` | {count} ({(count / audit['total_manifest_samples']) * 100:.0f}%) | {count} | "
+            f"| `{cat}` | {count} ({pct:.0f}%) | {count} | "
             f"`gameforge-cleanroom-unreal-pilots` | `REVIEW_REQUIRED` | **FALSE** | Quarantined |"
         )
 
@@ -254,8 +277,30 @@ def generate_provenance_markdown(audit: Dict[str, Any], out_path: Path) -> None:
         "",
     ])
 
-    out_path.write_text("\n".join(lines), encoding="utf-8")
+    _write_atomic(out_path, "\n".join(lines))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Forensic Data Provenance Auditor for GameForge V2")
+    parser.add_argument("--workspace", type=Path, default=REPO_ROOT, help="Workspace root directory")
+    parser.add_argument("--manifest", type=Path, default=None, help="Manifest JSON override")
+    parser.add_argument("--register", type=Path, default=None, help="Dataset register JSON override")
+    parser.add_argument("--output-json", type=Path, default=None, help="Output JSON path override")
+    parser.add_argument("--output-md", type=Path, default=None, help="Output Markdown path override")
+    args = parser.parse_args()
+
+    report = audit_provenance(
+        workspace_root=args.workspace,
+        manifest_override=args.manifest,
+        register_override=args.register,
+        output_json_override=args.output_json,
+        output_md_override=args.output_md,
+    )
+
+    # 0 leaked groups is required for clean dataset audit
+    group_leak_status = report.get("group_leakage_check", {}).get("status")
+    return 0 if group_leak_status == "PASS_NO_LEAKAGE" else 1
 
 
 if __name__ == "__main__":
-    audit_provenance()
+    sys.exit(main())
