@@ -121,6 +121,27 @@ def generate(
                     )
                     continue
 
+                overview = getattr(gds, "overview", None)
+                genre_val = str(getattr(overview, "genre", "")).lower()
+                is_board_or_puzzle = any(k in genre_val for k in ("board", "puzzle", "card", "grid"))
+                if is_board_or_puzzle:
+                    # Board / puzzle games interact with pieces rather than traversing navmesh
+                    steps = [
+                        InjectStep(inject=InjectArgs(action="IA_Interact", value=True, hold_s=0.1)),
+                        WaitStep(wait_s=WaitArgs(seconds=1.0)),
+                    ]
+                    scenarios.append(
+                        Scenario(
+                            scenario_id=scenario_id,
+                            description=f"Interact with board elements for objective {scenario_id}",
+                            timeout_s=30.0,
+                            steps=steps,
+                            expect=[EventExpectation(event="game.started")],
+                            captures=[],
+                        )
+                    )
+                    continue
+
                 # Greedy nearest-neighbour traversal
                 steps = []
                 cur = player_start

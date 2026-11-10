@@ -3,7 +3,7 @@ logical_task_id: T3-023
 tier: T3
 title: Input action and mapping setup
 status: specification-draft
-engine_variants: [unity, unreal]
+engine_variants: [unreal]
 prompt: >-
   Create and wire input actions/mappings for move, look, jump, and interact according to
   the project's chosen engine input system. Connect them to the specified player controller,

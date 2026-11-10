@@ -3,7 +3,7 @@ logical_task_id: T2-001
 tier: T2
 title: Third-person movement and camera
 status: specification-draft
-engine_variants: [unity, unreal]
+engine_variants: [unreal]
 prompt: >-
   Implement a third-person player controller in the supplied project. Support move,
   look, and jump using the project's intended input system. The camera must orbit

@@ -3,7 +3,7 @@ logical_task_id: T3-017
 tier: T3
 title: Health HUD binding
 status: specification-draft
-engine_variants: [unity, unreal]
+engine_variants: [unreal]
 prompt: >-
   In the supplied project, create or wire a health HUD using the project's existing UI
   conventions. The HUD must display the authoritative health value, update after damage

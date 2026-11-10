@@ -21,9 +21,17 @@ def workspace_root():
     return Path.cwd()
 
 
+def _resolve_doc(workspace_root: Path, filename: str) -> Path:
+    """Resolves documentation files from the canonical documentation authority (E:\\GameForge_Documentation)."""
+    doc_p = Path(r"E:\GameForge_Documentation") / filename
+    if doc_p.exists():
+        return doc_p
+    return workspace_root / filename
+
+
 def test_ac_01_authority_and_preflight(workspace_root):
     """AC-1: Active source of truth, repo inspection, and Step 5 selection."""
-    ssot = workspace_root / "GAMEFORGE_FINAL_MASTER_STRATEGY.md"
+    ssot = _resolve_doc(workspace_root, "GAMEFORGE_FINAL_MASTER_STRATEGY.md")
     assert ssot.is_file(), "Master strategy SSOT file missing"
     content = ssot.read_text(encoding="utf-8")
     assert "Version: 3.1.0" in content or "v3.1.0" in content, "Expected Strategy v3.1.0"
@@ -32,7 +40,7 @@ def test_ac_01_authority_and_preflight(workspace_root):
 
 def test_ac_02_test_count_reconciliation(workspace_root):
     """AC-2: Test count reconciliation between 80, 94, 6, and unique total."""
-    audit_report = workspace_root / "STEP4_AUDIT_REPORT.md"
+    audit_report = _resolve_doc(workspace_root, "STEP4_AUDIT_REPORT.md")
     assert audit_report.is_file()
     text = audit_report.read_text(encoding="utf-8")
     assert "114" in text, "Audit must record total unique tests (114)"
@@ -43,7 +51,7 @@ def test_ac_02_test_count_reconciliation(workspace_root):
 
 def test_ac_03_step_4_engine_audit(workspace_root):
     """AC-3: HUD/projectile probes, visual vs state separation, and E4 labeling."""
-    audit_report = workspace_root / "STEP4_AUDIT_REPORT.md"
+    audit_report = _resolve_doc(workspace_root, "STEP4_AUDIT_REPORT.md")
     assert audit_report.is_file()
     text = audit_report.read_text(encoding="utf-8")
     assert "H1" in text and "H12" in text, "Must cite H1-H12 probes"
@@ -116,7 +124,7 @@ def test_ac_08_layered_scorecards(workspace_root):
 
 def test_ac_09_project_state_synchronization(workspace_root):
     """AC-9: Consistency across roadmap CSV, manifest, and model register."""
-    roadmap_file = workspace_root / "GAMEFORGE_ROADMAP.csv"
+    roadmap_file = _resolve_doc(workspace_root, "GAMEFORGE_ROADMAP.csv")
     assert roadmap_file.is_file()
     with open(roadmap_file, "r", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
@@ -126,7 +134,7 @@ def test_ac_09_project_state_synchronization(workspace_root):
 
 def test_ac_10_sequential_continuation_and_resume(workspace_root):
     """AC-10: Strategy mandates sequential continuation without skipping gates."""
-    ssot = workspace_root / "GAMEFORGE_FINAL_MASTER_STRATEGY.md"
+    ssot = _resolve_doc(workspace_root, "GAMEFORGE_FINAL_MASTER_STRATEGY.md")
     content = ssot.read_text(encoding="utf-8")
     assert "30.1.1 Mandatory milestone loop" in content
     assert "READ SSOT" in content
@@ -134,7 +142,7 @@ def test_ac_10_sequential_continuation_and_resume(workspace_root):
 
 def test_ac_11_eight_tier_benchmark_inventory(workspace_root):
     """AC-11: Eight-tier structure T1-T8 preserved in inventory."""
-    inv_file = workspace_root / "TASK_INVENTORY.csv"
+    inv_file = _resolve_doc(workspace_root, "TASK_INVENTORY.csv")
     assert inv_file.is_file()
     tasks = load_task_inventory(inv_file)
     tiers = {t.tier for t in tasks}
@@ -173,7 +181,7 @@ def test_ac_14_metrics_and_split_integrity(workspace_root):
 
 def test_ac_15_t2_task_inventory(workspace_root):
     """AC-15: 15 specified T2 gameplay component tasks in inventory."""
-    inv_file = workspace_root / "TASK_INVENTORY.csv"
+    inv_file = _resolve_doc(workspace_root, "TASK_INVENTORY.csv")
     tasks = load_task_inventory(inv_file)
     t2_tasks = [t for t in tasks if t.tier == "T2"]
     assert len(t2_tasks) == 15
@@ -181,7 +189,7 @@ def test_ac_15_t2_task_inventory(workspace_root):
 
 def test_ac_16_t3_task_inventory(workspace_root):
     """AC-16: 15 specified T3 scene/editor authoring tasks in inventory."""
-    inv_file = workspace_root / "TASK_INVENTORY.csv"
+    inv_file = _resolve_doc(workspace_root, "TASK_INVENTORY.csv")
     tasks = load_task_inventory(inv_file)
     t3_tasks = [t for t in tasks if t.tier == "T3"]
     assert len(t3_tasks) == 15
@@ -189,7 +197,7 @@ def test_ac_16_t3_task_inventory(workspace_root):
 
 def test_ac_17_registry_schema_and_dimensions(workspace_root):
     """AC-17: Active Registry v2.1 has 26 columns, 4524 rows, 39 engines, unique keys, P0-P3."""
-    matrix_file = workspace_root / "ENGINE_FEATURE_COVERAGE_MATRIX.csv"
+    matrix_file = _resolve_doc(workspace_root, "ENGINE_FEATURE_COVERAGE_MATRIX.csv")
     assert matrix_file.is_file()
     with open(matrix_file, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.reader(f)
@@ -210,7 +218,7 @@ def test_ac_17_registry_schema_and_dimensions(workspace_root):
 
 def test_ac_18_registry_evidence_semantics(workspace_root):
     """AC-18: Controlled lifecycle labels and E0-E5 evidence ladder."""
-    matrix_file = workspace_root / "ENGINE_FEATURE_COVERAGE_MATRIX.csv"
+    matrix_file = _resolve_doc(workspace_root, "ENGINE_FEATURE_COVERAGE_MATRIX.csv")
     with open(matrix_file, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
         verif_levels = {r["verification_level"] for r in reader}
@@ -254,7 +262,7 @@ def test_ac_22_engine_capability_honesty(workspace_root):
 
 def test_ac_23_product_deferral(workspace_root):
     """AC-23: Windows desktop priority follows the latest recorded decision."""
-    roadmap_file = workspace_root / "GAMEFORGE_ROADMAP.csv"
+    roadmap_file = _resolve_doc(workspace_root, "GAMEFORGE_ROADMAP.csv")
     with open(roadmap_file, "r", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     step13 = next((r for r in rows if r["step_id"] == "STEP_13"), None)

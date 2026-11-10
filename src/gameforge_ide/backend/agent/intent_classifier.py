@@ -65,7 +65,15 @@ _cache: Dict[str, IntentResult] = {}
 _cache_lock = threading.Lock()
 
 
-def _timeout_s() -> float:
+_REPAIR_RE = re.compile(
+    r"^(?:please\s+)?(?:fix(?:\s+it|\s+this|\s+all(?:\s+the)?\s+(?:errors?|issues?)|\s+the\s+(?:errors?|issues?|build|scenarios?|problem)|\s+(?:errors?|issues?))?|(?:repair|debug|resolve|solve)(?:\s+it|\s+this|\s+the\s+(?:errors?|issues?|build|problem)|\s+(?:errors?|issues?))?|make\s+it\s+work|get\s+it\s+working|fix\s+everything|try\s+again(?:\s+and\s+fix)?)[.!?]*$",
+    re.I,
+)
+
+
+def is_repair_request(text: str) -> bool:
+    """Return True if text is a bare or natural error repair / fix request."""
+    return bool(_REPAIR_RE.search((text or "").strip()))
     try:
         return max(1.0, float(os.environ.get("GAMEFORGE_INTENT_TIMEOUT_S", "15")))
     except ValueError:
@@ -135,12 +143,18 @@ def classify_intent(
     if intent not in INTENTS or not (0.0 <= conf <= 1.0) or conf < MIN_CONFIDENCE:
         return None
     _defect_re = re.compile(
-        r"\b(not complete|incomplete|not working|broken|bug|error|fails|failing|crash|crashes|stuck|fix|missing|nothing is playable|not playable|tiles|only \d+ tiles|just \d+ tiles)\b",
+        r"\b(not complete|incomplete|not working|broken|bug|error|fails|failing|crash|crashes|stuck|missing|nothing is playable|not playable|tiles|only \d+ tiles|just \d+ tiles)\b",
         re.I,
     )
-    if intent == "chat" and _defect_re.search(text):
-        intent = "modify_game"
+    if is_repair_request(text):
+        intent = "code_change"
+        conf = max(conf, 0.95)
+    elif intent == "chat" and _defect_re.search(text):
+        intent = "code_change" if re.search(r"\b(fix|code|script|compile|build|error|crash|syntax)\b", text, re.I) else "modify_game"
         conf = max(conf, 0.85)
+    elif intent == "modify_game" and is_repair_request(text):
+        intent = "code_change"
+        conf = max(conf, 0.95)
     result = IntentResult(intent=intent, confidence=conf, source="model", seconds=round(time.monotonic() - t0, 2))
     with _cache_lock:
         if len(_cache) > 256:

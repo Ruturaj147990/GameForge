@@ -1,0 +1,24 @@
+{
+  "version": "1.1.0",
+  "architecture": "Unreal-Only Active Core with Dedicated Multi-Engine Repositories",
+  "ide_root": "E:\\GameForge_IDE",
+  "plugin_root": "E:\\GameForge_Unreal_Plugin",
+  "models_root": "E:\\GameForge_AI_Models",
+  "ollama_models_dir": "E:\\GameForge_AI_Models\\ollama",
+  "training_root": "E:\\GameForge_AI_Training",
+  "benchmarks_root": "E:\\GameForge_Benchmarks",
+  "projects_root": "E:\\GameForge_Projects",
+  "engine_testbed_root": "E:\\GameForge_Engine_Testbed",
+  "docs_root": "E:\\GameForge_Documentation",
+  "engine_root": "E:\\UE\\UE_5.7",
+  "ollama_url": "http://127.0.0.1:11434",
+  "bridge_port": 47815,
+  "separated_engines": {
+    "unity_root": "E:\\GameForge_Unity",
+    "godot_root": "E:\\GameForge_Godot",
+    "roblox_root": "E:\\GameForge_Roblox",
+    "bevy_root": "E:\\GameForge_Bevy",
+    "gamemaker_root": "E:\\GameForge_GameMaker",
+    "o3de_root": "E:\\GameForge_O3DE"
+  }
+}

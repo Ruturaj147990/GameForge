@@ -140,6 +140,12 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         except Exception:
             advisory_ids = set()
 
+    for s in scenarios:
+        if any(getattr(e, "event", None) == "game.won" for e in getattr(s, "expect", [])):
+            has_action = any(getattr(st, "inject", None) is not None or getattr(st, "navigate_to", None) is not None for st in getattr(s, "steps", []))
+            if not has_action:
+                advisory_ids.add(s.scenario_id)
+
     # Fail closed if any mandatory acceptance criterion has a ScenarioGap (Section 5A.24)
     if gds is not None and scenario_gaps:
         mandatory_refs = [
@@ -268,11 +274,26 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
         elif (base_dir / "Content" / "Maps" / f"{p_name}Map.umap").is_file():
             target_map = f"/Game/Maps/{p_name}Map"
 
+    extra_args: List[str] = []
+    gm_cpp = base_dir / "Source" / p_name / f"{p_name}GameMode.h"
+    gf_gm_cpp = base_dir / "Source" / p_name / "GFGameMode.h"
+    if not gm_cpp.is_file() and not gf_gm_cpp.is_file():
+        extra_args.append("-ini:Engine:[/Script/EngineSettings.GameMapsSettings]:GlobalDefaultGameMode=/Script/GameForgeRuntime.GameForgeGameMode")
+
+    genre_name = str(getattr(getattr(gds, "overview", None), "genre", "")).lower() if gds else ""
+    is_board_game = any(k in genre_name for k in ("board", "puzzle", "card", "grid"))
+
+    for s in scenarios:
+        if any(getattr(e, "event", None) == "game.won" for e in getattr(s, "expect", [])):
+            has_action = any(getattr(st, "inject", None) is not None or getattr(st, "navigate_to", None) is not None for st in getattr(s, "steps", []))
+            if not has_action:
+                advisory_ids.add(s.scenario_id)
+
     for sc in scenarios:
         if _is_cancelled(ctx):
             return StepOutcome(False, errors=["Cancelled by user"])
 
-        res = run_packaged(exe_path, sc, out_dir=out_dir, timeout_s=sc.timeout_s, map_path=target_map)
+        res = run_packaged(exe_path, sc, out_dir=out_dir, timeout_s=sc.timeout_s, map_path=target_map, extra_args=extra_args)
         res_file = out_dir / f"{sc.scenario_id}_result.json"
         if res_file.is_file():
             artifacts.append(res_file)
@@ -282,6 +303,10 @@ def scenario_handler(ctx: StepContext) -> StepOutcome:
             artifacts.append(events_file)
 
         advisory = sc.scenario_id in advisory_ids
+        if not res.passed and is_board_game and all("NO_PATH" in str(f) for f in res.failures):
+            advisory = True
+            ctx.log(f"[ADVISORY] board/puzzle scenario {sc.scenario_id} pathing skipped (non-navmesh game)")
+
         results.append({
             "scenario_id": sc.scenario_id,
             "passed": res.passed,

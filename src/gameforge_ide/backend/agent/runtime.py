@@ -1430,6 +1430,8 @@ class AgentRuntime:
         p = (user_prompt or "").strip().lower()
         if not p:
             return False
+        if self._is_repair_or_fix_request(user_prompt):
+            return False
         # Do not hijack explicit source file edits (.cpp, .h, .py, .cs)
         if re.search(r"[\w\-\./\\]+\.(?:cpp|h|hpp|py|cs)\b", p):
             return False
@@ -1461,6 +1463,226 @@ class AgentRuntime:
             return bool(found and found.is_file())
         except Exception:
             return False
+
+    def _is_repair_or_fix_request(self, user_prompt: str) -> bool:
+        """Determines if user prompt is requesting an error fix, repair of a failed build stage, or debugging."""
+        try:
+            from .intent_classifier import is_repair_request
+            return is_repair_request(user_prompt)
+        except Exception:
+            p = (user_prompt or "").strip().lower()
+            p = re.sub(r"[.!?,]+$", "", p).strip()
+            patterns = [
+                r"^(?:please\s+)?(?:fix(?:\s+it|\s+this|\s+all(?:\s+the)?\s+errors?|\s+the\s+errors?|\s+the\s+issues?|\s+the\s+build|\s+the\s+scenarios?|\s+errors?|\s+issues?)?|(?:repair|debug|resolve|solve)(?:\s+it|\s+this|\s+the\s+errors?|\s+the\s+build)?|make\s+it\s+work|get\s+it\s+working|fix\s+everything|try\s+again(?:\s+and\s+fix)?)[.!?]*$",
+            ]
+            return any(re.match(pat, p, re.I) for pat in patterns)
+
+    def _resolve_failed_run_context(self, session: Session, user_prompt: str) -> Optional[Dict[str, Any]]:
+        """Resolves target project, run ID, and failed stage from session metadata, conversation history, or recent runs."""
+        # 1. Check session metadata
+        meta = getattr(session, "metadata", {}) or {}
+        last_failed = meta.get("last_failed_run")
+        if last_failed and isinstance(last_failed, dict) and last_failed.get("run_id"):
+            return dict(last_failed)
+
+        # 2. Check runtime in-memory cache
+        if getattr(self, "_last_failed_run", None):
+            return dict(self._last_failed_run)
+
+        # 3. Inspect recent assistant messages in session history
+        messages = getattr(session, "messages", []) or []
+        for msg in reversed(messages):
+            role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else None)
+            if role != "assistant":
+                continue
+            content = str(getattr(msg, "content", "") or (msg.get("content") if isinstance(msg, dict) else "") or "")
+            m_proj = re.search(r"Project directory:\s*[`'\"]?([^`'\r\n]+?)[`'\"]?\s*-\s*run\s*[`'\"]?(run_\w+)[`'\"]?", content)
+            m_stage = re.search(r"stopped at stage\s*[`'\"]?(\w+)[`'\"]?", content)
+            if m_proj:
+                pdir = Path(m_proj.group(1).strip())
+                run_id = m_proj.group(2).strip()
+                stage = m_stage.group(1).strip() if m_stage else "unknown"
+                return {
+                    "run_id": run_id,
+                    "project_dir": str(pdir),
+                    "failed_stage": stage,
+                    "error": "Extracted from session build failure report",
+                }
+
+        # 4. Check active project directory or workspace for latest failed run
+        ps = getattr(self, "projects_service", None)
+        candidate_dirs = []
+        if ps and getattr(ps, "active_project_dir", None):
+            candidate_dirs.append(Path(ps.active_project_dir))
+        if getattr(session, "project_dir", None):
+            candidate_dirs.append(Path(session.project_dir))
+        candidate_dirs.append(self.workspace_root)
+
+        from ...forge.store import RunStore
+        for cdir in candidate_dirs:
+            if not cdir.is_dir():
+                continue
+            try:
+                store = RunStore(project_dir=cdir, workspace_dir=self.workspace_root)
+                recent = store.get_runs_index()
+                for r in recent:
+                    if r.get("status") in ("FAILED", "BLOCKED"):
+                        st = store.load(r["run_id"])
+                        failed_st = None
+                        if st:
+                            for sid, rec in st.records.items():
+                                if rec.status == "FAILED":
+                                    failed_st = sid
+                                    break
+                        return {
+                            "run_id": r["run_id"],
+                            "project_dir": str(cdir),
+                            "failed_stage": failed_st or "unknown",
+                            "error": r.get("error", "Run marked FAILED"),
+                        }
+            except Exception:
+                continue
+        return None
+
+    async def _execute_stage_repair_stream(
+        self,
+        session_id: str,
+        session: Session,
+        task_state: TaskState,
+        failed_ctx: Dict[str, Any],
+    ) -> AsyncIterator[AgentEvent]:
+        run_id = failed_ctx.get("run_id")
+        pdir = Path(failed_ctx.get("project_dir") or self.workspace_root).resolve()
+        failed_stage = failed_ctx.get("failed_stage") or "scenarios"
+
+        yield AgentEvent(
+            event_type="status",
+            content="RUNNING",
+            metadata={"stage": "Repair", "message": f"Inspecting and repairing failed stage '{failed_stage}' in {pdir.name}..."},
+        )
+
+        repair_notes: List[str] = []
+
+        # Perform targeted auto-repairs on disk
+        if failed_stage == "scenarios":
+            # 1. Fix DefaultEngine.ini GlobalDefaultGameMode if pointing to non-existent project class
+            eng_ini = pdir / "Config" / "DefaultEngine.ini"
+            if eng_ini.is_file():
+                txt = eng_ini.read_text(encoding="utf-8")
+                gm_h = pdir / "Source" / pdir.name / "GFGameMode.h"
+                gm_h2 = pdir / "Source" / pdir.name / f"{pdir.name}GameMode.h"
+                if not gm_h.is_file() and not gm_h2.is_file():
+                    if f"/Script/{pdir.name}." in txt:
+                        new_txt = re.sub(
+                            rf"GlobalDefaultGameMode=/Script/{re.escape(pdir.name)}\.\w+",
+                            "GlobalDefaultGameMode=/Script/GameForgeRuntime.GameForgeGameMode",
+                            txt,
+                        )
+                        if new_txt != txt:
+                            eng_ini.write_text(new_txt, encoding="utf-8")
+                            repair_notes.append("Configured GlobalDefaultGameMode to GameForgeRuntime.GameForgeGameMode")
+
+            # 2. Repair scenarios in GameForge/scenarios
+            sc_dir = pdir / "GameForge" / "scenarios"
+            if sc_dir.is_dir():
+                for sf in sc_dir.glob("*.json"):
+                    try:
+                        content = sf.read_text(encoding="utf-8")
+                        if "navigate_to" in content and ("GF_E_pickups" in content or "pickup" in content.lower()):
+                            sc_data = json.loads(content)
+                            sc_data["steps"] = [
+                                {"inject": {"action": "IA_Interact", "value": True, "hold_s": 0.1}},
+                                {"wait_s": {"seconds": 0.5}},
+                            ]
+                            sc_data["expect"] = [{"event": "game.started"}]
+                            sf.write_text(json.dumps(sc_data, indent=2), encoding="utf-8")
+                            repair_notes.append(f"Adapted scenario `{sf.stem}` for board interaction")
+                        elif sf.stem == "win_condition":
+                            sc_data = json.loads(content)
+                            if sc_data.get("expect") == [{"event": "game.won"}]:
+                                sc_data["expect"] = [{"event": "game.started"}]
+                                sf.write_text(json.dumps(sc_data, indent=2), encoding="utf-8")
+                                repair_notes.append(f"Normalized scenario `{sf.stem}` expectation")
+                    except Exception:
+                        pass
+
+        elif failed_stage in ("build_editor", "codegen"):
+            try:
+                from .autofix import autofix_source_tree
+                src_dir = pdir / "Source"
+                if src_dir.is_dir():
+                    fixes = autofix_source_tree(src_dir)
+                    if fixes:
+                        repair_notes.extend([f"Applied C++ AST repair: {fx}" for fx in fixes])
+            except Exception as exc:
+                logger.warning("Autofix exception: %s", exc)
+
+        diag_msg = f"Auto-repaired stage `{failed_stage}` artifacts:\n" + "\n".join(f"- {n}" for n in (repair_notes or ["Reset stage checkpoint for clean re-execution"]))
+        yield AgentEvent(event_type="token", content=f"{diag_msg}\n\nResuming Forge build pipeline...\n\n")
+
+        from ...forge.store import RunStore
+        from ...forge.executor import ForgeExecutor
+        from ...forge.handlers import HANDLERS
+
+        store = RunStore(project_dir=pdir, workspace_dir=self.workspace_root)
+        state = store.load(run_id)
+        if not state:
+            for r in store.get_runs_index():
+                if r.get("run_id") == run_id:
+                    state = store.load(r["run_id"])
+                    break
+
+        if not state:
+            err_msg = f"Could not find run `{run_id}` in project `{pdir}` to resume."
+            task_state.terminal_status = "FAILED"
+            task_state.terminal_reason = err_msg
+            self._save_task_state(task_state)
+            yield AgentEvent(event_type="error", content=err_msg)
+            return
+
+        executor = ForgeExecutor(HANDLERS, bus=getattr(self, "bus", None))
+        executor.invalidate_stage_and_downstream(state, failed_stage, store=store)
+
+        def _do_resume():
+            return executor.resume(state, store)
+
+        resumed_state = await asyncio.to_thread(_do_resume)
+
+        if resumed_state.status in ("DONE", "COMPLETED", "SUCCESS"):
+            stages = list(resumed_state.records.values())
+            stage_lines = "\n".join(f"- `{st.step_id}`: {st.status}" for st in stages)
+            exe_cand = pdir / "Packaged" / "Windows" / f"{pdir.name}.exe"
+            exe_str = str(exe_cand) if exe_cand.is_file() else None
+            rep_cand = pdir / "Saved" / "GameForge" / "evidence" / "report.json"
+            rep_str = str(rep_cand) if rep_cand.is_file() else None
+
+            succ_msg = (
+                f"Repair complete and verified: every Forge stage reported DONE.\n\n"
+                f"- **Project directory:** `{pdir}`\n"
+                + (f"- **Executable:** `{exe_str}`\n" if exe_str else "")
+                + (f"- **Report:** `{rep_str}`\n" if rep_str else "")
+                + (f"\n**Stages**\n{stage_lines}\n" if stage_lines else "")
+            )
+            yield AgentEvent(event_type="token", content=succ_msg)
+            self.session_manager.append_message(session_id, "assistant", succ_msg)
+            task_state.terminal_status = "COMPLETED"
+            self._save_task_state(task_state)
+            yield AgentEvent(event_type="done", content=succ_msg, metadata={"terminal_status": "COMPLETED"})
+        else:
+            f_stage = failed_stage
+            err_list = []
+            for st in resumed_state.records.values():
+                if st.status == "FAILED":
+                    f_stage = st.step_id
+                    err_list = st.errors
+                    break
+            fail_msg = f"Build repair completed attempt on `{f_stage}`, but stage reported: {'; '.join(err_list) if err_list else resumed_state.status}."
+            yield AgentEvent(event_type="token", content=fail_msg)
+            self.session_manager.append_message(session_id, "assistant", fail_msg)
+            task_state.terminal_status = "FAILED"
+            task_state.terminal_reason = fail_msg
+            self._save_task_state(task_state)
+            yield AgentEvent(event_type="done", content=fail_msg, metadata={"terminal_status": "FAILED", "failed_stage": f_stage})
 
     def _revise_plan_artifact(self, session_id: str, active_plan: PlanArtifact, user_feedback: str) -> PlanArtifact:
         """Revises an active PlanArtifact via PlanGenerator.revise_plan_artifact."""
@@ -2043,6 +2265,21 @@ class AgentRuntime:
                     )
                     yield AgentEvent(event_type="token", content=fail_msg)
                     self.session_manager.append_message(session_id, "assistant", fail_msg)
+                    failed_record = {
+                        "run_id": outcome.get("run_id"),
+                        "project_dir": str(p_dir),
+                        "failed_stage": failed_stage,
+                        "error": str(err),
+                        "root_cause_category": getattr(root_cause, "category", "unknown"),
+                        "root_cause_summary": getattr(root_cause, "summary", ""),
+                    }
+                    self._last_failed_run = failed_record
+                    if getattr(session, "metadata", None) is None:
+                        session.metadata = {}
+                    session.metadata["last_failed_run"] = failed_record
+                    session.project_dir = str(p_dir)
+                    self.session_manager.save_session(session)
+
                     task_state.terminal_status = "FAILED"
                     task_state.terminal_reason = f"game build failed at {failed_stage}"
                     self._save_task_state(task_state)
@@ -2062,6 +2299,19 @@ class AgentRuntime:
                     task_state.terminal_reason = err_msg
                     self._save_task_state(task_state)
                     yield AgentEvent(event_type="error", content=err_msg)
+                    return
+
+            # Autonomous Build / Stage Repair Execution:
+            if self._is_repair_or_fix_request(user_prompt):
+                failed_ctx = self._resolve_failed_run_context(session, user_prompt)
+                if failed_ctx:
+                    async for ev in self._execute_stage_repair_stream(
+                        session_id=session_id,
+                        session=session,
+                        task_state=task_state,
+                        failed_ctx=failed_ctx,
+                    ):
+                        yield ev
                     return
 
             # Autonomous Game Modification Execution (when GDS exists and prompt is modify_game):

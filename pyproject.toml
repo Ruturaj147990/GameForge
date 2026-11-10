@@ -39,16 +39,14 @@ ide = [
 gameforge = "src.gameforge_ide.launcher:main"
 gameforge-ide = "src.gameforge_ide.launcher:main"
 gameforge-studio = "src.gameforge_ide.launcher:main"
-gameforge-bench = "gameforge_bench.cli:main"
-gameforge-chat = "gameforge_bench.gameforge_cli:run_interactive_chat"
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["gameforge_bench*", "gameforge_ide*", "src.gameforge_ide*", "src.gameforge_bench*"]
+include = ["gameforge_ide*", "src.gameforge_ide*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "."]
+pythonpath = ["src", ".", "E:/GameForge_Benchmarks/src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

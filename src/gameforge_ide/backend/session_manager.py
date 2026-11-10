@@ -96,6 +96,7 @@ class Session(BaseModel):
     diff_history: List[DiffRecord] = Field(default_factory=list)
     checkpoints: List[TaskCheckpoint] = Field(default_factory=list)
     project_dir: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 @dataclass

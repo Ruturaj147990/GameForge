@@ -3,7 +3,7 @@ logical_task_id: T3-016
 tier: T3
 title: Player prefab/actor composition
 status: specification-draft
-engine_variants: [unity, unreal]
+engine_variants: [unreal]
 prompt: >-
   Create or repair the designated player prefab/actor composition so all required gameplay,
   collision, input, camera, and UI references listed in the variant acceptance file are present

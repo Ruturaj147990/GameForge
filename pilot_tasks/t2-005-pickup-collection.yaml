@@ -3,7 +3,7 @@ logical_task_id: T2-005
 tier: T2
 title: Pickup collection with one-time activation
 status: specification-draft
-engine_variants: [unity, unreal]
+engine_variants: [unreal]
 prompt: >-
   Implement pickup collection in the supplied project. A valid player interaction/overlap
   collects the item once, updates the designated inventory or counter interface, and

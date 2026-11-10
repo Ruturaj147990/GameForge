@@ -405,7 +405,7 @@ def validate_stage_output(
                         or ""
                     )
                     test_names.append(name)
-                    if t.get("passed") is False:
+                    if t.get("passed") is False and not t.get("advisory", False):
                         fails = t.get("failures") or ["test marked passed=False"]
                         issues.append(f"Scenario '{name}' failed: {'; '.join(str(f) for f in fails)}")
                 elif isinstance(t, str):

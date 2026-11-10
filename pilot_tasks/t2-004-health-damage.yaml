@@ -3,7 +3,7 @@ logical_task_id: T2-004
 tier: T2
 title: Health and damage with invulnerability window
 status: specification-draft
-engine_variants: [unity, unreal]
+engine_variants: [unreal]
 prompt: >-
   Implement a health/damage component or system in the supplied project. Damage must
   reduce health according to the spec, an invulnerability window must prevent repeated
