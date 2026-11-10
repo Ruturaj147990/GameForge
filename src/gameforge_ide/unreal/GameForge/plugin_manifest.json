@@ -83,7 +83,7 @@
     "Source/GameForgeRuntime/Public/GameForgeScenario.h": "3ef56b05a32e2d06940f0679a1788f0281d9920c0c38bf72c09ede43b35d9fcf",
     "Source/GameForgeRuntime/Public/GameForgeVisuals.h": "ff903940f735806699681b26926ebf5253d87a756fd0c691b4d9543777437deb"
   },
-  "generated_at": "2026-11-09T17:53:46.509649+00:00",
+  "generated_at": "2026-11-10T16:46:59.256483+00:00",
   "interfaces": {
     "GameForge.uplugin": "e927d07eb57a7d1a250ce4fb325cdee99c89bb4774b2613095dbe4d59b3b0d12",
     "Source/GameForgeRuntime/Public/GameForgeAttributes.h": "622f854adda4dda3c4523d63609367f0ad30206ed1d5f39264de0c080393960c",
@@ -99,5 +99,6 @@
   "manifest_version": 1,
   "plugin_name": "GameForge",
   "plugin_version": "1.0.0",
+  "synchronized_at": "2026-11-10T16:46:59.289611+00:00",
   "total_files": 81
 }

@@ -74,6 +74,9 @@ _REPAIR_RE = re.compile(
 def is_repair_request(text: str) -> bool:
     """Return True if text is a bare or natural error repair / fix request."""
     return bool(_REPAIR_RE.search((text or "").strip()))
+
+
+def _timeout_s() -> float:
     try:
         return max(1.0, float(os.environ.get("GAMEFORGE_INTENT_TIMEOUT_S", "15")))
     except ValueError:

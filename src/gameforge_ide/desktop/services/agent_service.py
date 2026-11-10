@@ -284,7 +284,7 @@ class _AgentWorker(QObject):
     def create_session(
         self,
         name: str = "Chat Session",
-        model_name: str = "gameforge-27b-sft:latest",
+        model_name: Optional[str] = None,
         provider_type: str = "ollama",
         project_dir: Optional[Union[str, Path]] = None,
         **kwargs,

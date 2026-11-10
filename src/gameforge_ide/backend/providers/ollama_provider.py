@@ -401,7 +401,11 @@ class OllamaProvider(ModelProvider):
         msg = data.get("message", {}) or {}
         calls = []
         for c in msg.get("tool_calls") or []:
-            fn = c.get("function", {})
+            if not isinstance(c, dict):
+                continue
+            fn = c.get("function")
+            if not isinstance(fn, dict):
+                fn = c
             args = fn.get("arguments", {})
             if isinstance(args, str):
                 try:
@@ -415,7 +419,9 @@ class OllamaProvider(ModelProvider):
                             args = {"_unparsed": args}
                     else:
                         args = {"_unparsed": args}
-            calls.append({"name": fn.get("name"), "arguments": args})
+            name = fn.get("name")
+            call_id = c.get("id") or c.get("call_id") or fn.get("id")
+            calls.append({"name": name, "arguments": args, "id": call_id})
         return {
             "content": msg.get("content", ""),
             "tool_calls": calls,
@@ -462,9 +468,8 @@ class OllamaProvider(ModelProvider):
             msg = data.get("message", {}) or {}
             raw_content = msg.get("content", "")
             return _extract_clean_json(raw_content)
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""
-            logger.warning("Ollama complete_json HTTP %s: %s", exc.code, body)
+        except (urllib.error.HTTPError, RuntimeError) as exc:
+            logger.warning("Ollama complete_json HTTP/Runtime error: %s", exc)
             return None
         except Exception as exc:
             logger.debug("Ollama complete_json error: %s", exc)

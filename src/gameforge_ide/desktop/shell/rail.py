@@ -231,7 +231,8 @@ class Rail(QWidget):
     def deleteLater(self) -> None:
         """Safely clean up signal connections on disposal."""
         try:
-            self.viewRequested.disconnect()
-        except (RuntimeError, TypeError):
+            if hasattr(self, "viewRequested") and self.receivers(self.viewRequested) > 0:
+                self.viewRequested.disconnect()
+        except (RuntimeError, TypeError, AttributeError):
             pass
         super().deleteLater()

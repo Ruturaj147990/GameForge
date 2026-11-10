@@ -925,13 +925,22 @@ class GameTools:
                 "error": f"Not a packaged game executable: '{exe}'. The project has not been cooked and packaged into a standalone Windows executable yet. Please package the game first via Build or 'unreal_package'.",
             }
 
-        # Allow execution only of games produced under projects_root or workspace Projects/Games subdirectories
-        p_root_res = self.projects_root.resolve()
-        ws_proj_res = (self.workspace_root / "Projects").resolve()
-        ws_games_res = (self.workspace_root / "Games").resolve()
-        in_projects = p_root_res in resolved_exe.parents
-        in_subprojects = (ws_proj_res in resolved_exe.parents) or (ws_games_res in resolved_exe.parents)
-        if not in_projects and not in_subprojects:
+        # Allow execution only of games produced under projects_root or workspace Projects/Games subdirectories or known project dirs
+        allowed_parents = {
+            self.projects_root.resolve(),
+            (self.workspace_root / "Projects").resolve(),
+            (self.workspace_root / "Games").resolve(),
+        }
+        try:
+            from ...core.settings import get_settings
+            allowed_parents.add(Path(get_settings().projects_root).resolve())
+        except Exception:
+            pass
+        for pdir in list_all_project_dirs(self.workspace_root).values():
+            allowed_parents.add(pdir.resolve())
+
+        is_allowed = any(ap in resolved_exe.parents for ap in allowed_parents)
+        if not is_allowed:
             return {"status": "BLOCKED", "error": "Only games produced under the GameForge projects root or workspace can be launched"}
 
         # Kept as plain subprocess.Popen (not jobs.spawn): launched for the user to keep playing, so it must not die with the IDE job.
