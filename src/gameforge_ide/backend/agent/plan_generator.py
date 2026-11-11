@@ -480,7 +480,21 @@ class PlanGenerator:
         tools_summary = ", ".join(t.name for t in self.tool_gateway.get_definitions())
         proj_context = f"Workspace: {self.workspace_root.name}"
         if active_project_dir:
-            proj_context += f" | Active Project: {Path(active_project_dir).name}"
+            p_dir = Path(active_project_dir)
+            proj_context += f" | Active Project: {p_dir.name}"
+            try:
+                existing_files = []
+                for ext in ("*.uproject", "Source/**/*.cpp", "Source/**/*.h", "Source/**/*.cs"):
+                    for fp in p_dir.glob(ext):
+                        if fp.is_file():
+                            rel = fp.relative_to(p_dir).as_posix()
+                            if not any(ign in rel for ign in ("Intermediate", "Binaries", "Saved", ".git")):
+                                existing_files.append(rel)
+                if existing_files:
+                    sample_files = existing_files[:15]
+                    proj_context += f"\nExisting Project Files on disk:\n" + "\n".join(f"- {f}" for f in sample_files)
+            except Exception:
+                pass
 
         # 3. Strategy evaluation and GDS pre-generation if game creation
         strategy_info = ""

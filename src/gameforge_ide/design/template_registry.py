@@ -208,6 +208,7 @@ CANONICAL_TEMPLATES: List[TemplateDefinition] = [
             Capability.JUMPING,
             Capability.SHOOTING,
             Capability.VEHICLE_PHYSICS,
+            Capability.BOARD_GAME,
         },
         description="Turn-based card match foundation with lane deployment and deck management.",
         preset_key="card_battler",
@@ -416,6 +417,45 @@ class SemanticTemplateRegistry:
                 forbidden_capabilities=forbid,
                 keywords_matched=matched,
                 title_hint=title_hint or "Capture Checkers",
+            )
+
+        if is_roll_and_move or re.search(r"\b(?:ludo|parcheesi)\b", text):
+            is_snakes = bool(re.search(r"\b(snakes?\s*(?:and|&)\s*ladders?|chutes\s*(?:and|&)\s*ladders?)\b", text))
+            is_ludo = bool(re.search(r"\b(?:ludo|parcheesi)\b", text))
+            if is_snakes:
+                matched.append("snakes_and_ladders")
+                hint = "Snakes and Ladders"
+            elif is_ludo:
+                matched.append("ludo")
+                hint = "Ludo"
+            else:
+                matched.append("roll_and_move")
+                hint = "Roll and Move Board"
+            req.update({
+                Capability.GRID_2D,
+                Capability.TURN_BASED,
+                Capability.BOARD_GAME,
+                Capability.FIXED_CAMERA,
+                Capability.PIECE_MOVEMENT,
+            })
+            forbid.update({
+                Capability.PHYSICS_CHARACTER,
+                Capability.COMBAT,
+                Capability.SHOOTING,
+                Capability.JUMPING,
+                Capability.ENEMIES,
+                Capability.VEHICLE_PHYSICS,
+                Capability.REAL_TIME,
+                Capability.PUZZLE_LOGIC,
+                Capability.CONSTRAINT_SOLVER,
+                Capability.CARD_DECK,
+            })
+            return CapabilityProfile(
+                detected_genre=Genre.GRID_BOARD,
+                required_capabilities=req,
+                forbidden_capabilities=forbid,
+                keywords_matched=matched,
+                title_hint=title_hint or hint,
             )
 
         # 2. General Spatial & Gameplay Capability Decomposition
@@ -665,8 +705,11 @@ class SemanticTemplateRegistry:
             mechanics_dict.setdefault("grid_size", 15)
         elif subtype in ("roll_and_move", "ludo"):
             plan_kind = "scratch_board"
+            mechanics_dict.setdefault("board_mode", "roll_and_move")
+            mechanics_dict.setdefault("has_dice", True)
             mechanics_dict.setdefault("grid_size", 10 if subtype == "roll_and_move" else 15)
             mechanics_dict.setdefault("dice_sides", 6)
+            custom_caps.extend(["roll_and_move", "dice_rolling"])
         elif subtype == "racing" or "racing" in profile.keywords_matched:
             plan_kind = "scratch_racing"
             mechanics_dict.setdefault("lap_count", brief.laps or 3)
@@ -949,14 +992,16 @@ class SemanticTemplateRegistry:
                         tmpl = next((t for t in self.templates if t.id == tmpl_id), None)
                         profile = self.analyze_prompt(prompt)
                         if strategy in (GenerationStrategy.ADAPT_TEMPLATE, GenerationStrategy.HYBRID):
-                            if tmpl is None:
-                                raise ValueError(f"LLM selected unknown template_id: {tmpl_id!r}")
-                            if (tmpl.capabilities & profile.forbidden_capabilities) or (
+                            if tmpl is None or (tmpl.capabilities & profile.forbidden_capabilities) or (
                                 tmpl.forbidden_capabilities & profile.required_capabilities
                             ):
-                                raise ValueError(
-                                    f"LLM selected incompatible template {tmpl.id!r} for the request."
+                                logger.info(
+                                    "LLM selected strategy %s with template_id %r which is unavailable or incompatible with prompt constraints. Downgrading to SCRATCH.",
+                                    strat_str,
+                                    tmpl_id,
                                 )
+                                strategy = GenerationStrategy.SCRATCH
+                                tmpl = None
                         if data.get("genre"):
                             try:
                                 profile.detected_genre = Genre(data["genre"])

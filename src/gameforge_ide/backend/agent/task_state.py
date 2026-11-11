@@ -162,7 +162,7 @@ def _matches_target(fpath: str, target: str) -> bool:
 
 TaskIntent = Literal["answer", "inspect", "plan", "mutate", "validate"]
 TaskPhase = Literal["discover", "plan", "author", "validate", "repair"]
-TerminalStatus = Literal["COMPLETED", "BLOCKED", "FAILED", "CANCELLED"]
+TerminalStatus = Literal["COMPLETED", "BLOCKED", "FAILED", "CANCELLED", "INCOMPLETE"]
 
 
 class TaskAcceptancePredicate(BaseModel):

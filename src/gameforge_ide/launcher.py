@@ -24,9 +24,9 @@ def _configure_terminal_logging(verbose: bool = False) -> None:
     root = logging.getLogger()
     root.setLevel(level)
 
-    # Also explicitly ensure gameforge loggers are set to INFO
-    logging.getLogger(__name__.rsplit(".", 1)[0]).setLevel(level)
-    logging.getLogger("gameforge").setLevel(level)
+    # Explicitly ensure all gameforge package loggers inherit the correct level
+    for name in ("src", "src.gameforge_ide", "gameforge_ide", "gameforge"):
+        logging.getLogger(name).setLevel(level)
 
     # Format with clean timestamps and module names
     formatter = logging.Formatter(
@@ -59,6 +59,20 @@ def _safe_print(msg: str) -> None:
             print(ascii_msg, flush=True)
         except Exception:
             pass
+
+
+def _install_exception_hook() -> None:
+    """Ensures unhandled exceptions in Qt slots and background threads print detailed tracebacks to the terminal."""
+    def _excepthook(exc_type, exc_value, exc_traceback):
+        import traceback
+        lines = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        _safe_print(f"\n[GameForge Unhandled Error] Uncaught exception in runtime:\n{lines}")
+        try:
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        except Exception:
+            pass
+
+    sys.excepthook = _excepthook
 
 
 def _setup_terminal_event_listener() -> None:
@@ -98,6 +112,8 @@ def _setup_terminal_event_listener() -> None:
                 stage = ev.get("stage", "")
                 status = ev.get("status", "")
                 _safe_print(f"[GameForge Pipeline] {stage}: {status}")
+            elif topic in ("job.failed", "job_failed"):
+                _safe_print(f"[GameForge Job FAILED] Job '{ev.get('job_name')}' failed: {ev.get('error')} ({ev.get('type')})")
 
         bus.subscribe("*", _on_event)
     except Exception as exc:
@@ -150,6 +166,7 @@ def _resolve_workspace(workspace_arg: Optional[Path | str] = None, portable: boo
 def _launch_native_desktop(workspace_path: Optional[Path | str] = None, verbose: bool = False, portable: bool = False) -> None:
     """Launch the genuine native PySide6 QMainWindow desktop application."""
     _configure_terminal_logging(verbose=verbose)
+    _install_exception_hook()
     _setup_terminal_event_listener()
 
     from PySide6.QtWidgets import QApplication

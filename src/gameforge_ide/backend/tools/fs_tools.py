@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
+
+logger = logging.getLogger(__name__)
 
 BINARY_EXTENSIONS = (
     ".pyc", ".pyd", ".dll", ".exe", ".pdb", ".bin", ".gguf",
@@ -47,6 +50,31 @@ def _detect_file_encoding(file_path: Path) -> str:
         return "utf-8"
 
 
+def _resolve_effective_path(boundary: BoundaryManager, main_path: str, sub_path: str, default: str = ".") -> str:
+    """Combines and resolves main path and subpath arguments flexibly."""
+    p_main = (main_path or "").strip()
+    sub_main = (sub_path or "").strip()
+    if sub_main in ("", "."):
+        sub_main = ""
+
+    if p_main and sub_main and p_main != sub_main:
+        norm_p = p_main.replace("\\", "/").strip("/")
+        norm_ws = str(boundary.workspace_root).replace("\\", "/").strip("/")
+        norm_ws_name = boundary.workspace_root.name.lower()
+        if (
+            norm_p == norm_ws
+            or norm_p.lower() == norm_ws.lower()
+            or norm_p.lower() == norm_ws_name
+            or norm_p == "."
+        ):
+            return sub_main
+        elif sub_main in p_main:
+            return p_main
+        else:
+            return f"{p_main.rstrip('/\\')}/{sub_main.lstrip('/\\')}"
+    return p_main or sub_main or default
+
+
 def tool_list_dir(
     boundary: BoundaryManager,
     subpath: str = ".",
@@ -60,12 +88,13 @@ def tool_list_dir(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Lists files and directories under subpath with safety checks."""
-    effective_path = path or dir_path or directory or folder or subpath or "."
+    effective_path = _resolve_effective_path(boundary, path or dir_path or directory or folder or "", subpath, default=".")
     effective_depth = depth if depth is not None else max_depth
     try:
         target_dir = boundary.validate_path(effective_path, allow_write=False)
     except (SecurityViolationError, ValueError) as exc:
-        return {"error": f"Security violation: {exc}"}
+        logger.warning("[fs_tools:list_dir] Security boundary check failed for '%s': %s", effective_path, exc)
+        return {"status": "ERROR", "error": f"Security violation: {exc}"}
 
     if not target_dir.exists():
         clean_sub = effective_path.replace("\\", "/").strip("/")
@@ -79,9 +108,11 @@ def tool_list_dir(
             except Exception:
                 pass
     if not target_dir.exists():
-        return {"error": f"Directory not found: {effective_path}"}
+        logger.warning("[fs_tools:list_dir] Directory not found: '%s' (workspace=%s)", effective_path, boundary.workspace_root)
+        return {"status": "ERROR", "error": f"Directory not found: {effective_path}"}
     if not target_dir.is_dir():
-        return {"error": f"Path is not a directory: {effective_path}"}
+        logger.warning("[fs_tools:list_dir] Path is not a directory: '%s'", effective_path)
+        return {"status": "ERROR", "error": f"Path is not a directory: {effective_path}"}
 
     results = []
 
@@ -130,11 +161,12 @@ def tool_read_file(
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Reads line-numbered content from a file inside the workspace."""
-    effective_path = subpath or file_path or path or file or filepath or ""
+    effective_path = _resolve_effective_path(boundary, file_path or path or file or filepath or "", subpath, default="")
     try:
         target_file = boundary.validate_path(effective_path, allow_write=False)
     except (SecurityViolationError, ValueError) as exc:
-        return {"error": f"Security violation: {exc}"}
+        logger.warning("[fs_tools:read_file] Security boundary check failed for '%s': %s", effective_path, exc)
+        return {"status": "ERROR", "error": f"Security violation: {exc}"}
 
     if not target_file.exists():
         clean_sub = effective_path.replace("\\", "/").strip("/")
@@ -148,9 +180,11 @@ def tool_read_file(
             except Exception:
                 pass
     if not target_file.exists():
-        return {"error": f"File does not exist: {effective_path}"}
+        logger.warning("[fs_tools:read_file] File does not exist: '%s' (workspace=%s)", effective_path, boundary.workspace_root)
+        return {"status": "ERROR", "error": f"File does not exist: {effective_path}"}
     if not target_file.is_file():
-        return {"error": f"Path is not a file: {effective_path}"}
+        logger.warning("[fs_tools:read_file] Path is not a file: '%s'", effective_path)
+        return {"status": "ERROR", "error": f"Path is not a file: {effective_path}"}
 
     encoding = _detect_file_encoding(target_file)
     lines = None
@@ -166,7 +200,7 @@ def tool_read_file(
             time.sleep(0.05 * (attempt + 1))
 
     if lines is None:
-        return {"error": f"Failed to read file: {last_err}"}
+        return {"status": "ERROR", "error": f"Failed to read file: {last_err}"}
 
     try:
         start_line_int = int(start_line) if start_line is not None else 1
@@ -232,7 +266,7 @@ def tool_search_code(
 ) -> Dict[str, Any]:
     """Searches workspace files for code patterns."""
     effective_query = query or pattern or search_term or text or ""
-    effective_path = path or dir_path or directory or subpath or "."
+    effective_path = _resolve_effective_path(boundary, path or dir_path or directory or "", subpath, default=".")
     try:
         effective_limit = int(limit) if limit is not None else int(max_results)
     except (ValueError, TypeError):
@@ -244,7 +278,7 @@ def tool_search_code(
     try:
         target_dir = boundary.validate_path(effective_path, allow_write=False)
     except (SecurityViolationError, ValueError) as exc:
-        return {"error": f"Security violation: {exc}"}
+        return {"status": "ERROR", "error": f"Security violation: {exc}"}
 
     if not target_dir.exists():
         clean_sub = effective_path.replace("\\", "/").strip("/")
@@ -259,14 +293,14 @@ def tool_search_code(
                 pass
 
     if not target_dir.exists():
-        return {"error": f"Directory not found: {effective_path}"}
+        return {"status": "ERROR", "error": f"Directory not found: {effective_path}"}
 
     matches = []
     try:
         flags = 0 if case_sensitive else re.IGNORECASE
         re_pattern = re.compile(effective_query if is_regex else re.escape(effective_query), flags)
     except re.error as e:
-        return {"error": f"Invalid regular expression '{effective_query}': {e}"}
+        return {"status": "ERROR", "error": f"Invalid regular expression '{effective_query}': {e}"}
 
     for root, dirs, files in os.walk(target_dir):
         # Ignore git, cache, build dirs

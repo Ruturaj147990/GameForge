@@ -149,6 +149,10 @@ class BoundaryManager:
                 f"Network share violation: '{target_path}' is an unauthorized UNC network path."
             )
 
+        # Normalize Git Bash / MSYS2 / POSIX drive notation on Windows: e.g. /E/path or \E\path -> E:/path
+        if os.name == "nt" or (self.workspace_root.drive and len(self.workspace_root.drive) >= 2):
+            raw_str = re.sub(r"^[/\\]([a-zA-Z])[/\\]", r"\1:/", raw_str)
+
         # Reject Alternate Data Streams (NTFS ADS) on Windows
         path_without_drive = raw_str
         if len(path_without_drive) >= 2 and path_without_drive[1] == ":" and path_without_drive[0].isalpha():
@@ -158,7 +162,20 @@ class BoundaryManager:
                 f"Alternate data stream violation: '{target_path}' contains invalid colon specifier."
             )
 
-        raw_path = Path(raw_str)
+        # Distinguish truly absolute paths (with Windows drive letter or UNC prefix)
+        # from workspace-relative paths that happen to start with a slash (e.g. '/Source/...').
+        # On Windows, Path(workspace) / Path('/Source') attaches to the drive root (E:\Source)
+        # rather than the workspace (E:\Workspace\Source), so leading slashes without a drive
+        # letter must be treated as workspace-relative.
+        has_drive = bool(re.match(r"^[a-zA-Z]:", raw_str))
+        is_unc = raw_str.startswith(("//", "\\\\"))
+        if not has_drive and not is_unc:
+            clean_rel = raw_str.lstrip("/\\")
+            raw_path = Path(clean_rel) if clean_rel else Path(".")
+            is_truly_absolute = False
+        else:
+            raw_path = Path(raw_str)
+            is_truly_absolute = True
 
         # Check for NTFS alternate data streams in individual parts
         for idx, part in enumerate(raw_path.parts):
@@ -187,7 +204,7 @@ class BoundaryManager:
         # workspace_root walk the actual directory entries for symlinks/junctions.
         try:
             norm_ws = os.path.normcase(str(self.workspace_root))
-            if raw_path.is_absolute():
+            if is_truly_absolute:
                 lexical_abs = Path(os.path.abspath(str(raw_path)))
                 norm_lex = os.path.normcase(str(lexical_abs))
                 if not (norm_lex == norm_ws or norm_lex.startswith(norm_ws + os.sep)):
@@ -225,7 +242,7 @@ class BoundaryManager:
             raise SecurityViolationError(f"Path inspection failure for '{target_path}': {exc}")
 
         try:
-            if not raw_path.is_absolute():
+            if not is_truly_absolute:
                 resolved = (self.workspace_root / raw_path).resolve()
             else:
                 resolved = raw_path.resolve()

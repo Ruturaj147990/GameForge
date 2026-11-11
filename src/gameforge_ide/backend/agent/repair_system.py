@@ -203,12 +203,31 @@ class RepairEngine:
             norm_file = Path(first.file).name if first.file else "unknown"
             sym = first.symbol or first.code or "unknown_symbol"
             sig = f"code:{norm_file}:{first.line}:{sym}"
+
+            # Verify that primary_file actually exists on disk before referencing it in repair plans
+            candidate_file = None
+            if first.file:
+                p_cand = Path(first.file)
+                if p_cand.is_absolute() and p_cand.is_file():
+                    candidate_file = str(p_cand.resolve())
+                else:
+                    rel_cand = (self.workspace_root / first.file).resolve()
+                    if rel_cand.is_file():
+                        candidate_file = str(rel_cand)
+                    elif p_cand.name:
+                        try:
+                            matching = [p for p in self.workspace_root.rglob(p_cand.name) if p.is_file()]
+                            if matching:
+                                candidate_file = str(matching[0].resolve())
+                        except Exception:
+                            pass
+
             return RootCause(
                 cause_id=f"rc_{uuid_hex(sig)}",
                 category=FailureCategory.CODE_DEFECT,
                 signature=sig,
                 description=first.message[:200],
-                primary_file=first.file or None,
+                primary_file=candidate_file or first.file,
                 diagnostics=diags,
             )
 

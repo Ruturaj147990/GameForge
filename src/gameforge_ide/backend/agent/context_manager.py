@@ -288,6 +288,17 @@ class ContextManager:
                         except Exception:
                             pass
 
+                src_files = []
+                for ext in ("*.uproject", "Source/**/*.cpp", "Source/**/*.h", "Source/**/*.cs"):
+                    for fp in p_path.glob(ext):
+                        if fp.is_file():
+                            rel = fp.relative_to(p_path).as_posix()
+                            if not any(ign in rel for ign in ("Intermediate", "Binaries", "Saved", ".git")):
+                                src_files.append(rel)
+                src_files_str = ""
+                if src_files:
+                    src_files_str = "- Existing Project Files on disk:\n" + "\n".join(f"  * {f}" for f in src_files[:20]) + "\n"
+
                 proj_note = (
                     f"\n=== ACTIVE PROJECT STATE ===\n"
                     f"- Project Name: {p_path.name}\n"
@@ -296,6 +307,7 @@ class ContextManager:
                     f"- Game Design Spec: {'FOUND' if gds_f else 'NOT FOUND'}\n"
                     f"- Packaged Executable: {pkg_str}\n"
                     f"- Playable: {is_playable}\n"
+                    f"{src_files_str}"
                     f"{build_diag_note}"
                     f"GROUNDING RULES:\n"
                     f"- If the user asks whether the game is playable, finished, or ready: answer truthfully based on the Packaged Executable status above.\n"

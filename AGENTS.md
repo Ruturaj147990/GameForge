@@ -53,6 +53,6 @@ When performing any task, navigate directly to the authoritative directory:
    - Benchmark evaluation: navigate to `E:\GameForge_Benchmarks` and run `pytest` there.
 4. **Hardware & Inference Constraints**:
    - Hardware: Ryzen 5 7600X, 32GB DDR5, RX 7700 XT 12GB VRAM.
-   - Inference: Always pass `"think": False` when querying Ollama API programmatically.
+   - Inference: Thinking mode is default ON (`"think": True`) for GameForge Qwen models (with resilient auto-fallback to False if Ollama rejects thinking on GGUFs lacking native thinking metadata); non-Qwen models default to `"think": False`.
    - Dynamic Synthesis: Never hardcode specific games or keyword shortcuts. All mechanics, layouts, and C++ code must be dynamically synthesized.
 5. **Automation Safety**: Automation closing the IDE must set `win.confirm_on_close = False` before `win.close()` to avoid modal dialog hangs.

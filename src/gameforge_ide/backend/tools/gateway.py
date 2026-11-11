@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from ..security.boundary import BoundaryManager, SecurityViolationError
 from ..models.modes import AutonomyProfile, PermissionsMode
@@ -654,7 +657,9 @@ class ToolGateway:
 
         definition = next((item for item in self.get_definitions() if item.name == canonical_name), None)
         if definition is None:
-            return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
+            err_msg = f"Unknown tool: '{name}'"
+            logger.warning("[ToolGateway] %s", err_msg)
+            return {"status": "ERROR", "error": err_msg}
 
         if self.tool_requires_approval(
             canonical_name,
@@ -678,9 +683,11 @@ class ToolGateway:
             if not any(k in args and args[k] for k in ("subpath", "file_path", "path")):
                 missing.append("subpath")
         if missing:
+            err_msg = f"Missing required parameter(s) for tool '{name}': {', '.join(missing)}"
+            logger.warning("[ToolGateway] %s (args=%s)", err_msg, args)
             return {
                 "status": "ERROR",
-                "error": f"Missing required parameter(s) for tool '{name}': {', '.join(missing)}",
+                "error": err_msg,
                 "execution_time_seconds": round(time.time() - t0, 3),
             }
 
@@ -779,7 +786,17 @@ class ToolGateway:
                 return {"status": "ERROR", "error": f"Unknown tool: '{name}'"}
 
             if isinstance(res, dict):
+                if "error" in res and "status" not in res:
+                    res["status"] = "ERROR"
                 res["execution_time_seconds"] = round(time.time() - t0, 3)
+                if res.get("status") in ("ERROR", "BLOCKED", "FAILED"):
+                    logger.warning(
+                        "[ToolGateway] Tool '%s' returned failure: %s (args=%s, time=%ss)",
+                        canonical_name,
+                        res.get("error") or res.get("message") or res,
+                        args,
+                        res.get("execution_time_seconds"),
+                    )
             else:
                 res = {
                     "status": "SUCCESS",
@@ -788,12 +805,25 @@ class ToolGateway:
                 }
             return res
         except SecurityViolationError as e:
+            logger.warning(
+                "[ToolGateway] Security violation on tool '%s': %s (args=%s)",
+                canonical_name,
+                e,
+                args,
+            )
             return {
                 "status": "BLOCKED",
                 "error": f"Security violation: {str(e)}",
                 "execution_time_seconds": round(time.time() - t0, 3),
             }
         except Exception as e:
+            logger.error(
+                "[ToolGateway] Exception executing tool '%s': %s (args=%s)",
+                canonical_name,
+                e,
+                args,
+                exc_info=True,
+            )
             return {
                 "status": "ERROR",
                 "error": f"Tool execution failed: {str(e)}",

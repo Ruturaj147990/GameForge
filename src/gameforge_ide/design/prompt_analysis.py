@@ -172,7 +172,10 @@ GENRE_KEYWORDS: List[Tuple[Genre, Tuple[str, ...], float]] = [
                           "turret defense", "lane defense", "wave survival", "horde survival"), 4.0),
     (Genre.PLATFORMER, ("racing", "race", "racer", "kart", "time trial", "speedrun", "runner", "endless runner", "hoverbike"), 2.2),
     (Genre.GRID_BOARD, ("chess", "checkers", "draughts", "tic tac toe", "tic-tac-toe", "connect four", "connect 4",
-                        "board game", "gomoku", "othello", "reversi", "roll and move", "dice board"), 3.0),
+                        "board game", "gomoku", "othello", "reversi", "roll and move", "dice board",
+                        "snake and ladders", "snake & ladders", "snakes and ladders", "snakes & ladders",
+                        "chutes and ladders", "chute and ladders", "snakes_and_ladders",
+                        "ludo", "parcheesi", "monopoly", "battleship"), 3.5),
     (Genre.CARD_BATTLER, ("card", "cards", "deck", "deckbuilder", "deck builder", "hand of cards", "tcg", "ccg"), 3.0),
     (Genre.PUZZLE, ("puzzle", "sudoku", "match three", "match-3", "tetris", "minesweeper", "sokoban", "logic"), 2.5),
     (Genre.PLATFORMER, ("platformer", "platform", "platforms", "jump", "jumping", "parkour", "obby", "obstacle course",
@@ -427,6 +430,12 @@ def _synth_title(brief: "PromptBrief") -> str:
         "dungeon": "Dungeon", "haunted": "Shadow", "castle": "Citadel", "stone_wood": "Keep",
         "city": "Metro", "candy": "Sugar", "toon_flat": "Toon", "ocean": "Abyssal",
     }.get(brief.theme or "", "")
+    if re.search(r"\b(snakes?\s*(?:and|&)\s*ladders?)\b", brief.prompt.lower()):
+        return "Snakes and Ladders"
+    if re.search(r"\b(chutes\s*(?:and|&)\s*ladders?)\b", brief.prompt.lower()):
+        return "Chutes and Ladders"
+    if re.search(r"\b(ludo|parcheesi)\b", brief.prompt.lower()):
+        return "Ludo"
     if brief.game_subtype in ("snake", "sudoku", "chess", "checkers", "tetris", "minesweeper"):
         return brief.game_subtype.title()
     if brief.game_subtype == "racing":
@@ -477,6 +486,8 @@ def _detect_subtype(text: str, brief: PromptBrief) -> Optional[str]:
         return "checkers"
     if re.search(r"\b(minesweeper|hidden\s+mine\s+grid)\b", text):
         return "minesweeper"
+    if re.search(r"\b(snakes?\s*(?:and|&)\s*ladders?|chutes\s*(?:and|&)\s*ladders?)\b", text):
+        return "roll_and_move"
     if re.search(r"\b(roll\s+and\s+move|race\s+board|linear\s+path\s+board|track\s+board)\b", text):
         return "roll_and_move"
     if re.search(r"\b(ludo|parcheesi)\b", text):
@@ -1113,16 +1124,24 @@ def _board_props_for_brief(brief: PromptBrief) -> Tuple[str, Dict[str, Any]]:
             "vs_ai": False,
             "cell_size_cm": 80.0,
         }
-    if st == "roll_and_move" or "roll and move" in p_low or "race board" in p_low:
-        return "Roll and Move Board", {
+    if st == "roll_and_move" or "roll and move" in p_low or "race board" in p_low or "ladder" in p_low or ("snake" in p_low and "ladder" in p_low):
+        is_snakes = bool(re.search(r"\b(snakes?\s*(?:and|&)\s*ladders?|chutes\s*(?:and|&)\s*ladders?|snakes?|ladders?)\b", p_low))
+        b_props = {
             "board_mode": "roll_and_move",
             "board_size": explicit_size or 10,
             "win_length": explicit_size or 10,
             "dice_sides": 6,
+            "has_dice": True,
             "players": max(2, brief.players),
             "vs_ai": brief.players < 2,
             "cell_size_cm": 100.0,
         }
+        if is_snakes:
+            b_props["snakes"] = 10
+            b_props["ladders"] = 9
+            b_props["forward_warps"] = {1: 38, 4: 14, 9: 31, 21: 42, 28: 84, 36: 44, 51: 67, 71: 91, 80: 100}
+            b_props["backward_warps"] = {16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 98: 79}
+        return "Snakes and Ladders Board" if is_snakes else "Roll and Move Board", b_props
     if st == "ludo" or any(k in p_low for k in ("ludo", "parcheesi")):
         return "Four-Track Race Board", {
             "board_mode": "ludo",

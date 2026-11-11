@@ -209,12 +209,50 @@ def tic_tac_toe_result(cells: List[int]) -> int:
 
 # ── 5D.6 Board Game Rules (Snakes and Ladders & Ludo) ─────────────────────────
 
+def validate_board_transitions(
+    snakes: Dict[int, int],
+    ladders: Dict[int, int],
+    num_tiles: int = 100,
+) -> Tuple[bool, List[str]]:
+    """Validate that snakes and ladders mappings are valid, disjoint, bounded, and acyclic."""
+    issues: List[str] = []
+
+    overlap = set(snakes.keys()) & set(ladders.keys())
+    if overlap:
+        issues.append(f"Tiles cannot be both snake heads and ladder bases: {sorted(overlap)}")
+
+    for head, tail in snakes.items():
+        if head <= tail:
+            issues.append(f"Snake at {head} must slide downwards (found tail at {tail})")
+        if head < 1 or head > num_tiles or tail < 1 or tail > num_tiles:
+            issues.append(f"Snake {head} -> {tail} out of board bounds (1..{num_tiles})")
+
+    for bottom, top in ladders.items():
+        if top <= bottom:
+            issues.append(f"Ladder at {bottom} must climb upwards (found top at {top})")
+        if bottom < 1 or bottom >= num_tiles or top < 1 or top > num_tiles:
+            issues.append(f"Ladder {bottom} -> {top} out of board bounds (1..{num_tiles})")
+
+    graph: Dict[int, int] = {**snakes, **ladders}
+    for start in graph:
+        visited = set()
+        curr = start
+        while curr in graph:
+            if curr in visited:
+                issues.append(f"Cyclic transition detected starting from tile {start} (loop at tile {curr})")
+                break
+            visited.add(curr)
+            curr = graph[curr]
+
+    return len(issues) == 0, issues
+
+
 @dataclass
 class SnakesAndLaddersRules:
     """Deterministic pure state machine for Snakes and Ladders on a tile track."""
     num_tiles: int = 100
     snakes: Dict[int, int] = field(default_factory=lambda: {
-        16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 98: 78
+        16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 98: 79
     })
     ladders: Dict[int, int] = field(default_factory=lambda: {
         1: 38, 4: 14, 9: 31, 21: 42, 28: 84, 36: 44, 51: 67, 71: 91, 80: 100
@@ -223,6 +261,11 @@ class SnakesAndLaddersRules:
     player_order: List[str] = field(default_factory=list)
     current_turn_index: int = 0
     winner: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        ok, issues = validate_board_transitions(self.snakes, self.ladders, self.num_tiles)
+        if not ok:
+            raise ValueError(f"Invalid Snakes and Ladders transitions: {'; '.join(issues)}")
 
     def add_player(self, player_id: str) -> None:
         if player_id in self.player_positions:
@@ -243,10 +286,21 @@ class SnakesAndLaddersRules:
         nxt = cur + roll
         if nxt > self.num_tiles:
             nxt = cur  # Must reach target exactly
-        elif nxt in self.snakes:
-            nxt = self.snakes[nxt]
-        elif nxt in self.ladders:
-            nxt = self.ladders[nxt]
+        else:
+            jumps = 0
+            visited = set()
+            while jumps < 5:
+                if nxt in visited:
+                    break
+                visited.add(nxt)
+                if nxt in self.snakes:
+                    nxt = self.snakes[nxt]
+                    jumps += 1
+                elif nxt in self.ladders:
+                    nxt = self.ladders[nxt]
+                    jumps += 1
+                else:
+                    break
 
         self.player_positions[player_id] = nxt
         if nxt == self.num_tiles:
@@ -640,6 +694,8 @@ GAME_TYPE_LAYOUT_MAP: Dict[str, str] = {
     "stealth": "rooms",
     "tic_tac_toe": "board",
     "roll_and_move": "board",
+    "snakes_and_ladders": "board",
+    "chutes_and_ladders": "board",
     "ludo": "board",
     "tetris": "board",
     "snake": "board",
@@ -670,6 +726,8 @@ GAME_TYPE_REQUIRED_MODULES: Dict[str, List[str]] = {
     "tetris": ["kit.grid_board"],
     "snake": ["kit.grid_board"],
     "roll_and_move": ["kit.grid_board"],
+    "snakes_and_ladders": ["kit.grid_board"],
+    "chutes_and_ladders": ["kit.grid_board"],
     "ludo": ["kit.grid_board"],
     "puzzle": ["kit.grid_board"],
     "platformer": ["kit.player_character", "kit.pickup", "kit.goal"],

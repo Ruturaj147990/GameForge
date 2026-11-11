@@ -232,3 +232,228 @@ AGFGameImpl::AGFGameImpl()
     assert "bool AGFGameImpl::CanMovePiece(int32 PlayerIndex, int32 PieceIndex)" in fixed["GFGameImpl.cpp"]
     assert "return false;" in fixed["GFGameImpl.cpp"]
     assert any("preventing LNK2019" in n for n in notes)
+
+
+def test_apply_edit_idempotent_already_applied(tmp_path):
+    """Verify that calling apply_diff on an already applied diff succeeds idempotently."""
+    from src.gameforge_ide.backend.security.boundary import BoundaryManager
+    from src.gameforge_ide.backend.tools.edit_tools import EditTools
+
+    target_file = tmp_path / "TestFile.cpp"
+    target_file.write_text("int original_val = 1;\n", encoding="utf-8")
+
+    boundary = BoundaryManager(tmp_path)
+    edit_tools = EditTools(boundary)
+
+    prop = edit_tools.propose_edit(
+        subpath="TestFile.cpp",
+        target_content="int original_val = 1;\n",
+        replacement_content="int original_val = 42;\n",
+    )
+    diff_id = prop["diff_id"]
+
+    # First apply
+    apply1 = edit_tools.apply_diff(diff_id=diff_id)
+    assert apply1["status"] == "SUCCESS"
+    assert "42" in target_file.read_text(encoding="utf-8")
+
+    # Second apply (must be idempotent and return SUCCESS, not ERROR)
+    apply2 = edit_tools.apply_diff(diff_id=diff_id)
+    assert apply2["status"] == "SUCCESS"
+    assert apply2.get("already_applied") is True
+
+
+def test_boundary_posix_drive_path_normalization(tmp_path):
+    """Verify that Unix/Git-Bash drive paths like /E/... are normalized without false security violations."""
+    from src.gameforge_ide.backend.security.boundary import BoundaryManager
+
+    boundary = BoundaryManager(tmp_path)
+    # Construct a POSIX-style path for the tmp_path
+    drive_letter = tmp_path.drive.rstrip(":").upper()
+    if drive_letter:
+        posix_path = f"/{drive_letter}{tmp_path.as_posix()[len(tmp_path.drive):]}"
+        resolved = boundary.validate_path(posix_path, allow_write=False)
+        assert resolved == tmp_path.resolve()
+
+
+def test_fs_tools_path_and_subpath_flexible_resolution(tmp_path):
+    """Verify tool_list_dir and tool_read_file handle both path and subpath and set status: ERROR on errors."""
+    from src.gameforge_ide.backend.security.boundary import BoundaryManager
+    from src.gameforge_ide.backend.tools.fs_tools import tool_list_dir, tool_read_file
+
+    sub_dir = tmp_path / "SubModule"
+    sub_dir.mkdir()
+    f1 = sub_dir / "Module.h"
+    f1.write_text("class Module {};\n", encoding="utf-8")
+
+    boundary = BoundaryManager(tmp_path)
+
+    # Both path (as workspace) and subpath provided
+    res = tool_list_dir(boundary, path=str(tmp_path), subpath="SubModule")
+    assert res["status"] == "SUCCESS"
+    assert any("Module.h" in item["path"] for item in res["items"])
+
+    # Error status must be explicitly set on failure
+    err_res = tool_list_dir(boundary, subpath="NonExistentDir")
+    assert err_res["status"] == "ERROR"
+    assert "error" in err_res
+
+    read_err = tool_read_file(boundary, subpath="NonExistentFile.txt")
+    assert read_err["status"] == "ERROR"
+    assert "error" in read_err
+
+
+def test_runtime_stream_repetition_detection():
+    """Verify runaway token repetition loop detection."""
+    from src.gameforge_ide.backend.agent.runtime import AgentRuntime
+
+    normal_text = "To fix this issue, let's inspect the files in the directory. Then we will apply the required changes."
+    assert AgentRuntime._detect_stream_repetition(normal_text) is False
+
+    repetitive_text = (
+        "However, since the error message indicates that the pending diff was not found, let's try listing.\n"
+        "However, since the error message indicates that the pending diff was not found, let's try reading.\n"
+        "However, since the error message indicates that the pending diff was not found, let's try proposing."
+    )
+    assert AgentRuntime._detect_stream_repetition(repetitive_text) is True
+
+
+def test_verify_disk_contents_remaps_workspace_prefix(tmp_path):
+    """Verify EditTools.verify_disk_contents remaps leading workspace directory name."""
+    from src.gameforge_ide.backend.security.boundary import BoundaryManager
+    from src.gameforge_ide.backend.tools.edit_tools import EditTools
+
+    ws_name = tmp_path.name
+    test_f = tmp_path / "Header.h"
+    test_f.write_text("#pragma once\n", encoding="utf-8")
+
+    boundary = BoundaryManager(tmp_path)
+    edit_tools = EditTools(boundary)
+
+    # Calling with WorkspaceName/Header.h
+    res = edit_tools.verify_disk_contents(subpath=f"{ws_name}/Header.h")
+    assert res["status"] == "SUCCESS"
+    assert res["verified"] is True
+
+
+def test_tool_gateway_logs_warnings_on_errors(tmp_path, caplog):
+    """Verify ToolGateway logs warnings when tools fail or encounter errors."""
+    import logging
+    from src.gameforge_ide.backend.tools.gateway import ToolGateway
+
+    gateway = ToolGateway(tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        # 1. Non-existent file read
+        res = gateway.execute_tool("read_file", {"subpath": "NoSuchFile.cpp"})
+        assert res["status"] == "ERROR"
+        assert any("NoSuchFile.cpp" in rec.message for rec in caplog.records)
+
+        # 2. Unknown tool
+        res_unk = gateway.execute_tool("unregistered_tool_xyz", {})
+        assert res_unk["status"] == "ERROR"
+        assert any("Unknown tool" in rec.message for rec in caplog.records)
+
+
+def test_launcher_terminal_logging_configuration():
+    """Verify _configure_terminal_logging sets up handlers and levels across gameforge packages."""
+    import logging
+    from src.gameforge_ide.launcher import _configure_terminal_logging
+
+    _configure_terminal_logging(verbose=False)
+    for name in ("src", "src.gameforge_ide", "gameforge_ide", "gameforge"):
+        logger = logging.getLogger(name)
+        assert logger.level == logging.INFO
+
+
+def test_boundary_and_tools_support_leading_slash_paths(tmp_path):
+    """Verify BoundaryManager and EditTools properly handle subpaths starting with leading slash."""
+    from src.gameforge_ide.backend.security.boundary import BoundaryManager
+    from src.gameforge_ide.backend.tools.edit_tools import EditTools
+    from src.gameforge_ide.backend.tools.fs_tools import tool_list_dir
+
+    src_dir = tmp_path / "Source" / "MyGame"
+    src_dir.mkdir(parents=True)
+    header_file = src_dir / "MyHeader.h"
+    header_file.write_text("// original content\n", encoding="utf-8")
+
+    boundary = BoundaryManager(tmp_path)
+    # 1. validate_path with leading slash
+    resolved = boundary.validate_path("/Source/MyGame/MyHeader.h")
+    assert resolved == header_file
+
+    # 2. list_dir with leading slash path
+    list_res = tool_list_dir(boundary, path="/Source/MyGame/", max_depth=1)
+    assert list_res["status"] == "SUCCESS"
+    assert any("MyHeader.h" in item["path"] for item in list_res["items"])
+
+    # 3. verify_disk_contents with leading slash subpath
+    edit_tools = EditTools(boundary)
+    v_res = edit_tools.verify_disk_contents(subpath="/Source/MyGame/MyHeader.h", expected_fragment="original")
+    assert v_res["status"] == "SUCCESS"
+    assert v_res["verified"] is True
+
+    # 4. propose_edit with leading slash subpath
+    prop_res = edit_tools.propose_edit(
+        subpath="/Source/MyGame/MyHeader.h",
+        target_content="// original content\n",
+        replacement_content="// new content\n",
+    )
+    assert prop_res["status"] in ("SUCCESS", "PENDING_APPROVAL")
+
+    # 5. delete_file with leading slash subpath
+    del_res = edit_tools.delete_file(subpath="/Source/MyGame/MyHeader.h")
+    assert del_res["status"] == "SUCCESS"
+    assert not header_file.exists()
+
+
+def test_qa_generate_handles_all_of_and_any_of_composite_conditions():
+    """Verify qa.generate creates executable scenarios for AllOf and AnyOf without ScenarioGaps."""
+    from src.gameforge_ide.design.presets import preset_platformer
+    from src.gameforge_ide.design.gds import AllOf, AnyOf, EventOccurred, ScenarioRef, StatCompare
+    from src.gameforge_ide.qa.generate import generate
+    from src.gameforge_ide.qa.manifest import LevelManifest, ManifestActor
+
+    gds = preset_platformer()
+    gds.goals.win = [
+        AllOf(
+            items=[
+                EventOccurred(event="wave.cleared"),
+                StatCompare(stat="game.counter.waves_cleared", op=">=", value=3.0),
+            ]
+        ),
+        AnyOf(
+            items=[
+                EventOccurred(event="goal.reached"),
+                StatCompare(stat="game.score", op=">=", value=10.0),
+            ]
+        ),
+    ]
+    gds.acceptance.scenarios = [
+        ScenarioRef(scenario_id="win_all", derived_from="goals.win[0]", must_pass=True),
+        ScenarioRef(scenario_id="win_any", derived_from="goals.win[1]", must_pass=True),
+        ScenarioRef(scenario_id="smoke", derived_from="smoke", must_pass=True),
+    ]
+
+    manifest = LevelManifest(
+        level_id="lvl1",
+        map="/Game/Maps/TestMap",
+        player_start=(0.0, 0.0, 100.0),
+        actors=[
+            ManifestActor(actor_id="goal", tag="GF_Goal", cls="GameForgeGoal", location=(500.0, 0.0, 100.0)),
+        ],
+    )
+
+    scenarios, gaps = generate(gds, [manifest])
+    assert len(gaps) == 0, f"Expected 0 gaps for AllOf and AnyOf, got: {gaps}"
+    assert len(scenarios) == 3
+
+    sc_all = next(s for s in scenarios if s.scenario_id == "win_all")
+    assert "Verify all" in sc_all.description
+    assert any(getattr(exp, "event", None) == "wave.cleared" for exp in sc_all.expect)
+
+    sc_any = next(s for s in scenarios if s.scenario_id == "win_any")
+    assert "Verify any" in sc_any.description
+
+
+

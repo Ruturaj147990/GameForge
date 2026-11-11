@@ -1560,6 +1560,8 @@ class MainWindow(QMainWindow):
     def _switch_studio_view(self, view_id: str) -> bool:
         if not hasattr(self, "_view_host"):
             return False
+        if getattr(self._view_host, "current_view_id", None) == view_id:
+            return True
         if self._view_host.show_view(view_id):
             self._rail.set_active_view(view_id)
             title = view_id.capitalize()

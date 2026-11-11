@@ -50,7 +50,7 @@
     "Source/GameForgeRuntime/Private/GameForgeGameplayStateComponent.cpp": "5f62391305e5bea29425223a25bc1d3f862d1ef96f7dd07b869ef565d92915c6",
     "Source/GameForgeRuntime/Private/GameForgeGuard.cpp": "9e5acd7dc4479f0f94c4be5c1dc6123480391976f6a3a57445dea5e2bc4b0e71",
     "Source/GameForgeRuntime/Private/GameForgeKitActors.cpp": "61c8b1e42f240a710fcb272647fd250dbd04453b778a203da3f6589043ce34d4",
-    "Source/GameForgeRuntime/Private/GameForgeKitBoard.cpp": "1154808add2b28748a69112e6eed27c22c0f1a8b3103f75474904b6f964da157",
+    "Source/GameForgeRuntime/Private/GameForgeKitBoard.cpp": "d44526692b704832863ac6acd1bb49bc2b61368cd59ecd1ae35f884ce9b2d74b",
     "Source/GameForgeRuntime/Private/GameForgeKitSelfTest.cpp": "e786dbfb9d1c2b45f947b0677111e71f2d31b693b9097757dba7ae4f081802ae",
     "Source/GameForgeRuntime/Private/GameForgeKitUI.cpp": "438509addcc8cc228ee452174474d6ecfcbb3188d57f4406d25c9765f654c7ac",
     "Source/GameForgeRuntime/Private/GameForgeLocomotionAnimInstance.cpp": "e817124c62214de6906e657feefe6d50dfbab22af49ab04a7cfc10a20151f39c",
@@ -60,7 +60,7 @@
     "Source/GameForgeRuntime/Private/GameForgePlayer.cpp": "19af8282ab3e024026b839caa975b79a8f79ff094c63d935350e29e93a8c76ce",
     "Source/GameForgeRuntime/Private/GameForgeRules.cpp": "a03e3ebc5263a79c47c7f84996f52db732c702b63f339dd5b3b9a16fccff696e",
     "Source/GameForgeRuntime/Private/GameForgeRuntimeModule.cpp": "21196fe07e4100dd30a851ac6bade153129b627e7fab8fbc08d2b2a8b952b530",
-    "Source/GameForgeRuntime/Private/GameForgeScenario.cpp": "b3f082226499e7163ba265899af3615fcc5229b849bead6762f66f6ae629d715",
+    "Source/GameForgeRuntime/Private/GameForgeScenario.cpp": "d39fb65015ca22c70ed277d626bcd58963023a43a4aecd57c44977fa37922ea7",
     "Source/GameForgeRuntime/Private/Tests/GameForgeRulesTests.cpp": "db858177dee735a8cc907c7043390fef82d77e3834a1d19f8fc1115723680e87",
     "Source/GameForgeRuntime/Public/GameForgeAttributes.h": "622f854adda4dda3c4523d63609367f0ad30206ed1d5f39264de0c080393960c",
     "Source/GameForgeRuntime/Public/GameForgeAutopilot.h": "cc02942322febbd7acac87f0530500d0d7435d4225866e9e5b8ea8ec953ee47e",
@@ -83,7 +83,7 @@
     "Source/GameForgeRuntime/Public/GameForgeScenario.h": "3ef56b05a32e2d06940f0679a1788f0281d9920c0c38bf72c09ede43b35d9fcf",
     "Source/GameForgeRuntime/Public/GameForgeVisuals.h": "ff903940f735806699681b26926ebf5253d87a756fd0c691b4d9543777437deb"
   },
-  "generated_at": "2026-11-10T16:46:59.256483+00:00",
+  "generated_at": "2026-11-11T09:04:36.463199+00:00",
   "interfaces": {
     "GameForge.uplugin": "e927d07eb57a7d1a250ce4fb325cdee99c89bb4774b2613095dbe4d59b3b0d12",
     "Source/GameForgeRuntime/Public/GameForgeAttributes.h": "622f854adda4dda3c4523d63609367f0ad30206ed1d5f39264de0c080393960c",
@@ -99,6 +99,5 @@
   "manifest_version": 1,
   "plugin_name": "GameForge",
   "plugin_version": "1.0.0",
-  "synchronized_at": "2026-11-10T16:46:59.289611+00:00",
   "total_files": 81
 }

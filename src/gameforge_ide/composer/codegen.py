@@ -100,6 +100,61 @@ def synthesize_cpp_bodies_for_architecture(
         )
         return on_event, tick
 
+    is_roll_and_move = (
+        "roll_and_move" in plan_kind
+        or "roll_and_move" in rules_low
+        or "snakes_and_ladders" in rules_low
+        or "snakes and ladders" in rules_low
+        or "chutes and ladders" in rules_low
+        or "ludo" in rules_low
+        or "roll_and_move" in custom_caps
+        or "dice_rolling" in custom_caps
+        or mechanics.get("board_mode") == "roll_and_move"
+        or mechanics.get("has_dice") is True
+    )
+    if is_roll_and_move:
+        on_event = (
+            "\tUWorld* CurrentWorld = GetWorld();\n"
+            "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
+            "\tif (Event.EventName == TEXT(\"dice.rolled\") || Event.EventName == TEXT(\"board.move\"))\n"
+            "\t{\n"
+            "\t\tMovesPlayed += 1;\n"
+            "\t\tif (GS) { GS->AddStat(FName(TEXT(\"game.score\")), 10.0f); }\n"
+            "\t}\n"
+            "\telse if (Event.EventName == TEXT(\"ladder.transition\"))\n"
+            "\t{\n"
+            "\t\tValidPlacements += 1;\n"
+            "\t\tif (GS) { GS->AddStat(FName(TEXT(\"game.score\")), 25.0f); }\n"
+            "\t}\n"
+            "\telse if (Event.EventName == TEXT(\"board.win\") || Event.EventName == TEXT(\"match.won\"))\n"
+            "\t{\n"
+            "\t\tbCompleted = true;\n"
+            "\t\tif (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))\n"
+            "\t\t{\n"
+            "\t\t\tBus->Emit(FName(TEXT(\"game.won\")), GetName(), TEXT(\"{\\\"winner\\\":\\\"player\\\"}\"));\n"
+            "\t\t}\n"
+            "\t}"
+        )
+        tick = (
+            "\tElapsedRuleTime += DeltaSeconds;\n"
+            "\tUWorld* CurrentWorld = GetWorld();\n"
+            "\tAGameForgeGameState* GS = CurrentWorld ? CurrentWorld->GetGameState<AGameForgeGameState>() : nullptr;\n"
+            "\tif (bRuleEnabled && !bCompleted && GS)\n"
+            "\t{\n"
+            "\t\tconst float Score = GS->GetStat(FName(TEXT(\"game.score\")));\n"
+            "\t\tif (Score >= 100.0f)\n"
+            "\t\t{\n"
+            "\t\t\tbCompleted = true;\n"
+            "\t\t\tif (UGameForgeEventBus* Bus = UGameForgeEventBus::Get(this))\n"
+            "\t\t\t{\n"
+            "\t\t\t\tBus->Emit(FName(TEXT(\"board.win\")), GetName(), TEXT(\"{\\\"winner\\\":\\\"player\\\"}\"));\n"
+            "\t\t\t\tBus->Emit(FName(TEXT(\"game.won\")), GetName(), TEXT(\"{\\\"winner\\\":\\\"player\\\"}\"));\n"
+            "\t\t\t}\n"
+            "\t\t}\n"
+            "\t}"
+        )
+        return on_event, tick
+
     is_turn_board = (
         "scratch_board" in plan_kind
         or "board_strategy" in plan_kind

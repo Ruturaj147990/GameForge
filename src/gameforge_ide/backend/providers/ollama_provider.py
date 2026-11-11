@@ -23,6 +23,8 @@ def _extract_clean_json(text: str) -> Optional[str]:
     if not text:
         return None
     s = text.strip()
+    s = re.sub(r"<think>[\s\S]*?</think>", "", s, flags=re.IGNORECASE).strip()
+    s = re.sub(r"</?think>", "", s, flags=re.IGNORECASE).strip()
     # 1. Fast path: directly parses as JSON
     try:
         json.loads(s)
@@ -233,6 +235,25 @@ class OllamaProvider(ModelProvider):
                 total += len(str(t))
         return int(total / 3.2) + 1
 
+    @staticmethod
+    def is_thinking_model(model_id: str) -> bool:
+        """Determines if thinking mode is default on for the model (GameForge Qwen models)."""
+        if not model_id:
+            return False
+        mid = str(model_id).lower().strip()
+        return "qwen" in mid or "gameforge-qwen" in mid
+
+    @classmethod
+    def resolve_think_mode(cls, model_id: str, explicit_think: Optional[bool] = None) -> bool:
+        """Resolves whether thinking mode is enabled for a given model.
+
+        Thinking mode is default ON (True) for GameForge Qwen models.
+        For other models, it defaults to False unless explicitly requested.
+        """
+        if explicit_think is not None:
+            return bool(explicit_think)
+        return cls.is_thinking_model(model_id)
+
     def _request_with_retry(
         self,
         req: urllib.request.Request,
@@ -283,6 +304,24 @@ class OllamaProvider(ModelProvider):
             except urllib.error.HTTPError as exc:
                 body = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""
                 last_exc = RuntimeError(f"Ollama API HTTP {exc.code}: {body}")
+                if exc.code == 400 and "does not support thinking" in body:
+                    try:
+                        req_data = json.loads(req.data.decode("utf-8")) if req.data else {}
+                        if req_data.get("think"):
+                            req_data["think"] = False
+                            req = urllib.request.Request(
+                                req.full_url,
+                                data=json.dumps(req_data).encode("utf-8"),
+                                headers=dict(req.headers),
+                                method=req.get_method(),
+                            )
+                            logger.info(
+                                "Model '%s' does not support native thinking parameter; retrying with think=False",
+                                req_data.get("model", ""),
+                            )
+                            continue
+                    except Exception:
+                        pass
                 if exc.code in (429, 502, 503, 504) and attempt < max_retries - 1:
                     sleep_time = 0.5 * (2 ** attempt)
                     logger.warning(
@@ -320,14 +359,17 @@ class OllamaProvider(ModelProvider):
             raise last_exc
         return {}
 
-    @staticmethod
+    @classmethod
     def build_stream_payload(
+        cls,
         model_id: str,
         messages: List[Dict[str, str]],
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
         num_ctx: int = 4096,
+        think: Optional[bool] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build the exact JSON payload sent to Ollama for streamed generation."""
         prompt_parts = []
@@ -351,8 +393,10 @@ class OllamaProvider(ModelProvider):
                 "temperature": temperature,
                 "num_predict": max_tokens,
                 "num_ctx": num_ctx,
+                "repeat_penalty": 1.15,
+                "repeat_last_n": 64,
             },
-            "think": False,
+            "think": cls.resolve_think_mode(model_id, think if think is not None else kwargs.get("think")),
         }
 
     def chat_with_tools(
@@ -365,12 +409,10 @@ class OllamaProvider(ModelProvider):
         max_tokens: int = 1024,
         keep_alive: Optional[str] = None,
         cancel_event: Optional[threading.Event] = None,
+        think: Optional[bool] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Native tool calling via /api/chat `tools`. Returns {content, tool_calls, usage}.
-
-        `tools` uses the provider-neutral shape {name, description, parameters}. `think` is
-        always False and `num_ctx` is always explicit (Master Blueprint v2 §6).
-        """
+        """Native tool calling via /api/chat `tools`. Returns {content, tool_calls, usage}."""
         est_tokens = self.estimate_tokens(messages) + self.estimate_tokens(json.dumps(tools))
         needed = max(8192, int(num_ctx or 0), est_tokens + max_tokens + 512)
         effective_ctx = self.budget_num_ctx(model_id, est_tokens, needed)
@@ -379,13 +421,20 @@ class OllamaProvider(ModelProvider):
                 "Ollama chat_with_tools: ~%d prompt tokens + %d output exceed num_ctx=%d for %s; "
                 "Ollama will truncate the oldest context.", est_tokens, max_tokens, effective_ctx, model_id,
             )
+        resolved_think = self.resolve_think_mode(model_id, think if think is not None else kwargs.get("think"))
         payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
             "tools": [{"type": "function", "function": t} for t in tools],
             "stream": False,
-            "think": False,
-            "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": effective_ctx},
+            "think": resolved_think,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "num_ctx": effective_ctx,
+                "repeat_penalty": 1.15,
+                "repeat_last_n": 64,
+            },
         }
         if keep_alive is not None:
             payload["keep_alive"] = keep_alive
@@ -395,7 +444,25 @@ class OllamaProvider(ModelProvider):
             headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
             method="POST",
         )
-        data = self._request_with_retry(req, timeout=self.timeout, cancel_event=cancel_event)
+        try:
+            data = self._request_with_retry(req, timeout=self.timeout, cancel_event=cancel_event)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace") if hasattr(exc, "read") else ""
+            if exc.code == 400 and "does not support thinking" in body and payload.get("think"):
+                logger.info(
+                    "Ollama model '%s' does not support native thinking parameter in chat_with_tools; retrying with think=False",
+                    model_id,
+                )
+                payload["think"] = False
+                retry_req = urllib.request.Request(
+                    f"http://{self.host}/api/chat",
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/2"},
+                    method="POST",
+                )
+                data = self._request_with_retry(retry_req, timeout=self.timeout, cancel_event=cancel_event)
+            else:
+                raise exc
         if "error" in data:
             raise RuntimeError(f"Ollama API error: {data['error']}")
         msg = data.get("message", {}) or {}
@@ -439,6 +506,7 @@ class OllamaProvider(ModelProvider):
         num_ctx: int = 8192,
         temperature: float = 0.2,
         timeout_s: float = 300.0,
+        **kwargs: Any,
     ) -> Optional[str]:
         """Structured output via /api/chat `format` (JSON schema). Returns clean JSON text or None on transport errors.
 
@@ -449,7 +517,7 @@ class OllamaProvider(ModelProvider):
         payload = {
             "model": model_id,
             "stream": False,
-            "think": False,
+            "think": self.resolve_think_mode(model_id, kwargs.get("think")),
             "format": schema,
             "messages": [
                 {"role": "system", "content": system},
@@ -495,14 +563,17 @@ class OllamaProvider(ModelProvider):
                 "tool_calls": calls, "content_preview": res["content"][:120],
                 "seconds": round(time.time() - t0, 2)}
 
-    @staticmethod
+    @classmethod
     def build_chat_payload(
+        cls,
         model_id: str,
         messages: List[Dict[str, str]],
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
         num_ctx: int = 4096,
+        think: Optional[bool] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build structured chat payload for Ollama /api/chat preserving multi-turn roles."""
         chat_messages = []
@@ -519,14 +590,17 @@ class OllamaProvider(ModelProvider):
                 "temperature": temperature,
                 "num_predict": max_tokens,
                 "num_ctx": num_ctx,
+                "repeat_penalty": 1.15,
+                "repeat_last_n": 64,
             },
-            "think": False,
+            "think": cls.resolve_think_mode(model_id, think if think is not None else kwargs.get("think")),
         }
 
     @staticmethod
     def parse_stream_lines(lines) -> Iterator[StreamChunk]:
         """Decode Ollama's newline-delimited JSON response records from /api/chat or /api/generate."""
         saw_done = False
+        in_thinking_field = False
         for line in lines:
             if not line:
                 continue
@@ -547,11 +621,36 @@ class OllamaProvider(ModelProvider):
             done = chunk.get("done", False)
             if done:
                 saw_done = True
-            # /api/chat sends token in chunk["message"]["content"], /api/generate sends in chunk["response"]
-            msg = chunk.get("message", {})
-            token = msg.get("content", "") if isinstance(msg, dict) else ""
-            if not token and "response" in chunk:
-                token = chunk.get("response", "")
+
+            thinking_token = ""
+            content_token = ""
+            if "message" in chunk and isinstance(chunk["message"], dict):
+                msg = chunk["message"]
+                thinking_token = msg.get("thinking", "") or ""
+                content_token = msg.get("content", "") or ""
+            elif "response" in chunk:
+                content_token = chunk.get("response", "") or ""
+            if not thinking_token and "thinking" in chunk and isinstance(chunk.get("thinking"), str):
+                thinking_token = chunk.get("thinking", "") or ""
+
+            tokens_to_yield = []
+            if thinking_token:
+                if not in_thinking_field:
+                    in_thinking_field = True
+                    tokens_to_yield.append("<think>")
+                tokens_to_yield.append(thinking_token)
+
+            if content_token:
+                if in_thinking_field:
+                    in_thinking_field = False
+                    tokens_to_yield.append("</think>")
+                tokens_to_yield.append(content_token)
+
+            if done and in_thinking_field:
+                in_thinking_field = False
+                tokens_to_yield.append("</think>")
+
+            token = "".join(tokens_to_yield)
             status = chunk.get("status")
             meta = {"eval_count": chunk.get("eval_count", 0)} if done else {}
             if status and not token:
@@ -602,6 +701,7 @@ class OllamaProvider(ModelProvider):
             temperature=temperature,
             max_tokens=max_tokens,
             num_ctx=resolved_ctx,
+            think=kwargs.get("think"),
         )
         if kwargs.get("keep_alive") is not None:
             payload["keep_alive"] = kwargs["keep_alive"]
@@ -626,8 +726,29 @@ class OllamaProvider(ModelProvider):
                 pass  # event loop already closed
 
         def _reader() -> None:
+            nonlocal req
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                try:
+                    resp = urllib.request.urlopen(req, timeout=self.timeout)
+                except urllib.error.HTTPError as e:
+                    body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
+                    if e.code == 400 and "does not support thinking" in body and payload.get("think"):
+                        logger.info(
+                            "Ollama model '%s' does not support native thinking parameter in stream_chat; retrying with think=False",
+                            model_id,
+                        )
+                        payload["think"] = False
+                        req = urllib.request.Request(
+                            url,
+                            data=json.dumps(payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json", "User-Agent": "GameForge-IDE/1.0"},
+                            method="POST",
+                        )
+                        resp = urllib.request.urlopen(req, timeout=self.timeout)
+                    else:
+                        raise e
+
+                with resp:
                     holder["resp"] = resp
                     for chunk in self.parse_stream_lines(resp):
                         if stop.is_set() or (external_cancel is not None and external_cancel.is_set()):
@@ -698,8 +819,10 @@ class OllamaProvider(ModelProvider):
                 "temperature": temperature,
                 "num_predict": max_tokens,
                 "num_ctx": resolved_ctx,
+                "repeat_penalty": 1.15,
+                "repeat_last_n": 64,
             },
-            "think": False,
+            "think": self.resolve_think_mode(model_id, kwargs.get("think")),
         }
         req = urllib.request.Request(
             url,

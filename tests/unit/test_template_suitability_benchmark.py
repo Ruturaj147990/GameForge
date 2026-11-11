@@ -148,3 +148,24 @@ def test_racing_game_maps_to_scratch(registry: SemanticTemplateRegistry):
     # No vehicle template in canonical templates -> SCRATCH
     assert decision.strategy == GenerationStrategy.SCRATCH
     assert Capability.VEHICLE_PHYSICS in decision.profile.required_capabilities
+
+
+def test_snakes_and_ladders_maps_to_scratch_and_never_platformer(registry: SemanticTemplateRegistry):
+    prompt = "Create a Snake and Ladders game"
+    decision = registry.evaluate_strategy(prompt)
+
+    assert decision.strategy == GenerationStrategy.SCRATCH, f"Expected SCRATCH for Snake and Ladders, got {decision.strategy}"
+    assert decision.template is None
+    assert decision.profile.detected_genre == Genre.GRID_BOARD
+    arch = decision.suggested_architecture
+    assert arch["plan_kind"] == "scratch_board"
+    assert "UBoardGameSubsystem" in arch["target_classes"]
+    assert "ASnakesAndLaddersGameMode" in arch["target_classes"]
+    assert arch["mechanics"].get("grid_size") == 10
+    assert arch["mechanics"].get("dice_sides") == 6
+
+    # Critical requirement: platformer, combat, and FPS templates MUST strictly conflict
+    for ev in decision.evaluations:
+        if ev.template.id in ("platformer_3d", "tactical_fps", "arena_combat", "top_down_shooter", "card_battler"):
+            assert ev.has_conflict is True, f"Template {ev.template.id} should have conflicted with Snake and Ladders"
+            assert ev.overlap_score == 0.0, f"Template {ev.template.id} score should be 0.0"

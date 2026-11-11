@@ -7,6 +7,7 @@ import difflib
 import hashlib
 import itertools
 import json
+import logging
 import os
 import re
 import stat
@@ -20,6 +21,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..security.boundary import BoundaryManager, SecurityViolationError
 from ...storage.atomic import atomic_write, atomic_write_json
 from ...storage.diff_store import DiffStore
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_unified_diff_text(
@@ -157,6 +160,27 @@ class EditTools:
         self.applied_diffs: Dict[str, Dict[str, Any]] = {}
         self.diff_store = DiffStore(self.boundary.workspace_root)
         self.diffs_dir = self.diff_store.diffs_dir
+        self._verification_history: List[Tuple[str, str, float]] = []
+
+    def _detect_placeholder_or_incomplete_code(self, code: str) -> Optional[str]:
+        stripped = code.strip()
+        if not stripped:
+            return None
+        # Explicit bare placeholder stubs
+        if stripped in ("pass", "...", "return;", "throw NotImplementedError();", "// TODO", "/* TODO */", "// FIXME"):
+            return f"Replacement content is a bare placeholder stub ({stripped!r}) without real functional implementation."
+        # If the code is short and contains placeholder markers
+        placeholder_tokens = ("TODO", "FIXME", "PLACEHOLDER", "IMPLEMENT_ME", "REPLACE_ME", "YOUR_CODE_HERE")
+        for token in placeholder_tokens:
+            if re.search(rf"\b{token}\b", stripped, re.I):
+                if len(stripped) < 80 or stripped.startswith(("//", "/*")):
+                    return f"Replacement content contains placeholder token {token!r} without real functional implementation."
+        # Check for truncated C++ code: large imbalance of { }
+        if code.count("{") - code.count("}") >= 3:
+            return "Replacement content has unbalanced opening braces '{' suggesting truncated code."
+        if code.count("}") - code.count("{") >= 3:
+            return "Replacement content has unbalanced closing braces '}' suggesting malformed code."
+        return None
 
     @staticmethod
     def _apply_unified_diff_text(original_text: str, diff_text: str, fuzzy_window: int = 25) -> Tuple[bool, str, Optional[str]]:
@@ -180,7 +204,7 @@ class EditTools:
         data = self.diff_store.load_diff(diff_id)
         if data:
             if not data.get("target_file") and data.get("file_path"):
-                data["target_file"] = str(self.boundary.workspace_root / data["file_path"])
+                data["target_file"] = str(self.boundary.workspace_root / data["file_path"].lstrip("/\\"))
             if not data.get("diff_patch") and data.get("diff_text"):
                 data["diff_patch"] = data["diff_text"]
             if "file_existed" not in data:
@@ -334,6 +358,13 @@ class EditTools:
         # Strip accidental markdown code block fences if replacement_content or target_content is wrapped in ```
         replacement_content = self._unwrap_markdown_fences(replacement_content)
         target_content = self._unwrap_markdown_fences(target_content)
+
+        placeholder_err = self._detect_placeholder_or_incomplete_code(replacement_content)
+        if placeholder_err and not kwargs.get("allow_placeholder", False):
+            return {
+                "status": "ERROR",
+                "error": f"Rejected placeholder or incomplete code in proposed edit: {placeholder_err}",
+            }
 
         try:
             target_file = self.boundary.validate_path(effective_path, allow_write=True)
@@ -719,6 +750,15 @@ class EditTools:
             loaded = self._load_diff_from_disk(effective_id)
             if loaded and loaded.get("status") == "PENDING_APPROVAL":
                 self.pending_diffs[effective_id] = loaded
+            elif effective_id in self.applied_diffs or (loaded and loaded.get("status") == "APPLIED"):
+                rec = self.applied_diffs.get(effective_id) or loaded
+                return {
+                    "status": "SUCCESS",
+                    "diff_id": effective_id,
+                    "file_path": rec.get("file_path", ""),
+                    "message": f"Diff {effective_id} is already applied to {rec.get('file_path', '')}.",
+                    "already_applied": True,
+                }
             else:
                 return {"status": "ERROR", "error": f"Pending diff {effective_id} not found."}
 
@@ -788,6 +828,8 @@ class EditTools:
             loaded = self._load_diff_from_disk(effective_id)
             if loaded and loaded.get("status") == "PENDING_APPROVAL":
                 self.pending_diffs[effective_id] = loaded
+            elif effective_id in self.applied_diffs or (loaded and loaded.get("status") == "APPLIED"):
+                return {"status": "ERROR", "error": f"Diff {effective_id} is already applied; use rollback_diff to revert."}
             else:
                 return {"status": "ERROR", "error": f"Pending diff {effective_id} not found."}
 
@@ -1219,10 +1261,7 @@ class EditTools:
             return {"status": "ERROR", "error": "No file path specified for delete_file."}
 
         try:
-            target_path = Path(effective_path)
-            if not target_path.is_absolute():
-                target_path = self.boundary.workspace_root / target_path
-            resolved = self.boundary.validate_path(target_path, allow_write=True)
+            resolved = self.boundary.validate_path(effective_path, allow_write=True)
 
             if not resolved.exists():
                 return {"status": "ERROR", "error": f"File not found: {effective_path}"}
@@ -1261,15 +1300,72 @@ class EditTools:
 
     def verify_disk_contents(self, subpath: str, expected_fragment: str = "") -> Dict[str, Any]:
         """Verifies that the target file exists on disk and contains expected_fragment."""
+        if expected_fragment is not None and expected_fragment != "":
+            frag_clean = expected_fragment.strip()
+            if not frag_clean:
+                return {
+                    "status": "ERROR",
+                    "verified": False,
+                    "error": "expected_fragment cannot be whitespace-only. Provide functional code statements or symbols to verify on disk.",
+                }
+            # Issue 13: Reject if expected_fragment consists purely of comments
+            lines = [l.strip() for l in frag_clean.splitlines() if l.strip()]
+            is_comment_only = len(lines) > 0 and all(
+                l.startswith(("//", "/*", "*", "*/", "#", "<!--", "--", ";"))
+                for l in lines
+            )
+            if is_comment_only:
+                return {
+                    "status": "ERROR",
+                    "verified": False,
+                    "error": f"expected_fragment consists only of comments: {frag_clean[:60]!r}. Verification must assert functional code logic, declarations, or symbols, not comments alone.",
+                }
+
+        # Issues 15 & 16: Detect repeated identical verification calls
+        with self._lock:
+            now = time.time()
+            clean_sub = subpath.replace("\\", "/").strip("/")
+            frag_key = expected_fragment.strip() if expected_fragment else ""
+            recent_matches = [
+                h for h in self._verification_history[-10:]
+                if h[0] == clean_sub and h[1] == frag_key
+            ]
+            self._verification_history.append((clean_sub, frag_key, now))
+            if len(recent_matches) >= 3:
+                return {
+                    "status": "REDUNDANT",
+                    "verified": True,
+                    "repeated_call": True,
+                    "message": f"Identical verification repeated {len(recent_matches) + 1} times for '{clean_sub}'. Target was already verified on disk; proceed with next step.",
+                }
+
         try:
-            target_path = Path(subpath)
-            if not target_path.is_absolute():
-                target_path = self.boundary.workspace_root / target_path
-            resolved = self.boundary.validate_path(target_path, allow_write=False)
+            resolved = self.boundary.validate_path(subpath, allow_write=False)
             if not resolved.is_file():
+                clean_sub = subpath.replace("\\", "/").strip("/")
+                parts = clean_sub.split("/")
+                if parts and parts[0].lower() == self.boundary.workspace_root.name.lower():
+                    remapped = "/".join(parts[1:])
+                    rem_target = self.boundary.workspace_root / remapped
+                    try:
+                        rem_resolved = self.boundary.validate_path(rem_target, allow_write=False)
+                        if rem_resolved.is_file():
+                            resolved = rem_resolved
+                    except Exception:
+                        pass
+            if not resolved.is_file():
+                logger.warning(
+                    "[edit_tools:verify_disk] File does not exist on disk: '%s' (resolved='%s', workspace='%s')",
+                    subpath, resolved, self.boundary.workspace_root
+                )
                 return {"status": "ERROR", "verified": False, "error": f"File does not exist: {subpath}"}
             data = resolved.read_text(encoding="utf-8", errors="replace")
             verified = (expected_fragment in data) if expected_fragment else True
+            if expected_fragment and not verified:
+                logger.warning(
+                    "[edit_tools:verify_disk] Fragment mismatch in '%s': expected '%s' not found",
+                    subpath, expected_fragment[:80]
+                )
             file_sz = 0
             try:
                 file_sz = resolved.stat().st_size
@@ -1283,6 +1379,7 @@ class EditTools:
                 "sha256": self._digest(resolved.read_bytes()),
             }
         except Exception as exc:
+            logger.warning("[edit_tools:verify_disk] Error verifying '%s': %s", subpath, exc)
             return {"status": "ERROR", "verified": False, "error": str(exc)}
 
     def begin_transaction(self, files: List[str]) -> Dict[str, Any]:
@@ -1290,11 +1387,8 @@ class EditTools:
         tx_id = f"tx_{uuid.uuid4().hex[:10]}"
         baselines: Dict[str, str] = {}
         for f in files:
-            p = Path(f)
-            if not p.is_absolute():
-                p = self.boundary.workspace_root / p
             try:
-                resolved = self.boundary.validate_path(p, allow_write=True)
+                resolved = self.boundary.validate_path(f, allow_write=True)
                 baselines[f] = self._digest(resolved.read_bytes()) if resolved.is_file() else "EMPTY"
             except Exception as e:
                 return {"status": "ERROR", "error": f"Invalid path {f}: {e}", "tx_id": tx_id}

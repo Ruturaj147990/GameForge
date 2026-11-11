@@ -881,8 +881,10 @@ bool AGameForgeGridBoard::MakeMove(int32 Row, int32 Col, int32 Player)
 
 	if (BoardMode.Equals(TEXT("race_board"), ESearchCase::IgnoreCase) ||
 		BoardMode.Equals(TEXT("grid_race"), ESearchCase::IgnoreCase) ||
+		BoardMode.Equals(TEXT("roll_and_move"), ESearchCase::IgnoreCase) ||
 		BoardMode.Equals(TEXT("snakes_and_ladders"), ESearchCase::IgnoreCase) ||
-		BoardMode.Equals(TEXT("ludo"), ESearchCase::IgnoreCase))
+		BoardMode.Equals(TEXT("ludo"), ESearchCase::IgnoreCase) ||
+		BoardMode.Contains(TEXT("roll")))
 	{
 		return MakeRaceMove(0, Player);
 	}

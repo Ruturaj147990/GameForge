@@ -16,6 +16,7 @@ class _Handler(BaseHTTPRequestHandler):
     tokens = 50
     delay = 0.01
     seen = []
+    fail_on_thinking = False
 
     def log_message(self, *a):  # silence
         pass
@@ -23,6 +24,12 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode())
         type(self).seen.append(body)
+        if type(self).fail_on_thinking and body.get("think") is True:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"error": "\\"model\\" does not support thinking"}')
+            return
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson")
         self.end_headers()
@@ -40,6 +47,7 @@ class _Handler(BaseHTTPRequestHandler):
 def server():
     _Handler.seen = []
     _Handler.aborted = False
+    _Handler.fail_on_thinking = False
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
@@ -56,15 +64,50 @@ def _collect(provider, **kw):
     return asyncio.run(run())
 
 
-def test_stream_collects_all_tokens_and_sends_think_false(server):
+def test_stream_collects_all_tokens_and_sends_think_true_for_qwen(server):
     _Handler.tokens, _Handler.delay = 5, 0
     p = OllamaProvider(host=server)
     chunks = _collect(p)
     text = "".join(c.token for c in chunks)
     assert text.startswith("t0 ") and "t4" in text
     assert chunks[-1].is_final
-    assert _Handler.seen[-1]["think"] is False
+    assert _Handler.seen[-1]["think"] is True
     assert _Handler.seen[-1]["options"]["num_ctx"] >= 8192
+
+
+def test_stream_explicit_think_false_for_qwen(server):
+    _Handler.tokens, _Handler.delay = 5, 0
+    p = OllamaProvider(host=server)
+    chunks = _collect(p, think=False)
+    assert _Handler.seen[-1]["think"] is False
+
+
+def test_stream_sends_think_false_for_non_qwen(server):
+    _Handler.tokens, _Handler.delay = 5, 0
+    p = OllamaProvider(host=server)
+
+    async def run():
+        out = []
+        async for ch in p.stream_chat("llama-3.1-8b", [{"role": "user", "content": "hi"}]):
+            out.append(ch)
+        return out
+
+    chunks = asyncio.run(run())
+    assert _Handler.seen[-1]["think"] is False
+
+
+def test_stream_retries_with_think_false_on_400_not_supported(server):
+    _Handler.tokens, _Handler.delay = 5, 0
+    _Handler.fail_on_thinking = True
+    p = OllamaProvider(host=server)
+    chunks = _collect(p)
+    text = "".join(c.token for c in chunks)
+    assert text.startswith("t0 ") and "t4" in text
+    assert chunks[-1].is_final
+    # Two requests were sent: first with think=True (failed 400), second with think=False (succeeded 200)
+    assert len(_Handler.seen) == 2
+    assert _Handler.seen[0]["think"] is True
+    assert _Handler.seen[1]["think"] is False
 
 
 def test_stream_cancel_event_stops_early(server):
@@ -125,3 +168,18 @@ def test_sticky_num_ctx_never_shrinks_and_is_bucketed():
 
 def test_host_with_scheme_is_normalised():
     assert OllamaProvider(host="http://127.0.0.1:11434/").host == "127.0.0.1:11434"
+
+
+def test_parse_stream_lines_translates_native_thinking_field():
+    lines = [
+        json.dumps({"message": {"thinking": "analyzing requirement", "content": ""}, "done": False}).encode(),
+        json.dumps({"message": {"thinking": " and checking imports", "content": ""}, "done": False}).encode(),
+        json.dumps({"message": {"thinking": "", "content": "I will edit the file."}, "done": False}).encode(),
+        json.dumps({"message": {"content": ""}, "done": True, "eval_count": 10}).encode(),
+    ]
+    chunks = list(OllamaProvider.parse_stream_lines(lines))
+    assert len(chunks) == 4
+    assert chunks[0].token == "<think>analyzing requirement"
+    assert chunks[1].token == " and checking imports"
+    assert chunks[2].token == "</think>I will edit the file."
+    assert chunks[3].is_final is True

@@ -191,11 +191,39 @@ class _AgentWorker(QObject):
                     full_text += event.content
                     _emit_safe(self.token_received, event.content)
                 elif etype == "status":
-                    print(f"[GameForge Agent Status] {event.content}", flush=True)
+                    meta = event.metadata or {}
+                    stage = meta.get("stage") or meta.get("engineering_stage") or ""
+                    action = meta.get("action", "")
+                    iter_num = meta.get("iteration")
+                    max_iter = meta.get("max_iterations")
+                    extra_parts = []
+                    if stage:
+                        extra_parts.append(f"Stage: {stage}")
+                    if action:
+                        extra_parts.append(f"Action: {action}")
+                    if iter_num:
+                        extra_parts.append(f"Iteration: {iter_num}/{max_iter or '?'}")
+                    if meta.get("unmet"):
+                        extra_parts.append(f"Unmet: {meta.get('unmet')}")
+                    if meta.get("message"):
+                        extra_parts.append(str(meta.get("message")))
+                    extra_str = f" ({', '.join(extra_parts)})" if extra_parts else ""
+                    print(f"[GameForge Agent Status] {event.content}{extra_str}", flush=True)
                     _emit_safe(self.status_changed, event.content, event.metadata)
                 elif etype == "plan":
-                    print(f"[GameForge Agent Plan] Plan event received", flush=True)
                     plan_data = event.metadata.get("plan") or event.metadata
+                    if isinstance(plan_data, dict) and plan_data.get("goal"):
+                        goal = plan_data.get("goal", "")
+                        ver = plan_data.get("version", 1)
+                        steps = plan_data.get("steps", [])
+                        print(f"[GameForge Agent Plan] Plan v{ver} formulated: '{goal}' ({len(steps)} steps)", flush=True)
+                        for idx, step in enumerate(steps, 1):
+                            st_title = step.get("title", "") if isinstance(step, dict) else getattr(step, "title", "")
+                            st_files = step.get("target_files", []) if isinstance(step, dict) else getattr(step, "target_files", [])
+                            st_files_str = f" [Files: {', '.join(st_files)}]" if st_files else ""
+                            print(f"  Step {idx}: {st_title}{st_files_str}", flush=True)
+                    else:
+                        print(f"[GameForge Agent Plan] Plan event received", flush=True)
                     _emit_safe(self.plan_received, plan_data if isinstance(plan_data, dict) else {"content": event.content})
                 elif etype == "context_usage":
                     report = event.metadata.get("report") if isinstance(event.metadata, dict) else None
@@ -204,16 +232,61 @@ class _AgentWorker(QObject):
                 elif etype == "tool_call":
                     tool = event.metadata.get("tool", "")
                     args = event.metadata.get("args", {})
-                    print(f"[GameForge Agent Tool] >>> Calling `{tool}` with args: {args}", flush=True)
+                    stage = event.metadata.get("engineering_stage", "")
+                    stage_str = f" [{stage}]" if stage else ""
+                    print(f"[GameForge Agent Tool]{stage_str} >>> Calling `{tool}` with args: {args}", flush=True)
                     _emit_safe(self.tool_called, tool, args)
                 elif etype == "tool_result":
                     tool = event.metadata.get("tool", "")
                     res = event.metadata.get("result", {})
-                    status = res.get("status", "SUCCESS") if isinstance(res, dict) else "OK"
-                    print(f"[GameForge Agent Tool] <<< `{tool}` returned status: {status}", flush=True)
+                    status = "OK"
+                    details: List[str] = []
+                    if isinstance(res, dict):
+                        status = res.get("status", "SUCCESS")
+                        err = res.get("error") or res.get("message")
+                        if err and (status in ("ERROR", "BLOCKED", "FAILED") or "error" in res):
+                            details.append(f"Error: {err}")
+                        elif res.get("message"):
+                            details.append(str(res.get("message")))
+
+                        if "items" in res and isinstance(res["items"], list):
+                            count = res.get("count", len(res["items"]))
+                            sample = [item.get("name", str(item)) if isinstance(item, dict) else str(item) for item in res["items"][:5]]
+                            sample_str = ", ".join(sample)
+                            if count > 5:
+                                sample_str += f", ... (+{count - 5} more)"
+                            details.append(f"{count} items: [{sample_str}]")
+                        elif "matches" in res and isinstance(res["matches"], list):
+                            details.append(f"{len(res['matches'])} matches found")
+                        elif "lines" in res:
+                            details.append(f"{res.get('lines')} lines ({res.get('bytes', 0)} bytes)")
+                        elif "bytes_written" in res:
+                            details.append(f"{res.get('bytes_written')} bytes written to {res.get('path', '')}")
+                        elif "diff_id" in res:
+                            diff_id_str = res.get("diff_id")
+                            fp = res.get("file_path", "")
+                            auto = " (auto-applied)" if res.get("applied_automatically") else ""
+                            details.append(f"diff: {diff_id_str} on {fp}{auto}")
+                        elif "exit_code" in res:
+                            details.append(f"exit_code={res.get('exit_code')}")
+                            if res.get("stderr"):
+                                details.append(f"stderr: {str(res.get('stderr'))[:200]}")
+                        elif "exists" in res:
+                            details.append(f"exists={res.get('exists')}, matches_fragment={res.get('matches_fragment')}")
+
+                        dur = res.get("execution_time_seconds")
+                        if dur is not None:
+                            details.append(f"in {dur}s")
+
+                    detail_str = f" | {' | '.join(details)}" if details else ""
+                    print(f"[GameForge Agent Tool] <<< `{tool}` returned status: {status}{detail_str}", flush=True)
                     _emit_safe(self.tool_result, tool, res)
                 elif etype == "file_changed":
-                    print(f"[GameForge Agent FileChanged] {event.content}", flush=True)
+                    stage = event.metadata.get("engineering_stage", "")
+                    diff_id = event.metadata.get("diff_id", "")
+                    stage_str = f" [{stage}]" if stage else ""
+                    diff_str = f" (diff: {diff_id})" if diff_id and diff_id not in event.content else ""
+                    print(f"[GameForge Agent FileChanged]{stage_str} {event.content}{diff_str}", flush=True)
                     _emit_safe(self.file_changed, event.content, event.metadata)
                 elif etype == "diff_pending":
                     print(f"[GameForge Agent Diff] Diff pending: {event.metadata.get('diff_id', '')}", flush=True)
@@ -222,7 +295,10 @@ class _AgentWorker(QObject):
                         event.metadata.get("diff_id", ""), event.metadata
                     )
                 elif etype == "error":
-                    print(f"[GameForge Agent Error] {event.content}", flush=True)
+                    err_meta = event.metadata or {}
+                    reason = err_meta.get("reason", "")
+                    reason_str = f" [Reason: {reason}]" if reason else ""
+                    print(f"[GameForge Agent Error] {event.content}{reason_str}", flush=True)
                     _emit_safe(self.error_occurred, event.content)
                     return
                 elif etype == "done":
@@ -251,7 +327,9 @@ class _AgentWorker(QObject):
             _emit_safe(self.task_done, full_text or "[Cancelled by user]")
             return
         except Exception as exc:
-            print(f"[GameForge Agent Error] Stream exception: {exc}", flush=True)
+            import traceback
+            tb = traceback.format_exc()
+            print(f"[GameForge Agent Error] Stream exception: {exc}\n{tb}", flush=True)
             _emit_safe(self.error_occurred, str(exc))
             return
         finally:

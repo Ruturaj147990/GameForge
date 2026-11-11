@@ -430,7 +430,7 @@ class TopBar(QWidget):
             fix_title = f"   ↳ Action: {row.fix_action.replace('_', ' ').capitalize()}"
             fix_act = self.systems_menu.addAction(fix_title)
             action_key = str(row.fix_action)
-            def _safe_emit_fix(k: str = action_key) -> None:
+            def _safe_emit_fix(*_args, k: str = action_key) -> None:
                 try:
                     self.fixActionRequested.emit(k)
                 except RuntimeError:

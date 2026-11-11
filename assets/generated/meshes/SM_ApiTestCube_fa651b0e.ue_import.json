@@ -1,0 +1,55 @@
+{
+  "asset_name": "SM_ApiTestCube_fa651b0e",
+  "purpose": "Blockout Geometry",
+  "target_engine": "Unreal Engine 5.7",
+  "asset_class": "UStaticMesh",
+  "sha256": "7a82e9878243404e599e367b2a51d4831caae1143502756a0583b74e467aaf1d",
+  "spec": {
+    "name": "SM_ApiTestCube_fa651b0e",
+    "purpose": "Blockout Geometry",
+    "size_cm": [
+      120.0,
+      120.0,
+      120.0
+    ],
+    "triangle_budget": 5000,
+    "collision_type": "box",
+    "lod_count": 1,
+    "material_type": "PBR_Standard",
+    "target_territory": "GLOBAL"
+  },
+  "geometry_metrics": {
+    "vertex_count": 8,
+    "triangle_count": 12,
+    "uv_channel_count": 1,
+    "bounding_box_extent": [
+      120.0,
+      120.0,
+      120.0
+    ]
+  },
+  "unreal_import_settings": {
+    "bImportMeshLODs": false,
+    "LODGroup": "LevelArchitecture",
+    "CollisionTraceFlag": "CTF_UseSimpleAsComplex",
+    "CollisionProfileName": "BlockAllDynamic",
+    "bGenerateLightmapUVs": true,
+    "bAutoGenerateCollision": true
+  },
+  "material_bindings": [
+    {
+      "slot_index": 0,
+      "slot_name": "M_SM_ApiTestCube_fa651b0e_Default",
+      "pbr_channels": {
+        "BaseColor": [
+          0.35,
+          0.55,
+          0.85,
+          1.0
+        ],
+        "Metallic": 0.2,
+        "Roughness": 0.4
+      }
+    }
+  ]
+}

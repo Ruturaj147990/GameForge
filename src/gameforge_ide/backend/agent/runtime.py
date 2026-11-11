@@ -1029,8 +1029,41 @@ class AgentRuntime:
         # 4. Strip code fences with file headers that were intercepted
         cleaned = re.sub(r"```(?:cpp|c|h|hpp|cs|python|py|json|ini)\s*\n\s*(?://|#|/\*)\s*(?:file:?|path:?|Source/|GameForge/).*?```", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
 
+        # Deduplicate consecutive identical paragraphs/lines from degenerate repetition
+        paras = cleaned.split("\n\n")
+        deduped = []
+        for p in paras:
+            p_strip = p.strip()
+            if not deduped or p_strip != deduped[-1].strip():
+                deduped.append(p)
+        cleaned = "\n\n".join(deduped)
+
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
         return cleaned.strip()
+
+    @staticmethod
+    def _detect_stream_repetition(text: str) -> bool:
+        """Detects runaway token generation repetition loops.
+        
+        Returns True if an identical line (>= 20 characters) has repeated 3 or more times,
+        or if the last 3 non-empty lines share the same 20-character prefix.
+        """
+        if len(text) < 100:
+            return False
+        lines = [line.strip() for line in text.splitlines() if len(line.strip()) >= 20]
+        if len(lines) >= 3:
+            p1 = lines[-1][:20]
+            p2 = lines[-2][:20]
+            p3 = lines[-3][:20]
+            if p1 == p2 == p3:
+                return True
+            counts: Dict[str, int] = {}
+            for l in lines:
+                if len(l) >= 25:
+                    counts[l] = counts.get(l, 0) + 1
+                    if counts[l] >= 3:
+                        return True
+        return False
 
     @staticmethod
     def _is_narrative_excuse(text: str) -> bool:
@@ -1582,27 +1615,21 @@ class AgentRuntime:
                             eng_ini.write_text(new_txt, encoding="utf-8")
                             repair_notes.append("Configured GlobalDefaultGameMode to GameForgeRuntime.GameForgeGameMode")
 
-            # 2. Repair scenarios in GameForge/scenarios
+            # 2. Repair scenarios in GameForge/scenarios without weakening assertions
             sc_dir = pdir / "GameForge" / "scenarios"
             if sc_dir.is_dir():
                 for sf in sc_dir.glob("*.json"):
                     try:
                         content = sf.read_text(encoding="utf-8")
+                        # If a board game has navigate_to without autopilot, convert navigation to select_actor
                         if "navigate_to" in content and ("GF_E_pickups" in content or "pickup" in content.lower()):
                             sc_data = json.loads(content)
                             sc_data["steps"] = [
-                                {"inject": {"action": "IA_Interact", "value": True, "hold_s": 0.1}},
-                                {"wait_s": {"seconds": 0.5}},
+                                {"select_actor": {"tag": "GF_Board"}},
+                                {"wait_s": {"seconds": 2.0}},
                             ]
-                            sc_data["expect"] = [{"event": "game.started"}]
                             sf.write_text(json.dumps(sc_data, indent=2), encoding="utf-8")
-                            repair_notes.append(f"Adapted scenario `{sf.stem}` for board interaction")
-                        elif sf.stem == "win_condition":
-                            sc_data = json.loads(content)
-                            if sc_data.get("expect") == [{"event": "game.won"}]:
-                                sc_data["expect"] = [{"event": "game.started"}]
-                                sf.write_text(json.dumps(sc_data, indent=2), encoding="utf-8")
-                                repair_notes.append(f"Normalized scenario `{sf.stem}` expectation")
+                            repair_notes.append(f"Adapted scenario `{sf.stem}` to board interaction step")
                     except Exception:
                         pass
 
@@ -2231,11 +2258,60 @@ class AgentRuntime:
                     if outcome.get("status") == "SUCCESS" and outcome.get("ok", True):
                         exe = outcome.get("exe") or outcome.get("package_exe")
                         report = outcome.get("report_path")
+
+                        # Mandatory Game-Specific Completion Gate (Section 2.4 - 2.6)
+                        from .requirement_traceability import verify_game_completion_gate
+                        gate_report = verify_game_completion_gate(
+                            prompt=effective_game_prompt,
+                            gds=gds_obj,
+                            project_dir=p_dir,
+                            outcome=outcome,
+                        )
+
+                        req_summary_lines = []
+                        if gate_report.completed_requirements:
+                            req_summary_lines.append("\n**Verified Gameplay Requirements:**")
+                            for req in gate_report.completed_requirements:
+                                req_summary_lines.append(f"- [x] **{req.title}**: {req.evidence or 'Verified'}")
+                        if gate_report.incomplete_requirements:
+                            req_summary_lines.append("\n**Incomplete / Unmet Requirements:**")
+                            for req in gate_report.incomplete_requirements:
+                                req_summary_lines.append(f"- [ ] **{req.title}**: {req.evidence or 'Not implemented'}")
+
+                        reqs_md = "\n".join(req_summary_lines)
+
+                        if not gate_report.is_complete:
+                            incomplete_msg = (
+                                f"### {gate_report.verdict_summary}\n\n"
+                                f"- **Project directory:** `{p_dir}`\n"
+                                + (f"- **Executable:** `{exe}`\n" if exe else "")
+                                + (f"\n{reqs_md}\n" if reqs_md else "")
+                                + (f"\n**Pipeline Stages**\n{stage_lines}\n" if stage_lines else "")
+                            )
+                            yield AgentEvent(event_type="token", content=incomplete_msg)
+                            self.session_manager.append_message(session_id, "assistant", incomplete_msg)
+                            task_state.terminal_status = "INCOMPLETE"
+                            task_state.terminal_reason = gate_report.verdict_summary
+                            self._save_task_state(task_state)
+                            yield AgentEvent(
+                                event_type="done",
+                                content=incomplete_msg,
+                                metadata={
+                                    "terminal_status": "INCOMPLETE",
+                                    "gate_report": {
+                                        "is_complete": False,
+                                        "template_only": gate_report.template_only_detected,
+                                    },
+                                },
+                            )
+                            return
+
                         succ_msg = (
-                            "Game creation complete and verified: every Forge stage (including packaged QA scenarios) reported DONE.\n\n"
+                            "Game creation complete and verified: Every Forge stage and all gameplay requirements reported DONE.\n\n"
                             f"- **Project directory:** `{p_dir}`\n"
                             + (f"- **Executable:** `{exe}`\n" if exe else "- **Executable:** not found on disk (packaging may have been skipped)\n")
                             + (f"- **Report:** `{report}`\n" if report else "")
+                            + (f"\n{reqs_md}\n" if reqs_md else "")
                             + (f"\n**Stages**\n{stage_lines}\n" if stage_lines else "")
                         )
                         yield AgentEvent(event_type="token", content=succ_msg)
@@ -2634,6 +2710,9 @@ class AgentRuntime:
                         continue
                     if _in_think:
                         continue
+                    if len(full_response) > 120 and self._detect_stream_repetition(full_response):
+                        logger.warning("Terminating runaway repetitive model generation loop.")
+                        break
                     if not self._is_tool_call_start(full_response) and not self._is_shell_or_code_stream(full_response):
                         tok = re.sub(r"</?think>", "", chunk.token, flags=re.IGNORECASE)
                         if tok:
@@ -2800,6 +2879,10 @@ class AgentRuntime:
                     _max_unmet_nudges = 3 if _tool_history else 1
                     if _unmet_predicates_nudges < _max_unmet_nudges and iteration < self.max_iterations:
                         _unmet_predicates_nudges += 1
+                        logger.warning(
+                            "[AgentRuntime] Acceptance predicates unmet (%d/%d): %s",
+                            _unmet_predicates_nudges, _max_unmet_nudges, unmet
+                        )
                         conversation_history.append({"role": "assistant", "content": full_response})
                         candidate_files = []
                         for th in _tool_history:
@@ -2864,6 +2947,10 @@ class AgentRuntime:
                             return
                         else:
                             # Model exceeded unmet predicate budget without modifying files — fail closed!
+                            logger.warning(
+                                "[AgentRuntime] Task BLOCKED: model_not_acting. Acceptance predicates remain unmet: %s",
+                                unmet
+                            )
                             task_state.terminal_status = "BLOCKED"
                             task_state.terminal_reason = "model_not_acting"
                             self._save_task_state(task_state)
@@ -2909,8 +2996,17 @@ class AgentRuntime:
             call_count = _tool_call_counts.get(_tool_key, 0) + 1
             _tool_call_counts[_tool_key] = call_count
 
-            if call_count >= 3:
+            if call_count == 2:
+                logger.warning(
+                    "[AgentRuntime] Repeated call detected: tool '%s' called for 2nd time with args %s",
+                    tool_name, tool_args
+                )
+            elif call_count >= 3:
                 # 3rd identical request terminates closed as BLOCKED (Rule 4 & Blueprint §4.E)
+                logger.warning(
+                    "[AgentRuntime] Task BLOCKED: repetition_budget_exhausted. Tool '%s' was invoked %d times with identical args: %s",
+                    tool_name, call_count, tool_args
+                )
                 task_state.terminal_status = "BLOCKED"
                 task_state.terminal_reason = "repetition_budget_exhausted"
                 self._save_task_state(task_state)
@@ -2940,6 +3036,10 @@ class AgentRuntime:
                 _edit_proposed = True
 
             eng_stage = self._classify_engineering_stage(tool_name, bool(_modified_files))
+            logger.info(
+                "[AgentRuntime] Iteration %d/%d [%s] Dispatching tool '%s' (args=%s)",
+                iteration, self.max_iterations, eng_stage, tool_name, tool_args
+            )
             yield AgentEvent(
                 event_type="tool_call",
                 content=f"Dispatching tool: {tool_name}",
@@ -3150,6 +3250,10 @@ class AgentRuntime:
 
                         tool_result["status"] = "SUCCESS"
                         tool_result["applied_automatically"] = True
+                        tool_result["message"] = (
+                            f"Changes were automatically applied to {target_fp}. "
+                            f"The file on disk has been updated. Do NOT call apply_edit for this diff."
+                        )
                         yield AgentEvent(
                             event_type="file_changed",
                             content=f"Applied edit to {target_fp} (diff: {diff_id})",
@@ -3187,6 +3291,18 @@ class AgentRuntime:
                     )
                     yield AgentEvent(event_type="status", content="WAITING_APPROVAL", metadata={"diff_id": diff_id})
                     return
+
+            tool_status = tool_result.get("status", "SUCCESS") if isinstance(tool_result, dict) else "SUCCESS"
+            if tool_status in ("ERROR", "BLOCKED", "FAILED") or (isinstance(tool_result, dict) and "error" in tool_result):
+                err_detail = tool_result.get("error") or tool_result.get("message") if isinstance(tool_result, dict) else str(tool_result)
+                logger.warning(
+                    "[AgentRuntime] Tool '%s' returned %s: %s (args=%s)",
+                    tool_name, tool_status, err_detail, tool_args
+                )
+            else:
+                dur = tool_result.get("execution_time_seconds") if isinstance(tool_result, dict) else None
+                dur_str = f" in {dur}s" if dur is not None else ""
+                logger.info("[AgentRuntime] Tool '%s' completed with status %s%s", tool_name, tool_status, dur_str)
 
             yield AgentEvent(
                 event_type="tool_result",
@@ -3282,13 +3398,23 @@ class AgentRuntime:
                 err_text = str(tool_result.get("error", "")) or str(tool_result)
                 root_cause = self.repair_engine.extract_root_cause(err_text, stage_id=tool_name)
                 can_repair, repair_reason = self.repair_engine.can_attempt_repair(root_cause)
+                logger.warning(
+                    "[AgentRuntime] Tool '%s' failure evaluating repair: root_cause=%s, can_repair=%s (error: %s)",
+                    tool_name, root_cause.cause_id, can_repair, err_text[:200]
+                )
                 if not can_repair:
+                    logger.warning("[AgentRuntime] Stopping repair loop for tool '%s': %s", tool_name, repair_reason)
                     continuation_nudge = (
                         f"[Stop Repair Loop on `{tool_name}`]: {repair_reason}\n\n"
                         f"The repair limit for this root cause ({root_cause.cause_id}) has been reached. "
                         f"Do not repeat the failed attempt. Reason about an alternative approach or report the blocker."
                     )
                 else:
+                    attempt_num = self.repair_engine.attempt_counts.get(root_cause.signature, 0) + 1
+                    logger.info(
+                        "[AgentRuntime] Self-repair attempt %d/5 initiated for root cause '%s' on tool '%s'",
+                        attempt_num, root_cause.cause_id, tool_name
+                    )
                     self.repair_engine.record_attempt(
                         root_cause,
                         diff_text=f"Error in {tool_name}",
@@ -3310,9 +3436,9 @@ class AgentRuntime:
                     attempt_num = self.repair_engine.attempt_counts.get(root_cause.signature, 0) + 1
                     continuation_nudge = (
                         f"[Tool Execution Error in `{tool_name}` (Repair Attempt {attempt_num}/5)]:\n{obs_json}{diag_summary}\n\n"
-                        f"The tool invocation returned an error. Analyze the error and diagnostics above, reason through why it occurred, "
-                        f"and invoke an appropriate tool to inspect or repair the issue (e.g. read the file to verify exact lines, check directory contents, or adjust parameters). "
-                        f"Do not terminate prematurely or output narrative excuses; perform the correction now."
+                        f"The tool returned an error. Analyze the error above, reason through why it occurred, "
+                        f"and immediately invoke an appropriate tool to inspect or repair the issue. "
+                        f"CRITICAL: Do NOT output repetitive conversational text or enumerate possible tools. Emit a concrete tool call now."
                     )
             elif tool_name in ("unreal_find_projects", "unreal_engine_info", "list_dir", "search_code", "search_index", "read_file"):
                 if (_task_needs_edit or task_state.intent == "mutate") and not _edit_proposed:
@@ -3329,6 +3455,14 @@ class AgentRuntime:
                         "Proceed with the next appropriate tool call to complete the task, or synthesize your final response. "
                         "Do not call discovery tools again unless you need a specific piece of information not yet retrieved."
                     )
+            elif tool_name == "propose_edit" and tool_result.get("applied_automatically"):
+                target_fp = tool_result.get("file_path") or tool_args.get("subpath") or ""
+                continuation_nudge = (
+                    f"[Observation for `propose_edit`]:\n{obs_json}\n\n"
+                    f"The edit to '{target_fp}' was AUTOMATICALLY APPLIED to disk. "
+                    f"The file on disk has been updated. Do NOT call `apply_edit` for diff '{diff_id}'. "
+                    f"Proceed to the next task step (e.g. modify other project files, or run tests/build verification to verify changes)."
+                )
             elif tool_name in ("apply_edit", "apply_diff", "apply_batch", "apply_diffs_batch") and tool_result.get("status") == "SUCCESS":
                 continuation_nudge = (
                     f"[Observation for `{tool_name}`]:\n{obs_json}\n\n"

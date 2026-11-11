@@ -64,15 +64,23 @@ def test_a_counter_strike_game_creation_workflow(temp_workspace: Path):
         assert len(active_plan.steps) == 11, "Expected 11-stage pipeline plan"
 
         # Turn 2: Proceed confirmation
+        proj_dir = temp_workspace / "Projects" / "TacticalFPS"
+        (proj_dir / "Source").mkdir(parents=True, exist_ok=True)
+        (proj_dir / "Config").mkdir(parents=True, exist_ok=True)
+        (proj_dir / "TacticalFPS.uproject").write_text("{}", encoding="utf-8")
+        (proj_dir / "Source" / "TacticalFPS.cpp").write_text("// C++ Tactical FPS logic\nvoid AWeapon::Fire() {}\n", encoding="utf-8")
+        (proj_dir / "Packaged" / "Windows").mkdir(parents=True, exist_ok=True)
+        (proj_dir / "Packaged" / "Windows" / "TacticalFPS.exe").write_bytes(b"MZfakeexe")
+
         with patch.object(
             runtime.tool_gateway.game_tools,
             "create_game",
             return_value={
                 "status": "SUCCESS",
                 "ok": True,
-                "project_dir": str(temp_workspace / "Projects" / "TacticalFPS"),
-                "package_exe": str(temp_workspace / "Projects" / "TacticalFPS" / "Packaged" / "Windows" / "TacticalFPS.exe"),
-                "report_path": str(temp_workspace / "Projects" / "TacticalFPS" / "Saved" / "GameForge" / "pipeline_report.json"),
+                "project_dir": str(proj_dir),
+                "package_exe": str(proj_dir / "Packaged" / "Windows" / "TacticalFPS.exe"),
+                "report_path": str(proj_dir / "Saved" / "GameForge" / "pipeline_report.json"),
             },
         ):
             events_turn2 = []

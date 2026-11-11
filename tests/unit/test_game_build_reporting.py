@@ -21,6 +21,14 @@ def _runtime(ws: Path) -> AgentRuntime:
 
 
 def _run_fast_create(ws: Path, outcome: dict, emit_stages: bool = False):
+    p_dir = Path(outcome.get("project_dir", ws / "P"))
+    if outcome.get("ok"):
+        p_dir.mkdir(parents=True, exist_ok=True)
+        (p_dir / "Source").mkdir(parents=True, exist_ok=True)
+        (p_dir / "Config").mkdir(parents=True, exist_ok=True)
+        (p_dir / "P.uproject").write_text("{}", encoding="utf-8")
+        (p_dir / "Source" / "Game.cpp").write_text("// C++ Tactical Shooter logic\nvoid AWeapon::Fire() {}\n", encoding="utf-8")
+
     rt = _runtime(ws)
     sess = rt.session_manager.create_session(
         name="t", model_name="gameforge-qwen3.5-9b", provider_type="ollama",

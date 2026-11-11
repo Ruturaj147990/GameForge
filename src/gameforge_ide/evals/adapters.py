@@ -9,6 +9,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, List, Optional
 
+from src.gameforge_ide.backend.providers.ollama_provider import OllamaProvider
+
 
 class ModelAdapter(abc.ABC):
     """Base interface for model evaluation adapters."""
@@ -63,7 +65,7 @@ class OllamaAdapter(ModelAdapter):
             "model": self._model_name,
             "prompt": prompt,
             "stream": False,
-            "think": False,
+            "think": OllamaProvider.resolve_think_mode(self._model_name),
             "options": {
                 "temperature": 0.1,
                 "num_ctx": num_ctx,
@@ -104,7 +106,37 @@ class OllamaAdapter(ModelAdapter):
         except urllib.error.HTTPError as e:
             duration_s = time.time() - t0
             body_err = e.read().decode("utf-8", errors="ignore") if hasattr(e, "read") else ""
-            err_msg = f"HTTP {e.code}: {body_err.strip() or e.reason}"
+            if e.code == 400 and "does not support thinking" in body_err and payload.get("think"):
+                payload["think"] = False
+                retry_data = json.dumps(payload).encode("utf-8")
+                retry_req = urllib.request.Request(
+                    self._api_url,
+                    data=retry_data,
+                    headers={"Content-Type": "application/json", "User-Agent": "GameForge-Eval"},
+                    method="POST",
+                )
+                try:
+                    with urllib.request.urlopen(retry_req, timeout=120) as resp:
+                        duration_s = time.time() - t0
+                        body = json.loads(resp.read().decode("utf-8"))
+                        response_text = body.get("response", "")
+                        prompt_eval_count = body.get("prompt_eval_count", 0)
+                        eval_count = body.get("eval_count", 0)
+                        eval_duration_ns = body.get("eval_duration", 1)
+                        tok_per_sec = (eval_count / (eval_duration_ns / 1e9)) if eval_duration_ns > 0 else 0.0
+                        return {
+                            "text": response_text,
+                            "duration_s": duration_s,
+                            "tokens_in": prompt_eval_count,
+                            "tokens_out": eval_count,
+                            "tok_per_sec": round(tok_per_sec, 2),
+                            "cost_usd": 0.0,
+                            "error": None,
+                        }
+                except Exception as retry_exc:
+                    err_msg = str(retry_exc)
+            else:
+                err_msg = f"HTTP {e.code}: {body_err.strip() or e.reason}"
             return {
                 "text": "",
                 "duration_s": duration_s,
